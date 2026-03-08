@@ -197,22 +197,50 @@ const Handovers = () => {
   };
 
   const handleConfirm = async (id: string) => {
+    const handover = myHandovers.find((h) => h.id === id);
     const { error } = await supabase.from("handovers").update({
       status: "confirmed",
       confirmed_by: user!.id,
       confirmed_at: new Date().toISOString(),
     }).eq("id", id);
     if (error) toast.error(error.message);
-    else { toast.success("Handover confirmed"); qc.invalidateQueries({ queryKey: ["handovers"] }); }
+    else {
+      toast.success("Handover confirmed");
+      if (handover?.user_id) {
+        sendNotification({
+          userId: handover.user_id,
+          title: "Handover Confirmed",
+          message: `Your ₹${Number(handover.cash_amount).toLocaleString()} handover was confirmed`,
+          type: "handover",
+          entityType: "handover",
+          entityId: id,
+        });
+      }
+      qc.invalidateQueries({ queryKey: ["handovers"] });
+    }
   };
 
   const handleReject = async (id: string) => {
+    const handover = myHandovers.find((h) => h.id === id);
     const { error } = await supabase.from("handovers").update({
       status: "rejected",
       rejected_at: new Date().toISOString(),
     }).eq("id", id);
     if (error) toast.error(error.message);
-    else { toast.success("Handover rejected"); qc.invalidateQueries({ queryKey: ["handovers"] }); }
+    else {
+      toast.success("Handover rejected");
+      if (handover?.user_id) {
+        sendNotification({
+          userId: handover.user_id,
+          title: "Handover Rejected",
+          message: `Your ₹${Number(handover.cash_amount).toLocaleString()} handover was rejected`,
+          type: "handover",
+          entityType: "handover",
+          entityId: id,
+        });
+      }
+      qc.invalidateQueries({ queryKey: ["handovers"] });
+    }
   };
 
   const getProfile = (userId: string | null) => profileMap?.[userId || ""] || { name: "Unknown", avatar: null };
