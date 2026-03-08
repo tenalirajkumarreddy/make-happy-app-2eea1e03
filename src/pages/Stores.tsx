@@ -134,7 +134,7 @@ const Stores = () => {
       <PageHeader
         title="Stores"
         subtitle="Manage store locations and assignments"
-        primaryAction={{ label: "Add Store", onClick: () => setShowAdd(true) }}
+        primaryAction={canCreateStores ? { label: "Add Store", onClick: () => setShowAdd(true) } : undefined}
         actions={[
           { label: "Store Types", icon: Settings2, onClick: () => navigate("/store-types"), priority: 1 },
         ]}

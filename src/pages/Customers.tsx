@@ -163,7 +163,7 @@ const Customers = () => {
       <PageHeader
         title="Customers"
         subtitle="Manage customer accounts and KYC verification"
-        primaryAction={{ label: "Add Customer", onClick: () => setShowAdd(true) }}
+        primaryAction={canCreateCustomers ? { label: "Add Customer", onClick: () => setShowAdd(true) } : undefined}
       />
 
       {canBulk && selected.size > 0 && (
