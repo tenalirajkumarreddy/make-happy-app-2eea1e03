@@ -180,6 +180,28 @@ export function StoreLedger({ sales, transactions, openingBalance, storeCreatedA
 
   const renderMobileCard = (row: LedgerEntry) => {
     const p = getRecorder(row.recorded_by);
+
+    if (row.id === "__opening_balance__") {
+      return (
+        <div className="rounded-xl border bg-card px-3 py-2.5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <Badge variant="secondary" className="text-[10px] h-5">PAYMENT</Badge>
+            <span className="text-[11px] text-muted-foreground">
+              {new Date(row.date).toLocaleDateString("en-IN")}
+            </span>
+          </div>
+          <div className="flex items-center justify-between mt-1.5">
+            <span className="font-medium text-sm text-muted-foreground">Opening Balance</span>
+            <span className="text-sm font-bold text-success">₹{row.total_amount.toLocaleString()}</span>
+          </div>
+          <div className="flex items-center justify-between mt-1 text-[11px] text-muted-foreground">
+            <span>Bal: ₹{Math.abs(row.outstanding).toLocaleString()}</span>
+            <span>Admin</span>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div
         className="rounded-xl border bg-card px-3 py-2.5 shadow-sm cursor-pointer"
