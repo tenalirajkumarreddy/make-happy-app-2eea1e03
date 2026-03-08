@@ -193,7 +193,7 @@ const Customers = () => {
                 </div>
                 <p className="text-xs text-muted-foreground font-mono mt-0.5">{row.display_id}</p>
                 <div className="flex items-center gap-3 mt-1.5">
-                  <span className="text-sm font-bold text-foreground">₹{Number(row.opening_balance).toLocaleString()}</span>
+                  <span className="text-sm font-bold text-foreground">₹{(row.stores || []).reduce((s: number, st: any) => s + Number(st.outstanding || 0), 0).toLocaleString()}</span>
                   <span className="text-xs text-muted-foreground">{row.stores?.length || 0} stores</span>
                 </div>
                 <div className="mt-1.5">
