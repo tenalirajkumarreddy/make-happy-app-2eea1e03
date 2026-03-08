@@ -221,6 +221,16 @@ const Stores = () => {
     ), hideOnMobile: true }] : []),
   ];
 
+  const filteredStores = useMemo(() => {
+    return applyFilters(stores || [], filters, {
+      dateField: "created_at",
+      outstandingField: "outstanding",
+      storeTypeField: "store_type_id",
+      routeField: "route_id",
+      statusField: "is_active",
+    });
+  }, [stores, filters]);
+
   if (isLoading) {
     return <TableSkeleton columns={7} />;
   }
