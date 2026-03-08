@@ -368,6 +368,12 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
               <div><Label className="text-xs">Pincode</Label><Input value={pincode} onChange={e => setPincode(e.target.value)} className="mt-0.5 h-8 text-sm" /></div>
             </div>
 
+            <div>
+              <Label>Opening Balance</Label>
+              <Input type="number" value={openingBalance} onChange={e => setOpeningBalance(e.target.value)} className="mt-1" placeholder="0 (can be negative)" />
+              <p className="text-[11px] text-muted-foreground mt-0.5">Enter negative for advance/credit, positive for dues</p>
+            </div>
+
             <div className="flex gap-2">
               <Button variant="outline" className="flex-1" onClick={() => setStep("customer")}>
                 <ChevronLeft className="mr-1 h-4 w-4" /> Back
