@@ -34,26 +34,82 @@ interface NavItem {
   badge?: number;
 }
 
-const mainNav: NavItem[] = [
-  { label: "Dashboard", path: "/", icon: LayoutDashboard },
-  { label: "Products", path: "/products", icon: Package },
-  { label: "Customers", path: "/customers", icon: Users },
-  { label: "Stores", path: "/stores", icon: Store },
-  { label: "Routes", path: "/routes", icon: Route },
-  { label: "Sales", path: "/sales", icon: ShoppingCart },
-  { label: "Transactions", path: "/transactions", icon: Receipt },
-  { label: "Orders", path: "/orders", icon: ClipboardList },
-  { label: "Handovers", path: "/handovers", icon: HandCoins },
-  { label: "Map", path: "/map", icon: Map },
-];
-
-const secondaryNav: NavItem[] = [
-  { label: "Reports", path: "/reports", icon: FileText },
-  { label: "Analytics", path: "/analytics", icon: BarChart3 },
-  { label: "Activity Log", path: "/activity", icon: History },
-  { label: "Access Control", path: "/access-control", icon: Shield },
-  { label: "Settings", path: "/settings", icon: Settings },
-];
+// Role-based navigation configuration
+const NAV_BY_ROLE: Record<string, { main: NavItem[]; secondary: NavItem[] }> = {
+  super_admin: {
+    main: [
+      { label: "Dashboard", path: "/", icon: LayoutDashboard },
+      { label: "Products", path: "/products", icon: Package },
+      { label: "Customers", path: "/customers", icon: Users },
+      { label: "Stores", path: "/stores", icon: Store },
+      { label: "Routes", path: "/routes", icon: Route },
+      { label: "Sales", path: "/sales", icon: ShoppingCart },
+      { label: "Transactions", path: "/transactions", icon: Receipt },
+      { label: "Orders", path: "/orders", icon: ClipboardList },
+      { label: "Handovers", path: "/handovers", icon: HandCoins },
+      { label: "Map", path: "/map", icon: Map },
+    ],
+    secondary: [
+      { label: "Reports", path: "/reports", icon: FileText },
+      { label: "Analytics", path: "/analytics", icon: BarChart3 },
+      { label: "Activity Log", path: "/activity", icon: History },
+      { label: "Access Control", path: "/access-control", icon: Shield },
+      { label: "Settings", path: "/settings", icon: Settings },
+    ],
+  },
+  manager: {
+    main: [
+      { label: "Dashboard", path: "/", icon: LayoutDashboard },
+      { label: "Products", path: "/products", icon: Package },
+      { label: "Customers", path: "/customers", icon: Users },
+      { label: "Stores", path: "/stores", icon: Store },
+      { label: "Routes", path: "/routes", icon: Route },
+      { label: "Sales", path: "/sales", icon: ShoppingCart },
+      { label: "Transactions", path: "/transactions", icon: Receipt },
+      { label: "Orders", path: "/orders", icon: ClipboardList },
+      { label: "Handovers", path: "/handovers", icon: HandCoins },
+      { label: "Map", path: "/map", icon: Map },
+    ],
+    secondary: [
+      { label: "Reports", path: "/reports", icon: FileText },
+      { label: "Analytics", path: "/analytics", icon: BarChart3 },
+      { label: "Activity Log", path: "/activity", icon: History },
+      { label: "Settings", path: "/settings", icon: Settings },
+    ],
+  },
+  agent: {
+    main: [
+      { label: "Dashboard", path: "/", icon: LayoutDashboard },
+      { label: "Customers", path: "/customers", icon: Users },
+      { label: "Stores", path: "/stores", icon: Store },
+      { label: "Routes", path: "/routes", icon: Route },
+      { label: "Sales", path: "/sales", icon: ShoppingCart },
+      { label: "Transactions", path: "/transactions", icon: Receipt },
+      { label: "Orders", path: "/orders", icon: ClipboardList },
+      { label: "Handovers", path: "/handovers", icon: HandCoins },
+    ],
+    secondary: [],
+  },
+  marketer: {
+    main: [
+      { label: "Dashboard", path: "/", icon: LayoutDashboard },
+      { label: "Customers", path: "/customers", icon: Users },
+      { label: "Stores", path: "/stores", icon: Store },
+      { label: "Orders", path: "/orders", icon: ClipboardList },
+      { label: "Transactions", path: "/transactions", icon: Receipt },
+      { label: "Handovers", path: "/handovers", icon: HandCoins },
+    ],
+    secondary: [],
+  },
+  pos: {
+    main: [
+      { label: "Dashboard", path: "/", icon: LayoutDashboard },
+      { label: "Sales", path: "/sales", icon: ShoppingCart },
+      { label: "Handovers", path: "/handovers", icon: HandCoins },
+    ],
+    secondary: [],
+  },
+};
 
 export function AppSidebar() {
   const [collapsed, setCollapsed] = useState(false);
