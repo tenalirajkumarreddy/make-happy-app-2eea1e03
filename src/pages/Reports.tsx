@@ -19,8 +19,8 @@ const Reports = () => {
       const endOfDay = reportDate + "T23:59:59";
 
       const [salesRes, txnRes, ordersRes, storesRes] = await Promise.all([
-        supabase.from("sales").select("*, stores(name), profiles:recorded_by(full_name)").gte("created_at", startOfDay).lte("created_at", endOfDay).order("created_at", { ascending: false }),
-        supabase.from("transactions").select("*, stores(name), profiles:recorded_by(full_name)").gte("created_at", startOfDay).lte("created_at", endOfDay).order("created_at", { ascending: false }),
+        supabase.from("sales").select("*, stores(name)").gte("created_at", startOfDay).lte("created_at", endOfDay).order("created_at", { ascending: false }),
+        supabase.from("transactions").select("*, stores(name)").gte("created_at", startOfDay).lte("created_at", endOfDay).order("created_at", { ascending: false }),
         supabase.from("orders").select("*, stores(name)").gte("created_at", startOfDay).lte("created_at", endOfDay),
         supabase.from("stores").select("id, name, display_id, outstanding").eq("is_active", true).gt("outstanding", 0).order("outstanding", { ascending: false }),
       ]);
