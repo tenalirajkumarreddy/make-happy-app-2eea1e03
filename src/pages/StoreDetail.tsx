@@ -494,16 +494,11 @@ const StoreDetail = () => {
   );
 };
 
-function InfoItem({ icon: Icon, label, value }: { icon: any; label: string; value: string }) {
+function InfoItem({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-start gap-2.5 rounded-lg bg-muted/50 p-3">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-background shadow-sm">
-        <Icon className="h-4 w-4 text-muted-foreground" />
-      </div>
-      <div className="min-w-0">
-        <p className="text-[11px] text-muted-foreground uppercase tracking-wider">{label}</p>
-        <p className="text-sm font-medium text-foreground truncate">{value}</p>
-      </div>
+    <div className="min-w-0">
+      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{label}</p>
+      <p className="text-sm font-medium text-foreground truncate">{value}</p>
     </div>
   );
 }
