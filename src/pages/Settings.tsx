@@ -60,19 +60,6 @@ const SettingsPage = () => {
     setSettings((prev) => ({ ...prev, [key]: prev[key] === "true" ? "false" : "true" }));
   };
 
-  const storeTypeColumns = [
-    { header: "Name", accessor: "name" as const, className: "font-medium" },
-    { header: "Order Type", accessor: (row: any) => <Badge variant="secondary">{row.order_type}</Badge> },
-    { header: "Auto Order", accessor: (row: any) => (
-      <Switch checked={row.auto_order_enabled} onCheckedChange={() => toggleAutoOrder(row.id, row.auto_order_enabled)} disabled={!isAdmin} />
-    )},
-    { header: "Status", accessor: (row: any) => <StatusBadge status={row.is_active ? "active" : "inactive"} /> },
-    { header: "Actions", accessor: (row: any) => isAdmin ? (
-      <Button variant={row.is_active ? "destructive" : "default"} size="sm" className="h-7 text-xs" onClick={() => toggleTypeActive(row.id, row.is_active)}>
-        {row.is_active ? "Disable" : "Enable"}
-      </Button>
-    ) : null },
-  ];
 
   if (loadingSettings || loadingTypes) {
     return <div className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
