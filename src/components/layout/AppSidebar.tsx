@@ -59,6 +59,16 @@ export function AppSidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
+  const { role } = useAuth();
+
+  // Customers see a minimal sidebar
+  const isCustomer = role === "customer";
+  const customerNav: NavItem[] = [
+    { label: "My Dashboard", path: "/", icon: LayoutDashboard },
+  ];
+
+  const visibleMainNav = isCustomer ? customerNav : mainNav;
+  const visibleSecondaryNav = isCustomer ? [] : secondaryNav;
 
   const renderNav = (items: NavItem[]) =>
     items.map((item) => {
