@@ -47,8 +47,8 @@ const AgentDashboard = () => {
     <div className="space-y-6 animate-fade-in">
       <PageHeader title="Dashboard" subtitle={`Welcome, ${profile?.full_name || "Agent"}! Here's your daily summary.`} />
 
-      {/* Quick Action Button */}
-      <div className="flex justify-center">
+      {/* Quick Action Button - Floating */}
+      <div className="fixed bottom-6 right-4 z-50 sm:bottom-8 sm:right-8">
         <QuickActionDrawer />
       </div>
 

@@ -187,9 +187,10 @@ export function QuickActionDrawer() {
     <>
       <Drawer open={open} onOpenChange={setOpen}>
         <DrawerTrigger asChild>
-          <Button size="lg" className="gap-2">
+          <Button size="lg" className="gap-2 rounded-full shadow-lg px-4 sm:px-6">
             <ScanLine className="h-5 w-5" />
-            Quick Actions
+            <span className="hidden sm:inline">Quick Actions</span>
+            <span className="sm:hidden">Scan</span>
           </Button>
         </DrawerTrigger>
         <DrawerContent className="max-h-[85vh]">

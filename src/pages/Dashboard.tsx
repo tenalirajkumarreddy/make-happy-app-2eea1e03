@@ -10,6 +10,7 @@ import { DashboardSkeleton } from "@/components/shared/DashboardSkeleton";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
 } from "recharts";
+import { QuickActionDrawer } from "@/components/agent/QuickActionDrawer";
 
 const COLORS = ["hsl(217, 91%, 50%)", "hsl(142, 72%, 42%)", "hsl(38, 92%, 50%)", "hsl(280, 65%, 60%)", "hsl(0, 72%, 51%)"];
 
@@ -86,6 +87,11 @@ const Dashboard = () => {
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader title="Dashboard" subtitle={`Welcome back, ${profile?.full_name || "User"}! Here's your business overview.`} />
+
+      {/* Quick Action Button - Floating */}
+      <div className="fixed bottom-6 right-4 z-50 sm:bottom-8 sm:right-8">
+        <QuickActionDrawer />
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <StatCard title="Total Sales (Today)" value={`₹${s.todayTotal.toLocaleString()}`} icon={DollarSign} iconColor="bg-primary" />
