@@ -113,6 +113,39 @@ const StoreDetail = () => {
     enabled: !!id,
   });
 
+  const { data: qrCodes } = useQuery({
+    queryKey: ["store-qr-codes", id],
+    queryFn: async () => {
+      const { data } = await supabase.from("store_qr_codes").select("*").eq("store_id", id!).order("created_at", { ascending: false });
+      return data || [];
+    },
+    enabled: !!id,
+  });
+
+  const handleQrScanned = async (rawData: string) => {
+    const upi = parseUpiQr(rawData);
+    if (!upi) { toast.error("Not a valid UPI QR code"); return; }
+    const { error } = await supabase.from("store_qr_codes").insert({
+      store_id: id!,
+      upi_id: upi.pa,
+      payee_name: upi.pn || null,
+      raw_data: rawData,
+    });
+    if (error) {
+      if (error.message.includes("duplicate")) toast.error("This QR is already linked to a store");
+      else toast.error(error.message);
+      return;
+    }
+    toast.success("QR code linked to store");
+    qc.invalidateQueries({ queryKey: ["store-qr-codes", id] });
+  };
+
+  const handleDeleteQr = async (qrId: string) => {
+    const { error } = await supabase.from("store_qr_codes").delete().eq("id", qrId);
+    if (error) { toast.error(error.message); return; }
+    toast.success("QR code removed");
+    qc.invalidateQueries({ queryKey: ["store-qr-codes", id] });
+  };
   const startEditing = () => {
     if (!store || !store.is_active) return;
     setForm({
