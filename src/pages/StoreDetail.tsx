@@ -486,6 +486,11 @@ const StoreDetail = () => {
                   <Scale className="h-3.5 w-3.5" /> Adjust Balance
                 </Button>
               )}
+              {canEdit && (
+                <Button variant="outline" size="sm" onClick={() => setShowTransfer(true)} className="gap-1.5">
+                  <ArrowRightLeft className="h-3.5 w-3.5" /> Transfer
+                </Button>
+              )}
               {store.lat && store.lng && (
                 <a href={`https://www.google.com/maps?q=${store.lat},${store.lng}`} target="_blank" rel="noopener noreferrer" className="hidden sm:inline-flex items-center gap-1.5 text-sm text-primary hover:underline">
                   <MapPin className="h-4 w-4" /> Map
