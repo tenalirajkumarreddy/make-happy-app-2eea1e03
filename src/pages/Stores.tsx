@@ -32,6 +32,7 @@ const Stores = () => {
   const [pricingStore, setPricingStore] = useState<any>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkRoute, setBulkRoute] = useState("");
+  const [filters, setFilters] = useState<FilterValues>({});
   const qc = useQueryClient();
   const canManagePricing = role === "super_admin" || role === "manager";
   const canBulk = role === "super_admin" || role === "manager";
