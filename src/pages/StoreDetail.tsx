@@ -504,6 +504,7 @@ const StoreDetail = () => {
           <StoreLedger
             sales={sales || []}
             transactions={transactions || []}
+            balanceAdjustments={balanceAdjustments || []}
             openingBalance={Number(store.opening_balance)}
             storeCreatedAt={store.created_at}
             profileMap={profileMap}
