@@ -112,9 +112,21 @@ const AccessControl = () => {
   };
 
   const handleToggleActive = async (userId: string, currentlyActive: boolean) => {
-    const { error } = await supabase.from("profiles").update({ is_active: !currentlyActive }).eq("user_id", userId);
-    if (error) toast.error(error.message);
-    else { toast.success(`User ${currentlyActive ? "disabled" : "enabled"}`); qc.invalidateQueries({ queryKey: ["all-users"] }); }
+    const newActive = !currentlyActive;
+    // Update profile
+    const { error } = await supabase.from("profiles").update({ is_active: newActive }).eq("user_id", userId);
+    if (error) { toast.error(error.message); return; }
+
+    // Ban/unban via edge function
+    const { error: banError } = await supabase.functions.invoke("toggle-user-ban", {
+      body: { user_id: userId, ban: !newActive },
+    });
+    if (banError) {
+      toast.error("Profile updated but auth ban failed: " + banError.message);
+    } else {
+      toast.success(`User ${currentlyActive ? "disabled" : "enabled"}`);
+    }
+    qc.invalidateQueries({ queryKey: ["all-users"] });
   };
 
   const handleChangeRole = async (userId: string, newRole: string) => {
