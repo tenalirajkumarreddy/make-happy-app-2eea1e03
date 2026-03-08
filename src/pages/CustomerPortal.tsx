@@ -10,6 +10,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { DataTable } from "@/components/shared/DataTable";
+import { BannerCarousel } from "@/components/banners/BannerCarousel";
 
 const CustomerPortal = () => {
   const { user } = useAuth();
