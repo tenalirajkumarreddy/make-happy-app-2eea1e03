@@ -227,7 +227,7 @@ const AccessControl = () => {
           {/* Mobile: card view */}
           <div className="md:hidden space-y-3">
             {staffUsers.map((row) => {
-              const userRole = (row.user_roles as any)?.[0]?.role || "—";
+              const userRole = row._role || "—";
               const userPerms = getPermissionsForUser(row.user_id);
               const isSA = userRole === "super_admin";
               return (
