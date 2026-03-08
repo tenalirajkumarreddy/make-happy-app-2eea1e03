@@ -14,8 +14,11 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { ImageUpload } from "@/components/shared/ImageUpload";
-import { Loader2, MapPin, ChevronRight, ChevronLeft, Plus, Check } from "lucide-react";
+import { Loader2, MapPin, ChevronRight, ChevronLeft, Plus, Check, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import {
+  Alert, AlertDescription, AlertTitle,
+} from "@/components/ui/alert";
 
 interface CreateStoreWizardProps {
   open: boolean;
