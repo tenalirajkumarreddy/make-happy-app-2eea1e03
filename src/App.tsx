@@ -22,6 +22,7 @@ import Activity from "./pages/Activity";
 import AccessControl from "./pages/AccessControl";
 import Settings from "./pages/Settings";
 import CustomerPortal from "./pages/CustomerPortal";
+import MapPage from "./pages/MapPage";
 import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
