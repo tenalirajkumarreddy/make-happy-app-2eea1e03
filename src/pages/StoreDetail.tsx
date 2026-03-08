@@ -13,12 +13,9 @@ import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
-import {
   Loader2, ArrowLeft, DollarSign, ShoppingCart, Banknote,
   MapPin, Store as StoreIcon, Phone, User, Tag, Navigation, Calendar,
-  Pencil, X, Save, AlertTriangle, Package, ScanLine, Trash2,
+  Pencil, X, Save, AlertTriangle, ScanLine, Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
@@ -26,6 +23,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { QrScanner } from "@/components/shared/QrScanner";
 import { parseUpiQr } from "@/lib/upiParser";
+import { StoreLedger } from "@/components/stores/StoreLedger";
 
 const StoreDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -37,7 +35,6 @@ const StoreDetail = () => {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
-  const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
   const [showQrScanner, setShowQrScanner] = useState(false);
   const [form, setForm] = useState({
     name: "",
@@ -122,18 +119,6 @@ const StoreDetail = () => {
     enabled: !!id,
   });
 
-  // Fetch sale items for detail view (must be before early returns to respect Rules of Hooks)
-  const { data: saleItems, isLoading: loadingSaleItems } = useQuery({
-    queryKey: ["sale-items-detail", selectedSaleId],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("sale_items")
-        .select("*, products(name, sku)")
-        .eq("sale_id", selectedSaleId!);
-      return data || [];
-    },
-    enabled: !!selectedSaleId,
-  });
 
   const handleQrScanned = async (rawData: string) => {
     const upi = parseUpiQr(rawData);
@@ -236,40 +221,7 @@ const StoreDetail = () => {
   const fullAddress = [store.street, store.area, store.city, store.district, store.state, store.pincode].filter(Boolean).join(", ") || store.address || "Not provided";
 
 
-  const selectedSale = sales?.find((s) => s.id === selectedSaleId);
 
-  const salesColumns = [
-    { header: "Sale ID", accessor: "display_id" as const, className: "font-mono text-xs" },
-    { header: "Total", accessor: (row: any) => <span className="font-semibold">₹{Number(row.total_amount).toLocaleString()}</span> },
-    { header: "Cash", accessor: (row: any) => `₹${Number(row.cash_amount).toLocaleString()}`, className: "hidden md:table-cell" },
-    { header: "UPI", accessor: (row: any) => `₹${Number(row.upi_amount).toLocaleString()}`, className: "hidden md:table-cell" },
-    { header: "Outstanding", accessor: (row: any) => (
-      <span className={Number(row.outstanding_amount) > 0 ? "text-destructive font-medium" : "text-muted-foreground"}>
-        ₹{Number(row.outstanding_amount).toLocaleString()}
-      </span>
-    ), className: "hidden sm:table-cell" },
-    { header: "Recorded By", accessor: (row: any) => {
-      const p = getRecorder(row.recorded_by);
-      return (
-        <div className="flex items-center gap-1.5">
-          <Avatar className="h-5 w-5">
-            <AvatarImage src={p?.avatar_url || undefined} />
-            <AvatarFallback className="text-[9px] bg-primary/10 text-primary">{(p?.full_name || "?").charAt(0)}</AvatarFallback>
-          </Avatar>
-          <span className="text-xs">{p?.full_name || "—"}</span>
-        </div>
-      );
-    }, className: "hidden lg:table-cell" },
-    { header: "Date", accessor: (row: any) => new Date(row.created_at).toLocaleDateString("en-IN"), className: "text-muted-foreground text-xs" },
-  ];
-
-  const txnColumns = [
-    { header: "Txn ID", accessor: "display_id" as const, className: "font-mono text-xs" },
-    { header: "Amount", accessor: (row: any) => `₹${Number(row.total_amount).toLocaleString()}`, className: "font-semibold" },
-    { header: "Cash", accessor: (row: any) => `₹${Number(row.cash_amount).toLocaleString()}`, className: "hidden md:table-cell" },
-    { header: "UPI", accessor: (row: any) => `₹${Number(row.upi_amount).toLocaleString()}`, className: "hidden md:table-cell" },
-    { header: "Date", accessor: (row: any) => new Date(row.created_at).toLocaleDateString("en-IN"), className: "text-muted-foreground text-xs" },
-  ];
 
   const orderColumns = [
     { header: "Order ID", accessor: "display_id" as const, className: "font-mono text-xs" },
@@ -491,34 +443,20 @@ const StoreDetail = () => {
         <StatCard title="Orders" value={String(orders?.length || 0)} icon={ShoppingCart} iconColor="bg-info" />
       </div>
 
-      <Tabs defaultValue="sales">
+      <Tabs defaultValue="ledger">
         <TabsList className="w-full sm:w-auto overflow-x-auto">
-          <TabsTrigger value="sales" className="text-xs sm:text-sm">Sales ({sales?.length || 0})</TabsTrigger>
-          <TabsTrigger value="transactions" className="text-xs sm:text-sm">Collections ({transactions?.length || 0})</TabsTrigger>
+          <TabsTrigger value="ledger" className="text-xs sm:text-sm">Ledger ({(sales?.length || 0) + (transactions?.length || 0)})</TabsTrigger>
           <TabsTrigger value="orders" className="text-xs sm:text-sm">Orders ({orders?.length || 0})</TabsTrigger>
           <TabsTrigger value="visits" className="text-xs sm:text-sm">Visits ({visits?.length || 0})</TabsTrigger>
           <TabsTrigger value="qr" className="text-xs sm:text-sm">QR ({qrCodes?.length || 0})</TabsTrigger>
         </TabsList>
-        <TabsContent value="sales" className="mt-4">
-          {(sales?.length || 0) === 0 ? <EmptyTab label="No sales yet" /> : (
-            <DataTable
-              columns={salesColumns}
-              data={sales || []}
-              searchKey="display_id"
-              searchPlaceholder="Search sales..."
-              onRowClick={(row: any) => setSelectedSaleId(row.id)}
-              renderMobileCard={(row: any) => {
-                const card = renderCompactCard("sale")(row);
-                return <div className="cursor-pointer" onClick={() => setSelectedSaleId(row.id)}>{card}</div>;
-              }}
-            />
-          )}
-        </TabsContent>
-        <TabsContent value="transactions" className="mt-4">
-          {(transactions?.length || 0) === 0 ? <EmptyTab label="No collections yet" /> : (
-            <DataTable columns={txnColumns} data={transactions || []} searchKey="display_id" searchPlaceholder="Search..."
-              renderMobileCard={renderCompactCard("txn")} />
-          )}
+        <TabsContent value="ledger" className="mt-4">
+          <StoreLedger
+            sales={sales || []}
+            transactions={transactions || []}
+            openingBalance={Number(store.opening_balance)}
+            profileMap={profileMap}
+          />
         </TabsContent>
         <TabsContent value="orders" className="mt-4">
           {(orders?.length || 0) === 0 ? <EmptyTab label="No orders yet" /> : (
@@ -560,64 +498,6 @@ const StoreDetail = () => {
           </div>
         </TabsContent>
       </Tabs>
-
-      <QrScanner open={showQrScanner} onOpenChange={setShowQrScanner} onScan={handleQrScanned} title="Scan Store QR" />
-
-      {/* Sale Detail Dialog */}
-      <Dialog open={!!selectedSaleId} onOpenChange={(v) => { if (!v) setSelectedSaleId(null); }}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Sale Details</DialogTitle></DialogHeader>
-          {selectedSale && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-sm text-muted-foreground">{selectedSale.display_id}</span>
-                <span className="text-xs text-muted-foreground">{new Date(selectedSale.created_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</span>
-              </div>
-              <div className="rounded-lg border bg-muted/30 p-3 space-y-1 text-sm">
-                <div className="flex justify-between"><span>Total</span><span className="font-bold">₹{Number(selectedSale.total_amount).toLocaleString()}</span></div>
-                <div className="flex justify-between"><span>Cash</span><span>₹{Number(selectedSale.cash_amount).toLocaleString()}</span></div>
-                <div className="flex justify-between"><span>UPI</span><span>₹{Number(selectedSale.upi_amount).toLocaleString()}</span></div>
-                <div className="flex justify-between font-medium"><span>Outstanding</span><span className={Number(selectedSale.outstanding_amount) > 0 ? "text-destructive" : ""}>₹{Number(selectedSale.outstanding_amount).toLocaleString()}</span></div>
-              </div>
-              <div>
-                <p className="text-sm font-medium mb-2 flex items-center gap-1.5"><Package className="h-4 w-4 text-muted-foreground" /> Items</p>
-                {loadingSaleItems ? (
-                  <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
-                ) : saleItems && saleItems.length > 0 ? (
-                  <div className="space-y-1.5">
-                    {saleItems.map((item: any) => (
-                      <div key={item.id} className="flex items-center justify-between rounded-lg border bg-card p-2.5 text-sm">
-                        <div>
-                          <p className="font-medium">{item.products?.name || "—"}</p>
-                          <p className="text-[11px] text-muted-foreground">{item.products?.sku} · Qty: {Number(item.quantity)}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-semibold">₹{Number(item.total_price).toLocaleString()}</p>
-                          <p className="text-[11px] text-muted-foreground">@ ₹{Number(item.unit_price).toLocaleString()}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground">No items recorded</p>
-                )}
-              </div>
-              {(() => {
-                const p = getRecorder(selectedSale.recorded_by);
-                return (
-                  <div className="flex items-center gap-2 pt-2 border-t">
-                    <Avatar className="h-5 w-5">
-                      <AvatarImage src={p?.avatar_url || undefined} />
-                      <AvatarFallback className="text-[9px] bg-primary/10 text-primary">{(p?.full_name || "?").charAt(0)}</AvatarFallback>
-                    </Avatar>
-                    <span className="text-xs text-muted-foreground">Recorded by {p?.full_name || "—"}</span>
-                  </div>
-                );
-              })()}
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };
