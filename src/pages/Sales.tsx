@@ -437,6 +437,7 @@ const Sales = () => {
                   <SelectContent>{stores?.map((s) => <SelectItem key={s.id} value={s.id}>{s.name} ({s.display_id})</SelectItem>)}</SelectContent>
                 </Select>
                 <QrStoreSelector onStoreSelected={handleStoreChange} />
+              </div>
               {selectedStore && (
                 <p className="text-xs text-muted-foreground mt-1">Current outstanding: ₹{oldOutstanding.toLocaleString()}</p>
               )}
