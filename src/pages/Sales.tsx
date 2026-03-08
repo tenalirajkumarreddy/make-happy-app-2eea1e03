@@ -458,6 +458,21 @@ const Sales = () => {
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Record Sale</DialogTitle></DialogHeader>
           <form onSubmit={handleAdd} className="space-y-4">
+            {canRecordBehalf && (
+              <div>
+                <Label>Record on behalf of</Label>
+                <Select value={recordedFor} onValueChange={setRecordedFor}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="Myself (default)" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="self">Myself</SelectItem>
+                    {staffUsers?.map((s) => (
+                      <SelectItem key={s.user_id} value={s.user_id}>{s.full_name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             <div>
               <Label>Store</Label>
               <div className="flex gap-2 mt-1">
