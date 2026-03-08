@@ -555,6 +555,9 @@ const Sales = () => {
             <div className="rounded-lg border bg-muted/30 p-3 space-y-1 text-sm">
               <div className="flex justify-between"><span>Payment</span><span>₹{(cash + upi).toLocaleString()}</span></div>
               <div className="flex justify-between font-semibold"><span>New Outstanding</span><span className={newOutstanding > oldOutstanding ? "text-destructive" : "text-success"}>₹{newOutstanding.toLocaleString()}</span></div>
+              {isPosUser && (cash + upi) !== totalAmount && totalAmount > 0 && (
+                <p className="text-xs text-destructive mt-1">⚠ POS sales require full payment (Cash + UPI = Total)</p>
+              )}
             </div>
 
             <Button type="submit" className="w-full" disabled={saving}>
