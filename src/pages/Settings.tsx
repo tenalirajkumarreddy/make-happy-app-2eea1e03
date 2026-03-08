@@ -95,6 +95,28 @@ const SettingsPage = () => {
           <div className="rounded-xl border bg-card p-6 space-y-4 max-w-lg">
             <h3 className="font-semibold">Company Information</h3>
             <div className="space-y-3">
+              {/* Company Logo */}
+              <div>
+                <Label>Company Logo</Label>
+                <div className="mt-1 flex items-center gap-3">
+                  <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
+                  {settings.company_logo ? (
+                    <div className="relative h-16 w-16 rounded-lg border bg-muted overflow-hidden">
+                      <img src={settings.company_logo} alt="Logo" className="h-full w-full object-contain" />
+                      {isAdmin && (
+                        <button onClick={removeLogo} className="absolute top-0.5 right-0.5 rounded-full bg-destructive/80 p-0.5 text-destructive-foreground hover:bg-destructive">
+                          <X className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <Button type="button" variant="outline" size="sm" onClick={() => logoInputRef.current?.click()} disabled={!isAdmin || uploadingLogo} className="gap-1.5">
+                      {uploadingLogo ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                      Upload Logo
+                    </Button>
+                  )}
+                </div>
+              </div>
               <div><Label>Company Name</Label><Input value={settings.company_name || ""} onChange={(e) => setSettings({ ...settings, company_name: e.target.value })} className="mt-1" disabled={!isAdmin} /></div>
               <div><Label>GST Number</Label><Input value={settings.gst_number || ""} onChange={(e) => setSettings({ ...settings, gst_number: e.target.value })} className="mt-1" disabled={!isAdmin} /></div>
               <div><Label>Customer Care Number</Label><Input value={settings.customer_care_number || ""} onChange={(e) => setSettings({ ...settings, customer_care_number: e.target.value })} className="mt-1" disabled={!isAdmin} /></div>
