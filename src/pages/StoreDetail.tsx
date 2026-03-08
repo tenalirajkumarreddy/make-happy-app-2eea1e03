@@ -163,6 +163,41 @@ const StoreDetail = () => {
     toast.success("QR code removed");
     qc.invalidateQueries({ queryKey: ["store-qr-codes", id] });
   };
+
+  const handleAdjustBalance = async () => {
+    if (!store || !id || !user) return;
+    const newBal = parseFloat(newBalanceInput);
+    if (isNaN(newBal)) { toast.error("Enter a valid amount"); return; }
+    const oldBal = Number(store.outstanding);
+    if (newBal === oldBal) { toast.error("New balance is the same as current"); return; }
+
+    setAdjustSaving(true);
+    const adjustment = newBal - oldBal;
+
+    const { error } = await supabase.from("balance_adjustments").insert({
+      store_id: id,
+      customer_id: store.customer_id,
+      old_outstanding: oldBal,
+      new_outstanding: newBal,
+      adjustment_amount: adjustment,
+      reason: adjustReason || null,
+      adjusted_by: user.id,
+    });
+
+    if (error) { toast.error(error.message); setAdjustSaving(false); return; }
+
+    await supabase.from("stores").update({ outstanding: newBal }).eq("id", id);
+    logActivity(user.id, "Balance adjustment", "store", store.display_id, id, { old: oldBal, new: newBal, adjustment });
+
+    toast.success("Balance adjusted");
+    setAdjustSaving(false);
+    setShowAdjustBalance(false);
+    setNewBalanceInput("");
+    setAdjustReason("");
+    qc.invalidateQueries({ queryKey: ["store", id] });
+    qc.invalidateQueries({ queryKey: ["balance-adjustments", id] });
+  };
+
   const startEditing = () => {
     if (!store || !store.is_active) return;
     setForm({
