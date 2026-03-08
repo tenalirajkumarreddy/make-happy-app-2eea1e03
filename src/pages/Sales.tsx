@@ -274,36 +274,35 @@ const Sales = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <PageHeader title="Sales" subtitle="View and record sales transactions" actionLabel="Record Sale" onAction={() => setShowAdd(true)} />
-      </div>
-
-      <div className="flex gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            exportCSV(
-              (sales || []).map((s: any) => ({ ...s, store_name: s.stores?.name || "", customer_name: s.customers?.name || "", recorder: getRecorderName(s.recorded_by) })),
-              [
-                { header: "Sale ID", key: "display_id" },
-                { header: "Store", key: "store_name" },
-                { header: "Customer", key: "customer_name" },
-                { header: "Total", key: "total_amount" },
-                { header: "Cash", key: "cash_amount" },
-                { header: "UPI", key: "upi_amount" },
-                { header: "Outstanding", key: "outstanding_amount" },
-                { header: "Recorded By", key: "recorder" },
-                { header: "Date", key: "created_at" },
-              ],
-              "sales-export.csv"
-            );
-          }}
-        >
-          <Download className="mr-1.5 h-4 w-4" />
-          Export CSV
-        </Button>
-      </div>
+      <PageHeader
+        title="Sales"
+        subtitle="View and record sales transactions"
+        primaryAction={{ label: "Record Sale", onClick: () => setShowAdd(true) }}
+        actions={[
+          {
+            label: "Export CSV",
+            icon: Download,
+            priority: 1,
+            onClick: () => {
+              exportCSV(
+                (sales || []).map((s: any) => ({ ...s, store_name: s.stores?.name || "", customer_name: s.customers?.name || "", recorder: getRecorderName(s.recorded_by) })),
+                [
+                  { header: "Sale ID", key: "display_id" },
+                  { header: "Store", key: "store_name" },
+                  { header: "Customer", key: "customer_name" },
+                  { header: "Total", key: "total_amount" },
+                  { header: "Cash", key: "cash_amount" },
+                  { header: "UPI", key: "upi_amount" },
+                  { header: "Outstanding", key: "outstanding_amount" },
+                  { header: "Recorded By", key: "recorder" },
+                  { header: "Date", key: "created_at" },
+                ],
+                "sales-export.csv"
+              );
+            },
+          },
+        ]}
+      />
 
       <DataTable
         columns={columns}

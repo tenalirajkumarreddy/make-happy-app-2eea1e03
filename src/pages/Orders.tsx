@@ -145,7 +145,7 @@ const Orders = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Orders" subtitle="Manage customer orders and fulfillment" actionLabel="Create Order" onAction={() => setShowAdd(true)} />
+      <PageHeader title="Orders" subtitle="Manage customer orders and fulfillment" primaryAction={{ label: "Create Order", onClick: () => setShowAdd(true) }} />
 
       <Tabs value={statusFilter} onValueChange={setStatusFilter}>
         <TabsList>

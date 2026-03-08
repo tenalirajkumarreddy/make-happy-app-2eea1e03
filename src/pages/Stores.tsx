@@ -129,7 +129,7 @@ const Stores = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Stores" subtitle="Manage store locations and assignments" actionLabel="Add Store" onAction={() => setShowAdd(true)} />
+      <PageHeader title="Stores" subtitle="Manage store locations and assignments" primaryAction={{ label: "Add Store", onClick: () => setShowAdd(true) }} />
 
       {canBulk && selected.size > 0 && (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-accent/50 p-3">

@@ -125,7 +125,7 @@ const Transactions = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Transactions" subtitle="View and record payment transactions" actionLabel="Record Transaction" onAction={() => setShowAdd(true)} />
+      <PageHeader title="Transactions" subtitle="View and record payment transactions" primaryAction={{ label: "Record Transaction", onClick: () => setShowAdd(true) }} />
       <DataTable columns={columns} data={transactions || []} searchKey="display_id" searchPlaceholder="Search by payment ID..." />
 
       <Dialog open={showAdd} onOpenChange={(v) => { setShowAdd(v); if (!v) resetForm(); }}>

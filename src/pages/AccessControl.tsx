@@ -152,8 +152,7 @@ const AccessControl = () => {
       <PageHeader
         title="Access Control"
         subtitle="Manage user roles, permissions, and access"
-        actionLabel="Invite Staff"
-        onAction={() => setShowInvite(true)}
+        primaryAction={{ label: "Invite Staff", onClick: () => setShowInvite(true) }}
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

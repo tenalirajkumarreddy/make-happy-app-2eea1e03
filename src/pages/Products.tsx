@@ -2,14 +2,14 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
-import { Package, Pencil, X, Save, AlertTriangle } from "lucide-react";
+import { Package, Pencil, X, Save, AlertTriangle, Grid3X3, Download } from "lucide-react";
 import { ImageUpload } from "@/components/shared/ImageUpload";
 import { ProductAccessMatrix } from "@/components/products/ProductAccessMatrix";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { logActivity } from "@/lib/activityLogger";
-import { Loader2, Grid3X3 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -172,15 +172,11 @@ const Products = () => {
       <PageHeader
         title="Products"
         subtitle="Manage your product catalog and pricing"
-        actionLabel="Add Product"
-        onAction={() => { resetForm(); setShowAdd(true); }}
+        primaryAction={{ label: "Add Product", onClick: () => { resetForm(); setShowAdd(true); } }}
+        actions={[
+          { label: "Product Access", icon: Grid3X3, onClick: () => setShowMatrix(true), priority: 1 },
+        ]}
       />
-      <div className="flex gap-2">
-        <Button variant="outline" onClick={() => setShowMatrix(true)}>
-          <Grid3X3 className="mr-2 h-4 w-4" />
-          Product Access
-        </Button>
-      </div>
       <DataTable
         columns={columns}
         data={products || []}
