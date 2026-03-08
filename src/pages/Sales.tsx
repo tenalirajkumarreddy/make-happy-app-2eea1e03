@@ -52,6 +52,7 @@ interface SaleItem {
 
 const Sales = () => {
   const { user } = useAuth();
+  const { allowed: canOverridePrice } = usePermission("price_override");
   const qc = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
   const [saving, setSaving] = useState(false);
