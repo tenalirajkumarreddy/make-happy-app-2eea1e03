@@ -160,7 +160,7 @@ const AccessControl = () => {
                 </TableHeader>
                 <TableBody>
                   {staffUsers.map((row) => {
-                    const userRole = (row.user_roles as any)?.[0]?.role || "—";
+                    const userRole = row._role || "—";
                     const userPerms = getPermissionsForUser(row.user_id);
                     return (
                       <TableRow key={row.id}>
