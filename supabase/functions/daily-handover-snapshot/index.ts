@@ -16,12 +16,20 @@ Deno.serve(async (req) => {
 
     const today = new Date().toISOString().split("T")[0];
 
-    // Get all users with roles (staff)
-    const { data: roles } = await supabase.from("user_roles").select("user_id");
+    // Get all staff users
+    const { data: roles } = await supabase.from("user_roles").select("user_id, role").neq("role", "customer");
     const userIds = [...new Set((roles || []).map((r) => r.user_id))];
 
+    // Get finalizer permission holders
+    const { data: finalizerPerms } = await supabase
+      .from("user_permissions")
+      .select("user_id")
+      .eq("permission", "finalizer")
+      .eq("enabled", true);
+    const finalizerIds = new Set((finalizerPerms || []).map((p) => p.user_id));
+
     for (const userId of userIds) {
-      // Sales totals for this user
+      // Sales totals
       const { data: sales } = await supabase
         .from("sales")
         .select("cash_amount, upi_amount")
@@ -62,8 +70,13 @@ Deno.serve(async (req) => {
 
       const balance = salesTotal + recvConfTotal - sentConfTotal - sentPendTotal;
 
+      // For finalizers, this balance is the "Total Income" for the day
       await supabase.from("handover_snapshots").upsert(
-        { user_id: userId, snapshot_date: today, balance_amount: Math.max(0, balance) },
+        {
+          user_id: userId,
+          snapshot_date: today,
+          balance_amount: Math.max(0, balance),
+        },
         { onConflict: "user_id,snapshot_date" }
       );
     }
