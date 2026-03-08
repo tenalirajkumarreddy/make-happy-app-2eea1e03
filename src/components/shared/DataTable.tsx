@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/select";
 
 interface Column<T> {
-  header: string;
+  header: string | (() => React.ReactNode);
   accessor: keyof T | ((row: T) => React.ReactNode);
   className?: string;
 }
