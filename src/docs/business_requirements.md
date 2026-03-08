@@ -1291,16 +1291,27 @@ Each card shows:
 **Access:** Admin and Managers only
 
 ### Bulk Customer Operations
-- Bulk edit customer details
+- Bulk activate/deactivate customers (with cascade to stores on deactivate)
 - Bulk KYC approval/rejection
 - Bulk credit limit update
-- Bulk export to Excel
+- **CSV Import**: Upload CSV file to create multiple customers at once
+  - Template download available
+  - Required fields: `name`
+  - Optional fields: `phone`, `email`, `address`
+  - Validation with error reporting per row
+- **Inline Table Editing**: Click any cell (name, phone, email) to edit in-place
+  - Press Enter to save, Escape to cancel
+  - Only super_admin/manager can edit
 
 ### Bulk Store Operations
-- Bulk route assignment
+- Bulk route assignment (select multiple stores → assign route)
 - Bulk enable/disable stores
 - Bulk pricing updates
-- Bulk export to Excel
+- **CSV Import**: Upload CSV to create multiple stores
+  - Required fields: `name`, `customer` (name or display ID), `store_type`
+  - Optional fields: `route`, `phone`, `address`
+  - Automatically matches customer, store type, and route by name
+- **Inline Table Editing**: Click store name or phone to edit in-place
 
 ### Bulk User Operations
 - Bulk permission changes
@@ -1571,18 +1582,22 @@ Each card shows:
 - Admin can override for individual stores
 - Affects what customers see when creating orders
 
-### Additional Permissions
+### Additional Permissions (Toggle-Based)
 
-**Controlled by Admin:**
-- Override product pricing (per user)
-- Add opening balance (per user)
-- Edit store balance manually (per user)
-- Enable/Disable Customers (cascades disable to their stores)
-- Enable/Disable Stores
-- Modify custom pricing for stores (Managers + Admin only)
-- Access to specific routes (per agent)
-- Collect handovers (Managers + Admin only)
-- Enable/disable partial collections (global setting)
+**Controlled by Admin per user (toggle on/off):**
+
+| Permission | Key | Description |
+|---|---|---|
+| Price Override | `price_override` | Can override product pricing when recording sales |
+| Record on Behalf | `record_behalf` | Can record sales/transactions on behalf of other users |
+| Create Customers | `create_customers` | Can create new customer records |
+| Create Stores | `create_stores` | Can create new store records |
+| Edit Balance | `edit_balance` | Can manually adjust store outstanding balance (logged in Balance Adjustment log) |
+| Opening Balance | `opening_balance` | Can set opening balance when creating a store (+ or - values supported) |
+
+- Super Admin always has all permissions regardless of toggles
+- Permissions are managed per-user in the Access Control → User Permissions panel
+- Each permission can be independently enabled/disabled
 
 ### User-Specific Overrides
 
@@ -1596,6 +1611,9 @@ Each card shows:
 
 ### Account Control
 - **Enable/Disable Users**: Admin can turn user accounts on/off
+- **Auth-level ban**: Disabling a user sets a ban at the authentication level (100-year ban duration)
+- **Active session termination**: Already logged-in users are force-signed-out when their profile is marked inactive (checked on every page load)
+- **Re-enabling**: Removes the auth ban, user can log in again immediately
 - **Disabled users**: Cannot access system, see "Contact Admin" message
 
 ---
@@ -1897,11 +1915,83 @@ Date: 2026-01-19
 
 ---
 
-**Document Version**: 3.0
-**Last Updated**: 2026-01-19
-**Status**: Comprehensive Update - Ready for Review
+**Document Version**: 4.0
+**Last Updated**: 2026-03-08
+**Status**: Implementation Update - Reflects Current Build
 
 ## Changelog
+
+### Version 4.0 (2026-03-08)
+**Implementation Updates & New Features:**
+
+1. **Toggle-Based Permission System (Implemented)**
+   - Six granular permissions managed per-user via Access Control UI:
+     - `price_override` — Override product pricing during sales
+     - `record_behalf` — Record sales/transactions on behalf of others
+     - `create_customers` — Create new customer records
+     - `create_stores` — Create new store records
+     - `edit_balance` — Manually adjust store outstanding (logged in balance_adjustments table)
+     - `opening_balance` — Set opening balance when creating stores (supports + and - values)
+   - Super Admin always has all permissions regardless of toggles
+   - Permissions stored in `user_permissions` table with RLS
+
+2. **Balance Adjustment System (Implemented)**
+   - Dedicated `balance_adjustments` table for audit trail
+   - Records: old_outstanding, new_outstanding, adjustment_amount, reason, adjusted_by
+   - Adjustments appear in store ledger as "ADJUSTMENT" entries
+   - Positive adjustments (increasing debt) shown as Debit, negative as Credit
+
+3. **User Disable / Auth Ban (Implemented)**
+   - Disabling a user via Access Control:
+     - Sets `is_active = false` on profiles table
+     - Calls `toggle-user-ban` edge function to ban at auth level (100-year ban)
+     - Already logged-in users are force-signed-out on next page load (AuthContext checks `is_active`)
+   - Re-enabling removes the ban, user can log in immediately
+   - Only super_admin can disable/enable users
+
+4. **Inline Table Editing (Implemented)**
+   - Customers page: Click name, phone, or email cells to edit in-place
+   - Stores page: Click store name or phone to edit in-place
+   - Press Enter to save, Escape to cancel
+   - Only super_admin/manager can edit
+   - Changes saved immediately to database
+
+5. **CSV Import (Implemented)**
+   - Customers page: Import CSV with name (required), phone, email, address
+   - Stores page: Import CSV with name, customer, store_type (required), route, phone, address
+   - Template download button for each entity
+   - Automatic matching of customer/store_type/route by name
+   - Per-row validation and error reporting
+   - Activity logging for imports
+
+6. **Customer-Account Auto-Linking (Implemented)**
+   - `handle_new_user` database trigger auto-links customer records by matching email
+   - Flow: Admin creates customer with email → Customer signs up (email or Google) → Trigger matches and sets `user_id`
+   - Customer automatically gets `customer` role
+
+7. **Notification System (Implemented)**
+   - Real-time notifications via Supabase Realtime (postgres_changes)
+   - Bell icon in TopBar with unread count badge
+   - Fetches: pending orders, pending KYC, pending handovers
+   - Listens for: new orders, KYC submissions, new handovers
+   - Mark all as read functionality
+   - Removed mock/hardcoded badge from sidebar Orders item
+
+8. **Store Ledger Enhancement**
+   - Ledger now displays balance adjustments alongside sales and transactions
+   - Adjustments show with "ADJUSTMENT" badge
+   - Proper debit/credit column placement based on adjustment direction
+
+9. **Opening Balance Permission Enforcement**
+   - Opening balance field in store creation wizard is conditionally shown based on `opening_balance` permission
+   - Without permission, stores created with default balance of 0
+   - Supports both positive (dues) and negative (advance/credit) values
+
+10. **Edge Function: toggle-user-ban**
+    - Supabase edge function at `supabase/functions/toggle-user-ban/index.ts`
+    - Verifies caller is super_admin before processing
+    - Uses Supabase Admin Auth API to set/remove ban_duration
+    - CORS-enabled for client-side calls
 
 ### Version 3.0 (2026-01-19)
 **Major Additions & Enhancements:**
