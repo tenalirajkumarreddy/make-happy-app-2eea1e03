@@ -73,9 +73,9 @@ const Handovers = () => {
   const { data: profileMap } = useQuery({
     queryKey: ["profile-map"],
     queryFn: async () => {
-      const { data } = await supabase.from("profiles").select("user_id, full_name");
-      const map: Record<string, string> = {};
-      (data || []).forEach((p) => { map[p.user_id] = p.full_name; });
+      const { data } = await supabase.from("profiles").select("user_id, full_name, avatar_url");
+      const map: Record<string, { name: string; avatar: string | null }> = {};
+      (data || []).forEach((p) => { map[p.user_id] = { name: p.full_name, avatar: p.avatar_url }; });
       return map;
     },
   });
