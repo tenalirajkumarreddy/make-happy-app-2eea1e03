@@ -163,6 +163,12 @@ const Stores = () => {
           </form>
         </DialogContent>
       </Dialog>
+
+      <StorePricingDialog
+        store={pricingStore}
+        open={!!pricingStore}
+        onOpenChange={(open) => { if (!open) setPricingStore(null); }}
+      />
     </div>
   );
 };

@@ -68,6 +68,8 @@ const Routes = () => {
     <div className="space-y-6 animate-fade-in">
       <PageHeader title="Routes" subtitle="Manage delivery routes by store type" actionLabel="Create Route" onAction={() => setShowAdd(true)} />
 
+      <RouteSessionPanel />
+
       {storeTypes && storeTypes.length > 0 ? (
         <Tabs defaultValue={defaultTab}>
           <TabsList>
