@@ -437,8 +437,17 @@ const Sales = () => {
                   <AvatarImage src={getRecorderAvatar(selectedSale.recorded_by) || undefined} />
                   <AvatarFallback className="text-[9px] bg-primary/10 text-primary">{getRecorderName(selectedSale.recorded_by).charAt(0)}</AvatarFallback>
                 </Avatar>
-                <span className="text-xs text-muted-foreground">Recorded by {getRecorderName(selectedSale.recorded_by)}</span>
+               <span className="text-xs text-muted-foreground">Recorded by {getRecorderName(selectedSale.recorded_by)}</span>
               </div>
+              {(selectedSale as any).logged_by && (
+                <div className="flex items-center gap-2">
+                  <Avatar className="h-5 w-5">
+                    <AvatarImage src={getRecorderAvatar((selectedSale as any).logged_by) || undefined} />
+                    <AvatarFallback className="text-[9px] bg-accent/20 text-accent-foreground">{getRecorderName((selectedSale as any).logged_by).charAt(0)}</AvatarFallback>
+                  </Avatar>
+                  <span className="text-xs text-muted-foreground">Logged by {getRecorderName((selectedSale as any).logged_by)}</span>
+                </div>
+              )}
             </div>
           )}
         </DialogContent>
