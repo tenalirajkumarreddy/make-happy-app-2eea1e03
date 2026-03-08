@@ -101,7 +101,7 @@ const Customers = () => {
         actionLabel="Add Customer"
         onAction={() => setShowAdd(true)}
       />
-      <DataTable columns={columns} data={customers || []} searchKey="name" searchPlaceholder="Search customers..." />
+      <DataTable columns={columns} data={customers || []} searchKey="name" searchPlaceholder="Search customers..." onRowClick={(row) => navigate(`/customers/${row.id}`)} />
 
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
         <DialogContent>
