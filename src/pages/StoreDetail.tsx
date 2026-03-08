@@ -496,6 +496,7 @@ const StoreDetail = () => {
           <TabsTrigger value="transactions" className="text-xs sm:text-sm">Collections ({transactions?.length || 0})</TabsTrigger>
           <TabsTrigger value="orders" className="text-xs sm:text-sm">Orders ({orders?.length || 0})</TabsTrigger>
           <TabsTrigger value="visits" className="text-xs sm:text-sm">Visits ({visits?.length || 0})</TabsTrigger>
+          <TabsTrigger value="qr" className="text-xs sm:text-sm">QR ({qrCodes?.length || 0})</TabsTrigger>
         </TabsList>
         <TabsContent value="sales" className="mt-4">
           {(sales?.length || 0) === 0 ? <EmptyTab label="No sales yet" /> : (
@@ -530,7 +531,36 @@ const StoreDetail = () => {
               renderMobileCard={renderCompactCard("visit")} />
           )}
         </TabsContent>
+        <TabsContent value="qr" className="mt-4">
+          <div className="space-y-4">
+            {canEdit && (
+              <Button variant="outline" size="sm" onClick={() => setShowQrScanner(true)} className="gap-2">
+                <ScanLine className="h-4 w-4" /> Scan & Add QR
+              </Button>
+            )}
+            {(qrCodes?.length || 0) === 0 ? <EmptyTab label="No QR codes linked" /> : (
+              <div className="space-y-2">
+                {qrCodes?.map((qr: any) => (
+                  <div key={qr.id} className="flex items-center justify-between rounded-lg border bg-card p-3">
+                    <div>
+                      <p className="font-mono text-sm">{qr.upi_id}</p>
+                      {qr.payee_name && <p className="text-xs text-muted-foreground mt-0.5">{qr.payee_name}</p>}
+                      <p className="text-[11px] text-muted-foreground mt-0.5">Added {new Date(qr.created_at).toLocaleDateString("en-IN")}</p>
+                    </div>
+                    {canEdit && (
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDeleteQr(qr.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </TabsContent>
       </Tabs>
+
+      <QrScanner open={showQrScanner} onOpenChange={setShowQrScanner} onScan={handleQrScanned} title="Scan Store QR" />
 
       {/* Sale Detail Dialog */}
       <Dialog open={!!selectedSaleId} onOpenChange={(v) => { if (!v) setSelectedSaleId(null); }}>
