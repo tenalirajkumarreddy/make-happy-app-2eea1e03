@@ -279,7 +279,7 @@ const Stores = () => {
 
       <DataTable
         columns={columns}
-        data={stores || []}
+        data={filteredStores}
         searchKey="name"
         searchPlaceholder="Search stores..."
         onRowClick={(row) => navigate(`/stores/${row.id}`)}
