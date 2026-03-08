@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { DataTable } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { StatCard } from "@/components/shared/StatCard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
@@ -78,6 +79,17 @@ const CustomerDetail = () => {
     },
     enabled: !!id,
   });
+
+  const { data: profiles } = useQuery({
+    queryKey: ["profiles"],
+    queryFn: async () => {
+      const { data } = await supabase.from("profiles").select("user_id, full_name, avatar_url");
+      return data || [];
+    },
+  });
+
+  const profileMap = new Map(profiles?.map((p) => [p.user_id, p]) || []);
+  const getRecorder = (uid: string) => profileMap.get(uid);
 
   const { data: orders } = useQuery({
     queryKey: ["customer-orders", id],
@@ -193,9 +205,26 @@ const CustomerDetail = () => {
   const salesColumns = [
     { header: "Sale ID", accessor: "display_id" as const, className: "font-mono text-xs" },
     { header: "Store", accessor: (row: any) => row.stores?.name || "—", className: "hidden sm:table-cell" },
-    { header: "Total", accessor: (row: any) => `₹${Number(row.total_amount).toLocaleString()}`, className: "font-semibold" },
+    { header: "Total", accessor: (row: any) => <span className="font-semibold">₹{Number(row.total_amount).toLocaleString()}</span> },
     { header: "Cash", accessor: (row: any) => `₹${Number(row.cash_amount).toLocaleString()}`, className: "hidden md:table-cell" },
     { header: "UPI", accessor: (row: any) => `₹${Number(row.upi_amount).toLocaleString()}`, className: "hidden md:table-cell" },
+    { header: "Outstanding", accessor: (row: any) => (
+      <span className={Number(row.outstanding_amount) > 0 ? "text-destructive font-medium" : "text-muted-foreground"}>
+        ₹{Number(row.outstanding_amount).toLocaleString()}
+      </span>
+    ), className: "hidden sm:table-cell" },
+    { header: "Recorded By", accessor: (row: any) => {
+      const p = getRecorder(row.recorded_by);
+      return (
+        <div className="flex items-center gap-1.5">
+          <Avatar className="h-5 w-5">
+            <AvatarImage src={p?.avatar_url || undefined} />
+            <AvatarFallback className="text-[9px] bg-primary/10 text-primary">{(p?.full_name || "?").charAt(0)}</AvatarFallback>
+          </Avatar>
+          <span className="text-xs">{p?.full_name || "—"}</span>
+        </div>
+      );
+    }, className: "hidden lg:table-cell" },
     { header: "Date", accessor: (row: any) => new Date(row.created_at).toLocaleDateString("en-IN"), className: "text-muted-foreground text-xs" },
   ];
 
@@ -349,7 +378,42 @@ const CustomerDetail = () => {
         </TabsContent>
         <TabsContent value="sales" className="mt-4">
           {(sales?.length || 0) === 0 ? <EmptyTab label="No sales recorded" /> : (
-            <DataTable columns={salesColumns} data={sales || []} searchKey="display_id" searchPlaceholder="Search sales..." />
+            <DataTable
+              columns={salesColumns}
+              data={sales || []}
+              searchKey="display_id"
+              searchPlaceholder="Search sales..."
+              renderMobileCard={(row: any) => {
+                const p = getRecorder(row.recorded_by);
+                return (
+                  <div className="rounded-xl border bg-card px-3 py-2.5 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-[11px] text-muted-foreground">{row.display_id}</span>
+                      <span className="text-[11px] text-muted-foreground">{new Date(row.created_at).toLocaleDateString("en-IN")}</span>
+                    </div>
+                    <div className="flex items-center justify-between mt-1">
+                      <div>
+                        <span className="text-sm font-bold text-foreground">₹{Number(row.total_amount).toLocaleString()}</span>
+                        {row.stores?.name && <span className="text-[11px] text-muted-foreground ml-2">{row.stores.name}</span>}
+                      </div>
+                      <span className={`text-xs font-medium ${Number(row.outstanding_amount) > 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                        Due: ₹{Number(row.outstanding_amount).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between mt-1.5 text-[11px] text-muted-foreground">
+                      <span>Cash ₹{Number(row.cash_amount).toLocaleString()} · UPI ₹{Number(row.upi_amount).toLocaleString()}</span>
+                      <div className="flex items-center gap-1">
+                        <Avatar className="h-4 w-4">
+                          <AvatarImage src={p?.avatar_url || undefined} />
+                          <AvatarFallback className="text-[8px] bg-primary/10 text-primary">{(p?.full_name || "?").charAt(0)}</AvatarFallback>
+                        </Avatar>
+                        <span>{p?.full_name || "—"}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }}
+            />
           )}
         </TabsContent>
         <TabsContent value="orders" className="mt-4">
