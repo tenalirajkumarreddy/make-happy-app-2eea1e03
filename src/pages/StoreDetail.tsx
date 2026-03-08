@@ -61,11 +61,23 @@ const StoreDetail = () => {
   const { data: sales } = useQuery({
     queryKey: ["store-sales", id],
     queryFn: async () => {
-      const { data } = await supabase.from("sales").select("*").eq("store_id", id!).order("created_at", { ascending: false }).limit(50);
+      const { data } = await supabase.from("sales").select("*, stores(name)").eq("store_id", id!).order("created_at", { ascending: false }).limit(50);
       return data || [];
     },
     enabled: !!id,
   });
+
+  const { data: profiles } = useQuery({
+    queryKey: ["profiles"],
+    queryFn: async () => {
+      const { data } = await supabase.from("profiles").select("user_id, full_name, avatar_url");
+      return data || [];
+    },
+  });
+
+  const profileMap = new Map(profiles?.map((p) => [p.user_id, p]) || []);
+  const getRecorder = (uid: string) => profileMap.get(uid);
+
 
   const { data: transactions } = useQuery({
     queryKey: ["store-transactions", id],
