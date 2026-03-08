@@ -612,6 +612,41 @@ export type Database = {
           },
         ]
       }
+      store_qr_codes: {
+        Row: {
+          created_at: string
+          id: string
+          payee_name: string | null
+          raw_data: string
+          store_id: string | null
+          upi_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          payee_name?: string | null
+          raw_data: string
+          store_id?: string | null
+          upi_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          payee_name?: string | null
+          raw_data?: string
+          store_id?: string | null
+          upi_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "store_qr_codes_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       store_type_pricing: {
         Row: {
           created_at: string

@@ -18,12 +18,14 @@ import {
 import {
   Loader2, ArrowLeft, DollarSign, ShoppingCart, Banknote,
   MapPin, Store as StoreIcon, Phone, User, Tag, Navigation, Calendar,
-  Pencil, X, Save, AlertTriangle, Package,
+  Pencil, X, Save, AlertTriangle, Package, ScanLine, Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { QrScanner } from "@/components/shared/QrScanner";
+import { parseUpiQr } from "@/lib/upiParser";
 
 const StoreDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -36,6 +38,7 @@ const StoreDetail = () => {
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
+  const [showQrScanner, setShowQrScanner] = useState(false);
   const [form, setForm] = useState({
     name: "",
     phone: "",
@@ -110,6 +113,39 @@ const StoreDetail = () => {
     enabled: !!id,
   });
 
+  const { data: qrCodes } = useQuery({
+    queryKey: ["store-qr-codes", id],
+    queryFn: async () => {
+      const { data } = await supabase.from("store_qr_codes").select("*").eq("store_id", id!).order("created_at", { ascending: false });
+      return data || [];
+    },
+    enabled: !!id,
+  });
+
+  const handleQrScanned = async (rawData: string) => {
+    const upi = parseUpiQr(rawData);
+    if (!upi) { toast.error("Not a valid UPI QR code"); return; }
+    const { error } = await supabase.from("store_qr_codes").insert({
+      store_id: id!,
+      upi_id: upi.pa,
+      payee_name: upi.pn || null,
+      raw_data: rawData,
+    });
+    if (error) {
+      if (error.message.includes("duplicate")) toast.error("This QR is already linked to a store");
+      else toast.error(error.message);
+      return;
+    }
+    toast.success("QR code linked to store");
+    qc.invalidateQueries({ queryKey: ["store-qr-codes", id] });
+  };
+
+  const handleDeleteQr = async (qrId: string) => {
+    const { error } = await supabase.from("store_qr_codes").delete().eq("id", qrId);
+    if (error) { toast.error(error.message); return; }
+    toast.success("QR code removed");
+    qc.invalidateQueries({ queryKey: ["store-qr-codes", id] });
+  };
   const startEditing = () => {
     if (!store || !store.is_active) return;
     setForm({
@@ -460,6 +496,7 @@ const StoreDetail = () => {
           <TabsTrigger value="transactions" className="text-xs sm:text-sm">Collections ({transactions?.length || 0})</TabsTrigger>
           <TabsTrigger value="orders" className="text-xs sm:text-sm">Orders ({orders?.length || 0})</TabsTrigger>
           <TabsTrigger value="visits" className="text-xs sm:text-sm">Visits ({visits?.length || 0})</TabsTrigger>
+          <TabsTrigger value="qr" className="text-xs sm:text-sm">QR ({qrCodes?.length || 0})</TabsTrigger>
         </TabsList>
         <TabsContent value="sales" className="mt-4">
           {(sales?.length || 0) === 0 ? <EmptyTab label="No sales yet" /> : (
@@ -494,7 +531,36 @@ const StoreDetail = () => {
               renderMobileCard={renderCompactCard("visit")} />
           )}
         </TabsContent>
+        <TabsContent value="qr" className="mt-4">
+          <div className="space-y-4">
+            {canEdit && (
+              <Button variant="outline" size="sm" onClick={() => setShowQrScanner(true)} className="gap-2">
+                <ScanLine className="h-4 w-4" /> Scan & Add QR
+              </Button>
+            )}
+            {(qrCodes?.length || 0) === 0 ? <EmptyTab label="No QR codes linked" /> : (
+              <div className="space-y-2">
+                {qrCodes?.map((qr: any) => (
+                  <div key={qr.id} className="flex items-center justify-between rounded-lg border bg-card p-3">
+                    <div>
+                      <p className="font-mono text-sm">{qr.upi_id}</p>
+                      {qr.payee_name && <p className="text-xs text-muted-foreground mt-0.5">{qr.payee_name}</p>}
+                      <p className="text-[11px] text-muted-foreground mt-0.5">Added {new Date(qr.created_at).toLocaleDateString("en-IN")}</p>
+                    </div>
+                    {canEdit && (
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDeleteQr(qr.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </TabsContent>
       </Tabs>
+
+      <QrScanner open={showQrScanner} onOpenChange={setShowQrScanner} onScan={handleQrScanned} title="Scan Store QR" />
 
       {/* Sale Detail Dialog */}
       <Dialog open={!!selectedSaleId} onOpenChange={(v) => { if (!v) setSelectedSaleId(null); }}>
