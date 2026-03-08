@@ -169,6 +169,7 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
     setName(""); setStoreTypeId(""); setRouteId(""); setPhone("");
     setPhotoUrl(""); setLat(null); setLng(null);
     setStreet(""); setArea(""); setCity(""); setDistrict(""); setState(""); setPincode(""); setAddress("");
+    setOpeningBalance("");
     setPriceMap({});
   };
 
