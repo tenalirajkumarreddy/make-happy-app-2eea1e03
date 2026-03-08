@@ -611,12 +611,26 @@ const Sales = () => {
             <div className="rounded-lg border bg-muted/30 p-3 space-y-1 text-sm">
               <div className="flex justify-between"><span>Payment</span><span>₹{(cash + upi).toLocaleString()}</span></div>
               <div className="flex justify-between font-semibold"><span>New Outstanding</span><span className={newOutstanding > oldOutstanding ? "text-destructive" : "text-success"}>₹{newOutstanding.toLocaleString()}</span></div>
+              {creditLimitInfo && creditLimitInfo.limit > 0 && (
+                <div className="flex justify-between text-xs"><span>Credit Limit ({creditLimitInfo.source})</span><span>₹{creditLimitInfo.limit.toLocaleString()}</span></div>
+              )}
               {isPosUser && (cash + upi) !== totalAmount && totalAmount > 0 && (
                 <p className="text-xs text-destructive mt-1">⚠ POS sales require full payment (Cash + UPI = Total)</p>
               )}
             </div>
 
-            <Button type="submit" className="w-full" disabled={saving}>
+            {creditExceeded && (
+              <div className="rounded-lg border border-destructive bg-destructive/10 p-3 text-sm text-destructive">
+                🚫 <strong>Credit limit exceeded!</strong> New outstanding (₹{newOutstanding.toLocaleString()}) exceeds the {creditLimitInfo?.source} credit limit of ₹{creditLimitInfo?.limit.toLocaleString()}. Increase payment or reduce items.
+              </div>
+            )}
+            {creditWarning && (
+              <div className="rounded-lg border border-yellow-500/50 bg-yellow-500/10 p-3 text-sm text-yellow-700 dark:text-yellow-400">
+                ⚠️ Outstanding approaching credit limit ({Math.round((newOutstanding / creditLimitInfo!.limit) * 100)}% used).
+              </div>
+            )}
+
+            <Button type="submit" className="w-full" disabled={saving || !!creditExceeded}>
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Record Sale
             </Button>
