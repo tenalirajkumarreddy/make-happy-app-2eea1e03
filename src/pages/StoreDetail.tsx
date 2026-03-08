@@ -186,6 +186,21 @@ const StoreDetail = () => {
   const totalCollected = transactions?.reduce((s, r) => s + Number(r.total_amount), 0) || 0;
   const fullAddress = [store.street, store.area, store.city, store.district, store.state, store.pincode].filter(Boolean).join(", ") || store.address || "Not provided";
 
+  // Fetch sale items for detail view
+  const { data: saleItems, isLoading: loadingSaleItems } = useQuery({
+    queryKey: ["sale-items-detail", selectedSaleId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("sale_items")
+        .select("*, products(name, sku)")
+        .eq("sale_id", selectedSaleId!);
+      return data || [];
+    },
+    enabled: !!selectedSaleId,
+  });
+
+  const selectedSale = sales?.find((s) => s.id === selectedSaleId);
+
   const salesColumns = [
     { header: "Sale ID", accessor: "display_id" as const, className: "font-mono text-xs" },
     { header: "Total", accessor: (row: any) => <span className="font-semibold">₹{Number(row.total_amount).toLocaleString()}</span> },
@@ -233,6 +248,85 @@ const StoreDetail = () => {
     { header: "Location", accessor: (row: any) => row.lat ? `${row.lat.toFixed(4)}, ${row.lng.toFixed(4)}` : "—", className: "text-xs text-muted-foreground hidden md:table-cell" },
     { header: "Visited At", accessor: (row: any) => new Date(row.visited_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }), className: "text-muted-foreground text-xs" },
   ];
+
+  // Unified compact card renderer
+  const renderCompactCard = (type: "sale" | "txn" | "order" | "visit") => (row: any) => {
+    const p = type !== "visit" ? getRecorder(row.recorded_by || row.created_by) : null;
+    return (
+      <div className="rounded-xl border bg-card px-3 py-2.5 shadow-sm">
+        <div className="flex items-center justify-between">
+          <span className="font-mono text-[11px] text-muted-foreground">
+            {type === "visit" ? ((row.route_sessions as any)?.routes?.name || "Visit") : row.display_id}
+          </span>
+          <span className="text-[11px] text-muted-foreground">
+            {new Date(type === "visit" ? row.visited_at : row.created_at).toLocaleDateString("en-IN")}
+          </span>
+        </div>
+
+        {type === "sale" && (
+          <>
+            <div className="flex items-center justify-between mt-1.5">
+              <span className="text-sm font-bold text-foreground">₹{Number(row.total_amount).toLocaleString()}</span>
+              <span className={`text-xs font-medium ${Number(row.outstanding_amount) > 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                Due: ₹{Number(row.outstanding_amount).toLocaleString()}
+              </span>
+            </div>
+            <div className="flex items-center justify-between mt-1.5 text-[11px] text-muted-foreground">
+              <span>Cash ₹{Number(row.cash_amount).toLocaleString()} · UPI ₹{Number(row.upi_amount).toLocaleString()}</span>
+              {p && (
+                <div className="flex items-center gap-1">
+                  <Avatar className="h-4 w-4">
+                    <AvatarImage src={p?.avatar_url || undefined} />
+                    <AvatarFallback className="text-[8px] bg-primary/10 text-primary">{(p?.full_name || "?").charAt(0)}</AvatarFallback>
+                  </Avatar>
+                  <span>{p?.full_name || "—"}</span>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {type === "txn" && (
+          <>
+            <div className="flex items-center justify-between mt-1.5">
+              <span className="text-sm font-bold text-foreground">₹{Number(row.total_amount).toLocaleString()}</span>
+              <span className="text-xs text-muted-foreground">
+                Bal: ₹{Number(row.old_outstanding).toLocaleString()} → ₹{Number(row.new_outstanding).toLocaleString()}
+              </span>
+            </div>
+            <div className="flex items-center justify-between mt-1.5 text-[11px] text-muted-foreground">
+              <span>Cash ₹{Number(row.cash_amount).toLocaleString()} · UPI ₹{Number(row.upi_amount).toLocaleString()}</span>
+              {row.notes && <span className="truncate max-w-[120px]">{row.notes}</span>}
+            </div>
+          </>
+        )}
+
+        {type === "order" && (
+          <>
+            <div className="flex items-center justify-between mt-1.5">
+              <StatusBadge status={row.status === "delivered" ? "active" : row.status === "cancelled" ? "rejected" : "pending"} label={row.status} />
+              <span className="text-xs text-muted-foreground capitalize">{row.order_type} · {row.source}</span>
+            </div>
+            {row.requirement_note && (
+              <p className="text-[11px] text-muted-foreground mt-1.5 truncate">{row.requirement_note}</p>
+            )}
+          </>
+        )}
+
+        {type === "visit" && (
+          <>
+            <div className="flex items-center justify-between mt-1.5">
+              <span className="text-sm font-medium text-foreground">
+                {new Date(row.visited_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+              </span>
+              {row.lat && <span className="text-[11px] text-muted-foreground">{row.lat.toFixed(4)}, {row.lng?.toFixed(4)}</span>}
+            </div>
+            {row.notes && <p className="text-[11px] text-muted-foreground mt-1.5 truncate">{row.notes}</p>}
+          </>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -374,46 +468,89 @@ const StoreDetail = () => {
               data={sales || []}
               searchKey="display_id"
               searchPlaceholder="Search sales..."
+              onRowClick={(row: any) => setSelectedSaleId(row.id)}
               renderMobileCard={(row: any) => {
-                const p = getRecorder(row.recorded_by);
-                return (
-                  <div className="rounded-xl border bg-card px-3 py-2.5 shadow-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono text-[11px] text-muted-foreground">{row.display_id}</span>
-                      <span className="text-[11px] text-muted-foreground">{new Date(row.created_at).toLocaleDateString("en-IN")}</span>
-                    </div>
-                    <div className="flex items-center justify-between mt-1.5">
-                      <span className="text-sm font-bold text-foreground">₹{Number(row.total_amount).toLocaleString()}</span>
-                      <span className={`text-xs font-medium ${Number(row.outstanding_amount) > 0 ? "text-destructive" : "text-muted-foreground"}`}>
-                        Due: ₹{Number(row.outstanding_amount).toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between mt-1.5 text-[11px] text-muted-foreground">
-                      <span>Cash ₹{Number(row.cash_amount).toLocaleString()} · UPI ₹{Number(row.upi_amount).toLocaleString()}</span>
-                      <div className="flex items-center gap-1">
-                        <Avatar className="h-4 w-4">
-                          <AvatarImage src={p?.avatar_url || undefined} />
-                          <AvatarFallback className="text-[8px] bg-primary/10 text-primary">{(p?.full_name || "?").charAt(0)}</AvatarFallback>
-                        </Avatar>
-                        <span>{p?.full_name || "—"}</span>
-                      </div>
-                    </div>
-                  </div>
-                );
+                const card = renderCompactCard("sale")(row);
+                return <div className="cursor-pointer" onClick={() => setSelectedSaleId(row.id)}>{card}</div>;
               }}
             />
           )}
         </TabsContent>
         <TabsContent value="transactions" className="mt-4">
-          {(transactions?.length || 0) === 0 ? <EmptyTab label="No collections yet" /> : <DataTable columns={txnColumns} data={transactions || []} searchKey="display_id" searchPlaceholder="Search..." />}
+          {(transactions?.length || 0) === 0 ? <EmptyTab label="No collections yet" /> : (
+            <DataTable columns={txnColumns} data={transactions || []} searchKey="display_id" searchPlaceholder="Search..."
+              renderMobileCard={renderCompactCard("txn")} />
+          )}
         </TabsContent>
         <TabsContent value="orders" className="mt-4">
-          {(orders?.length || 0) === 0 ? <EmptyTab label="No orders yet" /> : <DataTable columns={orderColumns} data={orders || []} searchKey="display_id" searchPlaceholder="Search orders..." />}
+          {(orders?.length || 0) === 0 ? <EmptyTab label="No orders yet" /> : (
+            <DataTable columns={orderColumns} data={orders || []} searchKey="display_id" searchPlaceholder="Search orders..."
+              renderMobileCard={renderCompactCard("order")} />
+          )}
         </TabsContent>
         <TabsContent value="visits" className="mt-4">
-          {(visits?.length || 0) === 0 ? <EmptyTab label="No visits recorded" /> : <DataTable columns={visitColumns} data={visits || []} searchKey="notes" searchPlaceholder="Search..." />}
+          {(visits?.length || 0) === 0 ? <EmptyTab label="No visits recorded" /> : (
+            <DataTable columns={visitColumns} data={visits || []} searchKey="notes" searchPlaceholder="Search..."
+              renderMobileCard={renderCompactCard("visit")} />
+          )}
         </TabsContent>
       </Tabs>
+
+      {/* Sale Detail Dialog */}
+      <Dialog open={!!selectedSaleId} onOpenChange={(v) => { if (!v) setSelectedSaleId(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Sale Details</DialogTitle></DialogHeader>
+          {selectedSale && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-sm text-muted-foreground">{selectedSale.display_id}</span>
+                <span className="text-xs text-muted-foreground">{new Date(selectedSale.created_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</span>
+              </div>
+              <div className="rounded-lg border bg-muted/30 p-3 space-y-1 text-sm">
+                <div className="flex justify-between"><span>Total</span><span className="font-bold">₹{Number(selectedSale.total_amount).toLocaleString()}</span></div>
+                <div className="flex justify-between"><span>Cash</span><span>₹{Number(selectedSale.cash_amount).toLocaleString()}</span></div>
+                <div className="flex justify-between"><span>UPI</span><span>₹{Number(selectedSale.upi_amount).toLocaleString()}</span></div>
+                <div className="flex justify-between font-medium"><span>Outstanding</span><span className={Number(selectedSale.outstanding_amount) > 0 ? "text-destructive" : ""}>₹{Number(selectedSale.outstanding_amount).toLocaleString()}</span></div>
+              </div>
+              <div>
+                <p className="text-sm font-medium mb-2 flex items-center gap-1.5"><Package className="h-4 w-4 text-muted-foreground" /> Items</p>
+                {loadingSaleItems ? (
+                  <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+                ) : saleItems && saleItems.length > 0 ? (
+                  <div className="space-y-1.5">
+                    {saleItems.map((item: any) => (
+                      <div key={item.id} className="flex items-center justify-between rounded-lg border bg-card p-2.5 text-sm">
+                        <div>
+                          <p className="font-medium">{item.products?.name || "—"}</p>
+                          <p className="text-[11px] text-muted-foreground">{item.products?.sku} · Qty: {Number(item.quantity)}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-semibold">₹{Number(item.total_price).toLocaleString()}</p>
+                          <p className="text-[11px] text-muted-foreground">@ ₹{Number(item.unit_price).toLocaleString()}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">No items recorded</p>
+                )}
+              </div>
+              {(() => {
+                const p = getRecorder(selectedSale.recorded_by);
+                return (
+                  <div className="flex items-center gap-2 pt-2 border-t">
+                    <Avatar className="h-5 w-5">
+                      <AvatarImage src={p?.avatar_url || undefined} />
+                      <AvatarFallback className="text-[9px] bg-primary/10 text-primary">{(p?.full_name || "?").charAt(0)}</AvatarFallback>
+                    </Avatar>
+                    <span className="text-xs text-muted-foreground">Recorded by {p?.full_name || "—"}</span>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
