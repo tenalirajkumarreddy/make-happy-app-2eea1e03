@@ -2,8 +2,11 @@ import { Outlet } from "react-router-dom";
 import { AppSidebar } from "./AppSidebar";
 import { TopBar } from "./TopBar";
 import { GlobalSearch } from "@/components/shared/GlobalSearch";
+import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 
 export function AppLayout() {
+  useRealtimeSync();
+
   return (
     <div className="flex min-h-screen">
       <AppSidebar />
