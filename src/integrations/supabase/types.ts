@@ -123,6 +123,7 @@ export type Database = {
         Row: {
           address: string | null
           created_at: string
+          credit_limit_override: number | null
           display_id: string
           email: string | null
           gst_number: string | null
@@ -146,6 +147,7 @@ export type Database = {
         Insert: {
           address?: string | null
           created_at?: string
+          credit_limit_override?: number | null
           display_id: string
           email?: string | null
           gst_number?: string | null
@@ -169,6 +171,7 @@ export type Database = {
         Update: {
           address?: string | null
           created_at?: string
+          credit_limit_override?: number | null
           display_id?: string
           email?: string | null
           gst_number?: string | null
@@ -864,6 +867,8 @@ export type Database = {
         Row: {
           auto_order_enabled: boolean
           created_at: string
+          credit_limit_kyc: number
+          credit_limit_no_kyc: number
           id: string
           is_active: boolean
           name: string
@@ -872,6 +877,8 @@ export type Database = {
         Insert: {
           auto_order_enabled?: boolean
           created_at?: string
+          credit_limit_kyc?: number
+          credit_limit_no_kyc?: number
           id?: string
           is_active?: boolean
           name: string
@@ -880,6 +887,8 @@ export type Database = {
         Update: {
           auto_order_enabled?: boolean
           created_at?: string
+          credit_limit_kyc?: number
+          credit_limit_no_kyc?: number
           id?: string
           is_active?: boolean
           name?: string
