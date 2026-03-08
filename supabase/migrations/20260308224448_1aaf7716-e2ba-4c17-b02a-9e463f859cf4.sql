@@ -1,0 +1,14 @@
+ALTER PUBLICATION supabase_realtime ADD TABLE public.sale_items;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.order_items;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.store_pricing;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.store_type_pricing;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.store_type_products;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.store_visits;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.handover_snapshots;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.products;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.routes;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.route_sessions;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.balance_adjustments;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.activity_logs;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.user_roles;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.profiles;
