@@ -419,12 +419,37 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
               </div>
             )}
 
+            {duplicateWarnings.length > 0 && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Possible Duplicates Found</AlertTitle>
+                <AlertDescription>
+                  <ul className="list-disc pl-4 text-xs space-y-0.5 mt-1">
+                    {duplicateWarnings.map((w, i) => <li key={i}>{w}</li>)}
+                  </ul>
+                  <p className="text-xs mt-2">You can still proceed if this is intentional.</p>
+                </AlertDescription>
+              </Alert>
+            )}
+
             <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => setStep("customer")}>
+              <Button variant="outline" className="flex-1" onClick={() => { setStep("customer"); setDuplicateWarnings([]); }}>
                 <ChevronLeft className="mr-1 h-4 w-4" /> Back
               </Button>
-              <Button className="flex-1" disabled={!canGoToPricing} onClick={() => setStep("pricing")}>
-                Next <ChevronRight className="ml-1 h-4 w-4" />
+              <Button
+                className="flex-1"
+                disabled={!canGoToPricing || checkingDupes}
+                onClick={async () => {
+                  const warnings = await checkDuplicates();
+                  if (warnings.length === 0 || duplicateWarnings.length > 0) {
+                    setStep("pricing");
+                  }
+                  // If warnings found first time, show them but don't proceed.
+                  // Second click (warnings already shown) proceeds anyway.
+                }}
+              >
+                {checkingDupes ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
+                {duplicateWarnings.length > 0 ? "Proceed Anyway" : "Next"} <ChevronRight className="ml-1 h-4 w-4" />
               </Button>
             </div>
           </div>
