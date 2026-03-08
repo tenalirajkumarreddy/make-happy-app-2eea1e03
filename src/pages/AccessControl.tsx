@@ -86,8 +86,7 @@ const AccessControl = () => {
   }) || [];
 
   const customerUsers = users?.filter((u) => {
-    const role = (u.user_roles as any)?.[0]?.role;
-    return role === "customer";
+    return u._role === "customer";
   }) || [];
 
   const handleInvite = async (e: React.FormEvent) => {
