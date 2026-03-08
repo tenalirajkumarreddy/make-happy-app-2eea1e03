@@ -1,67 +1,141 @@
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MapPin, Store } from "lucide-react";
-
-const storeTypes = ["Retail", "Wholesale", "Restaurant"];
-
-const routes = {
-  Retail: [
-    { name: "MG Road Route", stores: 45, outstanding: "₹1,25,000" },
-    { name: "South Bangalore", stores: 32, outstanding: "₹85,000" },
-    { name: "BTM Route", stores: 28, outstanding: "₹62,000" },
-  ],
-  Wholesale: [
-    { name: "Industrial Area", stores: 15, outstanding: "₹3,45,000" },
-    { name: "Market Road", stores: 12, outstanding: "₹2,10,000" },
-  ],
-  Restaurant: [
-    { name: "East Route", stores: 22, outstanding: "₹1,80,000" },
-    { name: "Central Zone", stores: 18, outstanding: "₹1,45,000" },
-  ],
-};
+import { MapPin, Store, Loader2 } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useState } from "react";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { toast } from "sonner";
 
 const Routes = () => {
+  const [showAdd, setShowAdd] = useState(false);
+  const [name, setName] = useState("");
+  const [storeTypeId, setStoreTypeId] = useState("");
+  const [saving, setSaving] = useState(false);
+  const qc = useQueryClient();
+
+  const { data: storeTypes, isLoading: typesLoading } = useQuery({
+    queryKey: ["store-types"],
+    queryFn: async () => {
+      const { data } = await supabase.from("store_types").select("*").eq("is_active", true);
+      return data || [];
+    },
+  });
+
+  const { data: routes, isLoading: routesLoading } = useQuery({
+    queryKey: ["routes-with-stores"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("routes")
+        .select("*, store_types(name), stores(id, outstanding)")
+        .eq("is_active", true);
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    const { error } = await supabase.from("routes").insert({ name, store_type_id: storeTypeId });
+    setSaving(false);
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success("Route created");
+      setShowAdd(false);
+      setName(""); setStoreTypeId("");
+      qc.invalidateQueries({ queryKey: ["routes-with-stores"] });
+    }
+  };
+
+  if (typesLoading || routesLoading) {
+    return <div className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  }
+
+  const defaultTab = storeTypes?.[0]?.id || "";
+
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Routes" subtitle="Manage delivery routes by store type" actionLabel="Create Route" />
+      <PageHeader title="Routes" subtitle="Manage delivery routes by store type" actionLabel="Create Route" onAction={() => setShowAdd(true)} />
 
-      <Tabs defaultValue="Retail">
-        <TabsList>
-          {storeTypes.map((type) => (
-            <TabsTrigger key={type} value={type}>{type}</TabsTrigger>
-          ))}
-        </TabsList>
-
-        {storeTypes.map((type) => (
-          <TabsContent key={type} value={type} className="space-y-4 mt-4">
-            {routes[type as keyof typeof routes]?.map((route) => (
-              <div
-                key={route.name}
-                className="flex items-center justify-between rounded-xl border bg-card p-5 hover:shadow-sm transition-shadow"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-accent">
-                    <MapPin className="h-5 w-5 text-accent-foreground" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold">{route.name}</h3>
-                    <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Store className="h-3.5 w-3.5" />
-                        {route.stores} stores
-                      </span>
-                      <span>Outstanding: <span className="font-medium text-foreground">{route.outstanding}</span></span>
-                    </div>
-                  </div>
-                </div>
-                <button className="text-sm font-medium text-primary hover:underline">
-                  More Details
-                </button>
-              </div>
+      {storeTypes && storeTypes.length > 0 ? (
+        <Tabs defaultValue={defaultTab}>
+          <TabsList>
+            {storeTypes.map((type) => (
+              <TabsTrigger key={type.id} value={type.id}>{type.name}</TabsTrigger>
             ))}
-          </TabsContent>
-        ))}
-      </Tabs>
+          </TabsList>
+
+          {storeTypes.map((type) => {
+            const typeRoutes = routes?.filter(r => r.store_type_id === type.id) || [];
+            return (
+              <TabsContent key={type.id} value={type.id} className="space-y-4 mt-4">
+                {typeRoutes.length === 0 ? (
+                  <div className="rounded-xl border bg-card p-10 text-center text-muted-foreground">
+                    No routes for {type.name}. Create one to get started.
+                  </div>
+                ) : (
+                  typeRoutes.map((route) => {
+                    const storeCount = route.stores?.length || 0;
+                    const totalOutstanding = route.stores?.reduce((sum: number, s: any) => sum + Number(s.outstanding || 0), 0) || 0;
+                    return (
+                      <div key={route.id} className="flex items-center justify-between rounded-xl border bg-card p-5 hover:shadow-sm transition-shadow">
+                        <div className="flex items-center gap-4">
+                          <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-accent">
+                            <MapPin className="h-5 w-5 text-accent-foreground" />
+                          </div>
+                          <div>
+                            <h3 className="font-semibold">{route.name}</h3>
+                            <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
+                              <span className="flex items-center gap-1"><Store className="h-3.5 w-3.5" />{storeCount} stores</span>
+                              <span>Outstanding: <span className="font-medium text-foreground">₹{totalOutstanding.toLocaleString()}</span></span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </TabsContent>
+            );
+          })}
+        </Tabs>
+      ) : (
+        <div className="rounded-xl border bg-card p-10 text-center text-muted-foreground">
+          No store types configured. Add them in Settings first.
+        </div>
+      )}
+
+      <Dialog open={showAdd} onOpenChange={setShowAdd}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Create Route</DialogTitle></DialogHeader>
+          <form onSubmit={handleAdd} className="space-y-4">
+            <div><Label>Route Name</Label><Input value={name} onChange={e => setName(e.target.value)} required className="mt-1" /></div>
+            <div>
+              <Label>Store Type</Label>
+              <Select value={storeTypeId} onValueChange={setStoreTypeId} required>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Select store type" /></SelectTrigger>
+                <SelectContent>
+                  {storeTypes?.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button type="submit" className="w-full" disabled={saving}>
+              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Create Route
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
