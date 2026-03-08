@@ -44,6 +44,8 @@ const PERM_HEADERS: { key: PermissionKey; label: string }[] = [
   { key: "create_stores", label: "Create Stores" },
   { key: "edit_balance", label: "Edit Balance" },
   { key: "opening_balance", label: "Opening Balance" },
+  { key: "finalizer", label: "Finalizer" },
+  { key: "see_handover_balance", label: "See Balances" },
 ];
 
 const AccessControl = () => {

@@ -12,6 +12,8 @@ const PERMISSION_KEYS = [
   "create_stores",
   "edit_balance",
   "opening_balance",
+  "finalizer",
+  "see_handover_balance",
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
