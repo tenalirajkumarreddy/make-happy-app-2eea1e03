@@ -23,7 +23,6 @@ const Transactions = () => {
   const qc = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [customerId, setCustomerId] = useState("");
   const [storeId, setStoreId] = useState("");
   const [cashAmount, setCashAmount] = useState("");
   const [upiAmount, setUpiAmount] = useState("");
@@ -41,23 +40,12 @@ const Transactions = () => {
     },
   });
 
-  const { data: customers } = useQuery({
-    queryKey: ["customers"],
-    queryFn: async () => {
-      const { data } = await supabase.from("customers").select("id, name").eq("is_active", true);
-      return data || [];
-    },
-  });
-
   const { data: stores } = useQuery({
-    queryKey: ["stores-for-txn", customerId],
+    queryKey: ["stores-for-txn"],
     queryFn: async () => {
-      let q = supabase.from("stores").select("id, name, outstanding, display_id").eq("is_active", true);
-      if (customerId) q = q.eq("customer_id", customerId);
-      const { data } = await q;
+      const { data } = await supabase.from("stores").select("id, name, outstanding, display_id, customer_id").eq("is_active", true);
       return data || [];
     },
-    enabled: !!customerId,
   });
 
   const cash = parseFloat(cashAmount) || 0;
@@ -68,7 +56,7 @@ const Transactions = () => {
   const newOutstanding = oldOutstanding - totalPayment;
 
   const resetForm = () => {
-    setCustomerId(""); setStoreId(""); setCashAmount(""); setUpiAmount(""); setNotes("");
+    setStoreId(""); setCashAmount(""); setUpiAmount(""); setNotes("");
   };
 
   const handleAdd = async (e: React.FormEvent) => {
@@ -77,6 +65,13 @@ const Transactions = () => {
       toast.error("Please select a store and enter payment amount");
       return;
     }
+
+    const customerId = selectedStore?.customer_id;
+    if (!customerId) {
+      toast.error("Store has no linked customer");
+      return;
+    }
+
     setSaving(true);
 
     const { count } = await supabase.from("transactions").select("id", { count: "exact", head: true });
@@ -97,7 +92,6 @@ const Transactions = () => {
 
     if (error) { toast.error(error.message); setSaving(false); return; }
 
-    // Update store outstanding
     await supabase.from("stores").update({ outstanding: newOutstanding }).eq("id", storeId);
 
     logActivity(user!.id, "Recorded transaction", "transaction", displayId, undefined, { total: totalPayment, store: storeId });
@@ -133,15 +127,8 @@ const Transactions = () => {
           <DialogHeader><DialogTitle>Record Transaction</DialogTitle></DialogHeader>
           <form onSubmit={handleAdd} className="space-y-4">
             <div>
-              <Label>Customer</Label>
-              <Select value={customerId} onValueChange={(v) => { setCustomerId(v); setStoreId(""); }}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Select customer" /></SelectTrigger>
-                <SelectContent>{customers?.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div>
               <Label>Store</Label>
-              <Select value={storeId} onValueChange={setStoreId} disabled={!customerId}>
+              <Select value={storeId} onValueChange={setStoreId}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Select store" /></SelectTrigger>
                 <SelectContent>{stores?.map((s) => <SelectItem key={s.id} value={s.id}>{s.name} ({s.display_id})</SelectItem>)}</SelectContent>
               </Select>

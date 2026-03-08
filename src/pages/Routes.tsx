@@ -3,6 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MapPin, Store, Loader2 } from "lucide-react";
 import { RouteSessionPanel } from "@/components/routes/RouteSessionPanel";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useState } from "react";
 import {
@@ -17,6 +18,7 @@ import {
 import { toast } from "sonner";
 
 const Routes = () => {
+  const { role } = useAuth();
   const [showAdd, setShowAdd] = useState(false);
   const [name, setName] = useState("");
   const [storeTypeId, setStoreTypeId] = useState("");
@@ -68,7 +70,7 @@ const Routes = () => {
     <div className="space-y-6 animate-fade-in">
       <PageHeader title="Routes" subtitle="Manage delivery routes by store type" primaryAction={{ label: "Create Route", onClick: () => setShowAdd(true) }} />
 
-      <RouteSessionPanel />
+      {role === "agent" && <RouteSessionPanel />}
 
       {storeTypes && storeTypes.length > 0 ? (
         <Tabs defaultValue={defaultTab}>
