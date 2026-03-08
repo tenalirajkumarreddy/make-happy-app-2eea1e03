@@ -172,10 +172,10 @@ const Handovers = () => {
   const getName = (userId: string | null) => getProfile(userId).name;
   const getInitials = (name: string) => name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
 
-  const UserAvatar = ({ userId, size = "sm" }: { userId: string | null; size?: "sm" | "md" }) => {
+  const UserAvatar = ({ userId, size = "sm" }: { userId: string | null; size?: "sm" | "md" | "lg" }) => {
     const p = getProfile(userId);
-    const cls = size === "md" ? "h-9 w-9" : "h-7 w-7";
-    const textCls = size === "md" ? "text-xs" : "text-[10px]";
+    const cls = size === "lg" ? "h-10 w-10" : size === "md" ? "h-9 w-9" : "h-7 w-7";
+    const textCls = size === "lg" ? "text-sm" : size === "md" ? "text-xs" : "text-[10px]";
     return (
       <Avatar className={`${cls} ring-2 ring-background`}>
         <AvatarImage src={p.avatar || undefined} alt={p.name} />
