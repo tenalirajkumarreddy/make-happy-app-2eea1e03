@@ -22,7 +22,7 @@ const MapPage = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from("route_sessions")
-        .select("*, routes(name), profiles:user_id(full_name)")
+        .select("*, routes(name)")
         .eq("status", "active");
       return data || [];
     },
