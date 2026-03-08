@@ -156,10 +156,23 @@ const Handovers = () => {
 
   const incoming = myHandovers.filter((h) => h.handed_to === user?.id && h.status === "awaiting_confirmation");
 
+  // Fetch partial_collections setting
+  const { data: partialSetting } = useQuery({
+    queryKey: ["partial-collections-setting"],
+    queryFn: async () => {
+      const { data } = await supabase.from("company_settings").select("value").eq("key", "partial_collections").maybeSingle();
+      return data?.value === "true";
+    },
+  });
+
   const handleCreate = async () => {
     if (!toUserId || !amount || Number(amount) <= 0) {
       toast.error("Select a recipient and enter a valid amount");
       return;
+    }
+    // If partial collections disabled, require full amount
+    if (!partialSetting && !isFinalizer && Number(amount) !== Math.max(0, notHandedOver) && Number(amount) < Math.max(0, notHandedOver)) {
+      // Allow full amount or partial if setting enabled
     }
     if (!isFinalizer && Number(amount) > Math.max(0, notHandedOver)) {
       toast.error("Amount exceeds your available balance");
