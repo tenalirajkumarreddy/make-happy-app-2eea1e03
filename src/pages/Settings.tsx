@@ -11,6 +11,7 @@ import { Loader2, Save } from "lucide-react";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { PricingTab } from "@/components/settings/PricingTab";
+import { BannerManagement } from "@/components/banners/BannerManagement";
 
 const SettingsPage = () => {
   const { role } = useAuth();
