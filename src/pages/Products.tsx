@@ -133,6 +133,11 @@ const Products = () => {
           </form>
         </DialogContent>
       </Dialog>
+      <ProductAccessDialog
+        product={selectedProduct}
+        open={!!selectedProduct}
+        onOpenChange={(open) => { if (!open) setSelectedProduct(null); }}
+      />
     </div>
   );
 };
