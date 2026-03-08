@@ -4,9 +4,12 @@ import { Loader2 } from "lucide-react";
 interface RoleRouteProps {
   staffElement: React.ReactNode;
   customerElement: React.ReactNode;
+  agentElement?: React.ReactNode;
+  marketerElement?: React.ReactNode;
+  posElement?: React.ReactNode;
 }
 
-export function RoleRoute({ staffElement, customerElement }: RoleRouteProps) {
+export function RoleRoute({ staffElement, customerElement, agentElement, marketerElement, posElement }: RoleRouteProps) {
   const { role, loading } = useAuth();
 
   if (loading) {
@@ -17,9 +20,10 @@ export function RoleRoute({ staffElement, customerElement }: RoleRouteProps) {
     );
   }
 
-  if (role === "customer") {
-    return <>{customerElement}</>;
-  }
+  if (role === "customer") return <>{customerElement}</>;
+  if (role === "agent" && agentElement) return <>{agentElement}</>;
+  if (role === "marketer" && marketerElement) return <>{marketerElement}</>;
+  if (role === "pos" && posElement) return <>{posElement}</>;
 
   return <>{staffElement}</>;
 }

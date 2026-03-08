@@ -2,12 +2,16 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { RoleRoute } from "@/components/auth/RoleRoute";
+import { RoleGuard } from "@/components/auth/RoleGuard";
 import { AppLayout } from "@/components/layout/AppLayout";
 import Dashboard from "./pages/Dashboard";
+import AgentDashboard from "./pages/AgentDashboard";
+import MarketerDashboard from "./pages/MarketerDashboard";
+import PosDashboard from "./pages/PosDashboard";
 import Products from "./pages/Products";
 import Customers from "./pages/Customers";
 import CustomerDetail from "./pages/CustomerDetail";
@@ -32,6 +36,18 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+function DashboardRouter() {
+  return (
+    <RoleRoute
+      staffElement={<Dashboard />}
+      customerElement={<CustomerPortal />}
+      agentElement={<AgentDashboard />}
+      marketerElement={<MarketerDashboard />}
+      posElement={<PosDashboard />}
+    />
+  );
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
@@ -49,24 +65,31 @@ const App = () => (
                 </ProtectedRoute>
               }
             >
-              <Route path="/" element={<RoleRoute staffElement={<Dashboard />} customerElement={<CustomerPortal />} />} />
-              <Route path="/products" element={<Products />} />
-              <Route path="/customers" element={<Customers />} />
-              <Route path="/customers/:id" element={<CustomerDetail />} />
-              <Route path="/stores" element={<Stores />} />
-              <Route path="/stores/:id" element={<StoreDetail />} />
-              <Route path="/store-types" element={<StoreTypes />} />
-              <Route path="/routes" element={<RoutesPage />} />
-              <Route path="/sales" element={<Sales />} />
-              <Route path="/transactions" element={<Transactions />} />
-              <Route path="/orders" element={<Orders />} />
-              <Route path="/handovers" element={<Handovers />} />
-              <Route path="/map" element={<MapPage />} />
-              <Route path="/reports" element={<Reports />} />
-              <Route path="/analytics" element={<Analytics />} />
-              <Route path="/activity" element={<Activity />} />
-              <Route path="/access-control" element={<AccessControl />} />
-              <Route path="/settings" element={<Settings />} />
+              <Route path="/" element={<DashboardRouter />} />
+              {/* Admin & Manager only */}
+              <Route path="/products" element={<RoleGuard allowed={["super_admin", "manager"]}><Products /></RoleGuard>} />
+              <Route path="/analytics" element={<RoleGuard allowed={["super_admin", "manager"]}><Analytics /></RoleGuard>} />
+              <Route path="/reports" element={<RoleGuard allowed={["super_admin", "manager"]}><Reports /></RoleGuard>} />
+              <Route path="/activity" element={<RoleGuard allowed={["super_admin", "manager"]}><Activity /></RoleGuard>} />
+              <Route path="/access-control" element={<RoleGuard allowed={["super_admin"]}><AccessControl /></RoleGuard>} />
+              <Route path="/settings" element={<RoleGuard allowed={["super_admin", "manager"]}><Settings /></RoleGuard>} />
+              <Route path="/map" element={<RoleGuard allowed={["super_admin", "manager"]}><MapPage /></RoleGuard>} />
+              {/* Admin, Manager, Agent, Marketer */}
+              <Route path="/customers" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer"]}><Customers /></RoleGuard>} />
+              <Route path="/customers/:id" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer"]}><CustomerDetail /></RoleGuard>} />
+              <Route path="/stores" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer"]}><Stores /></RoleGuard>} />
+              <Route path="/stores/:id" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer"]}><StoreDetail /></RoleGuard>} />
+              <Route path="/store-types" element={<RoleGuard allowed={["super_admin", "manager"]}><StoreTypes /></RoleGuard>} />
+              {/* Routes: Admin, Manager, Agent */}
+              <Route path="/routes" element={<RoleGuard allowed={["super_admin", "manager", "agent"]}><RoutesPage /></RoleGuard>} />
+              {/* Sales: Admin, Manager, Agent, POS */}
+              <Route path="/sales" element={<RoleGuard allowed={["super_admin", "manager", "agent", "pos"]}><Sales /></RoleGuard>} />
+              {/* Transactions: Admin, Manager, Agent, Marketer */}
+              <Route path="/transactions" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer"]}><Transactions /></RoleGuard>} />
+              {/* Orders: Admin, Manager, Agent, Marketer */}
+              <Route path="/orders" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer"]}><Orders /></RoleGuard>} />
+              {/* Handovers: All staff */}
+              <Route path="/handovers" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer", "pos"]}><Handovers /></RoleGuard>} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
