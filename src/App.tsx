@@ -10,7 +10,9 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import Dashboard from "./pages/Dashboard";
 import Products from "./pages/Products";
 import Customers from "./pages/Customers";
+import CustomerDetail from "./pages/CustomerDetail";
 import Stores from "./pages/Stores";
+import StoreDetail from "./pages/StoreDetail";
 import RoutesPage from "./pages/Routes";
 import Sales from "./pages/Sales";
 import Transactions from "./pages/Transactions";
@@ -49,7 +51,9 @@ const App = () => (
               <Route path="/" element={<RoleRoute staffElement={<Dashboard />} customerElement={<CustomerPortal />} />} />
               <Route path="/products" element={<Products />} />
               <Route path="/customers" element={<Customers />} />
+              <Route path="/customers/:id" element={<CustomerDetail />} />
               <Route path="/stores" element={<Stores />} />
+              <Route path="/stores/:id" element={<StoreDetail />} />
               <Route path="/routes" element={<RoutesPage />} />
               <Route path="/sales" element={<Sales />} />
               <Route path="/transactions" element={<Transactions />} />
