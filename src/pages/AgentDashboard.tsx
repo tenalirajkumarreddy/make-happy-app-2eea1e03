@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Store, ShoppingCart, Banknote, Smartphone, MapPin, Clock } from "lucide-react";
 import { DashboardSkeleton } from "@/components/shared/DashboardSkeleton";
+import { QuickActionDrawer } from "@/components/agent/QuickActionDrawer";
 
 const AgentDashboard = () => {
   const { user, profile } = useAuth();
