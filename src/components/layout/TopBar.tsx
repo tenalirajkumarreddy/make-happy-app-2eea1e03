@@ -106,6 +106,40 @@ export function TopBar() {
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-card/80 backdrop-blur-sm px-4 lg:px-6">
       <div className="w-10 lg:w-0" />
       <div className="ml-auto flex items-center gap-2">
+        {/* Offline indicator */}
+        {(!isOnline || pendingCount > 0) && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => pendingCount > 0 && isOnline && syncQueue()}
+                  className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                    !isOnline
+                      ? "bg-destructive/10 text-destructive"
+                      : "bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20"
+                  }`}
+                >
+                  {!isOnline ? (
+                    <WifiOff className="h-3.5 w-3.5" />
+                  ) : syncing ? (
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  )}
+                  {!isOnline ? "Offline" : `${pendingCount} pending`}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {!isOnline
+                  ? "You are offline. Actions will be queued and synced when back online."
+                  : syncing
+                  ? "Syncing queued actions..."
+                  : "Click to sync pending actions now"}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
+
         {/* Dark mode toggle */}
         <button
           onClick={toggle}
