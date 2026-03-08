@@ -185,6 +185,27 @@ const Sales = () => {
   const oldOutstanding = Number(selectedStore?.outstanding || 0);
   const newOutstanding = oldOutstanding + outstandingFromSale;
 
+  // Credit limit calculation
+  const creditLimitInfo = (() => {
+    if (!selectedStore || !storeTypes || !customers) return null;
+    const storeType = storeTypes.find((st) => st.id === selectedStore.store_type_id);
+    if (!storeType) return null;
+    const customer = customers.find((c) => c.id === selectedStore.customer_id);
+    if (!customer) return null;
+
+    // Check for customer-level override first
+    if (customer.credit_limit_override !== null && customer.credit_limit_override !== undefined) {
+      return { limit: Number(customer.credit_limit_override), source: "customer override", isKyc: customer.kyc_status === "approved" };
+    }
+
+    const isKyc = customer.kyc_status === "approved";
+    const limit = isKyc ? Number(storeType.credit_limit_kyc || 0) : Number(storeType.credit_limit_no_kyc || 0);
+    return { limit, source: isKyc ? "KYC" : "Non-KYC", isKyc };
+  })();
+
+  const creditExceeded = creditLimitInfo && creditLimitInfo.limit > 0 && newOutstanding > creditLimitInfo.limit;
+  const creditWarning = creditLimitInfo && creditLimitInfo.limit > 0 && newOutstanding > creditLimitInfo.limit * 0.8 && !creditExceeded;
+
   const addItem = () => setItems([...items, { product_id: "", quantity: 1, unit_price: 0 }]);
   const removeItem = (idx: number) => setItems(items.filter((_, i) => i !== idx));
   const updateItem = (idx: number, field: keyof SaleItem, value: any) => {
