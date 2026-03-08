@@ -62,8 +62,46 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
 
   // Pricing step
   const [priceMap, setPriceMap] = useState<Record<string, string>>({});
+  const [duplicateWarnings, setDuplicateWarnings] = useState<string[]>([]);
+  const [checkingDupes, setCheckingDupes] = useState(false);
 
   const canEditPricing = role === "super_admin" || role === "manager";
+
+  const getDistanceMeters = (lat1: number, lng1: number, lat2: number, lng2: number) => {
+    const R = 6371000;
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLng = ((lng2 - lng1) * Math.PI) / 180;
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  };
+
+  const checkDuplicates = async () => {
+    setCheckingDupes(true);
+    const warnings: string[] = [];
+    const { data: existingStores } = await supabase
+      .from("stores")
+      .select("id, name, phone, lat, lng, display_id")
+      .eq("is_active", true);
+    if (existingStores) {
+      for (const s of existingStores) {
+        if (name.trim() && s.name.toLowerCase() === name.trim().toLowerCase()) {
+          warnings.push(`Store "${s.name}" (${s.display_id}) has the same name`);
+        }
+        if (phone.trim() && s.phone && s.phone === phone.trim()) {
+          warnings.push(`Store "${s.name}" (${s.display_id}) has the same phone number`);
+        }
+        if (lat && lng && s.lat && s.lng) {
+          const dist = getDistanceMeters(lat, lng, s.lat, s.lng);
+          if (dist < 100) {
+            warnings.push(`Store "${s.name}" (${s.display_id}) is only ${Math.round(dist)}m away`);
+          }
+        }
+      }
+    }
+    setDuplicateWarnings(warnings);
+    setCheckingDupes(false);
+    return warnings;
+  };
 
   const { data: customers } = useQuery({
     queryKey: ["customers-list"],
