@@ -72,6 +72,7 @@ export function TopBar() {
   const navigate = useNavigate();
   const { dark, toggle } = useTheme();
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
+  const { isOnline, pendingCount, syncing, syncQueue } = useOnlineStatus();
   const [open, setOpen] = useState(false);
 
   // Request browser notification permission on first render
