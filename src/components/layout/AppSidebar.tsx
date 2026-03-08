@@ -117,10 +117,14 @@ export function AppSidebar() {
   const location = useLocation();
   const { role } = useAuth();
 
-  // Customers see a minimal sidebar
+  // Customers see a full portal sidebar
   const isCustomer = role === "customer";
   const customerNav: NavItem[] = [
-    { label: "My Dashboard", path: "/", icon: LayoutDashboard },
+    { label: "Dashboard", path: "/", icon: LayoutDashboard },
+    { label: "Sales", path: "/portal/sales", icon: ShoppingCart },
+    { label: "Orders", path: "/portal/orders", icon: ClipboardList },
+    { label: "Transactions", path: "/portal/transactions", icon: Receipt },
+    { label: "Profile", path: "/portal/profile", icon: Users },
   ];
 
   const roleNav = NAV_BY_ROLE[role || "agent"] || NAV_BY_ROLE.agent;
