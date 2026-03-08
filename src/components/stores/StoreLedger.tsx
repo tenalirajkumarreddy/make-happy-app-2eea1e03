@@ -207,13 +207,6 @@ export function StoreLedger({ sales, transactions, openingBalance, profileMap }:
             onRowClick={(row: any) => setSelectedEntryId(row.id)}
             renderMobileCard={renderMobileCard}
           />
-          {/* Opening balance row hint */}
-          <div className="rounded-lg border bg-muted/30 px-4 py-3 flex items-center justify-between text-sm text-muted-foreground">
-            <span>—</span>
-            <span className="font-medium">Opening Balance</span>
-            <span>—</span>
-            <span>—</span>
-            <span className="font-semibold text-foreground">₹{openingBalance.toLocaleString()}</span>
           </div>
         </>
       )}
