@@ -1,6 +1,7 @@
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
+import { KycReviewDialog } from "@/components/customers/KycReviewDialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -19,14 +20,16 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
 const Customers = () => {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const [showAdd, setShowAdd] = useState(false);
+  const [kycCustomer, setKycCustomer] = useState<any>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [address, setAddress] = useState("");
   const [saving, setSaving] = useState(false);
   const qc = useQueryClient();
+  const canReviewKyc = role === "super_admin" || role === "manager";
 
   const { data: customers, isLoading } = useQuery({
     queryKey: ["customers"],
@@ -72,7 +75,11 @@ const Customers = () => {
     { header: "Phone", accessor: (row: any) => row.phone || "—", className: "text-muted-foreground text-sm" },
     { header: "Stores", accessor: (row: any) => row.stores?.length || 0, className: "text-center" },
     { header: "Outstanding", accessor: (row: any) => `₹${Number(row.opening_balance).toLocaleString()}` },
-    { header: "KYC", accessor: (row: any) => <StatusBadge status={row.kyc_status === "verified" ? "verified" : row.kyc_status === "pending" ? "pending" : row.kyc_status === "rejected" ? "rejected" : "inactive"} label={row.kyc_status.replace("_", " ")} /> },
+    { header: "KYC", accessor: (row: any) => (
+      <button onClick={() => canReviewKyc && row.kyc_status !== "not_requested" ? setKycCustomer(row) : null} className={canReviewKyc && row.kyc_status !== "not_requested" ? "cursor-pointer hover:opacity-80" : ""}>
+        <StatusBadge status={row.kyc_status === "verified" ? "verified" : row.kyc_status === "pending" ? "pending" : row.kyc_status === "rejected" ? "rejected" : "inactive"} label={row.kyc_status.replace("_", " ")} />
+      </button>
+    )},
     { header: "Status", accessor: (row: any) => <StatusBadge status={row.is_active ? "active" : "inactive"} /> },
   ];
 
@@ -111,6 +118,13 @@ const Customers = () => {
           </form>
         </DialogContent>
       </Dialog>
+
+      <KycReviewDialog
+        customer={kycCustomer}
+        open={!!kycCustomer}
+        onOpenChange={(open) => { if (!open) setKycCustomer(null); }}
+        onDone={() => { setKycCustomer(null); qc.invalidateQueries({ queryKey: ["customers"] }); }}
+      />
     </div>
   );
 };

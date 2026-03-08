@@ -19,6 +19,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { PricingTab } from "@/components/settings/PricingTab";
 
 const SettingsPage = () => {
   const { role } = useAuth();
@@ -125,6 +126,7 @@ const SettingsPage = () => {
         <TabsList>
           <TabsTrigger value="company">Company</TabsTrigger>
           <TabsTrigger value="store-types">Store Types</TabsTrigger>
+          <TabsTrigger value="pricing">Pricing</TabsTrigger>
           <TabsTrigger value="features">Features</TabsTrigger>
         </TabsList>
 
@@ -153,6 +155,10 @@ const SettingsPage = () => {
             </div>
           )}
           <DataTable columns={storeTypeColumns} data={storeTypes || []} searchKey="name" searchPlaceholder="Search store types..." />
+        </TabsContent>
+
+        <TabsContent value="pricing" className="mt-4">
+          <PricingTab isAdmin={isAdmin} />
         </TabsContent>
 
         <TabsContent value="features" className="mt-4 space-y-4">

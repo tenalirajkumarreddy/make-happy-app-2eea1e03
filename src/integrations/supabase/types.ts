@@ -520,6 +520,126 @@ export type Database = {
           },
         ]
       }
+      store_pricing: {
+        Row: {
+          created_at: string
+          id: string
+          price: number
+          product_id: string
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          price?: number
+          product_id: string
+          store_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          price?: number
+          product_id?: string
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "store_pricing_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "store_pricing_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      store_type_pricing: {
+        Row: {
+          created_at: string
+          id: string
+          price: number
+          product_id: string
+          store_type_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          price?: number
+          product_id: string
+          store_type_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          price?: number
+          product_id?: string
+          store_type_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "store_type_pricing_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "store_type_pricing_store_type_id_fkey"
+            columns: ["store_type_id"]
+            isOneToOne: false
+            referencedRelation: "store_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      store_type_products: {
+        Row: {
+          created_at: string
+          id: string
+          product_id: string
+          store_type_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          product_id: string
+          store_type_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          product_id?: string
+          store_type_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "store_type_products_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "store_type_products_store_type_id_fkey"
+            columns: ["store_type_id"]
+            isOneToOne: false
+            referencedRelation: "store_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       store_types: {
         Row: {
           auto_order_enabled: boolean
