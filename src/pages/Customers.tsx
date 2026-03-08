@@ -113,11 +113,12 @@ const Customers = () => {
         />
       ),
       className: "w-10",
+      hideOnMobile: true,
     }] : []),
-    { header: "ID", accessor: "display_id" as const, className: "font-mono text-xs" },
+    { header: "ID", accessor: "display_id" as const, className: "font-mono text-xs hidden lg:table-cell", hideOnMobile: true },
     { header: "Name", accessor: "name" as const, className: "font-medium cursor-pointer text-primary hover:underline" },
-    { header: "Phone", accessor: (row: any) => row.phone || "—", className: "text-muted-foreground text-sm" },
-    { header: "Stores", accessor: (row: any) => row.stores?.length || 0, className: "text-center" },
+    { header: "Phone", accessor: (row: any) => row.phone || "—", className: "text-muted-foreground text-sm hidden sm:table-cell" },
+    { header: "Stores", accessor: (row: any) => row.stores?.length || 0, className: "text-center hidden sm:table-cell" },
     { header: "Outstanding", accessor: (row: any) => `₹${Number(row.opening_balance).toLocaleString()}` },
     { header: "KYC", accessor: (row: any) => (
       <button onClick={() => canReviewKyc && row.kyc_status !== "not_requested" ? setKycCustomer(row) : null} className={canReviewKyc && row.kyc_status !== "not_requested" ? "cursor-pointer hover:opacity-80" : ""}>
