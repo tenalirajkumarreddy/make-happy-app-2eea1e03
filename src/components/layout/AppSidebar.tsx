@@ -123,8 +123,9 @@ export function AppSidebar() {
     { label: "My Dashboard", path: "/", icon: LayoutDashboard },
   ];
 
-  const visibleMainNav = isCustomer ? customerNav : mainNav;
-  const visibleSecondaryNav = isCustomer ? [] : secondaryNav;
+  const roleNav = NAV_BY_ROLE[role || "agent"] || NAV_BY_ROLE.agent;
+  const visibleMainNav = isCustomer ? customerNav : roleNav.main;
+  const visibleSecondaryNav = isCustomer ? [] : roleNav.secondary;
 
   const renderNav = (items: NavItem[]) =>
     items.map((item) => {
