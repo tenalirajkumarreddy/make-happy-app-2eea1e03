@@ -7,7 +7,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { logActivity } from "@/lib/activityLogger";
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2, Plus, Trash2, Download, IndianRupee, CreditCard, Banknote, Clock, UserCircle, Store as StoreIcon } from "lucide-react";
+import { Loader2, Plus, Trash2, Download, IndianRupee, CreditCard, Banknote, Clock, UserCircle, Store as StoreIcon, Package } from "lucide-react";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { useState } from "react";
 import {
@@ -53,8 +53,8 @@ const Sales = () => {
   const qc = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
 
-  const [customerId, setCustomerId] = useState("");
   const [storeId, setStoreId] = useState("");
   const [cashAmount, setCashAmount] = useState("");
   const [upiAmount, setUpiAmount] = useState("");
@@ -72,7 +72,6 @@ const Sales = () => {
     },
   });
 
-  // Fetch profiles for recorded_by
   const { data: profiles } = useQuery({
     queryKey: ["profiles"],
     queryFn: async () => {
@@ -83,23 +82,12 @@ const Sales = () => {
 
   const profileMap = new Map(profiles?.map((p) => [p.user_id, p]) || []);
 
-  const { data: customers } = useQuery({
-    queryKey: ["customers"],
-    queryFn: async () => {
-      const { data } = await supabase.from("customers").select("id, name").eq("is_active", true);
-      return data || [];
-    },
-  });
-
   const { data: stores } = useQuery({
-    queryKey: ["stores-for-sale", customerId],
+    queryKey: ["stores-for-sale"],
     queryFn: async () => {
-      let q = supabase.from("stores").select("id, name, outstanding, display_id, store_type_id").eq("is_active", true);
-      if (customerId) q = q.eq("customer_id", customerId);
-      const { data } = await q;
+      const { data } = await supabase.from("stores").select("id, name, outstanding, display_id, store_type_id, customer_id").eq("is_active", true);
       return data || [];
     },
-    enabled: !!customerId,
   });
 
   const selectedStore = stores?.find((s) => s.id === storeId);
@@ -147,6 +135,21 @@ const Sales = () => {
     enabled: !!storeId && !!selectedStoreTypeId,
   });
 
+  // Fetch sale items for the selected sale detail
+  const { data: saleItems, isLoading: loadingSaleItems } = useQuery({
+    queryKey: ["sale-items", selectedSaleId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("sale_items")
+        .select("*, products(name, sku)")
+        .eq("sale_id", selectedSaleId!);
+      return data || [];
+    },
+    enabled: !!selectedSaleId,
+  });
+
+  const selectedSale = sales?.find((s) => s.id === selectedSaleId);
+
   const totalAmount = items.reduce((s, i) => s + i.quantity * i.unit_price, 0);
   const cash = parseFloat(cashAmount) || 0;
   const upi = parseFloat(upiAmount) || 0;
@@ -167,7 +170,7 @@ const Sales = () => {
   };
 
   const resetForm = () => {
-    setCustomerId(""); setStoreId(""); setCashAmount(""); setUpiAmount("");
+    setStoreId(""); setCashAmount(""); setUpiAmount("");
     setItems([{ product_id: "", quantity: 1, unit_price: 0 }]);
   };
 
@@ -183,6 +186,13 @@ const Sales = () => {
       return;
     }
     setSaving(true);
+
+    const customerId = selectedStore?.customer_id;
+    if (!customerId) {
+      toast.error("Store has no linked customer");
+      setSaving(false);
+      return;
+    }
 
     const { count } = await supabase.from("sales").select("id", { count: "exact", head: true });
     const displayId = `SALE-${String((count || 0) + 1).padStart(6, "0")}`;
@@ -233,7 +243,6 @@ const Sales = () => {
 
   const columns = [
     { header: "Sale ID", accessor: "display_id" as const, className: "font-mono text-xs", hideOnMobile: true },
-    { header: "Customer", accessor: (row: any) => row.customers?.name || "—", className: "font-medium hidden md:table-cell" },
     { header: "Store", accessor: (row: any) => (
       <div className="flex items-center gap-2">
         <StoreIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
@@ -309,24 +318,19 @@ const Sales = () => {
         data={sales || []}
         searchKey="display_id"
         searchPlaceholder="Search by sale ID..."
+        onRowClick={(row: any) => setSelectedSaleId(row.id)}
         renderMobileCard={(row: any) => (
-          <div className="rounded-xl border bg-card p-4 shadow-sm hover:shadow-md transition-shadow">
-            {/* Header row */}
+          <div className="rounded-xl border bg-card p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => setSelectedSaleId(row.id)}>
             <div className="flex items-center justify-between mb-3">
               <span className="font-mono text-xs text-muted-foreground">{row.display_id}</span>
               <span className="text-[11px] text-muted-foreground">{format(new Date(row.created_at), "dd MMM yy, hh:mm a")}</span>
             </div>
-
-            {/* Store & Customer */}
             <div className="mb-3">
               <div className="flex items-center gap-1.5">
                 <StoreIcon className="h-3.5 w-3.5 text-muted-foreground" />
                 <span className="font-semibold text-sm text-foreground">{row.stores?.name || "—"}</span>
               </div>
-              <p className="text-xs text-muted-foreground mt-0.5 pl-5">{row.customers?.name || "—"}</p>
             </div>
-
-            {/* Amount breakdown */}
             <div className="grid grid-cols-3 gap-2 mb-3">
               <div className="rounded-lg bg-muted/50 p-2 text-center">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Total</p>
@@ -341,8 +345,6 @@ const Sales = () => {
                 <p className="text-sm font-medium text-foreground">₹{Number(row.upi_amount).toLocaleString()}</p>
               </div>
             </div>
-
-            {/* Footer: Outstanding + Recorder */}
             <div className="flex items-center justify-between pt-2 border-t border-border">
               <div className="flex items-center gap-1.5">
                 <Avatar className="h-5 w-5">
@@ -362,20 +364,73 @@ const Sales = () => {
         )}
       />
 
+      {/* Sale Detail Dialog */}
+      <Dialog open={!!selectedSaleId} onOpenChange={(v) => { if (!v) setSelectedSaleId(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Sale Details</DialogTitle></DialogHeader>
+          {selectedSale && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-sm text-muted-foreground">{selectedSale.display_id}</span>
+                <span className="text-xs text-muted-foreground">{format(new Date(selectedSale.created_at), "dd MMM yy, hh:mm a")}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <StoreIcon className="h-4 w-4 text-muted-foreground" />
+                <span className="font-medium">{(selectedSale as any).stores?.name || "—"}</span>
+              </div>
+              <div className="rounded-lg border bg-muted/30 p-3 space-y-1 text-sm">
+                <div className="flex justify-between"><span>Total</span><span className="font-bold">₹{Number(selectedSale.total_amount).toLocaleString()}</span></div>
+                <div className="flex justify-between"><span>Cash</span><span>₹{Number(selectedSale.cash_amount).toLocaleString()}</span></div>
+                <div className="flex justify-between"><span>UPI</span><span>₹{Number(selectedSale.upi_amount).toLocaleString()}</span></div>
+                <div className="flex justify-between font-medium"><span>Outstanding</span><span className={Number(selectedSale.outstanding_amount) > 0 ? "text-destructive" : ""}>₹{Number(selectedSale.outstanding_amount).toLocaleString()}</span></div>
+              </div>
+
+              {/* Items */}
+              <div>
+                <p className="text-sm font-medium mb-2 flex items-center gap-1.5"><Package className="h-4 w-4 text-muted-foreground" /> Items</p>
+                {loadingSaleItems ? (
+                  <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+                ) : saleItems && saleItems.length > 0 ? (
+                  <div className="space-y-1.5">
+                    {saleItems.map((item: any) => (
+                      <div key={item.id} className="flex items-center justify-between rounded-lg border bg-card p-2.5 text-sm">
+                        <div>
+                          <p className="font-medium">{item.products?.name || "—"}</p>
+                          <p className="text-[11px] text-muted-foreground">{item.products?.sku} · Qty: {Number(item.quantity)}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-semibold">₹{Number(item.total_price).toLocaleString()}</p>
+                          <p className="text-[11px] text-muted-foreground">@ ₹{Number(item.unit_price).toLocaleString()}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">No items recorded</p>
+                )}
+              </div>
+
+              {/* Recorder */}
+              <div className="flex items-center gap-2 pt-2 border-t">
+                <Avatar className="h-5 w-5">
+                  <AvatarImage src={getRecorderAvatar(selectedSale.recorded_by) || undefined} />
+                  <AvatarFallback className="text-[9px] bg-primary/10 text-primary">{getRecorderName(selectedSale.recorded_by).charAt(0)}</AvatarFallback>
+                </Avatar>
+                <span className="text-xs text-muted-foreground">Recorded by {getRecorderName(selectedSale.recorded_by)}</span>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Record Sale Dialog */}
       <Dialog open={showAdd} onOpenChange={(v) => { setShowAdd(v); if (!v) resetForm(); }}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Record Sale</DialogTitle></DialogHeader>
           <form onSubmit={handleAdd} className="space-y-4">
             <div>
-              <Label>Customer</Label>
-              <Select value={customerId} onValueChange={(v) => { setCustomerId(v); setStoreId(""); setItems([{ product_id: "", quantity: 1, unit_price: 0 }]); }}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Select customer" /></SelectTrigger>
-                <SelectContent>{customers?.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div>
               <Label>Store</Label>
-              <Select value={storeId} onValueChange={handleStoreChange} disabled={!customerId}>
+              <Select value={storeId} onValueChange={handleStoreChange}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Select store" /></SelectTrigger>
                 <SelectContent>{stores?.map((s) => <SelectItem key={s.id} value={s.id}>{s.name} ({s.display_id})</SelectItem>)}</SelectContent>
               </Select>
