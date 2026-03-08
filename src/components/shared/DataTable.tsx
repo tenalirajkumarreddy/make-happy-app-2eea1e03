@@ -72,7 +72,7 @@ export function DataTable<T extends Record<string, any>>({
               </TableRow>
             ) : (
               filtered.map((row, i) => (
-                <TableRow key={i} className="cursor-pointer hover:bg-muted/30">
+                <TableRow key={i} className={`hover:bg-muted/30 ${onRowClick ? "cursor-pointer" : ""}`} onClick={() => onRowClick?.(row)}>
                   {columns.map((col, j) => (
                     <TableCell key={j} className={col.className}>
                       {typeof col.accessor === "function"
