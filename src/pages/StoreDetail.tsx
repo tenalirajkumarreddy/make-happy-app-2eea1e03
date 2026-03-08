@@ -550,6 +550,37 @@ const StoreDetail = () => {
           </div>
         </TabsContent>
       </Tabs>
+      {/* Adjust Balance Dialog */}
+      <Dialog open={showAdjustBalance} onOpenChange={(v) => { setShowAdjustBalance(v); if (!v) { setNewBalanceInput(""); setAdjustReason(""); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Adjust Balance</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label className="text-xs text-muted-foreground">Current Outstanding</Label>
+              <p className="text-lg font-bold">₹{Number(store?.outstanding || 0).toLocaleString()}</p>
+            </div>
+            <div>
+              <Label>New Outstanding (₹)</Label>
+              <Input type="number" value={newBalanceInput} onChange={(e) => setNewBalanceInput(e.target.value)} className="mt-1" />
+              {newBalanceInput && !isNaN(parseFloat(newBalanceInput)) && (
+                <p className="text-xs mt-1 text-muted-foreground">
+                  Adjustment: <span className={parseFloat(newBalanceInput) - Number(store?.outstanding || 0) > 0 ? "text-destructive font-medium" : "text-success font-medium"}>
+                    {parseFloat(newBalanceInput) - Number(store?.outstanding || 0) > 0 ? "+" : ""}₹{(parseFloat(newBalanceInput) - Number(store?.outstanding || 0)).toLocaleString()}
+                  </span>
+                </p>
+              )}
+            </div>
+            <div>
+              <Label>Reason</Label>
+              <Input value={adjustReason} onChange={(e) => setAdjustReason(e.target.value)} className="mt-1" placeholder="e.g. Correction after physical count" />
+            </div>
+            <Button onClick={handleAdjustBalance} className="w-full" disabled={adjustSaving}>
+              {adjustSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Confirm Adjustment
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
