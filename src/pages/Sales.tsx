@@ -5,7 +5,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { logActivity } from "@/lib/activityLogger";
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Loader2, Plus, Trash2, Download } from "lucide-react";
+import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { useState } from "react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -17,6 +18,26 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+
+function exportCSV(data: any[], columns: { header: string; key: string }[], filename: string) {
+  const header = columns.map((c) => c.header).join(",");
+  const rows = data.map((row) =>
+    columns.map((c) => {
+      const val = c.key.includes(".") ? c.key.split(".").reduce((o: any, k) => o?.[k], row) : row[c.key];
+      const str = String(val ?? "").replace(/"/g, '""');
+      return `"${str}"`;
+    }).join(",")
+  );
+  const csv = [header, ...rows].join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast.success(`Exported ${data.length} rows`);
+}
 
 interface SaleItem {
   product_id: string;
@@ -109,7 +130,6 @@ const Sales = () => {
     }
     setSaving(true);
 
-    // Generate display ID
     const { count } = await supabase.from("sales").select("id", { count: "exact", head: true });
     const displayId = `SALE-${String((count || 0) + 1).padStart(6, "0")}`;
 
@@ -128,7 +148,6 @@ const Sales = () => {
 
     if (error) { toast.error(error.message); setSaving(false); return; }
 
-    // Insert sale items
     const saleItems = items.filter((i) => i.product_id).map((i) => ({
       sale_id: sale.id,
       product_id: i.product_id,
@@ -138,10 +157,7 @@ const Sales = () => {
     }));
     await supabase.from("sale_items").insert(saleItems);
 
-    // Log activity
     logActivity(user!.id, "Recorded sale", "sale", displayId, sale.id, { total: totalAmount, store: storeId });
-
-    // Update store outstanding
     await supabase.from("stores").update({ outstanding: newOutstanding }).eq("id", storeId);
 
     toast.success("Sale recorded successfully");
@@ -162,12 +178,41 @@ const Sales = () => {
   ];
 
   if (isLoading) {
-    return <div className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+    return <TableSkeleton columns={7} />;
   }
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Sales" subtitle="View and record sales transactions" actionLabel="Record Sale" onAction={() => setShowAdd(true)} />
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <PageHeader title="Sales" subtitle="View and record sales transactions" actionLabel="Record Sale" onAction={() => setShowAdd(true)} />
+      </div>
+
+      <div className="flex gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            exportCSV(
+              (sales || []).map((s: any) => ({ ...s, store_name: s.stores?.name || "", customer_name: s.customers?.name || "" })),
+              [
+                { header: "Sale ID", key: "display_id" },
+                { header: "Store", key: "store_name" },
+                { header: "Customer", key: "customer_name" },
+                { header: "Total", key: "total_amount" },
+                { header: "Cash", key: "cash_amount" },
+                { header: "UPI", key: "upi_amount" },
+                { header: "Outstanding", key: "outstanding_amount" },
+                { header: "Date", key: "created_at" },
+              ],
+              "sales-export.csv"
+            );
+          }}
+        >
+          <Download className="mr-1.5 h-4 w-4" />
+          Export CSV
+        </Button>
+      </div>
+
       <DataTable columns={columns} data={sales || []} searchKey="display_id" searchPlaceholder="Search by sale ID..." />
 
       <Dialog open={showAdd} onOpenChange={(v) => { setShowAdd(v); if (!v) resetForm(); }}>
