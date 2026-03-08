@@ -13,13 +13,16 @@ import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import {
   Loader2, ArrowLeft, DollarSign, ShoppingCart, Banknote,
   MapPin, Store as StoreIcon, Phone,
-  Pencil, X, Save, AlertTriangle, ScanLine, Trash2, Scale,
+  Pencil, X, Save, AlertTriangle, ScanLine, Trash2, Scale, ArrowRightLeft,
 } from "lucide-react";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -43,6 +46,9 @@ const StoreDetail = () => {
   const [toggling, setToggling] = useState(false);
   const [showQrScanner, setShowQrScanner] = useState(false);
   const [showAdjustBalance, setShowAdjustBalance] = useState(false);
+  const [showTransfer, setShowTransfer] = useState(false);
+  const [transferCustomerId, setTransferCustomerId] = useState("");
+  const [transferSaving, setTransferSaving] = useState(false);
   const [adjustSaving, setAdjustSaving] = useState(false);
   const [newBalanceInput, setNewBalanceInput] = useState("");
   const [adjustReason, setAdjustReason] = useState("");
@@ -71,6 +77,35 @@ const StoreDetail = () => {
     },
     enabled: !!id,
   });
+
+  // Customer list for transfer
+  const { data: allCustomers } = useQuery({
+    queryKey: ["customers-for-transfer"],
+    queryFn: async () => {
+      const { data } = await supabase.from("customers").select("id, name, display_id").eq("is_active", true).order("name");
+      return data || [];
+    },
+    enabled: canEdit,
+  });
+
+  const handleTransfer = async () => {
+    if (!store || !id || !transferCustomerId) return;
+    if (transferCustomerId === store.customer_id) {
+      toast.error("Store already belongs to this customer");
+      return;
+    }
+    setTransferSaving(true);
+    const { error } = await supabase.from("stores").update({ customer_id: transferCustomerId }).eq("id", id);
+    setTransferSaving(false);
+    if (error) { toast.error(error.message); return; }
+    const newCust = allCustomers?.find((c) => c.id === transferCustomerId);
+    logActivity(user!.id, `Transferred store to ${newCust?.name}`, "store", store.display_id, id);
+    toast.success(`Store transferred to ${newCust?.name}`);
+    setShowTransfer(false);
+    setTransferCustomerId("");
+    qc.invalidateQueries({ queryKey: ["store", id] });
+    qc.invalidateQueries({ queryKey: ["stores"] });
+  };
 
   const { data: sales } = useQuery({
     queryKey: ["store-sales", id],
@@ -451,6 +486,11 @@ const StoreDetail = () => {
                   <Scale className="h-3.5 w-3.5" /> Adjust Balance
                 </Button>
               )}
+              {canEdit && (
+                <Button variant="outline" size="sm" onClick={() => setShowTransfer(true)} className="gap-1.5">
+                  <ArrowRightLeft className="h-3.5 w-3.5" /> Transfer
+                </Button>
+              )}
               {store.lat && store.lng && (
                 <a href={`https://www.google.com/maps?q=${store.lat},${store.lng}`} target="_blank" rel="noopener noreferrer" className="hidden sm:inline-flex items-center gap-1.5 text-sm text-primary hover:underline">
                   <MapPin className="h-4 w-4" /> Map
@@ -579,6 +619,33 @@ const StoreDetail = () => {
               Confirm Adjustment
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+      {/* Transfer Store Dialog */}
+      <Dialog open={showTransfer} onOpenChange={setShowTransfer}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Transfer Store</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">Move <strong>{store?.name}</strong> from <strong>{(store as any)?.customers?.name}</strong> to another customer.</p>
+          <div className="space-y-3 mt-2">
+            <div>
+              <Label>New Customer</Label>
+              <Select value={transferCustomerId} onValueChange={setTransferCustomerId}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Select customer" /></SelectTrigger>
+                <SelectContent>
+                  {allCustomers?.filter((c) => c.id !== store?.customer_id).map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name} ({c.display_id})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowTransfer(false)}>Cancel</Button>
+            <Button onClick={handleTransfer} disabled={transferSaving || !transferCustomerId}>
+              {transferSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Transfer
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

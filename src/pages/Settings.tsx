@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2, Save } from "lucide-react";
-import { useState, useEffect } from "react";
+import { Loader2, Save, Upload, X } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { PricingTab } from "@/components/settings/PricingTab";
 import { BannerManagement } from "@/components/banners/BannerManagement";
@@ -40,7 +40,13 @@ const SettingsPage = () => {
   const handleSaveSettings = async () => {
     setSavingSettings(true);
     for (const [key, value] of Object.entries(settings)) {
-      await supabase.from("company_settings").update({ value, updated_at: new Date().toISOString() }).eq("key", key);
+      // Try update first, then insert if not exists
+      const { data } = await supabase.from("company_settings").select("id").eq("key", key).maybeSingle();
+      if (data) {
+        await supabase.from("company_settings").update({ value, updated_at: new Date().toISOString() }).eq("key", key);
+      } else {
+        await supabase.from("company_settings").insert({ key, value });
+      }
     }
     setSavingSettings(false);
     toast.success("Settings saved");
@@ -50,6 +56,29 @@ const SettingsPage = () => {
 
   const toggleFeature = (key: string) => {
     setSettings((prev) => ({ ...prev, [key]: prev[key] === "true" ? "false" : "true" }));
+  };
+
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { toast.error("Max 2MB"); return; }
+    setUploadingLogo(true);
+    const ext = file.name.split(".").pop();
+    const path = `company/logo-${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from("entity-photos").upload(path, file, { upsert: true });
+    if (error) { toast.error(error.message); setUploadingLogo(false); return; }
+    const { data: urlData } = supabase.storage.from("entity-photos").getPublicUrl(path);
+    setSettings((prev) => ({ ...prev, company_logo: urlData.publicUrl }));
+    setUploadingLogo(false);
+    toast.success("Logo uploaded — save settings to apply");
+  };
+
+  const removeLogo = () => {
+    setSettings((prev) => ({ ...prev, company_logo: "" }));
+    if (logoInputRef.current) logoInputRef.current.value = "";
   };
 
 
@@ -72,6 +101,28 @@ const SettingsPage = () => {
           <div className="rounded-xl border bg-card p-6 space-y-4 max-w-lg">
             <h3 className="font-semibold">Company Information</h3>
             <div className="space-y-3">
+              {/* Company Logo */}
+              <div>
+                <Label>Company Logo</Label>
+                <div className="mt-1 flex items-center gap-3">
+                  <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
+                  {settings.company_logo ? (
+                    <div className="relative h-16 w-16 rounded-lg border bg-muted overflow-hidden">
+                      <img src={settings.company_logo} alt="Logo" className="h-full w-full object-contain" />
+                      {isAdmin && (
+                        <button onClick={removeLogo} className="absolute top-0.5 right-0.5 rounded-full bg-destructive/80 p-0.5 text-destructive-foreground hover:bg-destructive">
+                          <X className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <Button type="button" variant="outline" size="sm" onClick={() => logoInputRef.current?.click()} disabled={!isAdmin || uploadingLogo} className="gap-1.5">
+                      {uploadingLogo ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                      Upload Logo
+                    </Button>
+                  )}
+                </div>
+              </div>
               <div><Label>Company Name</Label><Input value={settings.company_name || ""} onChange={(e) => setSettings({ ...settings, company_name: e.target.value })} className="mt-1" disabled={!isAdmin} /></div>
               <div><Label>GST Number</Label><Input value={settings.gst_number || ""} onChange={(e) => setSettings({ ...settings, gst_number: e.target.value })} className="mt-1" disabled={!isAdmin} /></div>
               <div><Label>Customer Care Number</Label><Input value={settings.customer_care_number || ""} onChange={(e) => setSettings({ ...settings, customer_care_number: e.target.value })} className="mt-1" disabled={!isAdmin} /></div>
