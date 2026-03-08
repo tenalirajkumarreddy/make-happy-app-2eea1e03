@@ -527,6 +527,7 @@ export type Database = {
           customer_id: string
           display_id: string
           id: string
+          logged_by: string | null
           new_outstanding: number
           notes: string | null
           old_outstanding: number
@@ -544,6 +545,7 @@ export type Database = {
           customer_id: string
           display_id: string
           id?: string
+          logged_by?: string | null
           new_outstanding?: number
           notes?: string | null
           old_outstanding?: number
@@ -561,6 +563,7 @@ export type Database = {
           customer_id?: string
           display_id?: string
           id?: string
+          logged_by?: string | null
           new_outstanding?: number
           notes?: string | null
           old_outstanding?: number
@@ -923,6 +926,7 @@ export type Database = {
           customer_id: string
           display_id: string
           id: string
+          logged_by: string | null
           new_outstanding: number
           notes: string | null
           old_outstanding: number
@@ -940,6 +944,7 @@ export type Database = {
           customer_id: string
           display_id: string
           id?: string
+          logged_by?: string | null
           new_outstanding?: number
           notes?: string | null
           old_outstanding?: number
@@ -957,6 +962,7 @@ export type Database = {
           customer_id?: string
           display_id?: string
           id?: string
+          logged_by?: string | null
           new_outstanding?: number
           notes?: string | null
           old_outstanding?: number
