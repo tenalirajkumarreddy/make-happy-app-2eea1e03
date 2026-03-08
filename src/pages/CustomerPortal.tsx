@@ -115,7 +115,7 @@ const CustomerPortal = () => {
       </div>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <Button variant="outline" className="h-auto py-4 flex-col gap-2" onClick={() => navigate("/portal/orders")}>
           <ShoppingCart className="h-5 w-5" />
           <span className="text-xs">Place Order</span>
@@ -132,6 +132,16 @@ const CustomerPortal = () => {
           <Store className="h-5 w-5" />
           <span className="text-xs">My Profile</span>
         </Button>
+        {companySettings?.customer_care_number && (
+          <Button
+            variant="outline"
+            className="h-auto py-4 flex-col gap-2 border-primary/30 text-primary hover:bg-primary/5"
+            onClick={() => window.open(`tel:${companySettings.customer_care_number}`, "_self")}
+          >
+            <Phone className="h-5 w-5" />
+            <span className="text-xs">Call Agent</span>
+          </Button>
+        )}
       </div>
 
       {/* Stores Overview */}
