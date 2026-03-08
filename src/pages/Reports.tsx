@@ -51,7 +51,7 @@ const Reports = () => {
     { header: "Total", accessor: (row: any) => `₹${Number(row.total_amount).toLocaleString()}`, className: "font-semibold" },
     { header: "Cash", accessor: (row: any) => `₹${Number(row.cash_amount).toLocaleString()}` },
     { header: "UPI", accessor: (row: any) => `₹${Number(row.upi_amount).toLocaleString()}` },
-    { header: "By", accessor: (row: any) => row.profiles?.full_name || "—", className: "text-muted-foreground text-sm" },
+    { header: "Date", accessor: (row: any) => new Date(row.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }), className: "text-muted-foreground text-xs" },
   ];
 
   const outstandingColumns = [

@@ -118,7 +118,7 @@ const Handovers = () => {
                       label={item.status === "confirmed" ? "Confirmed" : item.status === "awaiting_confirmation" ? "Awaiting confirmation" : "Not handed over"}
                     />
                   </div>
-                  <p className="font-semibold">{(item as any).profiles?.full_name || "User"}</p>
+                  <p className="font-semibold">Handover #{item.id.slice(0, 8)}</p>
                   <div className="flex items-center gap-4 mt-2 text-sm">
                     <span className="flex items-center gap-1.5">
                       <Banknote className="h-4 w-4 text-success" />Cash: ₹{Number(item.cash_amount).toLocaleString()}

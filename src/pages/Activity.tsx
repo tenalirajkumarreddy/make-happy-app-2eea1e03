@@ -24,7 +24,7 @@ const Activity = () => {
 
   const columns = [
     { header: "Time", accessor: (row: any) => new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }), className: "font-mono text-xs" },
-    { header: "User", accessor: (row: any) => row.profiles?.full_name || "System", className: "font-medium" },
+    { header: "User", accessor: (row: any) => row.user_id?.slice(0, 8) || "System", className: "font-mono text-xs" },
     { header: "Action", accessor: "action" as const },
     { header: "Entity", accessor: (row: any) => row.entity_name || row.entity_id || "—", className: "text-muted-foreground" },
     { header: "Type", accessor: (row: any) => <Badge variant="outline">{row.entity_type}</Badge> },
