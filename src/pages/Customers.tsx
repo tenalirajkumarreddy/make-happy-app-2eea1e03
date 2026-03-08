@@ -247,7 +247,7 @@ const Customers = () => {
 
       <DataTable
         columns={columns}
-        data={customers || []}
+        data={filteredCustomers}
         searchKey="name"
         searchPlaceholder="Search customers..."
         onRowClick={(row) => navigate(`/customers/${row.id}`)}
