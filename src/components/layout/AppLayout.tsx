@@ -1,6 +1,7 @@
 import { Outlet } from "react-router-dom";
 import { AppSidebar } from "./AppSidebar";
 import { TopBar } from "./TopBar";
+import { GlobalSearch } from "@/components/shared/GlobalSearch";
 
 export function AppLayout() {
   return (
@@ -12,6 +13,7 @@ export function AppLayout() {
           <Outlet />
         </main>
       </div>
+      <GlobalSearch />
     </div>
   );
 }
