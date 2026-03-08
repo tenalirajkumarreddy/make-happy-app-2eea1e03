@@ -126,11 +126,11 @@
 
 @layer utilities {
   .glass-card {
-    @apply bg-card/80 backdrop-blur-sm border border-border/50 shadow-sm;
+    @apply bg-card backdrop-blur-sm border border-border shadow-sm;
   }
 
   .stat-card {
-    @apply bg-card rounded-xl border border-border/50 p-5 shadow-sm transition-all duration-200 hover:shadow-md hover:border-border;
+    @apply bg-card rounded-xl border border-border p-5 shadow-sm transition-all duration-200 hover:shadow-md hover:border-border;
   }
 
   .sidebar-item {
