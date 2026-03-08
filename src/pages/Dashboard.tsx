@@ -94,7 +94,7 @@ const Dashboard = () => {
         <StatCard title="Pending Outstanding" value={`₹${s.totalOutstanding.toLocaleString()}`} change={`${s.overdueStores} stores with balance`} changeType="negative" icon={Clock} iconColor="bg-warning" />
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
         <StatCard title="Active Customers" value={String(s.customerCount)} icon={Users} />
         <StatCard title="Active Stores" value={String(s.storeCount)} icon={Store} />
         <StatCard title="Pending Orders" value={String(s.pendingOrders.length)} icon={ShoppingCart} />
