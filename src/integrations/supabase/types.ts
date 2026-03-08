@@ -191,6 +191,30 @@ export type Database = {
         }
         Relationships: []
       }
+      handover_snapshots: {
+        Row: {
+          balance_amount: number
+          created_at: string
+          id: string
+          snapshot_date: string
+          user_id: string
+        }
+        Insert: {
+          balance_amount?: number
+          created_at?: string
+          id?: string
+          snapshot_date?: string
+          user_id: string
+        }
+        Update: {
+          balance_amount?: number
+          created_at?: string
+          id?: string
+          snapshot_date?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       handovers: {
         Row: {
           cash_amount: number
@@ -200,6 +224,7 @@ export type Database = {
           handed_to: string | null
           handover_date: string
           id: string
+          notes: string | null
           rejected_at: string | null
           status: string
           updated_at: string
@@ -214,6 +239,7 @@ export type Database = {
           handed_to?: string | null
           handover_date?: string
           id?: string
+          notes?: string | null
           rejected_at?: string | null
           status?: string
           updated_at?: string
@@ -228,6 +254,7 @@ export type Database = {
           handed_to?: string | null
           handover_date?: string
           id?: string
+          notes?: string | null
           rejected_at?: string | null
           status?: string
           updated_at?: string
