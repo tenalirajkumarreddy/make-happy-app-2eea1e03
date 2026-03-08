@@ -193,96 +193,161 @@ export default function DailyReport() {
 
   // ── Export functions ──
   const generatePDF = () => {
-    const doc = new jsPDF();
+    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+    const pw = 297; // A4 landscape width
+    const ph = 210; // A4 landscape height
+    const m = 8; // margin
+    const gutter = 5; // gap between columns
+    const colW = (pw - 2 * m - gutter) / 2; // two-column layout
+
     const dateStr = new Date(date).toLocaleDateString("en-IN", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-    doc.setFontSize(18);
-    doc.text("Daily Business Report", 14, 20);
-    doc.setFontSize(11);
-    doc.text(dateStr, 14, 28);
 
-    let y = 36;
+    // ── Header ──
+    doc.setFillColor(20, 20, 20);
+    doc.rect(0, 0, pw, 14, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text("DAILY BUSINESS REPORT", m, 9);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.text(dateStr, pw - m, 9, { align: "right" });
+    doc.setTextColor(0, 0, 0);
 
-    // Summary
-    doc.setFontSize(13);
-    doc.text("Summary", 14, y); y += 6;
-    const summaryData = [
-      ["Total Sale Amount", fmt(d.totalSaleAmount)],
-      ["Total Collections (Payments)", fmt(d.totalCollections)],
-      ["Total Income (Sales + Collections)", fmt(d.totalIncome)],
+    // ── Helper for compact section title ──
+    const sectionTitle = (title: string, x: number, y: number) => {
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(80, 80, 80);
+      doc.text(title.toUpperCase(), x, y);
+      doc.setTextColor(0, 0, 0);
+      doc.setFont("helvetica", "normal");
+      return y + 2;
+    };
+
+    const tinyStyle = { fontSize: 6, cellPadding: 1.2 };
+    const headStyle = { fillColor: [35, 35, 35] as [number, number, number], textColor: 255, fontSize: 6, cellPadding: 1.2, fontStyle: "bold" as const };
+
+    // ══════════ LEFT COLUMN ══════════
+    let ly = 18;
+
+    // Summary KPIs — 2-column key-value grid
+    ly = sectionTitle("Summary", m, ly);
+    const kpiLeft = [
+      ["Total Income", fmt(d.totalIncome)],
+      ["Sale Amount", fmt(d.totalSaleAmount)],
+      ["Collections", fmt(d.totalCollections)],
       ["Cash Collected", fmt(d.totalCash)],
       ["UPI Collected", fmt(d.totalUpi)],
-      ["Credit Given (Outstanding from Sales)", fmt(d.salesOutstanding)],
-      ["Total Items Sold", String(d.totalItemsSold)],
+      ["Credit Given", fmt(d.salesOutstanding)],
+    ];
+    const kpiRight = [
+      ["Items Sold", String(d.totalItemsSold)],
       ["Sales Count", String(d.salesCount)],
-      ["Payments Count", String(d.txnCount)],
+      ["Payments", String(d.txnCount)],
       ["Orders Delivered", String(d.ordersDelivered)],
       ["Orders Pending", String(d.ordersPending)],
-      ["Total Outstanding (All Stores)", fmt(d.totalOutstanding)],
+      ["Total Outstanding", fmt(d.totalOutstanding)],
     ];
-    autoTable(doc, { startY: y, head: [["Metric", "Value"]], body: summaryData, theme: "grid", headStyles: { fillColor: [30, 30, 30] } });
-    y = (doc as any).lastAutoTable.finalY + 10;
+    const halfCol = (colW - 2) / 2;
+    autoTable(doc, {
+      startY: ly, margin: { left: m }, tableWidth: halfCol - 1,
+      head: [["Metric", "Value"]], body: kpiLeft,
+      theme: "grid", styles: tinyStyle, headStyles: headStyle,
+    });
+    const kpiEndLeft = (doc as any).lastAutoTable.finalY;
+    autoTable(doc, {
+      startY: ly, margin: { left: m + halfCol + 1 }, tableWidth: halfCol - 1,
+      head: [["Metric", "Value"]], body: kpiRight,
+      theme: "grid", styles: tinyStyle, headStyles: headStyle,
+    });
+    ly = Math.max(kpiEndLeft, (doc as any).lastAutoTable.finalY) + 3;
 
-    // Sales
+    // Sales table
     if (d.sales.length > 0) {
-      doc.setFontSize(13);
-      doc.text("Sales", 14, y); y += 4;
+      ly = sectionTitle(`Sales (${d.salesCount})`, m, ly);
       autoTable(doc, {
-        startY: y,
-        head: [["ID", "Store", "Total", "Cash", "UPI", "Credit", "Time"]],
+        startY: ly, margin: { left: m, right: pw - m - colW },
+        tableWidth: colW,
+        head: [["ID", "Store", "Total", "Cash", "UPI", "Credit"]],
         body: d.sales.map((s: any) => [
-          s.display_id, s.stores?.name || "—", fmt(Number(s.total_amount)), fmt(Number(s.cash_amount)),
+          s.display_id, (s.stores?.name || "—").substring(0, 18),
+          fmt(Number(s.total_amount)), fmt(Number(s.cash_amount)),
           fmt(Number(s.upi_amount)), fmt(Number(s.outstanding_amount)),
-          new Date(s.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }),
         ]),
-        theme: "striped", headStyles: { fillColor: [30, 30, 30] }, styles: { fontSize: 8 },
+        theme: "striped", styles: tinyStyle, headStyles: headStyle,
+        columnStyles: { 1: { cellWidth: "auto" } },
       });
-      y = (doc as any).lastAutoTable.finalY + 10;
+      ly = (doc as any).lastAutoTable.finalY + 3;
     }
 
-    // Payments
-    if (d.txns.length > 0) {
-      if (y > 250) { doc.addPage(); y = 20; }
-      doc.setFontSize(13);
-      doc.text("Payments / Collections", 14, y); y += 4;
+    // Payments table (below sales in left column)
+    if (d.txns.length > 0 && ly < ph - 20) {
+      ly = sectionTitle(`Payments (${d.txnCount})`, m, ly);
       autoTable(doc, {
-        startY: y,
-        head: [["ID", "Store", "Total", "Cash", "UPI", "Time"]],
+        startY: ly, margin: { left: m, right: pw - m - colW },
+        tableWidth: colW,
+        head: [["ID", "Store", "Total", "Cash", "UPI"]],
         body: d.txns.map((t: any) => [
-          t.display_id, t.stores?.name || "—", fmt(Number(t.total_amount)), fmt(Number(t.cash_amount)),
-          fmt(Number(t.upi_amount)),
-          new Date(t.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }),
+          t.display_id, (t.stores?.name || "—").substring(0, 18),
+          fmt(Number(t.total_amount)), fmt(Number(t.cash_amount)), fmt(Number(t.upi_amount)),
         ]),
-        theme: "striped", headStyles: { fillColor: [30, 30, 30] }, styles: { fontSize: 8 },
+        theme: "striped", styles: tinyStyle, headStyles: headStyle,
       });
-      y = (doc as any).lastAutoTable.finalY + 10;
     }
 
-    // Products
+    // ══════════ RIGHT COLUMN ══════════
+    const rx = m + colW + gutter;
+    let ry = 18;
+
+    // Products sold
     if (d.productBreakdown.length > 0) {
-      if (y > 250) { doc.addPage(); y = 20; }
-      doc.setFontSize(13);
-      doc.text("Products Sold", 14, y); y += 4;
+      ry = sectionTitle(`Products Sold (${d.productBreakdown.length})`, rx, ry);
       autoTable(doc, {
-        startY: y,
-        head: [["Product", "Quantity", "Revenue"]],
-        body: d.productBreakdown.map((p) => [p.name, `${p.qty} ${p.unit}`, fmt(p.revenue)]),
-        theme: "striped", headStyles: { fillColor: [30, 30, 30] }, styles: { fontSize: 9 },
+        startY: ry, margin: { left: rx, right: m },
+        tableWidth: colW,
+        head: [["Product", "Qty", "Revenue"]],
+        body: d.productBreakdown.map((p) => [p.name.substring(0, 22), `${p.qty} ${p.unit}`, fmt(p.revenue)]),
+        theme: "striped", styles: tinyStyle, headStyles: headStyle,
       });
-      y = (doc as any).lastAutoTable.finalY + 10;
+      ry = (doc as any).lastAutoTable.finalY + 3;
     }
 
     // Staff balances
     if (d.staffBalances.length > 0) {
-      if (y > 230) { doc.addPage(); y = 20; }
-      doc.setFontSize(13);
-      doc.text("Staff Balances", 14, y); y += 4;
+      ry = sectionTitle(`Staff Balances (${d.staffBalances.length})`, rx, ry);
       autoTable(doc, {
-        startY: y,
-        head: [["Staff", "Role", "Collected", "Handed Over", "Pending", "Received", "Balance"]],
-        body: d.staffBalances.map((s) => [s.name, s.role, fmt(s.collected), fmt(s.handed_over), fmt(s.pending_handover), fmt(s.received), fmt(s.balance)]),
-        theme: "striped", headStyles: { fillColor: [30, 30, 30] }, styles: { fontSize: 8 },
+        startY: ry, margin: { left: rx, right: m },
+        tableWidth: colW,
+        head: [["Staff", "Role", "Collected", "Handed", "Pending", "Balance"]],
+        body: d.staffBalances.map((s) => [
+          s.name.substring(0, 14), s.role.replace("_", " "),
+          fmt(s.collected), fmt(s.handed_over), fmt(s.pending_handover), fmt(s.balance),
+        ]),
+        theme: "striped", styles: tinyStyle, headStyles: headStyle,
+      });
+      ry = (doc as any).lastAutoTable.finalY + 3;
+    }
+
+    // Outstanding stores
+    if (d.storesWithOutstanding.length > 0 && ry < ph - 20) {
+      ry = sectionTitle(`Outstanding (${d.storesWithOutstanding.length})`, rx, ry);
+      autoTable(doc, {
+        startY: ry, margin: { left: rx, right: m },
+        tableWidth: colW,
+        head: [["Store ID", "Store", "Outstanding"]],
+        body: d.storesWithOutstanding.slice(0, 20).map((s: any) => [
+          s.display_id, s.name.substring(0, 20), fmt(Number(s.outstanding)),
+        ]),
+        theme: "striped", styles: tinyStyle, headStyles: headStyle,
       });
     }
+
+    // ── Footer ──
+    doc.setFontSize(6);
+    doc.setTextColor(150, 150, 150);
+    doc.text(`Generated on ${new Date().toLocaleString("en-IN")}`, m, ph - 3);
+    doc.text("Confidential", pw - m, ph - 3, { align: "right" });
 
     doc.save(`daily-report-${date}.pdf`);
     toast.success("PDF downloaded");
