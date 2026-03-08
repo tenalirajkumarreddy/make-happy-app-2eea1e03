@@ -16,6 +16,16 @@ const CustomerPortal = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
+  const { data: companySettings } = useQuery({
+    queryKey: ["company-settings-portal"],
+    queryFn: async () => {
+      const { data } = await supabase.from("company_settings").select("key, value");
+      const map: Record<string, string> = {};
+      data?.forEach((s) => { map[s.key] = s.value || ""; });
+      return map;
+    },
+  });
+
   const { data: customer, isLoading: loadingCustomer } = useQuery({
     queryKey: ["my-customer", user?.id],
     queryFn: async () => {
