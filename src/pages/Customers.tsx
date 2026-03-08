@@ -41,7 +41,7 @@ const Customers = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("customers")
-        .select("*, stores(id)")
+        .select("*, stores(id, outstanding)")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
@@ -140,7 +140,10 @@ const Customers = () => {
     )},
     { header: "Phone", accessor: (row: any) => row.phone || "—", className: "text-muted-foreground text-sm hidden sm:table-cell" },
     { header: "Stores", accessor: (row: any) => row.stores?.length || 0, className: "text-center hidden sm:table-cell" },
-    { header: "Outstanding", accessor: (row: any) => `₹${Number(row.opening_balance).toLocaleString()}` },
+    { header: "Outstanding", accessor: (row: any) => {
+      const total = (row.stores || []).reduce((s: number, st: any) => s + Number(st.outstanding || 0), 0);
+      return `₹${total.toLocaleString()}`;
+    }},
     { header: "KYC", accessor: (row: any) => (
       <button onClick={() => canReviewKyc && row.kyc_status !== "not_requested" ? setKycCustomer(row) : null} className={canReviewKyc && row.kyc_status !== "not_requested" ? "cursor-pointer hover:opacity-80" : ""}>
         <StatusBadge status={row.kyc_status === "verified" ? "verified" : row.kyc_status === "pending" ? "pending" : row.kyc_status === "rejected" ? "rejected" : "inactive"} label={row.kyc_status.replace("_", " ")} />
@@ -193,7 +196,7 @@ const Customers = () => {
                 </div>
                 <p className="text-xs text-muted-foreground font-mono mt-0.5">{row.display_id}</p>
                 <div className="flex items-center gap-3 mt-1.5">
-                  <span className="text-sm font-bold text-foreground">₹{Number(row.opening_balance).toLocaleString()}</span>
+                  <span className="text-sm font-bold text-foreground">₹{(row.stores || []).reduce((s: number, st: any) => s + Number(st.outstanding || 0), 0).toLocaleString()}</span>
                   <span className="text-xs text-muted-foreground">{row.stores?.length || 0} stores</span>
                 </div>
                 <div className="mt-1.5">
