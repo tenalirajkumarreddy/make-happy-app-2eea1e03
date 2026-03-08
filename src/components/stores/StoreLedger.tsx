@@ -113,7 +113,7 @@ export function StoreLedger({ sales, transactions, balanceAdjustments = [], open
     });
 
     return entries;
-  }, [sales, transactions, openingBalance]);
+  }, [sales, transactions, balanceAdjustments, openingBalance]);
 
   const selectedEntry = ledgerEntries.find((e) => e.id === selectedEntryId);
   const isSaleSelected = selectedEntry?.type === "sale";
