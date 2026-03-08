@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
 const Customers = () => {
+  const { user } = useAuth();
   const [showAdd, setShowAdd] = useState(false);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");

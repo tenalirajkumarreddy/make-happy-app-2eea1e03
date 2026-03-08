@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 
 const Products = () => {
+  const { user } = useAuth();
   const [showAdd, setShowAdd] = useState(false);
   const [name, setName] = useState("");
   const [sku, setSku] = useState("");
