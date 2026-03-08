@@ -1,30 +1,237 @@
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { Loader2, Plus, Trash2 } from "lucide-react";
+import { useState } from "react";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { toast } from "sonner";
 
-const sales = [
-  { id: "SALE-000001", store: "Tea Stall - MG Road", type: "Retail", total: "₹1,200", cash: "₹500", upi: "₹200", outstanding: "₹500", agent: "Agent001", date: "2026-03-08 11:55" },
-  { id: "SALE-000002", store: "Bakery - Jayanagar", type: "Retail", total: "₹3,450", cash: "₹3,450", upi: "₹0", outstanding: "₹0", agent: "Agent002", date: "2026-03-08 10:30" },
-  { id: "SALE-000003", store: "Restaurant - Koramangala", type: "Restaurant", total: "₹8,900", cash: "₹5,000", upi: "₹3,900", outstanding: "₹0", agent: "Agent001", date: "2026-03-08 09:15" },
-  { id: "SALE-000004", store: "Wholesale Mart", type: "Wholesale", total: "₹25,600", cash: "₹10,000", upi: "₹5,000", outstanding: "₹10,600", agent: "Agent003", date: "2026-03-07 16:45" },
-];
-
-const columns = [
-  { header: "Sale ID", accessor: "id" as const, className: "font-mono text-xs" },
-  { header: "Store", accessor: "store" as const, className: "font-medium" },
-  { header: "Total", accessor: "total" as const, className: "font-semibold" },
-  { header: "Cash", accessor: "cash" as const, className: "text-success text-sm" },
-  { header: "UPI", accessor: "upi" as const, className: "text-info text-sm" },
-  { header: "Outstanding", accessor: "outstanding" as const, className: "text-sm" },
-  { header: "Agent", accessor: "agent" as const, className: "text-muted-foreground text-sm" },
-  { header: "Date", accessor: "date" as const, className: "text-muted-foreground text-xs" },
-];
+interface SaleItem {
+  product_id: string;
+  quantity: number;
+  unit_price: number;
+}
 
 const Sales = () => {
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const [showAdd, setShowAdd] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // Form state
+  const [customerId, setCustomerId] = useState("");
+  const [storeId, setStoreId] = useState("");
+  const [cashAmount, setCashAmount] = useState("");
+  const [upiAmount, setUpiAmount] = useState("");
+  const [items, setItems] = useState<SaleItem[]>([{ product_id: "", quantity: 1, unit_price: 0 }]);
+
+  const { data: sales, isLoading } = useQuery({
+    queryKey: ["sales"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("sales")
+        .select("*, stores(name), customers(name), profiles:recorded_by(full_name)")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: customers } = useQuery({
+    queryKey: ["customers"],
+    queryFn: async () => {
+      const { data } = await supabase.from("customers").select("id, name").eq("is_active", true);
+      return data || [];
+    },
+  });
+
+  const { data: stores } = useQuery({
+    queryKey: ["stores-for-sale", customerId],
+    queryFn: async () => {
+      let q = supabase.from("stores").select("id, name, outstanding, display_id").eq("is_active", true);
+      if (customerId) q = q.eq("customer_id", customerId);
+      const { data } = await q;
+      return data || [];
+    },
+    enabled: !!customerId,
+  });
+
+  const { data: products } = useQuery({
+    queryKey: ["products"],
+    queryFn: async () => {
+      const { data } = await supabase.from("products").select("id, name, base_price, sku").eq("is_active", true);
+      return data || [];
+    },
+  });
+
+  const totalAmount = items.reduce((s, i) => s + i.quantity * i.unit_price, 0);
+  const cash = parseFloat(cashAmount) || 0;
+  const upi = parseFloat(upiAmount) || 0;
+  const outstandingFromSale = totalAmount - cash - upi;
+  const selectedStore = stores?.find((s) => s.id === storeId);
+  const oldOutstanding = Number(selectedStore?.outstanding || 0);
+  const newOutstanding = oldOutstanding + outstandingFromSale;
+
+  const addItem = () => setItems([...items, { product_id: "", quantity: 1, unit_price: 0 }]);
+  const removeItem = (idx: number) => setItems(items.filter((_, i) => i !== idx));
+  const updateItem = (idx: number, field: keyof SaleItem, value: any) => {
+    const updated = [...items];
+    (updated[idx] as any)[field] = value;
+    if (field === "product_id") {
+      const p = products?.find((pr) => pr.id === value);
+      if (p) updated[idx].unit_price = Number(p.base_price);
+    }
+    setItems(updated);
+  };
+
+  const resetForm = () => {
+    setCustomerId(""); setStoreId(""); setCashAmount(""); setUpiAmount("");
+    setItems([{ product_id: "", quantity: 1, unit_price: 0 }]);
+  };
+
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!storeId || items.some((i) => !i.product_id)) {
+      toast.error("Please fill all required fields");
+      return;
+    }
+    setSaving(true);
+
+    // Generate display ID
+    const { count } = await supabase.from("sales").select("id", { count: "exact", head: true });
+    const displayId = `SALE-${String((count || 0) + 1).padStart(6, "0")}`;
+
+    const { data: sale, error } = await supabase.from("sales").insert({
+      display_id: displayId,
+      store_id: storeId,
+      customer_id: customerId,
+      recorded_by: user!.id,
+      total_amount: totalAmount,
+      cash_amount: cash,
+      upi_amount: upi,
+      outstanding_amount: outstandingFromSale,
+      old_outstanding: oldOutstanding,
+      new_outstanding: newOutstanding,
+    }).select("id").single();
+
+    if (error) { toast.error(error.message); setSaving(false); return; }
+
+    // Insert sale items
+    const saleItems = items.filter((i) => i.product_id).map((i) => ({
+      sale_id: sale.id,
+      product_id: i.product_id,
+      quantity: i.quantity,
+      unit_price: i.unit_price,
+      total_price: i.quantity * i.unit_price,
+    }));
+    await supabase.from("sale_items").insert(saleItems);
+
+    // Update store outstanding
+    await supabase.from("stores").update({ outstanding: newOutstanding }).eq("id", storeId);
+
+    toast.success("Sale recorded successfully");
+    setSaving(false);
+    setShowAdd(false);
+    resetForm();
+    qc.invalidateQueries({ queryKey: ["sales"] });
+  };
+
+  const columns = [
+    { header: "Sale ID", accessor: "display_id" as const, className: "font-mono text-xs" },
+    { header: "Store", accessor: (row: any) => row.stores?.name || "—", className: "font-medium" },
+    { header: "Total", accessor: (row: any) => `₹${Number(row.total_amount).toLocaleString()}`, className: "font-semibold" },
+    { header: "Cash", accessor: (row: any) => `₹${Number(row.cash_amount).toLocaleString()}`, className: "text-sm" },
+    { header: "UPI", accessor: (row: any) => `₹${Number(row.upi_amount).toLocaleString()}`, className: "text-sm" },
+    { header: "Outstanding", accessor: (row: any) => `₹${Number(row.outstanding_amount).toLocaleString()}`, className: "text-sm" },
+    { header: "Recorded By", accessor: (row: any) => row.profiles?.full_name || "—", className: "text-muted-foreground text-sm" },
+    { header: "Date", accessor: (row: any) => new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }), className: "text-muted-foreground text-xs" },
+  ];
+
+  if (isLoading) {
+    return <div className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  }
+
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Sales" subtitle="View and record sales transactions" actionLabel="Record Sale" />
-      <DataTable columns={columns} data={sales} searchKey="store" searchPlaceholder="Search by store..." />
+      <PageHeader title="Sales" subtitle="View and record sales transactions" actionLabel="Record Sale" onAction={() => setShowAdd(true)} />
+      <DataTable columns={columns} data={sales || []} searchKey="display_id" searchPlaceholder="Search by sale ID..." />
+
+      <Dialog open={showAdd} onOpenChange={(v) => { setShowAdd(v); if (!v) resetForm(); }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Record Sale</DialogTitle></DialogHeader>
+          <form onSubmit={handleAdd} className="space-y-4">
+            <div>
+              <Label>Customer</Label>
+              <Select value={customerId} onValueChange={(v) => { setCustomerId(v); setStoreId(""); }}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Select customer" /></SelectTrigger>
+                <SelectContent>{customers?.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Store</Label>
+              <Select value={storeId} onValueChange={setStoreId} disabled={!customerId}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Select store" /></SelectTrigger>
+                <SelectContent>{stores?.map((s) => <SelectItem key={s.id} value={s.id}>{s.name} ({s.display_id})</SelectItem>)}</SelectContent>
+              </Select>
+              {selectedStore && (
+                <p className="text-xs text-muted-foreground mt-1">Current outstanding: ₹{oldOutstanding.toLocaleString()}</p>
+              )}
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <Label>Products</Label>
+                <Button type="button" variant="outline" size="sm" onClick={addItem}><Plus className="h-3 w-3 mr-1" />Add</Button>
+              </div>
+              <div className="space-y-2">
+                {items.map((item, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <Select value={item.product_id} onValueChange={(v) => updateItem(idx, "product_id", v)}>
+                      <SelectTrigger className="flex-1"><SelectValue placeholder="Product" /></SelectTrigger>
+                      <SelectContent>{products?.map((p) => <SelectItem key={p.id} value={p.id}>{p.name} ({p.sku})</SelectItem>)}</SelectContent>
+                    </Select>
+                    <Input type="number" min={1} value={item.quantity} onChange={(e) => updateItem(idx, "quantity", Number(e.target.value))} className="w-16" placeholder="Qty" />
+                    <Input type="number" value={item.unit_price} onChange={(e) => updateItem(idx, "unit_price", Number(e.target.value))} className="w-24" placeholder="Price" />
+                    {items.length > 1 && (
+                      <Button type="button" variant="ghost" size="icon" onClick={() => removeItem(idx)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-lg border bg-muted/30 p-3 space-y-1 text-sm">
+              <div className="flex justify-between"><span>Total</span><span className="font-semibold">₹{totalAmount.toLocaleString()}</span></div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div><Label>Cash (₹)</Label><Input type="number" value={cashAmount} onChange={(e) => setCashAmount(e.target.value)} className="mt-1" placeholder="0" /></div>
+              <div><Label>UPI (₹)</Label><Input type="number" value={upiAmount} onChange={(e) => setUpiAmount(e.target.value)} className="mt-1" placeholder="0" /></div>
+            </div>
+
+            <div className="rounded-lg border bg-muted/30 p-3 space-y-1 text-sm">
+              <div className="flex justify-between"><span>Payment</span><span>₹{(cash + upi).toLocaleString()}</span></div>
+              <div className="flex justify-between font-semibold"><span>New Outstanding</span><span className={newOutstanding > oldOutstanding ? "text-destructive" : "text-success"}>₹{newOutstanding.toLocaleString()}</span></div>
+            </div>
+
+            <Button type="submit" className="w-full" disabled={saving}>
+              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Record Sale
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
