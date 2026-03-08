@@ -108,7 +108,39 @@ const Products = () => {
           Product Access
         </Button>
       </div>
-      <DataTable columns={columns} data={products || []} searchKey="name" searchPlaceholder="Search products..." />
+      <DataTable
+        columns={columns}
+        data={products || []}
+        searchKey="name"
+        searchPlaceholder="Search products..."
+        renderMobileCard={(row: any) => (
+          <div className="rounded-xl border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex gap-0">
+              <div className="w-24 h-24 shrink-0 bg-muted flex items-center justify-center">
+                {row.image_url ? (
+                  <img src={row.image_url} alt={row.name} className="w-full h-full object-cover" />
+                ) : (
+                  <Package className="h-8 w-8 text-muted-foreground/40" />
+                )}
+              </div>
+              <div className="flex-1 p-3 min-w-0">
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="font-semibold text-sm text-foreground truncate">{row.name}</h3>
+                  <StatusBadge status={row.is_active ? "active" : "inactive"} />
+                </div>
+                <p className="text-xs text-muted-foreground font-mono mt-0.5">{row.sku}</p>
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="text-sm font-bold text-foreground">₹{Number(row.base_price).toLocaleString()}</span>
+                  <span className="text-xs text-muted-foreground">/ {row.unit}</span>
+                </div>
+                {row.category && (
+                  <Badge variant="secondary" className="mt-1.5 text-[10px] h-5">{row.category}</Badge>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      />
 
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
         <DialogContent>
