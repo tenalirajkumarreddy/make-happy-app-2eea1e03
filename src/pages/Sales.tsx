@@ -431,10 +431,12 @@ const Sales = () => {
           <form onSubmit={handleAdd} className="space-y-4">
             <div>
               <Label>Store</Label>
-              <Select value={storeId} onValueChange={handleStoreChange}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Select store" /></SelectTrigger>
-                <SelectContent>{stores?.map((s) => <SelectItem key={s.id} value={s.id}>{s.name} ({s.display_id})</SelectItem>)}</SelectContent>
-              </Select>
+              <div className="flex gap-2 mt-1">
+                <Select value={storeId} onValueChange={handleStoreChange}>
+                  <SelectTrigger className="flex-1"><SelectValue placeholder="Select store" /></SelectTrigger>
+                  <SelectContent>{stores?.map((s) => <SelectItem key={s.id} value={s.id}>{s.name} ({s.display_id})</SelectItem>)}</SelectContent>
+                </Select>
+                <QrStoreSelector onStoreSelected={handleStoreChange} />
               {selectedStore && (
                 <p className="text-xs text-muted-foreground mt-1">Current outstanding: ₹{oldOutstanding.toLocaleString()}</p>
               )}
