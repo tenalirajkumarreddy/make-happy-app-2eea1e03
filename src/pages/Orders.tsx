@@ -7,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { logActivity } from "@/lib/activityLogger";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Loader2, Plus, Trash2, XCircle } from "lucide-react";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { useState } from "react";
 import {
@@ -34,6 +34,9 @@ const Orders = () => {
   const [showAdd, setShowAdd] = useState(false);
   const [saving, setSaving] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
+  const [cancelOrderId, setCancelOrderId] = useState<string | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelling, setCancelling] = useState(false);
 
   // Form state
   const [customerId, setCustomerId] = useState("");
@@ -142,6 +145,45 @@ const Orders = () => {
     qc.invalidateQueries({ queryKey: ["orders"] });
   };
 
+  const handleCancel = async () => {
+    if (!cancelOrderId || !cancelReason.trim()) { toast.error("Please provide a reason"); return; }
+    setCancelling(true);
+    const { error } = await supabase
+      .from("orders")
+      .update({
+        status: "cancelled",
+        cancellation_reason: cancelReason,
+        cancelled_by: user!.id,
+        cancelled_at: new Date().toISOString(),
+      })
+      .eq("id", cancelOrderId)
+      .eq("status", "pending");
+    setCancelling(false);
+    if (error) { toast.error(error.message); return; }
+
+    const order = orders?.find((o) => o.id === cancelOrderId);
+    logActivity(user!.id, "Cancelled order", "order", order?.display_id || "", cancelOrderId, { reason: cancelReason });
+
+    // Notify customer if linked
+    if (order?.customers && (order as any).customer_id) {
+      const { data: custData } = await supabase.from("customers").select("user_id").eq("id", (order as any).customer_id).single();
+      if (custData?.user_id) {
+        sendNotificationToMany([custData.user_id], {
+          title: "Order Cancelled",
+          message: `Order ${order?.display_id} was cancelled. Reason: ${cancelReason}`,
+          type: "order",
+          entityType: "order",
+          entityId: cancelOrderId,
+        });
+      }
+    }
+
+    toast.success("Order cancelled");
+    setCancelOrderId(null);
+    setCancelReason("");
+    qc.invalidateQueries({ queryKey: ["orders"] });
+  };
+
   const filteredOrders = statusFilter === "all"
     ? orders
     : orders?.filter((o) => o.status === statusFilter);
@@ -154,6 +196,16 @@ const Orders = () => {
     { header: "Customer", accessor: (row: any) => row.customers?.name || "—", className: "text-muted-foreground text-sm hidden lg:table-cell" },
     { header: "Status", accessor: (row: any) => <StatusBadge status={row.status === "delivered" ? "active" : row.status as any} label={row.status} /> },
     { header: "Date", accessor: (row: any) => new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }), className: "text-muted-foreground text-xs hidden sm:table-cell" },
+    {
+      header: "Actions",
+      accessor: (row: any) => row.status === "pending" ? (
+        <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive" onClick={() => setCancelOrderId(row.id)}>
+          <XCircle className="h-3.5 w-3.5 mr-1" /> Cancel
+        </Button>
+      ) : row.status === "cancelled" ? (
+        <span className="text-xs text-muted-foreground truncate max-w-[120px] block" title={row.cancellation_reason}>{row.cancellation_reason || "—"}</span>
+      ) : null,
+    },
   ];
 
   if (isLoading) {
@@ -237,6 +289,39 @@ const Orders = () => {
               Create Order
             </Button>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel Order Dialog */}
+      <Dialog open={!!cancelOrderId} onOpenChange={(v) => { if (!v) { setCancelOrderId(null); setCancelReason(""); } }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Cancel Order</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Are you sure you want to cancel order <span className="font-mono font-medium text-foreground">{orders?.find((o) => o.id === cancelOrderId)?.display_id}</span>?
+            </p>
+            <div>
+              <Label>Reason for cancellation</Label>
+              <Select value={cancelReason} onValueChange={setCancelReason}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Select reason" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Out of stock">Out of stock</SelectItem>
+                  <SelectItem value="Customer requested">Customer requested</SelectItem>
+                  <SelectItem value="Duplicate order">Duplicate order</SelectItem>
+                  <SelectItem value="Pricing issue">Pricing issue</SelectItem>
+                  <SelectItem value="Delivery not possible">Delivery not possible</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => { setCancelOrderId(null); setCancelReason(""); }}>Back</Button>
+              <Button variant="destructive" onClick={handleCancel} disabled={cancelling || !cancelReason}>
+                {cancelling && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Confirm Cancel
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

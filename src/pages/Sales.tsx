@@ -294,7 +294,22 @@ const Sales = () => {
     logActivity(user!.id, "Recorded sale", "sale", displayId, sale.id, { total: totalAmount, store: storeId });
     await supabase.from("stores").update({ outstanding: newOutstanding }).eq("id", storeId);
 
-    toast.success("Sale recorded successfully");
+    // Auto-mark pending orders for this store as delivered
+    const { data: pendingOrders } = await supabase
+      .from("orders")
+      .select("id, display_id")
+      .eq("store_id", storeId)
+      .eq("status", "pending");
+    if (pendingOrders && pendingOrders.length > 0) {
+      await supabase
+        .from("orders")
+        .update({ status: "delivered", delivered_at: new Date().toISOString() })
+        .in("id", pendingOrders.map((o) => o.id));
+      toast.success(`Sale recorded. ${pendingOrders.length} pending order(s) auto-marked as delivered.`);
+      qc.invalidateQueries({ queryKey: ["orders"] });
+    } else {
+      toast.success("Sale recorded successfully");
+    }
 
     // Notify admins/managers
     const storeName = stores?.find((s) => s.id === storeId)?.name || "store";
