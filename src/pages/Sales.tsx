@@ -554,7 +554,12 @@ const Sales = () => {
                 </div>
               )}
               {selectedStore && (
-                <p className="text-xs text-muted-foreground mt-1">Current outstanding: ₹{oldOutstanding.toLocaleString()}</p>
+                <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
+                  <p>Current outstanding: ₹{oldOutstanding.toLocaleString()}</p>
+                  {creditLimitInfo && creditLimitInfo.limit > 0 && (
+                    <p>Credit limit ({creditLimitInfo.source}): ₹{creditLimitInfo.limit.toLocaleString()} — <span className={oldOutstanding > creditLimitInfo.limit * 0.8 ? "text-destructive font-medium" : "text-muted-foreground"}>{Math.round((oldOutstanding / creditLimitInfo.limit) * 100)}% used</span></p>
+                  )}
+                </div>
               )}
             </div>
 
