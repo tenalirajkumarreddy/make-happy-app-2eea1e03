@@ -81,7 +81,7 @@ const Sales = () => {
   const { data: stores } = useQuery({
     queryKey: ["stores-for-sale", customerId],
     queryFn: async () => {
-      let q = supabase.from("stores").select("id, name, outstanding, display_id").eq("is_active", true);
+      let q = supabase.from("stores").select("id, name, outstanding, display_id, store_type_id").eq("is_active", true);
       if (customerId) q = q.eq("customer_id", customerId);
       const { data } = await q;
       return data || [];
@@ -89,19 +89,68 @@ const Sales = () => {
     enabled: !!customerId,
   });
 
-  const { data: products } = useQuery({
-    queryKey: ["products"],
+  const selectedStore = stores?.find((s) => s.id === storeId);
+  const selectedStoreTypeId = selectedStore?.store_type_id;
+
+  // Fetch products based on store type access matrix
+  const { data: availableProducts } = useQuery({
+    queryKey: ["products-for-sale", selectedStoreTypeId, storeId],
     queryFn: async () => {
-      const { data } = await supabase.from("products").select("id, name, base_price, sku").eq("is_active", true);
-      return data || [];
+      if (!selectedStoreTypeId) return [];
+
+      // Get products accessible for this store type
+      const { data: accessData } = await supabase
+        .from("store_type_products")
+        .select("product_id, products(id, name, sku, base_price)")
+        .eq("store_type_id", selectedStoreTypeId);
+
+      let productList: any[];
+      if (accessData && accessData.length > 0) {
+        productList = accessData.map((a: any) => a.products).filter(Boolean);
+      } else {
+        // No access matrix defined - show all active products
+        const { data } = await supabase.from("products").select("id, name, base_price, sku").eq("is_active", true);
+        productList = data || [];
+      }
+
+      // Fetch store-type pricing
+      const { data: typePricing } = await supabase
+        .from("store_type_pricing")
+        .select("product_id, price")
+        .eq("store_type_id", selectedStoreTypeId);
+      const typePriceMap: Record<string, number> = {};
+      typePricing?.forEach((p) => { typePriceMap[p.product_id] = Number(p.price); });
+
+      // Fetch store-level pricing (highest priority)
+      const { data: storePricing } = await supabase
+        .from("store_pricing")
+        .select("product_id, price")
+        .eq("store_id", storeId);
+      const storePriceMap: Record<string, number> = {};
+      storePricing?.forEach((p) => { storePriceMap[p.product_id] = Number(p.price); });
+
+      // Attach effective price to each product
+      return productList.map((p) => {
+        let effectivePrice = Number(p.base_price);
+        let priceSource = "base";
+        if (typePriceMap[p.id]) {
+          effectivePrice = typePriceMap[p.id];
+          priceSource = "type";
+        }
+        if (storePriceMap[p.id]) {
+          effectivePrice = storePriceMap[p.id];
+          priceSource = "store";
+        }
+        return { ...p, effectivePrice, priceSource };
+      });
     },
+    enabled: !!storeId && !!selectedStoreTypeId,
   });
 
   const totalAmount = items.reduce((s, i) => s + i.quantity * i.unit_price, 0);
   const cash = parseFloat(cashAmount) || 0;
   const upi = parseFloat(upiAmount) || 0;
   const outstandingFromSale = totalAmount - cash - upi;
-  const selectedStore = stores?.find((s) => s.id === storeId);
   const oldOutstanding = Number(selectedStore?.outstanding || 0);
   const newOutstanding = oldOutstanding + outstandingFromSale;
 
@@ -111,14 +160,21 @@ const Sales = () => {
     const updated = [...items];
     (updated[idx] as any)[field] = value;
     if (field === "product_id") {
-      const p = products?.find((pr) => pr.id === value);
-      if (p) updated[idx].unit_price = Number(p.base_price);
+      // Use effective price from hierarchy
+      const p = availableProducts?.find((pr: any) => pr.id === value);
+      if (p) updated[idx].unit_price = p.effectivePrice;
     }
     setItems(updated);
   };
 
   const resetForm = () => {
     setCustomerId(""); setStoreId(""); setCashAmount(""); setUpiAmount("");
+    setItems([{ product_id: "", quantity: 1, unit_price: 0 }]);
+  };
+
+  const handleStoreChange = (newStoreId: string) => {
+    setStoreId(newStoreId);
+    // Reset items when store changes since products/pricing may differ
     setItems([{ product_id: "", quantity: 1, unit_price: 0 }]);
   };
 
@@ -181,6 +237,12 @@ const Sales = () => {
     return <TableSkeleton columns={7} />;
   }
 
+  const getPriceLabel = (product: any) => {
+    if (product.priceSource === "store") return "(store price)";
+    if (product.priceSource === "type") return "(type price)";
+    return "(base price)";
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -221,14 +283,14 @@ const Sales = () => {
           <form onSubmit={handleAdd} className="space-y-4">
             <div>
               <Label>Customer</Label>
-              <Select value={customerId} onValueChange={(v) => { setCustomerId(v); setStoreId(""); }}>
+              <Select value={customerId} onValueChange={(v) => { setCustomerId(v); setStoreId(""); setItems([{ product_id: "", quantity: 1, unit_price: 0 }]); }}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Select customer" /></SelectTrigger>
                 <SelectContent>{customers?.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div>
               <Label>Store</Label>
-              <Select value={storeId} onValueChange={setStoreId} disabled={!customerId}>
+              <Select value={storeId} onValueChange={handleStoreChange} disabled={!customerId}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Select store" /></SelectTrigger>
                 <SelectContent>{stores?.map((s) => <SelectItem key={s.id} value={s.id}>{s.name} ({s.display_id})</SelectItem>)}</SelectContent>
               </Select>
@@ -237,27 +299,48 @@ const Sales = () => {
               )}
             </div>
 
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <Label>Products</Label>
-                <Button type="button" variant="outline" size="sm" onClick={addItem}><Plus className="h-3 w-3 mr-1" />Add</Button>
+            {storeId && (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <Label>Products</Label>
+                  <Button type="button" variant="outline" size="sm" onClick={addItem}><Plus className="h-3 w-3 mr-1" />Add</Button>
+                </div>
+                {(!availableProducts || availableProducts.length === 0) && (
+                  <p className="text-xs text-muted-foreground py-2">No products available for this store type. Configure the product access matrix first.</p>
+                )}
+                <div className="space-y-2">
+                  {items.map((item, idx) => (
+                    <div key={idx} className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Select value={item.product_id} onValueChange={(v) => updateItem(idx, "product_id", v)}>
+                          <SelectTrigger className="flex-1"><SelectValue placeholder="Product" /></SelectTrigger>
+                          <SelectContent>
+                            {availableProducts?.map((p: any) => (
+                              <SelectItem key={p.id} value={p.id}>
+                                {p.name} ({p.sku})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Input type="number" min={1} value={item.quantity} onChange={(e) => updateItem(idx, "quantity", Number(e.target.value))} className="w-16" placeholder="Qty" />
+                        <Input type="number" value={item.unit_price} onChange={(e) => updateItem(idx, "unit_price", Number(e.target.value))} className="w-24" placeholder="Price" />
+                        {items.length > 1 && (
+                          <Button type="button" variant="ghost" size="icon" onClick={() => removeItem(idx)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                        )}
+                      </div>
+                      {item.product_id && availableProducts && (
+                        <p className="text-[11px] text-muted-foreground pl-1">
+                          {(() => {
+                            const p = availableProducts.find((pr: any) => pr.id === item.product_id);
+                            return p ? `₹${p.effectivePrice.toLocaleString()} ${getPriceLabel(p)}` : "";
+                          })()}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="space-y-2">
-                {items.map((item, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
-                    <Select value={item.product_id} onValueChange={(v) => updateItem(idx, "product_id", v)}>
-                      <SelectTrigger className="flex-1"><SelectValue placeholder="Product" /></SelectTrigger>
-                      <SelectContent>{products?.map((p) => <SelectItem key={p.id} value={p.id}>{p.name} ({p.sku})</SelectItem>)}</SelectContent>
-                    </Select>
-                    <Input type="number" min={1} value={item.quantity} onChange={(e) => updateItem(idx, "quantity", Number(e.target.value))} className="w-16" placeholder="Qty" />
-                    <Input type="number" value={item.unit_price} onChange={(e) => updateItem(idx, "unit_price", Number(e.target.value))} className="w-24" placeholder="Price" />
-                    {items.length > 1 && (
-                      <Button type="button" variant="ghost" size="icon" onClick={() => removeItem(idx)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
+            )}
 
             <div className="rounded-lg border bg-muted/30 p-3 space-y-1 text-sm">
               <div className="flex justify-between"><span>Total</span><span className="font-semibold">₹{totalAmount.toLocaleString()}</span></div>
