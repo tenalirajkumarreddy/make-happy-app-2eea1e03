@@ -214,11 +214,15 @@ const Sales = () => {
     const { count } = await supabase.from("sales").select("id", { count: "exact", head: true });
     const displayId = `SALE-${String((count || 0) + 1).padStart(6, "0")}`;
 
+    const effectiveRecordedBy = recordedFor || user!.id;
+    const loggedBy = recordedFor ? user!.id : null;
+
     const { data: sale, error } = await supabase.from("sales").insert({
       display_id: displayId,
       store_id: storeId,
       customer_id: customerId,
-      recorded_by: user!.id,
+      recorded_by: effectiveRecordedBy,
+      logged_by: loggedBy,
       total_amount: totalAmount,
       cash_amount: cash,
       upi_amount: upi,
