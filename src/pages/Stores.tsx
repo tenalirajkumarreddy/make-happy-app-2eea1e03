@@ -247,6 +247,20 @@ const Stores = () => {
         ]}
       />
 
+      <div className="flex items-center justify-end">
+        <AdvancedFilters
+          config={{
+            dateRange: true,
+            outstandingRange: true,
+            storeType: { options: storeTypes?.map((t) => ({ id: t.id, name: t.name })) || [] },
+            route: { options: allRoutes?.map((r) => ({ id: r.id, name: r.name })) || [] },
+            status: true,
+          }}
+          values={filters}
+          onChange={setFilters}
+        />
+      </div>
+
       {canBulk && selected.size > 0 && (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-accent/50 p-3">
           <span className="text-sm font-medium">{selected.size} selected</span>
