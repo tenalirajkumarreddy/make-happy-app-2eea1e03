@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Html5Qrcode } from "html5-qrcode";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Camera, X } from "lucide-react";
+import { Camera, RefreshCw } from "lucide-react";
 
 interface QrScannerProps {
   open: boolean;
@@ -14,40 +14,48 @@ interface QrScannerProps {
 export function QrScanner({ open, onOpenChange, onScan, title = "Scan QR Code" }: QrScannerProps) {
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [started, setStarted] = useState(false);
   const containerId = "qr-reader";
 
-  useEffect(() => {
-    if (!open) return;
+  const startScanner = useCallback(async () => {
+    setError(null);
+    try {
+      // Request camera access directly in user gesture context
+      await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
 
-    let mounted = true;
-    const scanner = new Html5Qrcode(containerId);
-    scannerRef.current = scanner;
+      const scanner = new Html5Qrcode(containerId);
+      scannerRef.current = scanner;
 
-    scanner
-      .start(
+      await scanner.start(
         { facingMode: "environment" },
         { fps: 10, qrbox: { width: 250, height: 250 } },
         (decodedText) => {
-          if (!mounted) return;
           onScan(decodedText);
           scanner.stop().catch(() => {});
+          scannerRef.current = null;
+          setStarted(false);
           onOpenChange(false);
         },
-        () => {} // ignore scan failures
-      )
-      .catch((err) => {
-        if (mounted) setError("Camera access denied or not available");
-      });
+        () => {}
+      );
+      setStarted(true);
+    } catch {
+      setError("Camera access denied or not available");
+    }
+  }, [onScan, onOpenChange]);
 
-    return () => {
-      mounted = false;
-      scanner.stop().catch(() => {});
+  const handleClose = useCallback((v: boolean) => {
+    if (!v) {
+      scannerRef.current?.stop().catch(() => {});
       scannerRef.current = null;
-    };
-  }, [open]);
+      setStarted(false);
+      setError(null);
+    }
+    onOpenChange(v);
+  }, [onOpenChange]);
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v && scannerRef.current) scannerRef.current.stop().catch(() => {}); onOpenChange(v); }}>
+    <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -55,14 +63,24 @@ export function QrScanner({ open, onOpenChange, onScan, title = "Scan QR Code" }
             {title}
           </DialogTitle>
         </DialogHeader>
+
+        <div id={containerId} className="w-full rounded-lg overflow-hidden" />
+
         {error ? (
-          <div className="text-center py-8 space-y-3">
+          <div className="text-center py-4 space-y-3">
             <p className="text-sm text-destructive">{error}</p>
-            <Button variant="outline" size="sm" onClick={() => { setError(null); onOpenChange(false); }}>Close</Button>
+            <Button variant="outline" size="sm" onClick={() => { setError(null); }}>
+              <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Retry
+            </Button>
           </div>
-        ) : (
-          <div id={containerId} className="w-full rounded-lg overflow-hidden" />
-        )}
+        ) : !started ? (
+          <div className="text-center py-4">
+            <Button onClick={startScanner}>
+              <Camera className="h-4 w-4 mr-2" /> Start Camera
+            </Button>
+            <p className="text-xs text-muted-foreground mt-2">Tap to allow camera access</p>
+          </div>
+        ) : null}
       </DialogContent>
     </Dialog>
   );
