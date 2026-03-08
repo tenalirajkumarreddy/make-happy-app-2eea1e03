@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
 const Customers = () => {
+  const navigate = useNavigate();
   const { user, role } = useAuth();
   const [showAdd, setShowAdd] = useState(false);
   const [kycCustomer, setKycCustomer] = useState<any>(null);
