@@ -1,6 +1,7 @@
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MapPin, Store, Loader2 } from "lucide-react";
+import { RouteSessionPanel } from "@/components/routes/RouteSessionPanel";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useState } from "react";
