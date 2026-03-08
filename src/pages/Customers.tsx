@@ -95,9 +95,22 @@ const Customers = () => {
     const ids = Array.from(selected);
     const { error } = await supabase.from("customers").update({ is_active: active }).in("id", ids);
     if (error) { toast.error(error.message); return; }
+
+    // If deactivating, cascade to all stores of selected customers
+    if (!active) {
+      const { error: storeError } = await supabase
+        .from("stores")
+        .update({ is_active: false })
+        .in("customer_id", ids);
+      if (storeError) {
+        toast.error("Customers deactivated but failed to deactivate stores");
+      }
+    }
+
     toast.success(`${ids.length} customers ${active ? "activated" : "deactivated"}`);
     setSelected(new Set());
     qc.invalidateQueries({ queryKey: ["customers"] });
+    qc.invalidateQueries({ queryKey: ["stores"] });
   };
 
   const columns = [
@@ -165,9 +178,9 @@ const Customers = () => {
         searchPlaceholder="Search customers..."
         onRowClick={(row) => navigate(`/customers/${row.id}`)}
         renderMobileCard={(row: any) => (
-          <div className="rounded-xl border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow active:bg-muted/30">
-            <div className="flex gap-0">
-              <div className="w-24 h-24 shrink-0 bg-muted flex items-center justify-center">
+          <div className={`rounded-xl border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow active:bg-muted/30 ${!row.is_active ? "opacity-60" : ""}`}>
+            <div className="flex">
+              <div className="w-20 h-20 shrink-0 bg-muted flex items-center justify-center overflow-hidden">
                 {row.photo_url ? (
                   <img src={row.photo_url} alt={row.name} className="w-full h-full object-cover" />
                 ) : (
@@ -180,7 +193,7 @@ const Customers = () => {
                   <StatusBadge status={row.is_active ? "active" : "inactive"} />
                 </div>
                 <p className="text-xs text-muted-foreground font-mono mt-0.5">{row.display_id}</p>
-                <div className="flex items-center gap-3 mt-2">
+                <div className="flex items-center gap-3 mt-1.5">
                   <span className="text-sm font-bold text-foreground">₹{Number(row.opening_balance).toLocaleString()}</span>
                   <span className="text-xs text-muted-foreground">{row.stores?.length || 0} stores</span>
                 </div>
