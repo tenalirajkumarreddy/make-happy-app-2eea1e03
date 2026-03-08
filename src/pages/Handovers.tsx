@@ -159,11 +159,11 @@ const Handovers = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Handovers" subtitle="Track money flow between team members">
-        <Button onClick={() => setCreateOpen(true)} className="gap-2">
-          <Send className="h-4 w-4" /> Create Handover
-        </Button>
-      </PageHeader>
+      <PageHeader
+        title="Handovers"
+        subtitle="Track money flow between team members"
+        primaryAction={{ label: "Create Handover", icon: Send, onClick: () => setCreateOpen(true) }}
+      />
 
       {/* Balance Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
