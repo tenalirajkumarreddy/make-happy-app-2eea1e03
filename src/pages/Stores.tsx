@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2, DollarSign } from "lucide-react";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -20,6 +21,7 @@ import {
 import { toast } from "sonner";
 
 const Stores = () => {
+  const navigate = useNavigate();
   const { role } = useAuth();
   const [showAdd, setShowAdd] = useState(false);
   const [pricingStore, setPricingStore] = useState<any>(null);
@@ -120,7 +122,7 @@ const Stores = () => {
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader title="Stores" subtitle="Manage store locations and assignments" actionLabel="Add Store" onAction={() => setShowAdd(true)} />
-      <DataTable columns={columns} data={stores || []} searchKey="name" searchPlaceholder="Search stores..." />
+      <DataTable columns={columns} data={stores || []} searchKey="name" searchPlaceholder="Search stores..." onRowClick={(row) => navigate(`/stores/${row.id}`)} />
 
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
         <DialogContent>

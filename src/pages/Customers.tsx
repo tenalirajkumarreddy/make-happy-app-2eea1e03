@@ -8,6 +8,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { logActivity } from "@/lib/activityLogger";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Dialog,
   DialogContent,
@@ -20,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
 const Customers = () => {
+  const navigate = useNavigate();
   const { user, role } = useAuth();
   const [showAdd, setShowAdd] = useState(false);
   const [kycCustomer, setKycCustomer] = useState<any>(null);
@@ -71,7 +73,7 @@ const Customers = () => {
 
   const columns = [
     { header: "ID", accessor: "display_id" as const, className: "font-mono text-xs" },
-    { header: "Name", accessor: "name" as const, className: "font-medium" },
+    { header: "Name", accessor: "name" as const, className: "font-medium cursor-pointer text-primary hover:underline" },
     { header: "Phone", accessor: (row: any) => row.phone || "—", className: "text-muted-foreground text-sm" },
     { header: "Stores", accessor: (row: any) => row.stores?.length || 0, className: "text-center" },
     { header: "Outstanding", accessor: (row: any) => `₹${Number(row.opening_balance).toLocaleString()}` },
@@ -99,7 +101,7 @@ const Customers = () => {
         actionLabel="Add Customer"
         onAction={() => setShowAdd(true)}
       />
-      <DataTable columns={columns} data={customers || []} searchKey="name" searchPlaceholder="Search customers..." />
+      <DataTable columns={columns} data={customers || []} searchKey="name" searchPlaceholder="Search customers..." onRowClick={(row) => navigate(`/customers/${row.id}`)} />
 
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
         <DialogContent>
