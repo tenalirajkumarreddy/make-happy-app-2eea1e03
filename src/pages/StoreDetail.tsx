@@ -78,6 +78,35 @@ const StoreDetail = () => {
     enabled: !!id,
   });
 
+  // Customer list for transfer
+  const { data: allCustomers } = useQuery({
+    queryKey: ["customers-for-transfer"],
+    queryFn: async () => {
+      const { data } = await supabase.from("customers").select("id, name, display_id").eq("is_active", true).order("name");
+      return data || [];
+    },
+    enabled: canEdit,
+  });
+
+  const handleTransfer = async () => {
+    if (!store || !id || !transferCustomerId) return;
+    if (transferCustomerId === store.customer_id) {
+      toast.error("Store already belongs to this customer");
+      return;
+    }
+    setTransferSaving(true);
+    const { error } = await supabase.from("stores").update({ customer_id: transferCustomerId }).eq("id", id);
+    setTransferSaving(false);
+    if (error) { toast.error(error.message); return; }
+    const newCust = allCustomers?.find((c) => c.id === transferCustomerId);
+    logActivity(user!.id, `Transferred store to ${newCust?.name}`, "store", store.display_id, id);
+    toast.success(`Store transferred to ${newCust?.name}`);
+    setShowTransfer(false);
+    setTransferCustomerId("");
+    qc.invalidateQueries({ queryKey: ["store", id] });
+    qc.invalidateQueries({ queryKey: ["stores"] });
+  };
+
   const { data: sales } = useQuery({
     queryKey: ["store-sales", id],
     queryFn: async () => {
