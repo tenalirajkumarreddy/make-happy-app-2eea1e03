@@ -45,6 +45,8 @@ CREATE TABLE public.store_types (
   name text NOT NULL,
   order_type text NOT NULL DEFAULT 'simple',
   auto_order_enabled boolean NOT NULL DEFAULT false,
+  credit_limit_kyc numeric NOT NULL DEFAULT 0,
+  credit_limit_no_kyc numeric NOT NULL DEFAULT 0,
   is_active boolean NOT NULL DEFAULT true,
   created_at timestamptz NOT NULL DEFAULT now()
 );
