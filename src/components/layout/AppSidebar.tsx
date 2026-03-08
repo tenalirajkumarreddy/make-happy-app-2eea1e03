@@ -134,14 +134,17 @@ export function AppSidebar() {
         <p className={cn("px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted", collapsed && "text-center")}>
           {collapsed ? "•" : "Main"}
         </p>
-        {renderNav(mainNav)}
+        {renderNav(visibleMainNav)}
 
-        <div className="my-3 border-t border-sidebar-border" />
-
-        <p className={cn("px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted", collapsed && "text-center")}>
-          {collapsed ? "•" : "System"}
-        </p>
-        {renderNav(secondaryNav)}
+        {visibleSecondaryNav.length > 0 && (
+          <>
+            <div className="my-3 border-t border-sidebar-border" />
+            <p className={cn("px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted", collapsed && "text-center")}>
+              {collapsed ? "•" : "System"}
+            </p>
+            {renderNav(visibleSecondaryNav)}
+          </>
+        )}
       </nav>
 
       {/* Collapse button */}
