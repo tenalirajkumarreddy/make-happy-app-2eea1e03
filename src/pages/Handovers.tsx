@@ -2,11 +2,12 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import {
   Banknote, CheckCircle, Clock, AlertCircle, Loader2, Send,
-  ArrowDownLeft, XCircle, User, ChevronDown, Users, ShoppingCart, ArrowRight
+  ArrowDownLeft, XCircle, User, ChevronDown, Users, ShoppingCart, Wallet, Eye
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermission } from "@/hooks/usePermission";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
@@ -30,6 +31,8 @@ const Handovers = () => {
   const [submitting, setSubmitting] = useState(false);
 
   const isAdminOrManager = role === "super_admin" || role === "manager";
+  const { allowed: isFinalizer } = usePermission("finalizer");
+  const { allowed: canSeeBalances } = usePermission("see_handover_balance");
 
   const { data: staffProfiles } = useQuery({
     queryKey: ["staff-profiles"],
@@ -87,6 +90,39 @@ const Handovers = () => {
     },
   });
 
+  // For "See Balances" tab: fetch all staff sales and compute balances
+  const { data: allStaffBalances } = useQuery({
+    queryKey: ["all-staff-balances"],
+    queryFn: async () => {
+      // Get all staff user IDs
+      const { data: roles } = await supabase.from("user_roles").select("user_id, role").neq("role", "customer");
+      const staffIds = (roles || []).map((r) => r.user_id);
+
+      // Get all sales
+      const { data: allSales } = await supabase.from("sales").select("recorded_by, cash_amount, upi_amount");
+
+      // Get all handovers
+      const { data: allHandovers } = await supabase.from("handovers").select("user_id, handed_to, cash_amount, upi_amount, status");
+
+      const balances: Record<string, { sales: number; received: number; sentConfirmed: number; sentPending: number; total: number }> = {};
+
+      for (const uid of staffIds) {
+        const sales = (allSales || []).filter((s) => s.recorded_by === uid)
+          .reduce((s, r) => s + Number(r.cash_amount) + Number(r.upi_amount), 0);
+        const received = (allHandovers || []).filter((h) => h.handed_to === uid && h.status === "confirmed")
+          .reduce((s, h) => s + Number(h.cash_amount) + Number(h.upi_amount), 0);
+        const sentConfirmed = (allHandovers || []).filter((h) => h.user_id === uid && h.status === "confirmed")
+          .reduce((s, h) => s + Number(h.cash_amount) + Number(h.upi_amount), 0);
+        const sentPending = (allHandovers || []).filter((h) => h.user_id === uid && h.status === "awaiting_confirmation")
+          .reduce((s, h) => s + Number(h.cash_amount) + Number(h.upi_amount), 0);
+        const total = sales + received - sentConfirmed - sentPending;
+        balances[uid] = { sales, received, sentConfirmed, sentPending, total };
+      }
+      return balances;
+    },
+    enabled: canSeeBalances,
+  });
+
   const myHandovers = useMemo(() =>
     (handovers || []).filter((h) => h.user_id === user?.id || h.handed_to === user?.id),
     [handovers, user?.id]
@@ -124,7 +160,7 @@ const Handovers = () => {
       toast.error("Select a recipient and enter a valid amount");
       return;
     }
-    if (Number(amount) > Math.max(0, notHandedOver)) {
+    if (!isFinalizer && Number(amount) > Math.max(0, notHandedOver)) {
       toast.error("Amount exceeds your available balance");
       return;
     }
@@ -194,13 +230,11 @@ const Handovers = () => {
 
     return (
       <div className="group flex items-center gap-4 rounded-lg border bg-card px-4 py-3 hover:shadow-sm transition-shadow">
-        {/* Avatars */}
         <div className="flex items-center -space-x-2.5 shrink-0">
           <UserAvatar userId={item.user_id} size="lg" />
           <UserAvatar userId={item.handed_to} size="lg" />
         </div>
 
-        {/* Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-base font-bold tabular-nums">₹{total.toLocaleString()}</span>
@@ -229,7 +263,6 @@ const Handovers = () => {
           )}
         </div>
 
-        {/* Actions for incoming */}
         {showActions && (
           <div className="flex flex-col gap-1.5 shrink-0">
             <Button size="sm" className="h-7 text-xs gap-1 px-2.5" onClick={() => handleConfirm(item.id)}>
@@ -248,12 +281,15 @@ const Handovers = () => {
     return <div className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
 
+  const balanceLabel = isFinalizer ? "Total Income" : "Not Handed Over";
+  const balanceColor = isFinalizer ? "text-success" : "text-destructive";
+
   return (
     <div className="space-y-5 animate-fade-in">
       <PageHeader
         title="Handovers"
         subtitle="Track money flow between team members"
-        primaryAction={{ label: "Create Handover", icon: Send, onClick: () => setCreateOpen(true) }}
+        primaryAction={!isFinalizer ? { label: "Create Handover", icon: Send, onClick: () => setCreateOpen(true) } : undefined}
       />
 
       {/* Balance Cards */}
@@ -262,10 +298,10 @@ const Handovers = () => {
           <PopoverTrigger asChild>
             <button className="stat-card text-left w-full cursor-pointer hover:ring-2 hover:ring-primary/20 transition-all group">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-medium text-muted-foreground">Not Handed Over</span>
+                <span className="text-xs font-medium text-muted-foreground">{balanceLabel}</span>
                 <ChevronDown className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
               </div>
-              <p className="text-xl font-bold text-destructive">₹{Math.max(0, notHandedOver).toLocaleString()}</p>
+              <p className={`text-xl font-bold ${balanceColor}`}>₹{Math.max(0, notHandedOver).toLocaleString()}</p>
             </button>
           </PopoverTrigger>
           <PopoverContent className="w-64 p-3" align="start">
@@ -319,7 +355,7 @@ const Handovers = () => {
         </div>
       )}
 
-      {/* Flow */}
+      {/* Tabs */}
       <Tabs defaultValue="mine" className="w-full">
         <TabsList className="w-full">
           <TabsTrigger value="mine" className="flex-1 gap-1.5 text-xs">
@@ -330,10 +366,15 @@ const Handovers = () => {
               <Users className="h-3.5 w-3.5" /> All Handovers
             </TabsTrigger>
           )}
+          {canSeeBalances && (
+            <TabsTrigger value="balances" className="flex-1 gap-1.5 text-xs">
+              <Eye className="h-3.5 w-3.5" /> Balances
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="mine" className="space-y-2 mt-3">
-          {myHandovers.filter(h => h.status !== "awaiting_confirmation" || h.handed_to !== user?.id).length === 0 ? (
+          {myHandovers.filter(h => !(h.handed_to === user?.id && h.status === "awaiting_confirmation")).length === 0 ? (
             <div className="rounded-lg border bg-card p-8 text-center text-sm text-muted-foreground">No handovers yet.</div>
           ) : myHandovers
             .filter(h => !(h.handed_to === user?.id && h.status === "awaiting_confirmation"))
@@ -345,6 +386,42 @@ const Handovers = () => {
             {(handovers || []).length === 0 ? (
               <div className="rounded-lg border bg-card p-8 text-center text-sm text-muted-foreground">No handovers recorded.</div>
             ) : (handovers || []).map((item) => <HandoverCard key={item.id} item={item} />)}
+          </TabsContent>
+        )}
+
+        {canSeeBalances && (
+          <TabsContent value="balances" className="space-y-2 mt-3">
+            {!allStaffBalances || Object.keys(allStaffBalances).length === 0 ? (
+              <div className="rounded-lg border bg-card p-8 text-center text-sm text-muted-foreground">No staff balances to show.</div>
+            ) : (
+              <div className="space-y-2">
+                {Object.entries(allStaffBalances)
+                  .sort(([, a], [, b]) => b.total - a.total)
+                  .map(([uid, bal]) => {
+                    const withUser = bal.total + bal.sentPending; // awaiting is still "with" the user
+                    return (
+                      <div key={uid} className="flex items-center gap-3 rounded-lg border bg-card px-4 py-3">
+                        <UserAvatar userId={uid} size="lg" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold truncate">{getName(uid)}</p>
+                          <div className="flex items-center gap-3 mt-0.5 text-[11px] text-muted-foreground">
+                            <span>Sales: ₹{bal.sales.toLocaleString()}</span>
+                            <span>Received: ₹{bal.received.toLocaleString()}</span>
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className={`text-base font-bold tabular-nums ${withUser > 0 ? "text-destructive" : "text-success"}`}>
+                            ₹{Math.max(0, withUser).toLocaleString()}
+                          </p>
+                          {bal.sentPending > 0 && (
+                            <p className="text-[10px] text-warning">₹{bal.sentPending.toLocaleString()} awaiting</p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
           </TabsContent>
         )}
       </Tabs>
