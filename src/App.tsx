@@ -23,6 +23,7 @@ import Analytics from "./pages/Analytics";
 import Activity from "./pages/Activity";
 import AccessControl from "./pages/AccessControl";
 import Settings from "./pages/Settings";
+import StoreTypes from "./pages/StoreTypes";
 import CustomerPortal from "./pages/CustomerPortal";
 import MapPage from "./pages/MapPage";
 import Auth from "./pages/Auth";
