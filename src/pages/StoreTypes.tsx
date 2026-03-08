@@ -36,6 +36,8 @@ const StoreTypes = () => {
   const [deletingType, setDeletingType] = useState<any>(null);
   const [newTypeName, setNewTypeName] = useState("");
   const [newOrderType, setNewOrderType] = useState("simple");
+  const [creditLimitKyc, setCreditLimitKyc] = useState("");
+  const [creditLimitNoKyc, setCreditLimitNoKyc] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
