@@ -206,6 +206,11 @@ const Sales = () => {
       toast.error("Please fill all required fields");
       return;
     }
+    // POS users: payment must equal total (no outstanding allowed)
+    if (isPosUser && (cash + upi) !== totalAmount) {
+      toast.error("POS sales require full payment. Cash + UPI must equal Total.");
+      return;
+    }
     setSaving(true);
 
     const customerId = selectedStore?.customer_id;
