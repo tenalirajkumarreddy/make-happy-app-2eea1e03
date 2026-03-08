@@ -130,8 +130,8 @@ export function StoreLedger({ sales, transactions, openingBalance, storeCreatedA
                 <Tag className="h-3.5 w-3.5 text-muted-foreground" />
               </div>
               <div>
-                <p className="font-medium text-sm uppercase tracking-wide text-muted-foreground">Opening Balance</p>
-                <p className="text-sm font-semibold">₹{row.outstanding.toLocaleString()}</p>
+                <p className="font-medium text-sm text-muted-foreground">Opening Balance</p>
+                <p className="text-[11px] text-muted-foreground">Admin</p>
               </div>
             </div>
           );
