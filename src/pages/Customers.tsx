@@ -75,7 +75,11 @@ const Customers = () => {
     { header: "Phone", accessor: (row: any) => row.phone || "—", className: "text-muted-foreground text-sm" },
     { header: "Stores", accessor: (row: any) => row.stores?.length || 0, className: "text-center" },
     { header: "Outstanding", accessor: (row: any) => `₹${Number(row.opening_balance).toLocaleString()}` },
-    { header: "KYC", accessor: (row: any) => <StatusBadge status={row.kyc_status === "verified" ? "verified" : row.kyc_status === "pending" ? "pending" : row.kyc_status === "rejected" ? "rejected" : "inactive"} label={row.kyc_status.replace("_", " ")} /> },
+    { header: "KYC", accessor: (row: any) => (
+      <button onClick={() => canReviewKyc && row.kyc_status !== "not_requested" ? setKycCustomer(row) : null} className={canReviewKyc && row.kyc_status !== "not_requested" ? "cursor-pointer hover:opacity-80" : ""}>
+        <StatusBadge status={row.kyc_status === "verified" ? "verified" : row.kyc_status === "pending" ? "pending" : row.kyc_status === "rejected" ? "rejected" : "inactive"} label={row.kyc_status.replace("_", " ")} />
+      </button>
+    )},
     { header: "Status", accessor: (row: any) => <StatusBadge status={row.is_active ? "active" : "inactive"} /> },
   ];
 
