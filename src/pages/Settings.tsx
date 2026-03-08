@@ -94,14 +94,6 @@ const SettingsPage = () => {
           </div>
         </TabsContent>
 
-        <TabsContent value="store-types" className="mt-4 space-y-4">
-          {isAdmin && (
-            <div className="flex justify-end">
-              <Button onClick={() => setShowAddType(true)}><Plus className="mr-2 h-4 w-4" />Add Store Type</Button>
-            </div>
-          )}
-          <DataTable columns={storeTypeColumns} data={storeTypes || []} searchKey="name" searchPlaceholder="Search store types..." />
-        </TabsContent>
 
         <TabsContent value="pricing" className="mt-4">
           <PricingTab isAdmin={isAdmin} />
