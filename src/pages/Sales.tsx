@@ -50,8 +50,11 @@ interface SaleItem {
   unit_price: number;
 }
 
+const POS_STORE_ID = "00000000-0000-0000-0000-000000000001";
+
 const Sales = () => {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
+  const isPosUser = role === "pos";
   const { allowed: canOverridePrice } = usePermission("price_override");
   const { allowed: canRecordBehalf } = usePermission("record_behalf");
   const qc = useQueryClient();
@@ -59,7 +62,8 @@ const Sales = () => {
   const [saving, setSaving] = useState(false);
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
 
-  const [storeId, setStoreId] = useState("");
+  // POS users are locked to the POS store
+  const [storeId, setStoreId] = useState(isPosUser ? POS_STORE_ID : "");
   const [cashAmount, setCashAmount] = useState("");
   const [upiAmount, setUpiAmount] = useState("");
   const [recordedFor, setRecordedFor] = useState("");
@@ -187,7 +191,7 @@ const Sales = () => {
   });
 
   const resetForm = () => {
-    setStoreId(""); setCashAmount(""); setUpiAmount(""); setRecordedFor("");
+    setStoreId(isPosUser ? POS_STORE_ID : ""); setCashAmount(""); setUpiAmount(""); setRecordedFor("");
     setItems([{ product_id: "", quantity: 1, unit_price: 0 }]);
   };
 
@@ -200,6 +204,11 @@ const Sales = () => {
     e.preventDefault();
     if (!storeId || items.some((i) => !i.product_id)) {
       toast.error("Please fill all required fields");
+      return;
+    }
+    // POS users: payment must equal total (no outstanding allowed)
+    if (isPosUser && (cash + upi) !== totalAmount) {
+      toast.error("POS sales require full payment. Cash + UPI must equal Total.");
       return;
     }
     setSaving(true);
@@ -475,13 +484,19 @@ const Sales = () => {
 
             <div>
               <Label>Store</Label>
-              <div className="flex gap-2 mt-1">
-                <Select value={storeId} onValueChange={handleStoreChange}>
-                  <SelectTrigger className="flex-1"><SelectValue placeholder="Select store" /></SelectTrigger>
-                  <SelectContent>{stores?.map((s) => <SelectItem key={s.id} value={s.id}>{s.name} ({s.display_id})</SelectItem>)}</SelectContent>
-                </Select>
-                <QrStoreSelector onStoreSelected={handleStoreChange} />
-              </div>
+              {isPosUser ? (
+                <div className="mt-1 flex h-10 w-full items-center rounded-md border border-input bg-muted px-3 text-sm text-muted-foreground">
+                  POS Counter (auto-selected)
+                </div>
+              ) : (
+                <div className="flex gap-2 mt-1">
+                  <Select value={storeId} onValueChange={handleStoreChange}>
+                    <SelectTrigger className="flex-1"><SelectValue placeholder="Select store" /></SelectTrigger>
+                    <SelectContent>{stores?.map((s) => <SelectItem key={s.id} value={s.id}>{s.name} ({s.display_id})</SelectItem>)}</SelectContent>
+                  </Select>
+                  <QrStoreSelector onStoreSelected={handleStoreChange} />
+                </div>
+              )}
               {selectedStore && (
                 <p className="text-xs text-muted-foreground mt-1">Current outstanding: ₹{oldOutstanding.toLocaleString()}</p>
               )}
@@ -540,6 +555,9 @@ const Sales = () => {
             <div className="rounded-lg border bg-muted/30 p-3 space-y-1 text-sm">
               <div className="flex justify-between"><span>Payment</span><span>₹{(cash + upi).toLocaleString()}</span></div>
               <div className="flex justify-between font-semibold"><span>New Outstanding</span><span className={newOutstanding > oldOutstanding ? "text-destructive" : "text-success"}>₹{newOutstanding.toLocaleString()}</span></div>
+              {isPosUser && (cash + upi) !== totalAmount && totalAmount > 0 && (
+                <p className="text-xs text-destructive mt-1">⚠ POS sales require full payment (Cash + UPI = Total)</p>
+              )}
             </div>
 
             <Button type="submit" className="w-full" disabled={saving}>
