@@ -415,22 +415,13 @@ const StoreDetail = () => {
               <div className="space-y-1.5"><Label className="text-xs">Pincode</Label><Input value={form.pincode} onChange={(e) => setForm({ ...form, pincode: e.target.value })} /></div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              <InfoItem icon={User} label="Customer" value={(store as any).customers?.name || "—"} />
-              <InfoItem icon={Navigation} label="Route" value={(store as any).routes?.name || "Not assigned"} />
-              <InfoItem icon={Phone} label="Phone" value={store.phone || "Not provided"} />
-              <InfoItem icon={MapPin} label="Address" value={fullAddress} />
-              <InfoItem icon={Tag} label="Opening Balance" value={`₹${Number(store.opening_balance).toLocaleString()}`} />
-              <InfoItem icon={Calendar} label="Created" value={new Date(store.created_at).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" })} />
-              {store.alternate_phone && <InfoItem icon={Phone} label="Alt. Phone" value={store.alternate_phone} />}
-              {store.lat && store.lng && (
-                <div className="sm:hidden">
-                  <a href={`https://www.google.com/maps?q=${store.lat},${store.lng}`} target="_blank" rel="noopener noreferrer" className="flex items-start gap-2.5 rounded-lg bg-primary/10 p-3 text-primary hover:bg-primary/15 transition-colors">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-background shadow-sm"><MapPin className="h-4 w-4" /></div>
-                    <div className="min-w-0 pt-0.5"><p className="text-sm font-medium">View on Map</p></div>
-                  </a>
-                </div>
-              )}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-x-6 gap-y-2">
+              <InfoItem label="Customer" value={(store as any).customers?.name || "—"} />
+              <InfoItem label="Route" value={(store as any).routes?.name || "Not assigned"} />
+              <InfoItem label="Phone" value={store.phone || "Not provided"} />
+              <InfoItem label="Address" value={fullAddress} />
+              <InfoItem label="Opening Bal." value={`₹${Number(store.opening_balance).toLocaleString()}`} />
+              <InfoItem label="Created" value={new Date(store.created_at).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" })} />
             </div>
           )}
         </CardContent>
