@@ -258,10 +258,10 @@ export function RouteSessionPanel() {
                         <p className="text-sm font-medium">{store.name}</p>
                         {/* Colored badges */}
                         {!visited && activeSession && (
-                          <CircleDot className="h-3 w-3 text-blue-500" title="In session" />
+                          <span className="h-2.5 w-2.5 rounded-full bg-blue-500 inline-block" />
                         )}
                         {hasOrder && (
-                          <ShoppingCart className="h-3 w-3 text-green-500" title="Has pending order" />
+                          <span className="h-2.5 w-2.5 rounded-full bg-green-500 inline-block" />
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground">
