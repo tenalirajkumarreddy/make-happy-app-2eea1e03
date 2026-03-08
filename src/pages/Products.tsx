@@ -79,6 +79,15 @@ const Products = () => {
     { header: "Base Price", accessor: (row: any) => `₹${Number(row.base_price).toLocaleString()}` },
     { header: "Unit", accessor: "unit" as const, className: "hidden sm:table-cell" },
     { header: "Status", accessor: (row: any) => <StatusBadge status={row.is_active ? "active" : "inactive"} /> },
+    { header: "Access", accessor: (row: any) => (
+      <button
+        onClick={(e) => { e.stopPropagation(); setSelectedProduct(row); }}
+        className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 font-medium transition-colors"
+      >
+        <Settings2 className="h-3.5 w-3.5" />
+        <span className="hidden sm:inline">Store Types</span>
+      </button>
+    )},
   ];
 
   if (isLoading) {
