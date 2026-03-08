@@ -100,7 +100,7 @@ export function TopBar() {
           id: `order-${payload.new.id}`,
           message: `New order ${payload.new.display_id}`,
           time: payload.new.created_at,
-          type: "order",
+          type: "order" as const,
           read: false,
         }, ...prev].slice(0, 15));
       })
