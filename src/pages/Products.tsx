@@ -22,6 +22,7 @@ import { useQueryClient } from "@tanstack/react-query";
 const Products = () => {
   const { user } = useAuth();
   const [showAdd, setShowAdd] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [name, setName] = useState("");
   const [sku, setSku] = useState("");
   const [price, setPrice] = useState("");
