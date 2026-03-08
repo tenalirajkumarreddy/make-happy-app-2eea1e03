@@ -7,7 +7,7 @@ import { CreateStoreWizard } from "@/components/stores/CreateStoreWizard";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { DollarSign } from "lucide-react";
+import { DollarSign, Store } from "lucide-react";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useState } from "react";
@@ -147,7 +147,42 @@ const Stores = () => {
         </div>
       )}
 
-      <DataTable columns={columns} data={stores || []} searchKey="name" searchPlaceholder="Search stores..." onRowClick={(row) => navigate(`/stores/${row.id}`)} />
+      <DataTable
+        columns={columns}
+        data={stores || []}
+        searchKey="name"
+        searchPlaceholder="Search stores..."
+        onRowClick={(row) => navigate(`/stores/${row.id}`)}
+        renderMobileCard={(row: any) => (
+          <div className="rounded-xl border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow active:bg-muted/30">
+            <div className="flex gap-0">
+              <div className="w-24 h-24 shrink-0 bg-muted flex items-center justify-center">
+                {row.photo_url ? (
+                  <img src={row.photo_url} alt={row.name} className="w-full h-full object-cover" />
+                ) : (
+                  <Store className="h-8 w-8 text-muted-foreground/40" />
+                )}
+              </div>
+              <div className="flex-1 p-3 min-w-0">
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="font-semibold text-sm text-foreground truncate">{row.name}</h3>
+                  <StatusBadge status={row.is_active ? "active" : "inactive"} />
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">{row.customers?.name || "—"}</p>
+                <div className="flex items-center gap-3 mt-2">
+                  <span className="text-sm font-bold text-foreground">₹{Number(row.outstanding).toLocaleString()}</span>
+                  {row.store_types?.name && (
+                    <Badge variant="secondary" className="text-[10px] h-5">{row.store_types.name}</Badge>
+                  )}
+                </div>
+                {row.routes?.name && (
+                  <p className="text-[11px] text-muted-foreground mt-1">Route: {row.routes.name}</p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      />
 
       <CreateStoreWizard open={showAdd} onOpenChange={setShowAdd} />
 

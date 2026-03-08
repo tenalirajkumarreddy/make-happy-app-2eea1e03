@@ -7,7 +7,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { logActivity } from "@/lib/activityLogger";
-import { Loader2 } from "lucide-react";
+import { Loader2, User } from "lucide-react";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useState } from "react";
@@ -158,7 +158,40 @@ const Customers = () => {
         </div>
       )}
 
-      <DataTable columns={columns} data={customers || []} searchKey="name" searchPlaceholder="Search customers..." onRowClick={(row) => navigate(`/customers/${row.id}`)} />
+      <DataTable
+        columns={columns}
+        data={customers || []}
+        searchKey="name"
+        searchPlaceholder="Search customers..."
+        onRowClick={(row) => navigate(`/customers/${row.id}`)}
+        renderMobileCard={(row: any) => (
+          <div className="rounded-xl border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow active:bg-muted/30">
+            <div className="flex gap-0">
+              <div className="w-24 h-24 shrink-0 bg-muted flex items-center justify-center">
+                {row.photo_url ? (
+                  <img src={row.photo_url} alt={row.name} className="w-full h-full object-cover" />
+                ) : (
+                  <User className="h-8 w-8 text-muted-foreground/40" />
+                )}
+              </div>
+              <div className="flex-1 p-3 min-w-0">
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="font-semibold text-sm text-foreground truncate">{row.name}</h3>
+                  <StatusBadge status={row.is_active ? "active" : "inactive"} />
+                </div>
+                <p className="text-xs text-muted-foreground font-mono mt-0.5">{row.display_id}</p>
+                <div className="flex items-center gap-3 mt-2">
+                  <span className="text-sm font-bold text-foreground">₹{Number(row.opening_balance).toLocaleString()}</span>
+                  <span className="text-xs text-muted-foreground">{row.stores?.length || 0} stores</span>
+                </div>
+                <div className="mt-1.5">
+                  <StatusBadge status={row.kyc_status === "verified" ? "verified" : row.kyc_status === "pending" ? "pending" : "inactive"} label={`KYC: ${row.kyc_status.replace("_", " ")}`} />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      />
 
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
         <DialogContent>

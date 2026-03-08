@@ -35,6 +35,8 @@ interface DataTableProps<T> {
   searchKey?: keyof T;
   onRowClick?: (row: T) => void;
   pageSize?: number;
+  /** Custom mobile card renderer. When provided, replaces the default grid card. */
+  renderMobileCard?: (row: T, index: number) => React.ReactNode;
 }
 
 export function DataTable<T extends Record<string, any>>({
@@ -44,6 +46,7 @@ export function DataTable<T extends Record<string, any>>({
   searchKey,
   onRowClick,
   pageSize: defaultPageSize = 10,
+  renderMobileCard,
 }: DataTableProps<T>) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
@@ -129,6 +132,16 @@ export function DataTable<T extends Record<string, any>>({
           <div className="rounded-xl border bg-card p-6 text-center text-muted-foreground">
             No results found.
           </div>
+        ) : renderMobileCard ? (
+          paged.map((row, i) => (
+            <div
+              key={i}
+              className={onRowClick ? "cursor-pointer" : ""}
+              onClick={() => onRowClick?.(row)}
+            >
+              {renderMobileCard(row, i)}
+            </div>
+          ))
         ) : (
           paged.map((row, i) => (
             <div
@@ -142,7 +155,6 @@ export function DataTable<T extends Record<string, any>>({
                   .map((col, j) => {
                     const label = getHeaderText(col);
                     const value = getCellValue(col, row);
-                    // If no label (e.g. checkbox column), render full width
                     if (!label) {
                       return (
                         <div key={j} className="col-span-2 flex items-center">
