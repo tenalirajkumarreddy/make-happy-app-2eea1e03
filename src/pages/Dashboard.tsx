@@ -10,6 +10,7 @@ import { DashboardSkeleton } from "@/components/shared/DashboardSkeleton";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
 } from "recharts";
+import { QuickActionDrawer } from "@/components/agent/QuickActionDrawer";
 
 const COLORS = ["hsl(217, 91%, 50%)", "hsl(142, 72%, 42%)", "hsl(38, 92%, 50%)", "hsl(280, 65%, 60%)", "hsl(0, 72%, 51%)"];
 
