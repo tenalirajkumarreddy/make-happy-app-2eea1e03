@@ -82,10 +82,10 @@ export function StoreLedger({ sales, transactions, openingBalance, storeCreatedA
     entries.push({
       id: "__opening_balance__",
       type: "correction" as const,
-      date: "",
+      date: storeCreatedAt,
       display_id: "",
       description: "Opening Balance",
-      total_amount: 0,
+      total_amount: openingBalance,
       cash_amount: 0,
       upi_amount: 0,
       outstanding: openingBalance,
