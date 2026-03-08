@@ -53,17 +53,20 @@ const MapPage = () => {
     refetchInterval: 30000,
   });
 
-  const storesWithLocation = stores?.filter((s) => s.lat && s.lng) || [];
-  const storesWithoutLocation = stores?.filter((s) => !s.lat || !s.lng) || [];
+  const storesWithLocation = React.useMemo(() => stores?.filter((s) => s.lat && s.lng) || [], [stores]);
+  const storesWithoutLocation = React.useMemo(() => stores?.filter((s) => !s.lat || !s.lng) || [], [stores]);
 
   // Build a color map for store types
-  const storeTypeColorMap = new Map<string, string>();
-  stores?.forEach((s: any) => {
-    const typeName = s.store_types?.name || "Other";
-    if (!storeTypeColorMap.has(typeName)) {
-      storeTypeColorMap.set(typeName, TYPE_COLORS[storeTypeColorMap.size % TYPE_COLORS.length]);
-    }
-  });
+  const storeTypeColorMap = React.useMemo(() => {
+    const map = new Map<string, string>();
+    stores?.forEach((s: any) => {
+      const typeName = s.store_types?.name || "Other";
+      if (!map.has(typeName)) {
+        map.set(typeName, TYPE_COLORS[map.size % TYPE_COLORS.length]);
+      }
+    });
+    return map;
+  }, [stores]);
 
   // Initialize & update Leaflet map
   useEffect(() => {
