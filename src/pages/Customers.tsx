@@ -8,13 +8,11 @@ import { useAuth } from "@/contexts/AuthContext";
 import { logActivity } from "@/lib/activityLogger";
 import { Loader2 } from "lucide-react";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
+  Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,8 +29,10 @@ const Customers = () => {
   const [email, setEmail] = useState("");
   const [address, setAddress] = useState("");
   const [saving, setSaving] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const qc = useQueryClient();
   const canReviewKyc = role === "super_admin" || role === "manager";
+  const canBulk = role === "super_admin" || role === "manager";
 
   const { data: customers, isLoading } = useQuery({
     queryKey: ["customers"],
@@ -49,7 +49,6 @@ const Customers = () => {
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    // Generate display ID
     const count = (customers?.length || 0) + 1;
     const displayId = `CUST-${String(count).padStart(6, "0")}`;
 
@@ -72,7 +71,49 @@ const Customers = () => {
     }
   };
 
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (selected.size === (customers?.length || 0)) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(customers?.map((c) => c.id) || []));
+    }
+  };
+
+  const handleBulkStatus = async (active: boolean) => {
+    if (selected.size === 0) return;
+    const ids = Array.from(selected);
+    const { error } = await supabase.from("customers").update({ is_active: active }).in("id", ids);
+    if (error) { toast.error(error.message); return; }
+    toast.success(`${ids.length} customers ${active ? "activated" : "deactivated"}`);
+    setSelected(new Set());
+    qc.invalidateQueries({ queryKey: ["customers"] });
+  };
+
   const columns = [
+    ...(canBulk ? [{
+      header: () => (
+        <Checkbox
+          checked={selected.size === (customers?.length || 0) && (customers?.length || 0) > 0}
+          onCheckedChange={toggleAll}
+        />
+      ),
+      accessor: (row: any) => (
+        <Checkbox
+          checked={selected.has(row.id)}
+          onCheckedChange={() => toggleSelect(row.id)}
+          onClick={(e: React.MouseEvent) => e.stopPropagation()}
+        />
+      ),
+      className: "w-10",
+    }] : []),
     { header: "ID", accessor: "display_id" as const, className: "font-mono text-xs" },
     { header: "Name", accessor: "name" as const, className: "font-medium cursor-pointer text-primary hover:underline" },
     { header: "Phone", accessor: (row: any) => row.phone || "—", className: "text-muted-foreground text-sm" },
@@ -98,6 +139,17 @@ const Customers = () => {
         actionLabel="Add Customer"
         onAction={() => setShowAdd(true)}
       />
+
+      {/* Bulk actions bar */}
+      {canBulk && selected.size > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-accent/50 p-3">
+          <span className="text-sm font-medium">{selected.size} selected</span>
+          <Button variant="outline" size="sm" onClick={() => handleBulkStatus(true)}>Activate</Button>
+          <Button variant="outline" size="sm" onClick={() => handleBulkStatus(false)}>Deactivate</Button>
+          <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>Clear</Button>
+        </div>
+      )}
+
       <DataTable columns={columns} data={customers || []} searchKey="name" searchPlaceholder="Search customers..." onRowClick={(row) => navigate(`/customers/${row.id}`)} />
 
       <Dialog open={showAdd} onOpenChange={setShowAdd}>

@@ -140,3 +140,49 @@
     @apply text-sm text-muted-foreground;
   }
 }
+
+/* Print styles for Reports */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 12px;
+  }
+
+  .print\\:hidden,
+  aside,
+  header,
+  nav,
+  .print-hide {
+    display: none !important;
+  }
+
+  .print\\:block {
+    display: block !important;
+  }
+
+  .print-report {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .rounded-xl {
+    border-radius: 4px !important;
+  }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+
+  th, td {
+    border: 1px solid #ddd !important;
+    padding: 6px 8px !important;
+    text-align: left;
+  }
+
+  th {
+    background: #f5f5f5 !important;
+    font-weight: 600;
+  }
+}

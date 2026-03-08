@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/select";
 
 interface Column<T> {
-  header: string;
+  header: string | (() => React.ReactNode);
   accessor: keyof T | ((row: T) => React.ReactNode);
   className?: string;
 }
@@ -80,7 +80,7 @@ export function DataTable<T extends Record<string, any>>({
             <TableRow className="bg-muted/50 hover:bg-muted/50">
               {columns.map((col, i) => (
                 <TableHead key={i} className={col.className}>
-                  {col.header}
+                  {typeof col.header === "function" ? col.header() : col.header}
                 </TableHead>
               ))}
             </TableRow>

@@ -2,9 +2,10 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { StatCard } from "@/components/shared/StatCard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/shared/DataTable";
+import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, DollarSign, Banknote, Smartphone, TrendingUp, Download } from "lucide-react";
+import { DollarSign, Banknote, Smartphone, TrendingUp, Download, Printer } from "lucide-react";
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -85,16 +86,16 @@ const Reports = () => {
   ];
 
   if (isLoading) {
-    return <div className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+    return <TableSkeleton columns={5} rows={6} />;
   }
 
   const d = data!;
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in print-report">
       <PageHeader title="Reports" subtitle="Generate and view business reports" />
 
-      <div className="flex flex-wrap items-end gap-3">
+      <div className="flex flex-wrap items-end gap-3 print:hidden">
         <div>
           <Label className="text-xs">From</Label>
           <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="w-40 mt-1" />
@@ -145,6 +146,21 @@ const Reports = () => {
           <Download className="mr-1.5 h-4 w-4" />
           Export Outstanding CSV
         </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-9"
+          onClick={() => window.print()}
+        >
+          <Printer className="mr-1.5 h-4 w-4" />
+          Print
+        </Button>
+      </div>
+
+      {/* Print header (only visible when printing) */}
+      <div className="hidden print:block mb-4">
+        <h2 className="text-lg font-bold">Business Report</h2>
+        <p className="text-sm text-muted-foreground">Period: {fromDate} to {toDate}</p>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -155,7 +171,7 @@ const Reports = () => {
       </div>
 
       <Tabs defaultValue="sales">
-        <TabsList>
+        <TabsList className="print:hidden">
           <TabsTrigger value="sales">Sales ({d.salesCount})</TabsTrigger>
           <TabsTrigger value="outstanding">Outstanding ({d.outstandingStores.length})</TabsTrigger>
         </TabsList>
