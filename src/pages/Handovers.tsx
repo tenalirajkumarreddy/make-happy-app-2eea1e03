@@ -18,7 +18,7 @@ const Handovers = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("handovers")
-        .select("*, profiles:user_id(full_name), confirmed_profile:confirmed_by(full_name)")
+        .select("*")
         .order("handover_date", { ascending: false });
       if (error) throw error;
       return data;
