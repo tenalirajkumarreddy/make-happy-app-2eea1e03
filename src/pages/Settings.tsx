@@ -1,23 +1,14 @@
 import { PageHeader } from "@/components/shared/PageHeader";
-import { DataTable } from "@/components/shared/DataTable";
-import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2, Plus, Save } from "lucide-react";
+import { Loader2, Save } from "lucide-react";
 import { useState, useEffect } from "react";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
 import { toast } from "sonner";
 import { PricingTab } from "@/components/settings/PricingTab";
 
@@ -55,67 +46,13 @@ const SettingsPage = () => {
     qc.invalidateQueries({ queryKey: ["company-settings"] });
   };
 
-  // Store types
-  const [showAddType, setShowAddType] = useState(false);
-  const [newTypeName, setNewTypeName] = useState("");
-  const [newOrderType, setNewOrderType] = useState("simple");
-  const [savingType, setSavingType] = useState(false);
-
-  const { data: storeTypes, isLoading: loadingTypes } = useQuery({
-    queryKey: ["store-types"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("store_types").select("*").order("created_at");
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  const handleAddStoreType = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSavingType(true);
-    const { error } = await supabase.from("store_types").insert({
-      name: newTypeName,
-      order_type: newOrderType,
-    });
-    setSavingType(false);
-    if (error) toast.error(error.message);
-    else {
-      toast.success("Store type added");
-      setShowAddType(false);
-      setNewTypeName(""); setNewOrderType("simple");
-      qc.invalidateQueries({ queryKey: ["store-types"] });
-    }
-  };
-
-  const toggleAutoOrder = async (id: string, current: boolean) => {
-    await supabase.from("store_types").update({ auto_order_enabled: !current }).eq("id", id);
-    qc.invalidateQueries({ queryKey: ["store-types"] });
-  };
-
-  const toggleTypeActive = async (id: string, current: boolean) => {
-    await supabase.from("store_types").update({ is_active: !current }).eq("id", id);
-    qc.invalidateQueries({ queryKey: ["store-types"] });
-  };
 
   const toggleFeature = (key: string) => {
     setSettings((prev) => ({ ...prev, [key]: prev[key] === "true" ? "false" : "true" }));
   };
 
-  const storeTypeColumns = [
-    { header: "Name", accessor: "name" as const, className: "font-medium" },
-    { header: "Order Type", accessor: (row: any) => <Badge variant="secondary">{row.order_type}</Badge> },
-    { header: "Auto Order", accessor: (row: any) => (
-      <Switch checked={row.auto_order_enabled} onCheckedChange={() => toggleAutoOrder(row.id, row.auto_order_enabled)} disabled={!isAdmin} />
-    )},
-    { header: "Status", accessor: (row: any) => <StatusBadge status={row.is_active ? "active" : "inactive"} /> },
-    { header: "Actions", accessor: (row: any) => isAdmin ? (
-      <Button variant={row.is_active ? "destructive" : "default"} size="sm" className="h-7 text-xs" onClick={() => toggleTypeActive(row.id, row.is_active)}>
-        {row.is_active ? "Disable" : "Enable"}
-      </Button>
-    ) : null },
-  ];
 
-  if (loadingSettings || loadingTypes) {
+  if (loadingSettings) {
     return <div className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
 
@@ -125,7 +62,6 @@ const SettingsPage = () => {
       <Tabs defaultValue="company">
         <TabsList>
           <TabsTrigger value="company">Company</TabsTrigger>
-          <TabsTrigger value="store-types">Store Types</TabsTrigger>
           <TabsTrigger value="pricing">Pricing</TabsTrigger>
           <TabsTrigger value="features">Features</TabsTrigger>
         </TabsList>
@@ -148,14 +84,6 @@ const SettingsPage = () => {
           </div>
         </TabsContent>
 
-        <TabsContent value="store-types" className="mt-4 space-y-4">
-          {isAdmin && (
-            <div className="flex justify-end">
-              <Button onClick={() => setShowAddType(true)}><Plus className="mr-2 h-4 w-4" />Add Store Type</Button>
-            </div>
-          )}
-          <DataTable columns={storeTypeColumns} data={storeTypes || []} searchKey="name" searchPlaceholder="Search store types..." />
-        </TabsContent>
 
         <TabsContent value="pricing" className="mt-4">
           <PricingTab isAdmin={isAdmin} />
@@ -188,28 +116,6 @@ const SettingsPage = () => {
         </TabsContent>
       </Tabs>
 
-      <Dialog open={showAddType} onOpenChange={setShowAddType}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Add Store Type</DialogTitle></DialogHeader>
-          <form onSubmit={handleAddStoreType} className="space-y-4">
-            <div><Label>Type Name</Label><Input value={newTypeName} onChange={(e) => setNewTypeName(e.target.value)} required className="mt-1" placeholder="e.g., Retail, Wholesale" /></div>
-            <div>
-              <Label>Order Type</Label>
-              <Select value={newOrderType} onValueChange={setNewOrderType}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="simple">Simple</SelectItem>
-                  <SelectItem value="detailed">Detailed</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <Button type="submit" className="w-full" disabled={savingType}>
-              {savingType && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Add Store Type
-            </Button>
-          </form>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };
