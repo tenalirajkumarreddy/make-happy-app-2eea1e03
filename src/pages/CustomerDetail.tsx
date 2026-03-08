@@ -80,6 +80,17 @@ const CustomerDetail = () => {
     enabled: !!id,
   });
 
+  const { data: profiles } = useQuery({
+    queryKey: ["profiles"],
+    queryFn: async () => {
+      const { data } = await supabase.from("profiles").select("user_id, full_name, avatar_url");
+      return data || [];
+    },
+  });
+
+  const profileMap = new Map(profiles?.map((p) => [p.user_id, p]) || []);
+  const getRecorder = (uid: string) => profileMap.get(uid);
+
   const { data: orders } = useQuery({
     queryKey: ["customer-orders", id],
     queryFn: async () => {
