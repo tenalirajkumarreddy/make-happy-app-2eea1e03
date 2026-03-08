@@ -21,6 +21,7 @@ interface DataTableProps<T> {
   data: T[];
   searchPlaceholder?: string;
   searchKey?: keyof T;
+  onRowClick?: (row: T) => void;
 }
 
 export function DataTable<T extends Record<string, any>>({
@@ -28,6 +29,7 @@ export function DataTable<T extends Record<string, any>>({
   data,
   searchPlaceholder = "Search...",
   searchKey,
+  onRowClick,
 }: DataTableProps<T>) {
   const [search, setSearch] = useState("");
 
