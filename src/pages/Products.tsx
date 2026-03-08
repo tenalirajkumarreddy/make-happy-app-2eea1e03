@@ -2,7 +2,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
-import { Package, Pencil, X, Save, AlertTriangle } from "lucide-react";
+import { Package, Pencil, X, Save, AlertTriangle, Grid3X3, Download } from "lucide-react";
 import { ImageUpload } from "@/components/shared/ImageUpload";
 import { ProductAccessMatrix } from "@/components/products/ProductAccessMatrix";
 import { useQuery } from "@tanstack/react-query";
