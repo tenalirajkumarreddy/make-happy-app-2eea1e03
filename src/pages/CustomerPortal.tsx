@@ -10,6 +10,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { DataTable } from "@/components/shared/DataTable";
+import { BannerCarousel } from "@/components/banners/BannerCarousel";
 
 const CustomerPortal = () => {
   const { user } = useAuth();
@@ -70,6 +71,9 @@ const CustomerPortal = () => {
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader title="My Dashboard" subtitle={`Welcome, ${customer.name}`} primaryAction={{ label: "Place Order", onClick: () => navigate("/portal/orders") }} />
+
+      {/* Promotional Banners */}
+      <BannerCarousel storeTypeIds={stores?.map((s: any) => s.store_type_id).filter(Boolean)} />
 
       {/* KYC Banner */}
       {customer.kyc_status === "not_requested" && (

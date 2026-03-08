@@ -11,6 +11,7 @@ import { Loader2, Save } from "lucide-react";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { PricingTab } from "@/components/settings/PricingTab";
+import { BannerManagement } from "@/components/banners/BannerManagement";
 
 const SettingsPage = () => {
   const { role } = useAuth();
@@ -63,6 +64,7 @@ const SettingsPage = () => {
         <TabsList>
           <TabsTrigger value="company">Company</TabsTrigger>
           <TabsTrigger value="pricing">Pricing</TabsTrigger>
+          {isAdmin && <TabsTrigger value="banners">Banners</TabsTrigger>}
           <TabsTrigger value="features">Features</TabsTrigger>
         </TabsList>
 
@@ -88,6 +90,12 @@ const SettingsPage = () => {
         <TabsContent value="pricing" className="mt-4">
           <PricingTab isAdmin={isAdmin} />
         </TabsContent>
+
+        {isAdmin && (
+          <TabsContent value="banners" className="mt-4">
+            <BannerManagement />
+          </TabsContent>
+        )}
 
         <TabsContent value="features" className="mt-4 space-y-4">
           <div className="rounded-xl border bg-card p-6 space-y-5 max-w-lg">
