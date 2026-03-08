@@ -77,8 +77,24 @@ export function StoreLedger({ sales, transactions, openingBalance, profileMap }:
     // Sort newest first
     entries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
+    // Add opening balance as the very last (oldest) entry
+    entries.push({
+      id: "__opening_balance__",
+      type: "correction" as const,
+      date: "",
+      display_id: "",
+      description: "Opening Balance",
+      total_amount: 0,
+      cash_amount: 0,
+      upi_amount: 0,
+      outstanding: openingBalance,
+      notes: null,
+      recorded_by: "",
+      raw: null,
+    });
+
     return entries;
-  }, [sales, transactions]);
+  }, [sales, transactions, openingBalance]);
 
   const selectedEntry = ledgerEntries.find((e) => e.id === selectedEntryId);
   const isSaleSelected = selectedEntry?.type === "sale";
