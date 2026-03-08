@@ -38,7 +38,7 @@ const Customers = () => {
   const [photoUrl, setPhotoUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const qc = useQueryClient();
+  const [filters, setFilters] = useState<FilterValues>({});
   const canReviewKyc = role === "super_admin" || role === "manager";
   const canBulk = role === "super_admin" || role === "manager";
   const canEdit = role === "super_admin" || role === "manager";
