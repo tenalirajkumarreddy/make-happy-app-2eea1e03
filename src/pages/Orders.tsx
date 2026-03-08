@@ -120,6 +120,22 @@ const Orders = () => {
 
     logActivity(user!.id, "Created order", "order", displayId, order.id);
     toast.success("Order created");
+
+    // Notify admins/managers
+    const storeName = stores?.find((s) => s.id === storeId)?.name || "store";
+    getAdminUserIds().then((ids) => {
+      const others = ids.filter((id) => id !== user!.id);
+      if (others.length > 0) {
+        sendNotificationToMany(others, {
+          title: "New Order Created",
+          message: `Order ${displayId} (${orderType}) placed for ${storeName}`,
+          type: "order",
+          entityType: "order",
+          entityId: order.id,
+        });
+      }
+    });
+
     setSaving(false);
     setShowAdd(false);
     resetForm();

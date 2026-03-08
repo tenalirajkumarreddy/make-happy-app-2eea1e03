@@ -178,6 +178,16 @@ const Handovers = () => {
     if (error) toast.error(error.message);
     else {
       toast.success("Handover sent for confirmation");
+
+      // Notify the recipient
+      sendNotification({
+        userId: toUserId,
+        title: "Handover Received",
+        message: `₹${Number(amount).toLocaleString()} handover awaiting your confirmation`,
+        type: "handover",
+        entityType: "handover",
+      });
+
       setCreateOpen(false);
       setAmount("");
       setNotes("");

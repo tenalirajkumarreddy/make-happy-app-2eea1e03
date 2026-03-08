@@ -256,6 +256,22 @@ const Sales = () => {
     await supabase.from("stores").update({ outstanding: newOutstanding }).eq("id", storeId);
 
     toast.success("Sale recorded successfully");
+
+    // Notify admins/managers
+    const storeName = stores?.find((s) => s.id === storeId)?.name || "store";
+    getAdminUserIds().then((ids) => {
+      const others = ids.filter((id) => id !== user!.id);
+      if (others.length > 0) {
+        sendNotificationToMany(others, {
+          title: "New Sale Recorded",
+          message: `Sale ${displayId} of ₹${totalAmount.toLocaleString()} at ${storeName}`,
+          type: "payment",
+          entityType: "sale",
+          entityId: sale.id,
+        });
+      }
+    });
+
     setSaving(false);
     setShowAdd(false);
     resetForm();

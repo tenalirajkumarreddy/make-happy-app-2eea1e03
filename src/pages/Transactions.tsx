@@ -117,6 +117,22 @@ const Transactions = () => {
 
     logActivity(user!.id, "Recorded transaction", "transaction", displayId, undefined, { total: totalPayment, store: storeId });
     toast.success("Transaction recorded");
+
+    // Notify admins/managers
+    const storeName = stores?.find((s) => s.id === storeId)?.name || "store";
+    getAdminUserIds().then((ids) => {
+      const others = ids.filter((id) => id !== user!.id);
+      if (others.length > 0) {
+        sendNotificationToMany(others, {
+          title: "Payment Collected",
+          message: `₹${totalPayment.toLocaleString()} collected from ${storeName} (${displayId})`,
+          type: "payment",
+          entityType: "transaction",
+          entityId: displayId,
+        });
+      }
+    });
+
     setSaving(false);
     setShowAdd(false);
     resetForm();
