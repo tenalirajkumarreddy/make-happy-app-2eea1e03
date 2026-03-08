@@ -65,6 +65,8 @@ const StoreTypes = () => {
     setEditingType(null);
     setNewTypeName("");
     setNewOrderType("simple");
+    setCreditLimitKyc("");
+    setCreditLimitNoKyc("");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
