@@ -126,28 +126,6 @@ const SettingsPage = () => {
         </TabsContent>
       </Tabs>
 
-      <Dialog open={showAddType} onOpenChange={setShowAddType}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Add Store Type</DialogTitle></DialogHeader>
-          <form onSubmit={handleAddStoreType} className="space-y-4">
-            <div><Label>Type Name</Label><Input value={newTypeName} onChange={(e) => setNewTypeName(e.target.value)} required className="mt-1" placeholder="e.g., Retail, Wholesale" /></div>
-            <div>
-              <Label>Order Type</Label>
-              <Select value={newOrderType} onValueChange={setNewOrderType}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="simple">Simple</SelectItem>
-                  <SelectItem value="detailed">Detailed</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <Button type="submit" className="w-full" disabled={savingType}>
-              {savingType && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Add Store Type
-            </Button>
-          </form>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };
