@@ -5,6 +5,7 @@ import { KycReviewDialog } from "@/components/customers/KycReviewDialog";
 import { ImageUpload } from "@/components/shared/ImageUpload";
 import { EditableCell } from "@/components/shared/EditableCell";
 import { CsvImportDialog } from "@/components/shared/CsvImportDialog";
+import { AdvancedFilters, applyFilters, type FilterValues } from "@/components/shared/AdvancedFilters";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -13,7 +14,7 @@ import { Loader2, User, Upload } from "lucide-react";
 import { usePermission } from "@/hooks/usePermission";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -37,6 +38,7 @@ const Customers = () => {
   const [photoUrl, setPhotoUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [filters, setFilters] = useState<FilterValues>({});
   const qc = useQueryClient();
   const canReviewKyc = role === "super_admin" || role === "manager";
   const canBulk = role === "super_admin" || role === "manager";
@@ -202,6 +204,15 @@ const Customers = () => {
     { header: "Status", accessor: (row: any) => <StatusBadge status={row.is_active ? "active" : "inactive"} /> },
   ];
 
+  const filteredCustomers = useMemo(() => {
+    let data = customers || [];
+    return applyFilters(data, filters, {
+      dateField: "created_at",
+      kycField: "kyc_status",
+      statusField: "is_active",
+    });
+  }, [customers, filters]);
+
   if (isLoading) {
     return <TableSkeleton columns={7} />;
   }
@@ -217,6 +228,14 @@ const Customers = () => {
         ] : []}
       />
 
+      <div className="flex items-center justify-end">
+        <AdvancedFilters
+          config={{ dateRange: true, kycStatus: true, status: true }}
+          values={filters}
+          onChange={setFilters}
+        />
+      </div>
+
       {canBulk && selected.size > 0 && (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-accent/50 p-3">
           <span className="text-sm font-medium">{selected.size} selected</span>
@@ -228,7 +247,7 @@ const Customers = () => {
 
       <DataTable
         columns={columns}
-        data={customers || []}
+        data={filteredCustomers}
         searchKey="name"
         searchPlaceholder="Search customers..."
         onRowClick={(row) => navigate(`/customers/${row.id}`)}

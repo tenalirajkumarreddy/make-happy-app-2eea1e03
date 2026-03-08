@@ -6,6 +6,7 @@ import { StorePricingDialog } from "@/components/stores/StorePricingDialog";
 import { CreateStoreWizard } from "@/components/stores/CreateStoreWizard";
 import { EditableCell } from "@/components/shared/EditableCell";
 import { CsvImportDialog } from "@/components/shared/CsvImportDialog";
+import { AdvancedFilters, applyFilters, type FilterValues } from "@/components/shared/AdvancedFilters";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -13,7 +14,7 @@ import { DollarSign, Store, Settings2, Upload } from "lucide-react";
 import { usePermission } from "@/hooks/usePermission";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +32,7 @@ const Stores = () => {
   const [pricingStore, setPricingStore] = useState<any>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkRoute, setBulkRoute] = useState("");
+  const [filters, setFilters] = useState<FilterValues>({});
   const qc = useQueryClient();
   const canManagePricing = role === "super_admin" || role === "manager";
   const canBulk = role === "super_admin" || role === "manager";
@@ -219,6 +221,16 @@ const Stores = () => {
     ), hideOnMobile: true }] : []),
   ];
 
+  const filteredStores = useMemo(() => {
+    return applyFilters(stores || [], filters, {
+      dateField: "created_at",
+      outstandingField: "outstanding",
+      storeTypeField: "store_type_id",
+      routeField: "route_id",
+      statusField: "is_active",
+    });
+  }, [stores, filters]);
+
   if (isLoading) {
     return <TableSkeleton columns={7} />;
   }
@@ -234,6 +246,20 @@ const Stores = () => {
           ...(canCreateStores ? [{ label: "Import CSV", icon: Upload, onClick: () => setShowImport(true), priority: 2 as const }] : []),
         ]}
       />
+
+      <div className="flex items-center justify-end">
+        <AdvancedFilters
+          config={{
+            dateRange: true,
+            outstandingRange: true,
+            storeType: { options: storeTypes?.map((t) => ({ id: t.id, name: t.name })) || [] },
+            route: { options: allRoutes?.map((r) => ({ id: r.id, name: r.name })) || [] },
+            status: true,
+          }}
+          values={filters}
+          onChange={setFilters}
+        />
+      </div>
 
       {canBulk && selected.size > 0 && (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-accent/50 p-3">
@@ -253,7 +279,7 @@ const Stores = () => {
 
       <DataTable
         columns={columns}
-        data={stores || []}
+        data={filteredStores}
         searchKey="name"
         searchPlaceholder="Search stores..."
         onRowClick={(row) => navigate(`/stores/${row.id}`)}
