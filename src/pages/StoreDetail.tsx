@@ -42,6 +42,10 @@ const StoreDetail = () => {
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [showQrScanner, setShowQrScanner] = useState(false);
+  const [showAdjustBalance, setShowAdjustBalance] = useState(false);
+  const [adjustSaving, setAdjustSaving] = useState(false);
+  const [newBalanceInput, setNewBalanceInput] = useState("");
+  const [adjustReason, setAdjustReason] = useState("");
   const [form, setForm] = useState({
     name: "",
     phone: "",
