@@ -47,6 +47,57 @@ export type Database = {
         }
         Relationships: []
       }
+      balance_adjustments: {
+        Row: {
+          adjusted_by: string
+          adjustment_amount: number
+          created_at: string
+          customer_id: string
+          id: string
+          new_outstanding: number
+          old_outstanding: number
+          reason: string | null
+          store_id: string
+        }
+        Insert: {
+          adjusted_by: string
+          adjustment_amount?: number
+          created_at?: string
+          customer_id: string
+          id?: string
+          new_outstanding?: number
+          old_outstanding?: number
+          reason?: string | null
+          store_id: string
+        }
+        Update: {
+          adjusted_by?: string
+          adjustment_amount?: number
+          created_at?: string
+          customer_id?: string
+          id?: string
+          new_outstanding?: number
+          old_outstanding?: number
+          reason?: string | null
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "balance_adjustments_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "balance_adjustments_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       company_settings: {
         Row: {
           id: string
