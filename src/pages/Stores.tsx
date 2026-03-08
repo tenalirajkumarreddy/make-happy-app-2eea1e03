@@ -20,7 +20,9 @@ import {
 import { toast } from "sonner";
 
 const Stores = () => {
+  const { role } = useAuth();
   const [showAdd, setShowAdd] = useState(false);
+  const [pricingStore, setPricingStore] = useState<any>(null);
   const [name, setName] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [storeTypeId, setStoreTypeId] = useState("");
@@ -29,6 +31,7 @@ const Stores = () => {
   const [phone, setPhone] = useState("");
   const [saving, setSaving] = useState(false);
   const qc = useQueryClient();
+  const canManagePricing = role === "super_admin" || role === "manager";
 
   const { data: stores, isLoading } = useQuery({
     queryKey: ["stores"],
