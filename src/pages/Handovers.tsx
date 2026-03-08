@@ -1,10 +1,11 @@
 import { PageHeader } from "@/components/shared/PageHeader";
 import { StatusBadge } from "@/components/shared/StatusBadge";
-import { Banknote, Smartphone, CheckCircle, Clock, AlertCircle, Loader2, Send, ArrowDownLeft, ArrowUpRight, XCircle } from "lucide-react";
+import { Banknote, Smartphone, CheckCircle, Clock, AlertCircle, Loader2, Send, ArrowDownLeft, ArrowUpRight, XCircle, User } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -72,9 +73,9 @@ const Handovers = () => {
   const { data: profileMap } = useQuery({
     queryKey: ["profile-map"],
     queryFn: async () => {
-      const { data } = await supabase.from("profiles").select("user_id, full_name");
-      const map: Record<string, string> = {};
-      (data || []).forEach((p) => { map[p.user_id] = p.full_name; });
+      const { data } = await supabase.from("profiles").select("user_id, full_name, avatar_url");
+      const map: Record<string, { name: string; avatar: string | null }> = {};
+      (data || []).forEach((p) => { map[p.user_id] = { name: p.full_name, avatar: p.avatar_url }; });
       return map;
     },
   });
@@ -151,7 +152,21 @@ const Handovers = () => {
     else { toast.success("Handover rejected — amount returned to sender"); qc.invalidateQueries({ queryKey: ["handovers"] }); }
   };
 
-  const getName = (userId: string | null) => profileMap?.[userId || ""] || "Unknown";
+  const getProfile = (userId: string | null) => profileMap?.[userId || ""] || { name: "Unknown", avatar: null };
+  const getName = (userId: string | null) => getProfile(userId).name;
+
+  const UserAvatar = ({ userId, size = "sm" }: { userId: string | null; size?: "sm" | "md" }) => {
+    const p = getProfile(userId);
+    const cls = size === "md" ? "h-10 w-10" : "h-8 w-8";
+    return (
+      <Avatar className={cls}>
+        <AvatarImage src={p.avatar || undefined} alt={p.name} />
+        <AvatarFallback className="bg-primary/10 text-primary text-xs">
+          {p.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase() || <User className="h-3.5 w-3.5" />}
+        </AvatarFallback>
+      </Avatar>
+    );
+  };
 
   if (isLoading) {
     return <div className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
@@ -211,10 +226,13 @@ const Handovers = () => {
           {incoming.map((item) => (
             <div key={item.id} className="rounded-xl border bg-card p-4 border-l-4 border-l-warning">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div>
-                  <p className="font-semibold">₹{(Number(item.cash_amount) + Number(item.upi_amount)).toLocaleString()}</p>
-                  <p className="text-sm text-muted-foreground">From: {getName(item.user_id)} · {new Date(item.created_at).toLocaleDateString()}</p>
-                  {item.notes && <p className="text-sm mt-1 italic text-muted-foreground">"{item.notes}"</p>}
+                <div className="flex items-start gap-3">
+                  <UserAvatar userId={item.user_id} size="md" />
+                  <div>
+                    <p className="font-semibold">₹{(Number(item.cash_amount) + Number(item.upi_amount)).toLocaleString()}</p>
+                    <p className="text-sm text-muted-foreground">From: <span className="font-medium text-foreground">{getName(item.user_id)}</span> · {new Date(item.created_at).toLocaleDateString()}</p>
+                    {item.notes && <p className="text-sm mt-1 italic text-muted-foreground">"{item.notes}"</p>}
+                  </div>
                 </div>
                 <div className="flex gap-2">
                   <Button size="sm" onClick={() => handleConfirm(item.id)} className="gap-1">
@@ -245,7 +263,8 @@ const Handovers = () => {
               item.status === "confirmed" ? "border-l-success" :
               item.status === "rejected" ? "border-l-destructive" : "border-l-warning"
             }`}>
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div className="flex items-start gap-3">
+                <UserAvatar userId={item.handed_to} />
                 <div>
                   <div className="flex items-center gap-2">
                     <p className="font-semibold">₹{(Number(item.cash_amount) + Number(item.upi_amount)).toLocaleString()}</p>
@@ -254,7 +273,7 @@ const Handovers = () => {
                       label={item.status === "confirmed" ? "Confirmed" : item.status === "rejected" ? "Rejected" : "Awaiting"}
                     />
                   </div>
-                  <p className="text-sm text-muted-foreground">To: {getName(item.handed_to)} · {new Date(item.created_at).toLocaleDateString()}</p>
+                  <p className="text-sm text-muted-foreground">To: <span className="font-medium text-foreground">{getName(item.handed_to)}</span> · {new Date(item.created_at).toLocaleDateString()}</p>
                   {item.notes && <p className="text-sm mt-1 italic text-muted-foreground">"{item.notes}"</p>}
                 </div>
               </div>
@@ -270,7 +289,8 @@ const Handovers = () => {
               item.status === "confirmed" ? "border-l-success" :
               item.status === "rejected" ? "border-l-destructive" : "border-l-warning"
             }`}>
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div className="flex items-start gap-3">
+                <UserAvatar userId={item.user_id} />
                 <div>
                   <div className="flex items-center gap-2">
                     <p className="font-semibold">₹{(Number(item.cash_amount) + Number(item.upi_amount)).toLocaleString()}</p>
@@ -279,7 +299,7 @@ const Handovers = () => {
                       label={item.status === "confirmed" ? "Confirmed" : item.status === "rejected" ? "Rejected" : "Pending"}
                     />
                   </div>
-                  <p className="text-sm text-muted-foreground">From: {getName(item.user_id)} · {new Date(item.created_at).toLocaleDateString()}</p>
+                  <p className="text-sm text-muted-foreground">From: <span className="font-medium text-foreground">{getName(item.user_id)}</span> · {new Date(item.created_at).toLocaleDateString()}</p>
                   {item.notes && <p className="text-sm mt-1 italic text-muted-foreground">"{item.notes}"</p>}
                 </div>
               </div>
