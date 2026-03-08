@@ -13,9 +13,6 @@ import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
-import {
   Loader2, ArrowLeft, DollarSign, ShoppingCart, Banknote,
   MapPin, Store as StoreIcon, Phone, User, Tag, Navigation, Calendar,
   Pencil, X, Save, AlertTriangle, Package, ScanLine, Trash2,
