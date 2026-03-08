@@ -57,6 +57,7 @@ const Products = () => {
       toast.error(error.message);
     } else {
       toast.success("Product added");
+      logActivity(user!.id, "Added product", "product", name);
       setShowAdd(false);
       setName(""); setSku(""); setPrice(""); setUnit("PCS"); setCategory("");
       qc.invalidateQueries({ queryKey: ["products"] });

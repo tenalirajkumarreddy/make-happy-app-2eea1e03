@@ -58,6 +58,7 @@ const Customers = () => {
       toast.error(error.message);
     } else {
       toast.success("Customer added");
+      logActivity(user!.id, "Added customer", "customer", name);
       setShowAdd(false);
       setName(""); setPhone(""); setEmail(""); setAddress("");
       qc.invalidateQueries({ queryKey: ["customers"] });
