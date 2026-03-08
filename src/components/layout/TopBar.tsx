@@ -1,4 +1,4 @@
-import { Bell, ChevronDown, LogOut, Moon, Sun, Check, CheckCheck } from "lucide-react";
+import { Bell, ChevronDown, LogOut, Moon, Sun, Check, CheckCheck, WifiOff, RefreshCw } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   DropdownMenu,
