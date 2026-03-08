@@ -38,6 +38,7 @@ const StoreDetail = () => {
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
+  const [showQrScanner, setShowQrScanner] = useState(false);
   const [form, setForm] = useState({
     name: "",
     phone: "",
