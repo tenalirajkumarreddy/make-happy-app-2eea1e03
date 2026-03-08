@@ -229,6 +229,11 @@ const StoreTypes = () => {
                 </SelectContent>
               </Select>
             </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div><Label>Credit Limit (KYC) ₹</Label><Input type="number" min={0} value={creditLimitKyc} onChange={(e) => setCreditLimitKyc(e.target.value)} className="mt-1" placeholder="e.g., 5000" /></div>
+              <div><Label>Credit Limit (No KYC) ₹</Label><Input type="number" min={0} value={creditLimitNoKyc} onChange={(e) => setCreditLimitNoKyc(e.target.value)} className="mt-1" placeholder="e.g., 1000" /></div>
+            </div>
+            <p className="text-xs text-muted-foreground">Set 0 for no credit limit. These apply per store of this type.</p>
             <Button type="submit" className="w-full" disabled={saving}>
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {editingType ? "Update Store Type" : "Add Store Type"}
