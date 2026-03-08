@@ -4,8 +4,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  DollarSign, Users, Store, ShoppingCart, TrendingUp, Banknote, Smartphone, Clock, Loader2,
+  DollarSign, Users, Store, ShoppingCart, TrendingUp, Banknote, Smartphone, Clock,
 } from "lucide-react";
+import { DashboardSkeleton } from "@/components/shared/DashboardSkeleton";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
 } from "recharts";
@@ -77,7 +78,7 @@ const Dashboard = () => {
   });
 
   if (isLoading) {
-    return <div className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+    return <DashboardSkeleton />;
   }
 
   const s = stats!;

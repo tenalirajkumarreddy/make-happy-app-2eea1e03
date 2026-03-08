@@ -7,6 +7,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2, DollarSign } from "lucide-react";
+import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -116,7 +117,7 @@ const Stores = () => {
   ];
 
   if (isLoading) {
-    return <div className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+    return <TableSkeleton columns={7} />;
   }
 
   return (

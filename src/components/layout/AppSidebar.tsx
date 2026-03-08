@@ -121,7 +121,12 @@ export function AppSidebar() {
       {/* Search - desktop only */}
       {!collapsed && (
         <div className="px-3 pt-4 pb-2">
-          <button className="flex w-full items-center gap-2 rounded-lg bg-sidebar-accent px-3 py-2 text-xs text-sidebar-muted hover:text-sidebar-foreground transition-colors">
+          <button
+            onClick={() => {
+              document.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }));
+            }}
+            className="flex w-full items-center gap-2 rounded-lg bg-sidebar-accent px-3 py-2 text-xs text-sidebar-muted hover:text-sidebar-foreground transition-colors"
+          >
             <Search className="h-3.5 w-3.5" />
             <span>Search...</span>
             <kbd className="ml-auto rounded bg-sidebar-border px-1.5 py-0.5 text-[10px] font-mono">⌘K</kbd>

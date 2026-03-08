@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { logActivity } from "@/lib/activityLogger";
 import { Loader2 } from "lucide-react";
+import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -86,11 +87,7 @@ const Customers = () => {
   ];
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+    return <TableSkeleton columns={7} />;
   }
 
   return (
