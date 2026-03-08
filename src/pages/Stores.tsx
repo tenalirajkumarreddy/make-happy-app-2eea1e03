@@ -14,7 +14,7 @@ import { DollarSign, Store, Settings2, Upload } from "lucide-react";
 import { usePermission } from "@/hooks/usePermission";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
