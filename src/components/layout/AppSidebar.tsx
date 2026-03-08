@@ -22,6 +22,7 @@ import {
   HandCoins,
   FileText,
   Search,
+  Map,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -42,6 +43,7 @@ const mainNav: NavItem[] = [
   { label: "Transactions", path: "/transactions", icon: Receipt },
   { label: "Orders", path: "/orders", icon: ClipboardList, badge: 5 },
   { label: "Handovers", path: "/handovers", icon: HandCoins },
+  { label: "Map", path: "/map", icon: Map },
 ];
 
 const secondaryNav: NavItem[] = [
