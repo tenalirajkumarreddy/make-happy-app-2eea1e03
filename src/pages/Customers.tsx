@@ -73,7 +73,7 @@ const Customers = () => {
 
   const columns = [
     { header: "ID", accessor: "display_id" as const, className: "font-mono text-xs" },
-    { header: "Name", accessor: "name" as const, className: "font-medium" },
+    { header: "Name", accessor: "name" as const, className: "font-medium cursor-pointer text-primary hover:underline" },
     { header: "Phone", accessor: (row: any) => row.phone || "—", className: "text-muted-foreground text-sm" },
     { header: "Stores", accessor: (row: any) => row.stores?.length || 0, className: "text-center" },
     { header: "Outstanding", accessor: (row: any) => `₹${Number(row.opening_balance).toLocaleString()}` },
