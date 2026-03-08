@@ -157,6 +157,10 @@ const SettingsPage = () => {
           <DataTable columns={storeTypeColumns} data={storeTypes || []} searchKey="name" searchPlaceholder="Search store types..." />
         </TabsContent>
 
+        <TabsContent value="pricing" className="mt-4">
+          <PricingTab isAdmin={isAdmin} />
+        </TabsContent>
+
         <TabsContent value="features" className="mt-4 space-y-4">
           <div className="rounded-xl border bg-card p-6 space-y-5 max-w-lg">
             <h3 className="font-semibold">Feature Toggles</h3>

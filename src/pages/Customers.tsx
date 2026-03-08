@@ -118,6 +118,13 @@ const Customers = () => {
           </form>
         </DialogContent>
       </Dialog>
+
+      <KycReviewDialog
+        customer={kycCustomer}
+        open={!!kycCustomer}
+        onOpenChange={(open) => { if (!open) setKycCustomer(null); }}
+        onDone={() => { setKycCustomer(null); qc.invalidateQueries({ queryKey: ["customers"] }); }}
+      />
     </div>
   );
 };
