@@ -52,6 +52,7 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
   const [state, setState] = useState("");
   const [pincode, setPincode] = useState("");
   const [address, setAddress] = useState("");
+  const [openingBalance, setOpeningBalance] = useState("");
   const [locating, setLocating] = useState(false);
 
   // Pricing step
@@ -168,6 +169,7 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
     setName(""); setStoreTypeId(""); setRouteId(""); setPhone("");
     setPhotoUrl(""); setLat(null); setLng(null);
     setStreet(""); setArea(""); setCity(""); setDistrict(""); setState(""); setPincode(""); setAddress("");
+    setOpeningBalance("");
     setPriceMap({});
   };
 
@@ -203,6 +205,7 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
       const storeCount = (allStores?.length || 0) + 1;
       const storeDisplayId = `STR-${String(storeCount).padStart(6, "0")}`;
 
+      const ob = openingBalance ? Number(openingBalance) : 0;
       const { data: newStore, error: storeErr } = await supabase.from("stores").insert({
         display_id: storeDisplayId,
         name,
@@ -219,6 +222,8 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
         district: district || null,
         state: state || null,
         pincode: pincode || null,
+        opening_balance: ob,
+        outstanding: ob,
       }).select("id").single();
 
       if (storeErr) { toast.error(storeErr.message); setSaving(false); return; }
@@ -361,6 +366,12 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
               <div><Label className="text-xs">District</Label><Input value={district} onChange={e => setDistrict(e.target.value)} className="mt-0.5 h-8 text-sm" /></div>
               <div><Label className="text-xs">State</Label><Input value={state} onChange={e => setState(e.target.value)} className="mt-0.5 h-8 text-sm" /></div>
               <div><Label className="text-xs">Pincode</Label><Input value={pincode} onChange={e => setPincode(e.target.value)} className="mt-0.5 h-8 text-sm" /></div>
+            </div>
+
+            <div>
+              <Label>Opening Balance</Label>
+              <Input type="number" value={openingBalance} onChange={e => setOpeningBalance(e.target.value)} className="mt-1" placeholder="0 (can be negative)" />
+              <p className="text-[11px] text-muted-foreground mt-0.5">Enter negative for advance/credit, positive for dues</p>
             </div>
 
             <div className="flex gap-2">
