@@ -100,6 +100,24 @@ const Sales = () => {
     },
   });
 
+  // Fetch store types for credit limits
+  const { data: storeTypes } = useQuery({
+    queryKey: ["store-types-credit"],
+    queryFn: async () => {
+      const { data } = await supabase.from("store_types").select("id, credit_limit_kyc, credit_limit_no_kyc");
+      return data || [];
+    },
+  });
+
+  // Fetch customer KYC status for credit limit determination
+  const { data: customers } = useQuery({
+    queryKey: ["customers-kyc-for-sale"],
+    queryFn: async () => {
+      const { data } = await supabase.from("customers").select("id, kyc_status, credit_limit_override");
+      return data || [];
+    },
+  });
+
   const selectedStore = stores?.find((s) => s.id === storeId);
   const selectedStoreTypeId = selectedStore?.store_type_id;
 
