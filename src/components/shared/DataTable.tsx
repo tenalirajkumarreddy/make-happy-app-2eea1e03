@@ -46,6 +46,7 @@ export function DataTable<T extends Record<string, any>>({
   searchKey,
   onRowClick,
   pageSize: defaultPageSize = 10,
+  renderMobileCard,
 }: DataTableProps<T>) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
