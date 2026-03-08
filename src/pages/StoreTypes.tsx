@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, Plus, Pencil } from "lucide-react";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -22,6 +22,7 @@ const StoreTypes = () => {
   const isAdmin = role === "super_admin";
 
   const [showAdd, setShowAdd] = useState(false);
+  const [editingType, setEditingType] = useState<any>(null);
   const [newTypeName, setNewTypeName] = useState("");
   const [newOrderType, setNewOrderType] = useState("simple");
   const [saving, setSaving] = useState(false);
@@ -35,21 +36,39 @@ const StoreTypes = () => {
     },
   });
 
-  const handleAdd = async (e: React.FormEvent) => {
+  const openEdit = (row: any) => {
+    setEditingType(row);
+    setNewTypeName(row.name);
+    setNewOrderType(row.order_type);
+    setShowAdd(true);
+  };
+
+  const handleClose = () => {
+    setShowAdd(false);
+    setEditingType(null);
+    setNewTypeName("");
+    setNewOrderType("simple");
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    const { error } = await supabase.from("store_types").insert({
-      name: newTypeName,
-      order_type: newOrderType,
-    });
-    setSaving(false);
-    if (error) toast.error(error.message);
-    else {
-      toast.success("Store type added");
-      setShowAdd(false);
-      setNewTypeName("");
-      setNewOrderType("simple");
-      qc.invalidateQueries({ queryKey: ["store-types"] });
+    if (editingType) {
+      const { error } = await supabase.from("store_types").update({
+        name: newTypeName,
+        order_type: newOrderType,
+      }).eq("id", editingType.id);
+      setSaving(false);
+      if (error) toast.error(error.message);
+      else { toast.success("Store type updated"); handleClose(); qc.invalidateQueries({ queryKey: ["store-types"] }); }
+    } else {
+      const { error } = await supabase.from("store_types").insert({
+        name: newTypeName,
+        order_type: newOrderType,
+      });
+      setSaving(false);
+      if (error) toast.error(error.message);
+      else { toast.success("Store type added"); handleClose(); qc.invalidateQueries({ queryKey: ["store-types"] }); }
     }
   };
 
@@ -71,9 +90,14 @@ const StoreTypes = () => {
     )},
     { header: "Status", accessor: (row: any) => <StatusBadge status={row.is_active ? "active" : "inactive"} /> },
     ...(isAdmin ? [{ header: "Actions", accessor: (row: any) => (
-      <Button variant={row.is_active ? "destructive" : "default"} size="sm" className="h-7 text-xs" onClick={() => toggleActive(row.id, row.is_active)}>
-        {row.is_active ? "Disable" : "Enable"}
-      </Button>
+      <div className="flex gap-2">
+        <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => openEdit(row)}>
+          <Pencil className="h-3 w-3 mr-1" /> Edit
+        </Button>
+        <Button variant={row.is_active ? "destructive" : "default"} size="sm" className="h-7 text-xs" onClick={() => toggleActive(row.id, row.is_active)}>
+          {row.is_active ? "Disable" : "Enable"}
+        </Button>
+      </div>
     )}] : []),
   ];
 
@@ -89,10 +113,10 @@ const StoreTypes = () => {
 
       <DataTable columns={columns} data={storeTypes || []} searchKey="name" searchPlaceholder="Search store types..." />
 
-      <Dialog open={showAdd} onOpenChange={setShowAdd}>
+      <Dialog open={showAdd} onOpenChange={handleClose}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Add Store Type</DialogTitle></DialogHeader>
-          <form onSubmit={handleAdd} className="space-y-4">
+          <DialogHeader><DialogTitle>{editingType ? "Edit Store Type" : "Add Store Type"}</DialogTitle></DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div><Label>Type Name</Label><Input value={newTypeName} onChange={(e) => setNewTypeName(e.target.value)} required className="mt-1" placeholder="e.g., Retail, Wholesale" /></div>
             <div>
               <Label>Order Type</Label>
@@ -106,7 +130,7 @@ const StoreTypes = () => {
             </div>
             <Button type="submit" className="w-full" disabled={saving}>
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Add Store Type
+              {editingType ? "Update Store Type" : "Add Store Type"}
             </Button>
           </form>
         </DialogContent>
