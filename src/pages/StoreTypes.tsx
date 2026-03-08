@@ -36,6 +36,8 @@ const StoreTypes = () => {
   const [deletingType, setDeletingType] = useState<any>(null);
   const [newTypeName, setNewTypeName] = useState("");
   const [newOrderType, setNewOrderType] = useState("simple");
+  const [creditLimitKyc, setCreditLimitKyc] = useState("");
+  const [creditLimitNoKyc, setCreditLimitNoKyc] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -52,6 +54,8 @@ const StoreTypes = () => {
     setEditingType(row);
     setNewTypeName(row.name);
     setNewOrderType(row.order_type);
+    setCreditLimitKyc(String(row.credit_limit_kyc || 0));
+    setCreditLimitNoKyc(String(row.credit_limit_no_kyc || 0));
     setShowAdd(true);
   };
 
@@ -61,6 +65,8 @@ const StoreTypes = () => {
     setEditingType(null);
     setNewTypeName("");
     setNewOrderType("simple");
+    setCreditLimitKyc("");
+    setCreditLimitNoKyc("");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -70,6 +76,8 @@ const StoreTypes = () => {
       const { error } = await supabase.from("store_types").update({
         name: newTypeName,
         order_type: newOrderType,
+        credit_limit_kyc: parseFloat(creditLimitKyc) || 0,
+        credit_limit_no_kyc: parseFloat(creditLimitNoKyc) || 0,
       }).eq("id", editingType.id);
       setSaving(false);
       if (error) toast.error(error.message);
@@ -78,6 +86,8 @@ const StoreTypes = () => {
       const { error } = await supabase.from("store_types").insert({
         name: newTypeName,
         order_type: newOrderType,
+        credit_limit_kyc: parseFloat(creditLimitKyc) || 0,
+        credit_limit_no_kyc: parseFloat(creditLimitNoKyc) || 0,
       });
       setSaving(false);
       if (error) toast.error(error.message);
@@ -116,6 +126,12 @@ const StoreTypes = () => {
   const columns = [
     { header: "Name", accessor: "name" as const, className: "font-medium" },
     { header: "Order Type", accessor: (row: any) => <Badge variant="secondary">{row.order_type}</Badge> },
+    { header: "Credit (KYC)", accessor: (row: any) => (
+      <span className="text-sm font-medium">₹{Number(row.credit_limit_kyc || 0).toLocaleString()}</span>
+    )},
+    { header: "Credit (No KYC)", accessor: (row: any) => (
+      <span className="text-sm text-muted-foreground">₹{Number(row.credit_limit_no_kyc || 0).toLocaleString()}</span>
+    )},
     { header: "Auto Order", accessor: (row: any) => (
       <Switch checked={row.auto_order_enabled} onCheckedChange={() => toggleAutoOrder(row.id, row.auto_order_enabled)} disabled={!isAdmin} />
     )},
@@ -143,6 +159,16 @@ const StoreTypes = () => {
           <StatusBadge status={row.is_active ? "active" : "inactive"} />
         </div>
         <Badge variant="secondary" className="text-[10px] shrink-0">{row.order_type}</Badge>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="rounded-lg bg-muted/50 p-2 text-center">
+          <p className="text-[10px] text-muted-foreground uppercase">Credit (KYC)</p>
+          <p className="text-sm font-medium">₹{Number(row.credit_limit_kyc || 0).toLocaleString()}</p>
+        </div>
+        <div className="rounded-lg bg-muted/50 p-2 text-center">
+          <p className="text-[10px] text-muted-foreground uppercase">Credit (No KYC)</p>
+          <p className="text-sm font-medium">₹{Number(row.credit_limit_no_kyc || 0).toLocaleString()}</p>
+        </div>
       </div>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -203,6 +229,11 @@ const StoreTypes = () => {
                 </SelectContent>
               </Select>
             </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div><Label>Credit Limit (KYC) ₹</Label><Input type="number" min={0} value={creditLimitKyc} onChange={(e) => setCreditLimitKyc(e.target.value)} className="mt-1" placeholder="e.g., 5000" /></div>
+              <div><Label>Credit Limit (No KYC) ₹</Label><Input type="number" min={0} value={creditLimitNoKyc} onChange={(e) => setCreditLimitNoKyc(e.target.value)} className="mt-1" placeholder="e.g., 1000" /></div>
+            </div>
+            <p className="text-xs text-muted-foreground">Set 0 for no credit limit. These apply per store of this type.</p>
             <Button type="submit" className="w-full" disabled={saving}>
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {editingType ? "Update Store Type" : "Add Store Type"}

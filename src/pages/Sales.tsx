@@ -100,6 +100,24 @@ const Sales = () => {
     },
   });
 
+  // Fetch store types for credit limits
+  const { data: storeTypes } = useQuery({
+    queryKey: ["store-types-credit"],
+    queryFn: async () => {
+      const { data } = await supabase.from("store_types").select("id, credit_limit_kyc, credit_limit_no_kyc");
+      return data || [];
+    },
+  });
+
+  // Fetch customer KYC status for credit limit determination
+  const { data: customers } = useQuery({
+    queryKey: ["customers-kyc-for-sale"],
+    queryFn: async () => {
+      const { data } = await supabase.from("customers").select("id, kyc_status, credit_limit_override");
+      return data || [];
+    },
+  });
+
   const selectedStore = stores?.find((s) => s.id === storeId);
   const selectedStoreTypeId = selectedStore?.store_type_id;
 
@@ -166,6 +184,27 @@ const Sales = () => {
   const outstandingFromSale = totalAmount - cash - upi;
   const oldOutstanding = Number(selectedStore?.outstanding || 0);
   const newOutstanding = oldOutstanding + outstandingFromSale;
+
+  // Credit limit calculation
+  const creditLimitInfo = (() => {
+    if (!selectedStore || !storeTypes || !customers) return null;
+    const storeType = storeTypes.find((st) => st.id === selectedStore.store_type_id);
+    if (!storeType) return null;
+    const customer = customers.find((c) => c.id === selectedStore.customer_id);
+    if (!customer) return null;
+
+    // Check for customer-level override first
+    if (customer.credit_limit_override !== null && customer.credit_limit_override !== undefined) {
+      return { limit: Number(customer.credit_limit_override), source: "customer override", isKyc: customer.kyc_status === "approved" };
+    }
+
+    const isKyc = customer.kyc_status === "approved";
+    const limit = isKyc ? Number(storeType.credit_limit_kyc || 0) : Number(storeType.credit_limit_no_kyc || 0);
+    return { limit, source: isKyc ? "KYC" : "Non-KYC", isKyc };
+  })();
+
+  const creditExceeded = creditLimitInfo && creditLimitInfo.limit > 0 && newOutstanding > creditLimitInfo.limit;
+  const creditWarning = creditLimitInfo && creditLimitInfo.limit > 0 && newOutstanding > creditLimitInfo.limit * 0.8 && !creditExceeded;
 
   const addItem = () => setItems([...items, { product_id: "", quantity: 1, unit_price: 0 }]);
   const removeItem = (idx: number) => setItems(items.filter((_, i) => i !== idx));
@@ -515,7 +554,12 @@ const Sales = () => {
                 </div>
               )}
               {selectedStore && (
-                <p className="text-xs text-muted-foreground mt-1">Current outstanding: ₹{oldOutstanding.toLocaleString()}</p>
+                <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
+                  <p>Current outstanding: ₹{oldOutstanding.toLocaleString()}</p>
+                  {creditLimitInfo && creditLimitInfo.limit > 0 && (
+                    <p>Credit limit ({creditLimitInfo.source}): ₹{creditLimitInfo.limit.toLocaleString()} — <span className={oldOutstanding > creditLimitInfo.limit * 0.8 ? "text-destructive font-medium" : "text-muted-foreground"}>{Math.round((oldOutstanding / creditLimitInfo.limit) * 100)}% used</span></p>
+                  )}
+                </div>
               )}
             </div>
 
@@ -572,12 +616,26 @@ const Sales = () => {
             <div className="rounded-lg border bg-muted/30 p-3 space-y-1 text-sm">
               <div className="flex justify-between"><span>Payment</span><span>₹{(cash + upi).toLocaleString()}</span></div>
               <div className="flex justify-between font-semibold"><span>New Outstanding</span><span className={newOutstanding > oldOutstanding ? "text-destructive" : "text-success"}>₹{newOutstanding.toLocaleString()}</span></div>
+              {creditLimitInfo && creditLimitInfo.limit > 0 && (
+                <div className="flex justify-between text-xs"><span>Credit Limit ({creditLimitInfo.source})</span><span>₹{creditLimitInfo.limit.toLocaleString()}</span></div>
+              )}
               {isPosUser && (cash + upi) !== totalAmount && totalAmount > 0 && (
                 <p className="text-xs text-destructive mt-1">⚠ POS sales require full payment (Cash + UPI = Total)</p>
               )}
             </div>
 
-            <Button type="submit" className="w-full" disabled={saving}>
+            {creditExceeded && (
+              <div className="rounded-lg border border-destructive bg-destructive/10 p-3 text-sm text-destructive">
+                🚫 <strong>Credit limit exceeded!</strong> New outstanding (₹{newOutstanding.toLocaleString()}) exceeds the {creditLimitInfo?.source} credit limit of ₹{creditLimitInfo?.limit.toLocaleString()}. Increase payment or reduce items.
+              </div>
+            )}
+            {creditWarning && (
+              <div className="rounded-lg border border-yellow-500/50 bg-yellow-500/10 p-3 text-sm text-yellow-700 dark:text-yellow-400">
+                ⚠️ Outstanding approaching credit limit ({Math.round((newOutstanding / creditLimitInfo!.limit) * 100)}% used).
+              </div>
+            )}
+
+            <Button type="submit" className="w-full" disabled={saving || !!creditExceeded}>
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Record Sale
             </Button>
