@@ -94,20 +94,15 @@ const AccessControl = () => {
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     setSavingInvite(true);
-    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-      email: inviteEmail,
-      password: Math.random().toString(36).slice(-12) + "A1!",
-      options: { data: { full_name: inviteName } },
+    const { data, error } = await supabase.functions.invoke("invite-staff", {
+      body: { email: inviteEmail, full_name: inviteName, role: inviteRole },
     });
-    if (signUpError) { toast.error(signUpError.message); setSavingInvite(false); return; }
-    if (signUpData.user) {
-      const { error: roleError } = await supabase.from("user_roles")
-        .update({ role: inviteRole as any })
-        .eq("user_id", signUpData.user.id);
-      if (roleError) toast.error("Account created but role assignment failed: " + roleError.message);
-    }
-    toast.success(`Staff account created for ${inviteName}.`);
     setSavingInvite(false);
+    if (error || data?.error) {
+      toast.error(data?.error || error?.message || "Failed to invite staff");
+      return;
+    }
+    toast.success(`Staff account created for ${inviteName}. A password reset email will be sent.`);
     setShowInvite(false);
     setInviteEmail(""); setInviteName(""); setInviteRole("agent");
     qc.invalidateQueries({ queryKey: ["all-users"] });
