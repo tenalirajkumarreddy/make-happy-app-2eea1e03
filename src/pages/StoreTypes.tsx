@@ -43,7 +43,8 @@ const StoreTypes = () => {
     setShowAdd(true);
   };
 
-  const handleClose = () => {
+  const handleClose = (open?: boolean) => {
+    if (open) return; // Dialog is opening, don't interfere
     setShowAdd(false);
     setEditingType(null);
     setNewTypeName("");
