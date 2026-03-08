@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { logActivity } from "@/lib/activityLogger";
 import { Loader2 } from "lucide-react";
+import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
