@@ -4,8 +4,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  DollarSign, Users, Store, ShoppingCart, TrendingUp, Banknote, Smartphone, Clock, Loader2,
+  DollarSign, Users, Store, ShoppingCart, TrendingUp, Banknote, Smartphone, Clock,
 } from "lucide-react";
+import { DashboardSkeleton } from "@/components/shared/DashboardSkeleton";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
 } from "recharts";
