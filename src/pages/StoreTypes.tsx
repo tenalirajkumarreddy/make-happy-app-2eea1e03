@@ -9,9 +9,19 @@ import { Label } from "@/components/ui/label";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2, Plus, Pencil } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
@@ -23,9 +33,11 @@ const StoreTypes = () => {
 
   const [showAdd, setShowAdd] = useState(false);
   const [editingType, setEditingType] = useState<any>(null);
+  const [deletingType, setDeletingType] = useState<any>(null);
   const [newTypeName, setNewTypeName] = useState("");
   const [newOrderType, setNewOrderType] = useState("simple");
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const { data: storeTypes, isLoading } = useQuery({
     queryKey: ["store-types"],
@@ -44,7 +56,7 @@ const StoreTypes = () => {
   };
 
   const handleClose = (open?: boolean) => {
-    if (open) return; // Dialog is opening, don't interfere
+    if (open) return;
     setShowAdd(false);
     setEditingType(null);
     setNewTypeName("");
@@ -73,6 +85,24 @@ const StoreTypes = () => {
     }
   };
 
+  const handleDelete = async () => {
+    if (!deletingType) return;
+    setDeleting(true);
+    const { error } = await supabase.from("store_types").delete().eq("id", deletingType.id);
+    setDeleting(false);
+    if (error) {
+      if (error.message.includes("violates foreign key")) {
+        toast.error("Cannot delete: this store type is in use by stores or routes");
+      } else {
+        toast.error(error.message);
+      }
+    } else {
+      toast.success("Store type deleted");
+      qc.invalidateQueries({ queryKey: ["store-types"] });
+    }
+    setDeletingType(null);
+  };
+
   const toggleAutoOrder = async (id: string, current: boolean) => {
     await supabase.from("store_types").update({ auto_order_enabled: !current }).eq("id", id);
     qc.invalidateQueries({ queryKey: ["store-types"] });
@@ -98,9 +128,47 @@ const StoreTypes = () => {
         <Button variant={row.is_active ? "destructive" : "default"} size="sm" className="h-7 text-xs" onClick={() => toggleActive(row.id, row.is_active)}>
           {row.is_active ? "Disable" : "Enable"}
         </Button>
+        <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive hover:text-destructive" onClick={() => setDeletingType(row)}>
+          <Trash2 className="h-3 w-3" />
+        </Button>
       </div>
     )}] : []),
   ];
+
+  const renderMobileCard = (row: any) => (
+    <div className="rounded-xl border bg-card p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 min-w-0">
+          <h3 className="text-sm font-semibold text-foreground truncate">{row.name}</h3>
+          <StatusBadge status={row.is_active ? "active" : "inactive"} />
+        </div>
+        <Badge variant="secondary" className="text-[10px] shrink-0">{row.order_type}</Badge>
+      </div>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">Auto Order</span>
+          <Switch
+            checked={row.auto_order_enabled}
+            onCheckedChange={() => toggleAutoOrder(row.id, row.auto_order_enabled)}
+            disabled={!isAdmin}
+          />
+        </div>
+        {isAdmin && (
+          <div className="flex items-center gap-1.5">
+            <Button variant="outline" size="sm" className="h-7 text-xs px-2" onClick={() => openEdit(row)}>
+              <Pencil className="h-3 w-3 mr-1" /> Edit
+            </Button>
+            <Button variant={row.is_active ? "destructive" : "default"} size="sm" className="h-7 text-xs px-2" onClick={() => toggleActive(row.id, row.is_active)}>
+              {row.is_active ? "Disable" : "Enable"}
+            </Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeletingType(row)}>
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 
   if (isLoading) return <TableSkeleton columns={5} />;
 
@@ -112,7 +180,13 @@ const StoreTypes = () => {
         primaryAction={isAdmin ? { label: "Add Store Type", icon: Plus, onClick: () => setShowAdd(true) } : undefined}
       />
 
-      <DataTable columns={columns} data={storeTypes || []} searchKey="name" searchPlaceholder="Search store types..." />
+      <DataTable
+        columns={columns}
+        data={storeTypes || []}
+        searchKey="name"
+        searchPlaceholder="Search store types..."
+        renderMobileCard={renderMobileCard}
+      />
 
       <Dialog open={showAdd} onOpenChange={handleClose}>
         <DialogContent>
@@ -136,6 +210,24 @@ const StoreTypes = () => {
           </form>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!deletingType} onOpenChange={(open) => !open && setDeletingType(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Store Type</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete <strong>{deletingType?.name}</strong>? This cannot be undone. Store types that are in use by stores or routes cannot be deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} disabled={deleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
