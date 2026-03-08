@@ -291,6 +291,39 @@ const Orders = () => {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Cancel Order Dialog */}
+      <Dialog open={!!cancelOrderId} onOpenChange={(v) => { if (!v) { setCancelOrderId(null); setCancelReason(""); } }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Cancel Order</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Are you sure you want to cancel order <span className="font-mono font-medium text-foreground">{orders?.find((o) => o.id === cancelOrderId)?.display_id}</span>?
+            </p>
+            <div>
+              <Label>Reason for cancellation</Label>
+              <Select value={cancelReason} onValueChange={setCancelReason}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Select reason" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Out of stock">Out of stock</SelectItem>
+                  <SelectItem value="Customer requested">Customer requested</SelectItem>
+                  <SelectItem value="Duplicate order">Duplicate order</SelectItem>
+                  <SelectItem value="Pricing issue">Pricing issue</SelectItem>
+                  <SelectItem value="Delivery not possible">Delivery not possible</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => { setCancelOrderId(null); setCancelReason(""); }}>Back</Button>
+              <Button variant="destructive" onClick={handleCancel} disabled={cancelling || !cancelReason}>
+                {cancelling && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Confirm Cancel
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
