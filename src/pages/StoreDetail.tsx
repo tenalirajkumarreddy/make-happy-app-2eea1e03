@@ -235,18 +235,6 @@ const StoreDetail = () => {
   const totalCollected = transactions?.reduce((s, r) => s + Number(r.total_amount), 0) || 0;
   const fullAddress = [store.street, store.area, store.city, store.district, store.state, store.pincode].filter(Boolean).join(", ") || store.address || "Not provided";
 
-  // Fetch sale items for detail view
-  const { data: saleItems, isLoading: loadingSaleItems } = useQuery({
-    queryKey: ["sale-items-detail", selectedSaleId],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("sale_items")
-        .select("*, products(name, sku)")
-        .eq("sale_id", selectedSaleId!);
-      return data || [];
-    },
-    enabled: !!selectedSaleId,
-  });
 
   const selectedSale = sales?.find((s) => s.id === selectedSaleId);
 
