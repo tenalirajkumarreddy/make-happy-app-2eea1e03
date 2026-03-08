@@ -116,23 +116,38 @@ export function StoreLedger({ sales, transactions, openingBalance, profileMap }:
   const columns = [
     {
       header: "Date",
-      accessor: (row: LedgerEntry) => new Date(row.date).toLocaleDateString("en-IN"),
+      accessor: (row: LedgerEntry) => row.date ? new Date(row.date).toLocaleDateString("en-IN") : "—",
       className: "text-muted-foreground text-xs",
     },
     {
       header: "Description",
-      accessor: (row: LedgerEntry) => (
-        <div>
-          <p className="font-medium text-sm">{row.description}</p>
-          <p className="text-[11px] text-muted-foreground uppercase">{row.type === "sale" ? "SALE" : row.type === "payment" ? "PAYMENT" : "CORRECTION"}</p>
-          {row.notes && (
-            <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1">
-              <span className="w-0.5 h-3 bg-primary/40 rounded-full inline-block" />
-              <span className="italic">{row.notes}</span>
-            </p>
-          )}
-        </div>
-      ),
+      accessor: (row: LedgerEntry) => {
+        if (row.id === "__opening_balance__") {
+          return (
+            <div className="flex items-center gap-2">
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted shadow-sm">
+                <Tag className="h-3.5 w-3.5 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="font-medium text-sm uppercase tracking-wide text-muted-foreground">Opening Balance</p>
+                <p className="text-sm font-semibold">₹{row.outstanding.toLocaleString()}</p>
+              </div>
+            </div>
+          );
+        }
+        return (
+          <div>
+            <p className="font-medium text-sm">{row.description}</p>
+            <p className="text-[11px] text-muted-foreground uppercase">{row.type === "sale" ? "SALE" : row.type === "payment" ? "PAYMENT" : "CORRECTION"}</p>
+            {row.notes && (
+              <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1">
+                <span className="w-0.5 h-3 bg-primary/40 rounded-full inline-block" />
+                <span className="italic">{row.notes}</span>
+              </p>
+            )}
+          </div>
+        );
+      },
     },
     {
       header: "Debit (-)",
