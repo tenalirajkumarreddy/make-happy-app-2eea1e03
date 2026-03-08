@@ -172,10 +172,10 @@ const Handovers = () => {
   const getName = (userId: string | null) => getProfile(userId).name;
   const getInitials = (name: string) => name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
 
-  const UserAvatar = ({ userId, size = "sm" }: { userId: string | null; size?: "sm" | "md" }) => {
+  const UserAvatar = ({ userId, size = "sm" }: { userId: string | null; size?: "sm" | "md" | "lg" }) => {
     const p = getProfile(userId);
-    const cls = size === "md" ? "h-9 w-9" : "h-7 w-7";
-    const textCls = size === "md" ? "text-xs" : "text-[10px]";
+    const cls = size === "lg" ? "h-10 w-10" : size === "md" ? "h-9 w-9" : "h-7 w-7";
+    const textCls = size === "lg" ? "text-sm" : size === "md" ? "text-xs" : "text-[10px]";
     return (
       <Avatar className={`${cls} ring-2 ring-background`}>
         <AvatarImage src={p.avatar || undefined} alt={p.name} />
@@ -190,17 +190,14 @@ const Handovers = () => {
     const isSender = item.user_id === user?.id;
     const isReceiver = item.handed_to === user?.id;
     const total = Number(item.cash_amount) + Number(item.upi_amount);
-    const statusColor = item.status === "confirmed"
-      ? "text-success" : item.status === "rejected"
-      ? "text-destructive" : "text-warning";
     const statusLabel = item.status === "confirmed" ? "Confirmed" : item.status === "rejected" ? "Rejected" : "Pending";
 
     return (
-      <div className="group flex items-center gap-3 rounded-lg border bg-card px-3.5 py-3 hover:shadow-sm transition-shadow">
+      <div className="group flex items-center gap-4 rounded-lg border bg-card px-4 py-3 hover:shadow-sm transition-shadow">
         {/* Avatars */}
-        <div className="flex items-center -space-x-2 shrink-0">
-          <UserAvatar userId={item.user_id} size="md" />
-          <UserAvatar userId={item.handed_to} size="md" />
+        <div className="flex items-center -space-x-2.5 shrink-0">
+          <UserAvatar userId={item.user_id} size="lg" />
+          <UserAvatar userId={item.handed_to} size="lg" />
         </div>
 
         {/* Info */}
