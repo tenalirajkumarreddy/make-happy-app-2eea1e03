@@ -2,6 +2,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { KycReviewDialog } from "@/components/customers/KycReviewDialog";
+import { ImageUpload } from "@/components/shared/ImageUpload";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -28,6 +29,7 @@ const Customers = () => {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [address, setAddress] = useState("");
+  const [photoUrl, setPhotoUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const qc = useQueryClient();
@@ -58,6 +60,7 @@ const Customers = () => {
       phone: phone || null,
       email: email || null,
       address: address || null,
+      photo_url: photoUrl || null,
     });
     setSaving(false);
     if (error) {
@@ -66,7 +69,7 @@ const Customers = () => {
       toast.success("Customer added");
       logActivity(user!.id, "Added customer", "customer", name);
       setShowAdd(false);
-      setName(""); setPhone(""); setEmail(""); setAddress("");
+      setName(""); setPhone(""); setEmail(""); setAddress(""); setPhotoUrl("");
       qc.invalidateQueries({ queryKey: ["customers"] });
     }
   };
@@ -116,7 +119,12 @@ const Customers = () => {
       hideOnMobile: true,
     }] : []),
     { header: "ID", accessor: "display_id" as const, className: "font-mono text-xs hidden lg:table-cell", hideOnMobile: true },
-    { header: "Name", accessor: "name" as const, className: "font-medium cursor-pointer text-primary hover:underline" },
+    { header: "Name", accessor: (row: any) => (
+      <div className="flex items-center gap-2">
+        {row.photo_url && <img src={row.photo_url} alt="" className="h-8 w-8 rounded-full object-cover" />}
+        <span className="font-medium text-primary hover:underline">{row.name}</span>
+      </div>
+    )},
     { header: "Phone", accessor: (row: any) => row.phone || "—", className: "text-muted-foreground text-sm hidden sm:table-cell" },
     { header: "Stores", accessor: (row: any) => row.stores?.length || 0, className: "text-center hidden sm:table-cell" },
     { header: "Outstanding", accessor: (row: any) => `₹${Number(row.opening_balance).toLocaleString()}` },
@@ -141,7 +149,6 @@ const Customers = () => {
         onAction={() => setShowAdd(true)}
       />
 
-      {/* Bulk actions bar */}
       {canBulk && selected.size > 0 && (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-accent/50 p-3">
           <span className="text-sm font-medium">{selected.size} selected</span>
@@ -159,8 +166,13 @@ const Customers = () => {
             <DialogTitle>Add Customer</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleAdd} className="space-y-4">
-            <div><Label>Name</Label><Input value={name} onChange={e => setName(e.target.value)} required className="mt-1" /></div>
-            <div><Label>Phone</Label><Input value={phone} onChange={e => setPhone(e.target.value)} className="mt-1" placeholder="+91 98765 43210" /></div>
+            <div className="flex items-start gap-4">
+              <ImageUpload folder="customers" currentUrl={photoUrl || null} onUploaded={setPhotoUrl} onRemoved={() => setPhotoUrl("")} />
+              <div className="flex-1 space-y-3">
+                <div><Label>Name</Label><Input value={name} onChange={e => setName(e.target.value)} required className="mt-1" /></div>
+                <div><Label>Phone</Label><Input value={phone} onChange={e => setPhone(e.target.value)} className="mt-1" placeholder="+91 98765 43210" /></div>
+              </div>
+            </div>
             <div><Label>Email</Label><Input type="email" value={email} onChange={e => setEmail(e.target.value)} className="mt-1" /></div>
             <div><Label>Address</Label><Input value={address} onChange={e => setAddress(e.target.value)} className="mt-1" /></div>
             <Button type="submit" className="w-full" disabled={saving}>

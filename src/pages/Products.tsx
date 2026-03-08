@@ -2,6 +2,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
+import { ImageUpload } from "@/components/shared/ImageUpload";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -9,10 +10,7 @@ import { logActivity } from "@/lib/activityLogger";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
+  Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,6 +26,7 @@ const Products = () => {
   const [price, setPrice] = useState("");
   const [unit, setUnit] = useState("PCS");
   const [category, setCategory] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const qc = useQueryClient();
 
@@ -52,6 +51,7 @@ const Products = () => {
       base_price: parseFloat(price) || 0,
       unit,
       category: category || null,
+      image_url: imageUrl || null,
     });
     setSaving(false);
     if (error) {
@@ -60,13 +60,18 @@ const Products = () => {
       toast.success("Product added");
       logActivity(user!.id, "Added product", "product", name);
       setShowAdd(false);
-      setName(""); setSku(""); setPrice(""); setUnit("PCS"); setCategory("");
+      setName(""); setSku(""); setPrice(""); setUnit("PCS"); setCategory(""); setImageUrl("");
       qc.invalidateQueries({ queryKey: ["products"] });
     }
   };
 
   const columns = [
-    { header: "Product Name", accessor: "name" as const, className: "font-medium" },
+    { header: "Product", accessor: (row: any) => (
+      <div className="flex items-center gap-2">
+        {row.image_url && <img src={row.image_url} alt="" className="h-8 w-8 rounded-md object-cover" />}
+        <span className="font-medium">{row.name}</span>
+      </div>
+    )},
     { header: "SKU", accessor: "sku" as const, className: "font-mono text-xs text-muted-foreground hidden sm:table-cell" },
     { header: "Category", accessor: (row: any) => row.category ? <Badge variant="secondary">{row.category}</Badge> : <span className="text-muted-foreground">—</span>, className: "hidden md:table-cell" },
     { header: "Base Price", accessor: (row: any) => `₹${Number(row.base_price).toLocaleString()}` },
@@ -98,8 +103,13 @@ const Products = () => {
             <DialogTitle>Add Product</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleAdd} className="space-y-4">
-            <div><Label>Name</Label><Input value={name} onChange={e => setName(e.target.value)} required className="mt-1" /></div>
-            <div><Label>SKU</Label><Input value={sku} onChange={e => setSku(e.target.value)} required className="mt-1" placeholder="WB-500" /></div>
+            <div className="flex items-start gap-4">
+              <ImageUpload folder="products" currentUrl={imageUrl || null} onUploaded={setImageUrl} onRemoved={() => setImageUrl("")} />
+              <div className="flex-1 space-y-3">
+                <div><Label>Name</Label><Input value={name} onChange={e => setName(e.target.value)} required className="mt-1" /></div>
+                <div><Label>SKU</Label><Input value={sku} onChange={e => setSku(e.target.value)} required className="mt-1" placeholder="WB-500" /></div>
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div><Label>Base Price (₹)</Label><Input type="number" value={price} onChange={e => setPrice(e.target.value)} required className="mt-1" /></div>
               <div><Label>Unit</Label><Input value={unit} onChange={e => setUnit(e.target.value)} className="mt-1" /></div>
