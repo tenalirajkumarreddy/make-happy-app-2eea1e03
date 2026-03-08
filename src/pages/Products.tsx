@@ -28,6 +28,7 @@ const Products = () => {
   const canEdit = role === "super_admin" || role === "manager";
   const [showAdd, setShowAdd] = useState(false);
   const [showMatrix, setShowMatrix] = useState(false);
+  const [showCategories, setShowCategories] = useState(false);
   const [editProduct, setEditProduct] = useState<any>(null);
   const [name, setName] = useState("");
   const [sku, setSku] = useState("");
