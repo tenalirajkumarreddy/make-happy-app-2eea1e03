@@ -126,6 +126,12 @@ const StoreTypes = () => {
   const columns = [
     { header: "Name", accessor: "name" as const, className: "font-medium" },
     { header: "Order Type", accessor: (row: any) => <Badge variant="secondary">{row.order_type}</Badge> },
+    { header: "Credit (KYC)", accessor: (row: any) => (
+      <span className="text-sm font-medium">₹{Number(row.credit_limit_kyc || 0).toLocaleString()}</span>
+    )},
+    { header: "Credit (No KYC)", accessor: (row: any) => (
+      <span className="text-sm text-muted-foreground">₹{Number(row.credit_limit_no_kyc || 0).toLocaleString()}</span>
+    )},
     { header: "Auto Order", accessor: (row: any) => (
       <Switch checked={row.auto_order_enabled} onCheckedChange={() => toggleAutoOrder(row.id, row.auto_order_enabled)} disabled={!isAdmin} />
     )},
