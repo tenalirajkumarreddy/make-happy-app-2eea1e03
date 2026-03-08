@@ -110,7 +110,7 @@ export function TopBar() {
             id: `kyc-${payload.new.id}`,
             message: `KYC submitted by ${payload.new.name}`,
             time: payload.new.kyc_submitted_at || new Date().toISOString(),
-            type: "kyc",
+            type: "kyc" as const,
             read: false,
           }, ...prev].slice(0, 15));
         }
