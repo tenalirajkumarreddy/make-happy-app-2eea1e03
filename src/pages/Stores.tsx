@@ -2,9 +2,11 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
+import { StorePricingDialog } from "@/components/stores/StorePricingDialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2 } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { Loader2, DollarSign } from "lucide-react";
 import { useState } from "react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -18,7 +20,9 @@ import {
 import { toast } from "sonner";
 
 const Stores = () => {
+  const { role } = useAuth();
   const [showAdd, setShowAdd] = useState(false);
+  const [pricingStore, setPricingStore] = useState<any>(null);
   const [name, setName] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [storeTypeId, setStoreTypeId] = useState("");
@@ -27,6 +31,7 @@ const Stores = () => {
   const [phone, setPhone] = useState("");
   const [saving, setSaving] = useState(false);
   const qc = useQueryClient();
+  const canManagePricing = role === "super_admin" || role === "manager";
 
   const { data: stores, isLoading } = useQuery({
     queryKey: ["stores"],
@@ -101,6 +106,11 @@ const Stores = () => {
     { header: "Route", accessor: (row: any) => row.routes?.name || "—", className: "text-sm" },
     { header: "Outstanding", accessor: (row: any) => `₹${Number(row.outstanding).toLocaleString()}`, className: "font-semibold" },
     { header: "Status", accessor: (row: any) => <StatusBadge status={row.is_active ? "active" : "inactive"} /> },
+    ...(canManagePricing ? [{ header: "Pricing", accessor: (row: any) => (
+      <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setPricingStore(row)}>
+        <DollarSign className="mr-1 h-3 w-3" />Set Prices
+      </Button>
+    )}] : []),
   ];
 
   if (isLoading) {
@@ -153,6 +163,12 @@ const Stores = () => {
           </form>
         </DialogContent>
       </Dialog>
+
+      <StorePricingDialog
+        store={pricingStore}
+        open={!!pricingStore}
+        onOpenChange={(open) => { if (!open) setPricingStore(null); }}
+      />
     </div>
   );
 };

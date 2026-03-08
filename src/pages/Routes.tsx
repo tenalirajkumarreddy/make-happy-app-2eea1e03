@@ -1,6 +1,7 @@
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MapPin, Store, Loader2 } from "lucide-react";
+import { RouteSessionPanel } from "@/components/routes/RouteSessionPanel";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useState } from "react";
@@ -66,6 +67,8 @@ const Routes = () => {
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader title="Routes" subtitle="Manage delivery routes by store type" actionLabel="Create Route" onAction={() => setShowAdd(true)} />
+
+      <RouteSessionPanel />
 
       {storeTypes && storeTypes.length > 0 ? (
         <Tabs defaultValue={defaultTab}>

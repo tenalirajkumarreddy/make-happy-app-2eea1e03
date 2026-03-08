@@ -374,6 +374,56 @@ export type Database = {
         }
         Relationships: []
       }
+      route_sessions: {
+        Row: {
+          created_at: string
+          end_lat: number | null
+          end_lng: number | null
+          ended_at: string | null
+          id: string
+          route_id: string
+          start_lat: number | null
+          start_lng: number | null
+          started_at: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          end_lat?: number | null
+          end_lng?: number | null
+          ended_at?: string | null
+          id?: string
+          route_id: string
+          start_lat?: number | null
+          start_lng?: number | null
+          started_at?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          end_lat?: number | null
+          end_lng?: number | null
+          ended_at?: string | null
+          id?: string
+          route_id?: string
+          start_lat?: number | null
+          start_lng?: number | null
+          started_at?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "route_sessions_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "routes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       routes: {
         Row: {
           created_at: string
@@ -666,6 +716,51 @@ export type Database = {
           order_type?: string
         }
         Relationships: []
+      }
+      store_visits: {
+        Row: {
+          id: string
+          lat: number | null
+          lng: number | null
+          notes: string | null
+          session_id: string
+          store_id: string
+          visited_at: string
+        }
+        Insert: {
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          notes?: string | null
+          session_id: string
+          store_id: string
+          visited_at?: string
+        }
+        Update: {
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          notes?: string | null
+          session_id?: string
+          store_id?: string
+          visited_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "store_visits_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "route_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "store_visits_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       stores: {
         Row: {
