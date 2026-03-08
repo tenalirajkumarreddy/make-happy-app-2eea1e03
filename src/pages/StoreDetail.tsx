@@ -224,40 +224,7 @@ const StoreDetail = () => {
   const fullAddress = [store.street, store.area, store.city, store.district, store.state, store.pincode].filter(Boolean).join(", ") || store.address || "Not provided";
 
 
-  const selectedSale = sales?.find((s) => s.id === selectedSaleId);
 
-  const salesColumns = [
-    { header: "Sale ID", accessor: "display_id" as const, className: "font-mono text-xs" },
-    { header: "Total", accessor: (row: any) => <span className="font-semibold">₹{Number(row.total_amount).toLocaleString()}</span> },
-    { header: "Cash", accessor: (row: any) => `₹${Number(row.cash_amount).toLocaleString()}`, className: "hidden md:table-cell" },
-    { header: "UPI", accessor: (row: any) => `₹${Number(row.upi_amount).toLocaleString()}`, className: "hidden md:table-cell" },
-    { header: "Outstanding", accessor: (row: any) => (
-      <span className={Number(row.outstanding_amount) > 0 ? "text-destructive font-medium" : "text-muted-foreground"}>
-        ₹{Number(row.outstanding_amount).toLocaleString()}
-      </span>
-    ), className: "hidden sm:table-cell" },
-    { header: "Recorded By", accessor: (row: any) => {
-      const p = getRecorder(row.recorded_by);
-      return (
-        <div className="flex items-center gap-1.5">
-          <Avatar className="h-5 w-5">
-            <AvatarImage src={p?.avatar_url || undefined} />
-            <AvatarFallback className="text-[9px] bg-primary/10 text-primary">{(p?.full_name || "?").charAt(0)}</AvatarFallback>
-          </Avatar>
-          <span className="text-xs">{p?.full_name || "—"}</span>
-        </div>
-      );
-    }, className: "hidden lg:table-cell" },
-    { header: "Date", accessor: (row: any) => new Date(row.created_at).toLocaleDateString("en-IN"), className: "text-muted-foreground text-xs" },
-  ];
-
-  const txnColumns = [
-    { header: "Txn ID", accessor: "display_id" as const, className: "font-mono text-xs" },
-    { header: "Amount", accessor: (row: any) => `₹${Number(row.total_amount).toLocaleString()}`, className: "font-semibold" },
-    { header: "Cash", accessor: (row: any) => `₹${Number(row.cash_amount).toLocaleString()}`, className: "hidden md:table-cell" },
-    { header: "UPI", accessor: (row: any) => `₹${Number(row.upi_amount).toLocaleString()}`, className: "hidden md:table-cell" },
-    { header: "Date", accessor: (row: any) => new Date(row.created_at).toLocaleDateString("en-IN"), className: "text-muted-foreground text-xs" },
-  ];
 
   const orderColumns = [
     { header: "Order ID", accessor: "display_id" as const, className: "font-mono text-xs" },
