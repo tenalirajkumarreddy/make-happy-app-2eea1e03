@@ -461,7 +461,7 @@ const Sales = () => {
             {canRecordBehalf && (
               <div>
                 <Label>Record on behalf of</Label>
-                <Select value={recordedFor} onValueChange={setRecordedFor}>
+                <Select value={recordedFor || "self"} onValueChange={(v) => setRecordedFor(v === "self" ? "" : v)}>
                   <SelectTrigger className="mt-1"><SelectValue placeholder="Myself (default)" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="self">Myself</SelectItem>
