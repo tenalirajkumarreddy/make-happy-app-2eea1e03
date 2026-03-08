@@ -53,6 +53,7 @@ interface SaleItem {
 const Sales = () => {
   const { user } = useAuth();
   const { allowed: canOverridePrice } = usePermission("price_override");
+  const { allowed: canRecordBehalf } = usePermission("record_behalf");
   const qc = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -61,6 +62,7 @@ const Sales = () => {
   const [storeId, setStoreId] = useState("");
   const [cashAmount, setCashAmount] = useState("");
   const [upiAmount, setUpiAmount] = useState("");
+  const [recordedFor, setRecordedFor] = useState("");
   const [items, setItems] = useState<SaleItem[]>([{ product_id: "", quantity: 1, unit_price: 0 }]);
 
   const { data: sales, isLoading } = useQuery({
