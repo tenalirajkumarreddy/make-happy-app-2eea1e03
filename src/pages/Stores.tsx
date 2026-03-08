@@ -21,6 +21,7 @@ import {
 import { toast } from "sonner";
 
 const Stores = () => {
+  const navigate = useNavigate();
   const { role } = useAuth();
   const [showAdd, setShowAdd] = useState(false);
   const [pricingStore, setPricingStore] = useState<any>(null);
