@@ -95,7 +95,7 @@ const Sales = () => {
   const { data: stores } = useQuery({
     queryKey: ["stores-for-sale"],
     queryFn: async () => {
-      const { data } = await supabase.from("stores").select("id, name, outstanding, display_id, store_type_id, customer_id").eq("is_active", true);
+      const { data } = await supabase.from("stores").select("id, name, outstanding, display_id, store_type_id, customer_id, lat, lng").eq("is_active", true);
       return data || [];
     },
   });
