@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Store, ShoppingCart, Banknote, Smartphone, MapPin, Clock } from "lucide-react";
 import { DashboardSkeleton } from "@/components/shared/DashboardSkeleton";
+import { QuickActionDrawer } from "@/components/agent/QuickActionDrawer";
 
 const AgentDashboard = () => {
   const { user, profile } = useAuth();
@@ -45,6 +46,11 @@ const AgentDashboard = () => {
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader title="Dashboard" subtitle={`Welcome, ${profile?.full_name || "Agent"}! Here's your daily summary.`} />
+
+      {/* Quick Action Button */}
+      <div className="flex justify-center">
+        <QuickActionDrawer />
+      </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
         <StatCard title="Stores Covered" value={String(s.storesCovered)} icon={MapPin} iconColor="bg-primary" />
