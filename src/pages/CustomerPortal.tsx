@@ -183,7 +183,7 @@ const CustomerPortal = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader title="My Dashboard" subtitle={`Welcome, ${customer.name}`} actionLabel="Place Order" onAction={() => setShowOrder(true)} />
+      <PageHeader title="My Dashboard" subtitle={`Welcome, ${customer.name}`} primaryAction={{ label: "Place Order", onClick: () => setShowOrder(true) }} />
 
       {/* KYC Banner */}
       {customer.kyc_status === "not_requested" && (

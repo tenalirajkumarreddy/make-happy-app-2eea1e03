@@ -66,7 +66,7 @@ const Routes = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Routes" subtitle="Manage delivery routes by store type" actionLabel="Create Route" onAction={() => setShowAdd(true)} />
+      <PageHeader title="Routes" subtitle="Manage delivery routes by store type" primaryAction={{ label: "Create Route", onClick: () => setShowAdd(true) }} />
 
       <RouteSessionPanel />
 

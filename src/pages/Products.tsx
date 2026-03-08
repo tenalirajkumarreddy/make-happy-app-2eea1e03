@@ -172,15 +172,11 @@ const Products = () => {
       <PageHeader
         title="Products"
         subtitle="Manage your product catalog and pricing"
-        actionLabel="Add Product"
-        onAction={() => { resetForm(); setShowAdd(true); }}
+        primaryAction={{ label: "Add Product", onClick: () => { resetForm(); setShowAdd(true); } }}
+        actions={[
+          { label: "Product Access", icon: Grid3X3, onClick: () => setShowMatrix(true), priority: 1 },
+        ]}
       />
-      <div className="flex gap-2">
-        <Button variant="outline" onClick={() => setShowMatrix(true)}>
-          <Grid3X3 className="mr-2 h-4 w-4" />
-          Product Access
-        </Button>
-      </div>
       <DataTable
         columns={columns}
         data={products || []}
