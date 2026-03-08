@@ -363,7 +363,7 @@ const AccessControl = () => {
                 <SelectContent>{STAFF_ROLES.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <p className="text-xs text-muted-foreground">A temporary password will be generated. The user should reset it on first login.</p>
+            <p className="text-xs text-muted-foreground">The staff member will receive a password reset email to set their own password.</p>
             <Button type="submit" className="w-full" disabled={savingInvite}>
               {savingInvite && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Create Staff Account
