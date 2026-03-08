@@ -2,9 +2,10 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
-import { Package, Pencil, X, Save, AlertTriangle, Grid3X3, Download } from "lucide-react";
+import { Package, Pencil, X, Save, AlertTriangle, Grid3X3, Download, Tags } from "lucide-react";
 import { ImageUpload } from "@/components/shared/ImageUpload";
 import { ProductAccessMatrix } from "@/components/products/ProductAccessMatrix";
+import { ProductCategories } from "@/components/products/ProductCategories";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -27,6 +28,7 @@ const Products = () => {
   const canEdit = role === "super_admin" || role === "manager";
   const [showAdd, setShowAdd] = useState(false);
   const [showMatrix, setShowMatrix] = useState(false);
+  const [showCategories, setShowCategories] = useState(false);
   const [editProduct, setEditProduct] = useState<any>(null);
   const [name, setName] = useState("");
   const [sku, setSku] = useState("");
@@ -167,6 +169,10 @@ const Products = () => {
     return <ProductAccessMatrix onBack={() => setShowMatrix(false)} />;
   }
 
+  if (showCategories) {
+    return <ProductCategories onBack={() => setShowCategories(false)} />;
+  }
+
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader
@@ -174,7 +180,8 @@ const Products = () => {
         subtitle="Manage your product catalog and pricing"
         primaryAction={{ label: "Add Product", onClick: () => { resetForm(); setShowAdd(true); } }}
         actions={[
-          { label: "Product Access", icon: Grid3X3, onClick: () => setShowMatrix(true), priority: 1 },
+          { label: "Categories", icon: Tags, onClick: () => setShowCategories(true), priority: 1 },
+          { label: "Product Access", icon: Grid3X3, onClick: () => setShowMatrix(true), priority: 2 },
         ]}
       />
       <DataTable
