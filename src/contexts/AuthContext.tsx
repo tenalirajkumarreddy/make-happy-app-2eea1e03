@@ -32,8 +32,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const fetchUserData = async (userId: string) => {
     const [{ data: roleData }, { data: profileData }] = await Promise.all([
       supabase.from("user_roles").select("role").eq("user_id", userId).single(),
-      supabase.from("profiles").select("full_name, email, avatar_url").eq("user_id", userId).single(),
+      supabase.from("profiles").select("full_name, email, avatar_url, is_active").eq("user_id", userId).single(),
     ]);
+
+    // If user is disabled, sign them out immediately
+    if (profileData && !profileData.is_active) {
+      await supabase.auth.signOut();
+      setUser(null);
+      setSession(null);
+      setRole(null);
+      setProfile(null);
+      return;
+    }
 
     if (roleData) setRole(roleData.role as AppRole);
     if (profileData) setProfile(profileData);
