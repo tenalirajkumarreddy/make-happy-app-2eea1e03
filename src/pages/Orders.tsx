@@ -116,6 +116,7 @@ const Orders = () => {
       }
     }
 
+    logActivity(user!.id, "Created order", "order", displayId, order.id);
     toast.success("Order created");
     setSaving(false);
     setShowAdd(false);
