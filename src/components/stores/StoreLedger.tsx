@@ -76,6 +76,23 @@ export function StoreLedger({ sales, transactions, balanceAdjustments = [], open
       });
     }
 
+    for (const adj of balanceAdjustments) {
+      entries.push({
+        id: adj.id,
+        type: "correction",
+        date: adj.created_at,
+        display_id: "",
+        description: `Balance Adjustment: ₹${Number(adj.old_outstanding).toLocaleString()} → ₹${Number(adj.new_outstanding).toLocaleString()}`,
+        total_amount: Number(adj.adjustment_amount),
+        cash_amount: 0,
+        upi_amount: 0,
+        outstanding: Number(adj.new_outstanding),
+        notes: adj.reason,
+        recorded_by: adj.adjusted_by,
+        raw: adj,
+      });
+    }
+
     // Sort newest first
     entries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
