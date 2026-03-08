@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { DataTable } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
@@ -7,16 +7,35 @@ import { StatCard } from "@/components/shared/StatCard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Loader2, ArrowLeft, Store, DollarSign, ShoppingCart, Banknote,
-  User, Phone, Mail, MapPin, Calendar, Shield,
+  User, Phone, Mail, MapPin, Calendar, Shield, Pencil, X, Save,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { useState } from "react";
+import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 
 const CustomerDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const qc = useQueryClient();
+  const { role } = useAuth();
+  const canEdit = role === "super_admin" || role === "manager";
+
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    name: "",
+    phone: "",
+    email: "",
+    address: "",
+    gst_number: "",
+  });
 
   const { data: customer, isLoading } = useQuery({
     queryKey: ["customer", id],
@@ -72,6 +91,58 @@ const CustomerDetail = () => {
     },
     enabled: !!id,
   });
+
+  const startEditing = () => {
+    if (!customer) return;
+    setForm({
+      name: customer.name || "",
+      phone: customer.phone || "",
+      email: customer.email || "",
+      address: customer.address || "",
+      gst_number: customer.gst_number || "",
+    });
+    setEditing(true);
+  };
+
+  const handleSave = async () => {
+    if (!id) return;
+    setSaving(true);
+    const { error } = await supabase
+      .from("customers")
+      .update({
+        name: form.name,
+        phone: form.phone || null,
+        email: form.email || null,
+        address: form.address || null,
+        gst_number: form.gst_number || null,
+      })
+      .eq("id", id);
+    setSaving(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success("Customer updated");
+    setEditing(false);
+    qc.invalidateQueries({ queryKey: ["customer", id] });
+    qc.invalidateQueries({ queryKey: ["customers"] });
+  };
+
+  const handleToggleActive = async () => {
+    if (!customer || !id) return;
+    const newVal = !customer.is_active;
+    const { error } = await supabase
+      .from("customers")
+      .update({ is_active: newVal })
+      .eq("id", id);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success(`Customer ${newVal ? "activated" : "deactivated"}`);
+    qc.invalidateQueries({ queryKey: ["customer", id] });
+    qc.invalidateQueries({ queryKey: ["customers"] });
+  };
 
   if (isLoading) {
     return <div className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
@@ -144,26 +215,84 @@ const CustomerDetail = () => {
               <p className="text-sm text-muted-foreground font-mono mt-0.5">{customer.display_id}</p>
             </div>
 
-            {/* KYC badge on desktop */}
-            <div className="hidden sm:block shrink-0 pb-1">
-              <StatusBadge status={kycVariant} label={`KYC: ${kycLabel}`} />
+            {/* Actions */}
+            <div className="flex items-center gap-3 shrink-0 sm:pb-1">
+              {canEdit && (
+                <>
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="customer-active-toggle" className="text-xs text-muted-foreground">
+                      {customer.is_active ? "Active" : "Inactive"}
+                    </Label>
+                    <Switch
+                      id="customer-active-toggle"
+                      checked={customer.is_active}
+                      onCheckedChange={handleToggleActive}
+                    />
+                  </div>
+                  {!editing ? (
+                    <Button variant="outline" size="sm" onClick={startEditing} className="gap-1.5">
+                      <Pencil className="h-3.5 w-3.5" /> Edit
+                    </Button>
+                  ) : (
+                    <div className="flex gap-1.5">
+                      <Button variant="ghost" size="sm" onClick={() => setEditing(false)} disabled={saving}>
+                        <X className="h-4 w-4" />
+                      </Button>
+                      <Button size="sm" onClick={handleSave} disabled={saving} className="gap-1.5">
+                        {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                        Save
+                      </Button>
+                    </div>
+                  )}
+                </>
+              )}
+              {/* KYC badge on desktop */}
+              <div className="hidden sm:block">
+                <StatusBadge status={kycVariant} label={`KYC: ${kycLabel}`} />
+              </div>
             </div>
           </div>
 
           <Separator className="my-4" />
 
-          {/* Contact details grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            <InfoItem icon={Phone} label="Phone" value={customer.phone || "Not provided"} />
-            <InfoItem icon={Mail} label="Email" value={customer.email || "Not provided"} />
-            <InfoItem icon={MapPin} label="Address" value={customer.address || "Not provided"} />
-            <InfoItem icon={Calendar} label="Joined" value={new Date(customer.created_at).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" })} />
-          </div>
-
-          {/* KYC badge on mobile */}
-          <div className="sm:hidden mt-3">
-            <InfoItem icon={Shield} label="KYC Status" value={kycLabel} />
-          </div>
+          {/* Contact details grid - view or edit mode */}
+          {editing ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-name" className="text-xs">Name</Label>
+                <Input id="edit-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-phone" className="text-xs">Phone</Label>
+                <Input id="edit-phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-email" className="text-xs">Email</Label>
+                <Input id="edit-email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-gst" className="text-xs">GST Number</Label>
+                <Input id="edit-gst" value={form.gst_number} onChange={(e) => setForm({ ...form, gst_number: e.target.value })} />
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="edit-address" className="text-xs">Address</Label>
+                <Textarea id="edit-address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} rows={2} />
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <InfoItem icon={Phone} label="Phone" value={customer.phone || "Not provided"} />
+                <InfoItem icon={Mail} label="Email" value={customer.email || "Not provided"} />
+                <InfoItem icon={MapPin} label="Address" value={customer.address || "Not provided"} />
+                <InfoItem icon={Calendar} label="Joined" value={new Date(customer.created_at).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" })} />
+              </div>
+              {/* KYC badge on mobile */}
+              <div className="sm:hidden mt-3">
+                <InfoItem icon={Shield} label="KYC Status" value={kycLabel} />
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 

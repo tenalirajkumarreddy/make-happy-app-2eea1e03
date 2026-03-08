@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { DataTable } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
@@ -8,15 +8,40 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Loader2, ArrowLeft, DollarSign, ShoppingCart, Banknote,
   MapPin, Store as StoreIcon, Phone, User, Tag, Navigation, Calendar,
+  Pencil, X, Save,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useState } from "react";
+import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 
 const StoreDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const qc = useQueryClient();
+  const { role } = useAuth();
+  const canEdit = role === "super_admin" || role === "manager";
+
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    name: "",
+    phone: "",
+    alternate_phone: "",
+    street: "",
+    area: "",
+    city: "",
+    district: "",
+    state: "",
+    pincode: "",
+  });
 
   const { data: store, isLoading } = useQuery({
     queryKey: ["store", id],
@@ -87,6 +112,68 @@ const StoreDetail = () => {
     },
     enabled: !!id,
   });
+
+  const startEditing = () => {
+    if (!store) return;
+    setForm({
+      name: store.name || "",
+      phone: store.phone || "",
+      alternate_phone: store.alternate_phone || "",
+      street: store.street || "",
+      area: store.area || "",
+      city: store.city || "",
+      district: store.district || "",
+      state: store.state || "",
+      pincode: store.pincode || "",
+    });
+    setEditing(true);
+  };
+
+  const handleSave = async () => {
+    if (!id) return;
+    setSaving(true);
+    const address = [form.street, form.area, form.city, form.district, form.state, form.pincode].filter(Boolean).join(", ");
+    const { error } = await supabase
+      .from("stores")
+      .update({
+        name: form.name,
+        phone: form.phone || null,
+        alternate_phone: form.alternate_phone || null,
+        street: form.street || null,
+        area: form.area || null,
+        city: form.city || null,
+        district: form.district || null,
+        state: form.state || null,
+        pincode: form.pincode || null,
+        address: address || null,
+      })
+      .eq("id", id);
+    setSaving(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success("Store updated");
+    setEditing(false);
+    qc.invalidateQueries({ queryKey: ["store", id] });
+    qc.invalidateQueries({ queryKey: ["stores"] });
+  };
+
+  const handleToggleActive = async () => {
+    if (!store || !id) return;
+    const newVal = !store.is_active;
+    const { error } = await supabase
+      .from("stores")
+      .update({ is_active: newVal })
+      .eq("id", id);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success(`Store ${newVal ? "activated" : "deactivated"}`);
+    qc.invalidateQueries({ queryKey: ["store", id] });
+    qc.invalidateQueries({ queryKey: ["stores"] });
+  };
 
   if (isLoading) {
     return <div className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
@@ -171,48 +258,121 @@ const StoreDetail = () => {
               </div>
             </div>
 
-            {/* Map link on desktop */}
-            {store.lat && store.lng && (
-              <a
-                href={`https://www.google.com/maps?q=${store.lat},${store.lng}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hidden sm:inline-flex items-center gap-1.5 text-sm text-primary hover:underline shrink-0 pb-1"
-              >
-                <MapPin className="h-4 w-4" /> View on Map
-              </a>
-            )}
-          </div>
-
-          <Separator className="my-4" />
-
-          {/* Detail grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            <InfoItem icon={User} label="Customer" value={(store as any).customers?.name || "—"} />
-            <InfoItem icon={Navigation} label="Route" value={(store as any).routes?.name || "Not assigned"} />
-            <InfoItem icon={Phone} label="Phone" value={store.phone || "Not provided"} />
-            <InfoItem icon={MapPin} label="Address" value={fullAddress} />
-            <InfoItem icon={Tag} label="Opening Balance" value={`₹${Number(store.opening_balance).toLocaleString()}`} />
-            <InfoItem icon={Calendar} label="Created" value={new Date(store.created_at).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" })} />
-            {store.alternate_phone && <InfoItem icon={Phone} label="Alt. Phone" value={store.alternate_phone} />}
-            {store.lat && store.lng && (
-              <div className="sm:hidden">
+            {/* Actions */}
+            <div className="flex items-center gap-3 shrink-0 sm:pb-1">
+              {canEdit && (
+                <>
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="store-active-toggle" className="text-xs text-muted-foreground">
+                      {store.is_active ? "Active" : "Inactive"}
+                    </Label>
+                    <Switch
+                      id="store-active-toggle"
+                      checked={store.is_active}
+                      onCheckedChange={handleToggleActive}
+                    />
+                  </div>
+                  {!editing ? (
+                    <Button variant="outline" size="sm" onClick={startEditing} className="gap-1.5">
+                      <Pencil className="h-3.5 w-3.5" /> Edit
+                    </Button>
+                  ) : (
+                    <div className="flex gap-1.5">
+                      <Button variant="ghost" size="sm" onClick={() => setEditing(false)} disabled={saving}>
+                        <X className="h-4 w-4" />
+                      </Button>
+                      <Button size="sm" onClick={handleSave} disabled={saving} className="gap-1.5">
+                        {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                        Save
+                      </Button>
+                    </div>
+                  )}
+                </>
+              )}
+              {/* Map link on desktop */}
+              {store.lat && store.lng && (
                 <a
                   href={`https://www.google.com/maps?q=${store.lat},${store.lng}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-start gap-2.5 rounded-lg bg-primary/10 p-3 text-primary hover:bg-primary/15 transition-colors"
+                  className="hidden sm:inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
                 >
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-background shadow-sm">
-                    <MapPin className="h-4 w-4" />
-                  </div>
-                  <div className="min-w-0 pt-0.5">
-                    <p className="text-sm font-medium">View on Map</p>
-                  </div>
+                  <MapPin className="h-4 w-4" /> Map
                 </a>
-              </div>
-            )}
+              )}
+            </div>
           </div>
+
+          <Separator className="my-4" />
+
+          {/* Detail grid - view or edit mode */}
+          {editing ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-name" className="text-xs">Store Name</Label>
+                <Input id="edit-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-phone" className="text-xs">Phone</Label>
+                <Input id="edit-phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-alt-phone" className="text-xs">Alt. Phone</Label>
+                <Input id="edit-alt-phone" value={form.alternate_phone} onChange={(e) => setForm({ ...form, alternate_phone: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-street" className="text-xs">Street</Label>
+                <Input id="edit-street" value={form.street} onChange={(e) => setForm({ ...form, street: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-area" className="text-xs">Area</Label>
+                <Input id="edit-area" value={form.area} onChange={(e) => setForm({ ...form, area: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-city" className="text-xs">City</Label>
+                <Input id="edit-city" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-district" className="text-xs">District</Label>
+                <Input id="edit-district" value={form.district} onChange={(e) => setForm({ ...form, district: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-state" className="text-xs">State</Label>
+                <Input id="edit-state" value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-pincode" className="text-xs">Pincode</Label>
+                <Input id="edit-pincode" value={form.pincode} onChange={(e) => setForm({ ...form, pincode: e.target.value })} />
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <InfoItem icon={User} label="Customer" value={(store as any).customers?.name || "—"} />
+              <InfoItem icon={Navigation} label="Route" value={(store as any).routes?.name || "Not assigned"} />
+              <InfoItem icon={Phone} label="Phone" value={store.phone || "Not provided"} />
+              <InfoItem icon={MapPin} label="Address" value={fullAddress} />
+              <InfoItem icon={Tag} label="Opening Balance" value={`₹${Number(store.opening_balance).toLocaleString()}`} />
+              <InfoItem icon={Calendar} label="Created" value={new Date(store.created_at).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" })} />
+              {store.alternate_phone && <InfoItem icon={Phone} label="Alt. Phone" value={store.alternate_phone} />}
+              {store.lat && store.lng && (
+                <div className="sm:hidden">
+                  <a
+                    href={`https://www.google.com/maps?q=${store.lat},${store.lng}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-start gap-2.5 rounded-lg bg-primary/10 p-3 text-primary hover:bg-primary/15 transition-colors"
+                  >
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-background shadow-sm">
+                      <MapPin className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 pt-0.5">
+                      <p className="text-sm font-medium">View on Map</p>
+                    </div>
+                  </a>
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
