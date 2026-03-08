@@ -27,12 +27,13 @@ type LedgerEntry = {
 interface StoreLedgerProps {
   sales: any[];
   transactions: any[];
+  balanceAdjustments?: any[];
   openingBalance: number;
   storeCreatedAt: string;
   profileMap: Map<string, { user_id: string; full_name: string; avatar_url: string | null }>;
 }
 
-export function StoreLedger({ sales, transactions, openingBalance, storeCreatedAt, profileMap }: StoreLedgerProps) {
+export function StoreLedger({ sales, transactions, balanceAdjustments = [], openingBalance, storeCreatedAt, profileMap }: StoreLedgerProps) {
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
 
   const ledgerEntries = useMemo(() => {
@@ -75,6 +76,23 @@ export function StoreLedger({ sales, transactions, openingBalance, storeCreatedA
       });
     }
 
+    for (const adj of balanceAdjustments) {
+      entries.push({
+        id: adj.id,
+        type: "correction",
+        date: adj.created_at,
+        display_id: "",
+        description: `Balance Adjustment: ₹${Number(adj.old_outstanding).toLocaleString()} → ₹${Number(adj.new_outstanding).toLocaleString()}`,
+        total_amount: Number(adj.adjustment_amount),
+        cash_amount: 0,
+        upi_amount: 0,
+        outstanding: Number(adj.new_outstanding),
+        notes: adj.reason,
+        recorded_by: adj.adjusted_by,
+        raw: adj,
+      });
+    }
+
     // Sort newest first
     entries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
@@ -95,7 +113,7 @@ export function StoreLedger({ sales, transactions, openingBalance, storeCreatedA
     });
 
     return entries;
-  }, [sales, transactions, openingBalance]);
+  }, [sales, transactions, balanceAdjustments, openingBalance]);
 
   const selectedEntry = ledgerEntries.find((e) => e.id === selectedEntryId);
   const isSaleSelected = selectedEntry?.type === "sale";
@@ -155,6 +173,8 @@ export function StoreLedger({ sales, transactions, openingBalance, storeCreatedA
       accessor: (row: LedgerEntry) =>
         row.type === "sale" ? (
           <span className="text-destructive font-medium">₹{row.total_amount.toLocaleString()}</span>
+        ) : row.type === "correction" && row.id !== "__opening_balance__" && row.total_amount > 0 ? (
+          <span className="text-destructive font-medium">₹{row.total_amount.toLocaleString()}</span>
         ) : (
           <span className="text-muted-foreground">—</span>
         ),
@@ -164,6 +184,8 @@ export function StoreLedger({ sales, transactions, openingBalance, storeCreatedA
       accessor: (row: LedgerEntry) =>
         row.type === "payment" || row.id === "__opening_balance__" ? (
           <span className="text-success font-medium">₹{row.total_amount.toLocaleString()}</span>
+        ) : row.type === "correction" && row.id !== "__opening_balance__" && row.total_amount < 0 ? (
+          <span className="text-success font-medium">₹{Math.abs(row.total_amount).toLocaleString()}</span>
         ) : (
           <span className="text-muted-foreground">—</span>
         ),
@@ -208,8 +230,8 @@ export function StoreLedger({ sales, transactions, openingBalance, storeCreatedA
         onClick={() => setSelectedEntryId(row.id)}
       >
         <div className="flex items-center justify-between">
-          <Badge variant={row.type === "sale" ? "destructive" : "secondary"} className="text-[10px] h-5">
-            {row.type === "sale" ? "SALE" : "PAYMENT"}
+          <Badge variant={row.type === "sale" ? "destructive" : row.type === "correction" ? "outline" : "secondary"} className="text-[10px] h-5">
+            {row.type === "sale" ? "SALE" : row.type === "correction" ? "ADJUSTMENT" : "PAYMENT"}
           </Badge>
           <span className="text-[11px] text-muted-foreground">
             {new Date(row.date).toLocaleDateString("en-IN")}

@@ -13,29 +13,39 @@ import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Loader2, ArrowLeft, DollarSign, ShoppingCart, Banknote,
   MapPin, Store as StoreIcon, Phone,
-  Pencil, X, Save, AlertTriangle, ScanLine, Trash2,
+  Pencil, X, Save, AlertTriangle, ScanLine, Trash2, Scale,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermission } from "@/hooks/usePermission";
 import { QrScanner } from "@/components/shared/QrScanner";
 import { parseUpiQr } from "@/lib/upiParser";
 import { StoreLedger } from "@/components/stores/StoreLedger";
+import { logActivity } from "@/lib/activityLogger";
 
 const StoreDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { role } = useAuth();
+  const { role, user } = useAuth();
   const canEdit = role === "super_admin" || role === "manager";
+  const { allowed: canEditBalance } = usePermission("edit_balance");
 
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [showQrScanner, setShowQrScanner] = useState(false);
+  const [showAdjustBalance, setShowAdjustBalance] = useState(false);
+  const [adjustSaving, setAdjustSaving] = useState(false);
+  const [newBalanceInput, setNewBalanceInput] = useState("");
+  const [adjustReason, setAdjustReason] = useState("");
   const [form, setForm] = useState({
     name: "",
     phone: "",
@@ -110,6 +120,15 @@ const StoreDetail = () => {
     enabled: !!id,
   });
 
+  const { data: balanceAdjustments } = useQuery({
+    queryKey: ["balance-adjustments", id],
+    queryFn: async () => {
+      const { data } = await supabase.from("balance_adjustments").select("*").eq("store_id", id!).order("created_at", { ascending: false });
+      return data || [];
+    },
+    enabled: !!id,
+  });
+
   const { data: qrCodes } = useQuery({
     queryKey: ["store-qr-codes", id],
     queryFn: async () => {
@@ -144,6 +163,41 @@ const StoreDetail = () => {
     toast.success("QR code removed");
     qc.invalidateQueries({ queryKey: ["store-qr-codes", id] });
   };
+
+  const handleAdjustBalance = async () => {
+    if (!store || !id || !user) return;
+    const newBal = parseFloat(newBalanceInput);
+    if (isNaN(newBal)) { toast.error("Enter a valid amount"); return; }
+    const oldBal = Number(store.outstanding);
+    if (newBal === oldBal) { toast.error("New balance is the same as current"); return; }
+
+    setAdjustSaving(true);
+    const adjustment = newBal - oldBal;
+
+    const { error } = await supabase.from("balance_adjustments").insert({
+      store_id: id,
+      customer_id: store.customer_id,
+      old_outstanding: oldBal,
+      new_outstanding: newBal,
+      adjustment_amount: adjustment,
+      reason: adjustReason || null,
+      adjusted_by: user.id,
+    });
+
+    if (error) { toast.error(error.message); setAdjustSaving(false); return; }
+
+    await supabase.from("stores").update({ outstanding: newBal }).eq("id", id);
+    logActivity(user.id, "Balance adjustment", "store", store.display_id, id, { old: oldBal, new: newBal, adjustment });
+
+    toast.success("Balance adjusted");
+    setAdjustSaving(false);
+    setShowAdjustBalance(false);
+    setNewBalanceInput("");
+    setAdjustReason("");
+    qc.invalidateQueries({ queryKey: ["store", id] });
+    qc.invalidateQueries({ queryKey: ["balance-adjustments", id] });
+  };
+
   const startEditing = () => {
     if (!store || !store.is_active) return;
     setForm({
@@ -392,6 +446,11 @@ const StoreDetail = () => {
                   )}
                 </>
               )}
+              {canEditBalance && !isInactive && (
+                <Button variant="outline" size="sm" onClick={() => { setNewBalanceInput(String(store.outstanding)); setShowAdjustBalance(true); }} className="gap-1.5">
+                  <Scale className="h-3.5 w-3.5" /> Adjust Balance
+                </Button>
+              )}
               {store.lat && store.lng && (
                 <a href={`https://www.google.com/maps?q=${store.lat},${store.lng}`} target="_blank" rel="noopener noreferrer" className="hidden sm:inline-flex items-center gap-1.5 text-sm text-primary hover:underline">
                   <MapPin className="h-4 w-4" /> Map
@@ -445,6 +504,7 @@ const StoreDetail = () => {
           <StoreLedger
             sales={sales || []}
             transactions={transactions || []}
+            balanceAdjustments={balanceAdjustments || []}
             openingBalance={Number(store.opening_balance)}
             storeCreatedAt={store.created_at}
             profileMap={profileMap}
@@ -490,6 +550,37 @@ const StoreDetail = () => {
           </div>
         </TabsContent>
       </Tabs>
+      {/* Adjust Balance Dialog */}
+      <Dialog open={showAdjustBalance} onOpenChange={(v) => { setShowAdjustBalance(v); if (!v) { setNewBalanceInput(""); setAdjustReason(""); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Adjust Balance</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label className="text-xs text-muted-foreground">Current Outstanding</Label>
+              <p className="text-lg font-bold">₹{Number(store?.outstanding || 0).toLocaleString()}</p>
+            </div>
+            <div>
+              <Label>New Outstanding (₹)</Label>
+              <Input type="number" value={newBalanceInput} onChange={(e) => setNewBalanceInput(e.target.value)} className="mt-1" />
+              {newBalanceInput && !isNaN(parseFloat(newBalanceInput)) && (
+                <p className="text-xs mt-1 text-muted-foreground">
+                  Adjustment: <span className={parseFloat(newBalanceInput) - Number(store?.outstanding || 0) > 0 ? "text-destructive font-medium" : "text-success font-medium"}>
+                    {parseFloat(newBalanceInput) - Number(store?.outstanding || 0) > 0 ? "+" : ""}₹{(parseFloat(newBalanceInput) - Number(store?.outstanding || 0)).toLocaleString()}
+                  </span>
+                </p>
+              )}
+            </div>
+            <div>
+              <Label>Reason</Label>
+              <Input value={adjustReason} onChange={(e) => setAdjustReason(e.target.value)} className="mt-1" placeholder="e.g. Correction after physical count" />
+            </div>
+            <Button onClick={handleAdjustBalance} className="w-full" disabled={adjustSaving}>
+              {adjustSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Confirm Adjustment
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
