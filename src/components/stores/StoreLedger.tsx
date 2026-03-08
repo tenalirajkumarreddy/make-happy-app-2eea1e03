@@ -230,8 +230,8 @@ export function StoreLedger({ sales, transactions, balanceAdjustments = [], open
         onClick={() => setSelectedEntryId(row.id)}
       >
         <div className="flex items-center justify-between">
-          <Badge variant={row.type === "sale" ? "destructive" : "secondary"} className="text-[10px] h-5">
-            {row.type === "sale" ? "SALE" : "PAYMENT"}
+          <Badge variant={row.type === "sale" ? "destructive" : row.type === "correction" ? "outline" : "secondary"} className="text-[10px] h-5">
+            {row.type === "sale" ? "SALE" : row.type === "correction" ? "ADJUSTMENT" : "PAYMENT"}
           </Badge>
           <span className="text-[11px] text-muted-foreground">
             {new Date(row.date).toLocaleDateString("en-IN")}
