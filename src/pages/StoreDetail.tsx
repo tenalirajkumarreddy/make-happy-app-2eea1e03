@@ -120,6 +120,15 @@ const StoreDetail = () => {
     enabled: !!id,
   });
 
+  const { data: balanceAdjustments } = useQuery({
+    queryKey: ["balance-adjustments", id],
+    queryFn: async () => {
+      const { data } = await supabase.from("balance_adjustments").select("*").eq("store_id", id!).order("created_at", { ascending: false });
+      return data || [];
+    },
+    enabled: !!id,
+  });
+
   const { data: qrCodes } = useQuery({
     queryKey: ["store-qr-codes", id],
     queryFn: async () => {
