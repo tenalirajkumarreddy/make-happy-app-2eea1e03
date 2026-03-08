@@ -42,7 +42,7 @@ const mainNav: NavItem[] = [
   { label: "Routes", path: "/routes", icon: Route },
   { label: "Sales", path: "/sales", icon: ShoppingCart },
   { label: "Transactions", path: "/transactions", icon: Receipt },
-  { label: "Orders", path: "/orders", icon: ClipboardList, badge: 5 },
+  { label: "Orders", path: "/orders", icon: ClipboardList },
   { label: "Handovers", path: "/handovers", icon: HandCoins },
   { label: "Map", path: "/map", icon: Map },
 ];
