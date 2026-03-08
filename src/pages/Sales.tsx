@@ -50,8 +50,11 @@ interface SaleItem {
   unit_price: number;
 }
 
+const POS_STORE_ID = "00000000-0000-0000-0000-000000000001";
+
 const Sales = () => {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
+  const isPosUser = role === "pos";
   const { allowed: canOverridePrice } = usePermission("price_override");
   const { allowed: canRecordBehalf } = usePermission("record_behalf");
   const qc = useQueryClient();
@@ -59,7 +62,8 @@ const Sales = () => {
   const [saving, setSaving] = useState(false);
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
 
-  const [storeId, setStoreId] = useState("");
+  // POS users are locked to the POS store
+  const [storeId, setStoreId] = useState(isPosUser ? POS_STORE_ID : "");
   const [cashAmount, setCashAmount] = useState("");
   const [upiAmount, setUpiAmount] = useState("");
   const [recordedFor, setRecordedFor] = useState("");
