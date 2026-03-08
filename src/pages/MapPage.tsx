@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { MapPin, Navigation } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
