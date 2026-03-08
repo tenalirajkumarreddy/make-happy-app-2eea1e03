@@ -28,6 +28,7 @@ interface StoreLedgerProps {
   sales: any[];
   transactions: any[];
   openingBalance: number;
+  storeCreatedAt: string;
   profileMap: Map<string, { user_id: string; full_name: string; avatar_url: string | null }>;
 }
 
