@@ -276,6 +276,7 @@ const Handovers = () => {
                   <p className="text-sm text-muted-foreground">To: <span className="font-medium text-foreground">{getName(item.handed_to)}</span> · {new Date(item.created_at).toLocaleDateString()}</p>
                   {item.notes && <p className="text-sm mt-1 italic text-muted-foreground">"{item.notes}"</p>}
                 </div>
+              </div>
             </div>
           ))}
         </TabsContent>
@@ -301,6 +302,7 @@ const Handovers = () => {
                   <p className="text-sm text-muted-foreground">From: <span className="font-medium text-foreground">{getName(item.user_id)}</span> · {new Date(item.created_at).toLocaleDateString()}</p>
                   {item.notes && <p className="text-sm mt-1 italic text-muted-foreground">"{item.notes}"</p>}
                 </div>
+              </div>
             </div>
           ))}
         </TabsContent>
