@@ -22,6 +22,7 @@ const StoreTypes = () => {
   const isAdmin = role === "super_admin";
 
   const [showAdd, setShowAdd] = useState(false);
+  const [editingType, setEditingType] = useState<any>(null);
   const [newTypeName, setNewTypeName] = useState("");
   const [newOrderType, setNewOrderType] = useState("simple");
   const [saving, setSaving] = useState(false);
