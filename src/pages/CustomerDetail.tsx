@@ -378,7 +378,42 @@ const CustomerDetail = () => {
         </TabsContent>
         <TabsContent value="sales" className="mt-4">
           {(sales?.length || 0) === 0 ? <EmptyTab label="No sales recorded" /> : (
-            <DataTable columns={salesColumns} data={sales || []} searchKey="display_id" searchPlaceholder="Search sales..." />
+            <DataTable
+              columns={salesColumns}
+              data={sales || []}
+              searchKey="display_id"
+              searchPlaceholder="Search sales..."
+              renderMobileCard={(row: any) => {
+                const p = getRecorder(row.recorded_by);
+                return (
+                  <div className="rounded-xl border bg-card px-3 py-2.5 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-[11px] text-muted-foreground">{row.display_id}</span>
+                      <span className="text-[11px] text-muted-foreground">{new Date(row.created_at).toLocaleDateString("en-IN")}</span>
+                    </div>
+                    <div className="flex items-center justify-between mt-1">
+                      <div>
+                        <span className="text-sm font-bold text-foreground">₹{Number(row.total_amount).toLocaleString()}</span>
+                        {row.stores?.name && <span className="text-[11px] text-muted-foreground ml-2">{row.stores.name}</span>}
+                      </div>
+                      <span className={`text-xs font-medium ${Number(row.outstanding_amount) > 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                        Due: ₹{Number(row.outstanding_amount).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between mt-1.5 text-[11px] text-muted-foreground">
+                      <span>Cash ₹{Number(row.cash_amount).toLocaleString()} · UPI ₹{Number(row.upi_amount).toLocaleString()}</span>
+                      <div className="flex items-center gap-1">
+                        <Avatar className="h-4 w-4">
+                          <AvatarImage src={p?.avatar_url || undefined} />
+                          <AvatarFallback className="text-[8px] bg-primary/10 text-primary">{(p?.full_name || "?").charAt(0)}</AvatarFallback>
+                        </Avatar>
+                        <span>{p?.full_name || "—"}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }}
+            />
           )}
         </TabsContent>
         <TabsContent value="orders" className="mt-4">
