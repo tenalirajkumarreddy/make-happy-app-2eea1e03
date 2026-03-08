@@ -8,6 +8,7 @@ import { Loader2 } from "lucide-react";
 import { QrStoreSelector } from "@/components/shared/QrStoreSelector";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { useState } from "react";
+import { usePermission } from "@/hooks/usePermission";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -21,6 +22,7 @@ import { toast } from "sonner";
 
 const Transactions = () => {
   const { user } = useAuth();
+  const { allowed: canRecordBehalf } = usePermission("record_behalf");
   const qc = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -28,6 +30,7 @@ const Transactions = () => {
   const [cashAmount, setCashAmount] = useState("");
   const [upiAmount, setUpiAmount] = useState("");
   const [notes, setNotes] = useState("");
+  const [recordedFor, setRecordedFor] = useState("");
 
   const { data: transactions, isLoading } = useQuery({
     queryKey: ["transactions"],
@@ -49,6 +52,18 @@ const Transactions = () => {
     },
   });
 
+  // Fetch staff users for "record on behalf" selector
+  const { data: staffUsers } = useQuery({
+    queryKey: ["staff-for-behalf-txn"],
+    queryFn: async () => {
+      const { data: roles } = await supabase.from("user_roles").select("user_id, role").neq("role", "customer");
+      const staffIds = roles?.map((r) => r.user_id) || [];
+      const { data: profs } = await supabase.from("profiles").select("user_id, full_name").in("user_id", staffIds);
+      return profs?.filter((p) => p.user_id !== user?.id) || [];
+    },
+    enabled: canRecordBehalf,
+  });
+
   const cash = parseFloat(cashAmount) || 0;
   const upi = parseFloat(upiAmount) || 0;
   const totalPayment = cash + upi;
@@ -57,7 +72,7 @@ const Transactions = () => {
   const newOutstanding = oldOutstanding - totalPayment;
 
   const resetForm = () => {
-    setStoreId(""); setCashAmount(""); setUpiAmount(""); setNotes("");
+    setStoreId(""); setCashAmount(""); setUpiAmount(""); setNotes(""); setRecordedFor("");
   };
 
   const handleAdd = async (e: React.FormEvent) => {
@@ -78,11 +93,15 @@ const Transactions = () => {
     const { count } = await supabase.from("transactions").select("id", { count: "exact", head: true });
     const displayId = `PAY-${String((count || 0) + 1).padStart(6, "0")}`;
 
+    const effectiveRecordedBy = recordedFor || user!.id;
+    const loggedBy = recordedFor ? user!.id : null;
+
     const { error } = await supabase.from("transactions").insert({
       display_id: displayId,
       store_id: storeId,
       customer_id: customerId,
-      recorded_by: user!.id,
+      recorded_by: effectiveRecordedBy,
+      logged_by: loggedBy,
       cash_amount: cash,
       upi_amount: upi,
       total_amount: totalPayment,
@@ -127,6 +146,20 @@ const Transactions = () => {
         <DialogContent>
           <DialogHeader><DialogTitle>Record Transaction</DialogTitle></DialogHeader>
           <form onSubmit={handleAdd} className="space-y-4">
+            {canRecordBehalf && (
+              <div>
+                <Label>Record on behalf of</Label>
+                <Select value={recordedFor || "self"} onValueChange={(v) => setRecordedFor(v === "self" ? "" : v)}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="Myself (default)" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="self">Myself</SelectItem>
+                    {staffUsers?.map((s) => (
+                      <SelectItem key={s.user_id} value={s.user_id}>{s.full_name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div>
               <Label>Store</Label>
               <div className="flex gap-2 mt-1">

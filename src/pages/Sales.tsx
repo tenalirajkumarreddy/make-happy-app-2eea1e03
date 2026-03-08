@@ -53,6 +53,7 @@ interface SaleItem {
 const Sales = () => {
   const { user } = useAuth();
   const { allowed: canOverridePrice } = usePermission("price_override");
+  const { allowed: canRecordBehalf } = usePermission("record_behalf");
   const qc = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -61,6 +62,7 @@ const Sales = () => {
   const [storeId, setStoreId] = useState("");
   const [cashAmount, setCashAmount] = useState("");
   const [upiAmount, setUpiAmount] = useState("");
+  const [recordedFor, setRecordedFor] = useState("");
   const [items, setItems] = useState<SaleItem[]>([{ product_id: "", quantity: 1, unit_price: 0 }]);
 
   const { data: sales, isLoading } = useQuery({
@@ -172,8 +174,20 @@ const Sales = () => {
     setItems(updated);
   };
 
+  // Fetch staff users for "record on behalf" selector
+  const { data: staffUsers } = useQuery({
+    queryKey: ["staff-for-behalf"],
+    queryFn: async () => {
+      const { data: roles } = await supabase.from("user_roles").select("user_id, role").neq("role", "customer");
+      const staffIds = roles?.map((r) => r.user_id) || [];
+      const { data: profs } = await supabase.from("profiles").select("user_id, full_name").in("user_id", staffIds);
+      return profs?.filter((p) => p.user_id !== user?.id) || [];
+    },
+    enabled: canRecordBehalf,
+  });
+
   const resetForm = () => {
-    setStoreId(""); setCashAmount(""); setUpiAmount("");
+    setStoreId(""); setCashAmount(""); setUpiAmount(""); setRecordedFor("");
     setItems([{ product_id: "", quantity: 1, unit_price: 0 }]);
   };
 
@@ -200,11 +214,15 @@ const Sales = () => {
     const { count } = await supabase.from("sales").select("id", { count: "exact", head: true });
     const displayId = `SALE-${String((count || 0) + 1).padStart(6, "0")}`;
 
+    const effectiveRecordedBy = recordedFor || user!.id;
+    const loggedBy = recordedFor ? user!.id : null;
+
     const { data: sale, error } = await supabase.from("sales").insert({
       display_id: displayId,
       store_id: storeId,
       customer_id: customerId,
-      recorded_by: user!.id,
+      recorded_by: effectiveRecordedBy,
+      logged_by: loggedBy,
       total_amount: totalAmount,
       cash_amount: cash,
       upi_amount: upi,
@@ -419,8 +437,17 @@ const Sales = () => {
                   <AvatarImage src={getRecorderAvatar(selectedSale.recorded_by) || undefined} />
                   <AvatarFallback className="text-[9px] bg-primary/10 text-primary">{getRecorderName(selectedSale.recorded_by).charAt(0)}</AvatarFallback>
                 </Avatar>
-                <span className="text-xs text-muted-foreground">Recorded by {getRecorderName(selectedSale.recorded_by)}</span>
+               <span className="text-xs text-muted-foreground">Recorded by {getRecorderName(selectedSale.recorded_by)}</span>
               </div>
+              {(selectedSale as any).logged_by && (
+                <div className="flex items-center gap-2">
+                  <Avatar className="h-5 w-5">
+                    <AvatarImage src={getRecorderAvatar((selectedSale as any).logged_by) || undefined} />
+                    <AvatarFallback className="text-[9px] bg-accent/20 text-accent-foreground">{getRecorderName((selectedSale as any).logged_by).charAt(0)}</AvatarFallback>
+                  </Avatar>
+                  <span className="text-xs text-muted-foreground">Logged by {getRecorderName((selectedSale as any).logged_by)}</span>
+                </div>
+              )}
             </div>
           )}
         </DialogContent>
@@ -431,6 +458,21 @@ const Sales = () => {
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Record Sale</DialogTitle></DialogHeader>
           <form onSubmit={handleAdd} className="space-y-4">
+            {canRecordBehalf && (
+              <div>
+                <Label>Record on behalf of</Label>
+                <Select value={recordedFor || "self"} onValueChange={(v) => setRecordedFor(v === "self" ? "" : v)}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="Myself (default)" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="self">Myself</SelectItem>
+                    {staffUsers?.map((s) => (
+                      <SelectItem key={s.user_id} value={s.user_id}>{s.full_name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             <div>
               <Label>Store</Label>
               <div className="flex gap-2 mt-1">
