@@ -69,9 +69,19 @@ export function ProductAccessMatrix({ onBack }: ProductAccessMatrixProps) {
     return "";
   };
 
+  const getBasePrice = (productId: string) => {
+    const p = products?.find((pr) => pr.id === productId);
+    return p ? Number(p.base_price) : 0;
+  };
+
   const toggleAccess = (productId: string, storeTypeId: string) => {
     const k = key(productId, storeTypeId);
-    setAccessMap({ ...accessMap, [k]: !isChecked(productId, storeTypeId) });
+    const newChecked = !isChecked(productId, storeTypeId);
+    setAccessMap({ ...accessMap, [k]: newChecked });
+    // When enabling, default the price to base_price if no override exists
+    if (newChecked && !getPrice(productId, storeTypeId)) {
+      setPriceMap({ ...priceMap, [k]: String(getBasePrice(productId)) });
+    }
   };
 
   const handleSave = async () => {
@@ -88,20 +98,23 @@ export function ProductAccessMatrix({ onBack }: ProductAccessMatrixProps) {
       }
     }
     if (accessInserts.length > 0) {
-      // Insert in batches of 100
       for (let i = 0; i < accessInserts.length; i += 100) {
         await supabase.from("store_type_products").insert(accessInserts.slice(i, i + 100));
       }
     }
 
-    // Rebuild pricing
+    // Rebuild pricing - only save if price differs from base_price
     await supabase.from("store_type_pricing").delete().neq("id", "00000000-0000-0000-0000-000000000000");
     const pricingInserts: { store_type_id: string; product_id: string; price: number }[] = [];
     for (const p of products || []) {
       for (const st of storeTypes || []) {
-        const val = getPrice(p.id, st.id);
-        if (val !== "" && Number(val) > 0) {
-          pricingInserts.push({ store_type_id: st.id, product_id: p.id, price: Number(val) });
+        if (isChecked(p.id, st.id)) {
+          const val = getPrice(p.id, st.id);
+          const numVal = Number(val);
+          // Always save the type-level price (even if same as base, so the hierarchy is explicit)
+          if (val !== "" && numVal > 0) {
+            pricingInserts.push({ store_type_id: st.id, product_id: p.id, price: numVal });
+          }
         }
       }
     }
@@ -131,7 +144,7 @@ export function ProductAccessMatrix({ onBack }: ProductAccessMatrixProps) {
         </Button>
         <div className="flex-1">
           <h2 className="text-lg font-semibold">Product Access Matrix</h2>
-          <p className="text-sm text-muted-foreground">Toggle which products each store type can access and set type-level pricing</p>
+          <p className="text-sm text-muted-foreground">Toggle access & set type-level pricing (defaults to base price when enabled)</p>
         </div>
         <Button onClick={handleSave} disabled={saving || loading}>
           {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
@@ -163,11 +176,13 @@ export function ProductAccessMatrix({ onBack }: ProductAccessMatrixProps) {
                     <div className="font-medium">{p.name}</div>
                     <div className="flex items-center gap-2 mt-0.5">
                       <Badge variant="outline" className="text-[10px] font-mono">{p.sku}</Badge>
-                      <span className="text-xs text-muted-foreground">₹{Number(p.base_price).toLocaleString()}</span>
+                      <span className="text-xs text-muted-foreground">Base: ₹{Number(p.base_price).toLocaleString()}</span>
                     </div>
                   </td>
                   {storeTypes?.map((st) => {
                     const checked = isChecked(p.id, st.id);
+                    const currentPrice = getPrice(p.id, st.id);
+                    const isOverridden = currentPrice && Number(currentPrice) !== Number(p.base_price);
                     return (
                       <td key={st.id} className={`p-3 text-center transition-colors ${checked ? "bg-primary/5" : ""}`}>
                         <div className="flex flex-col items-center gap-1.5">
@@ -176,13 +191,17 @@ export function ProductAccessMatrix({ onBack }: ProductAccessMatrixProps) {
                             onCheckedChange={() => toggleAccess(p.id, st.id)}
                           />
                           {checked && (
-                            <Input
-                              type="number"
-                              value={getPrice(p.id, st.id)}
-                              onChange={(e) => setPriceMap({ ...priceMap, [key(p.id, st.id)]: e.target.value })}
-                              placeholder="—"
-                              className="w-20 h-7 text-xs text-center"
-                            />
+                            <div className="flex flex-col items-center gap-0.5">
+                              <Input
+                                type="number"
+                                value={currentPrice}
+                                onChange={(e) => setPriceMap({ ...priceMap, [key(p.id, st.id)]: e.target.value })}
+                                className={`w-20 h-7 text-xs text-center ${isOverridden ? "border-primary" : ""}`}
+                              />
+                              {isOverridden && (
+                                <span className="text-[10px] text-primary font-medium">Overridden</span>
+                              )}
+                            </div>
                           )}
                         </div>
                       </td>
