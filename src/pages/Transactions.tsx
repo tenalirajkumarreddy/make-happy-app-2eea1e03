@@ -33,7 +33,7 @@ const Transactions = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("transactions")
-        .select("*, stores(name), customers(name), profiles:recorded_by(full_name)")
+        .select("*, stores(name), customers(name)")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
