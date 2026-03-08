@@ -35,6 +35,8 @@ interface DataTableProps<T> {
   searchKey?: keyof T;
   onRowClick?: (row: T) => void;
   pageSize?: number;
+  /** Custom mobile card renderer. When provided, replaces the default grid card. */
+  renderMobileCard?: (row: T, index: number) => React.ReactNode;
 }
 
 export function DataTable<T extends Record<string, any>>({
