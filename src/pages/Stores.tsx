@@ -22,6 +22,7 @@ import { toast } from "sonner";
 const Stores = () => {
   const navigate = useNavigate();
   const { role } = useAuth();
+  const { allowed: canCreateStores } = usePermission("create_stores");
   const [showAdd, setShowAdd] = useState(false);
   const [pricingStore, setPricingStore] = useState<any>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());

@@ -24,6 +24,7 @@ import { toast } from "sonner";
 const Customers = () => {
   const navigate = useNavigate();
   const { user, role } = useAuth();
+  const { allowed: canCreateCustomers } = usePermission("create_customers");
   const [showAdd, setShowAdd] = useState(false);
   const [kycCustomer, setKycCustomer] = useState<any>(null);
   const [name, setName] = useState("");
