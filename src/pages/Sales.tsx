@@ -253,6 +253,17 @@ const Sales = () => {
     }
     setSaving(true);
 
+    // Proximity check for agents
+    if (role === "agent" && selectedStore) {
+      const { checkProximity } = await import("@/lib/proximity");
+      const result = await checkProximity(selectedStore.lat ?? null, selectedStore.lng ?? null);
+      if (!result.withinRange) {
+        toast.error(result.message);
+        setSaving(false);
+        return;
+      }
+    }
+
     const customerId = selectedStore?.customer_id;
     if (!customerId) {
       toast.error("Store has no linked customer");
