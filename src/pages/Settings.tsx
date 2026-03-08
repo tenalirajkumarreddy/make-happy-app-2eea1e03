@@ -91,6 +91,12 @@ const SettingsPage = () => {
           <PricingTab isAdmin={isAdmin} />
         </TabsContent>
 
+        {isAdmin && (
+          <TabsContent value="banners" className="mt-4">
+            <BannerManagement />
+          </TabsContent>
+        )}
+
         <TabsContent value="features" className="mt-4 space-y-4">
           <div className="rounded-xl border bg-card p-6 space-y-5 max-w-lg">
             <h3 className="font-semibold">Feature Toggles</h3>
