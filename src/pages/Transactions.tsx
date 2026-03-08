@@ -99,6 +99,7 @@ const Transactions = () => {
     // Update store outstanding
     await supabase.from("stores").update({ outstanding: newOutstanding }).eq("id", storeId);
 
+    logActivity(user!.id, "Recorded transaction", "transaction", displayId, undefined, { total: totalPayment, store: storeId });
     toast.success("Transaction recorded");
     setSaving(false);
     setShowAdd(false);

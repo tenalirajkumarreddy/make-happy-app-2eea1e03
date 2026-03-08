@@ -138,6 +138,9 @@ const Sales = () => {
     }));
     await supabase.from("sale_items").insert(saleItems);
 
+    // Log activity
+    logActivity(user!.id, "Recorded sale", "sale", displayId, sale.id, { total: totalAmount, store: storeId });
+
     // Update store outstanding
     await supabase.from("stores").update({ outstanding: newOutstanding }).eq("id", storeId);
 
