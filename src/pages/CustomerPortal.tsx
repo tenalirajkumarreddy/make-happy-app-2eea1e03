@@ -72,6 +72,9 @@ const CustomerPortal = () => {
     <div className="space-y-6 animate-fade-in">
       <PageHeader title="My Dashboard" subtitle={`Welcome, ${customer.name}`} primaryAction={{ label: "Place Order", onClick: () => navigate("/portal/orders") }} />
 
+      {/* Promotional Banners */}
+      <BannerCarousel storeTypeIds={stores?.map((s: any) => s.store_type_id).filter(Boolean)} />
+
       {/* KYC Banner */}
       {customer.kyc_status === "not_requested" && (
         <div className="rounded-xl border border-warning/30 bg-warning/5 p-4 flex items-center justify-between">
