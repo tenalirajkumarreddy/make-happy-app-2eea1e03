@@ -61,23 +61,32 @@ const AccessControl = () => {
   const { data: users, isLoading } = useQuery({
     queryKey: ["all-users"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: profiles, error: pErr } = await supabase
         .from("profiles")
-        .select("*, user_roles(role)")
+        .select("*")
         .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data;
+      if (pErr) throw pErr;
+
+      const { data: roles, error: rErr } = await supabase
+        .from("user_roles")
+        .select("user_id, role");
+      if (rErr) throw rErr;
+
+      const roleMap = new Map(roles?.map((r) => [r.user_id, r.role]) || []);
+      return (profiles || []).map((p) => ({
+        ...p,
+        _role: roleMap.get(p.user_id) || "customer",
+      }));
     },
   });
 
   const staffUsers = users?.filter((u) => {
-    const role = (u.user_roles as any)?.[0]?.role;
+    const role = u._role;
     return role && role !== "customer";
   }) || [];
 
   const customerUsers = users?.filter((u) => {
-    const role = (u.user_roles as any)?.[0]?.role;
-    return role === "customer";
+    return u._role === "customer";
   }) || [];
 
   const handleInvite = async (e: React.FormEvent) => {
@@ -151,7 +160,7 @@ const AccessControl = () => {
                 </TableHeader>
                 <TableBody>
                   {staffUsers.map((row) => {
-                    const userRole = (row.user_roles as any)?.[0]?.role || "—";
+                    const userRole = row._role || "—";
                     const userPerms = getPermissionsForUser(row.user_id);
                     return (
                       <TableRow key={row.id}>
@@ -218,7 +227,7 @@ const AccessControl = () => {
           {/* Mobile: card view */}
           <div className="md:hidden space-y-3">
             {staffUsers.map((row) => {
-              const userRole = (row.user_roles as any)?.[0]?.role || "—";
+              const userRole = row._role || "—";
               const userPerms = getPermissionsForUser(row.user_id);
               const isSA = userRole === "super_admin";
               return (
