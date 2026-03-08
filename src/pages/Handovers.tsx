@@ -115,7 +115,7 @@ const Handovers = () => {
                     <span className="text-sm font-medium">📅 {item.handover_date}</span>
                     <StatusBadge
                       status={item.status === "confirmed" ? "active" : item.status === "awaiting_confirmation" ? "pending" : "inactive"}
-                      label={item.status === "confirmed" ? `Collected by ${(item as any).confirmed_profile?.full_name || "Manager"}` : item.status === "awaiting_confirmation" ? "Awaiting confirmation" : "Not handed over"}
+                      label={item.status === "confirmed" ? "Confirmed" : item.status === "awaiting_confirmation" ? "Awaiting confirmation" : "Not handed over"}
                     />
                   </div>
                   <p className="font-semibold">{(item as any).profiles?.full_name || "User"}</p>
