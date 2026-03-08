@@ -52,6 +52,29 @@ const SettingsPage = () => {
     setSettings((prev) => ({ ...prev, [key]: prev[key] === "true" ? "false" : "true" }));
   };
 
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { toast.error("Max 2MB"); return; }
+    setUploadingLogo(true);
+    const ext = file.name.split(".").pop();
+    const path = `company/logo-${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from("entity-photos").upload(path, file, { upsert: true });
+    if (error) { toast.error(error.message); setUploadingLogo(false); return; }
+    const { data: urlData } = supabase.storage.from("entity-photos").getPublicUrl(path);
+    setSettings((prev) => ({ ...prev, company_logo: urlData.publicUrl }));
+    setUploadingLogo(false);
+    toast.success("Logo uploaded — save settings to apply");
+  };
+
+  const removeLogo = () => {
+    setSettings((prev) => ({ ...prev, company_logo: "" }));
+    if (logoInputRef.current) logoInputRef.current.value = "";
+  };
+
 
   if (loadingSettings) {
     return <div className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
