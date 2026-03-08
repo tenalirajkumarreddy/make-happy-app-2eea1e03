@@ -113,10 +113,10 @@ const StoreTypes = () => {
 
       <DataTable columns={columns} data={storeTypes || []} searchKey="name" searchPlaceholder="Search store types..." />
 
-      <Dialog open={showAdd} onOpenChange={setShowAdd}>
+      <Dialog open={showAdd} onOpenChange={handleClose}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Add Store Type</DialogTitle></DialogHeader>
-          <form onSubmit={handleAdd} className="space-y-4">
+          <DialogHeader><DialogTitle>{editingType ? "Edit Store Type" : "Add Store Type"}</DialogTitle></DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div><Label>Type Name</Label><Input value={newTypeName} onChange={(e) => setNewTypeName(e.target.value)} required className="mt-1" placeholder="e.g., Retail, Wholesale" /></div>
             <div>
               <Label>Order Type</Label>
@@ -130,7 +130,7 @@ const StoreTypes = () => {
             </div>
             <Button type="submit" className="w-full" disabled={saving}>
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Add Store Type
+              {editingType ? "Update Store Type" : "Add Store Type"}
             </Button>
           </form>
         </DialogContent>
