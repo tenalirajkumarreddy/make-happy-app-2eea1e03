@@ -35,6 +35,7 @@ const StoreDetail = () => {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
+  const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: "",
     phone: "",
