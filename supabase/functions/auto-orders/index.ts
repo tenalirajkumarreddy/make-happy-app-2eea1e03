@@ -1,4 +1,3 @@
-import Deno from "https://deno.land/x/deno@v1.0.0/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
