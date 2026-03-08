@@ -25,6 +25,7 @@ import {
   Map,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface NavItem {
   label: string;
@@ -58,6 +59,16 @@ export function AppSidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
+  const { role } = useAuth();
+
+  // Customers see a minimal sidebar
+  const isCustomer = role === "customer";
+  const customerNav: NavItem[] = [
+    { label: "My Dashboard", path: "/", icon: LayoutDashboard },
+  ];
+
+  const visibleMainNav = isCustomer ? customerNav : mainNav;
+  const visibleSecondaryNav = isCustomer ? [] : secondaryNav;
 
   const renderNav = (items: NavItem[]) =>
     items.map((item) => {
@@ -123,14 +134,17 @@ export function AppSidebar() {
         <p className={cn("px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted", collapsed && "text-center")}>
           {collapsed ? "•" : "Main"}
         </p>
-        {renderNav(mainNav)}
+        {renderNav(visibleMainNav)}
 
-        <div className="my-3 border-t border-sidebar-border" />
-
-        <p className={cn("px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted", collapsed && "text-center")}>
-          {collapsed ? "•" : "System"}
-        </p>
-        {renderNav(secondaryNav)}
+        {visibleSecondaryNav.length > 0 && (
+          <>
+            <div className="my-3 border-t border-sidebar-border" />
+            <p className={cn("px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted", collapsed && "text-center")}>
+              {collapsed ? "•" : "System"}
+            </p>
+            {renderNav(visibleSecondaryNav)}
+          </>
+        )}
       </nav>
 
       {/* Collapse button */}

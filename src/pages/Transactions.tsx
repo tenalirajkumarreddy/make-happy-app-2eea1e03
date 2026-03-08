@@ -33,7 +33,7 @@ const Transactions = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("transactions")
-        .select("*, stores(name), customers(name), profiles:recorded_by(full_name)")
+        .select("*, stores(name), customers(name)")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
@@ -115,7 +115,7 @@ const Transactions = () => {
     { header: "Total", accessor: (row: any) => `₹${Number(row.total_amount).toLocaleString()}`, className: "font-semibold" },
     { header: "Old Bal.", accessor: (row: any) => `₹${Number(row.old_outstanding).toLocaleString()}`, className: "text-muted-foreground text-sm" },
     { header: "New Bal.", accessor: (row: any) => `₹${Number(row.new_outstanding).toLocaleString()}`, className: "text-sm" },
-    { header: "By", accessor: (row: any) => row.profiles?.full_name || "—", className: "text-muted-foreground text-sm" },
+    { header: "Date", accessor: (row: any) => new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }), className: "text-muted-foreground text-xs" },
     { header: "Date", accessor: (row: any) => new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }), className: "text-muted-foreground text-xs" },
   ];
 

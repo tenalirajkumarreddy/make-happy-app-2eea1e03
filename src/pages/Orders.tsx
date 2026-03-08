@@ -45,7 +45,7 @@ const Orders = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("orders")
-        .select("*, stores(name), customers(name), profiles:created_by(full_name)")
+        .select("*, stores(name), customers(name)")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
@@ -133,7 +133,7 @@ const Orders = () => {
     { header: "Store", accessor: (row: any) => row.stores?.name || "—", className: "font-medium" },
     { header: "Type", accessor: (row: any) => <Badge variant="secondary">{row.order_type}</Badge> },
     { header: "Source", accessor: (row: any) => <Badge variant="outline">{row.source}</Badge> },
-    { header: "Created By", accessor: (row: any) => row.profiles?.full_name || "—", className: "text-muted-foreground text-sm" },
+    { header: "Customer", accessor: (row: any) => row.customers?.name || "—", className: "text-muted-foreground text-sm" },
     { header: "Status", accessor: (row: any) => <StatusBadge status={row.status === "delivered" ? "active" : row.status as any} label={row.status} /> },
     { header: "Date", accessor: (row: any) => new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }), className: "text-muted-foreground text-xs" },
   ];

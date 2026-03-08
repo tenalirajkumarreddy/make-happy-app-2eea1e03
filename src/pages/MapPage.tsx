@@ -22,7 +22,7 @@ const MapPage = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from("route_sessions")
-        .select("*, routes(name), profiles:user_id(full_name)")
+        .select("*, routes(name)")
         .eq("status", "active");
       return data || [];
     },
@@ -50,7 +50,7 @@ const MapPage = () => {
           <div className="flex flex-wrap gap-2">
             {activeSessions.map((session: any) => (
               <Badge key={session.id} variant="secondary" className="text-xs">
-                {(session as any).profiles?.full_name || "Agent"} → {(session as any).routes?.name || "Route"}
+                Agent → {(session as any).routes?.name || "Route"}
                 <span className="ml-1 text-muted-foreground">since {new Date(session.started_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}</span>
               </Badge>
             ))}

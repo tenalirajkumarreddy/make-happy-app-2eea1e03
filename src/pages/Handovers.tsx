@@ -18,7 +18,7 @@ const Handovers = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("handovers")
-        .select("*, profiles:user_id(full_name), confirmed_profile:confirmed_by(full_name)")
+        .select("*")
         .order("handover_date", { ascending: false });
       if (error) throw error;
       return data;
@@ -115,10 +115,10 @@ const Handovers = () => {
                     <span className="text-sm font-medium">📅 {item.handover_date}</span>
                     <StatusBadge
                       status={item.status === "confirmed" ? "active" : item.status === "awaiting_confirmation" ? "pending" : "inactive"}
-                      label={item.status === "confirmed" ? `Collected by ${(item as any).confirmed_profile?.full_name || "Manager"}` : item.status === "awaiting_confirmation" ? "Awaiting confirmation" : "Not handed over"}
+                      label={item.status === "confirmed" ? "Confirmed" : item.status === "awaiting_confirmation" ? "Awaiting confirmation" : "Not handed over"}
                     />
                   </div>
-                  <p className="font-semibold">{(item as any).profiles?.full_name || "User"}</p>
+                  <p className="font-semibold">Handover #{item.id.slice(0, 8)}</p>
                   <div className="flex items-center gap-4 mt-2 text-sm">
                     <span className="flex items-center gap-1.5">
                       <Banknote className="h-4 w-4 text-success" />Cash: ₹{Number(item.cash_amount).toLocaleString()}
