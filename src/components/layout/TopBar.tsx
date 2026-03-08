@@ -16,6 +16,8 @@ import { useEffect, useState } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useNotifications, requestNotificationPermission } from "@/hooks/useNotifications";
 import { Badge } from "@/components/ui/badge";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 
 function useTheme() {
   const [dark, setDark] = useState(() => {
