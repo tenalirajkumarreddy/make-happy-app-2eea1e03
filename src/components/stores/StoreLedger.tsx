@@ -162,7 +162,7 @@ export function StoreLedger({ sales, transactions, openingBalance, storeCreatedA
     {
       header: "Credit (+)",
       accessor: (row: LedgerEntry) =>
-        row.type === "payment" ? (
+        row.type === "payment" || row.id === "__opening_balance__" ? (
           <span className="text-success font-medium">₹{row.total_amount.toLocaleString()}</span>
         ) : (
           <span className="text-muted-foreground">—</span>
