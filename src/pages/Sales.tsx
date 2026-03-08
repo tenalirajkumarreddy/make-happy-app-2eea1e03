@@ -191,7 +191,7 @@ const Sales = () => {
   });
 
   const resetForm = () => {
-    setStoreId(""); setCashAmount(""); setUpiAmount(""); setRecordedFor("");
+    setStoreId(isPosUser ? POS_STORE_ID : ""); setCashAmount(""); setUpiAmount(""); setRecordedFor("");
     setItems([{ product_id: "", quantity: 1, unit_price: 0 }]);
   };
 
