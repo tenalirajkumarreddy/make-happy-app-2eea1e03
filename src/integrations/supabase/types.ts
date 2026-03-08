@@ -766,9 +766,12 @@ export type Database = {
         Row: {
           address: string | null
           alternate_phone: string | null
+          area: string | null
+          city: string | null
           created_at: string
           customer_id: string
           display_id: string
+          district: string | null
           id: string
           is_active: boolean
           lat: number | null
@@ -778,16 +781,22 @@ export type Database = {
           outstanding: number
           phone: string | null
           photo_url: string | null
+          pincode: string | null
           route_id: string | null
+          state: string | null
           store_type_id: string
+          street: string | null
           updated_at: string
         }
         Insert: {
           address?: string | null
           alternate_phone?: string | null
+          area?: string | null
+          city?: string | null
           created_at?: string
           customer_id: string
           display_id: string
+          district?: string | null
           id?: string
           is_active?: boolean
           lat?: number | null
@@ -797,16 +806,22 @@ export type Database = {
           outstanding?: number
           phone?: string | null
           photo_url?: string | null
+          pincode?: string | null
           route_id?: string | null
+          state?: string | null
           store_type_id: string
+          street?: string | null
           updated_at?: string
         }
         Update: {
           address?: string | null
           alternate_phone?: string | null
+          area?: string | null
+          city?: string | null
           created_at?: string
           customer_id?: string
           display_id?: string
+          district?: string | null
           id?: string
           is_active?: boolean
           lat?: number | null
@@ -816,8 +831,11 @@ export type Database = {
           outstanding?: number
           phone?: string | null
           photo_url?: string | null
+          pincode?: string | null
           route_id?: string | null
+          state?: string | null
           store_type_id?: string
+          street?: string | null
           updated_at?: string
         }
         Relationships: [
