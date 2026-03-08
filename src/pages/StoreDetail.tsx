@@ -616,6 +616,33 @@ const StoreDetail = () => {
           </div>
         </DialogContent>
       </Dialog>
+      {/* Transfer Store Dialog */}
+      <Dialog open={showTransfer} onOpenChange={setShowTransfer}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Transfer Store</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">Move <strong>{store?.name}</strong> from <strong>{(store as any)?.customers?.name}</strong> to another customer.</p>
+          <div className="space-y-3 mt-2">
+            <div>
+              <Label>New Customer</Label>
+              <Select value={transferCustomerId} onValueChange={setTransferCustomerId}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Select customer" /></SelectTrigger>
+                <SelectContent>
+                  {allCustomers?.filter((c) => c.id !== store?.customer_id).map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name} ({c.display_id})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowTransfer(false)}>Cancel</Button>
+            <Button onClick={handleTransfer} disabled={transferSaving || !transferCustomerId}>
+              {transferSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Transfer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
