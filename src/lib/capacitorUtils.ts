@@ -1,0 +1,99 @@
+import { Capacitor } from "@capacitor/core";
+import { Camera, CameraResultType, CameraSource } from "@capacitor/camera";
+import { Geolocation } from "@capacitor/geolocation";
+
+/**
+ * Check if running as native app
+ */
+export const isNativeApp = () => Capacitor.isNativePlatform();
+
+/**
+ * Check if running on Android
+ */
+export const isAndroid = () => Capacitor.getPlatform() === "android";
+
+/**
+ * Check if running on iOS
+ */
+export const isIOS = () => Capacitor.getPlatform() === "ios";
+
+/**
+ * Take a photo using native camera (falls back to web if not native)
+ */
+export async function takePhoto(): Promise<string | null> {
+  try {
+    const image = await Camera.getPhoto({
+      quality: 90,
+      allowEditing: false,
+      resultType: CameraResultType.Base64,
+      source: CameraSource.Camera,
+    });
+    return image.base64String ? `data:image/jpeg;base64,${image.base64String}` : null;
+  } catch (error) {
+    console.error("Camera error:", error);
+    return null;
+  }
+}
+
+/**
+ * Pick photo from gallery
+ */
+export async function pickPhoto(): Promise<string | null> {
+  try {
+    const image = await Camera.getPhoto({
+      quality: 90,
+      allowEditing: false,
+      resultType: CameraResultType.Base64,
+      source: CameraSource.Photos,
+    });
+    return image.base64String ? `data:image/jpeg;base64,${image.base64String}` : null;
+  } catch (error) {
+    console.error("Gallery error:", error);
+    return null;
+  }
+}
+
+/**
+ * Get current position using native geolocation
+ */
+export async function getCurrentPosition(): Promise<{ lat: number; lng: number } | null> {
+  try {
+    const position = await Geolocation.getCurrentPosition({
+      enableHighAccuracy: true,
+      timeout: 10000,
+    });
+    return {
+      lat: position.coords.latitude,
+      lng: position.coords.longitude,
+    };
+  } catch (error) {
+    console.error("Geolocation error:", error);
+    return null;
+  }
+}
+
+/**
+ * Request location permissions
+ */
+export async function requestLocationPermission(): Promise<boolean> {
+  try {
+    const status = await Geolocation.requestPermissions();
+    return status.location === "granted";
+  } catch (error) {
+    console.error("Permission error:", error);
+    return false;
+  }
+}
+
+/**
+ * Request camera permissions
+ */
+export async function requestCameraPermission(): Promise<boolean> {
+  try {
+    const status = await Camera.requestPermissions();
+    return status.camera === "granted";
+  } catch (error) {
+    console.error("Camera permission error:", error);
+    return false;
+  }
+}
