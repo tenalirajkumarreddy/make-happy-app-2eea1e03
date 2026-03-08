@@ -3,11 +3,12 @@ import { DataTable } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { ImageUpload } from "@/components/shared/ImageUpload";
+import { ProductAccessDialog } from "@/components/products/ProductAccessDialog";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { logActivity } from "@/lib/activityLogger";
-import { Loader2 } from "lucide-react";
+import { Loader2, Settings2 } from "lucide-react";
 import { useState } from "react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -21,6 +22,7 @@ import { useQueryClient } from "@tanstack/react-query";
 const Products = () => {
   const { user } = useAuth();
   const [showAdd, setShowAdd] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [name, setName] = useState("");
   const [sku, setSku] = useState("");
   const [price, setPrice] = useState("");
@@ -77,6 +79,15 @@ const Products = () => {
     { header: "Base Price", accessor: (row: any) => `₹${Number(row.base_price).toLocaleString()}` },
     { header: "Unit", accessor: "unit" as const, className: "hidden sm:table-cell" },
     { header: "Status", accessor: (row: any) => <StatusBadge status={row.is_active ? "active" : "inactive"} /> },
+    { header: "Access", accessor: (row: any) => (
+      <button
+        onClick={(e) => { e.stopPropagation(); setSelectedProduct(row); }}
+        className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 font-medium transition-colors"
+      >
+        <Settings2 className="h-3.5 w-3.5" />
+        <span className="hidden sm:inline">Store Types</span>
+      </button>
+    )},
   ];
 
   if (isLoading) {
@@ -122,6 +133,11 @@ const Products = () => {
           </form>
         </DialogContent>
       </Dialog>
+      <ProductAccessDialog
+        product={selectedProduct}
+        open={!!selectedProduct}
+        onOpenChange={(open) => { if (!open) setSelectedProduct(null); }}
+      />
     </div>
   );
 };
