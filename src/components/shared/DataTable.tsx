@@ -7,8 +7,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Column<T> {
   header: string;
@@ -22,6 +30,7 @@ interface DataTableProps<T> {
   searchPlaceholder?: string;
   searchKey?: keyof T;
   onRowClick?: (row: T) => void;
+  pageSize?: number;
 }
 
 export function DataTable<T extends Record<string, any>>({
@@ -30,14 +39,27 @@ export function DataTable<T extends Record<string, any>>({
   searchPlaceholder = "Search...",
   searchKey,
   onRowClick,
+  pageSize: defaultPageSize = 10,
 }: DataTableProps<T>) {
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(defaultPageSize);
 
   const filtered = searchKey
     ? data.filter((row) =>
         String(row[searchKey]).toLowerCase().includes(search.toLowerCase())
       )
     : data;
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safeP = Math.min(page, totalPages - 1);
+  const paged = filtered.slice(safeP * pageSize, (safeP + 1) * pageSize);
+
+  // Reset page on search
+  const handleSearch = (val: string) => {
+    setSearch(val);
+    setPage(0);
+  };
 
   return (
     <div className="space-y-4">
@@ -47,7 +69,7 @@ export function DataTable<T extends Record<string, any>>({
           <Input
             placeholder={searchPlaceholder}
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => handleSearch(e.target.value)}
             className="pl-9"
           />
         </div>
@@ -64,14 +86,14 @@ export function DataTable<T extends Record<string, any>>({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.length === 0 ? (
+            {paged.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={columns.length} className="h-24 text-center text-muted-foreground">
                   No results found.
                 </TableCell>
               </TableRow>
             ) : (
-              filtered.map((row, i) => (
+              paged.map((row, i) => (
                 <TableRow key={i} className={`hover:bg-muted/30 ${onRowClick ? "cursor-pointer" : ""}`} onClick={() => onRowClick?.(row)}>
                   {columns.map((col, j) => (
                     <TableCell key={j} className={col.className}>
@@ -86,6 +108,34 @@ export function DataTable<T extends Record<string, any>>({
           </TableBody>
         </Table>
       </div>
+
+      {/* Pagination */}
+      {filtered.length > 0 && (
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <span>Rows per page</span>
+            <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPage(0); }}>
+              <SelectTrigger className="h-8 w-[70px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {[10, 25, 50, 100].map((s) => (
+                  <SelectItem key={s} value={String(s)}>{s}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-2">
+            <span>{safeP * pageSize + 1}–{Math.min((safeP + 1) * pageSize, filtered.length)} of {filtered.length}</span>
+            <Button variant="outline" size="icon" className="h-8 w-8" disabled={safeP === 0} onClick={() => setPage(safeP - 1)}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button variant="outline" size="icon" className="h-8 w-8" disabled={safeP >= totalPages - 1} onClick={() => setPage(safeP + 1)}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
