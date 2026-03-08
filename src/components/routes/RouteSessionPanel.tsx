@@ -106,6 +106,16 @@ export function RouteSessionPanel() {
 
   const handleVisit = async (storeId: string) => {
     if (!activeSession) return;
+    const store = routeStores.find((s: any) => s.id === storeId);
+    // Proximity check
+    if (store?.lat && store?.lng) {
+      const { checkProximity } = await import("@/lib/proximity");
+      const result = await checkProximity(store.lat, store.lng);
+      if (!result.withinRange) {
+        toast.error(result.message);
+        return;
+      }
+    }
     const loc = await getLocation();
     const { error } = await supabase.from("store_visits").insert({
       session_id: activeSession.id,

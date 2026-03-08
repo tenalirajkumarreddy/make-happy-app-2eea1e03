@@ -95,7 +95,7 @@ const Sales = () => {
   const { data: stores } = useQuery({
     queryKey: ["stores-for-sale"],
     queryFn: async () => {
-      const { data } = await supabase.from("stores").select("id, name, outstanding, display_id, store_type_id, customer_id").eq("is_active", true);
+      const { data } = await supabase.from("stores").select("id, name, outstanding, display_id, store_type_id, customer_id, lat, lng").eq("is_active", true);
       return data || [];
     },
   });
@@ -252,6 +252,17 @@ const Sales = () => {
       return;
     }
     setSaving(true);
+
+    // Proximity check for agents
+    if (role === "agent" && selectedStore) {
+      const { checkProximity } = await import("@/lib/proximity");
+      const result = await checkProximity(selectedStore.lat ?? null, selectedStore.lng ?? null);
+      if (!result.withinRange) {
+        toast.error(result.message);
+        setSaving(false);
+        return;
+      }
+    }
 
     const customerId = selectedStore?.customer_id;
     if (!customerId) {
