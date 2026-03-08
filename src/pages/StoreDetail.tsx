@@ -11,11 +11,10 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Loader2, ArrowLeft, DollarSign, ShoppingCart, Banknote,
   MapPin, Store as StoreIcon, Phone, User, Tag, Navigation, Calendar,
-  Pencil, X, Save,
+  Pencil, X, Save, AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
@@ -31,6 +30,7 @@ const StoreDetail = () => {
 
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [toggling, setToggling] = useState(false);
   const [form, setForm] = useState({
     name: "",
     phone: "",
@@ -48,7 +48,7 @@ const StoreDetail = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("stores")
-        .select("*, customers(name), store_types(name), routes(name)")
+        .select("*, customers(name, is_active), store_types(name), routes(name)")
         .eq("id", id!)
         .maybeSingle();
       if (error) throw error;
@@ -60,12 +60,7 @@ const StoreDetail = () => {
   const { data: sales } = useQuery({
     queryKey: ["store-sales", id],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("sales")
-        .select("*")
-        .eq("store_id", id!)
-        .order("created_at", { ascending: false })
-        .limit(50);
+      const { data } = await supabase.from("sales").select("*").eq("store_id", id!).order("created_at", { ascending: false }).limit(50);
       return data || [];
     },
     enabled: !!id,
@@ -74,12 +69,7 @@ const StoreDetail = () => {
   const { data: transactions } = useQuery({
     queryKey: ["store-transactions", id],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("transactions")
-        .select("*")
-        .eq("store_id", id!)
-        .order("created_at", { ascending: false })
-        .limit(50);
+      const { data } = await supabase.from("transactions").select("*").eq("store_id", id!).order("created_at", { ascending: false }).limit(50);
       return data || [];
     },
     enabled: !!id,
@@ -88,12 +78,7 @@ const StoreDetail = () => {
   const { data: orders } = useQuery({
     queryKey: ["store-orders", id],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("orders")
-        .select("*")
-        .eq("store_id", id!)
-        .order("created_at", { ascending: false })
-        .limit(50);
+      const { data } = await supabase.from("orders").select("*").eq("store_id", id!).order("created_at", { ascending: false }).limit(50);
       return data || [];
     },
     enabled: !!id,
@@ -102,19 +87,14 @@ const StoreDetail = () => {
   const { data: visits } = useQuery({
     queryKey: ["store-visits", id],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("store_visits")
-        .select("*, route_sessions(routes(name))")
-        .eq("store_id", id!)
-        .order("visited_at", { ascending: false })
-        .limit(50);
+      const { data } = await supabase.from("store_visits").select("*, route_sessions(routes(name))").eq("store_id", id!).order("visited_at", { ascending: false }).limit(50);
       return data || [];
     },
     enabled: !!id,
   });
 
   const startEditing = () => {
-    if (!store) return;
+    if (!store || !store.is_active) return;
     setForm({
       name: store.name || "",
       phone: store.phone || "",
@@ -149,10 +129,7 @@ const StoreDetail = () => {
       })
       .eq("id", id);
     setSaving(false);
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
+    if (error) { toast.error(error.message); return; }
     toast.success("Store updated");
     setEditing(false);
     qc.invalidateQueries({ queryKey: ["store", id] });
@@ -161,18 +138,22 @@ const StoreDetail = () => {
 
   const handleToggleActive = async () => {
     if (!store || !id) return;
-    const newVal = !store.is_active;
-    const { error } = await supabase
-      .from("stores")
-      .update({ is_active: newVal })
-      .eq("id", id);
-    if (error) {
-      toast.error(error.message);
+    // Prevent activating store if customer is inactive
+    const customerActive = (store as any).customers?.is_active;
+    if (!store.is_active && customerActive === false) {
+      toast.error("Cannot activate store: the customer is inactive. Activate the customer first.");
       return;
     }
+    const newVal = !store.is_active;
+    setToggling(true);
+    const { error } = await supabase.from("stores").update({ is_active: newVal }).eq("id", id);
+    setToggling(false);
+    if (error) { toast.error(error.message); return; }
     toast.success(`Store ${newVal ? "activated" : "deactivated"}`);
+    setEditing(false);
     qc.invalidateQueries({ queryKey: ["store", id] });
     qc.invalidateQueries({ queryKey: ["stores"] });
+    qc.invalidateQueries({ queryKey: ["customer-stores", store.customer_id] });
   };
 
   if (isLoading) {
@@ -183,12 +164,10 @@ const StoreDetail = () => {
     return <div className="text-center py-20 text-muted-foreground">Store not found</div>;
   }
 
+  const isInactive = !store.is_active;
   const totalSales = sales?.reduce((s, r) => s + Number(r.total_amount), 0) || 0;
   const totalCollected = transactions?.reduce((s, r) => s + Number(r.total_amount), 0) || 0;
-
-  const fullAddress = [store.street, store.area, store.city, store.district, store.state, store.pincode]
-    .filter(Boolean)
-    .join(", ") || store.address || "Not provided";
+  const fullAddress = [store.street, store.area, store.city, store.district, store.state, store.pincode].filter(Boolean).join(", ") || store.address || "Not provided";
 
   const salesColumns = [
     { header: "Sale ID", accessor: "display_id" as const, className: "font-mono text-xs" },
@@ -224,18 +203,25 @@ const StoreDetail = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Back button */}
       <Button variant="ghost" size="sm" onClick={() => navigate("/stores")} className="gap-1.5 text-muted-foreground hover:text-foreground -ml-2">
         <ArrowLeft className="h-4 w-4" />
         Stores
       </Button>
 
-      {/* Profile Card */}
-      <Card className="overflow-hidden">
+      {isInactive && (
+        <div className="flex items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4">
+          <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-destructive">This store is inactive</p>
+            <p className="text-xs text-muted-foreground mt-0.5">No sales, orders, or modifications can be made. Activate the store to resume operations.</p>
+          </div>
+        </div>
+      )}
+
+      <Card className={`overflow-hidden ${isInactive ? "opacity-75" : ""}`}>
         <div className="h-20 sm:h-28 bg-gradient-to-r from-accent/40 via-primary/15 to-accent/20" />
         <CardContent className="relative px-4 sm:px-6 pb-6 -mt-10 sm:-mt-12">
           <div className="flex flex-col sm:flex-row sm:items-end gap-4">
-            {/* Photo */}
             <div className="h-20 w-20 sm:h-24 sm:w-24 rounded-xl border-4 border-card bg-muted flex items-center justify-center overflow-hidden shadow-md shrink-0">
               {store.photo_url ? (
                 <img src={store.photo_url} alt={store.name} className="w-full h-full object-cover" />
@@ -244,7 +230,6 @@ const StoreDetail = () => {
               )}
             </div>
 
-            {/* Name & badges */}
             <div className="flex-1 min-w-0 sm:pb-1">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-xl sm:text-2xl font-bold text-foreground truncate">{store.name}</h1>
@@ -258,8 +243,7 @@ const StoreDetail = () => {
               </div>
             </div>
 
-            {/* Actions */}
-            <div className="flex items-center gap-3 shrink-0 sm:pb-1">
+            <div className="flex items-center gap-3 shrink-0 sm:pb-1 flex-wrap">
               {canEdit && (
                 <>
                   <div className="flex items-center gap-2">
@@ -270,33 +254,30 @@ const StoreDetail = () => {
                       id="store-active-toggle"
                       checked={store.is_active}
                       onCheckedChange={handleToggleActive}
+                      disabled={toggling}
                     />
                   </div>
-                  {!editing ? (
-                    <Button variant="outline" size="sm" onClick={startEditing} className="gap-1.5">
-                      <Pencil className="h-3.5 w-3.5" /> Edit
-                    </Button>
-                  ) : (
-                    <div className="flex gap-1.5">
-                      <Button variant="ghost" size="sm" onClick={() => setEditing(false)} disabled={saving}>
-                        <X className="h-4 w-4" />
+                  {!isInactive && (
+                    !editing ? (
+                      <Button variant="outline" size="sm" onClick={startEditing} className="gap-1.5">
+                        <Pencil className="h-3.5 w-3.5" /> Edit
                       </Button>
-                      <Button size="sm" onClick={handleSave} disabled={saving} className="gap-1.5">
-                        {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                        Save
-                      </Button>
-                    </div>
+                    ) : (
+                      <div className="flex gap-1.5">
+                        <Button variant="ghost" size="sm" onClick={() => setEditing(false)} disabled={saving}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                        <Button size="sm" onClick={handleSave} disabled={saving} className="gap-1.5">
+                          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                          Save
+                        </Button>
+                      </div>
+                    )
                   )}
                 </>
               )}
-              {/* Map link on desktop */}
               {store.lat && store.lng && (
-                <a
-                  href={`https://www.google.com/maps?q=${store.lat},${store.lng}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hidden sm:inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
-                >
+                <a href={`https://www.google.com/maps?q=${store.lat},${store.lng}`} target="_blank" rel="noopener noreferrer" className="hidden sm:inline-flex items-center gap-1.5 text-sm text-primary hover:underline">
                   <MapPin className="h-4 w-4" /> Map
                 </a>
               )}
@@ -305,45 +286,17 @@ const StoreDetail = () => {
 
           <Separator className="my-4" />
 
-          {/* Detail grid - view or edit mode */}
           {editing ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="edit-name" className="text-xs">Store Name</Label>
-                <Input id="edit-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="edit-phone" className="text-xs">Phone</Label>
-                <Input id="edit-phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="edit-alt-phone" className="text-xs">Alt. Phone</Label>
-                <Input id="edit-alt-phone" value={form.alternate_phone} onChange={(e) => setForm({ ...form, alternate_phone: e.target.value })} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="edit-street" className="text-xs">Street</Label>
-                <Input id="edit-street" value={form.street} onChange={(e) => setForm({ ...form, street: e.target.value })} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="edit-area" className="text-xs">Area</Label>
-                <Input id="edit-area" value={form.area} onChange={(e) => setForm({ ...form, area: e.target.value })} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="edit-city" className="text-xs">City</Label>
-                <Input id="edit-city" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="edit-district" className="text-xs">District</Label>
-                <Input id="edit-district" value={form.district} onChange={(e) => setForm({ ...form, district: e.target.value })} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="edit-state" className="text-xs">State</Label>
-                <Input id="edit-state" value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="edit-pincode" className="text-xs">Pincode</Label>
-                <Input id="edit-pincode" value={form.pincode} onChange={(e) => setForm({ ...form, pincode: e.target.value })} />
-              </div>
+              <div className="space-y-1.5"><Label className="text-xs">Store Name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label className="text-xs">Phone</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label className="text-xs">Alt. Phone</Label><Input value={form.alternate_phone} onChange={(e) => setForm({ ...form, alternate_phone: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label className="text-xs">Street</Label><Input value={form.street} onChange={(e) => setForm({ ...form, street: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label className="text-xs">Area</Label><Input value={form.area} onChange={(e) => setForm({ ...form, area: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label className="text-xs">City</Label><Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label className="text-xs">District</Label><Input value={form.district} onChange={(e) => setForm({ ...form, district: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label className="text-xs">State</Label><Input value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label className="text-xs">Pincode</Label><Input value={form.pincode} onChange={(e) => setForm({ ...form, pincode: e.target.value })} /></div>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -356,18 +309,9 @@ const StoreDetail = () => {
               {store.alternate_phone && <InfoItem icon={Phone} label="Alt. Phone" value={store.alternate_phone} />}
               {store.lat && store.lng && (
                 <div className="sm:hidden">
-                  <a
-                    href={`https://www.google.com/maps?q=${store.lat},${store.lng}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-start gap-2.5 rounded-lg bg-primary/10 p-3 text-primary hover:bg-primary/15 transition-colors"
-                  >
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-background shadow-sm">
-                      <MapPin className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0 pt-0.5">
-                      <p className="text-sm font-medium">View on Map</p>
-                    </div>
+                  <a href={`https://www.google.com/maps?q=${store.lat},${store.lng}`} target="_blank" rel="noopener noreferrer" className="flex items-start gap-2.5 rounded-lg bg-primary/10 p-3 text-primary hover:bg-primary/15 transition-colors">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-background shadow-sm"><MapPin className="h-4 w-4" /></div>
+                    <div className="min-w-0 pt-0.5"><p className="text-sm font-medium">View on Map</p></div>
                   </a>
                 </div>
               )}
@@ -376,7 +320,6 @@ const StoreDetail = () => {
         </CardContent>
       </Card>
 
-      {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <StatCard title="Total Sales" value={`₹${totalSales.toLocaleString()}`} icon={DollarSign} iconColor="bg-primary" />
         <StatCard title="Collections" value={`₹${totalCollected.toLocaleString()}`} icon={Banknote} iconColor="bg-success" />
@@ -384,7 +327,6 @@ const StoreDetail = () => {
         <StatCard title="Orders" value={String(orders?.length || 0)} icon={ShoppingCart} iconColor="bg-info" />
       </div>
 
-      {/* Tabs */}
       <Tabs defaultValue="sales">
         <TabsList className="w-full sm:w-auto overflow-x-auto">
           <TabsTrigger value="sales" className="text-xs sm:text-sm">Sales ({sales?.length || 0})</TabsTrigger>
@@ -393,24 +335,16 @@ const StoreDetail = () => {
           <TabsTrigger value="visits" className="text-xs sm:text-sm">Visits ({visits?.length || 0})</TabsTrigger>
         </TabsList>
         <TabsContent value="sales" className="mt-4">
-          {(sales?.length || 0) === 0 ? <EmptyTab label="No sales yet" /> : (
-            <DataTable columns={salesColumns} data={sales || []} searchKey="display_id" searchPlaceholder="Search sales..." />
-          )}
+          {(sales?.length || 0) === 0 ? <EmptyTab label="No sales yet" /> : <DataTable columns={salesColumns} data={sales || []} searchKey="display_id" searchPlaceholder="Search sales..." />}
         </TabsContent>
         <TabsContent value="transactions" className="mt-4">
-          {(transactions?.length || 0) === 0 ? <EmptyTab label="No collections yet" /> : (
-            <DataTable columns={txnColumns} data={transactions || []} searchKey="display_id" searchPlaceholder="Search..." />
-          )}
+          {(transactions?.length || 0) === 0 ? <EmptyTab label="No collections yet" /> : <DataTable columns={txnColumns} data={transactions || []} searchKey="display_id" searchPlaceholder="Search..." />}
         </TabsContent>
         <TabsContent value="orders" className="mt-4">
-          {(orders?.length || 0) === 0 ? <EmptyTab label="No orders yet" /> : (
-            <DataTable columns={orderColumns} data={orders || []} searchKey="display_id" searchPlaceholder="Search orders..." />
-          )}
+          {(orders?.length || 0) === 0 ? <EmptyTab label="No orders yet" /> : <DataTable columns={orderColumns} data={orders || []} searchKey="display_id" searchPlaceholder="Search orders..." />}
         </TabsContent>
         <TabsContent value="visits" className="mt-4">
-          {(visits?.length || 0) === 0 ? <EmptyTab label="No visits recorded" /> : (
-            <DataTable columns={visitColumns} data={visits || []} searchKey="notes" searchPlaceholder="Search..." />
-          )}
+          {(visits?.length || 0) === 0 ? <EmptyTab label="No visits recorded" /> : <DataTable columns={visitColumns} data={visits || []} searchKey="notes" searchPlaceholder="Search..." />}
         </TabsContent>
       </Tabs>
     </div>
@@ -432,11 +366,7 @@ function InfoItem({ icon: Icon, label, value }: { icon: any; label: string; valu
 }
 
 function EmptyTab({ label }: { label: string }) {
-  return (
-    <div className="rounded-xl border border-dashed bg-card p-10 text-center text-muted-foreground">
-      {label}
-    </div>
-  );
+  return <div className="rounded-xl border border-dashed bg-card p-10 text-center text-muted-foreground">{label}</div>;
 }
 
 export default StoreDetail;

@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Loader2, ArrowLeft, Store, DollarSign, ShoppingCart, Banknote,
-  User, Phone, Mail, MapPin, Calendar, Shield, Pencil, X, Save,
+  User, Phone, Mail, MapPin, Calendar, Shield, Pencil, X, Save, AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
@@ -29,6 +29,7 @@ const CustomerDetail = () => {
 
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [toggling, setToggling] = useState(false);
   const [form, setForm] = useState({
     name: "",
     phone: "",
@@ -93,7 +94,7 @@ const CustomerDetail = () => {
   });
 
   const startEditing = () => {
-    if (!customer) return;
+    if (!customer || !customer.is_active) return;
     setForm({
       name: customer.name || "",
       phone: customer.phone || "",
@@ -131,17 +132,41 @@ const CustomerDetail = () => {
   const handleToggleActive = async () => {
     if (!customer || !id) return;
     const newVal = !customer.is_active;
+    setToggling(true);
+
+    // Update customer status
     const { error } = await supabase
       .from("customers")
       .update({ is_active: newVal })
       .eq("id", id);
     if (error) {
       toast.error(error.message);
+      setToggling(false);
       return;
     }
-    toast.success(`Customer ${newVal ? "activated" : "deactivated"}`);
+
+    // If deactivating customer, cascade: deactivate ALL their stores
+    if (!newVal && stores && stores.length > 0) {
+      const storeIds = stores.map((s) => s.id);
+      const { error: storeError } = await supabase
+        .from("stores")
+        .update({ is_active: false })
+        .in("id", storeIds);
+      if (storeError) {
+        toast.error("Customer deactivated but failed to deactivate stores: " + storeError.message);
+      } else {
+        toast.success(`Customer deactivated along with ${storeIds.length} store(s)`);
+      }
+    } else {
+      toast.success(`Customer ${newVal ? "activated" : "deactivated"}`);
+    }
+
+    setToggling(false);
+    setEditing(false);
     qc.invalidateQueries({ queryKey: ["customer", id] });
+    qc.invalidateQueries({ queryKey: ["customer-stores", id] });
     qc.invalidateQueries({ queryKey: ["customers"] });
+    qc.invalidateQueries({ queryKey: ["stores"] });
   };
 
   if (isLoading) {
@@ -152,6 +177,7 @@ const CustomerDetail = () => {
     return <div className="text-center py-20 text-muted-foreground">Customer not found</div>;
   }
 
+  const isInactive = !customer.is_active;
   const totalSales = sales?.reduce((s, r) => s + Number(r.total_amount), 0) || 0;
   const totalOutstanding = stores?.reduce((s, r) => s + Number(r.outstanding), 0) || 0;
 
@@ -186,18 +212,27 @@ const CustomerDetail = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Back button */}
       <Button variant="ghost" size="sm" onClick={() => navigate("/customers")} className="gap-1.5 text-muted-foreground hover:text-foreground -ml-2">
         <ArrowLeft className="h-4 w-4" />
         Customers
       </Button>
 
+      {/* Inactive banner */}
+      {isInactive && (
+        <div className="flex items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4">
+          <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-destructive">This customer is inactive</p>
+            <p className="text-xs text-muted-foreground mt-0.5">No sales, orders, or modifications can be made. Activate the customer to resume operations.</p>
+          </div>
+        </div>
+      )}
+
       {/* Profile Card */}
-      <Card className="overflow-hidden">
+      <Card className={`overflow-hidden ${isInactive ? "opacity-75" : ""}`}>
         <div className="h-20 sm:h-28 bg-gradient-to-r from-primary/20 via-accent/30 to-primary/10" />
         <CardContent className="relative px-4 sm:px-6 pb-6 -mt-10 sm:-mt-12">
           <div className="flex flex-col sm:flex-row sm:items-end gap-4">
-            {/* Avatar */}
             <div className="h-20 w-20 sm:h-24 sm:w-24 rounded-xl border-4 border-card bg-muted flex items-center justify-center overflow-hidden shadow-md shrink-0">
               {customer.photo_url ? (
                 <img src={customer.photo_url} alt={customer.name} className="w-full h-full object-cover" />
@@ -206,7 +241,6 @@ const CustomerDetail = () => {
               )}
             </div>
 
-            {/* Name & badges */}
             <div className="flex-1 min-w-0 sm:pb-1">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-xl sm:text-2xl font-bold text-foreground truncate">{customer.name}</h1>
@@ -215,8 +249,7 @@ const CustomerDetail = () => {
               <p className="text-sm text-muted-foreground font-mono mt-0.5">{customer.display_id}</p>
             </div>
 
-            {/* Actions */}
-            <div className="flex items-center gap-3 shrink-0 sm:pb-1">
+            <div className="flex items-center gap-3 shrink-0 sm:pb-1 flex-wrap">
               {canEdit && (
                 <>
                   <div className="flex items-center gap-2">
@@ -227,26 +260,28 @@ const CustomerDetail = () => {
                       id="customer-active-toggle"
                       checked={customer.is_active}
                       onCheckedChange={handleToggleActive}
+                      disabled={toggling}
                     />
                   </div>
-                  {!editing ? (
-                    <Button variant="outline" size="sm" onClick={startEditing} className="gap-1.5">
-                      <Pencil className="h-3.5 w-3.5" /> Edit
-                    </Button>
-                  ) : (
-                    <div className="flex gap-1.5">
-                      <Button variant="ghost" size="sm" onClick={() => setEditing(false)} disabled={saving}>
-                        <X className="h-4 w-4" />
+                  {!isInactive && (
+                    !editing ? (
+                      <Button variant="outline" size="sm" onClick={startEditing} className="gap-1.5">
+                        <Pencil className="h-3.5 w-3.5" /> Edit
                       </Button>
-                      <Button size="sm" onClick={handleSave} disabled={saving} className="gap-1.5">
-                        {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                        Save
-                      </Button>
-                    </div>
+                    ) : (
+                      <div className="flex gap-1.5">
+                        <Button variant="ghost" size="sm" onClick={() => setEditing(false)} disabled={saving}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                        <Button size="sm" onClick={handleSave} disabled={saving} className="gap-1.5">
+                          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                          Save
+                        </Button>
+                      </div>
+                    )
                   )}
                 </>
               )}
-              {/* KYC badge on desktop */}
               <div className="hidden sm:block">
                 <StatusBadge status={kycVariant} label={`KYC: ${kycLabel}`} />
               </div>
@@ -255,7 +290,6 @@ const CustomerDetail = () => {
 
           <Separator className="my-4" />
 
-          {/* Contact details grid - view or edit mode */}
           {editing ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
@@ -287,7 +321,6 @@ const CustomerDetail = () => {
                 <InfoItem icon={MapPin} label="Address" value={customer.address || "Not provided"} />
                 <InfoItem icon={Calendar} label="Joined" value={new Date(customer.created_at).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" })} />
               </div>
-              {/* KYC badge on mobile */}
               <div className="sm:hidden mt-3">
                 <InfoItem icon={Shield} label="KYC Status" value={kycLabel} />
               </div>
@@ -296,7 +329,6 @@ const CustomerDetail = () => {
         </CardContent>
       </Card>
 
-      {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <StatCard title="Total Stores" value={String(stores?.length || 0)} icon={Store} />
         <StatCard title="Total Sales" value={`₹${totalSales.toLocaleString()}`} icon={DollarSign} iconColor="bg-primary" />
@@ -304,7 +336,6 @@ const CustomerDetail = () => {
         <StatCard title="Orders" value={String(orders?.length || 0)} icon={ShoppingCart} iconColor="bg-info" />
       </div>
 
-      {/* Tabs */}
       <Tabs defaultValue="stores">
         <TabsList className="w-full sm:w-auto overflow-x-auto">
           <TabsTrigger value="stores" className="text-xs sm:text-sm">Stores ({stores?.length || 0})</TabsTrigger>
@@ -312,23 +343,17 @@ const CustomerDetail = () => {
           <TabsTrigger value="orders" className="text-xs sm:text-sm">Orders ({orders?.length || 0})</TabsTrigger>
         </TabsList>
         <TabsContent value="stores" className="mt-4">
-          {(stores?.length || 0) === 0 ? (
-            <EmptyTab label="No stores yet" />
-          ) : (
+          {(stores?.length || 0) === 0 ? <EmptyTab label="No stores yet" /> : (
             <DataTable columns={storeColumns} data={stores || []} searchKey="name" searchPlaceholder="Search stores..." onRowClick={(row) => navigate(`/stores/${row.id}`)} />
           )}
         </TabsContent>
         <TabsContent value="sales" className="mt-4">
-          {(sales?.length || 0) === 0 ? (
-            <EmptyTab label="No sales recorded" />
-          ) : (
+          {(sales?.length || 0) === 0 ? <EmptyTab label="No sales recorded" /> : (
             <DataTable columns={salesColumns} data={sales || []} searchKey="display_id" searchPlaceholder="Search sales..." />
           )}
         </TabsContent>
         <TabsContent value="orders" className="mt-4">
-          {(orders?.length || 0) === 0 ? (
-            <EmptyTab label="No orders" />
-          ) : (
+          {(orders?.length || 0) === 0 ? <EmptyTab label="No orders" /> : (
             <DataTable columns={orderColumns} data={orders || []} searchKey="display_id" searchPlaceholder="Search orders..." />
           )}
         </TabsContent>
