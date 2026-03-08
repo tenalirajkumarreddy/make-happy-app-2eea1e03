@@ -16,7 +16,7 @@ export function StatCard({ title, value, change, changeType = "neutral", icon: I
       <div className="flex items-start justify-between">
         <div className="space-y-2">
           <p className="text-sm text-muted-foreground">{title}</p>
-          <p className="text-2xl font-bold tracking-tight">{value}</p>
+          <p className="text-xl sm:text-2xl font-bold tracking-tight truncate">{value}</p>
           {change && (
             <p
               className={cn(

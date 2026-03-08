@@ -74,7 +74,7 @@ export function DataTable<T extends Record<string, any>>({
           />
         </div>
       )}
-      <div className="rounded-xl border bg-card overflow-hidden">
+      <div className="rounded-xl border bg-card overflow-x-auto -mx-3 sm:mx-0">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/50 hover:bg-muted/50">
@@ -111,7 +111,7 @@ export function DataTable<T extends Record<string, any>>({
 
       {/* Pagination */}
       {filtered.length > 0 && (
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
             <span>Rows per page</span>
             <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPage(0); }}>
