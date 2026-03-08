@@ -55,47 +55,6 @@ const SettingsPage = () => {
     qc.invalidateQueries({ queryKey: ["company-settings"] });
   };
 
-  // Store types
-  const [showAddType, setShowAddType] = useState(false);
-  const [newTypeName, setNewTypeName] = useState("");
-  const [newOrderType, setNewOrderType] = useState("simple");
-  const [savingType, setSavingType] = useState(false);
-
-  const { data: storeTypes, isLoading: loadingTypes } = useQuery({
-    queryKey: ["store-types"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("store_types").select("*").order("created_at");
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  const handleAddStoreType = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSavingType(true);
-    const { error } = await supabase.from("store_types").insert({
-      name: newTypeName,
-      order_type: newOrderType,
-    });
-    setSavingType(false);
-    if (error) toast.error(error.message);
-    else {
-      toast.success("Store type added");
-      setShowAddType(false);
-      setNewTypeName(""); setNewOrderType("simple");
-      qc.invalidateQueries({ queryKey: ["store-types"] });
-    }
-  };
-
-  const toggleAutoOrder = async (id: string, current: boolean) => {
-    await supabase.from("store_types").update({ auto_order_enabled: !current }).eq("id", id);
-    qc.invalidateQueries({ queryKey: ["store-types"] });
-  };
-
-  const toggleTypeActive = async (id: string, current: boolean) => {
-    await supabase.from("store_types").update({ is_active: !current }).eq("id", id);
-    qc.invalidateQueries({ queryKey: ["store-types"] });
-  };
 
   const toggleFeature = (key: string) => {
     setSettings((prev) => ({ ...prev, [key]: prev[key] === "true" ? "false" : "true" }));
