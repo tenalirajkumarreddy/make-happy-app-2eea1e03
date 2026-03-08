@@ -54,6 +54,8 @@ const StoreTypes = () => {
     setEditingType(row);
     setNewTypeName(row.name);
     setNewOrderType(row.order_type);
+    setCreditLimitKyc(String(row.credit_limit_kyc || 0));
+    setCreditLimitNoKyc(String(row.credit_limit_no_kyc || 0));
     setShowAdd(true);
   };
 
