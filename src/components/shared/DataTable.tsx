@@ -22,6 +22,10 @@ interface Column<T> {
   header: string | (() => React.ReactNode);
   accessor: keyof T | ((row: T) => React.ReactNode);
   className?: string;
+  /** Label used in mobile card view. Defaults to header string. */
+  mobileLabel?: string;
+  /** Hide this column entirely on mobile card view */
+  hideOnMobile?: boolean;
 }
 
 interface DataTableProps<T> {
@@ -55,10 +59,20 @@ export function DataTable<T extends Record<string, any>>({
   const safeP = Math.min(page, totalPages - 1);
   const paged = filtered.slice(safeP * pageSize, (safeP + 1) * pageSize);
 
-  // Reset page on search
   const handleSearch = (val: string) => {
     setSearch(val);
     setPage(0);
+  };
+
+  const getHeaderText = (col: Column<T>): string => {
+    if (col.mobileLabel) return col.mobileLabel;
+    if (typeof col.header === "string") return col.header;
+    return "";
+  };
+
+  const getCellValue = (col: Column<T>, row: T): React.ReactNode => {
+    if (typeof col.accessor === "function") return col.accessor(row);
+    return row[col.accessor] as React.ReactNode;
   };
 
   return (
@@ -74,7 +88,9 @@ export function DataTable<T extends Record<string, any>>({
           />
         </div>
       )}
-      <div className="rounded-xl border bg-card overflow-x-auto -mx-3 sm:mx-0">
+
+      {/* Desktop table view */}
+      <div className="rounded-xl border bg-card overflow-x-auto -mx-3 sm:mx-0 hidden md:block">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/50 hover:bg-muted/50">
@@ -97,9 +113,7 @@ export function DataTable<T extends Record<string, any>>({
                 <TableRow key={i} className={`hover:bg-muted/30 ${onRowClick ? "cursor-pointer" : ""}`} onClick={() => onRowClick?.(row)}>
                   {columns.map((col, j) => (
                     <TableCell key={j} className={col.className}>
-                      {typeof col.accessor === "function"
-                        ? col.accessor(row)
-                        : row[col.accessor]}
+                      {getCellValue(col, row)}
                     </TableCell>
                   ))}
                 </TableRow>
@@ -107,6 +121,46 @@ export function DataTable<T extends Record<string, any>>({
             )}
           </TableBody>
         </Table>
+      </div>
+
+      {/* Mobile card view */}
+      <div className="md:hidden space-y-3">
+        {paged.length === 0 ? (
+          <div className="rounded-xl border bg-card p-6 text-center text-muted-foreground">
+            No results found.
+          </div>
+        ) : (
+          paged.map((row, i) => (
+            <div
+              key={i}
+              className={`rounded-xl border bg-card p-4 ${onRowClick ? "cursor-pointer active:bg-muted/30" : ""}`}
+              onClick={() => onRowClick?.(row)}
+            >
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                {columns
+                  .filter((col) => !col.hideOnMobile)
+                  .map((col, j) => {
+                    const label = getHeaderText(col);
+                    const value = getCellValue(col, row);
+                    // If no label (e.g. checkbox column), render full width
+                    if (!label) {
+                      return (
+                        <div key={j} className="col-span-2 flex items-center">
+                          {value}
+                        </div>
+                      );
+                    }
+                    return (
+                      <div key={j} className="min-w-0">
+                        <p className="text-[11px] text-muted-foreground truncate">{label}</p>
+                        <div className="text-sm font-medium truncate">{value}</div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          ))
+        )}
       </div>
 
       {/* Pagination */}

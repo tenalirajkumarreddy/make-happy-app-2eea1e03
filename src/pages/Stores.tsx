@@ -166,19 +166,20 @@ const Stores = () => {
         />
       ),
       className: "w-10",
+      hideOnMobile: true,
     }] : []),
-    { header: "ID", accessor: "display_id" as const, className: "font-mono text-xs" },
+    { header: "ID", accessor: "display_id" as const, className: "font-mono text-xs hidden lg:table-cell", hideOnMobile: true },
     { header: "Store Name", accessor: "name" as const, className: "font-medium" },
-    { header: "Customer", accessor: (row: any) => row.customers?.name || "—", className: "text-muted-foreground text-sm" },
-    { header: "Type", accessor: (row: any) => row.store_types?.name ? <Badge variant="secondary">{row.store_types.name}</Badge> : "—" },
-    { header: "Route", accessor: (row: any) => row.routes?.name || "—", className: "text-sm" },
+    { header: "Customer", accessor: (row: any) => row.customers?.name || "—", className: "text-muted-foreground text-sm hidden sm:table-cell" },
+    { header: "Type", accessor: (row: any) => row.store_types?.name ? <Badge variant="secondary">{row.store_types.name}</Badge> : "—", className: "hidden sm:table-cell" },
+    { header: "Route", accessor: (row: any) => row.routes?.name || "—", className: "text-sm hidden lg:table-cell" },
     { header: "Outstanding", accessor: (row: any) => `₹${Number(row.outstanding).toLocaleString()}`, className: "font-semibold" },
     { header: "Status", accessor: (row: any) => <StatusBadge status={row.is_active ? "active" : "inactive"} /> },
     ...(canManagePricing ? [{ header: "Pricing", accessor: (row: any) => (
       <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={(e: React.MouseEvent) => { e.stopPropagation(); setPricingStore(row); }}>
         <DollarSign className="mr-1 h-3 w-3" />Set Prices
       </Button>
-    )}] : []),
+    ), hideOnMobile: true }] : []),
   ];
 
   if (isLoading) {
