@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { logActivity } from "@/lib/activityLogger";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Play, Square, MapPin, CheckCircle2 } from "lucide-react";
+import { Loader2, Play, Square, MapPin, CheckCircle2, Navigation, ShoppingCart, CircleDot } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -15,19 +15,28 @@ import {
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
+function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number) {
+  const R = 6371000;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 export function RouteSessionPanel() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [showStart, setShowStart] = useState(false);
   const [selectedRoute, setSelectedRoute] = useState("");
   const [saving, setSaving] = useState(false);
+  const [agentLocation, setAgentLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   const { data: activeSession, isLoading: loadingSession } = useQuery({
     queryKey: ["active-route-session", user?.id],
     queryFn: async () => {
       const { data } = await supabase
         .from("route_sessions")
-        .select("*, routes(name, stores(id, name, address))")
+        .select("*, routes(name, stores(id, name, address, lat, lng))")
         .eq("user_id", user!.id)
         .eq("status", "active")
         .maybeSingle();
@@ -48,6 +57,23 @@ export function RouteSessionPanel() {
     enabled: !!activeSession,
   });
 
+  // Check for pending orders on route stores
+  const routeStores = (activeSession as any)?.routes?.stores || [];
+  const storeIds = routeStores.map((s: any) => s.id);
+
+  const { data: pendingOrderStores } = useQuery({
+    queryKey: ["pending-order-stores", storeIds],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("orders")
+        .select("store_id")
+        .in("store_id", storeIds)
+        .eq("status", "pending");
+      return new Set((data || []).map((o) => o.store_id));
+    },
+    enabled: storeIds.length > 0,
+  });
+
   const { data: routes } = useQuery({
     queryKey: ["routes-list-active"],
     queryFn: async () => {
@@ -55,6 +81,36 @@ export function RouteSessionPanel() {
       return data || [];
     },
   });
+
+  // Get agent location periodically
+  useMemo(() => {
+    if (!activeSession) return;
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setAgentLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => {},
+      { timeout: 5000 }
+    );
+  }, [activeSession]);
+
+  // Sort stores: unvisited first, then by distance if agent location available
+  const sortedStores = useMemo(() => {
+    const stores = [...routeStores];
+    stores.sort((a: any, b: any) => {
+      const aVisited = visits?.has(a.id) ? 1 : 0;
+      const bVisited = visits?.has(b.id) ? 1 : 0;
+      if (aVisited !== bVisited) return aVisited - bVisited;
+      if (agentLocation && a.lat && a.lng && b.lat && b.lng) {
+        const distA = haversineDistance(agentLocation.lat, agentLocation.lng, a.lat, a.lng);
+        const distB = haversineDistance(agentLocation.lat, agentLocation.lng, b.lat, b.lng);
+        return distA - distB;
+      }
+      return 0;
+    });
+    return stores;
+  }, [routeStores, visits, agentLocation]);
+
+  const nextStore = sortedStores.find((s: any) => !visits?.has(s.id));
 
   const getLocation = (): Promise<{ lat: number; lng: number } | null> => {
     return new Promise((resolve) => {
@@ -130,9 +186,17 @@ export function RouteSessionPanel() {
     }
   };
 
+  const openDirections = (store: any) => {
+    if (store.lat && store.lng) {
+      window.open(`https://www.google.com/maps/dir/?api=1&destination=${store.lat},${store.lng}`, "_blank");
+    } else if (store.address) {
+      window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(store.address)}`, "_blank");
+    }
+  };
+
   if (loadingSession) return null;
 
-  const routeStores = (activeSession as any)?.routes?.stores || [];
+  const visitedCount = routeStores.filter((s: any) => visits?.has(s.id)).length;
 
   return (
     <>
@@ -143,7 +207,9 @@ export function RouteSessionPanel() {
               <div className="h-3 w-3 rounded-full bg-green-500 animate-pulse" />
               <div>
                 <p className="font-semibold">Active Session: {(activeSession as any)?.routes?.name}</p>
-                <p className="text-xs text-muted-foreground">Started {new Date(activeSession.started_at).toLocaleTimeString("en-IN")}</p>
+                <p className="text-xs text-muted-foreground">
+                  Started {new Date(activeSession.started_at).toLocaleTimeString("en-IN")} · {visitedCount}/{routeStores.length} visited
+                </p>
               </div>
             </div>
             <Button variant="destructive" size="sm" onClick={handleEnd} disabled={saving}>
@@ -151,12 +217,36 @@ export function RouteSessionPanel() {
               End Session
             </Button>
           </div>
+
+          {/* Next nearest store highlight */}
+          {nextStore && (
+            <div className="rounded-lg border-2 border-primary/30 bg-primary/5 p-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Navigation className="h-4 w-4 text-primary" />
+                <div>
+                  <p className="text-sm font-semibold text-primary">Next: {nextStore.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {nextStore.address || "No address"}
+                    {agentLocation && nextStore.lat && nextStore.lng && (
+                      <> · {(haversineDistance(agentLocation.lat, agentLocation.lng, nextStore.lat, nextStore.lng) / 1000).toFixed(1)} km away</>
+                    )}
+                  </p>
+                </div>
+              </div>
+              <Button size="sm" variant="outline" onClick={() => openDirections(nextStore)}>
+                <Navigation className="mr-1 h-3 w-3" />Directions
+              </Button>
+            </div>
+          )}
+
           <div className="space-y-2">
             <p className="text-sm font-medium text-muted-foreground">Stores on route ({routeStores.length})</p>
-            {routeStores.map((store: any) => {
+            {sortedStores.map((store: any) => {
               const visited = visits?.has(store.id);
+              const hasOrder = pendingOrderStores?.has(store.id);
+              const isNext = nextStore?.id === store.id;
               return (
-                <div key={store.id} className="flex items-center justify-between rounded-lg border p-3">
+                <div key={store.id} className={`flex items-center justify-between rounded-lg border p-3 ${isNext ? "border-primary/30 bg-primary/5" : ""}`}>
                   <div className="flex items-center gap-2">
                     {visited ? (
                       <CheckCircle2 className="h-4 w-4 text-green-500" />
@@ -164,16 +254,37 @@ export function RouteSessionPanel() {
                       <MapPin className="h-4 w-4 text-muted-foreground" />
                     )}
                     <div>
-                      <p className="text-sm font-medium">{store.name}</p>
-                      {store.address && <p className="text-xs text-muted-foreground">{store.address}</p>}
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-medium">{store.name}</p>
+                        {/* Colored badges */}
+                        {!visited && activeSession && (
+                          <CircleDot className="h-3 w-3 text-blue-500" title="In session" />
+                        )}
+                        {hasOrder && (
+                          <ShoppingCart className="h-3 w-3 text-green-500" title="Has pending order" />
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {store.address || "No address"}
+                        {agentLocation && store.lat && store.lng && (
+                          <> · {(haversineDistance(agentLocation.lat, agentLocation.lng, store.lat, store.lng) / 1000).toFixed(1)} km</>
+                        )}
+                      </p>
                     </div>
                   </div>
-                  {!visited && (
-                    <Button size="sm" variant="outline" onClick={() => handleVisit(store.id)}>
-                      Mark Visited
-                    </Button>
-                  )}
-                  {visited && <Badge variant="secondary">Visited</Badge>}
+                  <div className="flex items-center gap-1.5">
+                    {(store.lat || store.address) && (
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => openDirections(store)} title="Get directions">
+                        <Navigation className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                    {!visited && (
+                      <Button size="sm" variant="outline" onClick={() => handleVisit(store.id)}>
+                        Mark Visited
+                      </Button>
+                    )}
+                    {visited && <Badge variant="secondary">Visited</Badge>}
+                  </div>
                 </div>
               );
             })}
