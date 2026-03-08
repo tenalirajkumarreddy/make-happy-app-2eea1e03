@@ -455,6 +455,7 @@ const StoreDetail = () => {
             sales={sales || []}
             transactions={transactions || []}
             openingBalance={Number(store.opening_balance)}
+            storeCreatedAt={store.created_at}
             profileMap={profileMap}
           />
         </TabsContent>

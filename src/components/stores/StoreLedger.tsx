@@ -28,10 +28,11 @@ interface StoreLedgerProps {
   sales: any[];
   transactions: any[];
   openingBalance: number;
+  storeCreatedAt: string;
   profileMap: Map<string, { user_id: string; full_name: string; avatar_url: string | null }>;
 }
 
-export function StoreLedger({ sales, transactions, openingBalance, profileMap }: StoreLedgerProps) {
+export function StoreLedger({ sales, transactions, openingBalance, storeCreatedAt, profileMap }: StoreLedgerProps) {
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
 
   const ledgerEntries = useMemo(() => {
@@ -81,10 +82,10 @@ export function StoreLedger({ sales, transactions, openingBalance, profileMap }:
     entries.push({
       id: "__opening_balance__",
       type: "correction" as const,
-      date: "",
+      date: storeCreatedAt,
       display_id: "",
       description: "Opening Balance",
-      total_amount: 0,
+      total_amount: openingBalance,
       cash_amount: 0,
       upi_amount: 0,
       outstanding: openingBalance,
@@ -129,8 +130,8 @@ export function StoreLedger({ sales, transactions, openingBalance, profileMap }:
                 <Tag className="h-3.5 w-3.5 text-muted-foreground" />
               </div>
               <div>
-                <p className="font-medium text-sm uppercase tracking-wide text-muted-foreground">Opening Balance</p>
-                <p className="text-sm font-semibold">₹{row.outstanding.toLocaleString()}</p>
+                <p className="font-medium text-sm text-muted-foreground">Opening Balance</p>
+                <p className="text-[11px] text-muted-foreground">Admin</p>
               </div>
             </div>
           );
@@ -161,7 +162,7 @@ export function StoreLedger({ sales, transactions, openingBalance, profileMap }:
     {
       header: "Credit (+)",
       accessor: (row: LedgerEntry) =>
-        row.type === "payment" ? (
+        row.type === "payment" || row.id === "__opening_balance__" ? (
           <span className="text-success font-medium">₹{row.total_amount.toLocaleString()}</span>
         ) : (
           <span className="text-muted-foreground">—</span>
@@ -179,6 +180,28 @@ export function StoreLedger({ sales, transactions, openingBalance, profileMap }:
 
   const renderMobileCard = (row: LedgerEntry) => {
     const p = getRecorder(row.recorded_by);
+
+    if (row.id === "__opening_balance__") {
+      return (
+        <div className="rounded-xl border bg-card px-3 py-2.5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <Badge variant="secondary" className="text-[10px] h-5">PAYMENT</Badge>
+            <span className="text-[11px] text-muted-foreground">
+              {new Date(row.date).toLocaleDateString("en-IN")}
+            </span>
+          </div>
+          <div className="flex items-center justify-between mt-1.5">
+            <span className="font-medium text-sm text-muted-foreground">Opening Balance</span>
+            <span className="text-sm font-bold text-success">₹{row.total_amount.toLocaleString()}</span>
+          </div>
+          <div className="flex items-center justify-between mt-1 text-[11px] text-muted-foreground">
+            <span>Bal: ₹{Math.abs(row.outstanding).toLocaleString()}</span>
+            <span>Admin</span>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div
         className="rounded-xl border bg-card px-3 py-2.5 shadow-sm cursor-pointer"
