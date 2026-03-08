@@ -14,8 +14,11 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { ImageUpload } from "@/components/shared/ImageUpload";
-import { Loader2, MapPin, ChevronRight, ChevronLeft, Plus, Check } from "lucide-react";
+import { Loader2, MapPin, ChevronRight, ChevronLeft, Plus, Check, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import {
+  Alert, AlertDescription, AlertTitle,
+} from "@/components/ui/alert";
 
 interface CreateStoreWizardProps {
   open: boolean;
@@ -59,8 +62,46 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
 
   // Pricing step
   const [priceMap, setPriceMap] = useState<Record<string, string>>({});
+  const [duplicateWarnings, setDuplicateWarnings] = useState<string[]>([]);
+  const [checkingDupes, setCheckingDupes] = useState(false);
 
   const canEditPricing = role === "super_admin" || role === "manager";
+
+  const getDistanceMeters = (lat1: number, lng1: number, lat2: number, lng2: number) => {
+    const R = 6371000;
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLng = ((lng2 - lng1) * Math.PI) / 180;
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  };
+
+  const checkDuplicates = async () => {
+    setCheckingDupes(true);
+    const warnings: string[] = [];
+    const { data: existingStores } = await supabase
+      .from("stores")
+      .select("id, name, phone, lat, lng, display_id")
+      .eq("is_active", true);
+    if (existingStores) {
+      for (const s of existingStores) {
+        if (name.trim() && s.name.toLowerCase() === name.trim().toLowerCase()) {
+          warnings.push(`Store "${s.name}" (${s.display_id}) has the same name`);
+        }
+        if (phone.trim() && s.phone && s.phone === phone.trim()) {
+          warnings.push(`Store "${s.name}" (${s.display_id}) has the same phone number`);
+        }
+        if (lat && lng && s.lat && s.lng) {
+          const dist = getDistanceMeters(lat, lng, s.lat, s.lng);
+          if (dist < 100) {
+            warnings.push(`Store "${s.name}" (${s.display_id}) is only ${Math.round(dist)}m away`);
+          }
+        }
+      }
+    }
+    setDuplicateWarnings(warnings);
+    setCheckingDupes(false);
+    return warnings;
+  };
 
   const { data: customers } = useQuery({
     queryKey: ["customers-list"],
@@ -378,12 +419,37 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
               </div>
             )}
 
+            {duplicateWarnings.length > 0 && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Possible Duplicates Found</AlertTitle>
+                <AlertDescription>
+                  <ul className="list-disc pl-4 text-xs space-y-0.5 mt-1">
+                    {duplicateWarnings.map((w, i) => <li key={i}>{w}</li>)}
+                  </ul>
+                  <p className="text-xs mt-2">You can still proceed if this is intentional.</p>
+                </AlertDescription>
+              </Alert>
+            )}
+
             <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => setStep("customer")}>
+              <Button variant="outline" className="flex-1" onClick={() => { setStep("customer"); setDuplicateWarnings([]); }}>
                 <ChevronLeft className="mr-1 h-4 w-4" /> Back
               </Button>
-              <Button className="flex-1" disabled={!canGoToPricing} onClick={() => setStep("pricing")}>
-                Next <ChevronRight className="ml-1 h-4 w-4" />
+              <Button
+                className="flex-1"
+                disabled={!canGoToPricing || checkingDupes}
+                onClick={async () => {
+                  const warnings = await checkDuplicates();
+                  if (warnings.length === 0 || duplicateWarnings.length > 0) {
+                    setStep("pricing");
+                  }
+                  // If warnings found first time, show them but don't proceed.
+                  // Second click (warnings already shown) proceeds anyway.
+                }}
+              >
+                {checkingDupes ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
+                {duplicateWarnings.length > 0 ? "Proceed Anyway" : "Next"} <ChevronRight className="ml-1 h-4 w-4" />
               </Button>
             </div>
           </div>
