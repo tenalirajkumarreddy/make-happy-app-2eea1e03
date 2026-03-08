@@ -207,7 +207,6 @@ export function StoreLedger({ sales, transactions, openingBalance, profileMap }:
             onRowClick={(row: any) => setSelectedEntryId(row.id)}
             renderMobileCard={renderMobileCard}
           />
-          </div>
         </>
       )}
 
