@@ -1291,16 +1291,27 @@ Each card shows:
 **Access:** Admin and Managers only
 
 ### Bulk Customer Operations
-- Bulk edit customer details
+- Bulk activate/deactivate customers (with cascade to stores on deactivate)
 - Bulk KYC approval/rejection
 - Bulk credit limit update
-- Bulk export to Excel
+- **CSV Import**: Upload CSV file to create multiple customers at once
+  - Template download available
+  - Required fields: `name`
+  - Optional fields: `phone`, `email`, `address`
+  - Validation with error reporting per row
+- **Inline Table Editing**: Click any cell (name, phone, email) to edit in-place
+  - Press Enter to save, Escape to cancel
+  - Only super_admin/manager can edit
 
 ### Bulk Store Operations
-- Bulk route assignment
+- Bulk route assignment (select multiple stores → assign route)
 - Bulk enable/disable stores
 - Bulk pricing updates
-- Bulk export to Excel
+- **CSV Import**: Upload CSV to create multiple stores
+  - Required fields: `name`, `customer` (name or display ID), `store_type`
+  - Optional fields: `route`, `phone`, `address`
+  - Automatically matches customer, store type, and route by name
+- **Inline Table Editing**: Click store name or phone to edit in-place
 
 ### Bulk User Operations
 - Bulk permission changes
