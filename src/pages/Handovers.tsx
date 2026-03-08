@@ -1,10 +1,11 @@
 import { PageHeader } from "@/components/shared/PageHeader";
 import { StatusBadge } from "@/components/shared/StatusBadge";
-import { Banknote, Smartphone, CheckCircle, Clock, AlertCircle, Loader2, Send, ArrowDownLeft, ArrowUpRight, XCircle } from "lucide-react";
+import { Banknote, Smartphone, CheckCircle, Clock, AlertCircle, Loader2, Send, ArrowDownLeft, ArrowUpRight, XCircle, User } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
