@@ -174,8 +174,20 @@ const Sales = () => {
     setItems(updated);
   };
 
+  // Fetch staff users for "record on behalf" selector
+  const { data: staffUsers } = useQuery({
+    queryKey: ["staff-for-behalf"],
+    queryFn: async () => {
+      const { data: roles } = await supabase.from("user_roles").select("user_id, role").neq("role", "customer");
+      const staffIds = roles?.map((r) => r.user_id) || [];
+      const { data: profs } = await supabase.from("profiles").select("user_id, full_name").in("user_id", staffIds);
+      return profs?.filter((p) => p.user_id !== user?.id) || [];
+    },
+    enabled: canRecordBehalf,
+  });
+
   const resetForm = () => {
-    setStoreId(""); setCashAmount(""); setUpiAmount("");
+    setStoreId(""); setCashAmount(""); setUpiAmount(""); setRecordedFor("");
     setItems([{ product_id: "", quantity: 1, unit_price: 0 }]);
   };
 
