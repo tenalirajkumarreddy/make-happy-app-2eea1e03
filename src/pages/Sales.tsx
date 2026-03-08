@@ -11,6 +11,7 @@ import { Loader2, Plus, Trash2, Download, IndianRupee, CreditCard, Banknote, Clo
 import { QrStoreSelector } from "@/components/shared/QrStoreSelector";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { useState } from "react";
+import { usePermission } from "@/hooks/usePermission";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -51,6 +52,7 @@ interface SaleItem {
 
 const Sales = () => {
   const { user } = useAuth();
+  const { allowed: canOverridePrice } = usePermission("price_override");
   const qc = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -465,7 +467,7 @@ const Sales = () => {
                           </SelectContent>
                         </Select>
                         <Input type="number" min={1} value={item.quantity} onChange={(e) => updateItem(idx, "quantity", Number(e.target.value))} className="w-16" placeholder="Qty" />
-                        <Input type="number" value={item.unit_price} onChange={(e) => updateItem(idx, "unit_price", Number(e.target.value))} className="w-24" placeholder="Price" />
+                        <Input type="number" value={item.unit_price} onChange={(e) => updateItem(idx, "unit_price", Number(e.target.value))} className={`w-24 ${!canOverridePrice ? "bg-muted cursor-not-allowed" : ""}`} placeholder="Price" readOnly={!canOverridePrice} title={!canOverridePrice ? "Price override not allowed" : undefined} />
                         {items.length > 1 && (
                           <Button type="button" variant="ghost" size="icon" onClick={() => removeItem(idx)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                         )}
