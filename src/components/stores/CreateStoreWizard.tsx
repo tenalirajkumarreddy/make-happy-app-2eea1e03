@@ -27,6 +27,7 @@ type Step = "customer" | "details" | "pricing";
 
 export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStoreWizardProps) {
   const { role } = useAuth();
+  const { allowed: canSetOpeningBalance } = usePermission("opening_balance");
   const qc = useQueryClient();
   const [step, setStep] = useState<Step>("customer");
   const [saving, setSaving] = useState(false);
