@@ -90,9 +90,14 @@ const StoreTypes = () => {
     )},
     { header: "Status", accessor: (row: any) => <StatusBadge status={row.is_active ? "active" : "inactive"} /> },
     ...(isAdmin ? [{ header: "Actions", accessor: (row: any) => (
-      <Button variant={row.is_active ? "destructive" : "default"} size="sm" className="h-7 text-xs" onClick={() => toggleActive(row.id, row.is_active)}>
-        {row.is_active ? "Disable" : "Enable"}
-      </Button>
+      <div className="flex gap-2">
+        <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => openEdit(row)}>
+          <Pencil className="h-3 w-3 mr-1" /> Edit
+        </Button>
+        <Button variant={row.is_active ? "destructive" : "default"} size="sm" className="h-7 text-xs" onClick={() => toggleActive(row.id, row.is_active)}>
+          {row.is_active ? "Disable" : "Enable"}
+        </Button>
+      </div>
     )}] : []),
   ];
 
