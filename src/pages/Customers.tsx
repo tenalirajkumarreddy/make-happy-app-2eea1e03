@@ -1,6 +1,7 @@
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
+import { KycReviewDialog } from "@/components/customers/KycReviewDialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -19,14 +20,16 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
 const Customers = () => {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const [showAdd, setShowAdd] = useState(false);
+  const [kycCustomer, setKycCustomer] = useState<any>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [address, setAddress] = useState("");
   const [saving, setSaving] = useState(false);
   const qc = useQueryClient();
+  const canReviewKyc = role === "super_admin" || role === "manager";
 
   const { data: customers, isLoading } = useQuery({
     queryKey: ["customers"],
