@@ -40,7 +40,13 @@ const SettingsPage = () => {
   const handleSaveSettings = async () => {
     setSavingSettings(true);
     for (const [key, value] of Object.entries(settings)) {
-      await supabase.from("company_settings").update({ value, updated_at: new Date().toISOString() }).eq("key", key);
+      // Try update first, then insert if not exists
+      const { data } = await supabase.from("company_settings").select("id").eq("key", key).maybeSingle();
+      if (data) {
+        await supabase.from("company_settings").update({ value, updated_at: new Date().toISOString() }).eq("key", key);
+      } else {
+        await supabase.from("company_settings").insert({ key, value });
+      }
     }
     setSavingSettings(false);
     toast.success("Settings saved");
