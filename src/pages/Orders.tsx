@@ -7,9 +7,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { logActivity } from "@/lib/activityLogger";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Loader2, Plus, Trash2, XCircle } from "lucide-react";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
