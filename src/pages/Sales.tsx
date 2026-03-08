@@ -1,11 +1,13 @@
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { logActivity } from "@/lib/activityLogger";
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2, Plus, Trash2, Download } from "lucide-react";
+import { Loader2, Plus, Trash2, Download, IndianRupee, CreditCard, Banknote, Clock, UserCircle, Store as StoreIcon } from "lucide-react";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { useState } from "react";
 import {
@@ -18,6 +20,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { format } from "date-fns";
 
 function exportCSV(data: any[], columns: { header: string; key: string }[], filename: string) {
   const header = columns.map((c) => c.header).join(",");
@@ -51,7 +54,6 @@ const Sales = () => {
   const [showAdd, setShowAdd] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Form state
   const [customerId, setCustomerId] = useState("");
   const [storeId, setStoreId] = useState("");
   const [cashAmount, setCashAmount] = useState("");
@@ -63,12 +65,23 @@ const Sales = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("sales")
-        .select("*, stores(name), customers(name)")
+        .select("*, stores(name, display_id), customers(name, display_id)")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
     },
   });
+
+  // Fetch profiles for recorded_by
+  const { data: profiles } = useQuery({
+    queryKey: ["profiles"],
+    queryFn: async () => {
+      const { data } = await supabase.from("profiles").select("user_id, full_name, avatar_url");
+      return data || [];
+    },
+  });
+
+  const profileMap = new Map(profiles?.map((p) => [p.user_id, p]) || []);
 
   const { data: customers } = useQuery({
     queryKey: ["customers"],
@@ -92,13 +105,10 @@ const Sales = () => {
   const selectedStore = stores?.find((s) => s.id === storeId);
   const selectedStoreTypeId = selectedStore?.store_type_id;
 
-  // Fetch products based on store type access matrix
   const { data: availableProducts } = useQuery({
     queryKey: ["products-for-sale", selectedStoreTypeId, storeId],
     queryFn: async () => {
       if (!selectedStoreTypeId) return [];
-
-      // Get products accessible for this store type
       const { data: accessData } = await supabase
         .from("store_type_products")
         .select("product_id, products(id, name, sku, base_price)")
@@ -108,12 +118,10 @@ const Sales = () => {
       if (accessData && accessData.length > 0) {
         productList = accessData.map((a: any) => a.products).filter(Boolean);
       } else {
-        // No access matrix defined - show all active products
         const { data } = await supabase.from("products").select("id, name, base_price, sku").eq("is_active", true);
         productList = data || [];
       }
 
-      // Fetch store-type pricing
       const { data: typePricing } = await supabase
         .from("store_type_pricing")
         .select("product_id, price")
@@ -121,7 +129,6 @@ const Sales = () => {
       const typePriceMap: Record<string, number> = {};
       typePricing?.forEach((p) => { typePriceMap[p.product_id] = Number(p.price); });
 
-      // Fetch store-level pricing (highest priority)
       const { data: storePricing } = await supabase
         .from("store_pricing")
         .select("product_id, price")
@@ -129,18 +136,11 @@ const Sales = () => {
       const storePriceMap: Record<string, number> = {};
       storePricing?.forEach((p) => { storePriceMap[p.product_id] = Number(p.price); });
 
-      // Attach effective price to each product
       return productList.map((p) => {
         let effectivePrice = Number(p.base_price);
         let priceSource = "base";
-        if (typePriceMap[p.id]) {
-          effectivePrice = typePriceMap[p.id];
-          priceSource = "type";
-        }
-        if (storePriceMap[p.id]) {
-          effectivePrice = storePriceMap[p.id];
-          priceSource = "store";
-        }
+        if (typePriceMap[p.id]) { effectivePrice = typePriceMap[p.id]; priceSource = "type"; }
+        if (storePriceMap[p.id]) { effectivePrice = storePriceMap[p.id]; priceSource = "store"; }
         return { ...p, effectivePrice, priceSource };
       });
     },
@@ -160,7 +160,6 @@ const Sales = () => {
     const updated = [...items];
     (updated[idx] as any)[field] = value;
     if (field === "product_id") {
-      // Use effective price from hierarchy
       const p = availableProducts?.find((pr: any) => pr.id === value);
       if (p) updated[idx].unit_price = p.effectivePrice;
     }
@@ -174,7 +173,6 @@ const Sales = () => {
 
   const handleStoreChange = (newStoreId: string) => {
     setStoreId(newStoreId);
-    // Reset items when store changes since products/pricing may differ
     setItems([{ product_id: "", quantity: 1, unit_price: 0 }]);
   };
 
@@ -223,14 +221,45 @@ const Sales = () => {
     qc.invalidateQueries({ queryKey: ["sales"] });
   };
 
+  const getRecorderName = (userId: string) => {
+    const p = profileMap.get(userId);
+    return p?.full_name || "Unknown";
+  };
+
+  const getRecorderAvatar = (userId: string) => {
+    const p = profileMap.get(userId);
+    return p?.avatar_url || null;
+  };
+
   const columns = [
-    { header: "Sale ID", accessor: "display_id" as const, className: "font-mono text-xs" },
-    { header: "Store", accessor: (row: any) => row.stores?.name || "—", className: "font-medium" },
-    { header: "Total", accessor: (row: any) => `₹${Number(row.total_amount).toLocaleString()}`, className: "font-semibold" },
-    { header: "Cash", accessor: (row: any) => `₹${Number(row.cash_amount).toLocaleString()}`, className: "text-sm hidden md:table-cell" },
-    { header: "UPI", accessor: (row: any) => `₹${Number(row.upi_amount).toLocaleString()}`, className: "text-sm hidden md:table-cell" },
-    { header: "Outstanding", accessor: (row: any) => `₹${Number(row.outstanding_amount).toLocaleString()}`, className: "text-sm hidden lg:table-cell" },
-    { header: "Date", accessor: (row: any) => new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }), className: "text-muted-foreground text-xs hidden sm:table-cell" },
+    { header: "Sale ID", accessor: "display_id" as const, className: "font-mono text-xs", hideOnMobile: true },
+    { header: "Customer", accessor: (row: any) => row.customers?.name || "—", className: "font-medium hidden md:table-cell" },
+    { header: "Store", accessor: (row: any) => (
+      <div className="flex items-center gap-2">
+        <StoreIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        <span>{row.stores?.name || "—"}</span>
+      </div>
+    ), className: "font-medium" },
+    { header: "Total", accessor: (row: any) => <span className="font-semibold">₹{Number(row.total_amount).toLocaleString()}</span> },
+    { header: "Cash", accessor: (row: any) => `₹${Number(row.cash_amount).toLocaleString()}`, className: "text-sm hidden lg:table-cell" },
+    { header: "UPI", accessor: (row: any) => `₹${Number(row.upi_amount).toLocaleString()}`, className: "text-sm hidden lg:table-cell" },
+    { header: "Outstanding", accessor: (row: any) => (
+      <span className={Number(row.outstanding_amount) > 0 ? "text-destructive font-medium" : "text-muted-foreground"}>
+        ₹{Number(row.outstanding_amount).toLocaleString()}
+      </span>
+    ), className: "text-sm hidden md:table-cell" },
+    { header: "Recorded By", accessor: (row: any) => (
+      <div className="flex items-center gap-2">
+        <Avatar className="h-6 w-6">
+          <AvatarImage src={getRecorderAvatar(row.recorded_by) || undefined} />
+          <AvatarFallback className="text-[10px] bg-primary/10 text-primary">{getRecorderName(row.recorded_by).charAt(0)}</AvatarFallback>
+        </Avatar>
+        <span className="text-xs text-muted-foreground">{getRecorderName(row.recorded_by)}</span>
+      </div>
+    ), className: "hidden lg:table-cell" },
+    { header: "Date", accessor: (row: any) => (
+      <span className="text-xs text-muted-foreground">{format(new Date(row.created_at), "dd MMM yy, hh:mm a")}</span>
+    ), className: "hidden sm:table-cell" },
   ];
 
   if (isLoading) {
@@ -255,7 +284,7 @@ const Sales = () => {
           size="sm"
           onClick={() => {
             exportCSV(
-              (sales || []).map((s: any) => ({ ...s, store_name: s.stores?.name || "", customer_name: s.customers?.name || "" })),
+              (sales || []).map((s: any) => ({ ...s, store_name: s.stores?.name || "", customer_name: s.customers?.name || "", recorder: getRecorderName(s.recorded_by) })),
               [
                 { header: "Sale ID", key: "display_id" },
                 { header: "Store", key: "store_name" },
@@ -264,6 +293,7 @@ const Sales = () => {
                 { header: "Cash", key: "cash_amount" },
                 { header: "UPI", key: "upi_amount" },
                 { header: "Outstanding", key: "outstanding_amount" },
+                { header: "Recorded By", key: "recorder" },
                 { header: "Date", key: "created_at" },
               ],
               "sales-export.csv"
@@ -275,7 +305,63 @@ const Sales = () => {
         </Button>
       </div>
 
-      <DataTable columns={columns} data={sales || []} searchKey="display_id" searchPlaceholder="Search by sale ID..." />
+      <DataTable
+        columns={columns}
+        data={sales || []}
+        searchKey="display_id"
+        searchPlaceholder="Search by sale ID..."
+        renderMobileCard={(row: any) => (
+          <div className="rounded-xl border bg-card p-4 shadow-sm hover:shadow-md transition-shadow">
+            {/* Header row */}
+            <div className="flex items-center justify-between mb-3">
+              <span className="font-mono text-xs text-muted-foreground">{row.display_id}</span>
+              <span className="text-[11px] text-muted-foreground">{format(new Date(row.created_at), "dd MMM yy, hh:mm a")}</span>
+            </div>
+
+            {/* Store & Customer */}
+            <div className="mb-3">
+              <div className="flex items-center gap-1.5">
+                <StoreIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="font-semibold text-sm text-foreground">{row.stores?.name || "—"}</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5 pl-5">{row.customers?.name || "—"}</p>
+            </div>
+
+            {/* Amount breakdown */}
+            <div className="grid grid-cols-3 gap-2 mb-3">
+              <div className="rounded-lg bg-muted/50 p-2 text-center">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Total</p>
+                <p className="text-sm font-bold text-foreground">₹{Number(row.total_amount).toLocaleString()}</p>
+              </div>
+              <div className="rounded-lg bg-muted/50 p-2 text-center">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Cash</p>
+                <p className="text-sm font-medium text-foreground">₹{Number(row.cash_amount).toLocaleString()}</p>
+              </div>
+              <div className="rounded-lg bg-muted/50 p-2 text-center">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">UPI</p>
+                <p className="text-sm font-medium text-foreground">₹{Number(row.upi_amount).toLocaleString()}</p>
+              </div>
+            </div>
+
+            {/* Footer: Outstanding + Recorder */}
+            <div className="flex items-center justify-between pt-2 border-t border-border">
+              <div className="flex items-center gap-1.5">
+                <Avatar className="h-5 w-5">
+                  <AvatarImage src={getRecorderAvatar(row.recorded_by) || undefined} />
+                  <AvatarFallback className="text-[9px] bg-primary/10 text-primary">{getRecorderName(row.recorded_by).charAt(0)}</AvatarFallback>
+                </Avatar>
+                <span className="text-[11px] text-muted-foreground">{getRecorderName(row.recorded_by)}</span>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] text-muted-foreground">Outstanding</p>
+                <p className={`text-sm font-semibold ${Number(row.outstanding_amount) > 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                  ₹{Number(row.outstanding_amount).toLocaleString()}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      />
 
       <Dialog open={showAdd} onOpenChange={(v) => { setShowAdd(v); if (!v) resetForm(); }}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
@@ -316,9 +402,7 @@ const Sales = () => {
                           <SelectTrigger className="flex-1"><SelectValue placeholder="Product" /></SelectTrigger>
                           <SelectContent>
                             {availableProducts?.map((p: any) => (
-                              <SelectItem key={p.id} value={p.id}>
-                                {p.name} ({p.sku})
-                              </SelectItem>
+                              <SelectItem key={p.id} value={p.id}>{p.name} ({p.sku})</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
