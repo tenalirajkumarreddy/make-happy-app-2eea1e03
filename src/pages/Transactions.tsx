@@ -111,12 +111,12 @@ const Transactions = () => {
   const columns = [
     { header: "Payment ID", accessor: "display_id" as const, className: "font-mono text-xs" },
     { header: "Store", accessor: (row: any) => row.stores?.name || "—", className: "font-medium" },
-    { header: "Cash", accessor: (row: any) => `₹${Number(row.cash_amount).toLocaleString()}`, className: "text-sm" },
-    { header: "UPI", accessor: (row: any) => `₹${Number(row.upi_amount).toLocaleString()}`, className: "text-sm" },
     { header: "Total", accessor: (row: any) => `₹${Number(row.total_amount).toLocaleString()}`, className: "font-semibold" },
-    { header: "Old Bal.", accessor: (row: any) => `₹${Number(row.old_outstanding).toLocaleString()}`, className: "text-muted-foreground text-sm" },
-    { header: "New Bal.", accessor: (row: any) => `₹${Number(row.new_outstanding).toLocaleString()}`, className: "text-sm" },
-    { header: "Date", accessor: (row: any) => new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }), className: "text-muted-foreground text-xs" },
+    { header: "Cash", accessor: (row: any) => `₹${Number(row.cash_amount).toLocaleString()}`, className: "text-sm hidden md:table-cell" },
+    { header: "UPI", accessor: (row: any) => `₹${Number(row.upi_amount).toLocaleString()}`, className: "text-sm hidden md:table-cell" },
+    { header: "Old Bal.", accessor: (row: any) => `₹${Number(row.old_outstanding).toLocaleString()}`, className: "text-muted-foreground text-sm hidden lg:table-cell" },
+    { header: "New Bal.", accessor: (row: any) => `₹${Number(row.new_outstanding).toLocaleString()}`, className: "text-sm hidden lg:table-cell" },
+    { header: "Date", accessor: (row: any) => new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }), className: "text-muted-foreground text-xs hidden sm:table-cell" },
   ];
 
   if (isLoading) {

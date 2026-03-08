@@ -132,11 +132,11 @@ const Orders = () => {
   const columns = [
     { header: "Order ID", accessor: "display_id" as const, className: "font-mono text-xs" },
     { header: "Store", accessor: (row: any) => row.stores?.name || "—", className: "font-medium" },
-    { header: "Type", accessor: (row: any) => <Badge variant="secondary">{row.order_type}</Badge> },
-    { header: "Source", accessor: (row: any) => <Badge variant="outline">{row.source}</Badge> },
-    { header: "Customer", accessor: (row: any) => row.customers?.name || "—", className: "text-muted-foreground text-sm" },
+    { header: "Type", accessor: (row: any) => <Badge variant="secondary">{row.order_type}</Badge>, className: "hidden sm:table-cell" },
+    { header: "Source", accessor: (row: any) => <Badge variant="outline">{row.source}</Badge>, className: "hidden md:table-cell" },
+    { header: "Customer", accessor: (row: any) => row.customers?.name || "—", className: "text-muted-foreground text-sm hidden lg:table-cell" },
     { header: "Status", accessor: (row: any) => <StatusBadge status={row.status === "delivered" ? "active" : row.status as any} label={row.status} /> },
-    { header: "Date", accessor: (row: any) => new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }), className: "text-muted-foreground text-xs" },
+    { header: "Date", accessor: (row: any) => new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }), className: "text-muted-foreground text-xs hidden sm:table-cell" },
   ];
 
   if (isLoading) {
