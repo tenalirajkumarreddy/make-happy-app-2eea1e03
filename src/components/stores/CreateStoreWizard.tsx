@@ -52,6 +52,7 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
   const [state, setState] = useState("");
   const [pincode, setPincode] = useState("");
   const [address, setAddress] = useState("");
+  const [openingBalance, setOpeningBalance] = useState("");
   const [locating, setLocating] = useState(false);
 
   // Pricing step
