@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Loader2, ArrowLeft, DollarSign, ShoppingCart, Banknote,
-  MapPin, Store as StoreIcon, Phone, User, Tag, Navigation, Calendar,
+  MapPin, Store as StoreIcon, Phone,
   Pencil, X, Save, AlertTriangle, ScanLine, Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
