@@ -1571,18 +1571,22 @@ Each card shows:
 - Admin can override for individual stores
 - Affects what customers see when creating orders
 
-### Additional Permissions
+### Additional Permissions (Toggle-Based)
 
-**Controlled by Admin:**
-- Override product pricing (per user)
-- Add opening balance (per user)
-- Edit store balance manually (per user)
-- Enable/Disable Customers (cascades disable to their stores)
-- Enable/Disable Stores
-- Modify custom pricing for stores (Managers + Admin only)
-- Access to specific routes (per agent)
-- Collect handovers (Managers + Admin only)
-- Enable/disable partial collections (global setting)
+**Controlled by Admin per user (toggle on/off):**
+
+| Permission | Key | Description |
+|---|---|---|
+| Price Override | `price_override` | Can override product pricing when recording sales |
+| Record on Behalf | `record_behalf` | Can record sales/transactions on behalf of other users |
+| Create Customers | `create_customers` | Can create new customer records |
+| Create Stores | `create_stores` | Can create new store records |
+| Edit Balance | `edit_balance` | Can manually adjust store outstanding balance (logged in Balance Adjustment log) |
+| Opening Balance | `opening_balance` | Can set opening balance when creating a store (+ or - values supported) |
+
+- Super Admin always has all permissions regardless of toggles
+- Permissions are managed per-user in the Access Control → User Permissions panel
+- Each permission can be independently enabled/disabled
 
 ### User-Specific Overrides
 
@@ -1596,6 +1600,9 @@ Each card shows:
 
 ### Account Control
 - **Enable/Disable Users**: Admin can turn user accounts on/off
+- **Auth-level ban**: Disabling a user sets a ban at the authentication level (100-year ban duration)
+- **Active session termination**: Already logged-in users are force-signed-out when their profile is marked inactive (checked on every page load)
+- **Re-enabling**: Removes the auth ban, user can log in again immediately
 - **Disabled users**: Cannot access system, see "Contact Admin" message
 
 ---
