@@ -120,7 +120,7 @@ export function TopBar() {
           id: `handover-${payload.new.id}`,
           message: `New handover submitted`,
           time: payload.new.created_at,
-          type: "handover",
+          type: "handover" as const,
           read: false,
         }, ...prev].slice(0, 15));
       })
