@@ -106,6 +106,11 @@ const Stores = () => {
     { header: "Route", accessor: (row: any) => row.routes?.name || "—", className: "text-sm" },
     { header: "Outstanding", accessor: (row: any) => `₹${Number(row.outstanding).toLocaleString()}`, className: "font-semibold" },
     { header: "Status", accessor: (row: any) => <StatusBadge status={row.is_active ? "active" : "inactive"} /> },
+    ...(canManagePricing ? [{ header: "Pricing", accessor: (row: any) => (
+      <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setPricingStore(row)}>
+        <DollarSign className="mr-1 h-3 w-3" />Set Prices
+      </Button>
+    )}] : []),
   ];
 
   if (isLoading) {
