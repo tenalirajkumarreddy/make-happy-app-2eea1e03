@@ -226,10 +226,13 @@ const Handovers = () => {
           {incoming.map((item) => (
             <div key={item.id} className="rounded-xl border bg-card p-4 border-l-4 border-l-warning">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div>
-                  <p className="font-semibold">₹{(Number(item.cash_amount) + Number(item.upi_amount)).toLocaleString()}</p>
-                  <p className="text-sm text-muted-foreground">From: {getName(item.user_id)} · {new Date(item.created_at).toLocaleDateString()}</p>
-                  {item.notes && <p className="text-sm mt-1 italic text-muted-foreground">"{item.notes}"</p>}
+                <div className="flex items-start gap-3">
+                  <UserAvatar userId={item.user_id} size="md" />
+                  <div>
+                    <p className="font-semibold">₹{(Number(item.cash_amount) + Number(item.upi_amount)).toLocaleString()}</p>
+                    <p className="text-sm text-muted-foreground">From: <span className="font-medium text-foreground">{getName(item.user_id)}</span> · {new Date(item.created_at).toLocaleDateString()}</p>
+                    {item.notes && <p className="text-sm mt-1 italic text-muted-foreground">"{item.notes}"</p>}
+                  </div>
                 </div>
                 <div className="flex gap-2">
                   <Button size="sm" onClick={() => handleConfirm(item.id)} className="gap-1">
