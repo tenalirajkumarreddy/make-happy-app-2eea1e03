@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { logActivity } from "@/lib/activityLogger";
 import { Loader2, User } from "lucide-react";
+import { usePermission } from "@/hooks/usePermission";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useState } from "react";
@@ -23,6 +24,7 @@ import { toast } from "sonner";
 const Customers = () => {
   const navigate = useNavigate();
   const { user, role } = useAuth();
+  const { allowed: canCreateCustomers } = usePermission("create_customers");
   const [showAdd, setShowAdd] = useState(false);
   const [kycCustomer, setKycCustomer] = useState<any>(null);
   const [name, setName] = useState("");
@@ -161,7 +163,7 @@ const Customers = () => {
       <PageHeader
         title="Customers"
         subtitle="Manage customer accounts and KYC verification"
-        primaryAction={{ label: "Add Customer", onClick: () => setShowAdd(true) }}
+        primaryAction={canCreateCustomers ? { label: "Add Customer", onClick: () => setShowAdd(true) } : undefined}
       />
 
       {canBulk && selected.size > 0 && (

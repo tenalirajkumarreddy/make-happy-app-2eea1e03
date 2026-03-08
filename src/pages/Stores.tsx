@@ -8,6 +8,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { DollarSign, Store, Settings2 } from "lucide-react";
+import { usePermission } from "@/hooks/usePermission";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useState } from "react";
@@ -21,6 +22,7 @@ import { toast } from "sonner";
 const Stores = () => {
   const navigate = useNavigate();
   const { role } = useAuth();
+  const { allowed: canCreateStores } = usePermission("create_stores");
   const [showAdd, setShowAdd] = useState(false);
   const [pricingStore, setPricingStore] = useState<any>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -132,7 +134,7 @@ const Stores = () => {
       <PageHeader
         title="Stores"
         subtitle="Manage store locations and assignments"
-        primaryAction={{ label: "Add Store", onClick: () => setShowAdd(true) }}
+        primaryAction={canCreateStores ? { label: "Add Store", onClick: () => setShowAdd(true) } : undefined}
         actions={[
           { label: "Store Types", icon: Settings2, onClick: () => navigate("/store-types"), priority: 1 },
         ]}
