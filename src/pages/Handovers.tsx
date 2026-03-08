@@ -152,7 +152,21 @@ const Handovers = () => {
     else { toast.success("Handover rejected — amount returned to sender"); qc.invalidateQueries({ queryKey: ["handovers"] }); }
   };
 
-  const getName = (userId: string | null) => profileMap?.[userId || ""] || "Unknown";
+  const getProfile = (userId: string | null) => profileMap?.[userId || ""] || { name: "Unknown", avatar: null };
+  const getName = (userId: string | null) => getProfile(userId).name;
+
+  const UserAvatar = ({ userId, size = "sm" }: { userId: string | null; size?: "sm" | "md" }) => {
+    const p = getProfile(userId);
+    const cls = size === "md" ? "h-10 w-10" : "h-8 w-8";
+    return (
+      <Avatar className={cls}>
+        <AvatarImage src={p.avatar || undefined} alt={p.name} />
+        <AvatarFallback className="bg-primary/10 text-primary text-xs">
+          {p.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase() || <User className="h-3.5 w-3.5" />}
+        </AvatarFallback>
+      </Avatar>
+    );
+  };
 
   if (isLoading) {
     return <div className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
