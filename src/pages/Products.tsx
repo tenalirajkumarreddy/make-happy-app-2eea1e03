@@ -169,6 +169,10 @@ const Products = () => {
     return <ProductAccessMatrix onBack={() => setShowMatrix(false)} />;
   }
 
+  if (showCategories) {
+    return <ProductCategories onBack={() => setShowCategories(false)} />;
+  }
+
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader
