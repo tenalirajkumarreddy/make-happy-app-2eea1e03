@@ -145,6 +145,45 @@ const Orders = () => {
     qc.invalidateQueries({ queryKey: ["orders"] });
   };
 
+  const handleCancel = async () => {
+    if (!cancelOrderId || !cancelReason.trim()) { toast.error("Please provide a reason"); return; }
+    setCancelling(true);
+    const { error } = await supabase
+      .from("orders")
+      .update({
+        status: "cancelled",
+        cancellation_reason: cancelReason,
+        cancelled_by: user!.id,
+        cancelled_at: new Date().toISOString(),
+      })
+      .eq("id", cancelOrderId)
+      .eq("status", "pending");
+    setCancelling(false);
+    if (error) { toast.error(error.message); return; }
+
+    const order = orders?.find((o) => o.id === cancelOrderId);
+    logActivity(user!.id, "Cancelled order", "order", order?.display_id || "", cancelOrderId, { reason: cancelReason });
+
+    // Notify customer if linked
+    if (order?.customers && (order as any).customer_id) {
+      const { data: custData } = await supabase.from("customers").select("user_id").eq("id", (order as any).customer_id).single();
+      if (custData?.user_id) {
+        sendNotificationToMany([custData.user_id], {
+          title: "Order Cancelled",
+          message: `Order ${order?.display_id} was cancelled. Reason: ${cancelReason}`,
+          type: "order",
+          entityType: "order",
+          entityId: cancelOrderId,
+        });
+      }
+    }
+
+    toast.success("Order cancelled");
+    setCancelOrderId(null);
+    setCancelReason("");
+    qc.invalidateQueries({ queryKey: ["orders"] });
+  };
+
   const filteredOrders = statusFilter === "all"
     ? orders
     : orders?.filter((o) => o.status === statusFilter);
@@ -157,6 +196,16 @@ const Orders = () => {
     { header: "Customer", accessor: (row: any) => row.customers?.name || "—", className: "text-muted-foreground text-sm hidden lg:table-cell" },
     { header: "Status", accessor: (row: any) => <StatusBadge status={row.status === "delivered" ? "active" : row.status as any} label={row.status} /> },
     { header: "Date", accessor: (row: any) => new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }), className: "text-muted-foreground text-xs hidden sm:table-cell" },
+    {
+      header: "Actions",
+      accessor: (row: any) => row.status === "pending" ? (
+        <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive" onClick={() => setCancelOrderId(row.id)}>
+          <XCircle className="h-3.5 w-3.5 mr-1" /> Cancel
+        </Button>
+      ) : row.status === "cancelled" ? (
+        <span className="text-xs text-muted-foreground truncate max-w-[120px] block" title={row.cancellation_reason}>{row.cancellation_reason || "—"}</span>
+      ) : null,
+    },
   ];
 
   if (isLoading) {
