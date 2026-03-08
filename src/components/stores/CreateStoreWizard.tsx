@@ -205,6 +205,7 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
       const storeCount = (allStores?.length || 0) + 1;
       const storeDisplayId = `STR-${String(storeCount).padStart(6, "0")}`;
 
+      const ob = openingBalance ? Number(openingBalance) : 0;
       const { data: newStore, error: storeErr } = await supabase.from("stores").insert({
         display_id: storeDisplayId,
         name,
@@ -221,6 +222,8 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
         district: district || null,
         state: state || null,
         pincode: pincode || null,
+        opening_balance: ob,
+        outstanding: ob,
       }).select("id").single();
 
       if (storeErr) { toast.error(storeErr.message); setSaving(false); return; }
