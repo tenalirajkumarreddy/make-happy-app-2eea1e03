@@ -1,158 +1,131 @@
 import { StatCard } from "@/components/shared/StatCard";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { useAuth } from "@/contexts/AuthContext";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import {
-  DollarSign,
-  Users,
-  Store,
-  ShoppingCart,
-  TrendingUp,
-  Banknote,
-  Smartphone,
-  Clock,
+  DollarSign, Users, Store, ShoppingCart, TrendingUp, Banknote, Smartphone, Clock, Loader2,
 } from "lucide-react";
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  PieChart,
-  Pie,
-  Cell,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
 } from "recharts";
 
-const salesData = [
-  { day: "Mon", sales: 12400 },
-  { day: "Tue", sales: 18200 },
-  { day: "Wed", sales: 15600 },
-  { day: "Thu", sales: 22100 },
-  { day: "Fri", sales: 19800 },
-  { day: "Sat", sales: 24500 },
-  { day: "Sun", sales: 8900 },
-];
-
-const revenueData = [
-  { month: "Jan", revenue: 185000 },
-  { month: "Feb", revenue: 210000 },
-  { month: "Mar", revenue: 195000 },
-  { month: "Apr", revenue: 240000 },
-  { month: "May", revenue: 268000 },
-  { month: "Jun", revenue: 295000 },
-];
-
-const storeTypeData = [
-  { name: "Retail", value: 45, color: "hsl(217, 91%, 50%)" },
-  { name: "Wholesale", value: 28, color: "hsl(142, 72%, 42%)" },
-  { name: "Restaurant", value: 18, color: "hsl(38, 92%, 50%)" },
-  { name: "POS", value: 9, color: "hsl(280, 65%, 60%)" },
-];
-
-const recentOrders = [
-  { id: "ORD-012345", store: "Tea Stall - MG Road", amount: "₹1,200", status: "Pending" },
-  { id: "ORD-012346", store: "Bakery - Jayanagar", amount: "₹3,450", status: "Delivered" },
-  { id: "ORD-012347", store: "Restaurant - Koramangala", amount: "₹8,900", status: "Pending" },
-  { id: "ORD-012348", store: "Shop - BTM Layout", amount: "₹2,100", status: "Cancelled" },
-];
+const COLORS = ["hsl(217, 91%, 50%)", "hsl(142, 72%, 42%)", "hsl(38, 92%, 50%)", "hsl(280, 65%, 60%)", "hsl(0, 72%, 51%)"];
 
 const Dashboard = () => {
+  const { profile } = useAuth();
+
+  const { data: stats, isLoading } = useQuery({
+    queryKey: ["dashboard-stats"],
+    queryFn: async () => {
+      const today = new Date().toISOString().split("T")[0];
+
+      const [salesRes, txnRes, customersRes, storesRes, ordersRes, todaySalesRes] = await Promise.all([
+        supabase.from("sales").select("total_amount, cash_amount, upi_amount, created_at, stores(store_type_id, store_types(name))"),
+        supabase.from("transactions").select("total_amount, cash_amount, upi_amount"),
+        supabase.from("customers").select("id").eq("is_active", true),
+        supabase.from("stores").select("id, outstanding").eq("is_active", true),
+        supabase.from("orders").select("id, status, display_id, stores(name), created_at").eq("status", "pending").order("created_at", { ascending: false }).limit(5),
+        supabase.from("sales").select("total_amount, cash_amount, upi_amount").gte("created_at", today + "T00:00:00"),
+      ]);
+
+      const allSales = salesRes.data || [];
+      const todaySales = todaySalesRes.data || [];
+      const allStores = storesRes.data || [];
+
+      const todayTotal = todaySales.reduce((s, r) => s + Number(r.total_amount), 0);
+      const todayCash = todaySales.reduce((s, r) => s + Number(r.cash_amount), 0);
+      const todayUpi = todaySales.reduce((s, r) => s + Number(r.upi_amount), 0);
+      const totalOutstanding = allStores.reduce((s, r) => s + Number(r.outstanding), 0);
+      const overdueStores = allStores.filter((s) => Number(s.outstanding) > 0).length;
+
+      // Sales by day of week (last 7 days)
+      const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      const last7 = Array.from({ length: 7 }, (_, i) => {
+        const d = new Date();
+        d.setDate(d.getDate() - (6 - i));
+        return d;
+      });
+      const weeklySales = last7.map((d) => {
+        const dateStr = d.toISOString().split("T")[0];
+        const daySales = allSales.filter((s) => s.created_at.startsWith(dateStr));
+        return { day: dayNames[d.getDay()], sales: daySales.reduce((sum, s) => sum + Number(s.total_amount), 0) };
+      });
+
+      // Sales by store type
+      const storeTypeSales: Record<string, number> = {};
+      allSales.forEach((s) => {
+        const typeName = (s.stores as any)?.store_types?.name || "Other";
+        storeTypeSales[typeName] = (storeTypeSales[typeName] || 0) + Number(s.total_amount);
+      });
+      const totalSalesAmount = Object.values(storeTypeSales).reduce((a, b) => a + b, 0) || 1;
+      const storeTypeData = Object.entries(storeTypeSales).map(([name, value], i) => ({
+        name,
+        value: Math.round((value / totalSalesAmount) * 100),
+        color: COLORS[i % COLORS.length],
+      }));
+
+      return {
+        todayTotal, todayCash, todayUpi, totalOutstanding, overdueStores,
+        customerCount: customersRes.data?.length || 0,
+        storeCount: allStores.length,
+        pendingOrders: ordersRes.data || [],
+        weeklySales,
+        storeTypeData: storeTypeData.length > 0 ? storeTypeData : [{ name: "No data", value: 100, color: "hsl(220, 13%, 80%)" }],
+      };
+    },
+  });
+
+  if (isLoading) {
+    return <div className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  }
+
+  const s = stats!;
+
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Dashboard" subtitle="Welcome back! Here's your business overview." />
+      <PageHeader title="Dashboard" subtitle={`Welcome back, ${profile?.full_name || "User"}! Here's your business overview.`} />
 
-      {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          title="Total Sales (Today)"
-          value="₹1,21,500"
-          change="+12.5% from yesterday"
-          changeType="positive"
-          icon={DollarSign}
-          iconColor="bg-primary"
-        />
-        <StatCard
-          title="Cash Collected"
-          value="₹78,200"
-          change="+8.3% from yesterday"
-          changeType="positive"
-          icon={Banknote}
-          iconColor="bg-success"
-        />
-        <StatCard
-          title="UPI Collected"
-          value="₹43,300"
-          change="+18.1% from yesterday"
-          changeType="positive"
-          icon={Smartphone}
-          iconColor="bg-info"
-        />
-        <StatCard
-          title="Pending Outstanding"
-          value="₹4,52,000"
-          change="23 stores overdue"
-          changeType="negative"
-          icon={Clock}
-          iconColor="bg-warning"
-        />
+        <StatCard title="Total Sales (Today)" value={`₹${s.todayTotal.toLocaleString()}`} icon={DollarSign} iconColor="bg-primary" />
+        <StatCard title="Cash Collected" value={`₹${s.todayCash.toLocaleString()}`} icon={Banknote} iconColor="bg-success" />
+        <StatCard title="UPI Collected" value={`₹${s.todayUpi.toLocaleString()}`} icon={Smartphone} iconColor="bg-info" />
+        <StatCard title="Pending Outstanding" value={`₹${s.totalOutstanding.toLocaleString()}`} change={`${s.overdueStores} stores with balance`} changeType="negative" icon={Clock} iconColor="bg-warning" />
       </div>
 
-      {/* Secondary Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <StatCard title="Active Customers" value="342" icon={Users} />
-        <StatCard title="Active Stores" value="487" icon={Store} />
-        <StatCard title="Pending Orders" value="23" icon={ShoppingCart} />
-        <StatCard title="Route Coverage" value="78%" icon={TrendingUp} />
+        <StatCard title="Active Customers" value={String(s.customerCount)} icon={Users} />
+        <StatCard title="Active Stores" value={String(s.storeCount)} icon={Store} />
+        <StatCard title="Pending Orders" value={String(s.pendingOrders.length)} icon={ShoppingCart} />
+        <StatCard title="Store Types" value={String(s.storeTypeData.filter((t) => t.name !== "No data").length)} icon={TrendingUp} />
       </div>
 
-      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Weekly Sales */}
         <div className="lg:col-span-2 rounded-xl border bg-card p-5">
-          <h3 className="text-sm font-semibold mb-4">Weekly Sales</h3>
+          <h3 className="text-sm font-semibold mb-4">Last 7 Days Sales</h3>
           <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={salesData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 13%, 91%)" />
-              <XAxis dataKey="day" tick={{ fontSize: 12 }} stroke="hsl(220, 10%, 46%)" />
-              <YAxis tick={{ fontSize: 12 }} stroke="hsl(220, 10%, 46%)" />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "hsl(0, 0%, 100%)",
-                  border: "1px solid hsl(220, 13%, 91%)",
-                  borderRadius: "8px",
-                  fontSize: "12px",
-                }}
-              />
-              <Bar dataKey="sales" fill="hsl(217, 91%, 50%)" radius={[6, 6, 0, 0]} />
+            <BarChart data={s.weeklySales}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis dataKey="day" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
+              <YAxis tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
+              <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
+              <Bar dataKey="sales" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
 
-        {/* Store Types */}
         <div className="rounded-xl border bg-card p-5">
           <h3 className="text-sm font-semibold mb-4">Sales by Store Type</h3>
           <ResponsiveContainer width="100%" height={200}>
             <PieChart>
-              <Pie
-                data={storeTypeData}
-                cx="50%"
-                cy="50%"
-                innerRadius={50}
-                outerRadius={80}
-                paddingAngle={4}
-                dataKey="value"
-              >
-                {storeTypeData.map((entry, index) => (
-                  <Cell key={index} fill={entry.color} />
-                ))}
+              <Pie data={s.storeTypeData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={4} dataKey="value">
+                {s.storeTypeData.map((entry, index) => <Cell key={index} fill={entry.color} />)}
               </Pie>
               <Tooltip />
             </PieChart>
           </ResponsiveContainer>
           <div className="mt-2 grid grid-cols-2 gap-2">
-            {storeTypeData.map((item) => (
+            {s.storeTypeData.map((item) => (
               <div key={item.name} className="flex items-center gap-2 text-xs">
                 <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
                 <span className="text-muted-foreground">{item.name}</span>
@@ -163,53 +136,26 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Revenue Trend + Recent Orders */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="rounded-xl border bg-card p-5">
-          <h3 className="text-sm font-semibold mb-4">Revenue Trend</h3>
-          <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={revenueData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 13%, 91%)" />
-              <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="hsl(220, 10%, 46%)" />
-              <YAxis tick={{ fontSize: 12 }} stroke="hsl(220, 10%, 46%)" />
-              <Tooltip />
-              <Line
-                type="monotone"
-                dataKey="revenue"
-                stroke="hsl(217, 91%, 50%)"
-                strokeWidth={2.5}
-                dot={{ r: 4, fill: "hsl(217, 91%, 50%)" }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="rounded-xl border bg-card p-5">
-          <h3 className="text-sm font-semibold mb-4">Recent Orders</h3>
+      <div className="rounded-xl border bg-card p-5">
+        <h3 className="text-sm font-semibold mb-4">Pending Orders</h3>
+        {s.pendingOrders.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-6">No pending orders</p>
+        ) : (
           <div className="space-y-3">
-            {recentOrders.map((order) => (
-              <div
-                key={order.id}
-                className="flex items-center justify-between rounded-lg bg-muted/50 px-4 py-3"
-              >
+            {s.pendingOrders.map((order: any) => (
+              <div key={order.id} className="flex items-center justify-between rounded-lg bg-muted/50 px-4 py-3">
                 <div>
-                  <p className="text-sm font-medium">{order.store}</p>
-                  <p className="text-xs text-muted-foreground font-mono">{order.id}</p>
+                  <p className="text-sm font-medium">{order.stores?.name || "—"}</p>
+                  <p className="text-xs text-muted-foreground font-mono">{order.display_id}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-semibold">{order.amount}</p>
-                  <p className={`text-xs font-medium ${
-                    order.status === "Delivered" ? "text-success" :
-                    order.status === "Cancelled" ? "text-destructive" :
-                    "text-warning"
-                  }`}>
-                    {order.status}
-                  </p>
+                  <p className="text-xs font-medium text-warning">Pending</p>
+                  <p className="text-xs text-muted-foreground">{new Date(order.created_at).toLocaleDateString("en-IN")}</p>
                 </div>
               </div>
             ))}
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
