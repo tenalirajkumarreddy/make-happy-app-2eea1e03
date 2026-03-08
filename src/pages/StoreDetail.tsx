@@ -654,11 +654,7 @@ function InfoItem({ label, value }: { label: string; value: string }) {
       <p className="text-sm font-medium text-foreground truncate">{value}</p>
     </div>
   );
-              )}
-              {canEdit && !isInactive && (
-                <Button variant="outline" size="sm" onClick={() => setShowTransfer(true)} className="gap-1.5">
-                  <ArrowRightLeft className="h-3.5 w-3.5" /> Transfer
-                </Button>
+}
 
 function EmptyTab({ label }: { label: string }) {
   return <div className="rounded-xl border border-dashed bg-card p-10 text-center text-muted-foreground">{label}</div>;
