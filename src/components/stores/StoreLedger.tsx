@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import { Loader2, Package } from "lucide-react";
+import { Loader2, Package, Tag } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -77,8 +77,24 @@ export function StoreLedger({ sales, transactions, openingBalance, profileMap }:
     // Sort newest first
     entries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
+    // Add opening balance as the very last (oldest) entry
+    entries.push({
+      id: "__opening_balance__",
+      type: "correction" as const,
+      date: "",
+      display_id: "",
+      description: "Opening Balance",
+      total_amount: 0,
+      cash_amount: 0,
+      upi_amount: 0,
+      outstanding: openingBalance,
+      notes: null,
+      recorded_by: "",
+      raw: null,
+    });
+
     return entries;
-  }, [sales, transactions]);
+  }, [sales, transactions, openingBalance]);
 
   const selectedEntry = ledgerEntries.find((e) => e.id === selectedEntryId);
   const isSaleSelected = selectedEntry?.type === "sale";
@@ -100,23 +116,38 @@ export function StoreLedger({ sales, transactions, openingBalance, profileMap }:
   const columns = [
     {
       header: "Date",
-      accessor: (row: LedgerEntry) => new Date(row.date).toLocaleDateString("en-IN"),
+      accessor: (row: LedgerEntry) => row.date ? new Date(row.date).toLocaleDateString("en-IN") : "—",
       className: "text-muted-foreground text-xs",
     },
     {
       header: "Description",
-      accessor: (row: LedgerEntry) => (
-        <div>
-          <p className="font-medium text-sm">{row.description}</p>
-          <p className="text-[11px] text-muted-foreground uppercase">{row.type === "sale" ? "SALE" : row.type === "payment" ? "PAYMENT" : "CORRECTION"}</p>
-          {row.notes && (
-            <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1">
-              <span className="w-0.5 h-3 bg-primary/40 rounded-full inline-block" />
-              <span className="italic">{row.notes}</span>
-            </p>
-          )}
-        </div>
-      ),
+      accessor: (row: LedgerEntry) => {
+        if (row.id === "__opening_balance__") {
+          return (
+            <div className="flex items-center gap-2">
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted shadow-sm">
+                <Tag className="h-3.5 w-3.5 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="font-medium text-sm uppercase tracking-wide text-muted-foreground">Opening Balance</p>
+                <p className="text-sm font-semibold">₹{row.outstanding.toLocaleString()}</p>
+              </div>
+            </div>
+          );
+        }
+        return (
+          <div>
+            <p className="font-medium text-sm">{row.description}</p>
+            <p className="text-[11px] text-muted-foreground uppercase">{row.type === "sale" ? "SALE" : row.type === "payment" ? "PAYMENT" : "CORRECTION"}</p>
+            {row.notes && (
+              <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1">
+                <span className="w-0.5 h-3 bg-primary/40 rounded-full inline-block" />
+                <span className="italic">{row.notes}</span>
+              </p>
+            )}
+          </div>
+        );
+      },
     },
     {
       header: "Debit (-)",
@@ -191,14 +222,6 @@ export function StoreLedger({ sales, transactions, openingBalance, profileMap }:
             onRowClick={(row: any) => setSelectedEntryId(row.id)}
             renderMobileCard={renderMobileCard}
           />
-          {/* Opening balance row hint */}
-          <div className="rounded-lg border bg-muted/30 px-4 py-3 flex items-center justify-between text-sm text-muted-foreground">
-            <span>—</span>
-            <span className="font-medium">Opening Balance</span>
-            <span>—</span>
-            <span>—</span>
-            <span className="font-semibold text-foreground">₹{openingBalance.toLocaleString()}</span>
-          </div>
         </>
       )}
 
