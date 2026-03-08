@@ -290,7 +290,8 @@ const Handovers = () => {
               item.status === "confirmed" ? "border-l-success" :
               item.status === "rejected" ? "border-l-destructive" : "border-l-warning"
             }`}>
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div className="flex items-start gap-3">
+                <UserAvatar userId={item.user_id} />
                 <div>
                   <div className="flex items-center gap-2">
                     <p className="font-semibold">₹{(Number(item.cash_amount) + Number(item.upi_amount)).toLocaleString()}</p>
@@ -299,9 +300,10 @@ const Handovers = () => {
                       label={item.status === "confirmed" ? "Confirmed" : item.status === "rejected" ? "Rejected" : "Pending"}
                     />
                   </div>
-                  <p className="text-sm text-muted-foreground">From: {getName(item.user_id)} · {new Date(item.created_at).toLocaleDateString()}</p>
+                  <p className="text-sm text-muted-foreground">From: <span className="font-medium text-foreground">{getName(item.user_id)}</span> · {new Date(item.created_at).toLocaleDateString()}</p>
                   {item.notes && <p className="text-sm mt-1 italic text-muted-foreground">"{item.notes}"</p>}
                 </div>
+              </div>
               </div>
             </div>
           ))}
