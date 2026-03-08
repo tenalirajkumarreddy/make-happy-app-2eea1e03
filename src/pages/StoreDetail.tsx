@@ -13,17 +13,22 @@ import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Loader2, ArrowLeft, DollarSign, ShoppingCart, Banknote,
   MapPin, Store as StoreIcon, Phone,
-  Pencil, X, Save, AlertTriangle, ScanLine, Trash2,
+  Pencil, X, Save, AlertTriangle, ScanLine, Trash2, Scale,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermission } from "@/hooks/usePermission";
 import { QrScanner } from "@/components/shared/QrScanner";
 import { parseUpiQr } from "@/lib/upiParser";
 import { StoreLedger } from "@/components/stores/StoreLedger";
+import { logActivity } from "@/lib/activityLogger";
 
 const StoreDetail = () => {
   const { id } = useParams<{ id: string }>();
