@@ -6,6 +6,7 @@ import { StorePricingDialog } from "@/components/stores/StorePricingDialog";
 import { CreateStoreWizard } from "@/components/stores/CreateStoreWizard";
 import { EditableCell } from "@/components/shared/EditableCell";
 import { CsvImportDialog } from "@/components/shared/CsvImportDialog";
+import { AdvancedFilters, applyFilters, type FilterValues } from "@/components/shared/AdvancedFilters";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
