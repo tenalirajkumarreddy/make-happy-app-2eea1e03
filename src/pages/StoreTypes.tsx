@@ -36,21 +36,39 @@ const StoreTypes = () => {
     },
   });
 
-  const handleAdd = async (e: React.FormEvent) => {
+  const openEdit = (row: any) => {
+    setEditingType(row);
+    setNewTypeName(row.name);
+    setNewOrderType(row.order_type);
+    setShowAdd(true);
+  };
+
+  const handleClose = () => {
+    setShowAdd(false);
+    setEditingType(null);
+    setNewTypeName("");
+    setNewOrderType("simple");
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    const { error } = await supabase.from("store_types").insert({
-      name: newTypeName,
-      order_type: newOrderType,
-    });
-    setSaving(false);
-    if (error) toast.error(error.message);
-    else {
-      toast.success("Store type added");
-      setShowAdd(false);
-      setNewTypeName("");
-      setNewOrderType("simple");
-      qc.invalidateQueries({ queryKey: ["store-types"] });
+    if (editingType) {
+      const { error } = await supabase.from("store_types").update({
+        name: newTypeName,
+        order_type: newOrderType,
+      }).eq("id", editingType.id);
+      setSaving(false);
+      if (error) toast.error(error.message);
+      else { toast.success("Store type updated"); handleClose(); qc.invalidateQueries({ queryKey: ["store-types"] }); }
+    } else {
+      const { error } = await supabase.from("store_types").insert({
+        name: newTypeName,
+        order_type: newOrderType,
+      });
+      setSaving(false);
+      if (error) toast.error(error.message);
+      else { toast.success("Store type added"); handleClose(); qc.invalidateQueries({ queryKey: ["store-types"] }); }
     }
   };
 
