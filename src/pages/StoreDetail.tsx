@@ -18,12 +18,14 @@ import {
 import {
   Loader2, ArrowLeft, DollarSign, ShoppingCart, Banknote,
   MapPin, Store as StoreIcon, Phone, User, Tag, Navigation, Calendar,
-  Pencil, X, Save, AlertTriangle, Package,
+  Pencil, X, Save, AlertTriangle, Package, ScanLine, Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { QrScanner } from "@/components/shared/QrScanner";
+import { parseUpiQr } from "@/lib/upiParser";
 
 const StoreDetail = () => {
   const { id } = useParams<{ id: string }>();
