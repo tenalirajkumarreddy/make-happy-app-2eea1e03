@@ -321,18 +321,6 @@ const CustomerDetail = () => {
         </Card>
       </div>
 
-      {/* Stores */}
-      <div>
-        <h2 className="text-sm font-semibold mb-3 flex items-center gap-2">
-          <Store className="h-4 w-4 text-muted-foreground" /> Stores
-        </h2>
-        {(stores?.length || 0) === 0 ? (
-          <div className="rounded-xl border border-dashed bg-card p-8 text-center text-muted-foreground text-sm">No stores yet</div>
-        ) : (
-          <DataTable columns={storeColumns} data={stores || []} searchKey="name" searchPlaceholder="Search stores..." onRowClick={(row) => navigate(`/stores/${row.id}`)} />
-        )}
-      </div>
-
       {/* KYC Section */}
       <Card>
         <CardContent className="p-4 sm:p-5 space-y-4">
@@ -394,6 +382,18 @@ const CustomerDetail = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Stores */}
+      <div>
+        <h2 className="text-sm font-semibold mb-3 flex items-center gap-2">
+          <Store className="h-4 w-4 text-muted-foreground" /> Stores
+        </h2>
+        {(stores?.length || 0) === 0 ? (
+          <div className="rounded-xl border border-dashed bg-card p-8 text-center text-muted-foreground text-sm">No stores yet</div>
+        ) : (
+          <DataTable columns={storeColumns} data={stores || []} searchKey="name" searchPlaceholder="Search stores..." onRowClick={(row) => navigate(`/stores/${row.id}`)} />
+        )}
+      </div>
     </div>
   );
 };
