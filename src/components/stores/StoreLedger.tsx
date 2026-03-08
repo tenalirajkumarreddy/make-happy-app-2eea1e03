@@ -173,6 +173,8 @@ export function StoreLedger({ sales, transactions, balanceAdjustments = [], open
       accessor: (row: LedgerEntry) =>
         row.type === "sale" ? (
           <span className="text-destructive font-medium">₹{row.total_amount.toLocaleString()}</span>
+        ) : row.type === "correction" && row.id !== "__opening_balance__" && row.total_amount > 0 ? (
+          <span className="text-destructive font-medium">₹{row.total_amount.toLocaleString()}</span>
         ) : (
           <span className="text-muted-foreground">—</span>
         ),
@@ -182,6 +184,8 @@ export function StoreLedger({ sales, transactions, balanceAdjustments = [], open
       accessor: (row: LedgerEntry) =>
         row.type === "payment" || row.id === "__opening_balance__" ? (
           <span className="text-success font-medium">₹{row.total_amount.toLocaleString()}</span>
+        ) : row.type === "correction" && row.id !== "__opening_balance__" && row.total_amount < 0 ? (
+          <span className="text-success font-medium">₹{Math.abs(row.total_amount).toLocaleString()}</span>
         ) : (
           <span className="text-muted-foreground">—</span>
         ),
