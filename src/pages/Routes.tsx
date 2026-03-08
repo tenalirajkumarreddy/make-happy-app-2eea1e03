@@ -70,7 +70,7 @@ const Routes = () => {
     <div className="space-y-6 animate-fade-in">
       <PageHeader title="Routes" subtitle="Manage delivery routes by store type" primaryAction={{ label: "Create Route", onClick: () => setShowAdd(true) }} />
 
-      <RouteSessionPanel />
+      {role === "agent" && <RouteSessionPanel />}
 
       {storeTypes && storeTypes.length > 0 ? (
         <Tabs defaultValue={defaultTab}>
