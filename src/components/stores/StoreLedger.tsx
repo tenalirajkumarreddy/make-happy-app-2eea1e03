@@ -32,7 +32,7 @@ interface StoreLedgerProps {
   profileMap: Map<string, { user_id: string; full_name: string; avatar_url: string | null }>;
 }
 
-export function StoreLedger({ sales, transactions, openingBalance, profileMap }: StoreLedgerProps) {
+export function StoreLedger({ sales, transactions, openingBalance, storeCreatedAt, profileMap }: StoreLedgerProps) {
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
 
   const ledgerEntries = useMemo(() => {
