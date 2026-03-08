@@ -88,6 +88,11 @@ const Dashboard = () => {
     <div className="space-y-6 animate-fade-in">
       <PageHeader title="Dashboard" subtitle={`Welcome back, ${profile?.full_name || "User"}! Here's your business overview.`} />
 
+      {/* Quick Action Button - Floating */}
+      <div className="fixed bottom-6 right-4 z-50 sm:bottom-8 sm:right-8">
+        <QuickActionDrawer />
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <StatCard title="Total Sales (Today)" value={`₹${s.todayTotal.toLocaleString()}`} icon={DollarSign} iconColor="bg-primary" />
         <StatCard title="Cash Collected" value={`₹${s.todayCash.toLocaleString()}`} icon={Banknote} iconColor="bg-success" />
