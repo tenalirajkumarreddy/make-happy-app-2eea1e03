@@ -18,6 +18,7 @@ import {
 import { toast } from "sonner";
 
 const Routes = () => {
+  const { role } = useAuth();
   const [showAdd, setShowAdd] = useState(false);
   const [name, setName] = useState("");
   const [storeTypeId, setStoreTypeId] = useState("");
