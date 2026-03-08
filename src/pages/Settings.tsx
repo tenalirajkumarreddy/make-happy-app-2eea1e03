@@ -63,7 +63,6 @@ const SettingsPage = () => {
         <TabsList>
           <TabsTrigger value="company">Company</TabsTrigger>
           <TabsTrigger value="pricing">Pricing</TabsTrigger>
-          <TabsTrigger value="pricing">Pricing</TabsTrigger>
           <TabsTrigger value="features">Features</TabsTrigger>
         </TabsList>
 
