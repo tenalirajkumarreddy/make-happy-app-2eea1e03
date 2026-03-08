@@ -67,10 +67,10 @@ const Products = () => {
 
   const columns = [
     { header: "Product Name", accessor: "name" as const, className: "font-medium" },
-    { header: "SKU", accessor: "sku" as const, className: "font-mono text-xs text-muted-foreground" },
-    { header: "Category", accessor: (row: any) => row.category ? <Badge variant="secondary">{row.category}</Badge> : <span className="text-muted-foreground">—</span> },
+    { header: "SKU", accessor: "sku" as const, className: "font-mono text-xs text-muted-foreground hidden sm:table-cell" },
+    { header: "Category", accessor: (row: any) => row.category ? <Badge variant="secondary">{row.category}</Badge> : <span className="text-muted-foreground">—</span>, className: "hidden md:table-cell" },
     { header: "Base Price", accessor: (row: any) => `₹${Number(row.base_price).toLocaleString()}` },
-    { header: "Unit", accessor: "unit" as const },
+    { header: "Unit", accessor: "unit" as const, className: "hidden sm:table-cell" },
     { header: "Status", accessor: (row: any) => <StatusBadge status={row.is_active ? "active" : "inactive"} /> },
   ];
 
