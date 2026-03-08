@@ -3,6 +3,7 @@ import { DataTable } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { logActivity } from "@/lib/activityLogger";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -136,6 +137,9 @@ const Sales = () => {
       total_price: i.quantity * i.unit_price,
     }));
     await supabase.from("sale_items").insert(saleItems);
+
+    // Log activity
+    logActivity(user!.id, "Recorded sale", "sale", displayId, sale.id, { total: totalAmount, store: storeId });
 
     // Update store outstanding
     await supabase.from("stores").update({ outstanding: newOutstanding }).eq("id", storeId);

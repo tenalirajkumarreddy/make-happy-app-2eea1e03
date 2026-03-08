@@ -77,8 +77,14 @@ export type Database = {
           gst_number: string | null
           id: string
           is_active: boolean
+          kyc_aadhar_back_url: string | null
+          kyc_aadhar_front_url: string | null
           kyc_rejection_reason: string | null
+          kyc_selfie_url: string | null
           kyc_status: string
+          kyc_submitted_at: string | null
+          kyc_verified_at: string | null
+          kyc_verified_by: string | null
           name: string
           opening_balance: number
           phone: string | null
@@ -94,8 +100,14 @@ export type Database = {
           gst_number?: string | null
           id?: string
           is_active?: boolean
+          kyc_aadhar_back_url?: string | null
+          kyc_aadhar_front_url?: string | null
           kyc_rejection_reason?: string | null
+          kyc_selfie_url?: string | null
           kyc_status?: string
+          kyc_submitted_at?: string | null
+          kyc_verified_at?: string | null
+          kyc_verified_by?: string | null
           name: string
           opening_balance?: number
           phone?: string | null
@@ -111,8 +123,14 @@ export type Database = {
           gst_number?: string | null
           id?: string
           is_active?: boolean
+          kyc_aadhar_back_url?: string | null
+          kyc_aadhar_front_url?: string | null
           kyc_rejection_reason?: string | null
+          kyc_selfie_url?: string | null
           kyc_status?: string
+          kyc_submitted_at?: string | null
+          kyc_verified_at?: string | null
+          kyc_verified_by?: string | null
           name?: string
           opening_balance?: number
           phone?: string | null

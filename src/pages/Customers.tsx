@@ -3,6 +3,8 @@ import { DataTable } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { logActivity } from "@/lib/activityLogger";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import {
@@ -17,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
 const Customers = () => {
+  const { user } = useAuth();
   const [showAdd, setShowAdd] = useState(false);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -56,6 +59,7 @@ const Customers = () => {
       toast.error(error.message);
     } else {
       toast.success("Customer added");
+      logActivity(user!.id, "Added customer", "customer", name);
       setShowAdd(false);
       setName(""); setPhone(""); setEmail(""); setAddress("");
       qc.invalidateQueries({ queryKey: ["customers"] });

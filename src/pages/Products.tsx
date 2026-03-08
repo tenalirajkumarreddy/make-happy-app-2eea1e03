@@ -4,6 +4,8 @@ import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { logActivity } from "@/lib/activityLogger";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import {
@@ -19,6 +21,7 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 
 const Products = () => {
+  const { user } = useAuth();
   const [showAdd, setShowAdd] = useState(false);
   const [name, setName] = useState("");
   const [sku, setSku] = useState("");
@@ -55,6 +58,7 @@ const Products = () => {
       toast.error(error.message);
     } else {
       toast.success("Product added");
+      logActivity(user!.id, "Added product", "product", name);
       setShowAdd(false);
       setName(""); setSku(""); setPrice(""); setUnit("PCS"); setCategory("");
       qc.invalidateQueries({ queryKey: ["products"] });
