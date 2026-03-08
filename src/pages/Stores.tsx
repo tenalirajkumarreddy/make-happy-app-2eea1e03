@@ -155,8 +155,8 @@ const Stores = () => {
         onRowClick={(row) => navigate(`/stores/${row.id}`)}
         renderMobileCard={(row: any) => (
           <div className={`rounded-xl border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow active:bg-muted/30 ${!row.is_active ? "opacity-60" : ""}`}>
-            <div className="flex items-stretch">
-              <div className="w-20 shrink-0 bg-muted flex items-center justify-center overflow-hidden">
+            <div className="flex">
+              <div className="w-20 h-20 shrink-0 bg-muted flex items-center justify-center overflow-hidden">
                 {row.photo_url ? (
                   <img src={row.photo_url} alt={row.name} className="w-full h-full object-cover" />
                 ) : (
