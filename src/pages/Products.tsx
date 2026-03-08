@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Package, Pencil, X, Save, AlertTriangle, Grid3X3, Download } from "lucide-react";
 import { ImageUpload } from "@/components/shared/ImageUpload";
 import { ProductAccessMatrix } from "@/components/products/ProductAccessMatrix";
+import { ProductCategories } from "@/components/products/ProductCategories";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
