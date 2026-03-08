@@ -1,11 +1,11 @@
 import { PageHeader } from "@/components/shared/PageHeader";
-import { DataTable } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2, Shield, UserPlus, Settings2 } from "lucide-react";
+import { Loader2, UserPlus } from "lucide-react";
 import { useState } from "react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -17,8 +17,18 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
-import { UserPermissionsPanel } from "@/components/access/UserPermissionsPanel";
+import {
+  InlinePermissionCheckbox,
+  useUserPermissions,
+  PERMISSION_KEYS,
+  ROLE_DEFAULTS,
+  type PermissionKey,
+} from "@/components/access/UserPermissionsPanel";
 
 const STAFF_ROLES = [
   { value: "manager", label: "Manager" },
@@ -27,15 +37,26 @@ const STAFF_ROLES = [
   { value: "pos", label: "POS" },
 ];
 
+const PERM_HEADERS: { key: PermissionKey; label: string }[] = [
+  { key: "price_override", label: "Price Override" },
+  { key: "record_behalf", label: "Record On Behalf" },
+  { key: "create_customers", label: "Create Customers" },
+  { key: "create_stores", label: "Create Stores" },
+  { key: "edit_balance", label: "Edit Balance" },
+  { key: "opening_balance", label: "Opening Balance" },
+];
+
 const AccessControl = () => {
   const { role: currentRole } = useAuth();
   const qc = useQueryClient();
+  const isAdmin = currentRole === "super_admin";
   const [showInvite, setShowInvite] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [savingInvite, setSavingInvite] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteName, setInviteName] = useState("");
   const [inviteRole, setInviteRole] = useState("agent");
-  const [permUser, setPermUser] = useState<any>(null);
+
+  const { allPermissions, isLoading: permsLoading, saving: permSaving, getPermissionsForUser, handleToggle } = useUserPermissions();
 
   const { data: users, isLoading } = useQuery({
     queryKey: ["all-users"],
@@ -61,25 +82,21 @@ const AccessControl = () => {
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSaving(true);
-
+    setSavingInvite(true);
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email: inviteEmail,
       password: Math.random().toString(36).slice(-12) + "A1!",
       options: { data: { full_name: inviteName } },
     });
-
-    if (signUpError) { toast.error(signUpError.message); setSaving(false); return; }
-
+    if (signUpError) { toast.error(signUpError.message); setSavingInvite(false); return; }
     if (signUpData.user) {
       const { error: roleError } = await supabase.from("user_roles")
         .update({ role: inviteRole as any })
         .eq("user_id", signUpData.user.id);
       if (roleError) toast.error("Account created but role assignment failed: " + roleError.message);
     }
-
-    toast.success(`Staff account created for ${inviteName}. They should reset their password via login.`);
-    setSaving(false);
+    toast.success(`Staff account created for ${inviteName}.`);
+    setSavingInvite(false);
     setShowInvite(false);
     setInviteEmail(""); setInviteName(""); setInviteRole("agent");
     qc.invalidateQueries({ queryKey: ["all-users"] });
@@ -97,102 +114,7 @@ const AccessControl = () => {
     else { toast.success("Role updated"); qc.invalidateQueries({ queryKey: ["all-users"] }); }
   };
 
-  const getRoleBadgeVariant = (role: string) => {
-    switch (role) {
-      case "super_admin": return "default";
-      case "manager": return "secondary";
-      default: return "outline";
-    }
-  };
-
-  const staffColumns = [
-    { header: "Name", accessor: "full_name" as const, className: "font-medium" },
-    { header: "Email", accessor: (row: any) => row.email || "—", className: "text-muted-foreground text-sm", hideOnMobile: true },
-    { header: "Role", accessor: (row: any) => {
-      const role = (row.user_roles as any)?.[0]?.role || "—";
-      return <Badge variant={getRoleBadgeVariant(role) as any}>{role.replace("_", " ")}</Badge>;
-    }},
-    { header: "Status", accessor: (row: any) => <StatusBadge status={row.is_active ? "active" : "inactive"} /> },
-    { header: "Actions", accessor: (row: any) => {
-      const userRole = (row.user_roles as any)?.[0]?.role;
-      if (userRole === "super_admin" || currentRole !== "super_admin") return null;
-      return (
-        <div className="flex gap-1.5 flex-wrap">
-          <Select value={userRole} onValueChange={(v) => handleChangeRole(row.user_id, v)}>
-            <SelectTrigger className="h-7 w-24 text-xs"><SelectValue /></SelectTrigger>
-            <SelectContent>{STAFF_ROLES.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}</SelectContent>
-          </Select>
-          <Button variant="outline" size="sm" className="h-7 text-xs px-2" onClick={() => setPermUser(row)}>
-            <Settings2 className="h-3 w-3 mr-1" /> Permissions
-          </Button>
-          <Button variant={row.is_active ? "destructive" : "default"} size="sm" className="h-7 text-xs" onClick={() => handleToggleActive(row.user_id, row.is_active)}>
-            {row.is_active ? "Disable" : "Enable"}
-          </Button>
-        </div>
-      );
-    }},
-  ];
-
-  const customerColumns = [
-    { header: "Name", accessor: "full_name" as const, className: "font-medium" },
-    { header: "Email", accessor: (row: any) => row.email || "—", className: "text-muted-foreground text-sm", hideOnMobile: true },
-    { header: "Status", accessor: (row: any) => <StatusBadge status={row.is_active ? "active" : "inactive"} /> },
-    { header: "Actions", accessor: (row: any) => currentRole === "super_admin" ? (
-      <Button variant={row.is_active ? "destructive" : "default"} size="sm" className="h-7 text-xs" onClick={() => handleToggleActive(row.user_id, row.is_active)}>
-        {row.is_active ? "Disable" : "Enable"}
-      </Button>
-    ) : null},
-  ];
-
-  const renderStaffMobileCard = (row: any) => {
-    const userRole = (row.user_roles as any)?.[0]?.role || "—";
-    const isSuperAdmin = userRole === "super_admin";
-    return (
-      <div className="rounded-xl border bg-card p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="min-w-0">
-            <h3 className="text-sm font-semibold truncate">{row.full_name}</h3>
-            <p className="text-xs text-muted-foreground truncate">{row.email}</p>
-          </div>
-          <StatusBadge status={row.is_active ? "active" : "inactive"} />
-        </div>
-        <div className="flex items-center justify-between">
-          <Badge variant={getRoleBadgeVariant(userRole) as any}>{userRole.replace("_", " ")}</Badge>
-          {!isSuperAdmin && currentRole === "super_admin" && (
-            <div className="flex gap-1.5">
-              <Button variant="outline" size="sm" className="h-7 text-xs px-2" onClick={() => setPermUser(row)}>
-                <Settings2 className="h-3 w-3" />
-              </Button>
-              <Button variant={row.is_active ? "destructive" : "default"} size="sm" className="h-7 text-xs" onClick={() => handleToggleActive(row.user_id, row.is_active)}>
-                {row.is_active ? "Disable" : "Enable"}
-              </Button>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  const renderCustomerMobileCard = (row: any) => (
-    <div className="rounded-xl border bg-card p-4">
-      <div className="flex items-center justify-between">
-        <div className="min-w-0">
-          <h3 className="text-sm font-semibold truncate">{row.full_name}</h3>
-          <p className="text-xs text-muted-foreground truncate">{row.email}</p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <StatusBadge status={row.is_active ? "active" : "inactive"} />
-          {currentRole === "super_admin" && (
-            <Button variant={row.is_active ? "destructive" : "default"} size="sm" className="h-7 text-xs" onClick={() => handleToggleActive(row.user_id, row.is_active)}>
-              {row.is_active ? "Disable" : "Enable"}
-            </Button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-
-  if (isLoading) {
+  if (isLoading || permsLoading) {
     return <div className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
 
@@ -200,35 +122,212 @@ const AccessControl = () => {
     <div className="space-y-6 animate-fade-in">
       <PageHeader
         title="Access Control"
-        subtitle="Manage user roles, permissions, and access"
-        primaryAction={{ label: "Invite Staff", onClick: () => setShowInvite(true) }}
+        subtitle="Manage users, roles, and permissions"
+        primaryAction={isAdmin ? { label: "Invite Staff", icon: UserPlus, onClick: () => setShowInvite(true) } : undefined}
       />
-
-      <div className="grid grid-cols-3 gap-3">
-        <div className="rounded-xl border bg-card p-4">
-          <p className="text-xs text-muted-foreground">Staff</p>
-          <p className="text-xl font-bold">{staffUsers.length}</p>
-        </div>
-        <div className="rounded-xl border bg-card p-4">
-          <p className="text-xs text-muted-foreground">Customers</p>
-          <p className="text-xl font-bold">{customerUsers.length}</p>
-        </div>
-        <div className="rounded-xl border bg-card p-4">
-          <p className="text-xs text-muted-foreground">Active</p>
-          <p className="text-xl font-bold">{users?.filter((u) => u.is_active).length || 0}</p>
-        </div>
-      </div>
 
       <Tabs defaultValue="staff">
         <TabsList>
           <TabsTrigger value="staff">Staff ({staffUsers.length})</TabsTrigger>
           <TabsTrigger value="customers">Customers ({customerUsers.length})</TabsTrigger>
         </TabsList>
+
+        {/* ── Staff Tab ── */}
         <TabsContent value="staff" className="mt-4">
-          <DataTable columns={staffColumns} data={staffUsers} searchKey="full_name" searchPlaceholder="Search staff..." renderMobileCard={renderStaffMobileCard} />
+          {/* Desktop: scrollable table with inline permissions */}
+          <ScrollArea className="w-full hidden md:block">
+            <div className="rounded-xl border bg-card min-w-[900px]">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50 hover:bg-muted/50">
+                    <TableHead className="min-w-[160px]">Staff Member</TableHead>
+                    <TableHead className="min-w-[120px]">Role</TableHead>
+                    <TableHead className="min-w-[80px]">Status</TableHead>
+                    {PERM_HEADERS.map((p) => (
+                      <TableHead key={p.key} className="text-center min-w-[90px] text-xs">{p.label}</TableHead>
+                    ))}
+                    {isAdmin && <TableHead className="min-w-[80px]">Actions</TableHead>}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {staffUsers.map((row) => {
+                    const userRole = (row.user_roles as any)?.[0]?.role || "—";
+                    const userPerms = getPermissionsForUser(row.user_id);
+                    return (
+                      <TableRow key={row.id}>
+                        <TableCell>
+                          <div>
+                            <p className="font-medium text-sm">{row.full_name}</p>
+                            <p className="text-xs text-muted-foreground">{row.email}</p>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {isAdmin && userRole !== "super_admin" ? (
+                            <Select value={userRole} onValueChange={(v) => handleChangeRole(row.user_id, v)}>
+                              <SelectTrigger className="h-8 w-28 text-xs font-medium uppercase">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {STAFF_ROLES.map((r) => (
+                                  <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <Badge variant="default" className="uppercase text-[10px]">{userRole.replace("_", " ")}</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <StatusBadge status={row.is_active ? "active" : "inactive"} />
+                        </TableCell>
+                        {PERM_HEADERS.map((p) => (
+                          <TableCell key={p.key}>
+                            <InlinePermissionCheckbox
+                              userId={row.user_id}
+                              userRole={userRole}
+                              permissionKey={p.key}
+                              permissions={userPerms}
+                              onToggle={handleToggle}
+                              saving={permSaving}
+                            />
+                          </TableCell>
+                        ))}
+                        {isAdmin && (
+                          <TableCell>
+                            {userRole !== "super_admin" && (
+                              <Button
+                                variant={row.is_active ? "destructive" : "default"}
+                                size="sm"
+                                className="h-7 text-xs"
+                                onClick={() => handleToggleActive(row.user_id, row.is_active)}
+                              >
+                                {row.is_active ? "Disable" : "Enable"}
+                              </Button>
+                            )}
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+            <ScrollBar orientation="horizontal" />
+          </ScrollArea>
+
+          {/* Mobile: card view */}
+          <div className="md:hidden space-y-3">
+            {staffUsers.map((row) => {
+              const userRole = (row.user_roles as any)?.[0]?.role || "—";
+              const userPerms = getPermissionsForUser(row.user_id);
+              const isSA = userRole === "super_admin";
+              return (
+                <div key={row.id} className="rounded-xl border bg-card p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-semibold truncate">{row.full_name}</h3>
+                      <p className="text-xs text-muted-foreground truncate">{row.email}</p>
+                    </div>
+                    <StatusBadge status={row.is_active ? "active" : "inactive"} />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    {isAdmin && !isSA ? (
+                      <Select value={userRole} onValueChange={(v) => handleChangeRole(row.user_id, v)}>
+                        <SelectTrigger className="h-7 w-28 text-xs uppercase font-medium"><SelectValue /></SelectTrigger>
+                        <SelectContent>{STAFF_ROLES.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}</SelectContent>
+                      </Select>
+                    ) : (
+                      <Badge variant="default" className="uppercase text-[10px]">{userRole.replace("_", " ")}</Badge>
+                    )}
+                    {isAdmin && !isSA && (
+                      <Button variant={row.is_active ? "destructive" : "default"} size="sm" className="h-7 text-xs" onClick={() => handleToggleActive(row.user_id, row.is_active)}>
+                        {row.is_active ? "Disable" : "Enable"}
+                      </Button>
+                    )}
+                  </div>
+                  {/* Permissions grid */}
+                  <div className="grid grid-cols-3 gap-2 pt-2 border-t">
+                    {PERM_HEADERS.map((p) => {
+                      const dbPerm = userPerms.find((up: any) => up.permission === p.key);
+                      const isDefault = ROLE_DEFAULTS[userRole]?.includes(p.key) ?? false;
+                      const isEnabled = dbPerm ? dbPerm.enabled : isDefault;
+                      const isSaving = permSaving === `${row.user_id}-${p.key}`;
+                      return (
+                        <label key={p.key} className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer">
+                          {isSaving ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Checkbox
+                              checked={isEnabled}
+                              onCheckedChange={() => handleToggle(row.user_id, p.key, isEnabled)}
+                              disabled={isSA}
+                              className="h-3.5 w-3.5"
+                            />
+                          )}
+                          <span className="truncate">{p.label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </TabsContent>
+
+        {/* ── Customers Tab ── */}
         <TabsContent value="customers" className="mt-4">
-          <DataTable columns={customerColumns} data={customerUsers} searchKey="full_name" searchPlaceholder="Search customers..." renderMobileCard={renderCustomerMobileCard} />
+          <div className="rounded-xl border bg-card hidden md:block">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/50 hover:bg-muted/50">
+                  <TableHead>Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Status</TableHead>
+                  {isAdmin && <TableHead>Actions</TableHead>}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {customerUsers.length === 0 ? (
+                  <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">No customer accounts</TableCell></TableRow>
+                ) : customerUsers.map((row) => (
+                  <TableRow key={row.id}>
+                    <TableCell className="font-medium">{row.full_name}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{row.email || "—"}</TableCell>
+                    <TableCell><StatusBadge status={row.is_active ? "active" : "inactive"} /></TableCell>
+                    {isAdmin && (
+                      <TableCell>
+                        <Button variant={row.is_active ? "destructive" : "default"} size="sm" className="h-7 text-xs" onClick={() => handleToggleActive(row.user_id, row.is_active)}>
+                          {row.is_active ? "Disable" : "Enable"}
+                        </Button>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          {/* Mobile */}
+          <div className="md:hidden space-y-3">
+            {customerUsers.length === 0 ? (
+              <div className="rounded-xl border bg-card p-6 text-center text-muted-foreground text-sm">No customer accounts</div>
+            ) : customerUsers.map((row) => (
+              <div key={row.id} className="rounded-xl border bg-card p-4 flex items-center justify-between">
+                <div className="min-w-0">
+                  <h3 className="text-sm font-semibold truncate">{row.full_name}</h3>
+                  <p className="text-xs text-muted-foreground truncate">{row.email}</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <StatusBadge status={row.is_active ? "active" : "inactive"} />
+                  {isAdmin && (
+                    <Button variant={row.is_active ? "destructive" : "default"} size="sm" className="h-7 text-xs" onClick={() => handleToggleActive(row.user_id, row.is_active)}>
+                      {row.is_active ? "Disable" : "Enable"}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
         </TabsContent>
       </Tabs>
 
@@ -247,25 +346,11 @@ const AccessControl = () => {
               </Select>
             </div>
             <p className="text-xs text-muted-foreground">A temporary password will be generated. The user should reset it on first login.</p>
-            <Button type="submit" className="w-full" disabled={saving}>
-              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            <Button type="submit" className="w-full" disabled={savingInvite}>
+              {savingInvite && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Create Staff Account
             </Button>
           </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Permissions Dialog */}
-      <Dialog open={!!permUser} onOpenChange={(open) => !open && setPermUser(null)}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>User Permissions</DialogTitle></DialogHeader>
-          {permUser && (
-            <UserPermissionsPanel
-              userId={permUser.user_id}
-              userName={permUser.full_name}
-              userRole={(permUser.user_roles as any)?.[0]?.role || ""}
-            />
-          )}
         </DialogContent>
       </Dialog>
     </div>

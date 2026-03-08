@@ -1,54 +1,86 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Switch } from "@/components/ui/switch";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-const PERMISSION_DEFS = [
-  { key: "sales_behalf", label: "Record Sales on Behalf", description: "Record sales on behalf of other users", roles: ["manager"] },
-  { key: "payments_behalf", label: "Record Payments on Behalf", description: "Record payments on behalf of other users", roles: ["manager"] },
-  { key: "orders_behalf", label: "Create Orders on Behalf", description: "Create orders on behalf of other users", roles: ["manager"] },
-  { key: "opening_balance", label: "Set Opening Balance", description: "Set opening balance on new stores", roles: ["manager", "agent"] },
-  { key: "edit_balance", label: "Edit Store Balance", description: "Manually adjust store balances (logged as correction)", roles: ["manager"] },
-  { key: "price_override", label: "Override Store Pricing", description: "Override default store type pricing for individual stores", roles: ["manager", "agent"] },
+const PERMISSION_KEYS = [
+  "price_override",
+  "record_behalf",
+  "create_customers",
+  "create_stores",
+  "edit_balance",
+  "opening_balance",
 ] as const;
 
-interface UserPermissionsPanelProps {
+export type PermissionKey = (typeof PERMISSION_KEYS)[number];
+
+/** Default permissions per role — these are the "inherent" ones that can't be toggled off */
+const ROLE_DEFAULTS: Record<string, PermissionKey[]> = {
+  super_admin: ["price_override", "record_behalf", "create_customers", "create_stores", "edit_balance", "opening_balance"],
+  manager: ["price_override", "record_behalf", "create_customers", "create_stores", "edit_balance", "opening_balance"],
+  agent: ["create_customers", "create_stores"],
+  marketer: ["create_customers", "create_stores"],
+  pos: [],
+};
+
+interface InlinePermissionCheckboxProps {
   userId: string;
-  userName: string;
   userRole: string;
+  permissionKey: PermissionKey;
+  permissions: any[];
+  onToggle: (userId: string, key: PermissionKey, currentEnabled: boolean) => void;
+  saving: string | null;
 }
 
-export function UserPermissionsPanel({ userId, userName, userRole }: UserPermissionsPanelProps) {
+export function InlinePermissionCheckbox({
+  userId, userRole, permissionKey, permissions, onToggle, saving,
+}: InlinePermissionCheckboxProps) {
+  const isDefault = ROLE_DEFAULTS[userRole]?.includes(permissionKey) ?? false;
+  const dbPerm = permissions?.find((p: any) => p.permission === permissionKey);
+  const isEnabled = dbPerm ? dbPerm.enabled : isDefault;
+  const isSaving = saving === `${userId}-${permissionKey}`;
+  const isLocked = userRole === "super_admin"; // super admin always has all
+
+  return (
+    <div className="flex items-center justify-center">
+      {isSaving ? (
+        <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+      ) : (
+        <Checkbox
+          checked={isEnabled}
+          onCheckedChange={() => onToggle(userId, permissionKey, isEnabled)}
+          disabled={isLocked}
+          className={isEnabled ? "border-primary data-[state=checked]:bg-primary" : ""}
+        />
+      )}
+    </div>
+  );
+}
+
+export function useUserPermissions() {
   const qc = useQueryClient();
   const [saving, setSaving] = useState<string | null>(null);
 
-  const { data: permissions, isLoading } = useQuery({
-    queryKey: ["user-permissions", userId],
+  const { data: allPermissions, isLoading } = useQuery({
+    queryKey: ["all-user-permissions"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("user_permissions")
-        .select("*")
-        .eq("user_id", userId);
+      const { data, error } = await supabase.from("user_permissions").select("*");
       if (error) throw error;
       return data || [];
     },
   });
 
-  const applicablePerms = PERMISSION_DEFS.filter((p) => p.roles.includes(userRole as any));
-
-  const isEnabled = (key: string) => {
-    return permissions?.find((p) => p.permission === key)?.enabled ?? false;
+  const getPermissionsForUser = (userId: string) => {
+    return allPermissions?.filter((p) => p.user_id === userId) || [];
   };
 
-  const handleToggle = async (key: string, currentEnabled: boolean) => {
-    setSaving(key);
+  const handleToggle = async (userId: string, key: PermissionKey, currentEnabled: boolean) => {
+    const savingKey = `${userId}-${key}`;
+    setSaving(savingKey);
     const newVal = !currentEnabled;
 
-    // Upsert the permission
     const { error } = await supabase.from("user_permissions").upsert(
       { user_id: userId, permission: key, enabled: newVal, updated_at: new Date().toISOString() },
       { onConflict: "user_id,permission" }
@@ -58,43 +90,11 @@ export function UserPermissionsPanel({ userId, userName, userRole }: UserPermiss
     if (error) {
       toast.error(error.message);
     } else {
-      toast.success(`Permission ${newVal ? "granted" : "revoked"}`);
-      qc.invalidateQueries({ queryKey: ["user-permissions", userId] });
+      qc.invalidateQueries({ queryKey: ["all-user-permissions"] });
     }
   };
 
-  if (applicablePerms.length === 0) {
-    return (
-      <p className="text-xs text-muted-foreground py-2">No configurable permissions for this role.</p>
-    );
-  }
-
-  if (isLoading) {
-    return <div className="flex justify-center py-4"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>;
-  }
-
-  return (
-    <div className="space-y-2">
-      <p className="text-xs text-muted-foreground mb-2">
-        Permissions for <span className="font-medium text-foreground">{userName}</span>
-        <Badge variant="secondary" className="ml-2 text-[10px]">{userRole}</Badge>
-      </p>
-      {applicablePerms.map((perm) => {
-        const enabled = isEnabled(perm.key);
-        const isSaving = saving === perm.key;
-        return (
-          <div key={perm.key} className="flex items-center justify-between py-2 px-3 rounded-lg border bg-muted/20">
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-foreground">{perm.label}</p>
-              <p className="text-[11px] text-muted-foreground">{perm.description}</p>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              {isSaving && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
-              <Switch checked={enabled} onCheckedChange={() => handleToggle(perm.key, enabled)} disabled={isSaving} />
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
+  return { allPermissions, isLoading, saving, getPermissionsForUser, handleToggle };
 }
+
+export { PERMISSION_KEYS, ROLE_DEFAULTS };
