@@ -53,11 +53,11 @@ const MapPage = () => {
     refetchInterval: 30000,
   });
 
-  const storesWithLocation = React.useMemo(() => stores?.filter((s) => s.lat && s.lng) || [], [stores]);
-  const storesWithoutLocation = React.useMemo(() => stores?.filter((s) => !s.lat || !s.lng) || [], [stores]);
+  const storesWithLocation = useMemo(() => stores?.filter((s) => s.lat && s.lng) || [], [stores]);
+  const storesWithoutLocation = useMemo(() => stores?.filter((s) => !s.lat || !s.lng) || [], [stores]);
 
   // Build a color map for store types
-  const storeTypeColorMap = React.useMemo(() => {
+  const storeTypeColorMap = useMemo(() => {
     const map = new Map<string, string>();
     stores?.forEach((s: any) => {
       const typeName = s.store_types?.name || "Other";
