@@ -1,34 +1,112 @@
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
-
-const customers = [
-  { id: "CUST-000001", name: "Rajesh Kumar", phone: "+91 98765 43210", email: "rajesh@email.com", stores: 3, outstanding: "₹12,500", kyc: "verified" as const, status: "active" as const },
-  { id: "CUST-000002", name: "Priya Sharma", phone: "+91 87654 32109", email: "priya@email.com", stores: 2, outstanding: "₹8,200", kyc: "pending" as const, status: "active" as const },
-  { id: "CUST-000003", name: "Amit Patel", phone: "+91 76543 21098", email: "amit@email.com", stores: 5, outstanding: "₹45,000", kyc: "verified" as const, status: "active" as const },
-  { id: "CUST-000004", name: "Sunita Devi", phone: "+91 65432 10987", email: "sunita@email.com", stores: 1, outstanding: "₹0", kyc: "rejected" as const, status: "inactive" as const },
-  { id: "CUST-000005", name: "Vikram Singh", phone: "+91 54321 09876", email: "vikram@email.com", stores: 4, outstanding: "₹23,800", kyc: "verified" as const, status: "active" as const },
-];
-
-const columns = [
-  { header: "ID", accessor: "id" as const, className: "font-mono text-xs" },
-  { header: "Name", accessor: "name" as const, className: "font-medium" },
-  { header: "Phone", accessor: "phone" as const, className: "text-muted-foreground text-sm" },
-  { header: "Stores", accessor: "stores" as const, className: "text-center" },
-  { header: "Outstanding", accessor: "outstanding" as const, className: "font-semibold" },
-  { header: "KYC", accessor: (row: typeof customers[0]) => <StatusBadge status={row.kyc} /> },
-  { header: "Status", accessor: (row: typeof customers[0]) => <StatusBadge status={row.status} /> },
-];
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { Loader2 } from "lucide-react";
+import { useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 const Customers = () => {
+  const [showAdd, setShowAdd] = useState(false);
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [address, setAddress] = useState("");
+  const [saving, setSaving] = useState(false);
+  const qc = useQueryClient();
+
+  const { data: customers, isLoading } = useQuery({
+    queryKey: ["customers"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("customers")
+        .select("*, stores(id)")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    // Generate display ID
+    const count = (customers?.length || 0) + 1;
+    const displayId = `CUST-${String(count).padStart(6, "0")}`;
+
+    const { error } = await supabase.from("customers").insert({
+      display_id: displayId,
+      name,
+      phone: phone || null,
+      email: email || null,
+      address: address || null,
+    });
+    setSaving(false);
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success("Customer added");
+      setShowAdd(false);
+      setName(""); setPhone(""); setEmail(""); setAddress("");
+      qc.invalidateQueries({ queryKey: ["customers"] });
+    }
+  };
+
+  const columns = [
+    { header: "ID", accessor: "display_id" as const, className: "font-mono text-xs" },
+    { header: "Name", accessor: "name" as const, className: "font-medium" },
+    { header: "Phone", accessor: (row: any) => row.phone || "—", className: "text-muted-foreground text-sm" },
+    { header: "Stores", accessor: (row: any) => row.stores?.length || 0, className: "text-center" },
+    { header: "Outstanding", accessor: (row: any) => `₹${Number(row.opening_balance).toLocaleString()}` },
+    { header: "KYC", accessor: (row: any) => <StatusBadge status={row.kyc_status === "verified" ? "verified" : row.kyc_status === "pending" ? "pending" : row.kyc_status === "rejected" ? "rejected" : "inactive"} label={row.kyc_status.replace("_", " ")} /> },
+    { header: "Status", accessor: (row: any) => <StatusBadge status={row.is_active ? "active" : "inactive"} /> },
+  ];
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader
         title="Customers"
         subtitle="Manage customer accounts and KYC verification"
         actionLabel="Add Customer"
+        onAction={() => setShowAdd(true)}
       />
-      <DataTable columns={columns} data={customers} searchKey="name" searchPlaceholder="Search customers..." />
+      <DataTable columns={columns} data={customers || []} searchKey="name" searchPlaceholder="Search customers..." />
+
+      <Dialog open={showAdd} onOpenChange={setShowAdd}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Customer</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleAdd} className="space-y-4">
+            <div><Label>Name</Label><Input value={name} onChange={e => setName(e.target.value)} required className="mt-1" /></div>
+            <div><Label>Phone</Label><Input value={phone} onChange={e => setPhone(e.target.value)} className="mt-1" placeholder="+91 98765 43210" /></div>
+            <div><Label>Email</Label><Input type="email" value={email} onChange={e => setEmail(e.target.value)} className="mt-1" /></div>
+            <div><Label>Address</Label><Input value={address} onChange={e => setAddress(e.target.value)} className="mt-1" /></div>
+            <Button type="submit" className="w-full" disabled={saving}>
+              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Add Customer
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
