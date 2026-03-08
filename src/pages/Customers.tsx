@@ -5,6 +5,7 @@ import { KycReviewDialog } from "@/components/customers/KycReviewDialog";
 import { ImageUpload } from "@/components/shared/ImageUpload";
 import { EditableCell } from "@/components/shared/EditableCell";
 import { CsvImportDialog } from "@/components/shared/CsvImportDialog";
+import { AdvancedFilters, applyFilters, type FilterValues } from "@/components/shared/AdvancedFilters";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -13,7 +14,7 @@ import { Loader2, User, Upload } from "lucide-react";
 import { usePermission } from "@/hooks/usePermission";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
