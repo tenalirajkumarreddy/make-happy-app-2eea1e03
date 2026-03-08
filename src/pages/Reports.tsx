@@ -163,7 +163,7 @@ const Reports = () => {
         <p className="text-sm text-muted-foreground">Period: {fromDate} to {toDate}</p>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
         <StatCard title="Total Sales" value={`₹${d.totalSales.toLocaleString()}`} change={`${d.salesCount} sales`} changeType="neutral" icon={DollarSign} iconColor="bg-primary" />
         <StatCard title="Cash Collected" value={`₹${d.totalCash.toLocaleString()}`} icon={Banknote} iconColor="bg-success" />
         <StatCard title="UPI Collected" value={`₹${d.totalUpi.toLocaleString()}`} icon={Smartphone} iconColor="bg-info" />

@@ -87,7 +87,7 @@ const Dashboard = () => {
     <div className="space-y-6 animate-fade-in">
       <PageHeader title="Dashboard" subtitle={`Welcome back, ${profile?.full_name || "User"}! Here's your business overview.`} />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <StatCard title="Total Sales (Today)" value={`₹${s.todayTotal.toLocaleString()}`} icon={DollarSign} iconColor="bg-primary" />
         <StatCard title="Cash Collected" value={`₹${s.todayCash.toLocaleString()}`} icon={Banknote} iconColor="bg-success" />
         <StatCard title="UPI Collected" value={`₹${s.todayUpi.toLocaleString()}`} icon={Smartphone} iconColor="bg-info" />
