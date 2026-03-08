@@ -6,6 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { logActivity } from "@/lib/activityLogger";
+import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2, Plus, Trash2, Download, IndianRupee, CreditCard, Banknote, Clock, UserCircle, Store as StoreIcon, Package } from "lucide-react";
 import { QrStoreSelector } from "@/components/shared/QrStoreSelector";
@@ -255,6 +256,22 @@ const Sales = () => {
     await supabase.from("stores").update({ outstanding: newOutstanding }).eq("id", storeId);
 
     toast.success("Sale recorded successfully");
+
+    // Notify admins/managers
+    const storeName = stores?.find((s) => s.id === storeId)?.name || "store";
+    getAdminUserIds().then((ids) => {
+      const others = ids.filter((id) => id !== user!.id);
+      if (others.length > 0) {
+        sendNotificationToMany(others, {
+          title: "New Sale Recorded",
+          message: `Sale ${displayId} of ₹${totalAmount.toLocaleString()} at ${storeName}`,
+          type: "payment",
+          entityType: "sale",
+          entityId: sale.id,
+        });
+      }
+    });
+
     setSaving(false);
     setShowAdd(false);
     resetForm();

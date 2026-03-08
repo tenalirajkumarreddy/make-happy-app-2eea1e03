@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
+import { sendNotification, sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { useState, useMemo } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format, startOfDay } from "date-fns";
@@ -177,6 +178,16 @@ const Handovers = () => {
     if (error) toast.error(error.message);
     else {
       toast.success("Handover sent for confirmation");
+
+      // Notify the recipient
+      sendNotification({
+        userId: toUserId,
+        title: "Handover Received",
+        message: `₹${Number(amount).toLocaleString()} handover awaiting your confirmation`,
+        type: "handover",
+        entityType: "handover",
+      });
+
       setCreateOpen(false);
       setAmount("");
       setNotes("");
@@ -186,22 +197,50 @@ const Handovers = () => {
   };
 
   const handleConfirm = async (id: string) => {
+    const handover = myHandovers.find((h) => h.id === id);
     const { error } = await supabase.from("handovers").update({
       status: "confirmed",
       confirmed_by: user!.id,
       confirmed_at: new Date().toISOString(),
     }).eq("id", id);
     if (error) toast.error(error.message);
-    else { toast.success("Handover confirmed"); qc.invalidateQueries({ queryKey: ["handovers"] }); }
+    else {
+      toast.success("Handover confirmed");
+      if (handover?.user_id) {
+        sendNotification({
+          userId: handover.user_id,
+          title: "Handover Confirmed",
+          message: `Your ₹${Number(handover.cash_amount).toLocaleString()} handover was confirmed`,
+          type: "handover",
+          entityType: "handover",
+          entityId: id,
+        });
+      }
+      qc.invalidateQueries({ queryKey: ["handovers"] });
+    }
   };
 
   const handleReject = async (id: string) => {
+    const handover = myHandovers.find((h) => h.id === id);
     const { error } = await supabase.from("handovers").update({
       status: "rejected",
       rejected_at: new Date().toISOString(),
     }).eq("id", id);
     if (error) toast.error(error.message);
-    else { toast.success("Handover rejected"); qc.invalidateQueries({ queryKey: ["handovers"] }); }
+    else {
+      toast.success("Handover rejected");
+      if (handover?.user_id) {
+        sendNotification({
+          userId: handover.user_id,
+          title: "Handover Rejected",
+          message: `Your ₹${Number(handover.cash_amount).toLocaleString()} handover was rejected`,
+          type: "handover",
+          entityType: "handover",
+          entityId: id,
+        });
+      }
+      qc.invalidateQueries({ queryKey: ["handovers"] });
+    }
   };
 
   const getProfile = (userId: string | null) => profileMap?.[userId || ""] || { name: "Unknown", avatar: null };

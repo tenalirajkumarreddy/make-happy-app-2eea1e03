@@ -1,4 +1,4 @@
-import { Bell, ChevronDown, LogOut, Moon, Sun } from "lucide-react";
+import { Bell, ChevronDown, LogOut, Moon, Sun, Check, CheckCheck } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   DropdownMenu,
@@ -13,16 +13,9 @@ import {
 } from "@/components/ui/popover";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { ScrollArea } from "@/components/ui/scroll-area";
-
-interface Notification {
-  id: string;
-  message: string;
-  time: string;
-  type: "order" | "kyc" | "handover" | "system";
-  read: boolean;
-}
+import { useNotifications, requestNotificationPermission } from "@/hooks/useNotifications";
+import { Badge } from "@/components/ui/badge";
 
 function useTheme() {
   const [dark, setDark] = useState(() => {
@@ -40,97 +33,49 @@ function useTheme() {
   return { dark, toggle: () => setDark((d) => !d) };
 }
 
+const typeIcon = (type: string) => {
+  switch (type) {
+    case "order": return "🛒";
+    case "payment": return "💳";
+    case "handover": return "💰";
+    case "system": return "⚙️";
+    default: return "🔔";
+  }
+};
+
+const typeColor = (type: string) => {
+  switch (type) {
+    case "order": return "bg-blue-500/10 text-blue-600 dark:text-blue-400";
+    case "payment": return "bg-green-500/10 text-green-600 dark:text-green-400";
+    case "handover": return "bg-amber-500/10 text-amber-600 dark:text-amber-400";
+    case "system": return "bg-purple-500/10 text-purple-600 dark:text-purple-400";
+    default: return "bg-muted text-muted-foreground";
+  }
+};
+
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(dateStr).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+}
+
 export function TopBar() {
   const { profile, role, signOut } = useAuth();
   const navigate = useNavigate();
   const { dark, toggle } = useTheme();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
+  const [open, setOpen] = useState(false);
 
-  // Fetch initial notifications from recent activity
+  // Request browser notification permission on first render
   useEffect(() => {
-    async function fetchRecent() {
-      const [ordersRes, kycRes, handoversRes] = await Promise.all([
-        supabase.from("orders").select("id, display_id, created_at, status, stores(name)").eq("status", "pending").order("created_at", { ascending: false }).limit(5),
-        supabase.from("customers").select("id, name, kyc_submitted_at").eq("kyc_status", "pending").order("kyc_submitted_at", { ascending: false }).limit(5),
-        supabase.from("handovers").select("id, created_at, status").eq("status", "pending").order("created_at", { ascending: false }).limit(5),
-      ]);
-
-      const notifs: Notification[] = [];
-      (ordersRes.data || []).forEach((o: any) => {
-        notifs.push({
-          id: `order-${o.id}`,
-          message: `New order ${o.display_id} from ${o.stores?.name || "store"}`,
-          time: o.created_at,
-          type: "order",
-          read: false,
-        });
-      });
-      (kycRes.data || []).forEach((c: any) => {
-        notifs.push({
-          id: `kyc-${c.id}`,
-          message: `KYC submitted by ${c.name}`,
-          time: c.kyc_submitted_at || new Date().toISOString(),
-          type: "kyc",
-          read: false,
-        });
-      });
-      (handoversRes.data || []).forEach((h: any) => {
-        notifs.push({
-          id: `handover-${h.id}`,
-          message: `Pending handover awaiting confirmation`,
-          time: h.created_at,
-          type: "handover",
-          read: false,
-        });
-      });
-
-      notifs.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
-      setNotifications(notifs.slice(0, 10));
-    }
-
-    fetchRecent();
+    requestNotificationPermission();
   }, []);
-
-  // Subscribe to realtime changes
-  useEffect(() => {
-    const channel = supabase
-      .channel("notifications")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, (payload) => {
-        setNotifications((prev) => [{
-          id: `order-${payload.new.id}`,
-          message: `New order ${payload.new.display_id}`,
-          time: payload.new.created_at,
-          type: "order" as const,
-          read: false,
-        }, ...prev].slice(0, 15));
-      })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "customers", filter: "kyc_status=eq.pending" }, (payload) => {
-        if (payload.new.kyc_status === "pending") {
-          setNotifications((prev) => [{
-            id: `kyc-${payload.new.id}`,
-            message: `KYC submitted by ${payload.new.name}`,
-            time: payload.new.kyc_submitted_at || new Date().toISOString(),
-            type: "kyc" as const,
-            read: false,
-          }, ...prev].slice(0, 15));
-        }
-      })
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "handovers" }, (payload) => {
-        setNotifications((prev) => [{
-          id: `handover-${payload.new.id}`,
-          message: `New handover submitted`,
-          time: payload.new.created_at,
-          type: "handover" as const,
-          read: false,
-        }, ...prev].slice(0, 15));
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, []);
-
-  const unreadCount = notifications.filter((n) => !n.read).length;
-  const markAllRead = () => setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
 
   const initials = profile?.full_name
     ? profile.full_name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
@@ -143,13 +88,15 @@ export function TopBar() {
     navigate("/auth");
   };
 
-  const typeIcon = (type: string) => {
-    switch (type) {
-      case "order": return "🛒";
-      case "kyc": return "📋";
-      case "handover": return "💰";
-      default: return "🔔";
-    }
+  const handleNotificationClick = (n: any) => {
+    if (!n.is_read) markAsRead(n.id);
+    // Navigate based on entity type
+    if (n.entity_type === "order" && n.entity_id) navigate("/orders");
+    else if (n.entity_type === "sale" && n.entity_id) navigate("/sales");
+    else if (n.entity_type === "transaction" && n.entity_id) navigate("/transactions");
+    else if (n.entity_type === "handover" && n.entity_id) navigate("/handovers");
+    else if (n.entity_type === "customer" && n.entity_id) navigate(`/customers/${n.entity_id}`);
+    setOpen(false);
   };
 
   return (
@@ -166,41 +113,64 @@ export function TopBar() {
         </button>
 
         {/* Notifications */}
-        <Popover>
+        <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
             <button className="relative flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors">
               <Bell className="h-5 w-5" />
               {unreadCount > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
-                  {unreadCount > 9 ? "9+" : unreadCount}
+                <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground px-1 animate-pulse">
+                  {unreadCount > 99 ? "99+" : unreadCount}
                 </span>
               )}
             </button>
           </PopoverTrigger>
-          <PopoverContent align="end" className="w-80 p-0">
+          <PopoverContent align="end" className="w-96 p-0">
             <div className="flex items-center justify-between border-b px-4 py-3">
-              <p className="text-sm font-semibold">Notifications</p>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-semibold">Notifications</p>
+                {unreadCount > 0 && (
+                  <Badge variant="secondary" className="text-[10px] h-5">{unreadCount} new</Badge>
+                )}
+              </div>
               {unreadCount > 0 && (
-                <button onClick={markAllRead} className="text-xs text-primary hover:underline">
+                <button onClick={markAllAsRead} className="flex items-center gap-1 text-xs text-primary hover:underline">
+                  <CheckCheck className="h-3 w-3" />
                   Mark all read
                 </button>
               )}
             </div>
-            <ScrollArea className="max-h-80">
+            <ScrollArea className="max-h-96">
               {notifications.length === 0 ? (
-                <div className="p-6 text-center text-sm text-muted-foreground">No notifications</div>
+                <div className="p-8 text-center">
+                  <Bell className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">No notifications yet</p>
+                </div>
               ) : (
                 <div className="divide-y">
                   {notifications.map((n) => (
-                    <div key={n.id} className={`flex items-start gap-3 px-4 py-3 text-sm transition-colors ${n.read ? "opacity-60" : "bg-accent/30"}`}>
-                      <span className="text-base mt-0.5">{typeIcon(n.type)}</span>
+                    <button
+                      key={n.id}
+                      onClick={() => handleNotificationClick(n)}
+                      className={`w-full flex items-start gap-3 px-4 py-3 text-left text-sm transition-colors hover:bg-accent/50 ${
+                        n.is_read ? "opacity-60" : ""
+                      }`}
+                    >
+                      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-base ${typeColor(n.type)}`}>
+                        {typeIcon(n.type)}
+                      </span>
                       <div className="flex-1 min-w-0">
-                        <p className={`leading-snug ${n.read ? "" : "font-medium"}`}>{n.message}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {new Date(n.time).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className={`leading-snug truncate ${n.is_read ? "" : "font-semibold"}`}>
+                            {n.title}
+                          </p>
+                          {!n.is_read && (
+                            <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.message}</p>
+                        <p className="text-[11px] text-muted-foreground/70 mt-1">{timeAgo(n.created_at)}</p>
                       </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}

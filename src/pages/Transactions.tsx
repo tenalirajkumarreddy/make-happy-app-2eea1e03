@@ -3,6 +3,7 @@ import { DataTable } from "@/components/shared/DataTable";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { logActivity } from "@/lib/activityLogger";
+import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2 } from "lucide-react";
 import { QrStoreSelector } from "@/components/shared/QrStoreSelector";
@@ -116,6 +117,22 @@ const Transactions = () => {
 
     logActivity(user!.id, "Recorded transaction", "transaction", displayId, undefined, { total: totalPayment, store: storeId });
     toast.success("Transaction recorded");
+
+    // Notify admins/managers
+    const storeName = stores?.find((s) => s.id === storeId)?.name || "store";
+    getAdminUserIds().then((ids) => {
+      const others = ids.filter((id) => id !== user!.id);
+      if (others.length > 0) {
+        sendNotificationToMany(others, {
+          title: "Payment Collected",
+          message: `₹${totalPayment.toLocaleString()} collected from ${storeName} (${displayId})`,
+          type: "payment",
+          entityType: "transaction",
+          entityId: displayId,
+        });
+      }
+    });
+
     setSaving(false);
     setShowAdd(false);
     resetForm();
