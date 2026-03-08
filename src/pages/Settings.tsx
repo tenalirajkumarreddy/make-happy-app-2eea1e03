@@ -64,6 +64,7 @@ const SettingsPage = () => {
         <TabsList>
           <TabsTrigger value="company">Company</TabsTrigger>
           <TabsTrigger value="pricing">Pricing</TabsTrigger>
+          {isAdmin && <TabsTrigger value="banners">Banners</TabsTrigger>}
           <TabsTrigger value="features">Features</TabsTrigger>
         </TabsList>
 
