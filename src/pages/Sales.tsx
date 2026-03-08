@@ -479,13 +479,19 @@ const Sales = () => {
 
             <div>
               <Label>Store</Label>
-              <div className="flex gap-2 mt-1">
-                <Select value={storeId} onValueChange={handleStoreChange}>
-                  <SelectTrigger className="flex-1"><SelectValue placeholder="Select store" /></SelectTrigger>
-                  <SelectContent>{stores?.map((s) => <SelectItem key={s.id} value={s.id}>{s.name} ({s.display_id})</SelectItem>)}</SelectContent>
-                </Select>
-                <QrStoreSelector onStoreSelected={handleStoreChange} />
-              </div>
+              {isPosUser ? (
+                <div className="mt-1 flex h-10 w-full items-center rounded-md border border-input bg-muted px-3 text-sm text-muted-foreground">
+                  POS Counter (auto-selected)
+                </div>
+              ) : (
+                <div className="flex gap-2 mt-1">
+                  <Select value={storeId} onValueChange={handleStoreChange}>
+                    <SelectTrigger className="flex-1"><SelectValue placeholder="Select store" /></SelectTrigger>
+                    <SelectContent>{stores?.map((s) => <SelectItem key={s.id} value={s.id}>{s.name} ({s.display_id})</SelectItem>)}</SelectContent>
+                  </Select>
+                  <QrStoreSelector onStoreSelected={handleStoreChange} />
+                </div>
+              )}
               {selectedStore && (
                 <p className="text-xs text-muted-foreground mt-1">Current outstanding: ₹{oldOutstanding.toLocaleString()}</p>
               )}
