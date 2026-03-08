@@ -46,6 +46,9 @@ const StoreDetail = () => {
   const [toggling, setToggling] = useState(false);
   const [showQrScanner, setShowQrScanner] = useState(false);
   const [showAdjustBalance, setShowAdjustBalance] = useState(false);
+  const [showTransfer, setShowTransfer] = useState(false);
+  const [transferCustomerId, setTransferCustomerId] = useState("");
+  const [transferSaving, setTransferSaving] = useState(false);
   const [adjustSaving, setAdjustSaving] = useState(false);
   const [newBalanceInput, setNewBalanceInput] = useState("");
   const [adjustReason, setAdjustReason] = useState("");
