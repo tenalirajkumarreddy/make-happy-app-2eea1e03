@@ -4,19 +4,43 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/shared/DataTable";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, BarChart3, FileText, TrendingUp, Users, DollarSign, Banknote, Smartphone } from "lucide-react";
+import { Loader2, DollarSign, Banknote, Smartphone, TrendingUp, Download } from "lucide-react";
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+
+function exportCSV(data: any[], columns: { header: string; key: string }[], filename: string) {
+  const header = columns.map((c) => c.header).join(",");
+  const rows = data.map((row) =>
+    columns.map((c) => {
+      const val = c.key.includes(".") ? c.key.split(".").reduce((o: any, k) => o?.[k], row) : row[c.key];
+      const str = String(val ?? "").replace(/"/g, '""');
+      return `"${str}"`;
+    }).join(",")
+  );
+  const csv = [header, ...rows].join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast.success(`Exported ${data.length} rows`);
+}
 
 const Reports = () => {
-  const [reportDate, setReportDate] = useState(new Date().toISOString().split("T")[0]);
+  const today = new Date().toISOString().split("T")[0];
+  const [fromDate, setFromDate] = useState(today);
+  const [toDate, setToDate] = useState(today);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["reports", reportDate],
+    queryKey: ["reports", fromDate, toDate],
     queryFn: async () => {
-      const startOfDay = reportDate + "T00:00:00";
-      const endOfDay = reportDate + "T23:59:59";
+      const startOfDay = fromDate + "T00:00:00";
+      const endOfDay = toDate + "T23:59:59";
 
       const [salesRes, txnRes, ordersRes, storesRes] = await Promise.all([
         supabase.from("sales").select("*, stores(name)").gte("created_at", startOfDay).lte("created_at", endOfDay).order("created_at", { ascending: false }),
@@ -70,9 +94,57 @@ const Reports = () => {
     <div className="space-y-6 animate-fade-in">
       <PageHeader title="Reports" subtitle="Generate and view business reports" />
 
-      <div className="flex items-center gap-3">
-        <Label>Report Date</Label>
-        <Input type="date" value={reportDate} onChange={(e) => setReportDate(e.target.value)} className="w-44" />
+      <div className="flex flex-wrap items-end gap-3">
+        <div>
+          <Label className="text-xs">From</Label>
+          <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="w-40 mt-1" />
+        </div>
+        <div>
+          <Label className="text-xs">To</Label>
+          <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="w-40 mt-1" />
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-9"
+          onClick={() => {
+            exportCSV(
+              d.sales.map((s: any) => ({ ...s, store_name: s.stores?.name || "" })),
+              [
+                { header: "Sale ID", key: "display_id" },
+                { header: "Store", key: "store_name" },
+                { header: "Total", key: "total_amount" },
+                { header: "Cash", key: "cash_amount" },
+                { header: "UPI", key: "upi_amount" },
+                { header: "Outstanding", key: "outstanding_amount" },
+                { header: "Date", key: "created_at" },
+              ],
+              `sales-report-${fromDate}-to-${toDate}.csv`
+            );
+          }}
+        >
+          <Download className="mr-1.5 h-4 w-4" />
+          Export Sales CSV
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-9"
+          onClick={() => {
+            exportCSV(
+              d.outstandingStores,
+              [
+                { header: "Store ID", key: "display_id" },
+                { header: "Store", key: "name" },
+                { header: "Outstanding", key: "outstanding" },
+              ],
+              `outstanding-report-${fromDate}.csv`
+            );
+          }}
+        >
+          <Download className="mr-1.5 h-4 w-4" />
+          Export Outstanding CSV
+        </Button>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -89,7 +161,7 @@ const Reports = () => {
         </TabsList>
         <TabsContent value="sales" className="mt-4">
           {d.sales.length === 0 ? (
-            <div className="rounded-xl border bg-card p-8 text-center text-muted-foreground">No sales recorded on this date</div>
+            <div className="rounded-xl border bg-card p-8 text-center text-muted-foreground">No sales recorded in this period</div>
           ) : (
             <DataTable columns={salesColumns} data={d.sales} searchKey="display_id" searchPlaceholder="Search sales..." />
           )}
