@@ -27,6 +27,7 @@ type LedgerEntry = {
 interface StoreLedgerProps {
   sales: any[];
   transactions: any[];
+  balanceAdjustments?: any[];
   openingBalance: number;
   storeCreatedAt: string;
   profileMap: Map<string, { user_id: string; full_name: string; avatar_url: string | null }>;
