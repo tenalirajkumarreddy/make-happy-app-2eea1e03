@@ -180,7 +180,8 @@ const Products = () => {
         subtitle="Manage your product catalog and pricing"
         primaryAction={{ label: "Add Product", onClick: () => { resetForm(); setShowAdd(true); } }}
         actions={[
-          { label: "Product Access", icon: Grid3X3, onClick: () => setShowMatrix(true), priority: 1 },
+          { label: "Categories", icon: Tags, onClick: () => setShowCategories(true), priority: 1 },
+          { label: "Product Access", icon: Grid3X3, onClick: () => setShowMatrix(true), priority: 2 },
         ]}
       />
       <DataTable
