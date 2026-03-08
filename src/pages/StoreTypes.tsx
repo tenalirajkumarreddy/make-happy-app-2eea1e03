@@ -86,6 +86,8 @@ const StoreTypes = () => {
       const { error } = await supabase.from("store_types").insert({
         name: newTypeName,
         order_type: newOrderType,
+        credit_limit_kyc: parseFloat(creditLimitKyc) || 0,
+        credit_limit_no_kyc: parseFloat(creditLimitNoKyc) || 0,
       });
       setSaving(false);
       if (error) toast.error(error.message);

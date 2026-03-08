@@ -72,6 +72,7 @@ CREATE TABLE public.customers (
   kyc_verified_at timestamptz,
   kyc_verified_by uuid REFERENCES auth.users(id),
   opening_balance numeric NOT NULL DEFAULT 0,
+  credit_limit_override numeric DEFAULT NULL,
   is_active boolean NOT NULL DEFAULT true,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
