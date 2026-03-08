@@ -190,17 +190,14 @@ const Handovers = () => {
     const isSender = item.user_id === user?.id;
     const isReceiver = item.handed_to === user?.id;
     const total = Number(item.cash_amount) + Number(item.upi_amount);
-    const statusColor = item.status === "confirmed"
-      ? "text-success" : item.status === "rejected"
-      ? "text-destructive" : "text-warning";
     const statusLabel = item.status === "confirmed" ? "Confirmed" : item.status === "rejected" ? "Rejected" : "Pending";
 
     return (
-      <div className="group flex items-center gap-3 rounded-lg border bg-card px-3.5 py-3 hover:shadow-sm transition-shadow">
+      <div className="group flex items-center gap-4 rounded-lg border bg-card px-4 py-3 hover:shadow-sm transition-shadow">
         {/* Avatars */}
-        <div className="flex items-center -space-x-2 shrink-0">
-          <UserAvatar userId={item.user_id} size="md" />
-          <UserAvatar userId={item.handed_to} size="md" />
+        <div className="flex items-center -space-x-2.5 shrink-0">
+          <UserAvatar userId={item.user_id} size="lg" />
+          <UserAvatar userId={item.handed_to} size="lg" />
         </div>
 
         {/* Info */}
