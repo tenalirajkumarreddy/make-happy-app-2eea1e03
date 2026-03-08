@@ -26,6 +26,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { QrScanner } from "@/components/shared/QrScanner";
 import { parseUpiQr } from "@/lib/upiParser";
+import { StoreLedger } from "@/components/stores/StoreLedger";
 
 const StoreDetail = () => {
   const { id } = useParams<{ id: string }>();
