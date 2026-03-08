@@ -3,11 +3,13 @@ import { DataTable } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { KycReviewDialog } from "@/components/customers/KycReviewDialog";
 import { ImageUpload } from "@/components/shared/ImageUpload";
+import { EditableCell } from "@/components/shared/EditableCell";
+import { CsvImportDialog } from "@/components/shared/CsvImportDialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { logActivity } from "@/lib/activityLogger";
-import { Loader2, User } from "lucide-react";
+import { Loader2, User, Upload } from "lucide-react";
 import { usePermission } from "@/hooks/usePermission";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -26,6 +28,7 @@ const Customers = () => {
   const { user, role } = useAuth();
   const { allowed: canCreateCustomers } = usePermission("create_customers");
   const [showAdd, setShowAdd] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [kycCustomer, setKycCustomer] = useState<any>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -37,6 +40,7 @@ const Customers = () => {
   const qc = useQueryClient();
   const canReviewKyc = role === "super_admin" || role === "manager";
   const canBulk = role === "super_admin" || role === "manager";
+  const canEdit = role === "super_admin" || role === "manager";
 
   const { data: customers, isLoading } = useQuery({
     queryKey: ["customers"],
@@ -49,6 +53,13 @@ const Customers = () => {
       return data;
     },
   });
+
+  const updateCustomerField = async (id: string, field: string, value: string) => {
+    const { error } = await supabase.from("customers").update({ [field]: value || null }).eq("id", id);
+    if (error) { toast.error(error.message); throw error; }
+    toast.success("Updated");
+    qc.invalidateQueries({ queryKey: ["customers"] });
+  };
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,6 +87,35 @@ const Customers = () => {
     }
   };
 
+  const handleCsvImport = async (rows: Record<string, string>[]) => {
+    let success = 0;
+    const errors: string[] = [];
+    const currentCount = customers?.length || 0;
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const displayId = `CUST-${String(currentCount + success + 1).padStart(6, "0")}`;
+      const { error } = await supabase.from("customers").insert({
+        display_id: displayId,
+        name: row.name,
+        phone: row.phone || null,
+        email: row.email || null,
+        address: row.address || null,
+      });
+      if (error) {
+        errors.push(`Row ${i + 2}: ${error.message}`);
+      } else {
+        success++;
+      }
+    }
+
+    if (success > 0) {
+      logActivity(user!.id, `Imported ${success} customers via CSV`, "customer");
+      qc.invalidateQueries({ queryKey: ["customers"] });
+    }
+    return { success, errors };
+  };
+
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -98,7 +138,6 @@ const Customers = () => {
     const { error } = await supabase.from("customers").update({ is_active: active }).in("id", ids);
     if (error) { toast.error(error.message); return; }
 
-    // If deactivating, cascade to all stores of selected customers
     if (!active) {
       const { error: storeError } = await supabase
         .from("stores")
@@ -137,10 +176,19 @@ const Customers = () => {
     { header: "Name", accessor: (row: any) => (
       <div className="flex items-center gap-2">
         {row.photo_url && <img src={row.photo_url} alt="" className="h-8 w-8 rounded-full object-cover" />}
-        <span className="font-medium text-primary hover:underline">{row.name}</span>
+        {canEdit ? (
+          <EditableCell value={row.name} onSave={(v) => updateCustomerField(row.id, "name", v)} className="font-medium text-primary" />
+        ) : (
+          <span className="font-medium text-primary hover:underline">{row.name}</span>
+        )}
       </div>
     )},
-    { header: "Phone", accessor: (row: any) => row.phone || "—", className: "text-muted-foreground text-sm hidden sm:table-cell" },
+    { header: "Phone", accessor: (row: any) => canEdit ? (
+      <EditableCell value={row.phone || ""} onSave={(v) => updateCustomerField(row.id, "phone", v)} placeholder="Add phone" />
+    ) : (row.phone || "—"), className: "text-muted-foreground text-sm hidden sm:table-cell" },
+    { header: "Email", accessor: (row: any) => canEdit ? (
+      <EditableCell value={row.email || ""} onSave={(v) => updateCustomerField(row.id, "email", v)} placeholder="Add email" />
+    ) : (row.email || "—"), className: "text-muted-foreground text-sm hidden md:table-cell" },
     { header: "Stores", accessor: (row: any) => row.stores?.length || 0, className: "text-center hidden sm:table-cell" },
     { header: "Outstanding", accessor: (row: any) => {
       const total = (row.stores || []).reduce((s: number, st: any) => s + Number(st.outstanding || 0), 0);
@@ -164,6 +212,9 @@ const Customers = () => {
         title="Customers"
         subtitle="Manage customer accounts and KYC verification"
         primaryAction={canCreateCustomers ? { label: "Add Customer", onClick: () => setShowAdd(true) } : undefined}
+        actions={canCreateCustomers ? [
+          { label: "Import CSV", icon: Upload, onClick: () => setShowImport(true), priority: 1 },
+        ] : []}
       />
 
       {canBulk && selected.size > 0 && (
@@ -232,6 +283,19 @@ const Customers = () => {
           </form>
         </DialogContent>
       </Dialog>
+
+      <CsvImportDialog
+        open={showImport}
+        onOpenChange={setShowImport}
+        templateName="customers"
+        fields={[
+          { key: "name", label: "Name", required: true },
+          { key: "phone", label: "Phone" },
+          { key: "email", label: "Email" },
+          { key: "address", label: "Address" },
+        ]}
+        onImport={handleCsvImport}
+      />
 
       <KycReviewDialog
         customer={kycCustomer}

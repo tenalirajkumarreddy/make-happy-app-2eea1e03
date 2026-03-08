@@ -4,10 +4,12 @@ import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { StorePricingDialog } from "@/components/stores/StorePricingDialog";
 import { CreateStoreWizard } from "@/components/stores/CreateStoreWizard";
+import { EditableCell } from "@/components/shared/EditableCell";
+import { CsvImportDialog } from "@/components/shared/CsvImportDialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { DollarSign, Store, Settings2 } from "lucide-react";
+import { DollarSign, Store, Settings2, Upload } from "lucide-react";
 import { usePermission } from "@/hooks/usePermission";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -18,18 +20,21 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { logActivity } from "@/lib/activityLogger";
 
 const Stores = () => {
   const navigate = useNavigate();
-  const { role } = useAuth();
+  const { user, role } = useAuth();
   const { allowed: canCreateStores } = usePermission("create_stores");
   const [showAdd, setShowAdd] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [pricingStore, setPricingStore] = useState<any>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkRoute, setBulkRoute] = useState("");
   const qc = useQueryClient();
   const canManagePricing = role === "super_admin" || role === "manager";
   const canBulk = role === "super_admin" || role === "manager";
+  const canEdit = role === "super_admin" || role === "manager";
 
   const { data: stores, isLoading } = useQuery({
     queryKey: ["stores"],
@@ -50,6 +55,88 @@ const Stores = () => {
       return data || [];
     },
   });
+
+  const { data: storeTypes } = useQuery({
+    queryKey: ["store-types-list"],
+    queryFn: async () => {
+      const { data } = await supabase.from("store_types").select("id, name").eq("is_active", true);
+      return data || [];
+    },
+  });
+
+  const { data: customersList } = useQuery({
+    queryKey: ["customers-list"],
+    queryFn: async () => {
+      const { data } = await supabase.from("customers").select("id, name, display_id").eq("is_active", true);
+      return data || [];
+    },
+  });
+
+  const updateStoreField = async (id: string, field: string, value: string) => {
+    const { error } = await supabase.from("stores").update({ [field]: value || null }).eq("id", id);
+    if (error) { toast.error(error.message); throw error; }
+    toast.success("Updated");
+    qc.invalidateQueries({ queryKey: ["stores"] });
+  };
+
+  const handleCsvImport = async (rows: Record<string, string>[]) => {
+    let success = 0;
+    const errors: string[] = [];
+    const currentCount = stores?.length || 0;
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+
+      // Match customer by name or display_id
+      const customer = customersList?.find(
+        (c) => c.name.toLowerCase() === row.customer?.toLowerCase() || c.display_id === row.customer
+      );
+      if (!customer) {
+        errors.push(`Row ${i + 2}: Customer "${row.customer}" not found`);
+        continue;
+      }
+
+      // Match store type by name
+      const storeType = storeTypes?.find((t) => t.name.toLowerCase() === row.store_type?.toLowerCase());
+      if (!storeType) {
+        errors.push(`Row ${i + 2}: Store type "${row.store_type}" not found`);
+        continue;
+      }
+
+      // Optionally match route
+      let routeId: string | null = null;
+      if (row.route) {
+        const route = allRoutes?.find((r) => r.name.toLowerCase() === row.route?.toLowerCase());
+        if (!route) {
+          errors.push(`Row ${i + 2}: Route "${row.route}" not found`);
+          continue;
+        }
+        routeId = route.id;
+      }
+
+      const displayId = `STR-${String(currentCount + success + 1).padStart(6, "0")}`;
+      const { error } = await supabase.from("stores").insert({
+        display_id: displayId,
+        name: row.name,
+        customer_id: customer.id,
+        store_type_id: storeType.id,
+        route_id: routeId,
+        phone: row.phone || null,
+        address: row.address || null,
+      });
+      if (error) {
+        errors.push(`Row ${i + 2}: ${error.message}`);
+      } else {
+        success++;
+      }
+    }
+
+    if (success > 0) {
+      logActivity(user!.id, `Imported ${success} stores via CSV`, "store");
+      qc.invalidateQueries({ queryKey: ["stores"] });
+    }
+    return { success, errors };
+  };
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
@@ -110,10 +197,17 @@ const Stores = () => {
     { header: "Store", accessor: (row: any) => (
       <div className="flex items-center gap-2">
         {row.photo_url && <img src={row.photo_url} alt="" className="h-8 w-8 rounded-md object-cover" />}
-        <span className="font-medium">{row.name}</span>
+        {canEdit ? (
+          <EditableCell value={row.name} onSave={(v) => updateStoreField(row.id, "name", v)} className="font-medium" />
+        ) : (
+          <span className="font-medium">{row.name}</span>
+        )}
       </div>
     )},
     { header: "Customer", accessor: (row: any) => row.customers?.name || "—", className: "text-muted-foreground text-sm hidden sm:table-cell" },
+    { header: "Phone", accessor: (row: any) => canEdit ? (
+      <EditableCell value={row.phone || ""} onSave={(v) => updateStoreField(row.id, "phone", v)} placeholder="Add phone" />
+    ) : (row.phone || "—"), className: "text-muted-foreground text-sm hidden md:table-cell" },
     { header: "Type", accessor: (row: any) => row.store_types?.name ? <Badge variant="secondary">{row.store_types.name}</Badge> : "—", className: "hidden sm:table-cell" },
     { header: "Route", accessor: (row: any) => row.routes?.name || "—", className: "text-sm hidden lg:table-cell" },
     { header: "Outstanding", accessor: (row: any) => `₹${Number(row.outstanding).toLocaleString()}`, className: "font-semibold" },
@@ -137,6 +231,7 @@ const Stores = () => {
         primaryAction={canCreateStores ? { label: "Add Store", onClick: () => setShowAdd(true) } : undefined}
         actions={[
           { label: "Store Types", icon: Settings2, onClick: () => navigate("/store-types"), priority: 1 },
+          ...(canCreateStores ? [{ label: "Import CSV", icon: Upload, onClick: () => setShowImport(true), priority: 2 as const }] : []),
         ]}
       />
 
@@ -194,6 +289,21 @@ const Stores = () => {
       />
 
       <CreateStoreWizard open={showAdd} onOpenChange={setShowAdd} />
+
+      <CsvImportDialog
+        open={showImport}
+        onOpenChange={setShowImport}
+        templateName="stores"
+        fields={[
+          { key: "name", label: "Store Name", required: true },
+          { key: "customer", label: "Customer (name or ID)", required: true },
+          { key: "store_type", label: "Store Type", required: true },
+          { key: "route", label: "Route" },
+          { key: "phone", label: "Phone" },
+          { key: "address", label: "Address" },
+        ]}
+        onImport={handleCsvImport}
+      />
 
       <StorePricingDialog
         store={pricingStore}
