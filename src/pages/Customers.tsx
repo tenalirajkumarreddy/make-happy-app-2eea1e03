@@ -204,6 +204,15 @@ const Customers = () => {
     { header: "Status", accessor: (row: any) => <StatusBadge status={row.is_active ? "active" : "inactive"} /> },
   ];
 
+  const filteredCustomers = useMemo(() => {
+    let data = customers || [];
+    return applyFilters(data, filters, {
+      dateField: "created_at",
+      kycField: "kyc_status",
+      statusField: "is_active",
+    });
+  }, [customers, filters]);
+
   if (isLoading) {
     return <TableSkeleton columns={7} />;
   }
