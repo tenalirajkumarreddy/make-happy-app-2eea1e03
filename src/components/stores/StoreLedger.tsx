@@ -178,37 +178,22 @@ export function StoreLedger({ sales, transactions, openingBalance, profileMap }:
   ];
 
   const renderMobileCard = (row: LedgerEntry) => {
-    if (row.id === "__opening_balance__") {
-      return (
-        <div className="rounded-xl border bg-card px-3 py-2.5 shadow-sm flex items-center gap-2">
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted shadow-sm">
-            <Tag className="h-3.5 w-3.5 text-muted-foreground" />
-          </div>
-          <div>
-            <p className="font-medium text-sm uppercase tracking-wide text-muted-foreground">Opening Balance</p>
-            <p className="text-sm font-semibold">₹{row.outstanding.toLocaleString()}</p>
-          </div>
-        </div>
-      );
-    }
     const p = getRecorder(row.recorded_by);
-    const label = row.type === "sale" ? "SALE" : row.type === "payment" ? "PAYMENT" : "CORRECTION";
-    const displayLabel = row.type === "correction" ? "Balance Adjusted" : row.display_id;
     return (
       <div
         className="rounded-xl border bg-card px-3 py-2.5 shadow-sm cursor-pointer"
         onClick={() => setSelectedEntryId(row.id)}
       >
         <div className="flex items-center justify-between">
-          <Badge variant={row.type === "sale" ? "destructive" : row.type === "correction" ? "outline" : "secondary"} className="text-[10px] h-5">
-            {label}
+          <Badge variant={row.type === "sale" ? "destructive" : "secondary"} className="text-[10px] h-5">
+            {row.type === "sale" ? "SALE" : "PAYMENT"}
           </Badge>
           <span className="text-[11px] text-muted-foreground">
-            {row.date ? new Date(row.date).toLocaleDateString("en-IN") : "—"}
+            {new Date(row.date).toLocaleDateString("en-IN")}
           </span>
         </div>
         <div className="flex items-center justify-between mt-1.5">
-          <span className="font-mono text-xs text-muted-foreground">{displayLabel}</span>
+          <span className="font-mono text-xs text-muted-foreground">{row.display_id}</span>
           <span className={`text-sm font-bold ${row.type === "sale" ? "text-destructive" : "text-success"}`}>
             {row.type === "sale" ? "-" : "+"}₹{row.total_amount.toLocaleString()}
           </span>
