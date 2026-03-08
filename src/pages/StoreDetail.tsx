@@ -34,8 +34,9 @@ const StoreDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { role } = useAuth();
+  const { role, user } = useAuth();
   const canEdit = role === "super_admin" || role === "manager";
+  const { allowed: canEditBalance } = usePermission("edit_balance");
 
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
