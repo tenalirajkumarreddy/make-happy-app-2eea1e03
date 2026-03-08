@@ -160,6 +160,16 @@ const StoreTypes = () => {
         </div>
         <Badge variant="secondary" className="text-[10px] shrink-0">{row.order_type}</Badge>
       </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="rounded-lg bg-muted/50 p-2 text-center">
+          <p className="text-[10px] text-muted-foreground uppercase">Credit (KYC)</p>
+          <p className="text-sm font-medium">₹{Number(row.credit_limit_kyc || 0).toLocaleString()}</p>
+        </div>
+        <div className="rounded-lg bg-muted/50 p-2 text-center">
+          <p className="text-[10px] text-muted-foreground uppercase">Credit (No KYC)</p>
+          <p className="text-sm font-medium">₹{Number(row.credit_limit_no_kyc || 0).toLocaleString()}</p>
+        </div>
+      </div>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">Auto Order</span>
