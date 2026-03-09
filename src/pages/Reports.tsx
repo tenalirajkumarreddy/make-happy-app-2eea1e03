@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/shared/PageHeader";
-import { useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { useEffect } from "react";
 import {
   Calendar, ShoppingCart, ClipboardList, Users, Package,
   Banknote, TrendingDown,
@@ -20,21 +21,37 @@ const REPORT_SECTIONS = [
   { key: "orders", label: "Order Reports", icon: ClipboardList },
   { key: "agent", label: "Agent Performance", icon: Users },
   { key: "product", label: "Product Reports", icon: Package },
-  { key: "payment", label: "Payment & Outstanding", icon: Banknote },
+  { key: "payment", label: "Payment Reports", icon: Banknote },
+  { key: "outstanding", label: "Outstanding Reports", icon: TrendingDown },
 ] as const;
 
 type SectionKey = (typeof REPORT_SECTIONS)[number]["key"];
+const VALID_KEYS: string[] = REPORT_SECTIONS.map((s) => s.key);
 
 const Reports = () => {
-  const [active, setActive] = useState<SectionKey>("daily");
-  const ActiveIcon = REPORT_SECTIONS.find(s => s.key === active)?.icon || Calendar;
+  const { type } = useParams<{ type?: string }>();
+  const navigate = useNavigate();
+
+  const isValid = type && VALID_KEYS.includes(type);
+  const active: SectionKey = isValid ? (type as SectionKey) : "daily";
+  const ActiveIcon = REPORT_SECTIONS.find((s) => s.key === active)?.icon || Calendar;
+
+  useEffect(() => {
+    if (!type || !VALID_KEYS.includes(type)) {
+      navigate("/reports/daily", { replace: true });
+    }
+  }, [type, navigate]);
+
+  const handleChange = (v: string) => {
+    navigate(`/reports/${v}`, { replace: true });
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <PageHeader title="Reports" subtitle="Generate and view business reports" />
-        <Select value={active} onValueChange={(v) => setActive(v as SectionKey)}>
-          <SelectTrigger className="w-full sm:w-[260px]">
+        <Select value={active} onValueChange={handleChange}>
+          <SelectTrigger className="w-full sm:w-[260px]" data-testid="select-report-type">
             <div className="flex items-center gap-2">
               <ActiveIcon className="h-4 w-4" />
               <SelectValue />
@@ -44,7 +61,7 @@ const Reports = () => {
             {REPORT_SECTIONS.map((s) => {
               const Icon = s.icon;
               return (
-                <SelectItem key={s.key} value={s.key}>
+                <SelectItem key={s.key} value={s.key} data-testid={`select-report-${s.key}`}>
                   <div className="flex items-center gap-2">
                     <Icon className="h-4 w-4" />
                     {s.label}
@@ -62,7 +79,7 @@ const Reports = () => {
         {active === "orders" && <OrderReport />}
         {active === "agent" && <AgentPerformanceReport />}
         {active === "product" && <ProductReport />}
-        {active === "payment" && <PaymentOutstandingReport />}
+        {(active === "payment" || active === "outstanding") && <PaymentOutstandingReport />}
       </div>
     </div>
   );
