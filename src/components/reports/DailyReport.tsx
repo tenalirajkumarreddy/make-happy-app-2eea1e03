@@ -419,14 +419,16 @@ td.num{font-family:'DM Mono',monospace}
 </body>
 </html>`;
 
-    const win = window.open("", "_blank");
-    if (win) {
-      win.document.write(html);
-      win.document.close();
-      // Auto-trigger print dialog after fonts load
-      setTimeout(() => win.print(), 800);
-    }
-    toast.success("Report opened — use Print → Save as PDF");
+    const blob = new Blob([html], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `daily-report-${date}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success("Report downloaded — open it in a browser and print to save as PDF");
   };
 
   const generateExcel = () => {
