@@ -16,7 +16,6 @@ import {
   ShoppingCart, Package, Users, HandCoins, FileText, FileSpreadsheet,
 } from "lucide-react";
 import * as XLSX from "xlsx";
-import * as XLSX from "xlsx";
 
 const fmt = (n: number) => `₹${n.toLocaleString("en-IN")}`;
 
