@@ -20,8 +20,11 @@ export function QrScanner({ open, onOpenChange, onScan, title = "Scan QR Code" }
   const startScanner = useCallback(async () => {
     setError(null);
     try {
-      // Request camera access directly in user gesture context
-      await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      // Stop any existing scanner first
+      if (scannerRef.current) {
+        await scannerRef.current.stop().catch(() => {});
+        scannerRef.current = null;
+      }
 
       const scanner = new Html5Qrcode(containerId);
       scannerRef.current = scanner;
@@ -39,8 +42,16 @@ export function QrScanner({ open, onOpenChange, onScan, title = "Scan QR Code" }
         () => {}
       );
       setStarted(true);
-    } catch {
-      setError("Camera access denied or not available");
+    } catch (err: any) {
+      console.error("QR Scanner error:", err);
+      const msg = err?.message || String(err);
+      if (msg.includes("NotAllowedError") || msg.includes("Permission")) {
+        setError("Camera permission denied. Please allow camera access in your browser settings.");
+      } else if (msg.includes("NotFoundError") || msg.includes("not found")) {
+        setError("No camera found on this device.");
+      } else {
+        setError("Could not start camera: " + msg);
+      }
     }
   }, [onScan, onOpenChange]);
 
