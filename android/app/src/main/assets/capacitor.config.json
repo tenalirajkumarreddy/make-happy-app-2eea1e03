@@ -1,0 +1,26 @@
+{
+	"appId": "app.lovable.bizmanager",
+	"appName": "BizManager",
+	"webDir": "dist",
+	"server": {
+		"url": "https://22e9f0ea-22ae-4685-b0ce-0218e2390dbb.lovableproject.com?forceHideBadge=true",
+		"cleartext": true
+	},
+	"android": {
+		"allowMixedContent": true
+	},
+	"ios": {
+		"contentInset": "automatic"
+	},
+	"plugins": {
+		"SplashScreen": {
+			"launchShowDuration": 2000,
+			"backgroundColor": "#1a1a2e",
+			"showSpinner": false
+		},
+		"StatusBar": {
+			"style": "dark",
+			"backgroundColor": "#1a1a2e"
+		}
+	}
+}
