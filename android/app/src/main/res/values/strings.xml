@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">BizManager</string>
+    <string name="title_activity_main">BizManager</string>
+    <string name="package_name">app.lovable.bizmanager</string>
+    <string name="custom_url_scheme">app.lovable.bizmanager</string>
+</resources>
