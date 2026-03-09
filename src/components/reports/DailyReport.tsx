@@ -193,164 +193,242 @@ export default function DailyReport() {
 
   // ── Export functions ──
   const generatePDF = () => {
-    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-    const pw = 297; // A4 landscape width
-    const ph = 210; // A4 landscape height
-    const m = 8; // margin
-    const gutter = 5; // gap between columns
-    const colW = (pw - 2 * m - gutter) / 2; // two-column layout
-
     const dateStr = new Date(date).toLocaleDateString("en-IN", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 
-    // ── Header ──
-    doc.setFillColor(20, 20, 20);
-    doc.rect(0, 0, pw, 14, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(12);
-    doc.setFont("helvetica", "bold");
-    doc.text("DAILY BUSINESS REPORT", m, 9);
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "normal");
-    doc.text(dateStr, pw - m, 9, { align: "right" });
-    doc.setTextColor(0, 0, 0);
+    // Combine sales + payments into chronological list
+    const chronological = [
+      ...d.sales.map((s: any) => ({
+        time: new Date(s.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true }).toLowerCase(),
+        type: "Sale",
+        id: s.display_id,
+        store: s.stores?.name || "—",
+        detail: d.saleItems
+          .filter((si: any) => si.sale_id === s.id)
+          .map((si: any) => si.products?.name || "")
+          .filter(Boolean)
+          .join(", ") || "—",
+        total: Number(s.total_amount),
+        cash: Number(s.cash_amount),
+        upi: Number(s.upi_amount),
+        credit: Number(s.outstanding_amount),
+        sortKey: new Date(s.created_at).getTime(),
+      })),
+      ...d.txns.map((t: any) => ({
+        time: new Date(t.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true }).toLowerCase(),
+        type: "Payment",
+        id: t.display_id,
+        store: t.stores?.name || "—",
+        detail: "Collection received",
+        total: Number(t.total_amount),
+        cash: Number(t.cash_amount),
+        upi: Number(t.upi_amount),
+        credit: 0,
+        sortKey: new Date(t.created_at).getTime(),
+      })),
+    ].sort((a, b) => a.sortKey - b.sortKey);
 
-    // ── Helper for compact section title ──
-    const sectionTitle = (title: string, x: number, y: number) => {
-      doc.setFontSize(8);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(80, 80, 80);
-      doc.text(title.toUpperCase(), x, y);
-      doc.setTextColor(0, 0, 0);
-      doc.setFont("helvetica", "normal");
-      return y + 2;
-    };
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Daily Report - ${date}</title>
+<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@600;700&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--ink:#111820;--mid:#4a5560;--muted:#8a9aa8;--rule:#dde4ea;--accent:#0f2d4a;--tint:#e8f0f8;--pos:#155a38;--neg:#7a1c1c;--pay:#6a4a10}
+body{background:#c8d4de;display:flex;justify-content:center;padding:24px;font-family:'DM Sans',sans-serif}
+.page{width:297mm;min-height:210mm;background:#fff;padding:7mm 9mm 6mm;box-shadow:0 6px 40px rgba(0,0,0,.20);display:flex;flex-direction:column;gap:3.5mm}
+.header{display:grid;grid-template-columns:70mm 1fr 58mm;border:1.5px solid var(--accent)}
+.hd-brand{background:var(--accent);color:#fff;padding:3.5mm 5mm;display:flex;flex-direction:column;justify-content:center}
+.hd-brand .biz{font-family:'Crimson Pro',serif;font-size:18pt;line-height:1}
+.hd-brand .sub{font-size:6.5pt;letter-spacing:2.5px;text-transform:uppercase;opacity:.6;margin-top:2px}
+.hd-center{border-left:1.5px solid var(--accent);border-right:1.5px solid var(--accent);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:3mm}
+.hd-center .title{font-size:11pt;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:var(--accent)}
+.hd-center .date{font-size:8.5pt;color:var(--mid);font-weight:300;margin-top:2px}
+.hd-meta{padding:3mm 4mm;display:flex;flex-direction:column;justify-content:center;gap:3px}
+.hd-meta .mrow{display:flex;justify-content:space-between;font-size:7pt}
+.hd-meta .ml{color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.hd-meta .mv{font-family:'DM Mono',monospace;font-weight:500;color:var(--ink)}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(28mm,1fr));border:1.5px solid var(--accent)}
+.card{padding:2.5mm 3mm;border-right:1px solid var(--rule);text-align:center}
+.card:last-child{border-right:none}
+.card.hi{background:var(--tint)}
+.card-label{font-size:5.5pt;text-transform:uppercase;letter-spacing:1px;color:var(--muted);font-weight:500;margin-bottom:2px}
+.card-value{font-family:'DM Mono',monospace;font-size:12pt;font-weight:500;color:var(--ink)}
+.card-value.accent{color:var(--accent);font-size:13pt;font-weight:600}
+.card-value.pos{color:var(--pos)}
+.card-value.neg{color:var(--neg)}
+.card-sub{font-size:5.5pt;color:var(--muted);margin-top:1px}
+.mid-row{display:grid;grid-template-columns:1fr 1fr;gap:3.5mm}
+.box{border:1.5px solid var(--accent);overflow:hidden}
+.box-head{background:var(--accent);color:#fff;padding:1.5mm 3mm;font-size:6.5pt;font-weight:600;letter-spacing:2px;text-transform:uppercase;display:flex;justify-content:space-between;align-items:center}
+.box-head em{opacity:.5;font-style:normal;font-size:6pt;font-weight:400}
+table{width:100%;border-collapse:collapse;font-size:7.5pt}
+thead th{background:var(--tint);color:var(--accent);font-weight:600;font-size:6.5pt;text-transform:uppercase;letter-spacing:.5px;padding:1.5mm 2.5mm;border-bottom:1.5px solid var(--rule);text-align:left;white-space:nowrap}
+th.r,td.r{text-align:right}
+th.c,td.c{text-align:center}
+tbody tr{border-bottom:1px solid var(--rule)}
+tbody tr:last-child{border-bottom:none}
+tbody tr:nth-child(even){background:#fafcfe}
+td{padding:1.5mm 2.5mm;color:var(--ink);vertical-align:middle}
+td.mono{font-family:'DM Mono',monospace;font-size:7pt}
+td.muted{color:var(--muted);font-size:7pt}
+td.pos{color:var(--pos);font-family:'DM Mono',monospace}
+td.neg{color:var(--neg);font-family:'DM Mono',monospace}
+td.num{font-family:'DM Mono',monospace}
+.pill{display:inline-block;padding:1px 5px;border-radius:2px;font-size:6pt;font-weight:600;letter-spacing:.5px;text-transform:uppercase}
+.pill.sale{background:#dff0eb;color:var(--pos)}
+.pill.pay{background:#fff0d5;color:var(--pay)}
+.footer{border-top:1.5px solid var(--accent);padding-top:2mm;display:flex;justify-content:space-between;align-items:flex-end;font-size:6.5pt;color:var(--muted);margin-top:auto}
+.sig{border-bottom:1px solid var(--rule);display:inline-block;width:40mm;margin-left:2mm;vertical-align:bottom}
+@media print{body{background:none;padding:0}.page{box-shadow:none;width:297mm;height:210mm}}
+@page{size:A4 landscape;margin:0}
+</style>
+</head>
+<body>
+<div class="page">
 
-    const tinyStyle = { fontSize: 6, cellPadding: 1.2 };
-    const headStyle = { fillColor: [35, 35, 35] as [number, number, number], textColor: 255, fontSize: 6, cellPadding: 1.2, fontStyle: "bold" as const };
+  <div class="header">
+    <div class="hd-brand">
+      <div class="biz">BizManager</div>
+      <div class="sub">Daily Operations Report</div>
+    </div>
+    <div class="hd-center">
+      <div class="title">Daily Report</div>
+      <div class="date">${dateStr}</div>
+    </div>
+    <div class="hd-meta">
+      <div class="mrow"><span class="ml">Sales Count</span><span class="mv">${d.salesCount}</span></div>
+      <div class="mrow"><span class="ml">Payments</span><span class="mv">${d.txnCount}</span></div>
+      <div class="mrow"><span class="ml">Delivered</span><span class="mv">${d.ordersDelivered}</span></div>
+      <div class="mrow"><span class="ml">Pending</span><span class="mv">${d.ordersPending}</span></div>
+    </div>
+  </div>
 
-    // ══════════ LEFT COLUMN ══════════
-    let ly = 18;
+  <div class="cards">
+    <div class="card hi">
+      <div class="card-label">Total Sales</div>
+      <div class="card-value accent">${fmt(d.totalSaleAmount)}</div>
+      <div class="card-sub">${d.salesCount} sales</div>
+    </div>
+    <div class="card hi">
+      <div class="card-label">Collections</div>
+      <div class="card-value accent">${fmt(d.totalCollections)}</div>
+      <div class="card-sub">${d.txnCount} payments</div>
+    </div>
+    <div class="card hi">
+      <div class="card-label">Total Income</div>
+      <div class="card-value accent">${fmt(d.totalIncome)}</div>
+      <div class="card-sub">Sales + Collections</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Cash Collected</div>
+      <div class="card-value pos">${fmt(d.totalCash)}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">UPI Collected</div>
+      <div class="card-value pos">${fmt(d.totalUpi)}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Credit Given</div>
+      <div class="card-value neg">${fmt(d.salesOutstanding)}</div>
+      <div class="card-sub">Today's outstanding</div>
+    </div>
+    <div class="card">
+      <div class="card-label">All-Store Outstanding</div>
+      <div class="card-value neg">${fmt(d.totalOutstanding)}</div>
+      <div class="card-sub">Cumulative</div>
+    </div>
+  </div>
 
-    // Summary KPIs — 2-column key-value grid
-    ly = sectionTitle("Summary", m, ly);
-    const kpiLeft = [
-      ["Total Income", fmt(d.totalIncome)],
-      ["Sale Amount", fmt(d.totalSaleAmount)],
-      ["Collections", fmt(d.totalCollections)],
-      ["Cash Collected", fmt(d.totalCash)],
-      ["UPI Collected", fmt(d.totalUpi)],
-      ["Credit Given", fmt(d.salesOutstanding)],
-    ];
-    const kpiRight = [
-      ["Items Sold", String(d.totalItemsSold)],
-      ["Sales Count", String(d.salesCount)],
-      ["Payments", String(d.txnCount)],
-      ["Orders Delivered", String(d.ordersDelivered)],
-      ["Orders Pending", String(d.ordersPending)],
-      ["Total Outstanding", fmt(d.totalOutstanding)],
-    ];
-    const halfCol = (colW - 2) / 2;
-    autoTable(doc, {
-      startY: ly, margin: { left: m }, tableWidth: halfCol - 1,
-      head: [["Metric", "Value"]], body: kpiLeft,
-      theme: "grid", styles: tinyStyle, headStyles: headStyle,
-    });
-    const kpiEndLeft = (doc as any).lastAutoTable.finalY;
-    autoTable(doc, {
-      startY: ly, margin: { left: m + halfCol + 1 }, tableWidth: halfCol - 1,
-      head: [["Metric", "Value"]], body: kpiRight,
-      theme: "grid", styles: tinyStyle, headStyles: headStyle,
-    });
-    ly = Math.max(kpiEndLeft, (doc as any).lastAutoTable.finalY) + 3;
+  <div class="mid-row">
+    <div class="box">
+      <div class="box-head">Products Sold</div>
+      <table>
+        <thead><tr><th>Product</th><th class="r">Qty</th><th class="r">Avg Price</th><th class="r">Revenue</th></tr></thead>
+        <tbody>
+          ${d.productBreakdown.length === 0 
+            ? '<tr><td colspan="4" class="muted" style="text-align:center">No products sold</td></tr>'
+            : d.productBreakdown.map((p: any) => `<tr>
+              <td>${p.name}</td>
+              <td class="r num">${p.qty} ${p.unit}</td>
+              <td class="r num">${fmt(Math.round(p.revenue / p.qty))}</td>
+              <td class="r num">${fmt(p.revenue)}</td>
+            </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>
 
-    // Sales table
-    if (d.sales.length > 0) {
-      ly = sectionTitle(`Sales (${d.salesCount})`, m, ly);
-      autoTable(doc, {
-        startY: ly, margin: { left: m, right: pw - m - colW },
-        tableWidth: colW,
-        head: [["ID", "Store", "Total", "Cash", "UPI", "Credit"]],
-        body: d.sales.map((s: any) => [
-          s.display_id, (s.stores?.name || "—").substring(0, 18),
-          fmt(Number(s.total_amount)), fmt(Number(s.cash_amount)),
-          fmt(Number(s.upi_amount)), fmt(Number(s.outstanding_amount)),
-        ]),
-        theme: "striped", styles: tinyStyle, headStyles: headStyle,
-        columnStyles: { 1: { cellWidth: "auto" } },
-      });
-      ly = (doc as any).lastAutoTable.finalY + 3;
+    <div class="box">
+      <div class="box-head">Staff Balances</div>
+      <table>
+        <thead><tr><th>Name</th><th>Role</th><th class="r">Collected</th><th class="r">Handed Over</th><th class="r">Received</th><th class="r">Balance</th></tr></thead>
+        <tbody>
+          ${d.staffBalances.length === 0
+            ? '<tr><td colspan="6" class="muted" style="text-align:center">No staff activity</td></tr>'
+            : d.staffBalances.map((s: any) => `<tr>
+              <td><strong>${s.name}</strong></td>
+              <td><span class="pill ${s.role === "agent" ? "pay" : "sale"}">${s.role.replace("_", " ")}</span></td>
+              <td class="r num">${fmt(s.collected)}</td>
+              <td class="r num">${fmt(s.handed_over)}</td>
+              <td class="r num">${fmt(s.received)}</td>
+              <td class="r ${s.balance > 0 ? "pos" : s.balance < 0 ? "neg" : "num"}">${fmt(s.balance)}</td>
+            </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="box">
+    <div class="box-head">Sales &amp; Payments — Chronological <em>${chronological.length} entries</em></div>
+    <table>
+      <thead><tr>
+        <th class="c" style="width:14mm">Time</th>
+        <th style="width:16mm">Type</th>
+        <th style="width:24mm">ID</th>
+        <th>Store</th>
+        <th>Product / Note</th>
+        <th class="r">Total</th>
+        <th class="r">Cash</th>
+        <th class="r">UPI</th>
+        <th class="r">Credit</th>
+      </tr></thead>
+      <tbody>
+        ${chronological.length === 0
+          ? '<tr><td colspan="9" class="muted" style="text-align:center">No entries</td></tr>'
+          : chronological.map((e: any) => `<tr>
+            <td class="mono c">${e.time}</td>
+            <td><span class="pill ${e.type === "Sale" ? "sale" : "pay"}">${e.type}</span></td>
+            <td class="mono muted">${e.id}</td>
+            <td>${e.store}</td>
+            <td class="muted">${e.detail}</td>
+            <td class="r num">${fmt(e.total)}</td>
+            <td class="r ${e.cash > 0 ? "pos" : "num"}">${fmt(e.cash)}</td>
+            <td class="r ${e.upi > 0 ? "pos" : "num"}">${fmt(e.upi)}</td>
+            <td class="r ${e.type === "Sale" && e.credit > 0 ? "neg" : "num"}">${e.type === "Payment" ? "—" : fmt(e.credit)}</td>
+          </tr>`).join("")}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="footer">
+    <span>Generated: ${new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })} · BizManager · Confidential</span>
+    <span>Authorised Signature <span class="sig"></span></span>
+    <span>Total Outstanding (All Stores): <strong style="color:var(--neg)">${fmt(d.totalOutstanding)}</strong> · Page 1 of 1</span>
+  </div>
+
+</div>
+</body>
+</html>`;
+
+    const win = window.open("", "_blank");
+    if (win) {
+      win.document.write(html);
+      win.document.close();
+      // Auto-trigger print dialog after fonts load
+      setTimeout(() => win.print(), 800);
     }
-
-    // Payments table (below sales in left column)
-    if (d.txns.length > 0 && ly < ph - 20) {
-      ly = sectionTitle(`Payments (${d.txnCount})`, m, ly);
-      autoTable(doc, {
-        startY: ly, margin: { left: m, right: pw - m - colW },
-        tableWidth: colW,
-        head: [["ID", "Store", "Total", "Cash", "UPI"]],
-        body: d.txns.map((t: any) => [
-          t.display_id, (t.stores?.name || "—").substring(0, 18),
-          fmt(Number(t.total_amount)), fmt(Number(t.cash_amount)), fmt(Number(t.upi_amount)),
-        ]),
-        theme: "striped", styles: tinyStyle, headStyles: headStyle,
-      });
-    }
-
-    // ══════════ RIGHT COLUMN ══════════
-    const rx = m + colW + gutter;
-    let ry = 18;
-
-    // Products sold
-    if (d.productBreakdown.length > 0) {
-      ry = sectionTitle(`Products Sold (${d.productBreakdown.length})`, rx, ry);
-      autoTable(doc, {
-        startY: ry, margin: { left: rx, right: m },
-        tableWidth: colW,
-        head: [["Product", "Qty", "Revenue"]],
-        body: d.productBreakdown.map((p) => [p.name.substring(0, 22), `${p.qty} ${p.unit}`, fmt(p.revenue)]),
-        theme: "striped", styles: tinyStyle, headStyles: headStyle,
-      });
-      ry = (doc as any).lastAutoTable.finalY + 3;
-    }
-
-    // Staff balances
-    if (d.staffBalances.length > 0) {
-      ry = sectionTitle(`Staff Balances (${d.staffBalances.length})`, rx, ry);
-      autoTable(doc, {
-        startY: ry, margin: { left: rx, right: m },
-        tableWidth: colW,
-        head: [["Staff", "Role", "Collected", "Handed", "Pending", "Balance"]],
-        body: d.staffBalances.map((s) => [
-          s.name.substring(0, 14), s.role.replace("_", " "),
-          fmt(s.collected), fmt(s.handed_over), fmt(s.pending_handover), fmt(s.balance),
-        ]),
-        theme: "striped", styles: tinyStyle, headStyles: headStyle,
-      });
-      ry = (doc as any).lastAutoTable.finalY + 3;
-    }
-
-    // Outstanding stores
-    if (d.storesWithOutstanding.length > 0 && ry < ph - 20) {
-      ry = sectionTitle(`Outstanding (${d.storesWithOutstanding.length})`, rx, ry);
-      autoTable(doc, {
-        startY: ry, margin: { left: rx, right: m },
-        tableWidth: colW,
-        head: [["Store ID", "Store", "Outstanding"]],
-        body: d.storesWithOutstanding.slice(0, 20).map((s: any) => [
-          s.display_id, s.name.substring(0, 20), fmt(Number(s.outstanding)),
-        ]),
-        theme: "striped", styles: tinyStyle, headStyles: headStyle,
-      });
-    }
-
-    // ── Footer ──
-    doc.setFontSize(6);
-    doc.setTextColor(150, 150, 150);
-    doc.text(`Generated on ${new Date().toLocaleString("en-IN")}`, m, ph - 3);
-    doc.text("Confidential", pw - m, ph - 3, { align: "right" });
-
-    doc.save(`daily-report-${date}.pdf`);
-    toast.success("PDF downloaded");
+    toast.success("Report opened — use Print → Save as PDF");
   };
 
   const generateExcel = () => {
