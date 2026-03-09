@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   Package,
@@ -16,6 +16,8 @@ import {
   Bell,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
+  ChevronDown,
   Menu,
   X,
   Megaphone,
@@ -27,14 +29,29 @@ import {
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 
+interface NavChild {
+  label: string;
+  path: string;
+}
+
 interface NavItem {
   label: string;
   path: string;
   icon: React.ComponentType<{ className?: string }>;
   badge?: number;
+  children?: NavChild[];
 }
 
-// Role-based navigation configuration
+const REPORT_CHILDREN: NavChild[] = [
+  { label: "Daily Reports", path: "/reports/daily" },
+  { label: "Sales Reports", path: "/reports/sales" },
+  { label: "Order Reports", path: "/reports/orders" },
+  { label: "Agent Performance", path: "/reports/agent" },
+  { label: "Product Reports", path: "/reports/product" },
+  { label: "Payment Reports", path: "/reports/payment" },
+  { label: "Outstanding Reports", path: "/reports/outstanding" },
+];
+
 const NAV_BY_ROLE: Record<string, { main: NavItem[]; secondary: NavItem[] }> = {
   super_admin: {
     main: [
@@ -50,7 +67,7 @@ const NAV_BY_ROLE: Record<string, { main: NavItem[]; secondary: NavItem[] }> = {
       { label: "Map", path: "/map", icon: Map },
     ],
     secondary: [
-      { label: "Reports", path: "/reports", icon: FileText },
+      { label: "Reports", path: "/reports", icon: FileText, children: REPORT_CHILDREN },
       { label: "Analytics", path: "/analytics", icon: BarChart3 },
       { label: "Activity Log", path: "/activity", icon: History },
       { label: "Access Control", path: "/access-control", icon: Shield },
@@ -71,7 +88,7 @@ const NAV_BY_ROLE: Record<string, { main: NavItem[]; secondary: NavItem[] }> = {
       { label: "Map", path: "/map", icon: Map },
     ],
     secondary: [
-      { label: "Reports", path: "/reports", icon: FileText },
+      { label: "Reports", path: "/reports", icon: FileText, children: REPORT_CHILDREN },
       { label: "Analytics", path: "/analytics", icon: BarChart3 },
       { label: "Activity Log", path: "/activity", icon: History },
       { label: "Settings", path: "/settings", icon: Settings },
@@ -114,10 +131,11 @@ const NAV_BY_ROLE: Record<string, { main: NavItem[]; secondary: NavItem[] }> = {
 export function AppSidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
   const location = useLocation();
+  const navigate = useNavigate();
   const { role } = useAuth();
 
-  // Customers see a full portal sidebar
   const isCustomer = role === "customer";
   const customerNav: NavItem[] = [
     { label: "Dashboard", path: "/", icon: LayoutDashboard },
@@ -131,9 +149,79 @@ export function AppSidebar() {
   const visibleMainNav = isCustomer ? customerNav : roleNav.main;
   const visibleSecondaryNav = isCustomer ? [] : roleNav.secondary;
 
+  const toggleExpanded = (path: string) => {
+    setExpandedItems((prev) => ({ ...prev, [path]: !prev[path] }));
+  };
+
   const renderNav = (items: NavItem[]) =>
     items.map((item) => {
+      const hasChildren = item.children && item.children.length > 0;
       const isActive = location.pathname === item.path;
+      const isChildActive = hasChildren && item.children!.some((c) => location.pathname === c.path);
+      const isGroupActive = isActive || isChildActive;
+      const isExpanded = expandedItems[item.path] || isChildActive;
+
+      if (hasChildren) {
+        const handleParentClick = () => {
+          if (collapsed) {
+            navigate(item.children![0].path);
+          } else {
+            toggleExpanded(item.path);
+          }
+        };
+
+        return (
+          <div key={item.path}>
+            <button
+              onClick={handleParentClick}
+              data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}-toggle`}
+              className={cn(
+                "sidebar-item group relative w-full",
+                isGroupActive ? "sidebar-item-active" : "sidebar-item-inactive"
+              )}
+            >
+              <item.icon className={cn("h-5 w-5 shrink-0", isGroupActive ? "text-sidebar-primary" : "")} />
+              {!collapsed && (
+                <>
+                  <span className="truncate">{item.label}</span>
+                  <span className="ml-auto">
+                    {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  </span>
+                </>
+              )}
+              {collapsed && (
+                <div className="absolute left-full ml-2 hidden rounded-md bg-foreground px-2 py-1 text-xs text-background shadow-lg group-hover:block z-50">
+                  {item.label}
+                </div>
+              )}
+            </button>
+            {isExpanded && !collapsed && (
+              <div className="ml-4 mt-1 space-y-0.5 border-l border-sidebar-border pl-3">
+                {item.children!.map((child) => {
+                  const childActive = location.pathname === child.path;
+                  return (
+                    <NavLink
+                      key={child.path}
+                      to={child.path}
+                      onClick={() => setMobileOpen(false)}
+                      data-testid={`nav-${child.label.toLowerCase().replace(/\s+/g, "-")}`}
+                      className={cn(
+                        "flex items-center rounded-md px-3 py-2 text-sm transition-colors",
+                        childActive
+                          ? "text-sidebar-primary font-medium bg-sidebar-accent"
+                          : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
+                      )}
+                    >
+                      <span className="truncate">{child.label}</span>
+                    </NavLink>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      }
+
       return (
         <NavLink
           key={item.path}
@@ -166,7 +254,6 @@ export function AppSidebar() {
 
   const sidebarContent = (
     <div className="flex h-full flex-col">
-      {/* Logo */}
       <div className={cn("flex items-center gap-3 px-4 py-5 border-b border-sidebar-border", collapsed && "justify-center px-2")}>
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground font-bold text-sm shrink-0">
           BM
@@ -179,7 +266,6 @@ export function AppSidebar() {
         )}
       </div>
 
-      {/* Search - desktop only */}
       {!collapsed && (
         <div className="px-3 pt-4 pb-2">
           <button
@@ -195,7 +281,6 @@ export function AppSidebar() {
         </div>
       )}
 
-      {/* Main Nav */}
       <nav className="flex-1 space-y-1 px-3 py-3 overflow-y-auto">
         <p className={cn("px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted", collapsed && "text-center")}>
           {collapsed ? "•" : "Main"}
@@ -213,7 +298,6 @@ export function AppSidebar() {
         )}
       </nav>
 
-      {/* Collapse button */}
       <div className="hidden lg:flex items-center justify-center border-t border-sidebar-border p-3">
         <button
           onClick={() => setCollapsed(!collapsed)}
@@ -227,7 +311,6 @@ export function AppSidebar() {
 
   return (
     <>
-      {/* Mobile trigger */}
       <button
         onClick={() => setMobileOpen(true)}
         className="fixed left-4 top-4 z-40 flex h-10 w-10 items-center justify-center rounded-lg bg-card border border-border shadow-sm lg:hidden"
@@ -235,7 +318,6 @@ export function AppSidebar() {
         <Menu className="h-5 w-5" />
       </button>
 
-      {/* Mobile overlay */}
       {mobileOpen && (
         <div className="fixed inset-0 z-40 bg-foreground/40 backdrop-blur-sm lg:hidden" onClick={() => setMobileOpen(false)}>
           <aside
@@ -253,7 +335,6 @@ export function AppSidebar() {
         </div>
       )}
 
-      {/* Desktop sidebar */}
       <aside
         className={cn(
           "hidden lg:flex h-screen flex-col bg-sidebar border-r border-sidebar-border sticky top-0 transition-all duration-200",
