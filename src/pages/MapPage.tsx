@@ -22,17 +22,30 @@ const MapPage = () => {
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMap = useRef<L.Map | null>(null);
   const userMarkerRef = useRef<L.Marker | null>(null);
+  const agentMarkersRef = useRef<L.Marker[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<string>("");
+  const [filterType, setFilterType] = useState<string>("");
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [locating, setLocating] = useState(false);
 
-  const { data: stores, isLoading } = useQuery({
-    queryKey: ["stores-with-location"],
+  const { data: storeTypes } = useQuery({
+    queryKey: ["store-types-for-map"],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data } = await supabase.from("store_types").select("id, name").order("name");
+      return data || [];
+    },
+  });
+
+  const { data: stores, isLoading } = useQuery({
+    queryKey: ["stores-with-location", filterType],
+    queryFn: async () => {
+      let query = supabase
         .from("stores")
         .select("id, name, display_id, address, lat, lng, outstanding, is_active, phone, store_type_id, route_id, store_types(name), routes(name), customers(name)")
-        .order("name");
+        .order("name")
+        .limit(500);
+      if (filterType) query = query.eq("store_type_id", filterType);
+      const { data } = await query;
       return data || [];
     },
   });
@@ -42,7 +55,7 @@ const MapPage = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from("route_sessions")
-        .select("*, routes(name)")
+        .select("id, user_id, started_at, current_lat, current_lng, location_updated_at, routes(name), profiles(full_name)")
         .eq("status", "active");
       return data || [];
     },
@@ -269,6 +282,31 @@ const MapPage = () => {
     return () => { userMarkerRef.current?.remove(); userMarkerRef.current = null; };
   }, [userLocation]);
 
+  // Agent location markers (real-time)
+  useEffect(() => {
+    if (!leafletMap.current) return;
+    agentMarkersRef.current.forEach((m) => m.remove());
+    agentMarkersRef.current = [];
+    (activeSessions || []).forEach((session: any) => {
+      if (!session.current_lat || !session.current_lng) return;
+      const agentName = session.profiles?.full_name || "Agent";
+      const routeName = session.routes?.name || "Route";
+      const updatedAt = session.location_updated_at
+        ? new Date(session.location_updated_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })
+        : "";
+      const icon = L.divIcon({
+        className: "",
+        html: `<div style="background:#7c3aed;color:white;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:14px;border:2px solid white;box-shadow:0 2px 8px rgba(124,58,237,0.5);">🚶</div>`,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14],
+      });
+      const marker = L.marker([session.current_lat, session.current_lng], { icon, zIndexOffset: 3000 })
+        .addTo(leafletMap.current!)
+        .bindPopup(`<div style="font-family:system-ui;min-width:150px;"><strong>${agentName}</strong><div style="color:#7c3aed;font-size:12px;">${routeName}</div>${updatedAt ? `<div style="color:#888;font-size:11px;">Updated: ${updatedAt}</div>` : ""}</div>`);
+      agentMarkersRef.current.push(marker);
+    });
+  }, [activeSessions]);
+
   if (isLoading) return <TableSkeleton columns={3} rows={5} />;
 
   return (
@@ -294,7 +332,7 @@ const MapPage = () => {
 
       <div className="grid grid-cols-3 sm:grid-cols-5 gap-4">
         <div className="rounded-xl border bg-card p-4 text-center">
-          <p className="text-2xl font-bold">{stores?.length || 0}</p>
+          <p className="text-2xl font-bold">{stores?.length || 0}{(stores?.length || 0) >= 500 ? "+" : ""}</p>
           <p className="text-xs text-muted-foreground">Total Stores</p>
         </div>
         <div className="rounded-xl border bg-card p-4 text-center">
@@ -316,52 +354,71 @@ const MapPage = () => {
       </div>
 
       {/* Route filter + My Location */}
-      <div className="flex flex-wrap items-center gap-3">
-        <select
-          value={selectedRoute}
-          onChange={(e) => setSelectedRoute(e.target.value)}
-          className="rounded-lg border bg-card px-3 py-1.5 text-sm"
-        >
-          <option value="">All Routes</option>
-          {routes?.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-        </select>
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <select
+            value={selectedRoute}
+            onChange={(e) => setSelectedRoute(e.target.value)}
+            className="rounded-lg border bg-card px-3 py-1.5 text-sm"
+          >
+            <option value="">All Routes</option>
+            {routes?.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+          </select>
 
-        <Button variant="outline" size="sm" onClick={locateMe} disabled={locating} className="h-8 gap-1.5">
-          {locating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Navigation className="h-3.5 w-3.5" />}
-          My Location
-        </Button>
+          <select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+            className="rounded-lg border bg-card px-3 py-1.5 text-sm"
+          >
+            <option value="">All Types</option>
+            {storeTypes?.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
 
-        {/* Legend */}
-        {Array.from(storeTypeColorMap.entries()).map(([name, color]) => (
-          <div key={name} className="flex items-center gap-1.5 text-xs">
-            <div className="h-3 w-3 rounded-full border border-white shadow-sm" style={{ backgroundColor: color }} />
-            <span className="text-muted-foreground">{name}</span>
-          </div>
-        ))}
-        <div className="flex items-center gap-1.5 text-xs">
-          <div className="h-3 w-3 rounded-full border border-white shadow-sm bg-green-500" />
-          <span className="text-muted-foreground">Visited</span>
+          <Button variant="outline" size="sm" onClick={locateMe} disabled={locating} className="h-8 gap-1.5">
+            {locating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Navigation className="h-3.5 w-3.5" />}
+            My Location
+          </Button>
         </div>
-        <div className="flex items-center gap-1.5 text-xs">
-          <div className="h-3 w-3 rounded-full border border-white shadow-sm bg-amber-500" />
-          <span className="text-muted-foreground">Pending Order</span>
-        </div>
-        <div className="flex items-center gap-1.5 text-xs">
-          <div className="h-3 w-3 rounded-full border border-white shadow-sm bg-slate-400" />
-          <span className="text-muted-foreground">Inactive</span>
-        </div>
-        {companyCoords && (
+
+        {/* Legend — wraps naturally on mobile */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          {Array.from(storeTypeColorMap.entries()).map(([name, color]) => (
+            <div key={name} className="flex items-center gap-1.5 text-xs">
+              <div className="h-3 w-3 rounded-full border border-white shadow-sm shrink-0" style={{ backgroundColor: color }} />
+              <span className="text-muted-foreground">{name}</span>
+            </div>
+          ))}
           <div className="flex items-center gap-1.5 text-xs">
-            <div className="h-3 w-3 rounded-[3px] border border-white shadow-sm bg-violet-600" />
-            <span className="text-muted-foreground">{companySettings?.company_marker_label || "HQ"}</span>
+            <div className="h-3 w-3 rounded-full border border-white shadow-sm bg-green-500 shrink-0" />
+            <span className="text-muted-foreground">Visited</span>
           </div>
-        )}
-        {userLocation && (
           <div className="flex items-center gap-1.5 text-xs">
-            <div className="h-3 w-3 rounded-full border border-white shadow-sm bg-blue-500 ring-2 ring-blue-200" />
-            <span className="text-muted-foreground">You</span>
+            <div className="h-3 w-3 rounded-full border border-white shadow-sm bg-amber-500 shrink-0" />
+            <span className="text-muted-foreground">Pending Order</span>
           </div>
-        )}
+          <div className="flex items-center gap-1.5 text-xs">
+            <div className="h-3 w-3 rounded-full border border-white shadow-sm bg-slate-400 shrink-0" />
+            <span className="text-muted-foreground">Inactive</span>
+          </div>
+          {companyCoords && (
+            <div className="flex items-center gap-1.5 text-xs">
+              <div className="h-3 w-3 rounded-[3px] border border-white shadow-sm bg-violet-600 shrink-0" />
+              <span className="text-muted-foreground">{companySettings?.company_marker_label || "HQ"}</span>
+            </div>
+          )}
+          {userLocation && (
+            <div className="flex items-center gap-1.5 text-xs">
+              <div className="h-3 w-3 rounded-full border border-white shadow-sm bg-blue-500 ring-2 ring-blue-200 shrink-0" />
+              <span className="text-muted-foreground">You</span>
+            </div>
+          )}
+          {activeSessions && activeSessions.some((s: any) => s.current_lat) && (
+            <div className="flex items-center gap-1.5 text-xs">
+              <span className="text-sm leading-none">🚶</span>
+              <span className="text-muted-foreground">Agent (live)</span>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="rounded-xl border bg-card overflow-hidden">

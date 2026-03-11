@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { parseUpiQr } from "@/lib/upiParser";
 import { getCurrentPosition } from "@/lib/proximity";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   ScanLine, MapPin, ShoppingCart, Banknote, CheckCircle,
   Navigation, Loader2, Camera, RefreshCw, X, Store,
@@ -37,6 +38,8 @@ interface NearbyStore {
 
 export function QuickActionDrawer() {
   const navigate = useNavigate();
+  const { role } = useAuth();
+  const isAdmin = role === "super_admin" || role === "manager";
   const [open, setOpen] = useState(false);
 
   // scanner state
@@ -552,12 +555,20 @@ export function QuickActionDrawer() {
               </div>
               <p className="text-sm text-muted-foreground">This QR is not linked to any store. What would you like to do?</p>
               <div className="flex flex-col gap-2">
-                <Button onClick={handleCreateStore} className="gap-2 w-full">
-                  <Store className="h-4 w-4" /> Create New Store
-                </Button>
-                <Button variant="outline" onClick={handleLinkStore} className="gap-2 w-full">
-                  <MapPin className="h-4 w-4" /> Link to Existing Store
-                </Button>
+                {isAdmin ? (
+                  <>
+                    <Button onClick={handleCreateStore} className="gap-2 w-full">
+                      <Store className="h-4 w-4" /> Create New Store
+                    </Button>
+                    <Button variant="outline" onClick={handleLinkStore} className="gap-2 w-full">
+                      <MapPin className="h-4 w-4" /> Link to Existing Store
+                    </Button>
+                  </>
+                ) : (
+                  <div className="rounded-lg border bg-muted/40 p-3 text-sm text-muted-foreground text-center">
+                    This QR is not linked to any store yet. Ask your manager to set it up, then try scanning again.
+                  </div>
+                )}
               </div>
             </div>
           ) : (

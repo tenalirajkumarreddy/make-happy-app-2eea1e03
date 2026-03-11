@@ -1,11 +1,12 @@
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MapPin, Store, Loader2 } from "lucide-react";
+import { MapPin, Store, Loader2, ChevronRight } from "lucide-react";
 import { RouteSessionPanel } from "@/components/routes/RouteSessionPanel";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -19,6 +20,7 @@ import { toast } from "sonner";
 
 const Routes = () => {
   const { role } = useAuth();
+  const navigate = useNavigate();
   const [showAdd, setShowAdd] = useState(false);
   const [name, setName] = useState("");
   const [storeTypeId, setStoreTypeId] = useState("");
@@ -93,10 +95,14 @@ const Routes = () => {
                     const storeCount = route.stores?.length || 0;
                     const totalOutstanding = route.stores?.reduce((sum: number, s: any) => sum + Number(s.outstanding || 0), 0) || 0;
                     return (
-                      <div key={route.id} className="flex items-center justify-between rounded-xl border bg-card p-5 hover:shadow-sm transition-shadow">
+                      <div
+                        key={route.id}
+                        className="flex items-center justify-between rounded-xl border bg-card p-5 hover:shadow-md hover:bg-accent/20 transition-all cursor-pointer group"
+                        onClick={() => navigate(`/routes/${route.id}`)}
+                      >
                         <div className="flex items-center gap-4">
-                          <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-accent">
-                            <MapPin className="h-5 w-5 text-accent-foreground" />
+                          <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary/10">
+                            <MapPin className="h-5 w-5 text-primary" />
                           </div>
                           <div>
                             <h3 className="font-semibold">{route.name}</h3>
@@ -106,6 +112,7 @@ const Routes = () => {
                             </div>
                           </div>
                         </div>
+                        <ChevronRight className="h-5 w-5 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors shrink-0" />
                       </div>
                     );
                   })

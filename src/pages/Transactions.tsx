@@ -4,12 +4,13 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { logActivity } from "@/lib/activityLogger";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
+import { addToQueue } from "@/lib/offlineQueue";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2, X, CalendarIcon, Store as StoreIcon, Banknote, CreditCard } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { QrStoreSelector } from "@/components/shared/QrStoreSelector";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { usePermission } from "@/hooks/usePermission";
 import {
@@ -35,6 +36,7 @@ const Transactions = () => {
   const [showAdd, setShowAdd] = useState(false);
   const [saving, setSaving] = useState(false);
   const [storeId, setStoreId] = useState(searchParams.get("store") ?? "");
+  const PAGE_SIZE = 100;
 
   // When navigated with ?store=<id>, auto-open the add dialog
   useEffect(() => {
@@ -59,23 +61,43 @@ const Transactions = () => {
   const [filterTo, setFilterTo] = useState(today);
   const [filterStore, setFilterStore] = useState("all");
   const [filterPayment, setFilterPayment] = useState("all");
+  const [loadedPages, setLoadedPages] = useState(1);
 
-  const { data: transactions, isLoading, isError, error: txnError } = useQuery({
-    queryKey: ["transactions"],
+  // Reset to page 1 whenever any filter changes
+  useEffect(() => {
+    setLoadedPages(1);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterFrom, filterTo, filterStore, filterPayment]);
+
+  const { data: transactions, isLoading, isError, error: txnError, isFetching } = useQuery({
+    queryKey: ["transactions", isAdmin ? "all" : user?.id, filterFrom, filterTo, filterStore, filterPayment, loadedPages],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("transactions")
         .select("*, stores(name)")
         .order("created_at", { ascending: false });
+      // Non-admin roles only see their own records
+      if (!isAdmin) query = query.eq("recorded_by", user!.id);
+      // Server-side filters
+      if (filterFrom) query = query.gte("created_at", filterFrom + "T00:00:00");
+      if (filterTo) query = query.lte("created_at", filterTo + "T23:59:59");
+      if (filterStore !== "all") query = query.eq("store_id", filterStore);
+      if (filterPayment === "cash") query = query.gt("cash_amount", 0);
+      if (filterPayment === "upi") query = query.gt("upi_amount", 0);
+      // Cursor pagination
+      query = query.range(0, loadedPages * PAGE_SIZE - 1);
+      const { data, error } = await query;
       if (error) throw error;
       return data;
     },
   });
 
+  const hasMoreTransactions = (transactions?.length || 0) >= loadedPages * PAGE_SIZE;
+
   const { data: stores } = useQuery({
     queryKey: ["stores-for-txn"],
     queryFn: async () => {
-      const { data } = await supabase.from("stores").select("id, name, outstanding, display_id, customer_id").eq("is_active", true);
+      const { data } = await supabase.from("stores").select("id, name, outstanding, display_id, customer_id, is_active").order("is_active", { ascending: false }).order("name");
       return data || [];
     },
   });
@@ -137,6 +159,38 @@ const Transactions = () => {
     }
 
     setSaving(true);
+
+    // Queue transaction for offline sync if no network connection
+    if (!navigator.onLine) {
+      const effectiveRecordedByOffline = recordedFor || user!.id;
+      const loggedByOffline = recordedFor ? user!.id : null;
+      await addToQueue({
+        id: crypto.randomUUID(),
+        type: "transaction",
+        payload: {
+          txData: {
+            store_id: storeId,
+            customer_id: customerId,
+            recorded_by: effectiveRecordedByOffline,
+            logged_by: loggedByOffline,
+            cash_amount: cash,
+            upi_amount: upi,
+            total_amount: totalPayment,
+            old_outstanding: oldOutstanding,
+            new_outstanding: newOutstanding,
+            notes: notes || null,
+            ...(txnDate ? { created_at: new Date(txnDate).toISOString() } : {}),
+          },
+          storeUpdate: { outstanding: newOutstanding },
+        },
+        createdAt: new Date().toISOString(),
+      });
+      toast.warning("You're offline — transaction queued and will sync automatically when back online");
+      setSaving(false);
+      setShowAdd(false);
+      resetForm();
+      return;
+    }
 
     const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "PAY", seq_name: "pay_display_seq" });
 
@@ -210,17 +264,8 @@ const Transactions = () => {
     qc.invalidateQueries({ queryKey: ["transactions"] });
   };
 
-  const filteredTransactions = useMemo(() => {
-    return (transactions || []).filter((t: any) => {
-      const date = new Date(t.created_at);
-      if (filterFrom && date < new Date(filterFrom + "T00:00:00")) return false;
-      if (filterTo && date > new Date(filterTo + "T23:59:59")) return false;
-      if (filterStore !== "all" && t.store_id !== filterStore) return false;
-      if (filterPayment === "cash" && Number(t.cash_amount) === 0) return false;
-      if (filterPayment === "upi" && Number(t.upi_amount) === 0) return false;
-      return true;
-    });
-  }, [transactions, filterFrom, filterTo, filterStore, filterPayment]);
+  // Filtering is now done server-side; local array mirrors the fetched page(s)
+  const filteredTransactions = transactions || [];
 
   const activeTxnFilterCount = [filterStore !== "all", filterPayment !== "all", filterFrom !== thirtyDaysAgo, filterTo !== today].filter(Boolean).length;
 
@@ -304,7 +349,7 @@ const Transactions = () => {
             <X className="h-3 w-3 mr-1" /> Clear ({activeTxnFilterCount})
           </Button>
         )}
-        <span className="ml-auto text-xs text-muted-foreground">{filteredTransactions.length} result{filteredTransactions.length !== 1 ? "s" : ""}</span>
+        <span className="ml-auto text-xs text-muted-foreground">{filteredTransactions.length}{hasMoreTransactions ? "+" : ""} result{filteredTransactions.length !== 1 ? "s" : ""}</span>
       </div>
 
       <DataTable
@@ -312,6 +357,7 @@ const Transactions = () => {
         data={filteredTransactions}
         searchKey="display_id"
         searchPlaceholder="Search by payment ID..."
+        emptyMessage="No transactions recorded yet."
         renderMobileCard={(row: any) => (
           <div className="rounded-xl border bg-card p-4 shadow-sm hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between mb-3">
@@ -357,6 +403,15 @@ const Transactions = () => {
         )}
       />
 
+      {hasMoreTransactions && (
+        <div className="flex justify-center pt-2">
+          <Button variant="outline" size="sm" onClick={() => setLoadedPages((p) => p + 1)} disabled={isFetching} className="gap-1.5">
+            {isFetching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+            Load more
+          </Button>
+        </div>
+      )}
+
       <Dialog open={showAdd} onOpenChange={(v) => { setShowAdd(v); if (!v) resetForm(); }}>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>Record Transaction</DialogTitle></DialogHeader>
@@ -391,7 +446,11 @@ const Transactions = () => {
               <div className="flex gap-2 mt-1">
                 <Select value={storeId} onValueChange={setStoreId}>
                   <SelectTrigger className="flex-1"><SelectValue placeholder="Select store" /></SelectTrigger>
-                  <SelectContent>{stores?.map((s) => <SelectItem key={s.id} value={s.id}>{s.name} ({s.display_id})</SelectItem>)}</SelectContent>
+                  <SelectContent>{stores?.map((s) => (
+                      <SelectItem key={s.id} value={s.id} disabled={!(s as any).is_active}>
+                        {s.name} ({s.display_id}){!(s as any).is_active ? " — Inactive" : ""}
+                      </SelectItem>
+                    ))}</SelectContent>
                 </Select>
                 <QrStoreSelector onStoreSelected={setStoreId} />
               </div>

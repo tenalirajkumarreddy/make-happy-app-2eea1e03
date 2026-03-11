@@ -256,7 +256,7 @@ const Products = () => {
         renderMobileCard={(row: any) => (
           <div className="rounded-xl border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow active:bg-muted/30" onClick={() => { if (selectMode) { toggleSelect(row.id); } else if (canEdit) { openEdit(row); } }}>
             <div className="flex">
-              <div className="w-20 h-20 shrink-0 bg-muted flex items-center justify-center overflow-hidden">
+              <div className="w-24 self-stretch shrink-0 bg-muted flex items-center justify-center overflow-hidden">
                 {row.image_url ? (
                   <img src={row.image_url} alt={row.name} className="w-full h-full object-cover" />
                 ) : (

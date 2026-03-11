@@ -3,12 +3,16 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ShoppingCart, Banknote, Smartphone, MapPin, HandCoins, AlertCircle } from "lucide-react";
+import { ShoppingCart, Banknote, Smartphone, MapPin, HandCoins, AlertCircle, WifiOff, RefreshCw, Loader2 } from "lucide-react";
 import { DashboardSkeleton } from "@/components/shared/DashboardSkeleton";
 import { QuickActionDrawer } from "@/components/agent/QuickActionDrawer";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import { Button } from "@/components/ui/button";
+import { RouteSessionPanel } from "@/components/routes/RouteSessionPanel";
 
 const AgentDashboard = () => {
   const { user, profile } = useAuth();
+  const { isOnline, pendingCount, syncing, syncQueue } = useOnlineStatus();
 
   const { data: stats, isLoading } = useQuery({
     queryKey: ["agent-dashboard", user?.id],
@@ -63,6 +67,26 @@ const AgentDashboard = () => {
     <div className="space-y-6 animate-fade-in">
       <PageHeader title="Dashboard" subtitle={`Welcome, ${profile?.full_name || "Agent"}! Here's your daily summary.`} />
 
+      {/* Offline / pending sync banner */}
+      {(!isOnline || pendingCount > 0) && (
+        <div className={`flex items-center justify-between gap-3 rounded-lg border px-4 py-3 text-sm ${!isOnline ? "border-destructive/30 bg-destructive/5 text-destructive" : "border-warning/30 bg-warning/5 text-warning"}`}>
+          <div className="flex items-center gap-2">
+            <WifiOff className="h-4 w-4 shrink-0" />
+            <span>
+              {!isOnline
+                ? `You're offline${pendingCount > 0 ? ` — ${pendingCount} action${pendingCount > 1 ? "s" : ""} queued` : ""}`
+                : `${pendingCount} action${pendingCount > 1 ? "s" : ""} pending sync`}
+            </span>
+          </div>
+          {isOnline && pendingCount > 0 && (
+            <Button size="sm" variant="outline" onClick={syncQueue} disabled={syncing} className="h-7 gap-1.5 text-xs shrink-0">
+              {syncing ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+              Sync Now
+            </Button>
+          )}
+        </div>
+      )}
+
       {/* Quick Action Button - Floating */}
       <div className="fixed bottom-6 right-4 z-50 sm:bottom-8 sm:right-8">
         <QuickActionDrawer />
@@ -76,6 +100,9 @@ const AgentDashboard = () => {
         <StatCard title="Today's Handoverable" value={`₹${s.todayHandoverable.toLocaleString()}`} icon={HandCoins} iconColor="bg-orange-500" />
         <StatCard title="Pending Handover" value={`₹${s.totalPendingHandoverable.toLocaleString()}`} icon={AlertCircle} iconColor="bg-destructive" />
       </div>
+
+      {/* Route session — next store navigation */}
+      <RouteSessionPanel />
 
       <div className="rounded-xl border bg-card p-5">
         <h3 className="text-sm font-semibold mb-4">Pending Orders</h3>

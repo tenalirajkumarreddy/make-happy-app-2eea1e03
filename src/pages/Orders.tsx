@@ -9,7 +9,7 @@ import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2, Plus, Trash2, XCircle, CheckCircle2, Download, X, CalendarIcon } from "lucide-react";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
-import { useState, useMemo } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -41,6 +41,8 @@ const Orders = () => {
   const [cancelReason, setCancelReason] = useState("");
   const [cancelling, setCancelling] = useState(false);
   const [deliveringId, setDeliveringId] = useState<string | null>(null);
+  const [confirmDeliverId, setConfirmDeliverId] = useState<string | null>(null);
+  const [delivering, setDelivering] = useState(false);
 
   // List filters
   const today = new Date().toISOString().split("T")[0];
@@ -48,6 +50,14 @@ const Orders = () => {
   const [filterFrom, setFilterFrom] = useState(thirtyDaysAgo);
   const [filterTo, setFilterTo] = useState(today);
   const [filterCustomer, setFilterCustomer] = useState("all");
+  const PAGE_SIZE = 100;
+  const [loadedPages, setLoadedPages] = useState(1);
+
+  // Reset to page 1 whenever any filter changes
+  useEffect(() => {
+    setLoadedPages(1);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter, filterFrom, filterTo, filterCustomer]);
 
   // Form state
   const [customerId, setCustomerId] = useState("");
@@ -56,17 +66,27 @@ const Orders = () => {
   const [requirementNote, setRequirementNote] = useState("");
   const [orderItems, setOrderItems] = useState<OrderItem[]>([{ product_id: "", quantity: 1 }]);
 
-  const { data: orders, isLoading } = useQuery({
-    queryKey: ["orders"],
+  const { data: orders, isLoading, isFetching } = useQuery({
+    queryKey: ["orders", statusFilter, filterFrom, filterTo, filterCustomer, loadedPages],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("orders")
         .select("*, stores(name), customers(name)")
         .order("created_at", { ascending: false });
+      // Server-side filters
+      if (statusFilter !== "all") query = query.eq("status", statusFilter);
+      if (filterFrom) query = query.gte("created_at", filterFrom + "T00:00:00");
+      if (filterTo) query = query.lte("created_at", filterTo + "T23:59:59");
+      if (filterCustomer !== "all") query = query.eq("customer_id", filterCustomer);
+      // Cursor pagination
+      query = query.range(0, loadedPages * PAGE_SIZE - 1);
+      const { data, error } = await query;
       if (error) throw error;
       return data;
     },
   });
+
+  const hasMoreOrders = (orders?.length || 0) >= loadedPages * PAGE_SIZE;
 
   const { data: customers } = useQuery({
     queryKey: ["customers"],
@@ -158,17 +178,18 @@ const Orders = () => {
   };
 
   const handleMarkDelivered = async (orderId: string) => {
-    setDeliveringId(orderId);
+    setDelivering(true);
     const { error } = await supabase
       .from("orders")
       .update({ status: "delivered", delivered_at: new Date().toISOString() })
       .eq("id", orderId)
       .eq("status", "pending");
-    setDeliveringId(null);
+    setDelivering(false);
     if (error) { toast.error(error.message); return; }
     const order = orders?.find((o) => o.id === orderId);
     logActivity(user!.id, "Marked order delivered", "order", order?.display_id || "", orderId);
     toast.success("Order marked as delivered");
+    setConfirmDeliverId(null);
     qc.invalidateQueries({ queryKey: ["orders"] });
   };
 
@@ -231,16 +252,8 @@ const Orders = () => {
     qc.invalidateQueries({ queryKey: ["orders"] });
   };
 
-  const filteredOrders = useMemo(() => {
-    return (orders || []).filter((o: any) => {
-      if (statusFilter !== "all" && o.status !== statusFilter) return false;
-      const date = new Date(o.created_at);
-      if (filterFrom && date < new Date(filterFrom + "T00:00:00")) return false;
-      if (filterTo && date > new Date(filterTo + "T23:59:59")) return false;
-      if (filterCustomer !== "all" && o.customer_id !== filterCustomer) return false;
-      return true;
-    });
-  }, [orders, statusFilter, filterFrom, filterTo, filterCustomer]);
+  // Filtering is now done server-side; local array mirrors the fetched page(s)
+  const filteredOrders = orders || [];
 
   const activeOrderFilterCount = [filterCustomer !== "all", filterFrom !== thirtyDaysAgo, filterTo !== today].filter(Boolean).length;
 
@@ -262,8 +275,8 @@ const Orders = () => {
       header: "Actions",
       accessor: (row: any) => row.status === "pending" ? (
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" className="h-7 text-xs text-green-600" onClick={() => handleMarkDelivered(row.id)} disabled={deliveringId === row.id}>
-            {deliveringId === row.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5 mr-1" />}
+          <Button variant="ghost" size="sm" className="h-7 text-xs text-green-600" onClick={() => setConfirmDeliverId(row.id)} disabled={deliveringId === row.id}>
+            <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
             Deliver
           </Button>
           <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive" onClick={() => setCancelOrderId(row.id)}>
@@ -328,7 +341,7 @@ const Orders = () => {
             <X className="h-3 w-3 mr-1" /> Clear ({activeOrderFilterCount})
           </Button>
         )}
-        <span className="ml-auto text-xs text-muted-foreground">{filteredOrders.length} result{filteredOrders.length !== 1 ? "s" : ""}</span>
+        <span className="ml-auto text-xs text-muted-foreground">{filteredOrders.length}{hasMoreOrders ? "+" : ""} result{filteredOrders.length !== 1 ? "s" : ""}</span>
       </div>
 
       <DataTable
@@ -336,6 +349,7 @@ const Orders = () => {
         data={filteredOrders}
         searchKey="display_id"
         searchPlaceholder="Search by order ID..."
+        emptyMessage={statusFilter === "all" ? "No orders created yet." : `No ${statusFilter} orders.`}
         renderMobileCard={(row: any) => (
           <div className="rounded-xl border bg-card p-4 shadow-sm hover:shadow-md transition-shadow active:bg-muted/30">
             <div className="flex items-start justify-between gap-2">
@@ -354,8 +368,8 @@ const Orders = () => {
               <p className="text-xs text-muted-foreground">{new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}</p>
               {row.status === "pending" && (
                 <div className="flex items-center gap-1.5">
-                  <Button variant="outline" size="sm" className="h-7 text-xs text-green-600 border-green-600/40" onClick={(e) => { e.stopPropagation(); handleMarkDelivered(row.id); }} disabled={deliveringId === row.id}>
-                    {deliveringId === row.id ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <CheckCircle2 className="h-3 w-3 mr-1" />}Deliver
+                  <Button variant="outline" size="sm" className="h-7 text-xs text-green-600 border-green-600/40" onClick={(e) => { e.stopPropagation(); setConfirmDeliverId(row.id); }}>
+                    <CheckCircle2 className="h-3 w-3 mr-1" />Deliver
                   </Button>
                   <Button variant="outline" size="sm" className="h-7 text-xs text-destructive border-destructive/40" onClick={(e) => { e.stopPropagation(); setCancelOrderId(row.id); }}>
                     <XCircle className="h-3 w-3 mr-1" />Cancel
@@ -369,6 +383,15 @@ const Orders = () => {
           </div>
         )}
       />
+
+      {hasMoreOrders && (
+        <div className="flex justify-center pt-2">
+          <Button variant="outline" size="sm" onClick={() => setLoadedPages((p) => p + 1)} disabled={isFetching} className="gap-1.5">
+            {isFetching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+            Load more
+          </Button>
+        </div>
+      )}
 
       <Dialog open={showAdd} onOpenChange={(v) => { setShowAdd(v); if (!v) resetForm(); }}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
@@ -432,6 +455,25 @@ const Orders = () => {
               Create Order
             </Button>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm Delivery Dialog */}
+      <Dialog open={!!confirmDeliverId} onOpenChange={(v) => { if (!v) setConfirmDeliverId(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Mark as Delivered</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Confirm that order <span className="font-mono font-medium text-foreground">{orders?.find((o) => o.id === confirmDeliverId)?.display_id}</span> has been delivered to the store?
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setConfirmDeliverId(null)}>Cancel</Button>
+              <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={() => confirmDeliverId && handleMarkDelivered(confirmDeliverId)} disabled={delivering}>
+                {delivering && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Confirm Delivery
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 

@@ -64,6 +64,7 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
   // Pricing step
   const [priceMap, setPriceMap] = useState<Record<string, string>>({});
   const [duplicateWarnings, setDuplicateWarnings] = useState<string[]>([]);
+  const [locationHardBlock, setLocationHardBlock] = useState(false);
   const [checkingDupes, setCheckingDupes] = useState(false);
   const [custDuplicate, setCustDuplicate] = useState<{ id: string; name: string; display_id: string } | null>(null);
 
@@ -80,29 +81,40 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
   const checkDuplicates = async () => {
     setCheckingDupes(true);
     const warnings: string[] = [];
+    let hardBlock = false;
     const { data: existingStores } = await supabase
       .from("stores")
       .select("id, name, phone, lat, lng, display_id")
       .eq("is_active", true);
     if (existingStores) {
       for (const s of existingStores) {
-        if (name.trim() && s.name.toLowerCase() === name.trim().toLowerCase()) {
-          warnings.push(`Store "${s.name}" (${s.display_id}) has the same name`);
+        const nameTrimmed = name.trim();
+        const nameMatches = nameTrimmed && s.name.toLowerCase() === nameTrimmed.toLowerCase();
+        if (nameMatches) {
+          // Suggest area-suffix when area is available
+          const suffix = area.trim() || district.trim() || city.trim();
+          const suggestion = suffix ? ` → Try "${nameTrimmed} (${suffix})" instead` : "";
+          warnings.push(`Store "${s.name}" (${s.display_id}) has the same name.${suggestion}`);
         }
         if (phone.trim() && s.phone && s.phone === phone.trim()) {
           warnings.push(`Store "${s.name}" (${s.display_id}) has the same phone number`);
         }
         if (lat && lng && s.lat && s.lng) {
           const dist = getDistanceMeters(lat, lng, s.lat, s.lng);
-          if (dist < 100) {
+          if (dist < 5) {
+            // Hard block — same physical location
+            hardBlock = true;
+            warnings.push(`Store "${s.name}" (${s.display_id}) is at the same location (${Math.round(dist)}m away) — cannot create a duplicate store here`);
+          } else if (dist < 100) {
             warnings.push(`Store "${s.name}" (${s.display_id}) is only ${Math.round(dist)}m away`);
           }
         }
       }
     }
+    setLocationHardBlock(hardBlock);
     setDuplicateWarnings(warnings);
     setCheckingDupes(false);
-    return warnings;
+    return { warnings, hardBlock };
   };
 
   const { data: customers } = useQuery({
@@ -217,6 +229,8 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
     setObAmount("");
     setObType("debit");
     setPriceMap({});
+    setDuplicateWarnings([]);
+    setLocationHardBlock(false);
   };
 
   const handleSave = async () => {
@@ -489,25 +503,26 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
             {duplicateWarnings.length > 0 && (
               <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>Possible Duplicates Found</AlertTitle>
+                <AlertTitle>{locationHardBlock ? "Duplicate Location — Cannot Proceed" : "Possible Duplicates Found"}</AlertTitle>
                 <AlertDescription>
                   <ul className="list-disc pl-4 text-xs space-y-0.5 mt-1">
                     {duplicateWarnings.map((w, i) => <li key={i}>{w}</li>)}
                   </ul>
-                  <p className="text-xs mt-2">You can still proceed if this is intentional.</p>
+                  {!locationHardBlock && <p className="text-xs mt-2">You can still proceed if this is intentional.</p>}
                 </AlertDescription>
               </Alert>
             )}
 
             <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => { setStep("customer"); setDuplicateWarnings([]); }}>
+              <Button variant="outline" className="flex-1" onClick={() => { setStep("customer"); setDuplicateWarnings([]); setLocationHardBlock(false); }}>
                 <ChevronLeft className="mr-1 h-4 w-4" /> Back
               </Button>
               <Button
                 className="flex-1"
-                disabled={!canGoToPricing || checkingDupes}
+                disabled={!canGoToPricing || checkingDupes || locationHardBlock}
                 onClick={async () => {
-                  const warnings = await checkDuplicates();
+                  const { warnings, hardBlock } = await checkDuplicates();
+                  if (hardBlock) return; // same-location hard block — cannot proceed
                   if (warnings.length === 0 || duplicateWarnings.length > 0) {
                     setStep("pricing");
                   }

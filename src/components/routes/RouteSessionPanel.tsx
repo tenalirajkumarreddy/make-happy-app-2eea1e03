@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -34,9 +34,9 @@ export function RouteSessionPanel() {
   const { data: activeSession, isLoading: loadingSession } = useQuery({
     queryKey: ["active-route-session", user?.id],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data } = await (supabase as any)
         .from("route_sessions")
-        .select("*, routes(name, stores(id, name, address, lat, lng))")
+        .select("*, routes(name, stores(id, name, address, lat, lng, store_order))")
         .eq("user_id", user!.id)
         .eq("status", "active")
         .maybeSingle();
@@ -82,24 +82,47 @@ export function RouteSessionPanel() {
     },
   });
 
-  // Get agent location periodically
-  useMemo(() => {
-    if (!activeSession) return;
-    if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
-      (pos) => setAgentLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => {},
-      { timeout: 5000 }
-    );
-  }, [activeSession]);
+  // Continuously track agent location during an active session and push to DB
+  const locationWatchRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!activeSession || !navigator.geolocation) return;
 
-  // Sort stores: unvisited first, then by distance if agent location available
+    const pushLocation = async (lat: number, lng: number) => {
+      setAgentLocation({ lat, lng });
+      await supabase.from("route_sessions").update({
+        current_lat: lat,
+        current_lng: lng,
+        location_updated_at: new Date().toISOString(),
+      }).eq("id", activeSession.id);
+    };
+
+    locationWatchRef.current = navigator.geolocation.watchPosition(
+      (pos) => pushLocation(pos.coords.latitude, pos.coords.longitude),
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 30000, timeout: 10000 }
+    );
+
+    return () => {
+      if (locationWatchRef.current !== null) {
+        navigator.geolocation.clearWatch(locationWatchRef.current);
+        locationWatchRef.current = null;
+      }
+    };
+  }, [activeSession?.id]);
+
+  // Sort stores: unvisited first, then by pre-computed store_order (optimal route),
+  // falling back to live distance from agent if no order set.
   const sortedStores = useMemo(() => {
     const stores = [...routeStores];
     stores.sort((a: any, b: any) => {
       const aVisited = visits?.has(a.id) ? 1 : 0;
       const bVisited = visits?.has(b.id) ? 1 : 0;
       if (aVisited !== bVisited) return aVisited - bVisited;
+      // Primary: pre-computed optimal order
+      if (a.store_order != null && b.store_order != null) return a.store_order - b.store_order;
+      if (a.store_order != null) return -1;
+      if (b.store_order != null) return 1;
+      // Fallback: live distance from agent
       if (agentLocation && a.lat && a.lng && b.lat && b.lng) {
         const distA = haversineDistance(agentLocation.lat, agentLocation.lng, a.lat, a.lng);
         const distB = haversineDistance(agentLocation.lat, agentLocation.lng, b.lat, b.lng);

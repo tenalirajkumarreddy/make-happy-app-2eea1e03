@@ -359,7 +359,7 @@ const Stores = () => {
         renderMobileCard={(row: any) => (
           <div className={`rounded-xl border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow active:bg-muted/30 ${!row.is_active ? "opacity-60" : ""}`}>
             <div className="flex">
-              <div className="w-20 h-20 shrink-0 bg-muted flex items-center justify-center overflow-hidden">
+              <div className="w-24 self-stretch shrink-0 bg-muted flex items-center justify-center overflow-hidden">
                 {row.photo_url ? (
                   <img src={row.photo_url} alt={row.name} className="w-full h-full object-cover" />
                 ) : (
@@ -371,16 +371,15 @@ const Stores = () => {
                   <h3 className="font-semibold text-sm text-foreground truncate">{row.name}</h3>
                   <StatusBadge status={row.is_active ? "active" : "inactive"} />
                 </div>
-                <p className="text-xs text-muted-foreground mt-0.5">{row.customers?.name || "—"}</p>
+                <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                  {row.customers?.name || "—"}{row.routes?.name ? ` · ${row.routes.name}` : ""}
+                </p>
                 <div className="flex items-center gap-3 mt-1.5">
                   <span className="text-sm font-bold text-foreground">₹{Number(row.outstanding).toLocaleString()}</span>
                   {row.store_types?.name && (
                     <Badge variant="secondary" className="text-[10px] h-5">{row.store_types.name}</Badge>
                   )}
                 </div>
-                {row.routes?.name && (
-                  <p className="text-[11px] text-muted-foreground mt-1">Route: {row.routes.name}</p>
-                )}
               </div>
             </div>
           </div>

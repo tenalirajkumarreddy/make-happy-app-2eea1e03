@@ -21,10 +21,11 @@ const Dashboard = () => {
     queryKey: ["dashboard-stats"],
     queryFn: async () => {
       const today = new Date().toISOString().split("T")[0];
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
 
       const [salesRes, txnRes, customersRes, storesRes, ordersRes, todaySalesRes] = await Promise.all([
-        supabase.from("sales").select("total_amount, cash_amount, upi_amount, created_at, stores(store_type_id, store_types(name))"),
-        supabase.from("transactions").select("total_amount, cash_amount, upi_amount"),
+        supabase.from("sales").select("total_amount, cash_amount, upi_amount, created_at, stores(store_type_id, store_types(name))").gte("created_at", thirtyDaysAgo + "T00:00:00"),
+        supabase.from("transactions").select("total_amount, cash_amount, upi_amount").gte("created_at", thirtyDaysAgo + "T00:00:00"),
         supabase.from("customers").select("id").eq("is_active", true),
         supabase.from("stores").select("id, outstanding").eq("is_active", true),
         supabase.from("orders").select("id, status, display_id, stores(name), created_at").eq("status", "pending").order("created_at", { ascending: false }).limit(5),

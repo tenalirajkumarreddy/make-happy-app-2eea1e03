@@ -452,9 +452,22 @@ const StoreDetail = () => {
       )}
 
       <Card className={`overflow-hidden ${isInactive ? "opacity-75" : ""}`}>
-        <div className="h-20 sm:h-28 bg-gradient-to-r from-accent/40 via-primary/15 to-accent/20" />
-        <CardContent className="relative px-4 sm:px-6 pb-6 -mt-10 sm:-mt-12">
-          <div className="flex flex-col sm:flex-row sm:items-end gap-4">
+        {/* Banner */}
+        <div className="h-24 sm:h-32 bg-gradient-to-br from-primary/20 via-accent/30 to-primary/10 relative">
+          {store.lat && store.lng && (
+            <a
+              href={`https://www.google.com/maps?q=${store.lat},${store.lng}`}
+              target="_blank" rel="noopener noreferrer"
+              className="absolute top-3 right-3 flex items-center gap-1.5 text-xs font-medium bg-card/80 backdrop-blur-sm rounded-full px-3 py-1.5 text-primary hover:bg-card transition-colors shadow-sm"
+            >
+              <MapPin className="h-3.5 w-3.5" /> Map
+            </a>
+          )}
+        </div>
+
+        <CardContent className="relative px-4 sm:px-6 pb-5 -mt-10 sm:-mt-12">
+          {/* Identity row: photo + name/id */}
+          <div className="flex items-end gap-4">
             <div className="h-20 w-20 sm:h-24 sm:w-24 rounded-xl border-4 border-card bg-muted flex items-center justify-center overflow-hidden shadow-md shrink-0">
               {store.photo_url ? (
                 <img src={store.photo_url} alt={store.name} className="w-full h-full object-cover" />
@@ -462,10 +475,9 @@ const StoreDetail = () => {
                 <StoreIcon className="h-10 w-10 text-muted-foreground/40" />
               )}
             </div>
-
-            <div className="flex-1 min-w-0 sm:pb-1">
+            <div className="flex-1 min-w-0 pb-1">
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-xl sm:text-2xl font-bold text-foreground truncate">{store.name}</h1>
+                <h1 className="text-xl sm:text-2xl font-bold text-foreground leading-tight">{store.name}</h1>
                 <StatusBadge status={store.is_active ? "active" : "inactive"} />
               </div>
               <div className="flex flex-wrap items-center gap-2 mt-1">
@@ -475,56 +487,52 @@ const StoreDetail = () => {
                 )}
               </div>
             </div>
+          </div>
 
-            <div className="flex items-center gap-3 shrink-0 sm:pb-1 flex-wrap">
-              {canEdit && (
-                <>
-                  <div className="flex items-center gap-2">
-                    <Label htmlFor="store-active-toggle" className="text-xs text-muted-foreground">
-                      {store.is_active ? "Active" : "Inactive"}
-                    </Label>
-                    <Switch
-                      id="store-active-toggle"
-                      checked={store.is_active}
-                      onCheckedChange={handleToggleActive}
-                      disabled={toggling}
-                    />
-                  </div>
-                  {!isInactive && (
-                    !editing ? (
-                      <Button variant="outline" size="sm" onClick={startEditing} className="gap-1.5">
-                        <Pencil className="h-3.5 w-3.5" /> Edit
+          {/* Action bar — separate row, always wraps cleanly */}
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {canEdit && (
+              <>
+                <div className="flex items-center gap-2 rounded-full border bg-muted/50 px-3 py-1.5">
+                  <Label htmlFor="store-active-toggle" className="text-xs font-medium text-muted-foreground cursor-pointer select-none">
+                    {store.is_active ? "Active" : "Inactive"}
+                  </Label>
+                  <Switch
+                    id="store-active-toggle"
+                    checked={store.is_active}
+                    onCheckedChange={handleToggleActive}
+                    disabled={toggling}
+                  />
+                </div>
+                {!isInactive && (
+                  !editing ? (
+                    <Button variant="outline" size="sm" onClick={startEditing} className="gap-1.5 rounded-full h-8">
+                      <Pencil className="h-3.5 w-3.5" /> Edit
+                    </Button>
+                  ) : (
+                    <div className="flex gap-1.5">
+                      <Button variant="ghost" size="sm" onClick={() => setEditing(false)} disabled={saving} className="rounded-full h-8 w-8 p-0">
+                        <X className="h-4 w-4" />
                       </Button>
-                    ) : (
-                      <div className="flex gap-1.5">
-                        <Button variant="ghost" size="sm" onClick={() => setEditing(false)} disabled={saving}>
-                          <X className="h-4 w-4" />
-                        </Button>
-                        <Button size="sm" onClick={handleSave} disabled={saving} className="gap-1.5">
-                          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                          Save
-                        </Button>
-                      </div>
-                    )
-                  )}
-                </>
-              )}
-              {canEditBalance && !isInactive && (
-                <Button variant="outline" size="sm" onClick={() => { setNewBalanceInput(String(store.outstanding)); setShowAdjustBalance(true); }} className="gap-1.5">
-                  <Scale className="h-3.5 w-3.5" /> Adjust Balance
-                </Button>
-              )}
-              {canEdit && (
-                <Button variant="outline" size="sm" onClick={() => setShowTransfer(true)} className="gap-1.5">
-                  <ArrowRightLeft className="h-3.5 w-3.5" /> Transfer
-                </Button>
-              )}
-              {store.lat && store.lng && (
-                <a href={`https://www.google.com/maps?q=${store.lat},${store.lng}`} target="_blank" rel="noopener noreferrer" className="hidden sm:inline-flex items-center gap-1.5 text-sm text-primary hover:underline">
-                  <MapPin className="h-4 w-4" /> Map
-                </a>
-              )}
-            </div>
+                      <Button size="sm" onClick={handleSave} disabled={saving} className="gap-1.5 rounded-full h-8">
+                        {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                        Save
+                      </Button>
+                    </div>
+                  )
+                )}
+              </>
+            )}
+            {canEditBalance && !isInactive && (
+              <Button variant="outline" size="sm" onClick={() => { setNewBalanceInput(String(store.outstanding)); setShowAdjustBalance(true); }} className="gap-1.5 rounded-full h-8">
+                <Scale className="h-3.5 w-3.5" /> Adjust Balance
+              </Button>
+            )}
+            {canEdit && (
+              <Button variant="outline" size="sm" onClick={() => setShowTransfer(true)} className="gap-1.5 rounded-full h-8">
+                <ArrowRightLeft className="h-3.5 w-3.5" /> Transfer
+              </Button>
+            )}
           </div>
 
           <Separator className="my-4" />

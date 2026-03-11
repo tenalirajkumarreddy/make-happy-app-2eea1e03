@@ -353,7 +353,7 @@ const Customers = () => {
         renderMobileCard={(row: any) => (
           <div className={`rounded-xl border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow active:bg-muted/30 ${!row.is_active ? "opacity-60" : ""}`}>
             <div className="flex">
-              <div className="w-20 h-20 shrink-0 bg-muted flex items-center justify-center overflow-hidden">
+              <div className="w-24 self-stretch shrink-0 bg-muted flex items-center justify-center overflow-hidden">
                 {row.photo_url ? (
                   <img src={row.photo_url} alt={row.name} className="w-full h-full object-cover" />
                 ) : (
@@ -365,13 +365,13 @@ const Customers = () => {
                   <h3 className="font-semibold text-sm text-foreground truncate">{row.name}</h3>
                   <StatusBadge status={row.is_active ? "active" : "inactive"} />
                 </div>
-                <p className="text-xs text-muted-foreground font-mono mt-0.5">{row.display_id}</p>
+                <div className="flex items-center justify-between gap-2 mt-0.5">
+                  <p className="text-xs text-muted-foreground font-mono truncate">{row.display_id}</p>
+                  <StatusBadge status={row.kyc_status === "verified" ? "verified" : row.kyc_status === "pending" ? "pending" : "inactive"} label={`KYC: ${row.kyc_status.replace("_", " ")}`} />
+                </div>
                 <div className="flex items-center gap-3 mt-1.5">
                   <span className="text-sm font-bold text-foreground">₹{(row.stores || []).reduce((s: number, st: any) => s + Number(st.outstanding || 0), 0).toLocaleString()}</span>
                   <span className="text-xs text-muted-foreground">{row.stores?.length || 0} stores</span>
-                </div>
-                <div className="mt-1.5">
-                  <StatusBadge status={row.kyc_status === "verified" ? "verified" : row.kyc_status === "pending" ? "pending" : "inactive"} label={`KYC: ${row.kyc_status.replace("_", " ")}`} />
                 </div>
               </div>
             </div>

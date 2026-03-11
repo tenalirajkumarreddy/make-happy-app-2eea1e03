@@ -170,9 +170,10 @@ const Handovers = () => {
       toast.error("Select a recipient and enter a valid amount");
       return;
     }
-    // If partial collections disabled, require full amount
-    if (!partialSetting && !isFinalizer && Number(amount) !== Math.max(0, notHandedOver) && Number(amount) < Math.max(0, notHandedOver)) {
-      // Allow full amount or partial if setting enabled
+    // If partial collections disabled, require exact full balance
+    if (!partialSetting && !isFinalizer && Number(amount) < Math.max(0, notHandedOver)) {
+      toast.error(`Partial handovers are disabled. Enter the full balance: ₹${Math.max(0, notHandedOver).toLocaleString()}`);
+      return;
     }
     if (!isFinalizer && Number(amount) > Math.max(0, notHandedOver)) {
       toast.error("Amount exceeds your available balance");
@@ -211,6 +212,10 @@ const Handovers = () => {
 
   const handleConfirm = async (id: string) => {
     const handover = myHandovers.find((h) => h.id === id);
+    if (handover?.user_id === user?.id) {
+      toast.error("You cannot confirm your own handover");
+      return;
+    }
     const { error } = await supabase.from("handovers").update({
       status: "confirmed",
       confirmed_by: user!.id,
@@ -540,6 +545,12 @@ const Handovers = () => {
             <div className="space-y-2">
               <Label>Amount (₹)</Label>
               <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Enter amount" min="1" />
+              {partialSetting === false && !isFinalizer && (
+                <p className="text-xs text-warning flex items-center gap-1">
+                  <AlertCircle className="h-3 w-3 shrink-0" />
+                  Partial handovers are disabled — full balance of ₹{Math.max(0, notHandedOver).toLocaleString()} required
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <Label>Notes (optional)</Label>

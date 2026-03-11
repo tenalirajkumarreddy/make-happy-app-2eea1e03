@@ -7,6 +7,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { logActivity } from "@/lib/activityLogger";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
+import { addToQueue } from "@/lib/offlineQueue";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2, Plus, Trash2, Download, IndianRupee, CreditCard, Banknote, Clock, UserCircle, Store as StoreIcon, Package, X, CalendarIcon } from "lucide-react";
 import { QrStoreSelector } from "@/components/shared/QrStoreSelector";
@@ -55,6 +56,7 @@ interface SaleItem {
 }
 
 const POS_STORE_ID = "00000000-0000-0000-0000-000000000001";
+const PAGE_SIZE = 100;
 
 const Sales = () => {
   const { user, role } = useAuth();
@@ -95,18 +97,40 @@ const Sales = () => {
   const [filterUser, setFilterUser] = useState("all");
   const [filterPayment, setFilterPayment] = useState("all");
   const [items, setItems] = useState<SaleItem[]>([{ product_id: "", quantity: 1, unit_price: 0 }]);
+  const [loadedPages, setLoadedPages] = useState(1);
 
-  const { data: sales, isLoading } = useQuery({
-    queryKey: ["sales"],
+  // Reset to page 1 whenever any filter changes
+  useEffect(() => {
+    setLoadedPages(1);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterFrom, filterTo, filterStore, filterUser, filterPayment]);
+
+  const { data: sales, isLoading, isFetching } = useQuery({
+    queryKey: ["sales", isAdmin ? "all" : user?.id, filterFrom, filterTo, filterStore, filterUser, filterPayment, loadedPages],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("sales")
         .select("*, stores(name, display_id), customers(name, display_id)")
         .order("created_at", { ascending: false });
+      // Non-admin roles (agents, pos, marketer) only see their own records
+      if (!isAdmin) query = query.eq("recorded_by", user!.id);
+      // Server-side filters
+      if (filterFrom) query = query.gte("created_at", filterFrom + "T00:00:00");
+      if (filterTo) query = query.lte("created_at", filterTo + "T23:59:59");
+      if (filterStore !== "all") query = query.eq("store_id", filterStore);
+      if (filterUser !== "all") query = query.eq("recorded_by", filterUser);
+      if (filterPayment === "cash") query = query.gt("cash_amount", 0);
+      if (filterPayment === "upi") query = query.gt("upi_amount", 0);
+      if (filterPayment === "outstanding") query = query.gt("outstanding_amount", 0);
+      // Cursor pagination: fetch all pages up to current
+      query = query.range(0, loadedPages * PAGE_SIZE - 1);
+      const { data, error } = await query;
       if (error) throw error;
       return data;
     },
   });
+
+  const hasMoreSales = (sales?.length || 0) >= loadedPages * PAGE_SIZE;
 
   const { data: profiles } = useQuery({
     queryKey: ["profiles"],
@@ -118,19 +142,8 @@ const Sales = () => {
 
   const profileMap = new Map(profiles?.map((p) => [p.user_id, p]) || []);
 
-  const filteredSales = useMemo(() => {
-    return (sales || []).filter((s: any) => {
-      const date = new Date(s.created_at);
-      if (filterFrom && date < new Date(filterFrom + "T00:00:00")) return false;
-      if (filterTo && date > new Date(filterTo + "T23:59:59")) return false;
-      if (filterStore !== "all" && s.store_id !== filterStore) return false;
-      if (filterUser !== "all" && s.recorded_by !== filterUser) return false;
-      if (filterPayment === "cash" && Number(s.cash_amount) === 0) return false;
-      if (filterPayment === "upi" && Number(s.upi_amount) === 0) return false;
-      if (filterPayment === "outstanding" && Number(s.outstanding_amount) === 0) return false;
-      return true;
-    });
-  }, [sales, filterFrom, filterTo, filterStore, filterUser, filterPayment]);
+  // Filtering is now done server-side; local array mirrors the fetched page(s)
+  const filteredSales = sales || [];
 
   const activeFilterCount = [filterStore !== "all", filterUser !== "all", filterPayment !== "all", filterFrom !== thirtyDaysAgo, filterTo !== today].filter(Boolean).length;
 
@@ -145,7 +158,7 @@ const Sales = () => {
   const { data: stores } = useQuery({
     queryKey: ["stores-for-sale"],
     queryFn: async () => {
-      const { data } = await supabase.from("stores").select("id, name, outstanding, display_id, store_type_id, customer_id, lat, lng").eq("is_active", true);
+      const { data } = await supabase.from("stores").select("id, name, outstanding, display_id, store_type_id, customer_id, lat, lng, is_active").order("is_active", { ascending: false }).order("name");
       return data || [];
     },
   });
@@ -320,6 +333,9 @@ const Sales = () => {
         setSaving(false);
         return;
       }
+      if (result.skippedNoGps) {
+        toast.warning("Store has no GPS coordinates — location check skipped");
+      }
     }
 
     const customerId = selectedStore?.customer_id;
@@ -329,76 +345,91 @@ const Sales = () => {
       return;
     }
 
+    // Queue sale for offline sync if no network connection
+    if (!navigator.onLine) {
+      const effectiveRecordedByOffline = recordedFor || user!.id;
+      const loggedByOffline = recordedFor ? user!.id : null;
+      await addToQueue({
+        id: crypto.randomUUID(),
+        type: "sale",
+        payload: {
+          saleData: {
+            store_id: storeId,
+            customer_id: customerId,
+            recorded_by: effectiveRecordedByOffline,
+            logged_by: loggedByOffline,
+            total_amount: totalAmount,
+            cash_amount: cash,
+            upi_amount: upi,
+            outstanding_amount: outstandingFromSale,
+            old_outstanding: oldOutstanding,
+            new_outstanding: newOutstanding,
+            ...(saleDate ? { created_at: new Date(saleDate).toISOString() } : {}),
+          },
+          saleItems: items.filter((i) => i.product_id).map((i) => ({
+            product_id: i.product_id,
+            quantity: i.quantity,
+            unit_price: i.unit_price,
+            total_price: i.quantity * i.unit_price,
+          })),
+          storeUpdate: { outstanding: newOutstanding },
+        },
+        createdAt: new Date().toISOString(),
+      });
+      toast.warning("You're offline — sale queued and will sync automatically when back online");
+      setSaving(false);
+      setShowAdd(false);
+      resetForm();
+      return;
+    }
+
     const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "SALE", seq_name: "sale_display_seq" });
 
     const effectiveRecordedBy = recordedFor || user!.id;
     const loggedBy = recordedFor ? user!.id : null;
 
-    const { data: sale, error } = await supabase.from("sales").insert({
-      display_id: displayId,
-      store_id: storeId,
-      customer_id: customerId,
-      recorded_by: effectiveRecordedBy,
-      logged_by: loggedBy,
-      total_amount: totalAmount,
-      cash_amount: cash,
-      upi_amount: upi,
-      outstanding_amount: outstandingFromSale,
-      old_outstanding: oldOutstanding,
-      new_outstanding: newOutstanding,
-      ...(saleDate ? { created_at: new Date(saleDate).toISOString() } : {}),
-    }).select("id").single();
-
-    if (error) { toast.error(error.message); setSaving(false); return; }
-
     const saleItems = items.filter((i) => i.product_id).map((i) => ({
-      sale_id: sale.id,
       product_id: i.product_id,
       quantity: i.quantity,
       unit_price: i.unit_price,
       total_price: i.quantity * i.unit_price,
     }));
-    await supabase.from("sale_items").insert(saleItems);
 
-    logActivity(user!.id, "Recorded sale", "sale", displayId, sale.id, { total: totalAmount, store: storeId });
-    await supabase.from("stores").update({ outstanding: newOutstanding }).eq("id", storeId);
+    // Count pending orders before insert for the success toast
+    const { data: pendingOrders } = await supabase
+      .from("orders").select("id").eq("store_id", storeId).eq("status", "pending");
+    const pendingCount = pendingOrders?.length || 0;
 
-    // If backdated, recalculate all running balances in chronological order
-    if (saleDate) {
-      const { data: storeRow } = await supabase.from("stores").select("opening_balance").eq("id", storeId).single();
-      let runBal = Number(storeRow?.opening_balance || 0);
-      const [{ data: allSales }, { data: allTxns }] = await Promise.all([
-        supabase.from("sales").select("id, created_at, total_amount, cash_amount, upi_amount").eq("store_id", storeId).order("created_at", { ascending: true }),
-        supabase.from("transactions").select("id, created_at, total_amount").eq("store_id", storeId).order("created_at", { ascending: true }),
-      ]);
-      const timeline = [
-        ...(allSales || []).map((s: any) => ({ type: "sale", id: s.id, date: s.created_at, delta: Number(s.total_amount) - Number(s.cash_amount) - Number(s.upi_amount) })),
-        ...(allTxns || []).map((t: any) => ({ type: "txn", id: t.id, date: t.created_at, delta: -Number(t.total_amount) })),
-      ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-      for (const entry of timeline) {
-        const oldBal = runBal;
-        runBal += entry.delta;
-        if (entry.type === "sale") {
-          await supabase.from("sales").update({ old_outstanding: oldBal, new_outstanding: runBal }).eq("id", entry.id);
-        } else {
-          await supabase.from("transactions").update({ old_outstanding: oldBal, new_outstanding: runBal }).eq("id", entry.id);
-        }
+    // Single atomic RPC — insert sale + items, enforce credit limit, deliver orders, fix balance
+    const { data: result, error } = await supabase.rpc("record_sale", {
+      p_display_id: displayId,
+      p_store_id: storeId,
+      p_customer_id: customerId,
+      p_recorded_by: effectiveRecordedBy,
+      p_logged_by: loggedBy,
+      p_total_amount: totalAmount,
+      p_cash_amount: cash,
+      p_upi_amount: upi,
+      p_outstanding_amount: outstandingFromSale,
+      p_sale_items: saleItems,
+      p_created_at: saleDate ? new Date(saleDate).toISOString() : null,
+    });
+
+    if (error) {
+      if (error.message.includes("credit_limit_exceeded")) {
+        toast.error("Credit limit exceeded. Increase payment or reduce items.");
+      } else {
+        toast.error(error.message);
       }
-      await supabase.from("stores").update({ outstanding: runBal }).eq("id", storeId);
+      setSaving(false);
+      return;
     }
 
-    // Auto-mark pending orders for this store as delivered
-    const { data: pendingOrders } = await supabase
-      .from("orders")
-      .select("id, display_id")
-      .eq("store_id", storeId)
-      .eq("status", "pending");
-    if (pendingOrders && pendingOrders.length > 0) {
-      await supabase
-        .from("orders")
-        .update({ status: "delivered", delivered_at: new Date().toISOString() })
-        .in("id", pendingOrders.map((o) => o.id));
-      toast.success(`Sale recorded. ${pendingOrders.length} pending order(s) auto-marked as delivered.`);
+    const saleRow = (result as any)?.[0];
+    logActivity(user!.id, "Recorded sale", "sale", displayId, saleRow?.sale_id, { total: totalAmount, store: storeId });
+
+    if (pendingCount > 0) {
+      toast.success(`Sale recorded. ${pendingCount} pending order(s) auto-marked as delivered.`);
       qc.invalidateQueries({ queryKey: ["orders"] });
     } else {
       toast.success("Sale recorded successfully");
@@ -414,7 +445,7 @@ const Sales = () => {
           message: `Sale ${displayId} of ₹${totalAmount.toLocaleString()} at ${storeName}`,
           type: "payment",
           entityType: "sale",
-          entityId: sale.id,
+          entityId: saleRow?.sale_id,
         });
       }
     });
@@ -558,7 +589,7 @@ const Sales = () => {
             <X className="h-3 w-3 mr-1" /> Clear ({activeFilterCount})
           </Button>
         )}
-        <span className="ml-auto text-xs text-muted-foreground">{filteredSales.length} result{filteredSales.length !== 1 ? "s" : ""}</span>
+        <span className="ml-auto text-xs text-muted-foreground">{filteredSales.length}{hasMoreSales ? "+" : ""} result{filteredSales.length !== 1 ? "s" : ""}</span>
       </div>
 
       <DataTable
@@ -566,6 +597,7 @@ const Sales = () => {
         data={filteredSales}
         searchKey="display_id"
         searchPlaceholder="Search by sale ID..."
+        emptyMessage="No sales recorded yet."
         onRowClick={(row: any) => setSelectedSaleId(row.id)}
         renderMobileCard={(row: any) => (
           <div className="rounded-xl border bg-card p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => setSelectedSaleId(row.id)}>
@@ -611,6 +643,15 @@ const Sales = () => {
           </div>
         )}
       />
+
+      {hasMoreSales && (
+        <div className="flex justify-center pt-1">
+          <Button variant="outline" size="sm" onClick={() => setLoadedPages((p) => p + 1)} disabled={isFetching} className="gap-1.5">
+            {isFetching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+            Load more
+          </Button>
+        </div>
+      )}
 
       {/* Sale Detail Dialog */}
       <Dialog open={!!selectedSaleId} onOpenChange={(v) => { if (!v) setSelectedSaleId(null); }}>
@@ -722,7 +763,11 @@ const Sales = () => {
                 <div className="flex gap-2 mt-1">
                   <Select value={storeId} onValueChange={handleStoreChange}>
                     <SelectTrigger className="flex-1"><SelectValue placeholder="Select store" /></SelectTrigger>
-                    <SelectContent>{stores?.map((s) => <SelectItem key={s.id} value={s.id}>{s.name} ({s.display_id})</SelectItem>)}</SelectContent>
+                    <SelectContent>{stores?.map((s) => (
+                      <SelectItem key={s.id} value={s.id} disabled={!s.is_active}>
+                        {s.name} ({s.display_id}){!s.is_active ? " — Inactive" : ""}
+                      </SelectItem>
+                    ))}</SelectContent>
                   </Select>
                   <QrStoreSelector onStoreSelected={handleStoreChange} />
                 </div>
@@ -809,7 +854,7 @@ const Sales = () => {
               </div>
             )}
 
-            <Button type="submit" className="w-full" disabled={saving || !!creditExceeded}>
+            <Button type="submit" className="w-full" disabled={saving || (!!creditExceeded && !isAdmin)}>
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Record Sale
             </Button>

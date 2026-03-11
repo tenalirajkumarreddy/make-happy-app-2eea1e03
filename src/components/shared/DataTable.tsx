@@ -37,6 +37,8 @@ interface DataTableProps<T> {
   pageSize?: number;
   /** Custom mobile card renderer. When provided, replaces the default grid card. */
   renderMobileCard?: (row: T, index: number) => React.ReactNode;
+  /** Message shown when there are no rows. Defaults to "No results found." */
+  emptyMessage?: string;
 }
 
 export function DataTable<T extends Record<string, any>>({
@@ -47,10 +49,12 @@ export function DataTable<T extends Record<string, any>>({
   onRowClick,
   pageSize: defaultPageSize = 10,
   renderMobileCard,
+  emptyMessage,
 }: DataTableProps<T>) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(defaultPageSize);
+  const resolvedEmptyMessage = emptyMessage ?? "No results found.";
 
   const filtered = searchKey
     ? data.filter((row) =>
@@ -107,8 +111,8 @@ export function DataTable<T extends Record<string, any>>({
           <TableBody>
             {paged.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={columns.length} className="h-24 text-center text-muted-foreground">
-                  No results found.
+                <TableCell colSpan={columns.length} className="h-36 text-center">
+                  <p className="text-sm text-muted-foreground">{resolvedEmptyMessage}</p>
                 </TableCell>
               </TableRow>
             ) : (
@@ -129,8 +133,8 @@ export function DataTable<T extends Record<string, any>>({
       {/* Mobile card view */}
       <div className="md:hidden space-y-3">
         {paged.length === 0 ? (
-          <div className="rounded-xl border bg-card p-6 text-center text-muted-foreground">
-            No results found.
+          <div className="rounded-xl border bg-card p-8 text-center">
+            <p className="text-sm text-muted-foreground">{resolvedEmptyMessage}</p>
           </div>
         ) : renderMobileCard ? (
           paged.map((row, i) => (

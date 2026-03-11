@@ -36,17 +36,28 @@ export function useOnlineStatus() {
     for (const action of actions) {
       try {
         if (action.type === "sale") {
-          const { saleData, saleItems, storeUpdate } = action.payload;
-          const { data: sale, error } = await supabase.from("sales").insert(saleData).select("id").single();
+          const { saleData, saleItems } = action.payload;
+          const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "SALE", seq_name: "sale_display_seq" });
+          const { error } = await supabase.rpc("record_sale", {
+            p_display_id: displayId,
+            p_store_id: saleData.store_id,
+            p_customer_id: saleData.customer_id,
+            p_recorded_by: saleData.recorded_by,
+            p_logged_by: saleData.logged_by ?? null,
+            p_total_amount: saleData.total_amount,
+            p_cash_amount: saleData.cash_amount,
+            p_upi_amount: saleData.upi_amount,
+            p_outstanding_amount: saleData.outstanding_amount,
+            p_sale_items: saleItems,
+            p_created_at: saleData.created_at ?? null,
+          });
           if (error) throw error;
-          const items = saleItems.map((i: any) => ({ ...i, sale_id: sale.id }));
-          await supabase.from("sale_items").insert(items);
-          await supabase.from("stores").update(storeUpdate).eq("id", saleData.store_id);
         } else if (action.type === "transaction") {
-          const { txData, storeUpdate } = action.payload;
-          const { error } = await supabase.from("transactions").insert(txData);
+          const { txData } = action.payload;
+          const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "PAY", seq_name: "pay_display_seq" });
+          const { error } = await supabase.from("transactions").insert({ ...txData, display_id: displayId });
           if (error) throw error;
-          await supabase.from("stores").update(storeUpdate).eq("id", txData.store_id);
+          // DB trigger trg_transactions_recalc_outstanding handles store.outstanding update automatically
         }
         await removeFromQueue(action.id);
         synced++;

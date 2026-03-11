@@ -36,9 +36,10 @@ const STAFF_ROLES = ["super_admin", "manager", "agent", "marketer", "pos"];
 
 export function useRealtimeSync() {
   const qc = useQueryClient();
-  const { role } = useAuth();
+  const { role, user } = useAuth();
 
   const isStaff = role && STAFF_ROLES.includes(role);
+  const isAdmin = role === "super_admin" || role === "manager";
 
   useEffect(() => {
     if (!isStaff) return;
@@ -51,7 +52,19 @@ export function useRealtimeSync() {
       channel = channel.on(
         "postgres_changes",
         { event: "*", schema: "public", table },
-        () => {
+        (payload: any) => {
+          // For non-admins, skip invalidation if the record belongs to another user
+          if (!isAdmin) {
+            if (table === "sales" || table === "transactions") {
+              const recordedBy = payload.new?.recorded_by ?? payload.old?.recorded_by;
+              if (recordedBy && recordedBy !== user?.id) return;
+            }
+            if (table === "handovers") {
+              const sender = payload.new?.user_id ?? payload.old?.user_id;
+              const receiver = payload.new?.handed_to ?? payload.old?.handed_to;
+              if (sender !== user?.id && receiver !== user?.id) return;
+            }
+          }
           const keys = TABLE_QUERY_MAP[table] || [];
           keys.forEach((key) => {
             qc.invalidateQueries({ queryKey: [key] });
@@ -65,5 +78,5 @@ export function useRealtimeSync() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [qc, isStaff]);
+  }, [qc, isStaff, isAdmin, user?.id]);
 }
