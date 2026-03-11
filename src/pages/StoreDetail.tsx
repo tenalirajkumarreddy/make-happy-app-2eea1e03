@@ -32,6 +32,7 @@ import { QrScanner } from "@/components/shared/QrScanner";
 import { parseUpiQr } from "@/lib/upiParser";
 import { StoreLedger } from "@/components/stores/StoreLedger";
 import { logActivity } from "@/lib/activityLogger";
+import { ImageUpload } from "@/components/shared/ImageUpload";
 
 const StoreDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -52,6 +53,7 @@ const StoreDetail = () => {
   const [adjustSaving, setAdjustSaving] = useState(false);
   const [newBalanceInput, setNewBalanceInput] = useState("");
   const [adjustReason, setAdjustReason] = useState("");
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: "",
     phone: "",
@@ -62,6 +64,8 @@ const StoreDetail = () => {
     district: "",
     state: "",
     pincode: "",
+    store_type_id: "",
+    route_id: "",
   });
 
   const { data: store, isLoading } = useQuery({
@@ -83,6 +87,24 @@ const StoreDetail = () => {
     queryKey: ["customers-for-transfer"],
     queryFn: async () => {
       const { data } = await supabase.from("customers").select("id, name, display_id").eq("is_active", true).order("name");
+      return data || [];
+    },
+    enabled: canEdit,
+  });
+
+  const { data: allRoutes } = useQuery({
+    queryKey: ["routes-for-edit"],
+    queryFn: async () => {
+      const { data } = await supabase.from("routes").select("id, name").order("name");
+      return data || [];
+    },
+    enabled: canEdit,
+  });
+
+  const { data: allStoreTypes } = useQuery({
+    queryKey: ["store-types-for-edit"],
+    queryFn: async () => {
+      const { data } = await supabase.from("store_types").select("id, name").order("name");
       return data || [];
     },
     enabled: canEdit,
@@ -245,7 +267,10 @@ const StoreDetail = () => {
       district: store.district || "",
       state: store.state || "",
       pincode: store.pincode || "",
+      store_type_id: store.store_type_id || "",
+      route_id: store.route_id || "",
     });
+    setPhotoUrl(store.photo_url || null);
     setEditing(true);
   };
 
@@ -266,6 +291,9 @@ const StoreDetail = () => {
         state: form.state || null,
         pincode: form.pincode || null,
         address: address || null,
+        store_type_id: form.store_type_id || null,
+        route_id: form.route_id || null,
+        photo_url: photoUrl || null,
       })
       .eq("id", id);
     setSaving(false);
@@ -502,16 +530,41 @@ const StoreDetail = () => {
           <Separator className="my-4" />
 
           {editing ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              <div className="space-y-1.5"><Label className="text-xs">Store Name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-              <div className="space-y-1.5"><Label className="text-xs">Phone</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
-              <div className="space-y-1.5"><Label className="text-xs">Alt. Phone</Label><Input value={form.alternate_phone} onChange={(e) => setForm({ ...form, alternate_phone: e.target.value })} /></div>
-              <div className="space-y-1.5"><Label className="text-xs">Street</Label><Input value={form.street} onChange={(e) => setForm({ ...form, street: e.target.value })} /></div>
-              <div className="space-y-1.5"><Label className="text-xs">Area</Label><Input value={form.area} onChange={(e) => setForm({ ...form, area: e.target.value })} /></div>
-              <div className="space-y-1.5"><Label className="text-xs">City</Label><Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} /></div>
-              <div className="space-y-1.5"><Label className="text-xs">District</Label><Input value={form.district} onChange={(e) => setForm({ ...form, district: e.target.value })} /></div>
-              <div className="space-y-1.5"><Label className="text-xs">State</Label><Input value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} /></div>
-              <div className="space-y-1.5"><Label className="text-xs">Pincode</Label><Input value={form.pincode} onChange={(e) => setForm({ ...form, pincode: e.target.value })} /></div>
+            <div className="space-y-4">
+              <div className="flex items-start gap-4">
+                <ImageUpload folder="stores" currentUrl={photoUrl} onUploaded={setPhotoUrl} onRemoved={() => setPhotoUrl(null)} size="lg" />
+                <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="space-y-1.5"><Label className="text-xs">Store Name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
+                  <div className="space-y-1.5"><Label className="text-xs">Phone</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
+                  <div className="space-y-1.5"><Label className="text-xs">Alt. Phone</Label><Input value={form.alternate_phone} onChange={(e) => setForm({ ...form, alternate_phone: e.target.value })} /></div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Store Type</Label>
+                    <Select value={form.store_type_id} onValueChange={(v) => setForm({ ...form, store_type_id: v === "__none" ? "" : v })}>
+                      <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Select type" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none">None</SelectItem>
+                        {allStoreTypes?.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Route</Label>
+                    <Select value={form.route_id} onValueChange={(v) => setForm({ ...form, route_id: v === "__none" ? "" : v })}>
+                      <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Select route" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none">None</SelectItem>
+                        {allRoutes?.map((r) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5"><Label className="text-xs">Street</Label><Input value={form.street} onChange={(e) => setForm({ ...form, street: e.target.value })} /></div>
+                  <div className="space-y-1.5"><Label className="text-xs">Area</Label><Input value={form.area} onChange={(e) => setForm({ ...form, area: e.target.value })} /></div>
+                  <div className="space-y-1.5"><Label className="text-xs">City</Label><Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} /></div>
+                  <div className="space-y-1.5"><Label className="text-xs">District</Label><Input value={form.district} onChange={(e) => setForm({ ...form, district: e.target.value })} /></div>
+                  <div className="space-y-1.5"><Label className="text-xs">State</Label><Input value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} /></div>
+                  <div className="space-y-1.5"><Label className="text-xs">Pincode</Label><Input value={form.pincode} onChange={(e) => setForm({ ...form, pincode: e.target.value })} /></div>
+                </div>
+              </div>
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-x-6 gap-y-2">

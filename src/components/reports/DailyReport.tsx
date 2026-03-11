@@ -29,15 +29,17 @@ export default function DailyReport() {
   const { data, isLoading } = useQuery({
     queryKey: ["daily-report", date],
     queryFn: async () => {
-      const [salesRes, txnRes, ordersRes, saleItemsRes, storesRes, handoversRes, profilesRes, rolesRes] = await Promise.all([
-        supabase.from("sales").select("*, stores(name)").gte("created_at", startOfDay).lte("created_at", endOfDay).order("created_at", { ascending: false }),
-        supabase.from("transactions").select("*, stores(name)").gte("created_at", startOfDay).lte("created_at", endOfDay).order("created_at", { ascending: false }),
+      const [salesRes, txnRes, ordersRes, saleItemsRes, storesRes, handoversRes, profilesRes, rolesRes, routesRes, visitsRes] = await Promise.all([
+        supabase.from("sales").select("*, stores(name, route_id)").gte("created_at", startOfDay).lte("created_at", endOfDay).order("created_at", { ascending: false }),
+        supabase.from("transactions").select("*, stores(name, route_id)").gte("created_at", startOfDay).lte("created_at", endOfDay).order("created_at", { ascending: false }),
         supabase.from("orders").select("*, stores(name)").gte("created_at", startOfDay).lte("created_at", endOfDay),
         supabase.from("sale_items").select("*, products(name, unit)").gte("created_at", startOfDay).lte("created_at", endOfDay),
-        supabase.from("stores").select("id, name, display_id, outstanding").eq("is_active", true),
+        supabase.from("stores").select("id, name, display_id, outstanding, route_id").eq("is_active", true),
         supabase.from("handovers").select("*").eq("handover_date", date),
         supabase.from("profiles").select("user_id, full_name"),
         supabase.from("user_roles").select("user_id, role").neq("role", "customer"),
+        supabase.from("routes").select("id, name").eq("is_active", true).order("name"),
+        supabase.from("store_visits").select("store_id, stores(route_id)").gte("visited_at", startOfDay).lte("visited_at", endOfDay),
       ]);
 
       const sales = salesRes.data || [];
@@ -48,6 +50,8 @@ export default function DailyReport() {
       const handovers = handoversRes.data || [];
       const profiles = profilesRes.data || [];
       const roles = rolesRes.data || [];
+      const routes = routesRes.data || [];
+      const visits = visitsRes.data || [];
 
       const profileMap = Object.fromEntries(profiles.map((p) => [p.user_id, p.full_name]));
 
@@ -136,9 +140,28 @@ export default function DailyReport() {
       const pending = orders.filter((o) => o.status === "pending").length;
       const cancelled = orders.filter((o) => o.status === "cancelled").length;
 
+      // Route performance
+      const routePerformance = routes.map((route) => {
+        const routeStores = stores.filter((s) => s.route_id === route.id);
+        const totalStores = routeStores.length;
+        const visitedStoreIds = new Set(
+          visits
+            .filter((v: any) => v.stores?.route_id === route.id)
+            .map((v: any) => v.store_id)
+        );
+        const storesCovered = visitedStoreIds.size;
+        const pctCovered = totalStores > 0 ? Math.round((storesCovered / totalStores) * 100) : 0;
+        const routeSales = sales.filter((s: any) => s.stores?.route_id === route.id)
+          .reduce((sum: number, s: any) => sum + Number(s.total_amount), 0);
+        const routeCollected = txns.filter((t: any) => t.stores?.route_id === route.id)
+          .reduce((sum: number, t: any) => sum + Number(t.total_amount), 0);
+        const routePending = routeStores.reduce((sum, s) => sum + Number(s.outstanding), 0);
+        return { name: route.name, totalStores, storesCovered, pctCovered, sales: routeSales, collected: routeCollected, pending: routePending };
+      }).filter((r) => r.totalStores > 0);
+
       return {
         sales, txns, orders, saleItems, productBreakdown, staffBalances,
-        storesWithOutstanding,
+        storesWithOutstanding, routePerformance,
         totalSaleAmount, salesCash, salesUpi, salesOutstanding,
         totalCollections, txnCash, txnUpi,
         totalCash, totalUpi, totalIncome,
@@ -543,6 +566,7 @@ td.num{font-family:'DM Mono',monospace}
           <TabsTrigger value="sales">Sales ({d.salesCount})</TabsTrigger>
           <TabsTrigger value="payments">Payments ({d.txnCount})</TabsTrigger>
           <TabsTrigger value="products">Products ({d.productBreakdown.length})</TabsTrigger>
+          <TabsTrigger value="routes">Routes ({d.routePerformance.length})</TabsTrigger>
           <TabsTrigger value="staff">Staff Balances ({d.staffBalances.length})</TabsTrigger>
           <TabsTrigger value="outstanding">Outstanding ({d.storesWithOutstanding.length})</TabsTrigger>
         </TabsList>
@@ -568,6 +592,31 @@ td.num{font-family:'DM Mono',monospace}
             <Card><CardContent className="py-8 text-center text-muted-foreground">No products sold</CardContent></Card>
           ) : (
             <DataTable columns={productCols} data={d.productBreakdown} searchKey="name" searchPlaceholder="Search products..." />
+          )}
+        </TabsContent>
+
+        <TabsContent value="routes" className="mt-4">
+          {d.routePerformance.length === 0 ? (
+            <Card><CardContent className="py-8 text-center text-muted-foreground">No routes configured</CardContent></Card>
+          ) : (
+            <DataTable
+              columns={[
+                { header: "Route", accessor: "name" as const, className: "font-medium" },
+                { header: "Total Stores", accessor: "totalStores" as const, className: "text-center" },
+                { header: "Covered", accessor: (r: any) => `${r.storesCovered} / ${r.totalStores}`, className: "text-center" },
+                { header: "% Done", accessor: (r: any) => (
+                  <span className={r.pctCovered === 100 ? "text-success font-bold" : r.pctCovered >= 50 ? "text-warning font-semibold" : "text-destructive font-semibold"}>
+                    {r.pctCovered}%
+                  </span>
+                ), className: "text-center" },
+                { header: "Sales", accessor: (r: any) => fmt(r.sales), className: "font-semibold" },
+                { header: "Collected", accessor: (r: any) => fmt(r.collected), className: "text-success" },
+                { header: "Outstanding", accessor: (r: any) => fmt(r.pending), className: "text-destructive" },
+              ]}
+              data={d.routePerformance}
+              searchKey="name"
+              searchPlaceholder="Search routes..."
+            />
           )}
         </TabsContent>
 

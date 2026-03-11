@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2, Save, Upload, X } from "lucide-react";
+import { Loader2, Save, Upload, X, Navigation } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { PricingTab } from "@/components/settings/PricingTab";
@@ -125,8 +125,46 @@ const SettingsPage = () => {
               </div>
               <div><Label>Company Name</Label><Input value={settings.company_name || ""} onChange={(e) => setSettings({ ...settings, company_name: e.target.value })} className="mt-1" disabled={!isAdmin} /></div>
               <div><Label>GST Number</Label><Input value={settings.gst_number || ""} onChange={(e) => setSettings({ ...settings, gst_number: e.target.value })} className="mt-1" disabled={!isAdmin} /></div>
-              <div><Label>Customer Care Number</Label><Input value={settings.customer_care_number || ""} onChange={(e) => setSettings({ ...settings, customer_care_number: e.target.value })} className="mt-1" disabled={!isAdmin} /></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label>Customer Care Number</Label><Input value={settings.customer_care_number || ""} onChange={(e) => setSettings({ ...settings, customer_care_number: e.target.value })} className="mt-1" disabled={!isAdmin} placeholder="+91 98765 43210" /></div>
+                <div><Label>Office Phone</Label><Input value={settings.company_phone || ""} onChange={(e) => setSettings({ ...settings, company_phone: e.target.value })} className="mt-1" disabled={!isAdmin} placeholder="+91 22 1234 5678" /></div>
+              </div>
+              <div><Label>Email</Label><Input type="email" value={settings.company_email || ""} onChange={(e) => setSettings({ ...settings, company_email: e.target.value })} className="mt-1" disabled={!isAdmin} placeholder="info@company.com" /></div>
+              <div><Label>Website</Label><Input value={settings.company_website || ""} onChange={(e) => setSettings({ ...settings, company_website: e.target.value })} className="mt-1" disabled={!isAdmin} placeholder="https://www.company.com" /></div>
               <div><Label>Address</Label><Input value={settings.address || ""} onChange={(e) => setSettings({ ...settings, address: e.target.value })} className="mt-1" disabled={!isAdmin} /></div>
+              <div className="grid grid-cols-3 gap-3">
+                <div><Label>City</Label><Input value={settings.company_city || ""} onChange={(e) => setSettings({ ...settings, company_city: e.target.value })} className="mt-1" disabled={!isAdmin} /></div>
+                <div><Label>State</Label><Input value={settings.company_state || ""} onChange={(e) => setSettings({ ...settings, company_state: e.target.value })} className="mt-1" disabled={!isAdmin} /></div>
+                <div><Label>PIN Code</Label><Input value={settings.company_pin || ""} onChange={(e) => setSettings({ ...settings, company_pin: e.target.value })} className="mt-1" disabled={!isAdmin} placeholder="400001" /></div>
+              </div>
+            </div>
+            <div className="pt-2 border-t">
+              <h4 className="text-sm font-medium mb-3 flex items-center gap-2"><Navigation className="h-4 w-4 text-primary" />Map Coordinates</h4>
+              <p className="text-xs text-muted-foreground mb-3">Set your company's coordinates to show it as a pinned location on the map.</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label>Latitude</Label><Input value={settings.company_lat || ""} onChange={(e) => setSettings({ ...settings, company_lat: e.target.value })} className="mt-1 font-mono text-sm" disabled={!isAdmin} placeholder="e.g. 19.0760" /></div>
+                <div><Label>Longitude</Label><Input value={settings.company_lng || ""} onChange={(e) => setSettings({ ...settings, company_lng: e.target.value })} className="mt-1 font-mono text-sm" disabled={!isAdmin} placeholder="e.g. 72.8777" /></div>
+              </div>
+              <div className="mt-3">
+                <Label>Map Pin Label</Label>
+                <select value={settings.company_marker_label || "HQ"} onChange={(e) => isAdmin && setSettings({ ...settings, company_marker_label: e.target.value })} disabled={!isAdmin} className="mt-1 w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm">
+                  <option value="HQ">HQ (Headquarters)</option>
+                  <option value="Factory">Factory</option>
+                  <option value="Warehouse">Warehouse</option>
+                  <option value="Office">Office</option>
+                  <option value="Store">Store</option>
+                </select>
+              </div>
+              {isAdmin && (
+                <Button type="button" variant="outline" size="sm" className="mt-2 gap-1.5 text-xs" onClick={() => {
+                  navigator.geolocation.getCurrentPosition(
+                    (p) => setSettings((prev) => ({ ...prev, company_lat: p.coords.latitude.toFixed(6), company_lng: p.coords.longitude.toFixed(6) })),
+                    () => {}
+                  );
+                }}>
+                  <Navigation className="h-3.5 w-3.5" /> Use My Current Location
+                </Button>
+              )}
             </div>
             {isAdmin && (
               <Button onClick={handleSaveSettings} disabled={savingSettings}>

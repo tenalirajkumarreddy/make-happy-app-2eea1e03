@@ -281,7 +281,11 @@ const Handovers = () => {
     const statusLabel = item.status === "confirmed" ? "Confirmed" : item.status === "rejected" ? "Rejected" : "Pending";
 
     return (
-      <div className="group flex items-center gap-4 rounded-lg border bg-card px-4 py-3 hover:shadow-sm transition-shadow">
+      <div className={`group flex items-center gap-4 rounded-lg border bg-card px-4 py-3 hover:shadow-sm transition-shadow border-l-4 ${
+        item.status === "confirmed" ? "border-l-green-500" :
+        item.status === "rejected" ? "border-l-red-500" :
+        "border-l-orange-500"
+      }`}>
         <div className="flex items-center -space-x-2.5 shrink-0">
           <UserAvatar userId={item.user_id} size="lg" />
           <UserAvatar userId={item.handed_to} size="lg" />
@@ -327,6 +331,24 @@ const Handovers = () => {
         )}
       </div>
     );
+  };
+
+  const groupByDate = (items: typeof myHandovers) => {
+    const groups: Record<string, typeof myHandovers> = {};
+    items.forEach((item) => {
+      const date = item.created_at.split("T")[0];
+      if (!groups[date]) groups[date] = [];
+      groups[date].push(item);
+    });
+    return Object.entries(groups).sort(([a], [b]) => b.localeCompare(a));
+  };
+
+  const formatDateGroup = (dateStr: string) => {
+    const today = new Date().toISOString().split("T")[0];
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+    if (dateStr === today) return "Today";
+    if (dateStr === yesterday) return "Yesterday";
+    return format(new Date(dateStr + "T00:00:00"), "dd MMM yyyy");
   };
 
   if (isLoading) {
@@ -425,19 +447,33 @@ const Handovers = () => {
           )}
         </TabsList>
 
-        <TabsContent value="mine" className="space-y-2 mt-3">
+        <TabsContent value="mine" className="space-y-4 mt-3">
           {myHandovers.filter(h => !(h.handed_to === user?.id && h.status === "awaiting_confirmation")).length === 0 ? (
             <div className="rounded-lg border bg-card p-8 text-center text-sm text-muted-foreground">No handovers yet.</div>
-          ) : myHandovers
-            .filter(h => !(h.handed_to === user?.id && h.status === "awaiting_confirmation"))
-            .map((item) => <HandoverCard key={item.id} item={item} />)}
+          ) : groupByDate(myHandovers.filter(h => !(h.handed_to === user?.id && h.status === "awaiting_confirmation"))).map(([date, items]) => (
+            <div key={date} className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{formatDateGroup(date)}</span>
+                <div className="flex-1 h-px bg-border" />
+              </div>
+              {items.map((item) => <HandoverCard key={item.id} item={item} />)}
+            </div>
+          ))}
         </TabsContent>
 
         {isAdminOrManager && (
-          <TabsContent value="all" className="space-y-2 mt-3">
+          <TabsContent value="all" className="space-y-4 mt-3">
             {(handovers || []).length === 0 ? (
               <div className="rounded-lg border bg-card p-8 text-center text-sm text-muted-foreground">No handovers recorded.</div>
-            ) : (handovers || []).map((item) => <HandoverCard key={item.id} item={item} />)}
+            ) : groupByDate(handovers || []).map(([date, items]) => (
+              <div key={date} className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{formatDateGroup(date)}</span>
+                  <div className="flex-1 h-px bg-border" />
+                </div>
+                {items.map((item) => <HandoverCard key={item.id} item={item} />)}
+              </div>
+            ))}
           </TabsContent>
         )}
 

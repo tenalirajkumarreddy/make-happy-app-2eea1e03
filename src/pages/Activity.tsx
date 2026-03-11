@@ -42,7 +42,27 @@ const Activity = () => {
           No activity logs yet. Actions like recording sales, creating orders, and managing users will appear here.
         </div>
       ) : (
-        <DataTable columns={columns} data={activities} searchKey="action" searchPlaceholder="Search actions..." />
+        <DataTable
+          columns={columns}
+          data={activities}
+          searchKey="action"
+          searchPlaceholder="Search actions..."
+          renderMobileCard={(row: any) => (
+            <div className="rounded-xl border bg-card p-4 space-y-2 shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-sm font-medium text-foreground leading-snug">{row.action}</p>
+                <Badge variant="outline" className="text-[10px] h-5 px-1.5 shrink-0">{row.entity_type}</Badge>
+              </div>
+              {(row.entity_name || row.entity_id) && (
+                <p className="text-xs text-muted-foreground">{row.entity_name || row.entity_id}</p>
+              )}
+              <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border/50">
+                <span className="font-mono">{row.user_id?.slice(0, 8) || "System"}</span>
+                <span>{new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}</span>
+              </div>
+            </div>
+          )}
+        />
       )}
     </div>
   );

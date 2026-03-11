@@ -8,10 +8,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { logActivity } from "@/lib/activityLogger";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2, Plus, Trash2, Download, IndianRupee, CreditCard, Banknote, Clock, UserCircle, Store as StoreIcon, Package } from "lucide-react";
+import { Loader2, Plus, Trash2, Download, IndianRupee, CreditCard, Banknote, Clock, UserCircle, Store as StoreIcon, Package, X, CalendarIcon } from "lucide-react";
 import { QrStoreSelector } from "@/components/shared/QrStoreSelector";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { usePermission } from "@/hooks/usePermission";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -19,6 +20,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -64,10 +67,33 @@ const Sales = () => {
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
 
   // POS users are locked to the POS store
-  const [storeId, setStoreId] = useState(isPosUser ? POS_STORE_ID : "");
+  const isAdmin = role === "super_admin" || role === "manager";
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [storeId, setStoreId] = useState(isPosUser ? POS_STORE_ID : (searchParams.get("store") ?? ""));
+
+  // When navigated with ?store=<id>, auto-open the add dialog
+  useEffect(() => {
+    const storeParam = searchParams.get("store");
+    if (storeParam && !isPosUser) {
+      setStoreId(storeParam);
+      setShowAdd(true);
+      setSearchParams({}, { replace: true });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [cashAmount, setCashAmount] = useState("");
   const [upiAmount, setUpiAmount] = useState("");
   const [recordedFor, setRecordedFor] = useState("");
+  const [saleDate, setSaleDate] = useState("");
+
+  // List filters
+  const today = new Date().toISOString().split("T")[0];
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const [filterFrom, setFilterFrom] = useState(thirtyDaysAgo);
+  const [filterTo, setFilterTo] = useState(today);
+  const [filterStore, setFilterStore] = useState("all");
+  const [filterUser, setFilterUser] = useState("all");
+  const [filterPayment, setFilterPayment] = useState("all");
   const [items, setItems] = useState<SaleItem[]>([{ product_id: "", quantity: 1, unit_price: 0 }]);
 
   const { data: sales, isLoading } = useQuery({
@@ -91,6 +117,30 @@ const Sales = () => {
   });
 
   const profileMap = new Map(profiles?.map((p) => [p.user_id, p]) || []);
+
+  const filteredSales = useMemo(() => {
+    return (sales || []).filter((s: any) => {
+      const date = new Date(s.created_at);
+      if (filterFrom && date < new Date(filterFrom + "T00:00:00")) return false;
+      if (filterTo && date > new Date(filterTo + "T23:59:59")) return false;
+      if (filterStore !== "all" && s.store_id !== filterStore) return false;
+      if (filterUser !== "all" && s.recorded_by !== filterUser) return false;
+      if (filterPayment === "cash" && Number(s.cash_amount) === 0) return false;
+      if (filterPayment === "upi" && Number(s.upi_amount) === 0) return false;
+      if (filterPayment === "outstanding" && Number(s.outstanding_amount) === 0) return false;
+      return true;
+    });
+  }, [sales, filterFrom, filterTo, filterStore, filterUser, filterPayment]);
+
+  const activeFilterCount = [filterStore !== "all", filterUser !== "all", filterPayment !== "all", filterFrom !== thirtyDaysAgo, filterTo !== today].filter(Boolean).length;
+
+  const clearSalesFilters = () => {
+    setFilterFrom(thirtyDaysAgo);
+    setFilterTo(today);
+    setFilterStore("all");
+    setFilterUser("all");
+    setFilterPayment("all");
+  };
 
   const { data: stores } = useQuery({
     queryKey: ["stores-for-sale"],
@@ -231,7 +281,7 @@ const Sales = () => {
   });
 
   const resetForm = () => {
-    setStoreId(isPosUser ? POS_STORE_ID : ""); setCashAmount(""); setUpiAmount(""); setRecordedFor("");
+    setStoreId(isPosUser ? POS_STORE_ID : ""); setCashAmount(""); setUpiAmount(""); setRecordedFor(""); setSaleDate("");
     setItems([{ product_id: "", quantity: 1, unit_price: 0 }]);
   };
 
@@ -244,6 +294,14 @@ const Sales = () => {
     e.preventDefault();
     if (!storeId || items.some((i) => !i.product_id)) {
       toast.error("Please fill all required fields");
+      return;
+    }
+    if (items.some((i) => i.quantity <= 0)) {
+      toast.error("All item quantities must be greater than zero");
+      return;
+    }
+    if (totalAmount === 0) {
+      toast.error("Sale total cannot be zero");
       return;
     }
     // POS users: payment must equal total (no outstanding allowed)
@@ -271,8 +329,7 @@ const Sales = () => {
       return;
     }
 
-    const { count } = await supabase.from("sales").select("id", { count: "exact", head: true });
-    const displayId = `SALE-${String((count || 0) + 1).padStart(6, "0")}`;
+    const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "SALE", seq_name: "sale_display_seq" });
 
     const effectiveRecordedBy = recordedFor || user!.id;
     const loggedBy = recordedFor ? user!.id : null;
@@ -289,6 +346,7 @@ const Sales = () => {
       outstanding_amount: outstandingFromSale,
       old_outstanding: oldOutstanding,
       new_outstanding: newOutstanding,
+      ...(saleDate ? { created_at: new Date(saleDate).toISOString() } : {}),
     }).select("id").single();
 
     if (error) { toast.error(error.message); setSaving(false); return; }
@@ -304,6 +362,30 @@ const Sales = () => {
 
     logActivity(user!.id, "Recorded sale", "sale", displayId, sale.id, { total: totalAmount, store: storeId });
     await supabase.from("stores").update({ outstanding: newOutstanding }).eq("id", storeId);
+
+    // If backdated, recalculate all running balances in chronological order
+    if (saleDate) {
+      const { data: storeRow } = await supabase.from("stores").select("opening_balance").eq("id", storeId).single();
+      let runBal = Number(storeRow?.opening_balance || 0);
+      const [{ data: allSales }, { data: allTxns }] = await Promise.all([
+        supabase.from("sales").select("id, created_at, total_amount, cash_amount, upi_amount").eq("store_id", storeId).order("created_at", { ascending: true }),
+        supabase.from("transactions").select("id, created_at, total_amount").eq("store_id", storeId).order("created_at", { ascending: true }),
+      ]);
+      const timeline = [
+        ...(allSales || []).map((s: any) => ({ type: "sale", id: s.id, date: s.created_at, delta: Number(s.total_amount) - Number(s.cash_amount) - Number(s.upi_amount) })),
+        ...(allTxns || []).map((t: any) => ({ type: "txn", id: t.id, date: t.created_at, delta: -Number(t.total_amount) })),
+      ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      for (const entry of timeline) {
+        const oldBal = runBal;
+        runBal += entry.delta;
+        if (entry.type === "sale") {
+          await supabase.from("sales").update({ old_outstanding: oldBal, new_outstanding: runBal }).eq("id", entry.id);
+        } else {
+          await supabase.from("transactions").update({ old_outstanding: oldBal, new_outstanding: runBal }).eq("id", entry.id);
+        }
+      }
+      await supabase.from("stores").update({ outstanding: runBal }).eq("id", storeId);
+    }
 
     // Auto-mark pending orders for this store as delivered
     const { data: pendingOrders } = await supabase
@@ -406,7 +488,7 @@ const Sales = () => {
             priority: 1,
             onClick: () => {
               exportCSV(
-                (sales || []).map((s: any) => ({ ...s, store_name: s.stores?.name || "", customer_name: s.customers?.name || "", recorder: getRecorderName(s.recorded_by) })),
+                filteredSales.map((s: any) => ({ ...s, store_name: s.stores?.name || "", customer_name: s.customers?.name || "", recorder: getRecorderName(s.recorded_by) })),
                 [
                   { header: "Sale ID", key: "display_id" },
                   { header: "Store", key: "store_name" },
@@ -425,9 +507,63 @@ const Sales = () => {
         ]}
       />
 
+      <div className="flex flex-wrap items-center gap-2 p-3 rounded-lg border bg-muted/30">
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="h-8 text-xs gap-1.5 justify-start font-normal flex-1 min-w-[100px] sm:flex-none">
+              <CalendarIcon className="h-3 w-3 shrink-0" />
+              {filterFrom ? format(new Date(filterFrom + "T00:00:00"), "dd MMM yy") : "From"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar mode="single" selected={filterFrom ? new Date(filterFrom + "T00:00:00") : undefined} onSelect={(d) => setFilterFrom(d ? format(d, "yyyy-MM-dd") : "")} initialFocus />
+          </PopoverContent>
+        </Popover>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="h-8 text-xs gap-1.5 justify-start font-normal flex-1 min-w-[100px] sm:flex-none">
+              <CalendarIcon className="h-3 w-3 shrink-0" />
+              {filterTo ? format(new Date(filterTo + "T00:00:00"), "dd MMM yy") : "To"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar mode="single" selected={filterTo ? new Date(filterTo + "T00:00:00") : undefined} onSelect={(d) => setFilterTo(d ? format(d, "yyyy-MM-dd") : "")} initialFocus />
+          </PopoverContent>
+        </Popover>
+        <Select value={filterStore} onValueChange={setFilterStore}>
+          <SelectTrigger className="h-8 text-xs flex-1 min-w-[120px] sm:flex-none sm:w-40"><SelectValue placeholder="All stores" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All stores</SelectItem>
+            {stores?.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={filterUser} onValueChange={setFilterUser}>
+          <SelectTrigger className="h-8 text-xs flex-1 min-w-[120px] sm:flex-none sm:w-40"><SelectValue placeholder="All users" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All users</SelectItem>
+            {profiles?.map((p: any) => <SelectItem key={p.user_id} value={p.user_id}>{p.full_name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={filterPayment} onValueChange={setFilterPayment}>
+          <SelectTrigger className="h-8 text-xs flex-1 min-w-[120px] sm:flex-none sm:w-40"><SelectValue placeholder="Payment method" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All methods</SelectItem>
+            <SelectItem value="cash">Cash only</SelectItem>
+            <SelectItem value="upi">UPI only</SelectItem>
+            <SelectItem value="outstanding">Has outstanding</SelectItem>
+          </SelectContent>
+        </Select>
+        {activeFilterCount > 0 && (
+          <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={clearSalesFilters}>
+            <X className="h-3 w-3 mr-1" /> Clear ({activeFilterCount})
+          </Button>
+        )}
+        <span className="ml-auto text-xs text-muted-foreground">{filteredSales.length} result{filteredSales.length !== 1 ? "s" : ""}</span>
+      </div>
+
       <DataTable
         columns={columns}
-        data={sales || []}
+        data={filteredSales}
         searchKey="display_id"
         searchPlaceholder="Search by sale ID..."
         onRowClick={(row: any) => setSelectedSaleId(row.id)}
@@ -561,6 +697,18 @@ const Sales = () => {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+            )}
+
+            {isAdmin && (
+              <div>
+                <Label>Sale Date <span className="text-muted-foreground text-xs font-normal">(leave blank to use current time)</span></Label>
+                <Input
+                  type="datetime-local"
+                  value={saleDate}
+                  onChange={(e) => setSaleDate(e.target.value)}
+                  className="mt-1"
+                />
               </div>
             )}
 

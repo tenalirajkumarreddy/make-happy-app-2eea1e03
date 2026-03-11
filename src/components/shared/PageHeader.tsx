@@ -1,3 +1,4 @@
+import React from "react";
 import { Button } from "@/components/ui/button";
 import { LucideIcon, Plus, MoreVertical } from "lucide-react";
 import {
@@ -28,17 +29,19 @@ interface PageHeaderProps {
   };
   /** Secondary actions — shown in overflow menu on small screens, revealed as screen grows */
   actions?: PageAction[];
+  /** Always-visible node rendered before the primary action (e.g. a Filters button) */
+  filterNode?: React.ReactNode;
 }
 
-export function PageHeader({ title, subtitle, primaryAction, actions = [] }: PageHeaderProps) {
+export function PageHeader({ title, subtitle, primaryAction, actions = [], filterNode }: PageHeaderProps) {
   // Sort by priority (lower = more important)
   const sorted = [...actions].sort((a, b) => (a.priority ?? 10) - (b.priority ?? 10));
 
   return (
-    <div className="flex items-start justify-between gap-3 mb-6">
+    <div className="flex items-center justify-between gap-3 pb-4 mb-2">
       <div className="min-w-0">
         <h1 className="page-header">{title}</h1>
-        {subtitle && <p className="page-subtitle mt-1">{subtitle}</p>}
+        {subtitle && <p className="page-subtitle mt-0.5 hidden sm:block">{subtitle}</p>}
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
@@ -66,6 +69,9 @@ export function PageHeader({ title, subtitle, primaryAction, actions = [] }: Pag
             </Button>
           );
         })}
+
+        {/* Filters node — always visible */}
+        {filterNode}
 
         {/* Primary action — always visible */}
         {primaryAction && (

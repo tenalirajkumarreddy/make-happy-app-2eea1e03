@@ -5,11 +5,15 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2, UserPlus } from "lucide-react";
+import { Loader2, UserPlus, MapPin } from "lucide-react";
 import { useState } from "react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -57,8 +61,38 @@ const AccessControl = () => {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteName, setInviteName] = useState("");
   const [inviteRole, setInviteRole] = useState("agent");
+  const [confirmBan, setConfirmBan] = useState<{ userId: string; name: string } | null>(null);
 
   const { allPermissions, isLoading: permsLoading, saving: permSaving, getPermissionsForUser, handleToggle } = useUserPermissions();
+
+  const { data: agentRoutes, refetch: refetchAgentRoutes } = useQuery({
+    queryKey: ["agent-routes"],
+    queryFn: async () => {
+      const { data } = await supabase.from("agent_routes").select("user_id, route_id, enabled");
+      return data || [];
+    },
+  });
+
+  const { data: routesWithTypes } = useQuery({
+    queryKey: ["routes-for-access"],
+    queryFn: async () => {
+      const { data } = await supabase.from("routes").select("id, name, store_type_id, store_types(name)").eq("is_active", true).order("name");
+      return data || [];
+    },
+  });
+
+  const isRouteEnabled = (userId: string, routeId: string) =>
+    (agentRoutes || []).some((r) => r.user_id === userId && r.route_id === routeId && r.enabled);
+
+  const handleRouteToggle = async (userId: string, routeId: string) => {
+    const current = isRouteEnabled(userId, routeId);
+    const { error } = await supabase.from("agent_routes").upsert(
+      { user_id: userId, route_id: routeId, enabled: !current },
+      { onConflict: "user_id,route_id" }
+    );
+    if (error) toast.error(error.message);
+    else refetchAgentRoutes();
+  };
 
   const { data: users, isLoading } = useQuery({
     queryKey: ["all-users"],
@@ -148,6 +182,7 @@ const AccessControl = () => {
         <TabsList>
           <TabsTrigger value="staff">Staff ({staffUsers.length})</TabsTrigger>
           <TabsTrigger value="customers">Customers ({customerUsers.length})</TabsTrigger>
+          {isAdmin && <TabsTrigger value="routes"><MapPin className="h-3.5 w-3.5 mr-1" />Route Access</TabsTrigger>}
         </TabsList>
 
         {/* ── Staff Tab ── */}
@@ -217,7 +252,7 @@ const AccessControl = () => {
                                 variant={row.is_active ? "destructive" : "default"}
                                 size="sm"
                                 className="h-7 text-xs"
-                                onClick={() => handleToggleActive(row.user_id, row.is_active)}
+                                onClick={() => row.is_active ? setConfirmBan({ userId: row.user_id, name: row.full_name }) : handleToggleActive(row.user_id, row.is_active)}
                               >
                                 {row.is_active ? "Disable" : "Enable"}
                               </Button>
@@ -258,7 +293,7 @@ const AccessControl = () => {
                       <Badge variant="default" className="uppercase text-[10px]">{userRole.replace("_", " ")}</Badge>
                     )}
                     {isAdmin && !isSA && (
-                      <Button variant={row.is_active ? "destructive" : "default"} size="sm" className="h-7 text-xs" onClick={() => handleToggleActive(row.user_id, row.is_active)}>
+                      <Button variant={row.is_active ? "destructive" : "default"} size="sm" className="h-7 text-xs" onClick={() => row.is_active ? setConfirmBan({ userId: row.user_id, name: row.full_name }) : handleToggleActive(row.user_id, row.is_active)}>
                         {row.is_active ? "Disable" : "Enable"}
                       </Button>
                     )}
@@ -315,7 +350,7 @@ const AccessControl = () => {
                     <TableCell><StatusBadge status={row.is_active ? "active" : "inactive"} /></TableCell>
                     {isAdmin && (
                       <TableCell>
-                        <Button variant={row.is_active ? "destructive" : "default"} size="sm" className="h-7 text-xs" onClick={() => handleToggleActive(row.user_id, row.is_active)}>
+                        <Button variant={row.is_active ? "destructive" : "default"} size="sm" className="h-7 text-xs" onClick={() => row.is_active ? setConfirmBan({ userId: row.user_id, name: row.full_name }) : handleToggleActive(row.user_id, row.is_active)}>
                           {row.is_active ? "Disable" : "Enable"}
                         </Button>
                       </TableCell>
@@ -338,7 +373,7 @@ const AccessControl = () => {
                 <div className="flex items-center gap-2 shrink-0">
                   <StatusBadge status={row.is_active ? "active" : "inactive"} />
                   {isAdmin && (
-                    <Button variant={row.is_active ? "destructive" : "default"} size="sm" className="h-7 text-xs" onClick={() => handleToggleActive(row.user_id, row.is_active)}>
+                    <Button variant={row.is_active ? "destructive" : "default"} size="sm" className="h-7 text-xs" onClick={() => row.is_active ? setConfirmBan({ userId: row.user_id, name: row.full_name }) : handleToggleActive(row.user_id, row.is_active)}>
                       {row.is_active ? "Disable" : "Enable"}
                     </Button>
                   )}
@@ -347,6 +382,83 @@ const AccessControl = () => {
             ))}
           </div>
         </TabsContent>
+
+        {/* ── Route Access Tab ── */}
+        {isAdmin && (
+          <TabsContent value="routes" className="mt-4">
+            {(() => {
+              const agents = staffUsers.filter((u) => u._role === "agent" || u._role === "marketer");
+              if (!routesWithTypes || routesWithTypes.length === 0) {
+                return <div className="rounded-xl border bg-card p-10 text-center text-muted-foreground">No routes created yet. Create routes first.</div>;
+              }
+              if (agents.length === 0) {
+                return <div className="rounded-xl border bg-card p-10 text-center text-muted-foreground">No agents or marketers found.</div>;
+              }
+
+              // Group routes by store type
+              const byType: Record<string, { typeName: string; routes: typeof routesWithTypes }> = {};
+              routesWithTypes.forEach((r: any) => {
+                const tid = r.store_type_id;
+                if (!byType[tid]) byType[tid] = { typeName: r.store_types?.name || "Other", routes: [] };
+                byType[tid].routes.push(r);
+              });
+
+              return (
+                <div className="space-y-4">
+                  <p className="text-xs text-muted-foreground">Check a box to grant an agent access to that route. Changes take effect immediately.</p>
+                  <ScrollArea className="w-full">
+                    <div className="rounded-xl border bg-card min-w-[600px]">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-muted/50 hover:bg-muted/50">
+                            <TableHead className="min-w-[180px]">Route</TableHead>
+                            {agents.map((a) => (
+                              <TableHead key={a.user_id} className="text-center min-w-[100px] text-xs">
+                                <div className="font-medium truncate max-w-[96px]">{a.full_name}</div>
+                                <div className="text-[10px] font-normal text-muted-foreground uppercase">{a._role}</div>
+                              </TableHead>
+                            ))}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {Object.entries(byType).map(([tid, group]) => (
+                            <>
+                              <TableRow key={`type-${tid}`} className="bg-accent/30 hover:bg-accent/30">
+                                <TableCell colSpan={agents.length + 1} className="text-xs font-bold uppercase tracking-wider text-muted-foreground py-1.5 pl-4">
+                                  {group.typeName}
+                                </TableCell>
+                              </TableRow>
+                              {group.routes.map((route: any) => (
+                                <TableRow key={route.id}>
+                                  <TableCell className="font-medium text-sm pl-6">
+                                    <div className="flex items-center gap-2">
+                                      <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
+                                      {route.name}
+                                    </div>
+                                  </TableCell>
+                                  {agents.map((agent) => (
+                                    <TableCell key={agent.user_id} className="text-center">
+                                      <Checkbox
+                                        checked={isRouteEnabled(agent.user_id, route.id)}
+                                        onCheckedChange={() => handleRouteToggle(agent.user_id, route.id)}
+                                        className="h-4 w-4"
+                                      />
+                                    </TableCell>
+                                  ))}
+                                </TableRow>
+                              ))}
+                            </>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    <ScrollBar orientation="horizontal" />
+                  </ScrollArea>
+                </div>
+              );
+            })()}
+          </TabsContent>
+        )}
       </Tabs>
 
       {/* Invite Staff Dialog */}
@@ -371,6 +483,21 @@ const AccessControl = () => {
           </form>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!confirmBan} onOpenChange={(v) => { if (!v) setConfirmBan(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Disable user account?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong>{confirmBan?.name}</strong> will be immediately signed out and unable to access the app until re-enabled.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setConfirmBan(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive hover:bg-destructive/90" onClick={() => { if (confirmBan) { handleToggleActive(confirmBan.userId, true); setConfirmBan(null); } }}>Disable</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

@@ -33,12 +33,13 @@ export default function PaymentOutstandingReport() {
   const { data, isLoading } = useQuery({
     queryKey: ["payment-outstanding-report", inactiveDays],
     queryFn: async () => {
-      const [storesRes, txnRes, salesRes, storeTypesRes, customersRes] = await Promise.all([
+      const [storesRes, txnRes, salesRes, storeTypesRes, customersRes, ordersRes] = await Promise.all([
         supabase.from("stores").select("id, name, display_id, outstanding, opening_balance, store_type_id, customer_id").eq("is_active", true),
         supabase.from("transactions").select("store_id, total_amount, cash_amount, upi_amount, created_at, recorded_by").order("created_at", { ascending: false }),
         supabase.from("sales").select("store_id, total_amount, outstanding_amount, created_at").order("created_at", { ascending: false }),
-        supabase.from("store_types").select("id, name"),
-        supabase.from("customers").select("id, name, phone"),
+        supabase.from("store_types").select("id, name, credit_limit_kyc, credit_limit_no_kyc"),
+        supabase.from("customers").select("id, name, phone, kyc_status, credit_limit_override"),
+        supabase.from("orders").select("store_id, created_at").order("created_at", { ascending: false }),
       ]);
 
       const stores = storesRes.data || [];
@@ -46,9 +47,16 @@ export default function PaymentOutstandingReport() {
       const allSales = salesRes.data || [];
       const storeTypes = storeTypesRes.data || [];
       const customers = customersRes.data || [];
+      const allOrders = ordersRes.data || [];
 
-      const storeTypeMap = Object.fromEntries(storeTypes.map(t => [t.id, t.name]));
+      const storeTypeMap = Object.fromEntries(storeTypes.map(t => [t.id, { name: t.name, creditKyc: Number(t.credit_limit_kyc), creditNoKyc: Number(t.credit_limit_no_kyc) }]));
       const customerMap = Object.fromEntries(customers.map(c => [c.id, c]));
+
+      // Last order date per store
+      const lastOrderDate: Record<string, string> = {};
+      allOrders.forEach(o => {
+        if (!lastOrderDate[o.store_id] || o.created_at > lastOrderDate[o.store_id]) lastOrderDate[o.store_id] = o.created_at;
+      });
 
       // Total outstanding
       const totalOutstanding = stores.reduce((s, st) => s + Number(st.outstanding), 0);
@@ -84,25 +92,39 @@ export default function PaymentOutstandingReport() {
         const openingBal = Number(s.opening_balance);
         const lastSale = lastSaleDate[s.id];
         const lastPayment = lastPaymentDate[s.id];
+        const lastOrder = lastOrderDate[s.id];
         const daysSinceLastSale = lastSale ? Math.floor((nowMs - new Date(lastSale).getTime()) / 86400000) : 999;
         const daysSinceLastPayment = lastPayment ? Math.floor((nowMs - new Date(lastPayment).getTime()) / 86400000) : 999;
-        const typeName = storeTypeMap[s.store_type_id] || "Other";
+        const daysSinceLastOrder = lastOrder ? Math.floor((nowMs - new Date(lastOrder).getTime()) / 86400000) : 999;
+        const typeInfo = storeTypeMap[s.store_type_id] || { name: "Other", creditKyc: 0, creditNoKyc: 0 };
+        const typeName = typeInfo.name;
         const cust = customerMap[s.customer_id];
+        const isKyc = cust?.kyc_status === "verified";
+        const creditLimit = cust?.credit_limit_override
+          ? Number(cust.credit_limit_override)
+          : isKyc ? typeInfo.creditKyc : typeInfo.creditNoKyc;
 
-        // Danger: outstanding > 2x opening balance OR no payment in 30+ days with high outstanding
-        const isDanger = outstanding > openingBal * 2 || (daysSinceLastPayment > 30 && outstanding > 5000);
-        // Inactive: has outstanding but no order/sale in X days
+        // Danger: outstanding > 2x credit limit OR no payment in 30+ days with high outstanding
+        const isDanger = (creditLimit > 0 && outstanding > creditLimit * 2) || (daysSinceLastPayment > 30 && outstanding > 5000);
+        // Inactive: has outstanding but no sale in X days
         const isInactive = daysSinceLastSale >= inactiveDays && outstanding > 0;
+        // Credit limit exceeded
+        const isCreditExceeded = creditLimit > 0 && outstanding > creditLimit;
+        // No recent orders (15 days)
+        const hasNoRecentOrders = daysSinceLastOrder >= 15;
 
         return {
           id: s.id, name: s.name, displayId: s.display_id, outstanding, openingBalance: openingBal,
           type: typeName, customerName: cust?.name || "-", customerPhone: cust?.phone || "-",
-          daysSinceLastSale, daysSinceLastPayment, isDanger, isInactive,
+          daysSinceLastSale, daysSinceLastPayment, daysSinceLastOrder, isDanger, isInactive,
+          isCreditExceeded, hasNoRecentOrders, creditLimit,
         };
       }).sort((a, b) => b.outstanding - a.outstanding);
 
       const dangerCustomers = storeAnalysis.filter(s => s.isDanger);
       const inactiveCustomers = storeAnalysis.filter(s => s.isInactive);
+      const creditExceededStores = storeAnalysis.filter(s => s.isCreditExceeded);
+      const noRecentOrdersStores = storeAnalysis.filter(s => s.hasNoRecentOrders);
 
       // Aging analysis
       const aging = { "0-30": 0, "31-60": 0, "61-90": 0, "90+": 0 };
@@ -145,7 +167,7 @@ export default function PaymentOutstandingReport() {
 
       return {
         totalOutstanding, totalCollections, collectionRate, totalOpeningBalance,
-        storeAnalysis, dangerCustomers, inactiveCustomers,
+        storeAnalysis, dangerCustomers, inactiveCustomers, creditExceededStores, noRecentOrdersStores,
         agingData, outstandingByType, collectionTrend, paymentSplit,
         storesWithOutstanding: storeAnalysis.length,
       };
@@ -227,11 +249,15 @@ export default function PaymentOutstandingReport() {
         <StatCard title="Stores w/ Dues" value={String(d.storesWithOutstanding)} icon={DollarSign} iconColor="bg-warning" />
         <StatCard title="Danger" value={String(d.dangerCustomers.length)} icon={AlertTriangle} iconColor="bg-destructive" />
         <StatCard title="Inactive" value={String(d.inactiveCustomers.length)} icon={UserX} iconColor="bg-warning" />
+        <StatCard title="Credit Exceeded" value={String(d.creditExceededStores.length)} icon={Shield} iconColor="bg-destructive" />
+        <StatCard title="No Orders (15d)" value={String(d.noRecentOrdersStores.length)} icon={Clock} iconColor="bg-warning" />
       </div>
 
       <Tabs defaultValue="danger">
         <TabsList className="flex-wrap h-auto">
           <TabsTrigger value="danger">⚠️ Danger</TabsTrigger>
+          <TabsTrigger value="credit">💳 Credit Exceeded</TabsTrigger>
+          <TabsTrigger value="noorders">📭 No Orders</TabsTrigger>
           <TabsTrigger value="inactive">Inactive</TabsTrigger>
           <TabsTrigger value="all">All Outstanding</TabsTrigger>
           <TabsTrigger value="aging">Aging</TabsTrigger>
@@ -257,6 +283,53 @@ export default function PaymentOutstandingReport() {
                     <TableCell className="text-right">{fmt(s.openingBalance)}</TableCell>
                     <TableCell className="text-right">{s.daysSinceLastSale < 999 ? s.daysSinceLastSale + "d ago" : "Never"}</TableCell>
                     <TableCell className="text-right">{s.daysSinceLastPayment < 999 ? s.daysSinceLastPayment + "d ago" : "Never"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody></Table>
+            )}
+          </CardContent></Card>
+        </TabsContent>
+
+        <TabsContent value="credit">
+          <Card><CardHeader><CardTitle className="text-sm flex items-center gap-2 text-destructive"><Shield className="h-4 w-4" />Credit Limit Exceeded — Outstanding greater than allowed credit</CardTitle></CardHeader><CardContent>
+            {d.creditExceededStores.length === 0 ? <p className="text-sm text-muted-foreground text-center py-8">No stores exceeding credit limit 🎉</p> : (
+              <Table><TableHeader><TableRow>
+                <TableHead>#</TableHead><TableHead>Store</TableHead><TableHead>Type</TableHead><TableHead>Customer</TableHead><TableHead>Phone</TableHead>
+                <TableHead className="text-right">Outstanding</TableHead><TableHead className="text-right">Credit Limit</TableHead><TableHead className="text-right">Excess</TableHead>
+              </TableRow></TableHeader><TableBody>
+                {d.creditExceededStores.map((s, i) => (
+                  <TableRow key={s.id} className="bg-destructive/5">
+                    <TableCell>{i + 1}</TableCell>
+                    <TableCell className="font-medium">{s.name}</TableCell>
+                    <TableCell><Badge variant="outline">{s.type}</Badge></TableCell>
+                    <TableCell>{s.customerName}</TableCell>
+                    <TableCell>{s.customerPhone}</TableCell>
+                    <TableCell className="text-right font-bold text-destructive">{fmt(s.outstanding)}</TableCell>
+                    <TableCell className="text-right">{s.creditLimit > 0 ? fmt(s.creditLimit) : "—"}</TableCell>
+                    <TableCell className="text-right font-bold text-destructive">{s.creditLimit > 0 ? fmt(s.outstanding - s.creditLimit) : "—"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody></Table>
+            )}
+          </CardContent></Card>
+        </TabsContent>
+
+        <TabsContent value="noorders">
+          <Card><CardHeader><CardTitle className="text-sm flex items-center gap-2 text-warning"><Clock className="h-4 w-4" />No Orders in Last 15 Days — Outstanding with no recent activity</CardTitle></CardHeader><CardContent>
+            {d.noRecentOrdersStores.length === 0 ? <p className="text-sm text-muted-foreground text-center py-8">All active stores have recent orders</p> : (
+              <Table><TableHeader><TableRow>
+                <TableHead>#</TableHead><TableHead>Store</TableHead><TableHead>Type</TableHead><TableHead>Customer</TableHead>
+                <TableHead className="text-right">Outstanding</TableHead><TableHead className="text-right">Last Order</TableHead><TableHead className="text-right">Last Sale</TableHead>
+              </TableRow></TableHeader><TableBody>
+                {d.noRecentOrdersStores.map((s, i) => (
+                  <TableRow key={s.id}>
+                    <TableCell>{i + 1}</TableCell>
+                    <TableCell className="font-medium">{s.name}</TableCell>
+                    <TableCell><Badge variant="outline">{s.type}</Badge></TableCell>
+                    <TableCell>{s.customerName}</TableCell>
+                    <TableCell className="text-right font-bold">{fmt(s.outstanding)}</TableCell>
+                    <TableCell className="text-right">{s.daysSinceLastOrder < 999 ? s.daysSinceLastOrder + "d ago" : "Never"}</TableCell>
+                    <TableCell className="text-right">{s.daysSinceLastSale < 999 ? s.daysSinceLastSale + "d ago" : "Never"}</TableCell>
                   </TableRow>
                 ))}
               </TableBody></Table>

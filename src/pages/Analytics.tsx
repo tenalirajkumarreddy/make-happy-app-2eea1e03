@@ -1,26 +1,45 @@
 import { PageHeader } from "@/components/shared/PageHeader";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2 } from "lucide-react";
+import { Loader2, CalendarIcon } from "lucide-react";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { format } from "date-fns";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  LineChart, Line, PieChart, Pie, Cell, AreaChart, Area,
+  LineChart, Line, PieChart, Pie, Cell, AreaChart, Area, Legend,
 } from "recharts";
 
 const COLORS = ["hsl(217, 91%, 50%)", "hsl(142, 72%, 42%)", "hsl(38, 92%, 50%)", "hsl(280, 65%, 60%)", "hsl(0, 72%, 51%)"];
 
 const Analytics = () => {
+  const today = new Date();
+  const thirtyAgo = new Date(today);
+  thirtyAgo.setDate(thirtyAgo.getDate() - 29);
+  const [from, setFrom] = useState(thirtyAgo.toISOString().split("T")[0]);
+  const [to, setTo] = useState(today.toISOString().split("T")[0]);
+  const [pending, setPending] = useState({ from: thirtyAgo.toISOString().split("T")[0], to: today.toISOString().split("T")[0] });
+
+  const applyFilter = () => setPending({ from, to });
+
   const { data, isLoading } = useQuery({
-    queryKey: ["analytics-enhanced"],
+    queryKey: ["analytics-enhanced", pending.from, pending.to],
     queryFn: async () => {
-      const [salesRes, txnRes, storesRes, ordersRes, profilesRes, rolesRes, customersRes] = await Promise.all([
-        supabase.from("sales").select("total_amount, cash_amount, upi_amount, created_at, recorded_by, stores(name, store_type_id, store_types(name))").order("created_at"),
-        supabase.from("transactions").select("total_amount, cash_amount, upi_amount, created_at"),
-        supabase.from("stores").select("id, outstanding, store_type_id, is_active, created_at, store_types(name)").eq("is_active", true),
+      const startOfDay = pending.from + "T00:00:00";
+      const endOfDay = pending.to + "T23:59:59";
+
+      const [salesRes, txnRes, storesRes, ordersRes, profilesRes, rolesRes, customersRes, routesRes, visitsRes] = await Promise.all([
+        supabase.from("sales").select("total_amount, cash_amount, upi_amount, created_at, recorded_by, stores(name, store_type_id, route_id, store_types(name))").gte("created_at", startOfDay).lte("created_at", endOfDay).order("created_at"),
+        supabase.from("transactions").select("total_amount, cash_amount, upi_amount, created_at").gte("created_at", startOfDay).lte("created_at", endOfDay),
+        supabase.from("stores").select("id, outstanding, store_type_id, route_id, is_active, created_at, store_types(name)").eq("is_active", true),
         supabase.from("orders").select("status"),
         supabase.from("profiles").select("user_id, full_name"),
         supabase.from("user_roles").select("user_id, role").in("role", ["agent", "marketer"]),
         supabase.from("customers").select("id, created_at, kyc_status"),
+        supabase.from("routes").select("id, name").eq("is_active", true).order("name"),
+        supabase.from("store_visits").select("store_id, stores(route_id)").gte("visited_at", startOfDay).lte("visited_at", endOfDay),
       ]);
 
       const sales = salesRes.data || [];
@@ -30,22 +49,28 @@ const Analytics = () => {
       const profiles = profilesRes.data || [];
       const roles = rolesRes.data || [];
       const customers = customersRes.data || [];
+      const routes = routesRes.data || [];
+      const visits = visitsRes.data || [];
 
       const profileMap: Record<string, string> = {};
       profiles.forEach((p) => { profileMap[p.user_id] = p.full_name; });
 
-      // Daily sales trend (last 30 days)
-      const dailySales: Record<string, number> = {};
-      const last30 = Array.from({ length: 30 }, (_, i) => {
-        const d = new Date(); d.setDate(d.getDate() - (29 - i));
+      // Daily sales trend within the selected range
+      const fromDate = new Date(pending.from);
+      const toDate = new Date(pending.to);
+      const dayMs = 86400000;
+      const numDays = Math.min(Math.ceil((toDate.getTime() - fromDate.getTime()) / dayMs) + 1, 90);
+      const rangeDays = Array.from({ length: numDays }, (_, i) => {
+        const d = new Date(fromDate); d.setDate(fromDate.getDate() + i);
         return d.toISOString().split("T")[0];
       });
-      last30.forEach((d) => { dailySales[d] = 0; });
+      const dailySales: Record<string, number> = {};
+      rangeDays.forEach((d) => { dailySales[d] = 0; });
       sales.forEach((s) => {
         const day = s.created_at.split("T")[0];
         if (dailySales[day] !== undefined) dailySales[day] += Number(s.total_amount);
       });
-      const salesTrend = last30.map((d) => ({ date: d.slice(5), amount: dailySales[d] }));
+      const salesTrend = rangeDays.map((d) => ({ date: d.slice(5), amount: dailySales[d] }));
 
       // Payment method split
       const totalCash = sales.reduce((s, r) => s + Number(r.cash_amount), 0) + txns.reduce((s, r) => s + Number(r.cash_amount), 0);
@@ -72,7 +97,7 @@ const Analytics = () => {
         { name: "Cancelled", value: orderStatus.cancelled, color: "hsl(0, 72%, 51%)" },
       ].filter((o) => o.value > 0);
 
-      // Agent leaderboard
+      // Agent leaderboard (within range)
       const agentSales: Record<string, { total: number; count: number }> = {};
       const agentIds = new Set(roles.map((r) => r.user_id));
       sales.forEach((s) => {
@@ -87,7 +112,7 @@ const Analytics = () => {
         .sort((a, b) => b.total - a.total)
         .slice(0, 10);
 
-      // Customer growth (last 12 months)
+      // Customer growth (last 12 months, always)
       const monthlyCustomers: Record<string, number> = {};
       const last12 = Array.from({ length: 12 }, (_, i) => {
         const d = new Date(); d.setMonth(d.getMonth() - (11 - i));
@@ -114,7 +139,65 @@ const Analytics = () => {
       });
       const storeAnalytics = Object.entries(storesByType).map(([name, val]) => ({ name, ...val }));
 
-      return { salesTrend, paymentSplit, outstandingData, orderData, totalCash, totalUpi, leaderboard, customerGrowth, storeAnalytics };
+      // Revenue vs collections per day
+      const dailyCollections: Record<string, number> = {};
+      rangeDays.forEach((d) => { dailyCollections[d] = 0; });
+      txns.forEach((t) => {
+        const day = t.created_at.split("T")[0];
+        if (dailyCollections[day] !== undefined) dailyCollections[day] += Number(t.total_amount);
+      });
+      const revenueVsCollections = rangeDays.map((d) => ({
+        date: d.slice(5),
+        sales: dailySales[d],
+        collections: dailyCollections[d],
+      }));
+
+      // Top stores by sales in period
+      const storeSalesMap: Record<string, { name: string; amount: number; count: number }> = {};
+      sales.forEach((s: any) => {
+        const storeId = (s.stores as any)?.name ? (s.stores as any).name : "Unknown";
+        if (!storeSalesMap[storeId]) storeSalesMap[storeId] = { name: storeId, amount: 0, count: 0 };
+        storeSalesMap[storeId].amount += Number(s.total_amount);
+        storeSalesMap[storeId].count += 1;
+      });
+      const topStoresBySales = Object.values(storeSalesMap)
+        .sort((a, b) => b.amount - a.amount)
+        .slice(0, 10);
+
+      // KYC status distribution
+      const kycBuckets: Record<string, number> = { verified: 0, pending: 0, not_requested: 0, rejected: 0 };
+      customers.forEach((c) => { const k = c.kyc_status || "not_requested"; kycBuckets[k] = (kycBuckets[k] || 0) + 1; });
+      const kycData = [
+        { name: "Verified", value: kycBuckets.verified, color: "hsl(142, 72%, 42%)" },
+        { name: "Pending", value: kycBuckets.pending, color: "hsl(38, 92%, 50%)" },
+        { name: "Not Requested", value: kycBuckets.not_requested, color: "hsl(215, 20%, 65%)" },
+        { name: "Rejected", value: kycBuckets.rejected, color: "hsl(0, 72%, 51%)" },
+      ].filter((k) => k.value > 0);
+
+      // Outstanding distribution histogram
+      const outBuckets: Record<string, number> = { "₹0": 0, "₹1–1K": 0, "₹1K–5K": 0, "₹5K–20K": 0, "₹20K+": 0 };
+      stores.forEach((s) => {
+        const amt = Number(s.outstanding);
+        if (amt === 0) outBuckets["₹0"]++;
+        else if (amt <= 1000) outBuckets["₹1–1K"]++;
+        else if (amt <= 5000) outBuckets["₹1K–5K"]++;
+        else if (amt <= 20000) outBuckets["₹5K–20K"]++;
+        else outBuckets["₹20K+"]++;
+      });
+      const outstandingHistogram = Object.entries(outBuckets).map(([range, count]) => ({ range, count }));
+
+      // Route-wise sales & completion
+      const routeMap: Record<string, { name: string; sales: number; totalStores: number; visitedStores: Set<string> }> = {};
+      routes.forEach((r) => { routeMap[r.id] = { name: r.name, sales: 0, totalStores: 0, visitedStores: new Set() }; });
+      stores.forEach((s: any) => { if (s.route_id && routeMap[s.route_id]) routeMap[s.route_id].totalStores++; });
+      visits.forEach((v: any) => { const rid = v.stores?.route_id; if (rid && routeMap[rid]) routeMap[rid].visitedStores.add(v.store_id); });
+      sales.forEach((s: any) => { const rid = (s.stores as any)?.route_id; if (rid && routeMap[rid]) routeMap[rid].sales += Number(s.total_amount); });
+      const routeSalesData = Object.values(routeMap)
+        .filter((r) => r.totalStores > 0)
+        .map((r) => ({ name: r.name, sales: r.sales, completion: r.totalStores > 0 ? Math.round((r.visitedStores.size / r.totalStores) * 100) : 0 }))
+        .sort((a, b) => b.sales - a.sales);
+
+      return { salesTrend, paymentSplit, outstandingData, orderData, totalCash, totalUpi, leaderboard, customerGrowth, storeAnalytics, revenueVsCollections, topStoresBySales, kycData, outstandingHistogram, routeSalesData };
     },
   });
 
@@ -129,6 +212,39 @@ const Analytics = () => {
     <div className="space-y-6 animate-fade-in">
       <PageHeader title="Analytics" subtitle="Business intelligence and performance metrics" />
 
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-4">
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="h-8 text-xs gap-1.5 justify-start font-normal min-w-[110px]">
+              <CalendarIcon className="h-3 w-3 shrink-0" />
+              {from ? format(new Date(from + "T00:00:00"), "dd MMM yy") : "From"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar mode="single" selected={from ? new Date(from + "T00:00:00") : undefined} onSelect={(d) => setFrom(d ? format(d, "yyyy-MM-dd") : "")} initialFocus />
+          </PopoverContent>
+        </Popover>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="h-8 text-xs gap-1.5 justify-start font-normal min-w-[110px]">
+              <CalendarIcon className="h-3 w-3 shrink-0" />
+              {to ? format(new Date(to + "T00:00:00"), "dd MMM yy") : "To"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar mode="single" selected={to ? new Date(to + "T00:00:00") : undefined} onSelect={(d) => setTo(d ? format(d, "yyyy-MM-dd") : "")} initialFocus />
+          </PopoverContent>
+        </Popover>
+        <Button size="sm" onClick={applyFilter} disabled={isLoading} className="h-8">
+          {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Apply"}
+        </Button>
+        <Button size="sm" variant="ghost" className="h-8 text-xs text-muted-foreground" onClick={() => {
+          const t = new Date(); const f = new Date(t); f.setDate(t.getDate() - 29);
+          const fStr = f.toISOString().split("T")[0]; const tStr = t.toISOString().split("T")[0];
+          setFrom(fStr); setTo(tStr); setPending({ from: fStr, to: tStr });
+        }}>Last 30 days</Button>
+      </div>
+
       {!hasData && d.leaderboard.length === 0 ? (
         <div className="rounded-xl border bg-card p-12 text-center">
           <p className="text-lg font-semibold">No data yet</p>
@@ -139,7 +255,7 @@ const Analytics = () => {
           {/* Row 1: Sales trend + Payment methods */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div className="rounded-xl border bg-card p-5">
-              <h3 className="text-sm font-semibold mb-4">Sales Trend (Last 30 Days)</h3>
+              <h3 className="text-sm font-semibold mb-4">Sales Trend ({pending.from} to {pending.to})</h3>
               <ResponsiveContainer width="100%" height={260}>
                 <AreaChart data={d.salesTrend}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
@@ -263,6 +379,142 @@ const Analytics = () => {
                     </Pie>
                     <Tooltip />
                   </PieChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </div>
+
+          {/* Row 4: Revenue vs Collections + Agent Sales Count */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="rounded-xl border bg-card p-5">
+              <h3 className="text-sm font-semibold mb-4">Revenue vs Collections</h3>
+              {d.revenueVsCollections.every((r) => r.sales === 0 && r.collections === 0) ? (
+                <p className="text-sm text-muted-foreground text-center py-16">No data in range</p>
+              ) : (
+                <ResponsiveContainer width="100%" height={260}>
+                  <LineChart data={d.revenueVsCollections}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="date" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
+                    <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }}
+                      formatter={(v: number) => `₹${v.toLocaleString()}`}
+                    />
+                    <Legend wrapperStyle={{ fontSize: "12px" }} />
+                    <Line type="monotone" dataKey="sales" stroke="hsl(217, 91%, 50%)" strokeWidth={2} dot={false} name="Sales" />
+                    <Line type="monotone" dataKey="collections" stroke="hsl(142, 72%, 42%)" strokeWidth={2} dot={false} name="Collections" />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+
+            <div className="rounded-xl border bg-card p-5">
+              <h3 className="text-sm font-semibold mb-4">Agent Performance (Count vs Revenue)</h3>
+              {d.leaderboard.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-16">No agent sales yet</p>
+              ) : (
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={d.leaderboard}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="name" tick={{ fontSize: 9 }} stroke="hsl(var(--muted-foreground))" angle={-30} textAnchor="end" height={50} />
+                    <YAxis yAxisId="left" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                    <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }}
+                      formatter={(v: number, name: string) => [name === "Revenue" ? `₹${v.toLocaleString()}` : v, name]}
+                    />
+                    <Legend wrapperStyle={{ fontSize: "12px" }} />
+                    <Bar yAxisId="left" dataKey="total" fill="hsl(217, 91%, 50%)" radius={[4, 4, 0, 0]} name="Revenue" />
+                    <Bar yAxisId="right" dataKey="count" fill="hsl(142, 72%, 42%)" radius={[4, 4, 0, 0]} name="Sales Count" />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </div>
+
+          {/* Row 5: Top Stores by Sales */}
+          {d.topStoresBySales.length > 0 && (
+            <div className="rounded-xl border bg-card p-5">
+              <h3 className="text-sm font-semibold mb-4">Top Stores by Sales</h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={d.topStoresBySales} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis type="number" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
+                  <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" width={120} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }}
+                    formatter={(v: number) => `₹${v.toLocaleString()}`}
+                  />
+                  <Bar dataKey="amount" fill="hsl(38, 92%, 50%)" radius={[0, 6, 6, 0]} name="Sales Amount" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Row 6: KYC Status + Outstanding Histogram + Route Sales */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="rounded-xl border bg-card p-5">
+              <h3 className="text-sm font-semibold mb-4">Customers by KYC Status</h3>
+              {d.kycData.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-12">No customers</p>
+              ) : (
+                <>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <PieChart>
+                      <Pie data={d.kycData} cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={3} dataKey="value">
+                        {d.kycData.map((e, i) => <Cell key={i} fill={e.color} />)}
+                      </Pie>
+                      <Tooltip formatter={(v: number) => `${v} customers`} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 mt-2 text-xs">
+                    {d.kycData.map((k) => (
+                      <span key={k.name} className="flex items-center gap-1.5">
+                        <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: k.color }} />
+                        {k.name}: {k.value}
+                      </span>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="rounded-xl border bg-card p-5">
+              <h3 className="text-sm font-semibold mb-4">Outstanding Distribution</h3>
+              {d.outstandingHistogram.every((b) => b.count === 0) ? (
+                <p className="text-sm text-muted-foreground text-center py-12">No stores</p>
+              ) : (
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={d.outstandingHistogram}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="range" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }}
+                      formatter={(v: number) => [`${v} stores`, "Count"]}
+                    />
+                    <Bar dataKey="count" fill="hsl(0, 72%, 51%)" radius={[6, 6, 0, 0]} name="Stores" />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+
+            <div className="rounded-xl border bg-card p-5">
+              <h3 className="text-sm font-semibold mb-4">Sales by Route</h3>
+              {d.routeSalesData.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-12">No routes</p>
+              ) : (
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={d.routeSalesData} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis type="number" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => v >= 1000 ? `₹${(v/1000).toFixed(0)}k` : `₹${v}`} />
+                    <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" width={90} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }}
+                      formatter={(v: number, name: string) => [name === "sales" ? `₹${v.toLocaleString()}` : `${v}%`, name === "sales" ? "Sales" : "Completion"]}
+                    />
+                    <Bar dataKey="sales" fill="hsl(280, 65%, 60%)" radius={[0, 6, 6, 0]} name="sales" />
+                  </BarChart>
                 </ResponsiveContainer>
               )}
             </div>

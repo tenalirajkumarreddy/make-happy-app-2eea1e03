@@ -141,6 +141,12 @@
   }
 }
 
+@keyframes scan {
+  0%   { transform: translateY(-100px); }
+  50%  { transform: translateY(100px); }
+  100% { transform: translateY(-100px); }
+}
+
 /* Print styles for Reports */
 @media print {
   body {

@@ -4,13 +4,12 @@ import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { StorePricingDialog } from "@/components/stores/StorePricingDialog";
 import { CreateStoreWizard } from "@/components/stores/CreateStoreWizard";
-import { EditableCell } from "@/components/shared/EditableCell";
 import { CsvImportDialog } from "@/components/shared/CsvImportDialog";
 import { AdvancedFilters, applyFilters, type FilterValues } from "@/components/shared/AdvancedFilters";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { DollarSign, Store, Settings2, Upload } from "lucide-react";
+import { DollarSign, Store, Settings2, Upload, Loader2 } from "lucide-react";
 import { usePermission } from "@/hooks/usePermission";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -22,6 +21,10 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { logActivity } from "@/lib/activityLogger";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const Stores = () => {
   const navigate = useNavigate();
@@ -31,7 +34,12 @@ const Stores = () => {
   const [showImport, setShowImport] = useState(false);
   const [pricingStore, setPricingStore] = useState<any>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selectMode, setSelectMode] = useState(false);
   const [bulkRoute, setBulkRoute] = useState("");
+  const [editMode, setEditMode] = useState(false);
+  const [editData, setEditData] = useState<Record<string, { name: string; phone: string }>>({});
+  const [bulkSaving, setBulkSaving] = useState(false);
+  const [confirmBulkDeactivate, setConfirmBulkDeactivate] = useState(false);
   const [filters, setFilters] = useState<FilterValues>({});
   const qc = useQueryClient();
   const canManagePricing = role === "super_admin" || role === "manager";
@@ -74,12 +82,50 @@ const Stores = () => {
     },
   });
 
-  const updateStoreField = async (id: string, field: string, value: string) => {
-    const { error } = await supabase.from("stores").update({ [field]: value || null }).eq("id", id);
-    if (error) { toast.error(error.message); throw error; }
-    toast.success("Updated");
+  const enterEditMode = () => {
+    const data: Record<string, { name: string; phone: string }> = {};
+    (stores || []).forEach((s: any) => {
+      data[s.id] = { name: s.name || "", phone: s.phone || "" };
+    });
+    setEditData(data);
+    setEditMode(true);
+  };
+
+  const cancelEditMode = () => { setEditMode(false); setEditData({}); };
+
+  const saveAllEdits = async () => {
+    setBulkSaving(true);
+    const changed = (stores || []).filter((s: any) => {
+      const d = editData[s.id];
+      if (!d) return false;
+      return d.name !== (s.name || "") || d.phone !== (s.phone || "");
+    });
+    if (changed.length === 0) {
+      toast.info("No changes to save");
+      setBulkSaving(false);
+      setEditMode(false);
+      return;
+    }
+    const results = await Promise.all(
+      changed.map((s: any) => {
+        const d = editData[s.id];
+        return supabase.from("stores").update({ name: d.name || null, phone: d.phone || null }).eq("id", s.id);
+      })
+    );
+    setBulkSaving(false);
+    const errCount = results.filter((r) => r.error).length;
+    if (errCount > 0) { toast.error(`${errCount} update(s) failed`); }
+    else {
+      toast.success(`${changed.length} store(s) updated`);
+      logActivity(user!.id, `Bulk updated ${changed.length} stores`, "store");
+    }
+    setEditMode(false);
+    setEditData({});
     qc.invalidateQueries({ queryKey: ["stores"] });
   };
+
+  const setField = (id: string, field: keyof typeof editData[string], value: string) =>
+    setEditData((prev) => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
 
   const handleCsvImport = async (rows: Record<string, string>[]) => {
     let success = 0;
@@ -178,7 +224,7 @@ const Stores = () => {
   };
 
   const columns = [
-    ...(canBulk ? [{
+    ...(canBulk && selectMode ? [{
       header: () => (
         <Checkbox
           checked={selected.size === (stores?.length || 0) && (stores?.length || 0) > 0}
@@ -199,17 +245,30 @@ const Stores = () => {
     { header: "Store", accessor: (row: any) => (
       <div className="flex items-center gap-2">
         {row.photo_url && <img src={row.photo_url} alt="" className="h-8 w-8 rounded-md object-cover" />}
-        {canEdit ? (
-          <EditableCell value={row.name} onSave={(v) => updateStoreField(row.id, "name", v)} className="font-medium" />
+        {editMode ? (
+          <input
+            className="border border-input rounded px-2 py-0.5 text-sm bg-background w-36 focus:outline-none focus:ring-1 focus:ring-ring"
+            value={editData[row.id]?.name ?? row.name ?? ""}
+            onChange={(e) => setField(row.id, "name", e.target.value)}
+            onClick={(e) => e.stopPropagation()}
+          />
         ) : (
           <span className="font-medium">{row.name}</span>
         )}
       </div>
     )},
     { header: "Customer", accessor: (row: any) => row.customers?.name || "—", className: "text-muted-foreground text-sm hidden sm:table-cell" },
-    { header: "Phone", accessor: (row: any) => canEdit ? (
-      <EditableCell value={row.phone || ""} onSave={(v) => updateStoreField(row.id, "phone", v)} placeholder="Add phone" />
-    ) : (row.phone || "—"), className: "text-muted-foreground text-sm hidden md:table-cell" },
+    { header: "Phone", accessor: (row: any) => editMode ? (
+      <input
+        className="border border-input rounded px-2 py-0.5 text-sm bg-background w-32 focus:outline-none focus:ring-1 focus:ring-ring"
+        value={editData[row.id]?.phone ?? row.phone ?? ""}
+        onChange={(e) => setField(row.id, "phone", e.target.value)}
+        onClick={(e) => e.stopPropagation()}
+        placeholder="Add phone"
+      />
+    ) : (
+      <span className="text-muted-foreground text-sm">{row.phone || "—"}</span>
+    ), className: "hidden md:table-cell" },
     { header: "Type", accessor: (row: any) => row.store_types?.name ? <Badge variant="secondary">{row.store_types.name}</Badge> : "—", className: "hidden sm:table-cell" },
     { header: "Route", accessor: (row: any) => row.routes?.name || "—", className: "text-sm hidden lg:table-cell" },
     { header: "Outstanding", accessor: (row: any) => `₹${Number(row.outstanding).toLocaleString()}`, className: "font-semibold" },
@@ -241,31 +300,45 @@ const Stores = () => {
         title="Stores"
         subtitle="Manage store locations and assignments"
         primaryAction={canCreateStores ? { label: "Add Store", onClick: () => setShowAdd(true) } : undefined}
+        filterNode={
+          <AdvancedFilters
+            config={{
+              dateRange: true,
+              outstandingRange: true,
+              storeType: { options: storeTypes?.map((t) => ({ id: t.id, name: t.name })) || [] },
+              route: { options: allRoutes?.map((r) => ({ id: r.id, name: r.name })) || [] },
+              status: true,
+            }}
+            values={filters}
+            onChange={setFilters}
+          />
+        }
         actions={[
           { label: "Store Types", icon: Settings2, onClick: () => navigate("/store-types"), priority: 1 },
           ...(canCreateStores ? [{ label: "Import CSV", icon: Upload, onClick: () => setShowImport(true), priority: 2 as const }] : []),
+          ...(canBulk ? [{ label: selectMode ? "Done" : "Select", onClick: () => { setSelectMode((v) => !v); setSelected(new Set()); }, priority: 3 as const }] : []),
+          ...(canEdit && !editMode ? [{ label: "Bulk Edit", onClick: enterEditMode, priority: 4 as const }] : []),
         ]}
       />
 
-      <div className="flex items-center justify-end">
-        <AdvancedFilters
-          config={{
-            dateRange: true,
-            outstandingRange: true,
-            storeType: { options: storeTypes?.map((t) => ({ id: t.id, name: t.name })) || [] },
-            route: { options: allRoutes?.map((r) => ({ id: r.id, name: r.name })) || [] },
-            status: true,
-          }}
-          values={filters}
-          onChange={setFilters}
-        />
-      </div>
+      {editMode && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-primary/30 bg-primary/5 p-3">
+          <span className="text-sm font-medium text-primary">Bulk edit — modify name or phone then save</span>
+          <div className="ml-auto flex gap-2">
+            <Button size="sm" variant="outline" onClick={cancelEditMode} disabled={bulkSaving}>Cancel</Button>
+            <Button size="sm" onClick={saveAllEdits} disabled={bulkSaving}>
+              {bulkSaving && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+              Save All
+            </Button>
+          </div>
+        </div>
+      )}
 
-      {canBulk && selected.size > 0 && (
+      {canBulk && selectMode && selected.size > 0 && (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-accent/50 p-3">
           <span className="text-sm font-medium">{selected.size} selected</span>
           <Button variant="outline" size="sm" onClick={() => handleBulkStatus(true)}>Activate</Button>
-          <Button variant="outline" size="sm" onClick={() => handleBulkStatus(false)}>Deactivate</Button>
+          <Button variant="outline" size="sm" className="text-destructive border-destructive/40" onClick={() => setConfirmBulkDeactivate(true)}>Deactivate</Button>
           <div className="flex items-center gap-2">
             <Select value={bulkRoute} onValueChange={setBulkRoute}>
               <SelectTrigger className="h-8 w-40"><SelectValue placeholder="Assign route" /></SelectTrigger>
@@ -282,7 +355,7 @@ const Stores = () => {
         data={filteredStores}
         searchKey="name"
         searchPlaceholder="Search stores..."
-        onRowClick={(row) => navigate(`/stores/${row.id}`)}
+        onRowClick={(row) => { if (!editMode) navigate(`/stores/${row.id}`); }}
         renderMobileCard={(row: any) => (
           <div className={`rounded-xl border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow active:bg-muted/30 ${!row.is_active ? "opacity-60" : ""}`}>
             <div className="flex">
@@ -336,6 +409,21 @@ const Stores = () => {
         open={!!pricingStore}
         onOpenChange={(open) => { if (!open) setPricingStore(null); }}
       />
+
+      <AlertDialog open={confirmBulkDeactivate} onOpenChange={setConfirmBulkDeactivate}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Deactivate {selected.size} store(s)?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The selected stores will be deactivated and unavailable for new sales or orders until reactivated.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive hover:bg-destructive/90" onClick={() => { setConfirmBulkDeactivate(false); handleBulkStatus(false); }}>Deactivate</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

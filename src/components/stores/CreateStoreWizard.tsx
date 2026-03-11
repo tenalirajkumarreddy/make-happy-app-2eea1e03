@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -57,13 +57,15 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
   const [state, setState] = useState("");
   const [pincode, setPincode] = useState("");
   const [address, setAddress] = useState("");
-  const [openingBalance, setOpeningBalance] = useState("");
+  const [obAmount, setObAmount] = useState("");
+  const [obType, setObType] = useState<"debit" | "credit">("debit");
   const [locating, setLocating] = useState(false);
 
   // Pricing step
   const [priceMap, setPriceMap] = useState<Record<string, string>>({});
   const [duplicateWarnings, setDuplicateWarnings] = useState<string[]>([]);
   const [checkingDupes, setCheckingDupes] = useState(false);
+  const [custDuplicate, setCustDuplicate] = useState<{ id: string; name: string; display_id: string } | null>(null);
 
   const canEditPricing = role === "super_admin" || role === "manager";
 
@@ -106,7 +108,7 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
   const { data: customers } = useQuery({
     queryKey: ["customers-list"],
     queryFn: async () => {
-      const { data } = await supabase.from("customers").select("id, name, display_id").eq("is_active", true);
+      const { data } = await supabase.from("customers").select("id, name, display_id, phone").eq("is_active", true);
       return data || [];
     },
     enabled: open,
@@ -212,7 +214,8 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
     setName(""); setStoreTypeId(""); setRouteId(""); setPhone("");
     setPhotoUrl(""); setLat(null); setLng(null);
     setStreet(""); setArea(""); setCity(""); setDistrict(""); setState(""); setPincode(""); setAddress("");
-    setOpeningBalance("");
+    setObAmount("");
+    setObType("debit");
     setPriceMap({});
   };
 
@@ -248,7 +251,7 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
       const storeCount = (allStores?.length || 0) + 1;
       const storeDisplayId = `STR-${String(storeCount).padStart(6, "0")}`;
 
-      const ob = openingBalance ? Number(openingBalance) : 0;
+      const ob = obAmount && Number(obAmount) > 0 ? (obType === "credit" ? -Number(obAmount) : Number(obAmount)) : 0;
       const { data: newStore, error: storeErr } = await supabase.from("stores").insert({
         display_id: storeDisplayId,
         name,
@@ -295,8 +298,18 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
     setSaving(false);
   };
 
-  const canGoToDetails = customerMode === "select" ? !!customerId : !!newCustName.trim();
+  const canGoToDetails = customerMode === "select" ? !!customerId : !!newCustName.trim() && !(newCustPhone.trim() && custDuplicate);
   const canGoToPricing = !!name.trim() && !!storeTypeId;
+
+  // Debounced phone check for new customer
+  useEffect(() => {
+    if (!newCustPhone.trim() || newCustPhone.trim().length < 6) { setCustDuplicate(null); return; }
+    const timer = setTimeout(() => {
+      const match = (customers || []).find((c) => c.phone && c.phone === newCustPhone.trim());
+      setCustDuplicate(match ? { id: match.id, name: match.name, display_id: match.display_id } : null);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [newCustPhone, customers]);
 
   const getEffectivePrice = (product: any) => {
     if (typePricing && product.id in (typePricing as any)) return `₹${(typePricing as any)[product.id]} (type)`;
@@ -349,7 +362,16 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
             ) : (
               <div className="space-y-3">
                 <div><Label>Name *</Label><Input value={newCustName} onChange={e => setNewCustName(e.target.value)} className="mt-1" /></div>
-                <div><Label>Phone</Label><Input value={newCustPhone} onChange={e => setNewCustPhone(e.target.value)} className="mt-1" /></div>
+                <div>
+                  <Label>Phone</Label>
+                  <Input value={newCustPhone} onChange={e => setNewCustPhone(e.target.value)} className="mt-1" />
+                  {custDuplicate && newCustPhone.trim() && (
+                    <div className="flex items-start gap-2 mt-1.5 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                      <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                      <span>Phone already used by <span className="font-semibold">{custDuplicate.name}</span> ({custDuplicate.display_id}). Select them as the existing customer instead.</span>
+                    </div>
+                  )}
+                </div>
                 <div><Label>Email</Label><Input type="email" value={newCustEmail} onChange={e => setNewCustEmail(e.target.value)} className="mt-1" /></div>
               </div>
             )}
@@ -414,8 +436,53 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
             {canSetOpeningBalance && (
               <div>
                 <Label>Opening Balance</Label>
-                <Input type="number" value={openingBalance} onChange={e => setOpeningBalance(e.target.value)} className="mt-1" placeholder="0 (can be negative)" />
-                <p className="text-[11px] text-muted-foreground mt-0.5">Enter negative for advance/credit, positive for dues</p>
+                <div className="flex gap-2 mt-1">
+                  <Input
+                    type="number"
+                    min="0"
+                    value={obAmount}
+                    onChange={e => setObAmount(e.target.value)}
+                    placeholder="Enter amount"
+                    className="flex-1"
+                  />
+                  <div className="flex rounded-md border overflow-hidden text-sm font-medium">
+                    <button
+                      type="button"
+                      onClick={() => setObType("credit")}
+                      className={`px-3 py-2 transition-colors ${
+                        obType === "credit"
+                          ? "bg-green-500 text-white"
+                          : "bg-muted text-muted-foreground hover:bg-muted/70"
+                      }`}
+                    >
+                      Credit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setObType("debit")}
+                      className={`px-3 py-2 transition-colors ${
+                        obType === "debit"
+                          ? "bg-destructive text-destructive-foreground"
+                          : "bg-muted text-muted-foreground hover:bg-muted/70"
+                      }`}
+                    >
+                      Debit
+                    </button>
+                  </div>
+                </div>
+                {obAmount && Number(obAmount) > 0 ? (
+                  <p className={`text-sm font-medium mt-1.5 ${
+                    obType === "credit" ? "text-green-600" : "text-destructive"
+                  }`}>
+                    {obType === "credit" ? "+" : "-"}₹{Number(obAmount).toLocaleString()}
+                    {" — "}
+                    {obType === "credit" ? "Company owes this store" : "Store owes the company"}
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Credit = company owes store &nbsp;·&nbsp; Debit = store owes company
+                  </p>
+                )}
               </div>
             )}
 

@@ -18,6 +18,7 @@ import { useNotifications, requestNotificationPermission } from "@/hooks/useNoti
 import { Badge } from "@/components/ui/badge";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
+import { GlobalSearch } from "./GlobalSearch";
 
 function useTheme() {
   const [dark, setDark] = useState(() => {
@@ -105,6 +106,9 @@ export function TopBar() {
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-card/80 backdrop-blur-sm px-4 lg:px-6">
       <div className="w-10 lg:w-0" />
+      <div className="flex-1 mx-4 max-w-sm">
+        <GlobalSearch />
+      </div>
       <div className="ml-auto flex items-center gap-2">
         {/* Offline indicator */}
         {(!isOnline || pendingCount > 0) && (

@@ -12,13 +12,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
   Loader2, ArrowLeft, Store, User, Pencil, X, Save, AlertTriangle,
-  Shield, CheckCircle2, XCircle, ExternalLink, Upload, Camera,
+  Shield, CheckCircle2, XCircle, ExternalLink, Upload, Camera, Receipt,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useRef } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { logActivity } from "@/lib/activityLogger";
+import { ImageUpload } from "@/components/shared/ImageUpload";
 
 const CustomerDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -41,6 +42,7 @@ const CustomerDetail = () => {
     address: "",
     gst_number: "",
   });
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
 
   const { data: customer, isLoading } = useQuery({
     queryKey: ["customer", id],
@@ -69,6 +71,20 @@ const CustomerDetail = () => {
     enabled: !!id,
   });
 
+  const { data: customerTxns } = useQuery({
+    queryKey: ["customer-transactions", id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("transactions")
+        .select("id, display_id, total_amount, cash_amount, upi_amount, created_at, stores(name)")
+        .eq("customer_id", id!)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      return data || [];
+    },
+    enabled: !!id,
+  });
+
   const invalidateAll = () => {
     qc.invalidateQueries({ queryKey: ["customer", id] });
     qc.invalidateQueries({ queryKey: ["customers"] });
@@ -83,6 +99,7 @@ const CustomerDetail = () => {
       address: customer.address || "",
       gst_number: customer.gst_number || "",
     });
+    setPhotoUrl(customer.photo_url || null);
     setEditing(true);
   };
 
@@ -97,6 +114,7 @@ const CustomerDetail = () => {
         email: form.email || null,
         address: form.address || null,
         gst_number: form.gst_number || null,
+        photo_url: photoUrl || null,
       })
       .eq("id", id);
     setSaving(false);
@@ -290,12 +308,17 @@ const CustomerDetail = () => {
           <Separator className="my-3" />
 
           {editing ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1"><Label className="text-xs">Name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-              <div className="space-y-1"><Label className="text-xs">Phone</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
-              <div className="space-y-1"><Label className="text-xs">Email</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
-              <div className="space-y-1"><Label className="text-xs">GST Number</Label><Input value={form.gst_number} onChange={(e) => setForm({ ...form, gst_number: e.target.value })} /></div>
-              <div className="space-y-1 sm:col-span-2"><Label className="text-xs">Address</Label><Textarea value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} rows={2} /></div>
+            <div className="space-y-4">
+              <div className="flex items-start gap-4">
+                <ImageUpload folder="customers" currentUrl={photoUrl} onUploaded={setPhotoUrl} onRemoved={() => setPhotoUrl(null)} />
+                <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1"><Label className="text-xs">Name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
+                  <div className="space-y-1"><Label className="text-xs">Phone</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
+                  <div className="space-y-1"><Label className="text-xs">Email</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
+                  <div className="space-y-1"><Label className="text-xs">GST Number</Label><Input value={form.gst_number} onChange={(e) => setForm({ ...form, gst_number: e.target.value })} /></div>
+                  <div className="space-y-1 sm:col-span-2"><Label className="text-xs">Address</Label><Textarea value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} rows={2} /></div>
+                </div>
+              </div>
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-x-6 gap-y-2">
@@ -392,6 +415,33 @@ const CustomerDetail = () => {
           <div className="rounded-xl border border-dashed bg-card p-8 text-center text-muted-foreground text-sm">No stores yet</div>
         ) : (
           <DataTable columns={storeColumns} data={stores || []} searchKey="name" searchPlaceholder="Search stores..." onRowClick={(row) => navigate(`/stores/${row.id}`)} />
+        )}
+      </div>
+
+      {/* Payment History */}
+      <div>
+        <h2 className="text-sm font-semibold mb-3 flex items-center gap-2">
+          <Receipt className="h-4 w-4 text-muted-foreground" /> Payment History
+          {customerTxns && customerTxns.length > 0 && (
+            <span className="ml-1 text-xs font-normal text-muted-foreground">({customerTxns.length})</span>
+          )}
+        </h2>
+        {(customerTxns?.length || 0) === 0 ? (
+          <div className="rounded-xl border border-dashed bg-card p-8 text-center text-muted-foreground text-sm">No payments recorded</div>
+        ) : (
+          <DataTable
+            columns={[
+              { header: "Payment ID", accessor: "display_id" as const, className: "font-mono text-xs" },
+              { header: "Store", accessor: (row: any) => (row.stores as any)?.name || "—", className: "font-medium" },
+              { header: "Total", accessor: (row: any) => `₹${Number(row.total_amount).toLocaleString()}`, className: "font-semibold" },
+              { header: "Cash", accessor: (row: any) => `₹${Number(row.cash_amount).toLocaleString()}`, className: "text-sm hidden md:table-cell" },
+              { header: "UPI", accessor: (row: any) => `₹${Number(row.upi_amount).toLocaleString()}`, className: "text-sm hidden md:table-cell" },
+              { header: "Date", accessor: (row: any) => new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }), className: "text-muted-foreground text-xs" },
+            ]}
+            data={customerTxns || []}
+            searchKey="display_id"
+            searchPlaceholder="Search payments..."
+          />
         )}
       </div>
     </div>

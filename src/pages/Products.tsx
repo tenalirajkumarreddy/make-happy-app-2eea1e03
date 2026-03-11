@@ -2,7 +2,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
-import { Package, Pencil, X, Save, AlertTriangle, Grid3X3, Download, Tags } from "lucide-react";
+import { Package, Pencil, X, Save, AlertTriangle, Grid3X3, Download, Tags, CheckSquare } from "lucide-react";
 import { ImageUpload } from "@/components/shared/ImageUpload";
 import { ProductAccessMatrix } from "@/components/products/ProductAccessMatrix";
 import { ProductCategories } from "@/components/products/ProductCategories";
@@ -10,11 +10,16 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { logActivity } from "@/lib/activityLogger";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -41,6 +46,9 @@ const Products = () => {
   const [description, setDescription] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [saving, setSaving] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [confirmBulkDeactivate, setConfirmBulkDeactivate] = useState(false);
   const qc = useQueryClient();
 
   const { data: products, isLoading } = useQuery({
@@ -142,7 +150,37 @@ const Products = () => {
     setName(""); setSku(""); setPrice(""); setUnit("PCS"); setCategory(""); setDescription(""); setImageUrl("");
   };
 
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkStatus = async (activate: boolean) => {
+    const ids = Array.from(selectedIds);
+    if (!ids.length) return;
+    const { error } = await supabase.from("products").update({ is_active: activate }).in("id", ids);
+    if (error) { toast.error(error.message); return; }
+    toast.success(`${ids.length} product(s) ${activate ? "activated" : "deactivated"}`);
+    setSelectedIds(new Set());
+    setSelectMode(false);
+    qc.invalidateQueries({ queryKey: ["products"] });
+  };
+
   const columns = [
+    ...(selectMode ? [{
+      header: "",
+      accessor: (row: any) => (
+        <Checkbox
+          checked={selectedIds.has(row.id)}
+          onCheckedChange={() => toggleSelect(row.id)}
+          onClick={(e: React.MouseEvent) => e.stopPropagation()}
+        />
+      ),
+      className: "w-10",
+    }] : []),
     { header: "Product", accessor: (row: any) => (
       <div className="flex items-center gap-2">
         {row.image_url && <img src={row.image_url} alt="" className="h-8 w-8 rounded-md object-cover" />}
@@ -197,16 +235,26 @@ const Products = () => {
         actions={[
           { label: "Categories", icon: Tags, onClick: () => setShowCategories(true), priority: 1 },
           { label: "Product Access", icon: Grid3X3, onClick: () => setShowMatrix(true), priority: 2 },
+          ...(canEdit ? [{ label: selectMode ? "Done" : "Select", icon: CheckSquare, onClick: () => { setSelectMode((v) => !v); setSelectedIds(new Set()); }, priority: 3 }] : []),
         ]}
       />
+
+      {selectMode && selectedIds.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted/40 px-4 py-2.5">
+          <span className="text-sm font-medium">{selectedIds.size} selected</span>
+          <Button size="sm" variant="outline" className="h-7 text-xs text-green-600 border-green-600/40" onClick={() => handleBulkStatus(true)}>Activate</Button>
+          <Button size="sm" variant="outline" className="h-7 text-xs text-destructive border-destructive/40" onClick={() => setConfirmBulkDeactivate(true)}>Deactivate</Button>
+          <Button size="sm" variant="ghost" className="h-7 text-xs ml-auto" onClick={() => setSelectedIds(new Set())}>Clear</Button>
+        </div>
+      )}
       <DataTable
         columns={columns}
         data={products || []}
         searchKey="name"
         searchPlaceholder="Search products..."
-        onRowClick={(row) => { if (canEdit) openEdit(row); }}
+        onRowClick={(row) => { if (canEdit && !selectMode) openEdit(row); }}
         renderMobileCard={(row: any) => (
-          <div className="rounded-xl border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow active:bg-muted/30" onClick={() => { if (canEdit) openEdit(row); }}>
+          <div className="rounded-xl border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow active:bg-muted/30" onClick={() => { if (selectMode) { toggleSelect(row.id); } else if (canEdit) { openEdit(row); } }}>
             <div className="flex">
               <div className="w-20 h-20 shrink-0 bg-muted flex items-center justify-center overflow-hidden">
                 {row.image_url ? (
@@ -246,7 +294,7 @@ const Products = () => {
 
       {/* Add Product Dialog */}
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Add Product</DialogTitle>
           </DialogHeader>
@@ -285,7 +333,7 @@ const Products = () => {
 
       {/* Edit Product Dialog */}
       <Dialog open={!!editProduct} onOpenChange={(open) => { if (!open) { setEditProduct(null); resetForm(); } }}>
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Edit Product</DialogTitle>
           </DialogHeader>
@@ -327,6 +375,21 @@ const Products = () => {
           </form>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={confirmBulkDeactivate} onOpenChange={setConfirmBulkDeactivate}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Deactivate {selectedIds.size} product(s)?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The selected products will no longer appear in order forms. This can be reversed by reactivating them.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive hover:bg-destructive/90" onClick={() => { setConfirmBulkDeactivate(false); handleBulkStatus(false); }}>Deactivate</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

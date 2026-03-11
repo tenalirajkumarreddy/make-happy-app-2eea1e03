@@ -3,7 +3,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Store, ShoppingCart, Banknote, Smartphone, MapPin, Clock } from "lucide-react";
+import { ShoppingCart, Banknote, Smartphone, MapPin, HandCoins, AlertCircle } from "lucide-react";
 import { DashboardSkeleton } from "@/components/shared/DashboardSkeleton";
 import { QuickActionDrawer } from "@/components/agent/QuickActionDrawer";
 
@@ -15,11 +15,15 @@ const AgentDashboard = () => {
     queryFn: async () => {
       const today = new Date().toISOString().split("T")[0];
 
-      const [salesRes, txnRes, visitsRes, ordersRes] = await Promise.all([
+      const [salesRes, txnRes, visitsRes, ordersRes, allSalesRes, allTxnsRes, confirmedHandoversRes, todayHandoverRes] = await Promise.all([
         supabase.from("sales").select("total_amount, cash_amount, upi_amount").eq("recorded_by", user!.id).gte("created_at", today + "T00:00:00"),
         supabase.from("transactions").select("total_amount, cash_amount, upi_amount").eq("recorded_by", user!.id).gte("created_at", today + "T00:00:00"),
         supabase.from("store_visits").select("id, stores(name)").gte("visited_at", today + "T00:00:00"),
         supabase.from("orders").select("id, display_id, stores(name), created_at").eq("status", "pending").order("created_at", { ascending: false }).limit(10),
+        supabase.from("sales").select("cash_amount, upi_amount").eq("recorded_by", user!.id),
+        supabase.from("transactions").select("cash_amount, upi_amount").eq("recorded_by", user!.id),
+        supabase.from("handovers").select("cash_amount, upi_amount").eq("user_id", user!.id).eq("status", "confirmed"),
+        supabase.from("handovers").select("cash_amount, upi_amount, status").eq("user_id", user!.id).eq("handover_date", today).maybeSingle(),
       ]);
 
       const todaySales = salesRes.data || [];
@@ -29,11 +33,23 @@ const AgentDashboard = () => {
       const totalCash = todaySales.reduce((s, r) => s + Number(r.cash_amount), 0) + todayTxns.reduce((s, r) => s + Number(r.cash_amount), 0);
       const totalUpi = todaySales.reduce((s, r) => s + Number(r.upi_amount), 0) + todayTxns.reduce((s, r) => s + Number(r.upi_amount), 0);
 
+      const allTimeCash = (allSalesRes.data || []).reduce((s, r) => s + Number(r.cash_amount), 0) + (allTxnsRes.data || []).reduce((s, r) => s + Number(r.cash_amount), 0);
+      const allTimeUpi = (allSalesRes.data || []).reduce((s, r) => s + Number(r.upi_amount), 0) + (allTxnsRes.data || []).reduce((s, r) => s + Number(r.upi_amount), 0);
+      const confirmedCash = (confirmedHandoversRes.data || []).reduce((s, r) => s + Number(r.cash_amount), 0);
+      const confirmedUpi = (confirmedHandoversRes.data || []).reduce((s, r) => s + Number(r.upi_amount), 0);
+
+      const todayHandover = todayHandoverRes.data;
+      const todayConfirmed = todayHandover?.status === "confirmed" ? Number(todayHandover.cash_amount) + Number(todayHandover.upi_amount) : 0;
+      const todayHandoverable = Math.max(0, totalCash + totalUpi - todayConfirmed);
+      const totalPendingHandoverable = Math.max(0, allTimeCash + allTimeUpi - confirmedCash - confirmedUpi);
+
       return {
         storesCovered: visitsRes.data?.length || 0,
         totalSale,
         totalCash,
         totalUpi,
+        todayHandoverable,
+        totalPendingHandoverable,
         pendingOrders: ordersRes.data || [],
       };
     },
@@ -52,11 +68,13 @@ const AgentDashboard = () => {
         <QuickActionDrawer />
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
         <StatCard title="Stores Covered" value={String(s.storesCovered)} icon={MapPin} iconColor="bg-primary" />
         <StatCard title="Sales Recorded" value={`₹${s.totalSale.toLocaleString()}`} icon={ShoppingCart} iconColor="bg-success" />
         <StatCard title="Cash Collected" value={`₹${s.totalCash.toLocaleString()}`} icon={Banknote} iconColor="bg-warning" />
         <StatCard title="UPI Collected" value={`₹${s.totalUpi.toLocaleString()}`} icon={Smartphone} iconColor="bg-info" />
+        <StatCard title="Today's Handoverable" value={`₹${s.todayHandoverable.toLocaleString()}`} icon={HandCoins} iconColor="bg-orange-500" />
+        <StatCard title="Pending Handover" value={`₹${s.totalPendingHandoverable.toLocaleString()}`} icon={AlertCircle} iconColor="bg-destructive" />
       </div>
 
       <div className="rounded-xl border bg-card p-5">

@@ -14,9 +14,9 @@ build = ["npm", "run", "build"]
 [userenv]
 
 [userenv.shared]
-VITE_SUPABASE_URL = "https://pvkxsfmjevtpipcztcne.supabase.co"
-VITE_SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB2a3hzZm1qZXZ0cGlwY3p0Y25lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5Njk3MDgsImV4cCI6MjA4ODU0NTcwOH0.-BMmtMJku4y5NBAMLgqvWdkTvrAgNku7bkyBz45ZmTc"
-VITE_SUPABASE_PROJECT_ID = "pvkxsfmjevtpipcztcne"
+VITE_SUPABASE_URL = "https://vrhptrtgrpftycvojaqo.supabase.co"
+VITE_SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZyaHB0cnRncnBmdHljdm9qYXFvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxMTg5ODMsImV4cCI6MjA4ODY5NDk4M30.ek7gNnoghGYYNrdZr-BttzRn6xY0aVqGU31pVcQ67mU"
+VITE_SUPABASE_PROJECT_ID = "vrhptrtgrpftycvojaqo"
 
 [workflows]
 runButton = "Project"

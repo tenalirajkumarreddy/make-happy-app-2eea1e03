@@ -1,8 +1,9 @@
 import { PageHeader } from "@/components/shared/PageHeader";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { MapPin, Navigation } from "lucide-react";
+import { MapPin, Navigation, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
@@ -20,7 +21,10 @@ const TYPE_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ef4444", "#06
 const MapPage = () => {
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMap = useRef<L.Map | null>(null);
+  const userMarkerRef = useRef<L.Marker | null>(null);
   const [selectedRoute, setSelectedRoute] = useState<string>("");
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [locating, setLocating] = useState(false);
 
   const { data: stores, isLoading } = useQuery({
     queryKey: ["stores-with-location"],
@@ -78,6 +82,37 @@ const MapPage = () => {
     },
   });
 
+  const { data: companySettings } = useQuery({
+    queryKey: ["company-settings-map"],
+    queryFn: async () => {
+      const { data } = await supabase.from("company_settings").select("key, value");
+      const map: Record<string, string> = {};
+      data?.forEach((s: any) => { map[s.key] = s.value || ""; });
+      return map;
+    },
+  });
+
+  const companyCoords = useMemo(() => {
+    if (!companySettings) return null;
+    const lat = parseFloat(companySettings.company_lat || "");
+    const lng = parseFloat(companySettings.company_lng || "");
+    return !isNaN(lat) && !isNaN(lng) ? { lat, lng } : null;
+  }, [companySettings]);
+
+  const locateMe = () => {
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setUserLocation(loc);
+        leafletMap.current?.setView([loc.lat, loc.lng], 16);
+        setLocating(false);
+      },
+      () => setLocating(false),
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
   // Route stores for route visualization
   const activeRouteStoreIds = useMemo(() => {
     if (!selectedRoute || !stores) return new Set<string>();
@@ -97,12 +132,18 @@ const MapPage = () => {
   }, [stores]);
 
   useEffect(() => {
-    if (!mapRef.current || storesWithLocation.length === 0) return;
+    if (!mapRef.current || (storesWithLocation.length === 0 && !companyCoords)) return;
 
     if (!leafletMap.current) {
+      const initCenter: [number, number] = companyCoords
+        ? [companyCoords.lat, companyCoords.lng]
+        : storesWithLocation.length > 0
+        ? [storesWithLocation[0].lat!, storesWithLocation[0].lng!]
+        : [20.5937, 78.9629];
+      const initZoom = companyCoords || storesWithLocation.length > 0 ? 13 : 5;
       leafletMap.current = L.map(mapRef.current, {
-        center: [20.5937, 78.9629],
-        zoom: 5,
+        center: initCenter,
+        zoom: initZoom,
         scrollWheelZoom: true,
       });
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -179,16 +220,54 @@ const MapPage = () => {
       L.polyline(routePoints, { color: "#3b82f6", weight: 3, opacity: 0.6, dashArray: "8 4" }).addTo(map);
     }
 
+    // Company marker
+    if (companyCoords) {
+      const label = companySettings?.company_marker_label || companySettings?.company_name || "HQ";
+      const companyIcon = L.divIcon({
+        className: "",
+        html: `<div style="background:#7c3aed;color:white;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700;white-space:nowrap;box-shadow:0 2px 10px rgba(124,58,237,0.5);border:2px solid white;">${label}</div>`,
+        iconAnchor: [0, 0],
+      });
+      L.marker([companyCoords.lat, companyCoords.lng], { icon: companyIcon, zIndexOffset: 1000 })
+        .addTo(map)
+        .bindPopup(`
+          <div style="font-family:system-ui;min-width:180px;">
+            <strong style="font-size:14px;">${companySettings?.company_name || "Company"}</strong>
+            <div style="color:#7c3aed;font-size:12px;font-weight:600;">${label}</div>
+            ${companySettings?.address ? `<div style="margin-top:4px;font-size:12px;color:#666;">${companySettings.address}</div>` : ""}
+            ${companySettings?.customer_care_number ? `<div style="font-size:11px;color:#888;">${companySettings.customer_care_number}</div>` : ""}
+            <a href="https://www.google.com/maps?q=${companyCoords.lat},${companyCoords.lng}" target="_blank" rel="noopener" style="display:inline-block;margin-top:6px;font-size:11px;color:#7c3aed;">Open in Google Maps →</a>
+          </div>
+        `);
+      bounds.push([companyCoords.lat, companyCoords.lng]);
+    }
+
     if (bounds.length > 0) {
       map.fitBounds(bounds as L.LatLngBoundsExpression, { padding: [40, 40], maxZoom: 14 });
     }
-  }, [storesWithLocation, storeTypeColorMap, visitedStoreIds, pendingOrderStoreIds, activeRouteStoreIds]);
+  }, [storesWithLocation, storeTypeColorMap, visitedStoreIds, pendingOrderStoreIds, activeRouteStoreIds, companyCoords, companySettings]);
 
   useEffect(() => {
     return () => {
       if (leafletMap.current) { leafletMap.current.remove(); leafletMap.current = null; }
     };
   }, []);
+
+  // User location marker
+  useEffect(() => {
+    if (!userLocation || !leafletMap.current) return;
+    if (userMarkerRef.current) userMarkerRef.current.remove();
+    const icon = L.divIcon({
+      className: "",
+      html: `<div style="width:18px;height:18px;background:#3b82f6;border:3px solid white;border-radius:50%;box-shadow:0 0 0 5px rgba(59,130,246,0.25);"></div>`,
+      iconSize: [18, 18],
+      iconAnchor: [9, 9],
+    });
+    userMarkerRef.current = L.marker([userLocation.lat, userLocation.lng], { icon, zIndexOffset: 2000 })
+      .addTo(leafletMap.current)
+      .bindPopup("<b>Your Location</b>");
+    return () => { userMarkerRef.current?.remove(); userMarkerRef.current = null; };
+  }, [userLocation]);
 
   if (isLoading) return <TableSkeleton columns={3} rows={5} />;
 
@@ -236,7 +315,7 @@ const MapPage = () => {
         </div>
       </div>
 
-      {/* Route filter */}
+      {/* Route filter + My Location */}
       <div className="flex flex-wrap items-center gap-3">
         <select
           value={selectedRoute}
@@ -246,6 +325,11 @@ const MapPage = () => {
           <option value="">All Routes</option>
           {routes?.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
         </select>
+
+        <Button variant="outline" size="sm" onClick={locateMe} disabled={locating} className="h-8 gap-1.5">
+          {locating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Navigation className="h-3.5 w-3.5" />}
+          My Location
+        </Button>
 
         {/* Legend */}
         {Array.from(storeTypeColorMap.entries()).map(([name, color]) => (
@@ -266,10 +350,22 @@ const MapPage = () => {
           <div className="h-3 w-3 rounded-full border border-white shadow-sm bg-slate-400" />
           <span className="text-muted-foreground">Inactive</span>
         </div>
+        {companyCoords && (
+          <div className="flex items-center gap-1.5 text-xs">
+            <div className="h-3 w-3 rounded-[3px] border border-white shadow-sm bg-violet-600" />
+            <span className="text-muted-foreground">{companySettings?.company_marker_label || "HQ"}</span>
+          </div>
+        )}
+        {userLocation && (
+          <div className="flex items-center gap-1.5 text-xs">
+            <div className="h-3 w-3 rounded-full border border-white shadow-sm bg-blue-500 ring-2 ring-blue-200" />
+            <span className="text-muted-foreground">You</span>
+          </div>
+        )}
       </div>
 
       <div className="rounded-xl border bg-card overflow-hidden">
-        {storesWithLocation.length > 0 ? (
+        {storesWithLocation.length > 0 || companyCoords ? (
           <div ref={mapRef} className="h-[500px] w-full" />
         ) : (
           <div className="flex flex-col items-center justify-center h-[400px] text-center px-6">

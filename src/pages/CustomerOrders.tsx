@@ -66,8 +66,7 @@ const CustomerOrders = () => {
     }
 
     setSaving(true);
-    const { count } = await supabase.from("orders").select("id", { count: "exact", head: true });
-    const displayId = `ORD-${String((count || 0) + 1).padStart(6, "0")}`;
+    const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "ORD", seq_name: "ord_display_seq" });
     const { error } = await supabase.from("orders").insert({
       display_id: displayId,
       store_id: orderStoreId,

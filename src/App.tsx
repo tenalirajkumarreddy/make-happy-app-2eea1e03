@@ -28,6 +28,7 @@ import Activity from "./pages/Activity";
 import AccessControl from "./pages/AccessControl";
 import Settings from "./pages/Settings";
 import StoreTypes from "./pages/StoreTypes";
+import StoreTypeAccess from "./pages/StoreTypeAccess";
 import CustomerPortal from "./pages/CustomerPortal";
 import MapPage from "./pages/MapPage";
 import CustomerSales from "./pages/CustomerSales";
@@ -85,6 +86,7 @@ const App = () => (
               <Route path="/stores" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer"]}><Stores /></RoleGuard>} />
               <Route path="/stores/:id" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer"]}><StoreDetail /></RoleGuard>} />
               <Route path="/store-types" element={<RoleGuard allowed={["super_admin", "manager"]}><StoreTypes /></RoleGuard>} />
+              <Route path="/store-types/access" element={<RoleGuard allowed={["super_admin", "manager"]}><StoreTypeAccess /></RoleGuard>} />
               {/* Routes: Admin, Manager, Agent */}
               <Route path="/routes" element={<RoleGuard allowed={["super_admin", "manager", "agent"]}><RoutesPage /></RoleGuard>} />
               {/* Sales: Admin, Manager, Agent, POS */}

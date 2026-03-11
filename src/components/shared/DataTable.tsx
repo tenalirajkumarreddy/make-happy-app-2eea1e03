@@ -113,7 +113,7 @@ export function DataTable<T extends Record<string, any>>({
               </TableRow>
             ) : (
               paged.map((row, i) => (
-                <TableRow key={i} className={`hover:bg-muted/30 ${onRowClick ? "cursor-pointer" : ""}`} onClick={() => onRowClick?.(row)}>
+                <TableRow key={i} className={`group hover:bg-muted/30 ${onRowClick ? "cursor-pointer" : ""}`} onClick={() => onRowClick?.(row)}>
                   {columns.map((col, j) => (
                     <TableCell key={j} className={col.className}>
                       {getCellValue(col, row)}
@@ -177,7 +177,7 @@ export function DataTable<T extends Record<string, any>>({
 
       {/* Pagination */}
       {filtered.length > 0 && (
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-sm text-muted-foreground">
+        <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
             <span>Rows per page</span>
             <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPage(0); }}>

@@ -281,7 +281,7 @@ export function AppSidebar() {
         </div>
       )}
 
-      <nav className="flex-1 space-y-1 px-3 py-3 overflow-y-auto">
+      <nav className="flex-1 space-y-1 px-3 py-3 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         <p className={cn("px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted", collapsed && "text-center")}>
           {collapsed ? "•" : "Main"}
         </p>
@@ -321,7 +321,7 @@ export function AppSidebar() {
       {mobileOpen && (
         <div className="fixed inset-0 z-40 bg-foreground/40 backdrop-blur-sm lg:hidden" onClick={() => setMobileOpen(false)}>
           <aside
-            className="h-full w-72 bg-sidebar overflow-y-auto"
+            className="h-full w-72 bg-sidebar overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
             onClick={(e) => e.stopPropagation()}
           >
             <button

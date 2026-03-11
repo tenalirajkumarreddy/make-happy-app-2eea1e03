@@ -173,6 +173,8 @@ export function StoreLedger({ sales, transactions, balanceAdjustments = [], open
       accessor: (row: LedgerEntry) =>
         row.type === "sale" ? (
           <span className="text-destructive font-medium">₹{row.total_amount.toLocaleString()}</span>
+        ) : row.id === "__opening_balance__" && row.total_amount > 0 ? (
+          <span className="text-destructive font-medium">₹{row.total_amount.toLocaleString()}</span>
         ) : row.type === "correction" && row.id !== "__opening_balance__" && row.total_amount > 0 ? (
           <span className="text-destructive font-medium">₹{row.total_amount.toLocaleString()}</span>
         ) : (
@@ -181,19 +183,26 @@ export function StoreLedger({ sales, transactions, balanceAdjustments = [], open
     },
     {
       header: "Credit (+)",
-      accessor: (row: LedgerEntry) =>
-        row.type === "payment" || row.id === "__opening_balance__" ? (
-          <span className="text-success font-medium">₹{row.total_amount.toLocaleString()}</span>
-        ) : row.type === "correction" && row.id !== "__opening_balance__" && row.total_amount < 0 ? (
-          <span className="text-success font-medium">₹{Math.abs(row.total_amount).toLocaleString()}</span>
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        ),
+      accessor: (row: LedgerEntry) => {
+        if (row.id === "__opening_balance__" && row.total_amount < 0) {
+          return <span className="text-success font-medium">₹{Math.abs(row.total_amount).toLocaleString()}</span>;
+        }
+        if (row.id !== "__opening_balance__" && row.type === "payment") {
+          return <span className="text-success font-medium">₹{row.total_amount.toLocaleString()}</span>;
+        }
+        if (row.type === "sale" && (row.cash_amount + row.upi_amount) > 0) {
+          return <span className="text-success font-medium">₹{(row.cash_amount + row.upi_amount).toLocaleString()}</span>;
+        }
+        if (row.type === "correction" && row.id !== "__opening_balance__" && row.total_amount < 0) {
+          return <span className="text-success font-medium">₹{Math.abs(row.total_amount).toLocaleString()}</span>;
+        }
+        return <span className="text-muted-foreground">—</span>;
+      },
     },
     {
       header: "Balance",
       accessor: (row: LedgerEntry) => (
-        <span className={row.outstanding < 0 ? "text-destructive font-semibold" : "text-foreground font-semibold"}>
+        <span className={row.outstanding > 0 ? "text-destructive font-semibold" : row.outstanding < 0 ? "text-success font-semibold" : "text-muted-foreground font-semibold"}>
           {row.outstanding < 0 ? "-" : ""}₹{Math.abs(row.outstanding).toLocaleString()}
         </span>
       ),
@@ -204,21 +213,29 @@ export function StoreLedger({ sales, transactions, balanceAdjustments = [], open
     const p = getRecorder(row.recorded_by);
 
     if (row.id === "__opening_balance__") {
+      const isCredit = row.total_amount < 0;
+      const displayAmount = Math.abs(row.total_amount);
       return (
         <div className="rounded-xl border bg-card px-3 py-2.5 shadow-sm">
           <div className="flex items-center justify-between">
-            <Badge variant="secondary" className="text-[10px] h-5">PAYMENT</Badge>
+            <Badge variant={isCredit ? "secondary" : "destructive"} className="text-[10px] h-5">
+              {isCredit ? "CREDIT" : "DEBIT"}
+            </Badge>
             <span className="text-[11px] text-muted-foreground">
               {new Date(row.date).toLocaleDateString("en-IN")}
             </span>
           </div>
           <div className="flex items-center justify-between mt-1.5">
             <span className="font-medium text-sm text-muted-foreground">Opening Balance</span>
-            <span className="text-sm font-bold text-success">₹{row.total_amount.toLocaleString()}</span>
+            <span className={`text-sm font-bold ${isCredit ? "text-success" : "text-destructive"}`}>
+              {isCredit ? "+" : "-"}₹{displayAmount.toLocaleString()}
+            </span>
           </div>
-          <div className="flex items-center justify-between mt-1 text-[11px] text-muted-foreground">
-            <span>Bal: ₹{Math.abs(row.outstanding).toLocaleString()}</span>
-            <span>Admin</span>
+          <div className="flex items-center justify-between mt-1 text-[11px]">
+            <span className={row.outstanding > 0 ? "text-destructive" : row.outstanding < 0 ? "text-success" : "text-muted-foreground"}>
+              Bal: {row.outstanding < 0 ? "-" : ""}₹{Math.abs(row.outstanding).toLocaleString()}
+            </span>
+            <span className="text-muted-foreground">Admin</span>
           </div>
         </div>
       );
@@ -239,13 +256,18 @@ export function StoreLedger({ sales, transactions, balanceAdjustments = [], open
         </div>
         <div className="flex items-center justify-between mt-1.5">
           <span className="font-mono text-xs text-muted-foreground">{row.display_id}</span>
-          <span className={`text-sm font-bold ${row.type === "sale" ? "text-destructive" : "text-success"}`}>
-            {row.type === "sale" ? "-" : "+"}₹{row.total_amount.toLocaleString()}
-          </span>
+          <div className="flex flex-col items-end gap-0.5">
+            <span className="text-sm font-bold text-destructive">-₹{row.total_amount.toLocaleString()}</span>
+            {(row.cash_amount + row.upi_amount) > 0 && (
+              <span className="text-xs font-medium text-success">+₹{(row.cash_amount + row.upi_amount).toLocaleString()}</span>
+            )}
+          </div>
         </div>
-        <div className="flex items-center justify-between mt-1 text-[11px] text-muted-foreground">
-          <span>Bal: ₹{Math.abs(row.outstanding).toLocaleString()}</span>
-          {p && <span>{p.full_name}</span>}
+        <div className="flex items-center justify-between mt-1 text-[11px]">
+          <span className={row.outstanding > 0 ? "text-destructive" : row.outstanding < 0 ? "text-success" : "text-muted-foreground"}>
+            Bal: {row.outstanding < 0 ? "-" : ""}₹{Math.abs(row.outstanding).toLocaleString()}
+          </span>
+          {p && <span className="text-muted-foreground">{p.full_name}</span>}
         </div>
       </div>
     );

@@ -7,21 +7,24 @@ import { supabase } from "@/integrations/supabase/client";
 import { logActivity } from "@/lib/activityLogger";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2, Plus, Trash2, XCircle } from "lucide-react";
+import { Loader2, Plus, Trash2, XCircle, CheckCircle2, Download, X, CalendarIcon } from "lucide-react";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
+import { format } from "date-fns";
 
 interface OrderItem {
   product_id: string;
@@ -37,6 +40,14 @@ const Orders = () => {
   const [cancelOrderId, setCancelOrderId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelling, setCancelling] = useState(false);
+  const [deliveringId, setDeliveringId] = useState<string | null>(null);
+
+  // List filters
+  const today = new Date().toISOString().split("T")[0];
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const [filterFrom, setFilterFrom] = useState(thirtyDaysAgo);
+  const [filterTo, setFilterTo] = useState(today);
+  const [filterCustomer, setFilterCustomer] = useState("all");
 
   // Form state
   const [customerId, setCustomerId] = useState("");
@@ -95,10 +106,11 @@ const Orders = () => {
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!storeId) { toast.error("Please select a store"); return; }
+    if (orderType === "simple" && !requirementNote.trim()) { toast.error("Please describe the requirement"); return; }
+    if (orderType === "detailed" && !orderItems.some((i) => i.product_id)) { toast.error("Please add at least one product"); return; }
     setSaving(true);
 
-    const { count } = await supabase.from("orders").select("id", { count: "exact", head: true });
-    const displayId = `ORD-${String((count || 0) + 1).padStart(6, "0")}`;
+    const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "ORD", seq_name: "ord_display_seq" });
 
     const { data: order, error } = await supabase.from("orders").insert({
       display_id: displayId,
@@ -145,6 +157,41 @@ const Orders = () => {
     qc.invalidateQueries({ queryKey: ["orders"] });
   };
 
+  const handleMarkDelivered = async (orderId: string) => {
+    setDeliveringId(orderId);
+    const { error } = await supabase
+      .from("orders")
+      .update({ status: "delivered", delivered_at: new Date().toISOString() })
+      .eq("id", orderId)
+      .eq("status", "pending");
+    setDeliveringId(null);
+    if (error) { toast.error(error.message); return; }
+    const order = orders?.find((o) => o.id === orderId);
+    logActivity(user!.id, "Marked order delivered", "order", order?.display_id || "", orderId);
+    toast.success("Order marked as delivered");
+    qc.invalidateQueries({ queryKey: ["orders"] });
+  };
+
+  const exportCSV = () => {
+    const rows = (filteredOrders || []).map((o) => ({
+      "Order ID": o.display_id,
+      "Store": (o as any).stores?.name || "",
+      "Customer": (o as any).customers?.name || "",
+      "Type": o.order_type,
+      "Source": o.source,
+      "Status": o.status,
+      "Note": o.requirement_note || "",
+      "Created": new Date(o.created_at).toLocaleString("en-IN"),
+    }));
+    const header = Object.keys(rows[0] || {}).join(",");
+    const csv = [header, ...rows.map((r) => Object.values(r).map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `orders-${statusFilter}-${new Date().toISOString().split("T")[0]}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+  };
+
   const handleCancel = async () => {
     if (!cancelOrderId || !cancelReason.trim()) { toast.error("Please provide a reason"); return; }
     setCancelling(true);
@@ -184,9 +231,24 @@ const Orders = () => {
     qc.invalidateQueries({ queryKey: ["orders"] });
   };
 
-  const filteredOrders = statusFilter === "all"
-    ? orders
-    : orders?.filter((o) => o.status === statusFilter);
+  const filteredOrders = useMemo(() => {
+    return (orders || []).filter((o: any) => {
+      if (statusFilter !== "all" && o.status !== statusFilter) return false;
+      const date = new Date(o.created_at);
+      if (filterFrom && date < new Date(filterFrom + "T00:00:00")) return false;
+      if (filterTo && date > new Date(filterTo + "T23:59:59")) return false;
+      if (filterCustomer !== "all" && o.customer_id !== filterCustomer) return false;
+      return true;
+    });
+  }, [orders, statusFilter, filterFrom, filterTo, filterCustomer]);
+
+  const activeOrderFilterCount = [filterCustomer !== "all", filterFrom !== thirtyDaysAgo, filterTo !== today].filter(Boolean).length;
+
+  const clearOrderFilters = () => {
+    setFilterFrom(thirtyDaysAgo);
+    setFilterTo(today);
+    setFilterCustomer("all");
+  };
 
   const columns = [
     { header: "Order ID", accessor: "display_id" as const, className: "font-mono text-xs" },
@@ -199,9 +261,15 @@ const Orders = () => {
     {
       header: "Actions",
       accessor: (row: any) => row.status === "pending" ? (
-        <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive" onClick={() => setCancelOrderId(row.id)}>
-          <XCircle className="h-3.5 w-3.5 mr-1" /> Cancel
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="sm" className="h-7 text-xs text-green-600" onClick={() => handleMarkDelivered(row.id)} disabled={deliveringId === row.id}>
+            {deliveringId === row.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5 mr-1" />}
+            Deliver
+          </Button>
+          <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive" onClick={() => setCancelOrderId(row.id)}>
+            <XCircle className="h-3.5 w-3.5 mr-1" /> Cancel
+          </Button>
+        </div>
       ) : row.status === "cancelled" ? (
         <span className="text-xs text-muted-foreground truncate max-w-[120px] block" title={row.cancellation_reason}>{row.cancellation_reason || "—"}</span>
       ) : null,
@@ -214,7 +282,7 @@ const Orders = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Orders" subtitle="Manage customer orders and fulfillment" primaryAction={{ label: "Create Order", onClick: () => setShowAdd(true) }} />
+      <PageHeader title="Orders" subtitle="Manage customer orders and fulfillment" primaryAction={{ label: "Create Order", onClick: () => setShowAdd(true) }} actions={[{ label: "Export CSV", icon: Download, onClick: exportCSV, variant: "outline" as const }]} />
 
       <Tabs value={statusFilter} onValueChange={setStatusFilter}>
         <TabsList>
@@ -225,7 +293,82 @@ const Orders = () => {
         </TabsList>
       </Tabs>
 
-      <DataTable columns={columns} data={filteredOrders || []} searchKey="display_id" searchPlaceholder="Search by order ID..." />
+      <div className="flex flex-wrap items-center gap-2 p-3 rounded-lg border bg-muted/30">
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="h-8 text-xs gap-1.5 justify-start font-normal flex-1 min-w-[100px] sm:flex-none">
+              <CalendarIcon className="h-3 w-3 shrink-0" />
+              {filterFrom ? format(new Date(filterFrom + "T00:00:00"), "dd MMM yy") : "From"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar mode="single" selected={filterFrom ? new Date(filterFrom + "T00:00:00") : undefined} onSelect={(d) => setFilterFrom(d ? format(d, "yyyy-MM-dd") : "")} initialFocus />
+          </PopoverContent>
+        </Popover>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="h-8 text-xs gap-1.5 justify-start font-normal flex-1 min-w-[100px] sm:flex-none">
+              <CalendarIcon className="h-3 w-3 shrink-0" />
+              {filterTo ? format(new Date(filterTo + "T00:00:00"), "dd MMM yy") : "To"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar mode="single" selected={filterTo ? new Date(filterTo + "T00:00:00") : undefined} onSelect={(d) => setFilterTo(d ? format(d, "yyyy-MM-dd") : "")} initialFocus />
+          </PopoverContent>
+        </Popover>
+        <Select value={filterCustomer} onValueChange={setFilterCustomer}>
+          <SelectTrigger className="h-8 text-xs flex-1 min-w-[120px] sm:flex-none sm:w-44"><SelectValue placeholder="All customers" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All customers</SelectItem>
+            {customers?.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        {activeOrderFilterCount > 0 && (
+          <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={clearOrderFilters}>
+            <X className="h-3 w-3 mr-1" /> Clear ({activeOrderFilterCount})
+          </Button>
+        )}
+        <span className="ml-auto text-xs text-muted-foreground">{filteredOrders.length} result{filteredOrders.length !== 1 ? "s" : ""}</span>
+      </div>
+
+      <DataTable
+        columns={columns}
+        data={filteredOrders}
+        searchKey="display_id"
+        searchPlaceholder="Search by order ID..."
+        renderMobileCard={(row: any) => (
+          <div className="rounded-xl border bg-card p-4 shadow-sm hover:shadow-md transition-shadow active:bg-muted/30">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-mono text-xs font-medium text-muted-foreground">{row.display_id}</span>
+                  <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{row.order_type}</Badge>
+                  <Badge variant="outline" className="text-[10px] h-4 px-1.5">{row.source}</Badge>
+                </div>
+                <h3 className="font-semibold text-sm text-foreground truncate mt-0.5">{row.stores?.name || "—"}</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">{row.customers?.name || "—"}</p>
+              </div>
+              <StatusBadge status={row.status === "delivered" ? "active" : row.status as any} label={row.status} />
+            </div>
+            <div className="flex items-center justify-between mt-3 gap-2 flex-wrap">
+              <p className="text-xs text-muted-foreground">{new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}</p>
+              {row.status === "pending" && (
+                <div className="flex items-center gap-1.5">
+                  <Button variant="outline" size="sm" className="h-7 text-xs text-green-600 border-green-600/40" onClick={(e) => { e.stopPropagation(); handleMarkDelivered(row.id); }} disabled={deliveringId === row.id}>
+                    {deliveringId === row.id ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <CheckCircle2 className="h-3 w-3 mr-1" />}Deliver
+                  </Button>
+                  <Button variant="outline" size="sm" className="h-7 text-xs text-destructive border-destructive/40" onClick={(e) => { e.stopPropagation(); setCancelOrderId(row.id); }}>
+                    <XCircle className="h-3 w-3 mr-1" />Cancel
+                  </Button>
+                </div>
+              )}
+              {row.status === "cancelled" && row.cancellation_reason && (
+                <span className="text-xs text-muted-foreground italic truncate max-w-[180px]">{row.cancellation_reason}</span>
+              )}
+            </div>
+          </div>
+        )}
+      />
 
       <Dialog open={showAdd} onOpenChange={(v) => { setShowAdd(v); if (!v) resetForm(); }}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
@@ -305,11 +448,9 @@ const Orders = () => {
               <Select value={cancelReason} onValueChange={setCancelReason}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Select reason" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Out of stock">Out of stock</SelectItem>
-                  <SelectItem value="Customer requested">Customer requested</SelectItem>
-                  <SelectItem value="Duplicate order">Duplicate order</SelectItem>
-                  <SelectItem value="Pricing issue">Pricing issue</SelectItem>
-                  <SelectItem value="Delivery not possible">Delivery not possible</SelectItem>
+                  <SelectItem value="By Mistake">By Mistake</SelectItem>
+                  <SelectItem value="Stock Available">Stock Available</SelectItem>
+                  <SelectItem value="Other Brands">Other Brands</SelectItem>
                   <SelectItem value="Other">Other</SelectItem>
                 </SelectContent>
               </Select>

@@ -1,11 +1,10 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'app.lovable.bizmanager',
+  appId: 'com.bizmanager.app',
   appName: 'BizManager',
   webDir: 'dist',
   server: {
-    url: 'https://22e9f0ea-22ae-4685-b0ce-0218e2390dbb.lovableproject.com?forceHideBadge=true',
     cleartext: true
   },
   android: {

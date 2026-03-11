@@ -9,9 +9,10 @@ import { Label } from "@/components/ui/label";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2, Plus, Pencil, Trash2 } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useNavigate } from "react-router-dom";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,6 +31,8 @@ const StoreTypes = () => {
   const { role } = useAuth();
   const qc = useQueryClient();
   const isAdmin = role === "super_admin";
+
+  const navigate = useNavigate();
 
   const [showAdd, setShowAdd] = useState(false);
   const [editingType, setEditingType] = useState<any>(null);
@@ -203,6 +206,7 @@ const StoreTypes = () => {
       <PageHeader
         title="Store Types"
         subtitle="Manage store type categories and their settings"
+        actions={[{ label: "Store Type Access", icon: ShieldCheck, onClick: () => navigate("/store-types/access"), priority: 1 }]}
         primaryAction={isAdmin ? { label: "Add Store Type", icon: Plus, onClick: () => setShowAdd(true) } : undefined}
       />
 
