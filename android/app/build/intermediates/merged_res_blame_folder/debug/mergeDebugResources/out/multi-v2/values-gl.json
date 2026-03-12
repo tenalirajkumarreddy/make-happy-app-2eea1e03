@@ -1,7 +1,7 @@
 {
     "logs": [
         {
-            "outputFile": "app.lovable.bizmanager.app-mergeDebugResources-42:/values-gl/values-gl.xml",
+            "outputFile": "com.bizmanager.app-mergeDebugResources-42:/values-gl/values-gl.xml",
             "map": [
                 {
                     "source": "C:\\Users\\rajku\\.gradle\\caches\\8.14.3\\transforms\\c1b0052ae712299163f2612d6db27779\\transformed\\play-services-base-18.5.0\\res\\values-gl\\values.xml",

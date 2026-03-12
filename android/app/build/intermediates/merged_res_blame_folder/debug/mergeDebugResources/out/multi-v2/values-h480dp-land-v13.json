@@ -1,7 +1,7 @@
 {
     "logs": [
         {
-            "outputFile": "app.lovable.bizmanager.app-mergeDebugResources-42:/values-h480dp-land-v13/values-h480dp-land-v13.xml",
+            "outputFile": "com.bizmanager.app-mergeDebugResources-42:/values-h480dp-land-v13/values-h480dp-land-v13.xml",
             "map": [
                 {
                     "source": "C:\\Users\\rajku\\.gradle\\caches\\8.14.3\\transforms\\d30d5b44a30cca3e7686b77f30f8a3cf\\transformed\\material-1.13.0\\res\\values-h480dp-land-v13\\values-h480dp-land-v13.xml",

@@ -2,8 +2,8 @@
 <resources>
     <color name="ic_launcher_background">#FFFFFF</color>
     <string name="app_name">BizManager</string>
-    <string name="custom_url_scheme">app.lovable.bizmanager</string>
-    <string name="package_name">app.lovable.bizmanager</string>
+    <string name="custom_url_scheme">com.bizmanager.app</string>
+    <string name="package_name">com.bizmanager.app</string>
     <string name="title_activity_main">BizManager</string>
     <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
         
