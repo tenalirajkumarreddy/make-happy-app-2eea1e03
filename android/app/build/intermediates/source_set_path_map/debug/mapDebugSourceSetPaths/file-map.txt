@@ -48,7 +48,8 @@ com.bizmanager.app-debug-46 C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-
 com.bizmanager.app-main-47 C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\res
 com.bizmanager.app-debug-48 C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\capacitor-cordova-android-plugins\build\intermediates\packaged_res\debug\packageDebugResources
 com.bizmanager.app-debug-49 C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\android\capacitor\build\intermediates\packaged_res\debug\packageDebugResources
-com.bizmanager.app-debug-50 C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\camera\android\build\intermediates\packaged_res\debug\packageDebugResources
-com.bizmanager.app-debug-51 C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\geolocation\android\build\intermediates\packaged_res\debug\packageDebugResources
-com.bizmanager.app-debug-52 C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\splash-screen\android\build\intermediates\packaged_res\debug\packageDebugResources
-com.bizmanager.app-debug-53 C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\status-bar\android\build\intermediates\packaged_res\debug\packageDebugResources
+com.bizmanager.app-debug-50 C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\app\android\build\intermediates\packaged_res\debug\packageDebugResources
+com.bizmanager.app-debug-51 C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\camera\android\build\intermediates\packaged_res\debug\packageDebugResources
+com.bizmanager.app-debug-52 C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\geolocation\android\build\intermediates\packaged_res\debug\packageDebugResources
+com.bizmanager.app-debug-53 C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\splash-screen\android\build\intermediates\packaged_res\debug\packageDebugResources
+com.bizmanager.app-debug-54 C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\status-bar\android\build\intermediates\packaged_res\debug\packageDebugResources

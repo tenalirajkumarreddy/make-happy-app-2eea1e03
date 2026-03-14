@@ -5,10 +5,10 @@ const config: CapacitorConfig = {
   appName: 'BizManager',
   webDir: 'dist',
   server: {
-    cleartext: true
+    cleartext: false
   },
   android: {
-    allowMixedContent: true
+    allowMixedContent: false
   },
   ios: {
     contentInset: 'automatic'

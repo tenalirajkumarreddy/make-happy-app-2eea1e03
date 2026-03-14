@@ -9,9 +9,15 @@ const STORE_NAME = "pending_actions";
 
 export interface PendingAction {
   id: string;
-  type: "sale" | "transaction";
-  payload: any;
+  type: "sale" | "transaction" | "visit";
+  payload: unknown;
   createdAt: string;
+}
+
+function emitQueueChanged() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("offline-queue-changed"));
+  }
 }
 
 function openDB(): Promise<IDBDatabase> {
@@ -33,7 +39,10 @@ export async function addToQueue(action: PendingAction): Promise<void> {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, "readwrite");
     tx.objectStore(STORE_NAME).put(action);
-    tx.oncomplete = () => resolve();
+    tx.oncomplete = () => {
+      emitQueueChanged();
+      resolve();
+    };
     tx.onerror = () => reject(tx.error);
   });
 }
@@ -53,7 +62,10 @@ export async function removeFromQueue(id: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, "readwrite");
     tx.objectStore(STORE_NAME).delete(id);
-    tx.oncomplete = () => resolve();
+    tx.oncomplete = () => {
+      emitQueueChanged();
+      resolve();
+    };
     tx.onerror = () => reject(tx.error);
   });
 }

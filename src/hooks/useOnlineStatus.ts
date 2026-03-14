@@ -11,13 +11,18 @@ export function useOnlineStatus() {
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
+    const handleQueueChanged = () => {
+      getQueueCount().then(setPendingCount).catch(() => {});
+    };
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
+    window.addEventListener("offline-queue-changed", handleQueueChanged);
     // Load initial pending count
     getQueueCount().then(setPendingCount).catch(() => {});
     return () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("offline-queue-changed", handleQueueChanged);
     };
   }, []);
 
@@ -58,6 +63,24 @@ export function useOnlineStatus() {
           const { error } = await supabase.from("transactions").insert({ ...txData, display_id: displayId });
           if (error) throw error;
           // DB trigger trg_transactions_recalc_outstanding handles store.outstanding update automatically
+        } else if (action.type === "visit") {
+          const { userId, storeId, lat, lng } = action.payload;
+          const { data: session, error: sessionError } = await supabase
+            .from("route_sessions")
+            .select("id")
+            .eq("user_id", userId)
+            .eq("status", "active")
+            .maybeSingle();
+          if (sessionError) throw sessionError;
+          if (!session?.id) throw new Error("No active route session available for queued visit");
+
+          const { error } = await supabase.from("store_visits").insert({
+            session_id: session.id,
+            store_id: storeId,
+            lat: lat ?? null,
+            lng: lng ?? null,
+          });
+          if (error) throw error;
         }
         await removeFromQueue(action.id);
         synced++;

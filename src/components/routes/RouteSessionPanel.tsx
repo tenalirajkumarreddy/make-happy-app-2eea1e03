@@ -24,7 +24,8 @@ function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
 }
 
 export function RouteSessionPanel() {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
+  const isScopedStaff = role === "agent" || role === "marketer" || role === "pos" || role === "manager";
   const qc = useQueryClient();
   const [showStart, setShowStart] = useState(false);
   const [selectedRoute, setSelectedRoute] = useState("");
@@ -75,11 +76,28 @@ export function RouteSessionPanel() {
   });
 
   const { data: routes } = useQuery({
-    queryKey: ["routes-list-active"],
+    queryKey: ["routes-list-active", user?.id, role],
     queryFn: async () => {
-      const { data } = await supabase.from("routes").select("id, name").eq("is_active", true);
-      return data || [];
+      const { data, error } = await supabase.from("routes").select("id, name").eq("is_active", true);
+      if (error) throw error;
+
+      const allRoutes = data || [];
+      if (!user?.id || !isScopedStaff) return allRoutes;
+
+      const { data: accessRows, error: accessError } = await supabase
+        .from("agent_routes")
+        .select("route_id, enabled")
+        .eq("user_id", user.id);
+      if (accessError) throw accessError;
+
+      if (!accessRows || accessRows.length === 0) return allRoutes;
+
+      const enabledRouteIds = new Set(
+        accessRows.filter((row: any) => row.enabled).map((row: any) => row.route_id)
+      );
+      return allRoutes.filter((route: any) => enabledRouteIds.has(route.id));
     },
+    enabled: !!user,
   });
 
   // Continuously track agent location during an active session and push to DB

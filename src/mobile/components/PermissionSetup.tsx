@@ -59,7 +59,11 @@ export function PermissionSetup({ onComplete }: Props) {
 
   const handleAllow = async () => {
     setLoading(true);
-    try { await current.request(); } catch {}
+    try {
+      await current.request();
+    } catch {
+      void 0;
+    }
     setLoading(false);
     advance();
   };
