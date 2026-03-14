@@ -902,14 +902,20 @@ function RecordPayment({ preselectStore }: { preselectStore?: StoreOption | null
 interface AgentRecordProps {
   preselectStore?: StoreOption | null;
   preselectTab?: "sale" | "payment";
+  allowSale?: boolean;
 }
 
-export function AgentRecord({ preselectStore, preselectTab }: AgentRecordProps) {
-  const [activeTab, setActiveTab] = useState<string>(preselectTab ?? "sale");
+export function AgentRecord({ preselectStore, preselectTab, allowSale = true }: AgentRecordProps) {
+  const initialTab = !allowSale ? "payment" : (preselectTab ?? "sale");
+  const [activeTab, setActiveTab] = useState<string>(initialTab);
 
   useEffect(() => {
+    if (!allowSale) {
+      setActiveTab("payment");
+      return;
+    }
     if (preselectStore && preselectTab) setActiveTab(preselectTab);
-  }, [preselectStore?.id, preselectTab]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [preselectStore?.id, preselectTab, allowSale]);
 
   return (
     <div className="pb-4">
@@ -917,22 +923,24 @@ export function AgentRecord({ preselectStore, preselectTab }: AgentRecordProps) 
       <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 dark:from-slate-900 dark:via-blue-950 dark:to-indigo-950 px-4 pt-4 pb-6">
         <p className="text-blue-200 text-xs font-medium uppercase tracking-widest mb-3">Action</p>
         <div className="bg-white/15 backdrop-blur-sm rounded-2xl p-1 flex gap-1">
-          <button
-            onClick={() => setActiveTab("sale")}
-            className={cn(
-              "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all",
-              activeTab === "sale"
-                ? "bg-white text-blue-700 shadow-sm"
-                : "text-white/80 hover:text-white hover:bg-white/10"
-            )}
-          >
-            <ShoppingCart className="h-4 w-4" />
-            Record Sale
-          </button>
+          {allowSale && (
+            <button
+              onClick={() => setActiveTab("sale")}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all",
+                activeTab === "sale"
+                  ? "bg-white text-blue-700 shadow-sm"
+                  : "text-white/80 hover:text-white hover:bg-white/10"
+              )}
+            >
+              <ShoppingCart className="h-4 w-4" />
+              Record Sale
+            </button>
+          )}
           <button
             onClick={() => setActiveTab("payment")}
             className={cn(
-              "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all",
+              `${allowSale ? "flex-1" : "w-full"} flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all`,
               activeTab === "payment"
                 ? "bg-white text-emerald-700 shadow-sm"
                 : "text-white/80 hover:text-white hover:bg-white/10"
@@ -945,7 +953,7 @@ export function AgentRecord({ preselectStore, preselectTab }: AgentRecordProps) 
       </div>
 
       <div className="mt-4">
-        {activeTab === "sale" && <RecordSale preselectStore={preselectStore} />}
+        {allowSale && activeTab === "sale" && <RecordSale preselectStore={preselectStore} />}
         {activeTab === "payment" && <RecordPayment preselectStore={preselectStore} />}
       </div>
     </div>

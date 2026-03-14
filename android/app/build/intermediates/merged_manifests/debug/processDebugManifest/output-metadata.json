@@ -4,7 +4,7 @@
     "type": "MERGED_MANIFESTS",
     "kind": "Directory"
   },
-  "applicationId": "com.bizmanager.app",
+  "applicationId": "com.aquaprime.app",
   "variantName": "debug",
   "elements": [
     {

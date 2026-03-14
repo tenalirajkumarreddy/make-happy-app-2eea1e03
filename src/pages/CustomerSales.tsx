@@ -3,6 +3,7 @@ import { DataTable } from "@/components/shared/DataTable";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { resolveCustomer } from "@/lib/resolveCustomer";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,10 +13,7 @@ const CustomerSales = () => {
 
   const { data: customer } = useQuery({
     queryKey: ["my-customer", user?.id],
-    queryFn: async () => {
-      const { data } = await supabase.from("customers").select("*").eq("user_id", user!.id).single();
-      return data;
-    },
+    queryFn: async () => resolveCustomer(user!.id),
     enabled: !!user,
   });
 

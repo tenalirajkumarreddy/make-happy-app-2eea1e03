@@ -4,6 +4,7 @@ import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { resolveCustomer } from "@/lib/resolveCustomer";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2, Store, ShoppingCart, DollarSign, FileCheck, Upload, Phone } from "lucide-react";
 import { useState } from "react";
@@ -28,10 +29,7 @@ const CustomerPortal = () => {
 
   const { data: customer, isLoading: loadingCustomer } = useQuery({
     queryKey: ["my-customer", user?.id],
-    queryFn: async () => {
-      const { data } = await supabase.from("customers").select("*").eq("user_id", user!.id).single();
-      return data;
-    },
+    queryFn: async () => resolveCustomer(user!.id),
     enabled: !!user,
   });
 

@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { resolveCustomer } from "@/lib/resolveCustomer";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2, Upload, CheckCircle, Phone } from "lucide-react";
 import { useState } from "react";
@@ -27,10 +28,7 @@ const CustomerProfile = () => {
 
   const { data: customer, isLoading } = useQuery({
     queryKey: ["my-customer", user?.id],
-    queryFn: async () => {
-      const { data } = await supabase.from("customers").select("*").eq("user_id", user!.id).single();
-      return data;
-    },
+    queryFn: async () => resolveCustomer(user!.id),
     enabled: !!user,
   });
 

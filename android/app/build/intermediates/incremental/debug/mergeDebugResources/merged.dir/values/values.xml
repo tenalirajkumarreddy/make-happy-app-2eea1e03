@@ -2490,7 +2490,7 @@
     <string name="common_open_on_phone">Open on phone</string>
     <string name="common_signin_button_text">Sign in</string>
     <string name="common_signin_button_text_long">Sign in with Google</string>
-    <string name="custom_url_scheme">com.bizmanager.app</string>
+    <string name="custom_url_scheme">com.aquaprime.app</string>
     <string description="Screen reader announcement for when a checkbox is on error. [CHAR LIMIT=NONE]" name="error_a11y_label">
     Error: invalid
   </string>
@@ -2498,6 +2498,11 @@
     <string name="exposed_dropdown_menu_content_description">Show dropdown menu</string>
     <string name="fab_transformation_scrim_behavior" translatable="false">com.google.android.material.transformation.FabTransformationScrimBehavior</string>
     <string name="fab_transformation_sheet_behavior" translatable="false">com.google.android.material.transformation.FabTransformationSheetBehavior</string>
+    <string name="gcm_defaultSenderId" translatable="false">648044405229</string>
+    <string name="google_api_key" translatable="false">AIzaSyCngbWt92ZlOXNeAk3DHLXncWOjwZ_Xu7Y</string>
+    <string name="google_app_id" translatable="false">1:648044405229:android:54c85efd0913280284c7e4</string>
+    <string name="google_crash_reporting_api_key" translatable="false">AIzaSyCngbWt92ZlOXNeAk3DHLXncWOjwZ_Xu7Y</string>
+    <string name="google_storage_bucket" translatable="false">aqua-prime-auth.firebasestorage.app</string>
     <string name="hide_bottom_view_on_scroll_behavior" translatable="false">com.google.android.material.behavior.HideBottomViewOnScrollBehavior</string>
     <string description="Content description for an icon that appears in the title area of a dialog" name="icon_content_description">Dialog Icon</string>
     <string name="item_view_role_description">Tab</string>
@@ -2621,12 +2626,13 @@
     Expanded
   </string>
     <string name="no_webview_text">This app requires a WebView to work</string>
-    <string name="package_name">com.bizmanager.app</string>
+    <string name="package_name">com.aquaprime.app</string>
     <string name="password_toggle_content_description">Show password</string>
     <string name="path_password_eye" translatable="false">M12,4.5C7,4.5 2.73,7.61 1,12c1.73,4.39 6,7.5 11,7.5s9.27,-3.11 11,-7.5c-1.73,-4.39 -6,-7.5 -11,-7.5zM12,17c-2.76,0 -5,-2.24 -5,-5s2.24,-5 5,-5 5,2.24 5,5 -2.24,5 -5,5zM12,9c-1.66,0 -3,1.34 -3,3s1.34,3 3,3 3,-1.34 3,-3 -1.34,-3 -3,-3z</string>
     <string name="path_password_eye_mask_strike_through" translatable="false">M2,4.27 L19.73,22 L22.27,19.46 L4.54,1.73 L4.54,1 L23,1 L23,23 L1,23 L1,4.27 Z</string>
     <string name="path_password_eye_mask_visible" translatable="false">M2,4.27 L2,4.27 L4.54,1.73 L4.54,1.73 L4.54,1 L23,1 L23,23 L1,23 L1,4.27 Z</string>
     <string name="path_password_strike_through" translatable="false">M3.27,4.27 L19.74,20.74</string>
+    <string name="project_id" translatable="false">aqua-prime-auth</string>
     <string name="search_menu_title">Search</string>
     <string name="searchbar_scrolling_view_behavior" translatable="false">
     com.google.android.material.search.SearchBar$ScrollingViewBehavior

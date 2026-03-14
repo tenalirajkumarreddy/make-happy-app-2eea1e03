@@ -1,7 +1,7 @@
 {
     "logs": [
         {
-            "outputFile": "com.bizmanager.app-mergeDebugResources-42:/values-en-rGB/values-en-rGB.xml",
+            "outputFile": "com.aquaprime.app-mergeDebugResources-43:/values-en-rGB/values-en-rGB.xml",
             "map": [
                 {
                     "source": "C:\\Users\\rajku\\.gradle\\caches\\8.14.3\\transforms\\c1b0052ae712299163f2612d6db27779\\transformed\\play-services-base-18.5.0\\res\\values-en-rGB\\values.xml",

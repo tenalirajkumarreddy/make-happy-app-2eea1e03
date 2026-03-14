@@ -1,22 +1,46 @@
-import { Home, Map, ScanLine, History, Users } from "lucide-react";
+import { Home, Map, ScanLine, History, Users, ClipboardList, ReceiptIndianRupee } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type MobileTab = "home" | "routes" | "scan" | "history" | "customers";
+export type MobileTab = "home" | "routes" | "scan" | "history" | "customers" | "orders" | "record" | "sales" | "transactions" | "profile";
+
+interface MobileTabItem {
+  id: MobileTab;
+  label: string;
+  icon: typeof Home;
+  centerAction?: boolean;
+}
 
 interface Props {
   tab: MobileTab;
   onChange: (t: MobileTab) => void;
+  tabs?: MobileTabItem[];
 }
 
-const TABS = [
+const AGENT_TABS: MobileTabItem[] = [
   { id: "home" as MobileTab, label: "Home", icon: Home },
   { id: "routes" as MobileTab, label: "Routes", icon: Map },
-  { id: "scan" as MobileTab, label: "Scan", icon: ScanLine },
+  { id: "scan" as MobileTab, label: "Scan", icon: ScanLine, centerAction: true },
   { id: "customers" as MobileTab, label: "Stores", icon: Users },
   { id: "history" as MobileTab, label: "History", icon: History },
 ];
 
-export function BottomNav({ tab, onChange }: Props) {
+export const MARKETER_TABS: MobileTabItem[] = [
+  { id: "home", label: "Home", icon: Home },
+  { id: "orders", label: "Orders", icon: ClipboardList },
+  { id: "record", label: "Record", icon: ReceiptIndianRupee, centerAction: true },
+  { id: "customers", label: "Stores", icon: Users },
+  { id: "history", label: "History", icon: History },
+];
+
+export const CUSTOMER_TABS: MobileTabItem[] = [
+  { id: "home", label: "Home", icon: Home },
+  { id: "sales", label: "Sales", icon: ClipboardList },
+  { id: "orders", label: "Order +", icon: ScanLine, centerAction: true },
+  { id: "transactions", label: "Ledger", icon: ReceiptIndianRupee },
+  { id: "profile", label: "Profile", icon: Users },
+];
+
+export function BottomNav({ tab, onChange, tabs = AGENT_TABS }: Props) {
   return (
     <nav
       className="fixed bottom-0 left-0 right-0 z-40"
@@ -25,12 +49,12 @@ export function BottomNav({ tab, onChange }: Props) {
       {/* Frosted glass nav bar */}
       <div className="bg-white/90 dark:bg-slate-900/95 backdrop-blur-xl border-t border-slate-200/80 dark:border-slate-700/50 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] dark:shadow-[0_-4px_20px_rgba(0,0,0,0.3)]">
         <div className="flex items-end h-16">
-          {TABS.map((t) => {
+          {tabs.map((t) => {
             const Icon = t.icon;
             const isActive = tab === t.id;
-            const isScan = t.id === "scan";
+            const isCenterAction = !!t.centerAction;
 
-            if (isScan) {
+            if (isCenterAction) {
               return (
                 <button
                   key={t.id}

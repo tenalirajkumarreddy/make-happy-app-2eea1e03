@@ -45,8 +45,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    if (roleData) setRole(roleData.role as AppRole);
     if (profileData) setProfile(profileData);
+
+    if (roleData) {
+      setRole(roleData.role as AppRole);
+    } else {
+      setRole(null);
+    }
   };
 
   useEffect(() => {

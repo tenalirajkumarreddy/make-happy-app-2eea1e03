@@ -1,16 +1,16 @@
 import { useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Mail, Lock, User, Loader2, ArrowLeft } from "lucide-react";
+import { Mail, Lock, User, Loader2, ArrowLeft, Smartphone } from "lucide-react";
+import { sendPhoneOtp, verifyPhoneOtp } from "@/lib/firebaseAuth";
 
 const Auth = () => {
   const navigate = useNavigate();
-  const location = useLocation();
   const [loading, setLoading] = useState(false);
   const [showForgot, setShowForgot] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
@@ -23,6 +23,12 @@ const Auth = () => {
   const [signupName, setSignupName] = useState("");
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
+
+  // Phone OTP state
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [phoneCode, setPhoneCode] = useState("");
+  const [phoneOtpSent, setPhoneOtpSent] = useState(false);
+  const [phoneVerifiedNumber, setPhoneVerifiedNumber] = useState("");
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,6 +77,54 @@ const Auth = () => {
     } else {
       toast.success("Password reset link sent to your email!");
       setShowForgot(false);
+    }
+  };
+
+  const handleSendPhoneOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const normalized = await sendPhoneOtp(phoneNumber, "firebase-recaptcha-container");
+      setPhoneOtpSent(true);
+      setPhoneVerifiedNumber(normalized);
+      toast.success(`OTP sent to ${normalized}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to send OTP";
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyPhoneOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const idToken = await verifyPhoneOtp(phoneCode);
+
+      const { data, error } = await supabase.functions.invoke("firebase-phone-exchange", {
+        body: { idToken },
+      });
+
+      if (error) throw error;
+      if (!data?.access_token || !data?.refresh_token) {
+        throw new Error("Phone login failed to create app session");
+      }
+
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+      });
+
+      if (sessionError) throw sessionError;
+
+      toast.success("Logged in with phone successfully");
+      navigate("/");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "OTP verification failed";
+      toast.error(message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -185,6 +239,68 @@ const Auth = () => {
                   Login
                 </Button>
               </form>
+
+              <div className="relative my-4">
+                <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
+                <div className="relative flex justify-center text-xs uppercase"><span className="bg-card px-2 text-muted-foreground">or phone OTP</span></div>
+              </div>
+
+              {!phoneOtpSent ? (
+                <form onSubmit={handleSendPhoneOtp} className="space-y-4">
+                  <div>
+                    <Label htmlFor="phone-number">Phone Number</Label>
+                    <div className="relative mt-1">
+                      <Smartphone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        id="phone-number"
+                        type="tel"
+                        placeholder="+91XXXXXXXXXX"
+                        value={phoneNumber}
+                        onChange={(e) => setPhoneNumber(e.target.value)}
+                        className="pl-9"
+                        required
+                      />
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">Use country code, e.g. +91...</p>
+                  </div>
+                  <div id="firebase-recaptcha-container" />
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Send OTP
+                  </Button>
+                </form>
+              ) : (
+                <form onSubmit={handleVerifyPhoneOtp} className="space-y-4">
+                  <div>
+                    <Label htmlFor="phone-otp">OTP Code</Label>
+                    <Input
+                      id="phone-otp"
+                      inputMode="numeric"
+                      placeholder="Enter 6-digit code"
+                      value={phoneCode}
+                      onChange={(e) => setPhoneCode(e.target.value)}
+                      required
+                    />
+                    <p className="mt-1 text-xs text-muted-foreground">Code sent to {phoneVerifiedNumber}</p>
+                  </div>
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Verify & Login
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="w-full"
+                    onClick={() => {
+                      setPhoneOtpSent(false);
+                      setPhoneCode("");
+                      setPhoneVerifiedNumber("");
+                    }}
+                  >
+                    Use different number
+                  </Button>
+                </form>
+              )}
             </TabsContent>
 
             <TabsContent value="signup" className="mt-4">
