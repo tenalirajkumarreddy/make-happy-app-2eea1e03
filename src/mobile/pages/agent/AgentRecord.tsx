@@ -170,6 +170,10 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
     if (items.length === 0) { toast.error("Add at least one product"); return; }
     if (totalAmount === 0) { toast.error("Sale total cannot be zero"); return; }
     if (!store.customer_id) { toast.error("Store has no linked customer"); return; }
+    if (role === "pos" && outstandingFromSale !== 0) {
+      toast.error("POS sales require full payment. Cash + UPI must equal total amount.");
+      return;
+    }
     if (creditExceeded) { toast.error("Credit limit exceeded. Increase payment or reduce items."); return; }
 
     setSaving(true);
@@ -903,19 +907,29 @@ interface AgentRecordProps {
   preselectStore?: StoreOption | null;
   preselectTab?: "sale" | "payment";
   allowSale?: boolean;
+  allowPayment?: boolean;
 }
 
-export function AgentRecord({ preselectStore, preselectTab, allowSale = true }: AgentRecordProps) {
+export function AgentRecord({
+  preselectStore,
+  preselectTab,
+  allowSale = true,
+  allowPayment = true,
+}: AgentRecordProps) {
   const initialTab = !allowSale ? "payment" : (preselectTab ?? "sale");
   const [activeTab, setActiveTab] = useState<string>(initialTab);
 
   useEffect(() => {
+    if (!allowPayment) {
+      setActiveTab("sale");
+      return;
+    }
     if (!allowSale) {
       setActiveTab("payment");
       return;
     }
     if (preselectStore && preselectTab) setActiveTab(preselectTab);
-  }, [preselectStore?.id, preselectTab, allowSale]);
+  }, [preselectStore?.id, preselectTab, allowSale, allowPayment]);
 
   return (
     <div className="pb-4">
@@ -937,24 +951,26 @@ export function AgentRecord({ preselectStore, preselectTab, allowSale = true }: 
               Record Sale
             </button>
           )}
-          <button
-            onClick={() => setActiveTab("payment")}
-            className={cn(
-              `${allowSale ? "flex-1" : "w-full"} flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all`,
-              activeTab === "payment"
-                ? "bg-white text-emerald-700 shadow-sm"
-                : "text-white/80 hover:text-white hover:bg-white/10"
-            )}
-          >
-            <Banknote className="h-4 w-4" />
-            Collect Payment
-          </button>
+          {allowPayment && (
+            <button
+              onClick={() => setActiveTab("payment")}
+              className={cn(
+                `${allowSale ? "flex-1" : "w-full"} flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all`,
+                activeTab === "payment"
+                  ? "bg-white text-emerald-700 shadow-sm"
+                  : "text-white/80 hover:text-white hover:bg-white/10"
+              )}
+            >
+              <Banknote className="h-4 w-4" />
+              Collect Payment
+            </button>
+          )}
         </div>
       </div>
 
       <div className="mt-4">
         {allowSale && activeTab === "sale" && <RecordSale preselectStore={preselectStore} />}
-        {activeTab === "payment" && <RecordPayment preselectStore={preselectStore} />}
+        {allowPayment && activeTab === "payment" && <RecordPayment preselectStore={preselectStore} />}
       </div>
     </div>
   );

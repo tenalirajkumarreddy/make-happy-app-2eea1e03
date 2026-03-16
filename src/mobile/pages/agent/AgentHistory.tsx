@@ -123,14 +123,53 @@ export function AgentHistory() {
   const { data: staffUsers } = useQuery({
     queryKey: ["mobile-staff-users"],
     queryFn: async () => {
-      const { data: roles } = await supabase.from("user_roles").select("user_id").neq("role", "customer");
-      const ids = (roles || []).map((row: any) => row.user_id).filter((id: string) => id !== user!.id);
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("user_id, full_name")
-        .in("user_id", ids)
-        .eq("is_active", true);
-      return profiles || [];
+      const { data: roles, error: rolesError } = await supabase
+        .from("user_roles")
+        .select("user_id, role")
+        .in("role", ["super_admin", "manager", "agent", "marketer", "pos"]);
+
+      const roleByUserId = new Map((roles || []).map((row: any) => [row.user_id, row.role]));
+      const ids = Array.from(roleByUserId.keys()).filter((id: string) => id !== user!.id);
+
+      let profiles: Array<{ user_id: string; full_name: string | null; email: string | null; phone: string | null }> = [];
+
+      if (!rolesError && ids.length > 0) {
+        const { data: filteredProfiles, error: filteredError } = await supabase
+          .from("profiles")
+          .select("user_id, full_name, email, phone")
+          .in("user_id", ids)
+          .eq("is_active", true);
+        if (!filteredError) {
+          profiles = (filteredProfiles || []) as typeof profiles;
+        }
+      }
+
+      if (profiles.length === 0) {
+        const { data: fallbackProfiles, error: fallbackError } = await supabase
+          .from("profiles")
+          .select("user_id, full_name, email, phone")
+          .eq("is_active", true)
+          .neq("user_id", user!.id);
+        if (fallbackError) throw fallbackError;
+        profiles = (fallbackProfiles || []) as typeof profiles;
+      }
+
+      const roleLabel: Record<string, string> = {
+        super_admin: "Admin",
+        manager: "Manager",
+        agent: "Agent",
+        marketer: "Marketer",
+        pos: "POS",
+      };
+
+      return (profiles || []).map((profile: any) => {
+        const role = roleByUserId.get(profile.user_id) || "agent";
+        return {
+          ...profile,
+          role,
+          roleLabel: roleLabel[role] || "Staff",
+        };
+      });
     },
     enabled: !!user,
   });
@@ -608,9 +647,18 @@ export function AgentHistory() {
                     <SelectValue placeholder="Select recipient..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {(staffUsers as any[] || []).map((staff: any) => (
-                      <SelectItem key={staff.user_id} value={staff.user_id}>{staff.full_name}</SelectItem>
-                    ))}
+                    {(staffUsers as any[] || []).map((staff: any) => {
+                      const detail = staff.phone || staff.email || "No contact";
+                      return (
+                        <SelectItem key={staff.user_id} value={staff.user_id}>
+                          <div className="flex w-full items-center justify-between gap-3">
+                            <span className="font-medium">{staff.full_name || "Staff"}</span>
+                            <span className="text-xs text-slate-500 dark:text-slate-400">{staff.roleLabel}</span>
+                          </div>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{detail}</p>
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
               </div>

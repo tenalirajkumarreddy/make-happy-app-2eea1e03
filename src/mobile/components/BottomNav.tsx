@@ -40,6 +40,12 @@ export const CUSTOMER_TABS: MobileTabItem[] = [
   { id: "profile", label: "Profile", icon: Users },
 ];
 
+export const POS_TABS: MobileTabItem[] = [
+  { id: "home", label: "Home", icon: Home },
+  { id: "record", label: "Sale", icon: ScanLine, centerAction: true },
+  { id: "history", label: "History", icon: History },
+];
+
 export function BottomNav({ tab, onChange, tabs = AGENT_TABS }: Props) {
   return (
     <nav

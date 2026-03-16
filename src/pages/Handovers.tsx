@@ -36,13 +36,54 @@ const Handovers = () => {
   const { allowed: canSeeBalances } = usePermission("see_handover_balance");
 
   const { data: staffProfiles } = useQuery({
-    queryKey: ["staff-profiles"],
+    queryKey: ["staff-profiles", user?.id],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("profiles")
-        .select("user_id, full_name, email")
-        .eq("is_active", true);
-      return (data || []).filter((p) => p.user_id !== user?.id);
+      const { data: roles, error: rolesError } = await supabase
+        .from("user_roles")
+        .select("user_id, role")
+        .in("role", ["super_admin", "manager", "agent", "marketer", "pos"]);
+
+      const staffRoleMap = new Map((roles || []).map((row) => [row.user_id, row.role]));
+      const staffIds = Array.from(staffRoleMap.keys()).filter((id) => id !== user?.id);
+
+      let profiles: Array<{ user_id: string; full_name: string; email: string | null; phone: string | null }> = [];
+
+      if (!rolesError && staffIds.length > 0) {
+        const { data: filteredProfiles, error: filteredError } = await supabase
+          .from("profiles")
+          .select("user_id, full_name, email, phone")
+          .in("user_id", staffIds)
+          .eq("is_active", true);
+        if (!filteredError) {
+          profiles = (filteredProfiles || []) as typeof profiles;
+        }
+      }
+
+      if (profiles.length === 0) {
+        const { data: fallbackProfiles, error: fallbackError } = await supabase
+          .from("profiles")
+          .select("user_id, full_name, email, phone")
+          .eq("is_active", true)
+          .neq("user_id", user!.id);
+        if (fallbackError) throw fallbackError;
+        profiles = (fallbackProfiles || []) as typeof profiles;
+      }
+
+      const roleLabel: Record<string, string> = {
+        super_admin: "Admin",
+        manager: "Manager",
+        agent: "Agent",
+        marketer: "Marketer",
+        pos: "POS",
+      };
+
+      return (profiles || [])
+        .map((profile) => ({
+          ...profile,
+          role: staffRoleMap.get(profile.user_id) || "agent",
+          roleLabel: roleLabel[staffRoleMap.get(profile.user_id) || ""] || "Staff",
+        }))
+        .sort((a, b) => a.full_name.localeCompare(b.full_name));
     },
     enabled: !!user,
   });
@@ -536,9 +577,18 @@ const Handovers = () => {
               <Select value={toUserId} onValueChange={setToUserId}>
                 <SelectTrigger><SelectValue placeholder="Select staff member" /></SelectTrigger>
                 <SelectContent>
-                  {(staffProfiles || []).map((p) => (
-                    <SelectItem key={p.user_id} value={p.user_id}>{p.full_name} ({p.email})</SelectItem>
-                  ))}
+                  {(staffProfiles || []).map((p) => {
+                    const detail = p.phone || p.email || "No contact";
+                    return (
+                      <SelectItem key={p.user_id} value={p.user_id}>
+                        <div className="flex w-full items-center justify-between gap-3">
+                          <span className="font-medium">{p.full_name}</span>
+                          <span className="text-xs text-muted-foreground">{p.roleLabel}</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground truncate">{detail}</p>
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>
