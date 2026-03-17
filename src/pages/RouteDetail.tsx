@@ -1,7 +1,7 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { getCurrentPosition } from "@/lib/capacitorUtils";
+import { getCurrentPosition } from "@/lib/proximity";
 import { useAuth } from "@/contexts/AuthContext";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";

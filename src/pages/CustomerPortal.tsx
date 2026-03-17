@@ -8,6 +8,7 @@ import { resolveCustomer } from "@/lib/resolveCustomer";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2, Store, ShoppingCart, DollarSign, FileCheck, Phone, Link2, X } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { DataTable } from "@/components/shared/DataTable";
@@ -27,10 +28,10 @@ const CustomerPortal = () => {
     setLinkingGoogle(true);
     const { error } = await supabase.auth.linkIdentity({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/portal` },
+      options: { redirectTo: window.location.origin },
     });
     if (error) {
-      import("sonner").then(({ toast }) => toast.error(error.message));
+      toast.error(error.message);
       setLinkingGoogle(false);
     }
     // On success the browser will redirect to Google — no further action needed here

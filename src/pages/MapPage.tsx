@@ -1,5 +1,5 @@
-import { getCurrentPosition } from "@/lib/capacitorUtils";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { getCurrentPosition } from "@/lib/proximity";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { MapPin, Navigation, Loader2 } from "lucide-react";
@@ -54,7 +54,7 @@ const MapPage = () => {
   const { data: activeSessions } = useQuery({
     queryKey: ["active-sessions-map"],
     queryFn: async () => {
-      const { data } = await (supabase as any)
+      const { data } = await supabase
         .from("route_sessions")
         .select("id, user_id, started_at, current_lat, current_lng, location_updated_at, routes(name), profiles(full_name)")
         .eq("status", "active");
@@ -117,9 +117,8 @@ const MapPage = () => {
     setLocating(true);
     const pos = await getCurrentPosition();
     if (pos) {
-      const loc = { lat: pos.lat, lng: pos.lng };
-      setUserLocation(loc);
-      leafletMap.current?.setView([loc.lat, loc.lng], 16);
+      setUserLocation(pos);
+      leafletMap.current?.setView([pos.lat, pos.lng], 16);
     }
     setLocating(false);
   };

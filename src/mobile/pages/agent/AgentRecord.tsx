@@ -331,17 +331,15 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
               </select>
             </div>
           )}
-          {["super_admin", "manager"].includes(role || "") && (
-            <div>
-              <Label className="text-xs text-slate-500 dark:text-slate-400 font-semibold">Sale Date (optional)</Label>
-              <Input
-                type="date"
-                value={saleDate}
-                onChange={(e) => setSaleDate(e.target.value)}
-                className="mt-1 h-10 rounded-xl border-slate-200 dark:border-slate-600"
-              />
-            </div>
-          )}
+          <div>
+            <Label className="text-xs text-slate-500 dark:text-slate-400 font-semibold">Sale Date (optional)</Label>
+            <Input
+              type="date"
+              value={saleDate}
+              onChange={(e) => setSaleDate(e.target.value)}
+              className="mt-1 h-10 rounded-xl border-slate-200 dark:border-slate-600"
+            />
+          </div>
         </div>
       </div>
 
@@ -572,7 +570,7 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
 
 // ─── Record Payment ───────────────────────────────────────────────────────────
 function RecordPayment({ preselectStore }: { preselectStore?: StoreOption | null }) {
-  const { user, role } = useAuth();
+  const { user } = useAuth();
   const { allowed: canRecordBehalf } = usePermission("record_behalf");
   const qc = useQueryClient();
   const [saving, setSaving] = useState(false);
@@ -832,17 +830,15 @@ function RecordPayment({ preselectStore }: { preselectStore?: StoreOption | null
               </select>
             </div>
           )}
-          {["super_admin", "manager"].includes(role || "") && (
-            <div>
-              <Label className="text-xs text-slate-500 dark:text-slate-400 font-semibold">Payment Date (optional)</Label>
-              <Input
-                type="date"
-                value={txnDate}
-                onChange={(e) => setTxnDate(e.target.value)}
-                className="mt-1 h-10 rounded-xl border-slate-200 dark:border-slate-600"
-              />
-            </div>
-          )}
+          <div>
+            <Label className="text-xs text-slate-500 dark:text-slate-400 font-semibold">Payment Date (optional)</Label>
+            <Input
+              type="date"
+              value={txnDate}
+              onChange={(e) => setTxnDate(e.target.value)}
+              className="mt-1 h-10 rounded-xl border-slate-200 dark:border-slate-600"
+            />
+          </div>
         </div>
       </div>
 

@@ -119,6 +119,8 @@ export function AgentStoreProfile({ store, onBack, onGoRecord }: Props) {
     if (typeP && productId in typeP) return { price: typeP[productId], label: "type" as const };
     return { price: basePrice, label: "base" as const };
   };
+
+  const handleNavigate = () => {
     if (currentStore.lat != null && currentStore.lng != null) {
       window.open(`https://www.google.com/maps/dir/?api=1&destination=${currentStore.lat},${currentStore.lng}`, "_blank");
       return;

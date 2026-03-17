@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Mail, Lock, Loader2, ArrowLeft, Smartphone, ChevronDown, ChevronUp } from "lucide-react";
 import { sendPhoneOtp, verifyPhoneOtp } from "@/lib/firebaseAuth";
 import { resolveCustomer } from "@/lib/resolveCustomer";
+import { generateDisplayId } from "@/lib/displayId";
 import { useQuery } from "@tanstack/react-query";
 
 type Step = "phone" | "otp" | "register" | "add-store";
@@ -118,7 +119,7 @@ const Auth = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      const displayId = `CUST${Math.floor(10000000 + Math.random() * 90000000)}`;
+      const displayId = generateDisplayId("CUST");
 
       const { data: cust, error } = await supabase
         .from("customers")
@@ -151,7 +152,7 @@ const Auth = () => {
     }
     setLoading(true);
     try {
-      const displayId = `STR${Math.floor(10000000 + Math.random() * 90000000)}`;
+      const displayId = generateDisplayId("STR");
       const { error } = await supabase.from("stores").insert({
         customer_id: newCustomerId,
         store_type_id: storeTypeId,

@@ -726,5 +726,24 @@ CREATE POLICY "Staff can view KYC docs" ON storage.objects FOR SELECT USING (buc
 
 
 -- ============================================================
+-- 9. CUSTOMER SELF-REGISTRATION RLS POLICIES
+-- ============================================================
+-- Allow phone-OTP-authenticated customers to create their own profile
+CREATE POLICY "Customers can register own profile" ON public.customers
+  FOR INSERT TO authenticated
+  WITH CHECK (user_id = auth.uid());
+
+-- Allow customers to add stores linked to their own customer record
+CREATE POLICY "Customers can insert own stores" ON public.stores
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.customers
+      WHERE id = customer_id
+        AND user_id = auth.uid()
+    )
+  );
+
+-- ============================================================
 -- END OF TOTAL MIGRATION
 -- ============================================================

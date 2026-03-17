@@ -9,6 +9,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { logActivity } from "@/lib/activityLogger";
+import { generateDisplayId } from "@/lib/displayId";
 import { Loader2, User, Upload, AlertCircle } from "lucide-react";
 import { usePermission } from "@/hooks/usePermission";
 import { useRouteAccess } from "@/hooks/useRouteAccess";
@@ -93,7 +94,7 @@ const Customers = () => {
       return;
     }
     setSaving(true);
-    const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "CUST", seq_name: "cust_display_seq" });
+    const displayId = generateDisplayId("CUST");
 
     const { error } = await supabase.from("customers").insert({
       display_id: displayId,
@@ -122,7 +123,7 @@ const Customers = () => {
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
-      const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "CUST", seq_name: "cust_display_seq" });
+      const displayId = generateDisplayId("CUST");
       const { error } = await supabase.from("customers").insert({
         display_id: displayId,
         name: row.name,

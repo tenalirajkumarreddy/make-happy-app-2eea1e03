@@ -3,8 +3,6 @@
  * Checks if the user is within a given radius of a target location.
  */
 
-import { getCurrentPosition } from "./capacitorUtils";
-
 const PROXIMITY_RADIUS_METERS = 100;
 
 function getDistanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -17,8 +15,19 @@ function getDistanceMeters(lat1: number, lng1: number, lat2: number, lng2: numbe
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// Re-exporting getCurrentPosition for backward compatibility
-export { getCurrentPosition };
+function getCurrentPosition(): Promise<{ lat: number; lng: number } | null> {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) {
+      resolve(null);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  });
+}
 
 export interface ProximityResult {
   withinRange: boolean;
@@ -63,4 +72,4 @@ export async function checkProximity(
   };
 }
 
-export { PROXIMITY_RADIUS_METERS, getDistanceMeters };
+export { PROXIMITY_RADIUS_METERS, getDistanceMeters, getCurrentPosition };

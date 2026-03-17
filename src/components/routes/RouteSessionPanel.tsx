@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { getCurrentPosition } from "@/lib/proximity";
 import { useAuth } from "@/contexts/AuthContext";
 import { logActivity } from "@/lib/activityLogger";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,6 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { getCurrentPosition, watchPosition, clearWatch } from "@/lib/capacitorUtils";
 
 function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number) {
   const R = 6371000;
@@ -102,41 +102,33 @@ export function RouteSessionPanel() {
   });
 
   // Continuously track agent location during an active session and push to DB
-  const locationWatchRef = useRef<string | null>(null);
+  const locationWatchRef = useRef<number | null>(null);
+  const lastPushRef = useRef<number>(0);
   useEffect(() => {
-    if (!activeSession) return;
-
-    let mounted = true;
+    if (!activeSession || !navigator.geolocation) return;
 
     const pushLocation = async (lat: number, lng: number) => {
-      if (!mounted) return;
       setAgentLocation({ lat, lng });
-      await (supabase as any).from("route_sessions").update({
+      const now = Date.now();
+      // Throttle DB writes to at most once per 15 seconds
+      if (now - lastPushRef.current < 15000) return;
+      lastPushRef.current = now;
+      await supabase.from("route_sessions").update({
         current_lat: lat,
         current_lng: lng,
         location_updated_at: new Date().toISOString(),
       }).eq("id", activeSession.id);
     };
 
-    const setupWatch = async () => {
-      const id = await watchPosition((pos) => {
-        if (pos) {
-          pushLocation(pos.coords.latitude, pos.coords.longitude);
-        }
-      });
-      if (mounted) {
-        locationWatchRef.current = id;
-      } else if (id) {
-        clearWatch(id);
-      }
-    };
-
-    setupWatch();
+    locationWatchRef.current = navigator.geolocation.watchPosition(
+      (pos) => pushLocation(pos.coords.latitude, pos.coords.longitude),
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 30000, timeout: 10000 }
+    );
 
     return () => {
-      mounted = false;
-      if (locationWatchRef.current) {
-        clearWatch(locationWatchRef.current);
+      if (locationWatchRef.current !== null) {
+        navigator.geolocation.clearWatch(locationWatchRef.current);
         locationWatchRef.current = null;
       }
     };
@@ -167,14 +159,10 @@ export function RouteSessionPanel() {
 
   const nextStore = sortedStores.find((s: any) => !visits?.has(s.id));
 
-  const getLocation = async (): Promise<{ lat: number; lng: number } | null> => {
-    return await getCurrentPosition();
-  };
-
   const handleStart = async () => {
     if (!selectedRoute) { toast.error("Select a route"); return; }
     setSaving(true);
-    const loc = await getLocation();
+    const loc = await getCurrentPosition();
     const { error } = await supabase.from("route_sessions").insert({
       user_id: user!.id,
       route_id: selectedRoute,

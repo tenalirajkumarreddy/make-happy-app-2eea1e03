@@ -11,7 +11,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { DollarSign, Store, Settings2, Upload, Loader2 } from "lucide-react";
 import { usePermission } from "@/hooks/usePermission";
-import { useRouteAccess } from "@/hooks/useRouteAccess";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useState, useMemo } from "react";
@@ -46,8 +45,6 @@ const Stores = () => {
   const canManagePricing = role === "super_admin" || role === "manager";
   const canBulk = role === "super_admin" || role === "manager";
   const canEdit = role === "super_admin" || role === "manager";
-
-  const { canAccessRoute, loading: routeLoading } = useRouteAccess(user?.id, role);
 
   const { data: stores, isLoading } = useQuery({
     queryKey: ["stores"],
@@ -284,17 +281,16 @@ const Stores = () => {
   ];
 
   const filteredStores = useMemo(() => {
-    const accessibleStores = (stores || []).filter((s: any) => canAccessRoute(s.route_id));
-    return applyFilters(accessibleStores, filters, {
+    return applyFilters(stores || [], filters, {
       dateField: "created_at",
       outstandingField: "outstanding",
       storeTypeField: "store_type_id",
       routeField: "route_id",
       statusField: "is_active",
     });
-  }, [stores, filters, canAccessRoute]);
+  }, [stores, filters]);
 
-  if (isLoading || routeLoading) {
+  if (isLoading) {
     return <TableSkeleton columns={7} />;
   }
 
