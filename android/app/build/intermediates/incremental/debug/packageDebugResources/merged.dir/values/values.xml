@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#FFFFFF</color>
-    <string name="app_name">BizManager</string>
+    <string name="app_name">Aqua Prime</string>
     <string name="custom_url_scheme">com.aquaprime.app</string>
     <string name="gcm_defaultSenderId" translatable="false">648044405229</string>
     <string name="google_api_key" translatable="false">AIzaSyCngbWt92ZlOXNeAk3DHLXncWOjwZ_Xu7Y</string>
@@ -10,7 +10,7 @@
     <string name="google_storage_bucket" translatable="false">aqua-prime-auth.firebasestorage.app</string>
     <string name="package_name">com.aquaprime.app</string>
     <string name="project_id" translatable="false">aqua-prime-auth</string>
-    <string name="title_activity_main">BizManager</string>
+    <string name="title_activity_main">Aqua Prime</string>
     <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
         
         <item name="colorPrimary">@color/colorPrimary</item>

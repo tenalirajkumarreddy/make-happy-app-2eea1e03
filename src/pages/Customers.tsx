@@ -11,6 +11,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { logActivity } from "@/lib/activityLogger";
 import { Loader2, User, Upload, AlertCircle } from "lucide-react";
 import { usePermission } from "@/hooks/usePermission";
+import { useRouteAccess } from "@/hooks/useRouteAccess";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useState, useMemo, useEffect } from "react";
@@ -53,12 +54,14 @@ const Customers = () => {
   const canBulk = role === "super_admin" || role === "manager";
   const canEdit = role === "super_admin" || role === "manager";
 
+  const { canAccessRoute, loading: routeLoading, hasMatrixRestrictions } = useRouteAccess(user?.id, role);
+
   const { data: customers, isLoading } = useQuery({
     queryKey: ["customers"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("customers")
-        .select("*, stores(id, outstanding)")
+        .select("*, stores(id, outstanding, route_id)")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
@@ -79,6 +82,10 @@ const Customers = () => {
     e.preventDefault();
     if (!name.trim()) {
       toast.error("Customer name is required");
+      return;
+    }
+    if (!phone.trim() || phone.trim().length < 6) {
+      toast.error("Valid phone number is required");
       return;
     }
     if (duplicateCustomer && phone.trim()) {
@@ -291,14 +298,19 @@ const Customers = () => {
 
   const filteredCustomers = useMemo(() => {
     let data = customers || [];
+    if (hasMatrixRestrictions) {
+      data = data.filter((c: any) => 
+        c.stores?.some((s: any) => canAccessRoute(s.route_id))
+      );
+    }
     return applyFilters(data, filters, {
       dateField: "created_at",
       kycField: "kyc_status",
       statusField: "is_active",
     });
-  }, [customers, filters]);
+  }, [customers, filters, hasMatrixRestrictions, canAccessRoute]);
 
-  if (isLoading) {
+  if (isLoading || routeLoading) {
     return <TableSkeleton columns={7} />;
   }
 
@@ -388,8 +400,8 @@ const Customers = () => {
             <div className="flex items-start gap-4">
               <ImageUpload folder="customers" currentUrl={photoUrl || null} onUploaded={setPhotoUrl} onRemoved={() => setPhotoUrl("")} />
               <div className="flex-1 space-y-3">
-                <div><Label>Name</Label><Input value={name} onChange={e => setName(e.target.value)} required className="mt-1" /></div>
-                <div><Label>Phone</Label><Input value={phone} onChange={e => setPhone(e.target.value)} className="mt-1" placeholder="+91 98765 43210" /></div>
+                <div><Label>Name *</Label><Input value={name} onChange={e => setName(e.target.value)} required className="mt-1" /></div>
+                <div><Label>Phone *</Label><Input value={phone} onChange={e => setPhone(e.target.value)} className="mt-1" placeholder="+91 98765 43210" required /></div>
               </div>
             </div>
             {duplicateCustomer && phone.trim() && (
@@ -416,7 +428,7 @@ const Customers = () => {
         templateName="customers"
         fields={[
           { key: "name", label: "Name", required: true },
-          { key: "phone", label: "Phone" },
+          { key: "phone", label: "Phone", required: true },
           { key: "email", label: "Email" },
           { key: "address", label: "Address" },
         ]}

@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  List,
   Loader2,
   MapPin,
   Navigation2,
@@ -19,6 +20,7 @@ import { RouteSessionPanel } from "@/components/routes/RouteSessionPanel";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { useRouteAccess } from "@/hooks/useRouteAccess";
+import { getCurrentPosition } from "@/lib/capacitorUtils";
 
 interface RouteStore {
   id: string;
@@ -47,9 +49,32 @@ interface VisitRow {
   route_sessions: { route_id: string } | { route_id: string }[] | null;
 }
 
+interface OrderRow {
+  id: string;
+  store_id: string;
+  status: string;
+  stores: { id: string; name: string; display_id: string; address: string | null; phone: string | null; lat: number | null; lng: number | null; route_id: string | null; routes: { name: string } | null } | null;
+}
+
+const haversineMeters = (lat1: number, lng1: number, lat2: number, lng2: number) => {
+  const R = 6371000;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
+const formatDistance = (meters: number) => {
+  if (meters < 1000) return `${Math.round(meters)}m`;
+  return `${(meters / 1000).toFixed(1)}km`;
+};
+
 export function AgentRoutes() {
   const { user, role } = useAuth();
+  const [view, setView] = useState<"routes" | "orders">("routes");
   const [expandedRouteId, setExpandedRouteId] = useState<string | null>(null);
+  const [agentPos, setAgentPos] = useState<{ lat: number; lng: number } | null>(null);
+  const [fetchingPos, setFetchingPos] = useState(false);
   const todayStart = startOfDay(new Date()).toISOString();
   const { canAccessRoute, loading: loadingRouteAccess } = useRouteAccess(user?.id, role);
 
@@ -112,6 +137,22 @@ export function AgentRoutes() {
     enabled: allStoreIds.length > 0,
   });
 
+  // "ALL ORDERS" view: fetch all pending/active orders with store details
+  const { data: allOrders, isLoading: loadingOrders } = useQuery({
+    queryKey: ["mobile-agent-all-orders", allStoreIds],
+    queryFn: async () => {
+      if (allStoreIds.length === 0) return [];
+      const { data, error } = await supabase
+        .from("orders")
+        .select("id, store_id, status, stores(id, name, display_id, address, phone, lat, lng, route_id, routes(name))")
+        .in("store_id", allStoreIds)
+        .in("status", ["pending", "active"]);
+      if (error) throw error;
+      return (data as unknown as OrderRow[]) || [];
+    },
+    enabled: view === "orders" && allStoreIds.length > 0,
+  });
+
   const { data: visitedStoresByRoute } = useQuery({
     queryKey: ["store-visits", user?.id, "mobile-routes", todayStart],
     queryFn: async () => {
@@ -128,7 +169,6 @@ export function AgentRoutes() {
         const routeSession = Array.isArray(visit.route_sessions) ? visit.route_sessions[0] : visit.route_sessions;
         const routeId = routeSession?.route_id;
         if (!routeId) return;
-
         const routeVisits = visitMap.get(routeId) || new Set<string>();
         routeVisits.add(visit.store_id);
         visitMap.set(routeId, routeVisits);
@@ -139,16 +179,60 @@ export function AgentRoutes() {
     enabled: !!user,
   });
 
+  // Aggregate orders by store for the "ALL ORDERS" view
+  const ordersView = useMemo(() => {
+    if (!allOrders) return [];
+
+    // Group by store
+    const storeMap = new Map<string, { store: NonNullable<OrderRow["stores"]>; orderCount: number; statuses: string[] }>();
+    allOrders.forEach((order) => {
+      if (!order.stores) return;
+      const existing = storeMap.get(order.store_id);
+      if (existing) {
+        existing.orderCount++;
+        existing.statuses.push(order.status);
+      } else {
+        storeMap.set(order.store_id, { store: order.stores, orderCount: 1, statuses: [order.status] });
+      }
+    });
+
+    const entries = Array.from(storeMap.values());
+
+    // Sort by distance from agent if GPS available
+    if (agentPos) {
+      entries.sort((a, b) => {
+        const distA = a.store.lat != null && a.store.lng != null
+          ? haversineMeters(agentPos.lat, agentPos.lng, a.store.lat, a.store.lng)
+          : Infinity;
+        const distB = b.store.lat != null && b.store.lng != null
+          ? haversineMeters(agentPos.lat, agentPos.lng, b.store.lat, b.store.lng)
+          : Infinity;
+        return distA - distB;
+      });
+    }
+
+    return entries;
+  }, [allOrders, agentPos]);
+
+  const handleSwitchToOrders = async () => {
+    setView("orders");
+    if (!agentPos) {
+      setFetchingPos(true);
+      const pos = await getCurrentPosition();
+      if (pos) setAgentPos({ lat: pos.lat, lng: pos.lng });
+      setFetchingPos(false);
+    }
+  };
+
   const handleCall = (phone: string) => {
     window.open(`tel:${phone}`, "_self");
   };
 
-  const openDirections = (store: RouteStore) => {
+  const openDirections = (store: { lat: number | null; lng: number | null; address: string | null }) => {
     if (store.lat != null && store.lng != null) {
       window.open(`https://www.google.com/maps/dir/?api=1&destination=${store.lat},${store.lng}`, "_blank");
       return;
     }
-
     if (store.address) {
       window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(store.address)}`, "_blank");
     }
@@ -159,231 +243,386 @@ export function AgentRoutes() {
       <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 dark:from-slate-900 dark:via-blue-950 dark:to-indigo-950 px-4 pt-4 pb-8">
         <p className="text-blue-200 text-xs font-medium uppercase tracking-widest">Today</p>
         <h2 className="text-white text-xl font-bold mt-0.5">My Routes</h2>
+
+        {/* View toggle */}
+        <div className="flex mt-4 rounded-xl overflow-hidden border border-white/20 w-full">
+          <button
+            type="button"
+            onClick={() => setView("routes")}
+            className={cn(
+              "flex-1 py-2 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors",
+              view === "routes"
+                ? "bg-white text-blue-700"
+                : "bg-white/10 text-white/80 hover:bg-white/20"
+            )}
+          >
+            <MapPin className="h-3.5 w-3.5" />
+            All Routes
+          </button>
+          <button
+            type="button"
+            onClick={handleSwitchToOrders}
+            className={cn(
+              "flex-1 py-2 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors",
+              view === "orders"
+                ? "bg-white text-blue-700"
+                : "bg-white/10 text-white/80 hover:bg-white/20"
+            )}
+          >
+            {fetchingPos ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <List className="h-3.5 w-3.5" />}
+            All Orders
+          </button>
+        </div>
       </div>
 
       <div className="px-4 -mt-5 space-y-4">
-        <div className="rounded-2xl bg-white dark:bg-slate-800 shadow-xl border border-slate-100 dark:border-slate-700 overflow-hidden">
-          <RouteSessionPanel />
-        </div>
-
-        <div>
-          <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2.5">
-            Available Routes
-          </p>
-
-          {isLoading || loadingRouteAccess ? (
-            <div className="flex justify-center items-center py-12">
-              <div className="flex flex-col items-center gap-3">
-                <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-                <p className="text-sm text-slate-400">Loading routes...</p>
-              </div>
+        {/* ── ROUTES VIEW ── */}
+        {view === "routes" && (
+          <>
+            <div className="rounded-2xl bg-white dark:bg-slate-800 shadow-xl border border-slate-100 dark:border-slate-700 overflow-hidden">
+              <RouteSessionPanel />
             </div>
-          ) : routeList.length === 0 ? (
-            <div className="rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 p-8 text-center bg-slate-50/50 dark:bg-slate-800/30">
-              <div className="h-12 w-12 rounded-2xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center mx-auto mb-3">
-                <MapPin className="h-6 w-6 text-slate-400" />
-              </div>
-              <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">No Routes Available</p>
-              <p className="text-xs text-slate-400 mt-1">Contact your manager to assign routes</p>
-            </div>
-          ) : (
-            <div className="space-y-2.5">
-              {routeList.map((route, idx) => {
-                const storeCount = route.stores.length;
-                const routeVisitSet = visitedStoresByRoute?.get(route.id) || new Set<string>();
-                const visitedCount = routeVisitSet.size;
-                const pendingOrders = route.stores.filter((store) => pendingOrderStoreIds?.has(store.id)).length;
-                const totalOutstanding = route.stores.reduce((sum, store) => sum + Number(store.outstanding || 0), 0);
-                const sortedStores = [...route.stores].sort((left, right) => {
-                  if (left.store_order != null && right.store_order != null) return left.store_order - right.store_order;
-                  if (left.store_order != null) return -1;
-                  if (right.store_order != null) return 1;
-                  return left.name.localeCompare(right.name);
-                });
-                const isExpanded = expandedRouteId === route.id;
 
-                const gradients = [
-                  "from-blue-500 to-indigo-600",
-                  "from-emerald-500 to-teal-600",
-                  "from-violet-500 to-purple-600",
-                  "from-amber-500 to-orange-600",
-                ];
-                const gradient = gradients[idx % gradients.length];
+            <div>
+              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2.5">
+                Available Routes
+              </p>
 
-                return (
-                  <div
-                    key={route.id}
-                    className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm overflow-hidden"
-                  >
-                    <button
-                      type="button"
-                      className="w-full text-left"
-                      onClick={() => setExpandedRouteId(isExpanded ? null : route.id)}
-                    >
-                      <div className="flex items-center gap-0">
-                        <div className={`w-1.5 self-stretch bg-gradient-to-b ${gradient} rounded-l-none`} />
-                        <div className="flex-1 flex items-center gap-3 p-4">
-                          <div className={`h-11 w-11 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center shrink-0 shadow-sm`}>
-                            <MapPin className="h-5 w-5 text-white" />
-                          </div>
+              {isLoading || loadingRouteAccess ? (
+                <div className="flex justify-center items-center py-12">
+                  <div className="flex flex-col items-center gap-3">
+                    <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                    <p className="text-sm text-slate-400">Loading routes...</p>
+                  </div>
+                </div>
+              ) : routeList.length === 0 ? (
+                <div className="rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 p-8 text-center bg-slate-50/50 dark:bg-slate-800/30">
+                  <div className="h-12 w-12 rounded-2xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center mx-auto mb-3">
+                    <MapPin className="h-6 w-6 text-slate-400" />
+                  </div>
+                  <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">No Routes Available</p>
+                  <p className="text-xs text-slate-400 mt-1">Contact your manager to assign routes</p>
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {routeList.map((route, idx) => {
+                    const storeCount = route.stores.length;
+                    const routeVisitSet = visitedStoresByRoute?.get(route.id) || new Set<string>();
+                    const visitedCount = routeVisitSet.size;
+                    const pendingOrders = route.stores.filter((store) => pendingOrderStoreIds?.has(store.id)).length;
+                    const totalOutstanding = route.stores.reduce((sum, store) => sum + Number(store.outstanding || 0), 0);
+                    const sortedStores = [...route.stores].sort((left, right) => {
+                      if (left.store_order != null && right.store_order != null) return left.store_order - right.store_order;
+                      if (left.store_order != null) return -1;
+                      if (right.store_order != null) return 1;
+                      return left.name.localeCompare(right.name);
+                    });
+                    const isExpanded = expandedRouteId === route.id;
 
-                          <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-slate-800 dark:text-white text-base leading-tight truncate">
-                              {route.name}
-                            </p>
-                            <div className="flex items-center gap-3 mt-1 flex-wrap">
-                              <span className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
-                                <Store className="h-3 w-3" />
-                                {storeCount} {storeCount === 1 ? "store" : "stores"}
-                              </span>
-                              <span className="text-xs text-slate-500 dark:text-slate-400">
-                                Outstanding: <span className="font-semibold text-slate-700 dark:text-slate-200">₹{totalOutstanding.toLocaleString("en-IN")}</span>
-                              </span>
-                              {pendingOrders > 0 && (
-                                <span className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
-                                  <ShoppingBag className="h-3 w-3" />
-                                  {pendingOrders} active orders
-                                </span>
-                              )}
-                            </div>
+                    const gradients = [
+                      "from-blue-500 to-indigo-600",
+                      "from-emerald-500 to-teal-600",
+                      "from-violet-500 to-purple-600",
+                      "from-amber-500 to-orange-600",
+                    ];
+                    const gradient = gradients[idx % gradients.length];
 
-                            <div className="flex gap-2 mt-3 flex-wrap">
-                              {route.store_types?.name && (
-                                <Badge variant="outline" className="text-[10px] font-semibold">
-                                  {route.store_types.name}
+                    return (
+                      <div
+                        key={route.id}
+                        className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm overflow-hidden"
+                      >
+                        <button
+                          type="button"
+                          className="w-full text-left"
+                          onClick={() => setExpandedRouteId(isExpanded ? null : route.id)}
+                        >
+                          <div className="flex items-center gap-0">
+                            <div className={`w-1.5 self-stretch bg-gradient-to-b ${gradient} rounded-l-none`} />
+                            <div className="flex-1 flex items-center gap-3 p-4">
+                              <div className={`h-11 w-11 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center shrink-0 shadow-sm`}>
+                                <MapPin className="h-5 w-5 text-white" />
+                              </div>
+
+                              <div className="flex-1 min-w-0">
+                                <p className="font-semibold text-slate-800 dark:text-white text-base leading-tight truncate">
+                                  {route.name}
+                                </p>
+                                <div className="flex items-center gap-3 mt-1 flex-wrap">
+                                  <span className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+                                    <Store className="h-3 w-3" />
+                                    {storeCount} {storeCount === 1 ? "store" : "stores"}
+                                  </span>
+                                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                                    Outstanding: <span className="font-semibold text-slate-700 dark:text-slate-200">₹{totalOutstanding.toLocaleString("en-IN")}</span>
+                                  </span>
+                                  {pendingOrders > 0 && (
+                                    <span className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+                                      <ShoppingBag className="h-3 w-3" />
+                                      {pendingOrders} active orders
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div className="flex gap-2 mt-3 flex-wrap">
+                                  {route.store_types?.name && (
+                                    <Badge variant="outline" className="text-[10px] font-semibold">
+                                      {route.store_types.name}
+                                    </Badge>
+                                  )}
+                                  <Badge variant="outline" className="text-[10px] font-semibold border-blue-200 dark:border-blue-700 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20">
+                                    {visitedCount}/{storeCount} visited today
+                                  </Badge>
+                                  {activeSession?.route_id === route.id && (
+                                    <Badge className="text-[10px] font-semibold bg-emerald-500 text-white">
+                                      Active session
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0">
+                                {pendingOrders > 0 && (
+                                  <Badge className="bg-amber-500 text-white text-[10px] font-bold h-5 px-1.5">
+                                    {pendingOrders}
+                                  </Badge>
+                                )}
+                                <Badge variant="outline" className="text-[10px] font-semibold border-emerald-200 dark:border-emerald-700 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 mr-1 inline-block animate-pulse" />
+                                  Active
                                 </Badge>
-                              )}
-                              <Badge variant="outline" className="text-[10px] font-semibold border-blue-200 dark:border-blue-700 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20">
-                                {visitedCount}/{storeCount} visited today
-                              </Badge>
-                              {activeSession?.route_id === route.id && (
-                                <Badge className="text-[10px] font-semibold bg-emerald-500 text-white">
-                                  Active session
-                                </Badge>
-                              )}
+                                {isExpanded ? (
+                                  <ChevronUp className="h-4 w-4 text-slate-300 dark:text-slate-600" />
+                                ) : (
+                                  <ChevronDown className="h-4 w-4 text-slate-300 dark:text-slate-600" />
+                                )}
+                              </div>
                             </div>
                           </div>
+                        </button>
 
-                          <div className="flex items-center gap-2 shrink-0">
-                            {pendingOrders > 0 && (
-                              <Badge className="bg-amber-500 text-white text-[10px] font-bold h-5 px-1.5">
-                                {pendingOrders}
-                              </Badge>
-                            )}
-                            <Badge variant="outline" className="text-[10px] font-semibold border-emerald-200 dark:border-emerald-700 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20">
-                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 mr-1 inline-block animate-pulse" />
-                              Active
-                            </Badge>
-                            {isExpanded ? (
-                              <ChevronUp className="h-4 w-4 text-slate-300 dark:text-slate-600" />
+                        {isExpanded && (
+                          <div className="border-t border-slate-100 dark:border-slate-700 px-4 py-4 bg-slate-50/60 dark:bg-slate-900/30">
+                            {sortedStores.length === 0 ? (
+                              <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 p-5 text-center">
+                                <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">No stores assigned</p>
+                                <p className="text-xs text-slate-400 mt-1">This route has no stores yet.</p>
+                              </div>
                             ) : (
-                              <ChevronDown className="h-4 w-4 text-slate-300 dark:text-slate-600" />
+                              <div className="space-y-3">
+                                {sortedStores.map((store) => {
+                                  const visited = (visitedStoresByRoute?.get(route.id) || new Set<string>()).has(store.id);
+                                  const canNavigate = (store.lat != null && store.lng != null) || !!store.address;
+
+                                  return (
+                                    <div
+                                      key={store.id}
+                                      className={cn(
+                                        "rounded-2xl border p-3 bg-white dark:bg-slate-800 shadow-sm",
+                                        visited
+                                          ? "border-emerald-100 dark:border-emerald-800/40"
+                                          : "border-slate-100 dark:border-slate-700"
+                                      )}
+                                    >
+                                      <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0 flex-1">
+                                          <div className="flex items-center gap-2 flex-wrap">
+                                            <p className="text-sm font-bold text-slate-800 dark:text-white truncate">{store.name}</p>
+                                            <span className="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded-md font-mono">
+                                              {store.display_id}
+                                            </span>
+                                          </div>
+
+                                          {store.customers?.name && (
+                                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{store.customers.name}</p>
+                                          )}
+
+                                          {store.address && (
+                                            <p className="text-xs text-slate-400 mt-1 line-clamp-2">{store.address}</p>
+                                          )}
+
+                                          <div className="flex items-center gap-2 flex-wrap mt-2">
+                                            <Badge
+                                              variant="outline"
+                                              className={cn(
+                                                "text-[10px] font-semibold",
+                                                visited
+                                                  ? "border-emerald-200 dark:border-emerald-700 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20"
+                                                  : "border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400"
+                                              )}
+                                            >
+                                              {visited ? <CheckCircle2 className="h-3 w-3 mr-1" /> : <span className="h-2 w-2 rounded-full bg-slate-300 dark:bg-slate-600 mr-1 inline-block" />}
+                                              {visited ? "Visited today" : "Pending visit"}
+                                            </Badge>
+                                            {pendingOrderStoreIds?.has(store.id) && (
+                                              <Badge className="text-[10px] font-semibold bg-amber-500 text-white">
+                                                Pending order
+                                              </Badge>
+                                            )}
+                                            <Badge variant="outline" className="text-[10px] font-semibold border-slate-200 dark:border-slate-700">
+                                              Outstanding ₹{Number(store.outstanding || 0).toLocaleString("en-IN")}
+                                            </Badge>
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      <div className="grid grid-cols-2 gap-2 mt-3">
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="h-9 rounded-xl text-xs"
+                                          onClick={() => handleCall(store.phone || "")}
+                                          disabled={!store.phone}
+                                        >
+                                          <Phone className="h-3.5 w-3.5 mr-1.5" />
+                                          Call
+                                        </Button>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="h-9 rounded-xl text-xs"
+                                          onClick={() => openDirections(store)}
+                                          disabled={!canNavigate}
+                                        >
+                                          <Navigation2 className="h-3.5 w-3.5 mr-1.5" />
+                                          Navigate
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* ── ALL ORDERS VIEW ── */}
+        {view === "orders" && (
+          <div>
+            <div className="flex items-center justify-between mb-2.5">
+              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+                Pending Orders {agentPos ? "· Nearest First" : ""}
+              </p>
+              {!agentPos && !fetchingPos && (
+                <button
+                  type="button"
+                  className="text-xs text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-1"
+                  onClick={async () => {
+                    setFetchingPos(true);
+                    const pos = await getCurrentPosition();
+                    if (pos) setAgentPos({ lat: pos.lat, lng: pos.lng });
+                    setFetchingPos(false);
+                  }}
+                >
+                  {fetchingPos ? <Loader2 className="h-3 w-3 animate-spin" /> : <MapPin className="h-3 w-3" />}
+                  Use GPS
+                </button>
+              )}
+            </div>
+
+            {loadingOrders || isLoading ? (
+              <div className="flex justify-center items-center py-12">
+                <div className="flex flex-col items-center gap-3">
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                  <p className="text-sm text-slate-400">Loading orders...</p>
+                </div>
+              </div>
+            ) : ordersView.length === 0 ? (
+              <div className="rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 p-8 text-center bg-slate-50/50 dark:bg-slate-800/30">
+                <div className="h-12 w-12 rounded-2xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center mx-auto mb-3">
+                  <ShoppingBag className="h-6 w-6 text-slate-400" />
+                </div>
+                <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">No Pending Orders</p>
+                <p className="text-xs text-slate-400 mt-1">All orders are fulfilled for now</p>
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {ordersView.map(({ store, orderCount }, idx) => {
+                  const distMeters = agentPos && store.lat != null && store.lng != null
+                    ? haversineMeters(agentPos.lat, agentPos.lng, store.lat, store.lng)
+                    : null;
+                  const canNavigate = (store.lat != null && store.lng != null) || !!store.address;
+
+                  return (
+                    <div
+                      key={store.id}
+                      className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-4"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="h-5 w-5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 text-[10px] font-bold flex items-center justify-center shrink-0">
+                              {idx + 1}
+                            </span>
+                            <p className="text-sm font-bold text-slate-800 dark:text-white truncate">{store.name}</p>
+                            <span className="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded-md font-mono">
+                              {store.display_id}
+                            </span>
+                          </div>
+
+                          {store.routes?.name && (
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
+                              <MapPin className="h-3 w-3" />
+                              {store.routes.name}
+                            </p>
+                          )}
+
+                          {store.address && (
+                            <p className="text-xs text-slate-400 mt-1 line-clamp-1">{store.address}</p>
+                          )}
+
+                          <div className="flex items-center gap-2 flex-wrap mt-2">
+                            <Badge className="text-[10px] font-semibold bg-amber-500 text-white">
+                              <ShoppingBag className="h-3 w-3 mr-1" />
+                              {orderCount} {orderCount === 1 ? "order" : "orders"} pending
+                            </Badge>
+                            {distMeters != null && (
+                              <Badge variant="outline" className="text-[10px] font-semibold border-blue-200 dark:border-blue-700 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20">
+                                <Navigation2 className="h-3 w-3 mr-1" />
+                                {formatDistance(distMeters)}
+                              </Badge>
                             )}
                           </div>
                         </div>
                       </div>
-                    </button>
 
-                    {isExpanded && (
-                      <div className="border-t border-slate-100 dark:border-slate-700 px-4 py-4 bg-slate-50/60 dark:bg-slate-900/30">
-                        {sortedStores.length === 0 ? (
-                          <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 p-5 text-center">
-                            <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">No stores assigned</p>
-                            <p className="text-xs text-slate-400 mt-1">This route has no stores yet.</p>
-                          </div>
-                        ) : (
-                          <div className="space-y-3">
-                            {sortedStores.map((store) => {
-                              const visited = routeVisitSet.has(store.id);
-                              const canNavigate = (store.lat != null && store.lng != null) || !!store.address;
-
-                              return (
-                                <div
-                                  key={store.id}
-                                  className={cn(
-                                    "rounded-2xl border p-3 bg-white dark:bg-slate-800 shadow-sm",
-                                    visited
-                                      ? "border-emerald-100 dark:border-emerald-800/40"
-                                      : "border-slate-100 dark:border-slate-700"
-                                  )}
-                                >
-                                  <div className="flex items-start justify-between gap-3">
-                                    <div className="min-w-0 flex-1">
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <p className="text-sm font-bold text-slate-800 dark:text-white truncate">{store.name}</p>
-                                        <span className="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded-md font-mono">
-                                          {store.display_id}
-                                        </span>
-                                      </div>
-
-                                      {store.customers?.name && (
-                                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{store.customers.name}</p>
-                                      )}
-
-                                      {store.address && (
-                                        <p className="text-xs text-slate-400 mt-1 line-clamp-2">{store.address}</p>
-                                      )}
-
-                                      <div className="flex items-center gap-2 flex-wrap mt-2">
-                                        <Badge
-                                          variant="outline"
-                                          className={cn(
-                                            "text-[10px] font-semibold",
-                                            visited
-                                              ? "border-emerald-200 dark:border-emerald-700 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20"
-                                              : "border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400"
-                                          )}
-                                        >
-                                          {visited ? <CheckCircle2 className="h-3 w-3 mr-1" /> : <span className="h-2 w-2 rounded-full bg-slate-300 dark:bg-slate-600 mr-1 inline-block" />}
-                                          {visited ? "Visited today" : "Pending visit"}
-                                        </Badge>
-                                        {pendingOrderStoreIds?.has(store.id) && (
-                                          <Badge className="text-[10px] font-semibold bg-amber-500 text-white">
-                                            Pending order
-                                          </Badge>
-                                        )}
-                                        <Badge variant="outline" className="text-[10px] font-semibold border-slate-200 dark:border-slate-700">
-                                          Outstanding ₹{Number(store.outstanding || 0).toLocaleString("en-IN")}
-                                        </Badge>
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  <div className="grid grid-cols-2 gap-2 mt-3">
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="h-9 rounded-xl text-xs"
-                                      onClick={() => handleCall(store.phone || "")}
-                                      disabled={!store.phone}
-                                    >
-                                      <Phone className="h-3.5 w-3.5 mr-1.5" />
-                                      Call
-                                    </Button>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="h-9 rounded-xl text-xs"
-                                      onClick={() => openDirections(store)}
-                                      disabled={!canNavigate}
-                                    >
-                                      <Navigation2 className="h-3.5 w-3.5 mr-1.5" />
-                                      Navigate
-                                    </Button>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
+                      <div className="grid grid-cols-2 gap-2 mt-3">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-9 rounded-xl text-xs"
+                          onClick={() => handleCall(store.phone || "")}
+                          disabled={!store.phone}
+                        >
+                          <Phone className="h-3.5 w-3.5 mr-1.5" />
+                          Call
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-9 rounded-xl text-xs"
+                          onClick={() => openDirections(store)}
+                          disabled={!canNavigate}
+                        >
+                          <Navigation2 className="h-3.5 w-3.5 mr-1.5" />
+                          Navigate
+                        </Button>
                       </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

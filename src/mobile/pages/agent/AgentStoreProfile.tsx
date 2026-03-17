@@ -7,6 +7,7 @@ import {
   Loader2,
   MapPin,
   Navigation2,
+  Package,
   Phone,
   Store,
   Wallet,
@@ -17,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import type { StoreOption } from "@/mobile/components/StorePickerSheet";
+import { getCurrentPosition } from "@/lib/capacitorUtils";
 import { addToQueue } from "@/lib/offlineQueue";
 
 interface Props {
@@ -36,6 +38,7 @@ interface StoreProfileRow {
   lat: number | null;
   lng: number | null;
   route_id: string | null;
+  store_type_id: string | null;
   customers: { name: string; phone: string | null } | null;
   store_types: { name: string } | null;
   routes: { name: string } | null;
@@ -50,7 +53,7 @@ export function AgentStoreProfile({ store, onBack, onGoRecord }: Props) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("stores")
-        .select("id, name, display_id, photo_url, outstanding, address, phone, lat, lng, route_id, customers(name, phone), store_types(name), routes(name)")
+        .select("id, name, display_id, photo_url, outstanding, address, phone, lat, lng, route_id, store_type_id, customers(name, phone), store_types(name), routes(name)")
         .eq("id", store.id)
         .maybeSingle();
       if (error) throw error;
@@ -67,7 +70,55 @@ export function AgentStoreProfile({ store, onBack, onGoRecord }: Props) {
     routes: storeRow?.routes || store.routes || null,
   }), [store, storeRow]);
 
-  const openDirections = () => {
+  const storeTypeId = storeRow?.store_type_id || null;
+
+  const { data: storeProducts } = useQuery({
+    queryKey: ["mobile-store-products", store.id, storeTypeId],
+    queryFn: async () => {
+      if (!storeTypeId) {
+        const { data } = await supabase.from("products").select("id, name, sku, base_price").eq("is_active", true).order("name");
+        return data || [];
+      }
+      const { data: accessData } = await supabase
+        .from("store_type_products")
+        .select("product_id, products(id, name, sku, base_price)")
+        .eq("store_type_id", storeTypeId);
+      if (accessData && accessData.length > 0) {
+        return accessData.map((a: any) => a.products).filter(Boolean);
+      }
+      const { data } = await supabase.from("products").select("id, name, sku, base_price").eq("is_active", true).order("name");
+      return data || [];
+    },
+    enabled: !!storeRow,
+  });
+
+  const { data: typeP } = useQuery({
+    queryKey: ["mobile-store-type-pricing", storeTypeId],
+    queryFn: async () => {
+      const { data } = await supabase.from("store_type_pricing").select("product_id, price").eq("store_type_id", storeTypeId!);
+      const map: Record<string, number> = {};
+      data?.forEach((p) => { map[p.product_id] = Number(p.price); });
+      return map;
+    },
+    enabled: !!storeTypeId,
+  });
+
+  const { data: storeP } = useQuery({
+    queryKey: ["mobile-store-pricing", store.id],
+    queryFn: async () => {
+      const { data } = await supabase.from("store_pricing").select("product_id, price").eq("store_id", store.id);
+      const map: Record<string, number> = {};
+      data?.forEach((p) => { map[p.product_id] = Number(p.price); });
+      return map;
+    },
+    enabled: !!store.id,
+  });
+
+  const getPrice = (productId: string, basePrice: number) => {
+    if (storeP && productId in storeP) return { price: storeP[productId], label: "store" as const };
+    if (typeP && productId in typeP) return { price: typeP[productId], label: "type" as const };
+    return { price: basePrice, label: "base" as const };
+  };
     if (currentStore.lat != null && currentStore.lng != null) {
       window.open(`https://www.google.com/maps/dir/?api=1&destination=${currentStore.lat},${currentStore.lng}`, "_blank");
       return;
@@ -79,7 +130,7 @@ export function AgentStoreProfile({ store, onBack, onGoRecord }: Props) {
   };
 
   const handleCall = () => {
-    const phone = currentStore.phone || currentStore.customers?.phone || null;
+    const phone = currentStore.phone || (currentStore.customers as any)?.phone || null;
     if (!phone) return;
     window.open(`tel:${phone}`, "_self");
   };
@@ -91,14 +142,10 @@ export function AgentStoreProfile({ store, onBack, onGoRecord }: Props) {
     try {
       let lat: number | null = null;
       let lng: number | null = null;
-      try {
-        const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
-          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 })
-        );
-        lat = pos.coords.latitude;
-        lng = pos.coords.longitude;
-      } catch {
-        void 0;
+      const pos = await getCurrentPosition();
+      if (pos) {
+        lat = pos.lat;
+        lng = pos.lng;
       }
 
       if (!navigator.onLine) {
@@ -146,7 +193,7 @@ export function AgentStoreProfile({ store, onBack, onGoRecord }: Props) {
     }
   };
 
-  const phone = currentStore.phone || currentStore.customers?.phone || null;
+  const phone = currentStore.phone || (currentStore.customers as any)?.phone || null;
   const canNavigate = (currentStore.lat != null && currentStore.lng != null) || !!currentStore.address;
 
   return (
@@ -247,6 +294,37 @@ export function AgentStoreProfile({ store, onBack, onGoRecord }: Props) {
             </div>
           )}
         </div>
+
+        {/* Products Section */}
+        {storeProducts && storeProducts.length > 0 && (
+          <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-4 shadow-sm">
+            <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+              <Package className="h-3.5 w-3.5" />
+              Products & Pricing ({storeProducts.length})
+            </p>
+            <div className="space-y-2">
+              {storeProducts.map((p: any) => {
+                const { price, label } = getPrice(p.id, Number(p.base_price));
+                return (
+                  <div key={p.id} className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-slate-800 dark:text-white truncate">{p.name}</p>
+                      <span className="text-[10px] text-slate-400 font-mono">{p.sku}</span>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-bold text-slate-800 dark:text-white">₹{price.toLocaleString("en-IN")}</p>
+                      <span className={`text-[10px] font-semibold capitalize ${
+                        label === "store" ? "text-blue-600 dark:text-blue-400" :
+                        label === "type" ? "text-violet-600 dark:text-violet-400" :
+                        "text-slate-400"
+                      }`}>{label}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

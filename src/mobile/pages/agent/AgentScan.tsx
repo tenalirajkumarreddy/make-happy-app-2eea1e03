@@ -14,6 +14,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import type { StoreOption } from "@/mobile/components/StorePickerSheet";
 import { useRouteAccess } from "@/hooks/useRouteAccess";
+import { getCurrentPosition } from "@/lib/capacitorUtils";
 import { addToQueue } from "@/lib/offlineQueue";
 
 const SCANNER_ID = "mobile-qr-reader";
@@ -184,9 +185,8 @@ export function AgentScan({ onGoRecord, onGoVisit, onOpenStore }: Props) {
   const handleFindNearby = async () => {
     setNearbyLoading(true);
     try {
-      const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
-        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 8000, enableHighAccuracy: true })
-      );
+      const pos = await getCurrentPosition();
+      if (!pos) throw new Error("Could not get location");
 
       const { data, error } = await supabase
         .from("stores")
@@ -201,7 +201,7 @@ export function AgentScan({ onGoRecord, onGoVisit, onOpenStore }: Props) {
         .filter((s) => canAccessRoute(s.route_id))
         .map((s) => ({
           ...(s as StoreOption),
-          _distKm: haversineKm(pos.coords.latitude, pos.coords.longitude, Number(s.lat), Number(s.lng)),
+          _distKm: haversineKm(pos.lat, pos.lng, Number(s.lat), Number(s.lng)),
         }))
         .sort((a, b) => a._distKm - b._distKm)
         .slice(0, 5);
@@ -223,14 +223,10 @@ export function AgentScan({ onGoRecord, onGoVisit, onOpenStore }: Props) {
     try {
       let lat: number | null = null;
       let lng: number | null = null;
-      try {
-        const pos = await new Promise<GeolocationPosition>((res, rej) =>
-          navigator.geolocation.getCurrentPosition(res, rej, { timeout: 5000 })
-        );
-        lat = pos.coords.latitude;
-        lng = pos.coords.longitude;
-      } catch {
-        void 0;
+      const pos = await getCurrentPosition();
+      if (pos) {
+        lat = pos.lat;
+        lng = pos.lng;
       }
 
       if (!navigator.onLine) {

@@ -1,6 +1,6 @@
 {
 	"appId": "com.aquaprime.app",
-	"appName": "BizManager",
+	"appName": "Aqua Prime",
 	"webDir": "dist",
 	"server": {
 		"cleartext": false

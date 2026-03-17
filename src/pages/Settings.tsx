@@ -1,3 +1,4 @@
+import { getCurrentPosition } from "@/lib/capacitorUtils";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
@@ -156,11 +157,11 @@ const SettingsPage = () => {
                 </select>
               </div>
               {isAdmin && (
-                <Button type="button" variant="outline" size="sm" className="mt-2 gap-1.5 text-xs" onClick={() => {
-                  navigator.geolocation.getCurrentPosition(
-                    (p) => setSettings((prev) => ({ ...prev, company_lat: p.coords.latitude.toFixed(6), company_lng: p.coords.longitude.toFixed(6) })),
-                    () => {}
-                  );
+                <Button type="button" variant="outline" size="sm" className="mt-2 gap-1.5 text-xs" onClick={async () => {
+                  const p = await getCurrentPosition();
+                  if (p) {
+                    setSettings((prev) => ({ ...prev, company_lat: p.lat.toFixed(6), company_lng: p.lng.toFixed(6) }));
+                  }
                 }}>
                   <Navigation className="h-3.5 w-3.5" /> Use My Current Location
                 </Button>

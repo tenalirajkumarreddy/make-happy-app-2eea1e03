@@ -1,3 +1,4 @@
+import { getCurrentPosition } from "@/lib/capacitorUtils";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -53,7 +54,7 @@ const MapPage = () => {
   const { data: activeSessions } = useQuery({
     queryKey: ["active-sessions-map"],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data } = await (supabase as any)
         .from("route_sessions")
         .select("id, user_id, started_at, current_lat, current_lng, location_updated_at, routes(name), profiles(full_name)")
         .eq("status", "active");
@@ -112,18 +113,15 @@ const MapPage = () => {
     return !isNaN(lat) && !isNaN(lng) ? { lat, lng } : null;
   }, [companySettings]);
 
-  const locateMe = () => {
+  const locateMe = async () => {
     setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        setUserLocation(loc);
-        leafletMap.current?.setView([loc.lat, loc.lng], 16);
-        setLocating(false);
-      },
-      () => setLocating(false),
-      { enableHighAccuracy: true, timeout: 10000 }
-    );
+    const pos = await getCurrentPosition();
+    if (pos) {
+      const loc = { lat: pos.lat, lng: pos.lng };
+      setUserLocation(loc);
+      leafletMap.current?.setView([loc.lat, loc.lng], 16);
+    }
+    setLocating(false);
   };
 
   // Route stores for route visualization

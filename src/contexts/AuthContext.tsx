@@ -30,57 +30,88 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const fetchUserData = async (userId: string) => {
-    const [{ data: roleData }, { data: profileData }] = await Promise.all([
-      supabase.from("user_roles").select("role").eq("user_id", userId).single(),
-      supabase.from("profiles").select("full_name, email, avatar_url, is_active").eq("user_id", userId).single(),
-    ]);
+    try {
+      const [{ data: roleData }, { data: profileData }] = await Promise.all([
+        supabase.from("user_roles").select("role").eq("user_id", userId).maybeSingle(),
+        supabase.from("profiles").select("full_name, email, avatar_url, is_active").eq("user_id", userId).maybeSingle(),
+      ]);
 
-    // If user is disabled, sign them out immediately
-    if (profileData && !profileData.is_active) {
-      await supabase.auth.signOut();
-      setUser(null);
-      setSession(null);
-      setRole(null);
-      setProfile(null);
-      return;
-    }
+      // If user is disabled, sign them out immediately
+      if (profileData && !profileData.is_active) {
+        await supabase.auth.signOut();
+        setUser(null);
+        setSession(null);
+        setRole(null);
+        setProfile(null);
+        return;
+      }
 
-    if (profileData) setProfile(profileData);
+      if (profileData) setProfile(profileData);
 
-    if (roleData) {
-      setRole(roleData.role as AppRole);
-    } else {
-      setRole(null);
+      if (roleData && roleData.role) {
+        setRole(roleData.role as AppRole);
+      } else {
+        setRole("customer");
+      }
+    } catch (error) {
+      console.error("Error fetching user data:", error);
+      setRole("customer");
     }
   };
 
   useEffect(() => {
+    let mounted = true;
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      (_event, session) => {
+        if (!mounted) return;
+        
+        // Always block the UI from rendering auth-dependent routes 
+        // until we finish resolving the new auth state.
+        setLoading(true);
         setSession(session);
         setUser(session?.user ?? null);
 
         if (session?.user) {
-          // Defer to avoid Supabase deadlock
-          setTimeout(() => fetchUserData(session.user.id), 0);
+          // Defer to avoid Supabase deadlock where DB query waits for Auth headers
+          setTimeout(async () => {
+            if (!mounted) return;
+            await fetchUserData(session.user.id);
+            if (mounted) setLoading(false);
+          }, 0);
         } else {
           setRole(null);
           setProfile(null);
+          if (mounted) setLoading(false);
         }
-        setLoading(false);
       }
     );
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchUserData(session.user.id);
+    const initAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!mounted) return;
+        
+        setSession(session);
+        setUser(session?.user ?? null);
+        
+        if (session?.user) {
+          // It's safe to await here since we aren't in the onAuthStateChange lock
+          await fetchUserData(session.user.id);
+        }
+      } catch (error) {
+        console.error("Auth context intialization error", error);
+      } finally {
+        if (mounted) setLoading(false);
       }
-      setLoading(false);
-    });
+    };
 
-    return () => subscription.unsubscribe();
+    initAuth();
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signOut = async () => {
@@ -98,4 +129,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
-export const useAuth = () => useContext(AuthContext);
+export function useAuth() {
+  return useContext(AuthContext);
+}

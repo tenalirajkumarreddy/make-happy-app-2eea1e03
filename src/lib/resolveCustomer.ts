@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 export async function resolveCustomer(
   userId: string,
   select = "*"
-) {
+): Promise<any> {
   const { data } = await supabase
     .from("customers")
     .select(select)

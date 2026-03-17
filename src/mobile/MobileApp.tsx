@@ -76,6 +76,7 @@ const TAB_TITLES: Record<MobileTab, string> = {
   sales: "Sales",
   transactions: "Transactions",
   profile: "Profile",
+  handovers: "Handovers",
 };
 
 type StaffRole = "super_admin" | "manager";
@@ -593,6 +594,7 @@ function PosApp() {
       >
         {tab === "home" && <PosHome onOpenRecord={() => setTab("record")} onOpenHistory={() => setTab("history")} />}
         {tab === "record" && <AgentRecord preselectTab="sale" allowPayment={false} />}
+        {tab === "handovers" && <Handovers />}
         {tab === "history" && <AgentHistory />}
       </main>
 

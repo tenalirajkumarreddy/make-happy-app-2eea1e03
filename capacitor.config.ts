@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.aquaprime.app',
-  appName: 'BizManager',
+  appName: 'Aqua Prime',
   webDir: 'dist',
   server: {
     cleartext: false

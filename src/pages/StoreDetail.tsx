@@ -18,7 +18,7 @@ import {
 import {
   Loader2, ArrowLeft, DollarSign, ShoppingCart, Banknote,
   MapPin, Store as StoreIcon, Phone,
-  Pencil, X, Save, AlertTriangle, ScanLine, Trash2, Scale, ArrowRightLeft,
+  Pencil, X, Save, AlertTriangle, ScanLine, Trash2, Scale, ArrowRightLeft, Package, ShieldCheck,
 } from "lucide-react";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -33,6 +33,7 @@ import { parseUpiQr } from "@/lib/upiParser";
 import { StoreLedger } from "@/components/stores/StoreLedger";
 import { logActivity } from "@/lib/activityLogger";
 import { ImageUpload } from "@/components/shared/ImageUpload";
+import { KycReviewDialog } from "@/components/customers/KycReviewDialog";
 
 const StoreDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -48,6 +49,7 @@ const StoreDetail = () => {
   const [showQrScanner, setShowQrScanner] = useState(false);
   const [showAdjustBalance, setShowAdjustBalance] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
+  const [showKycDialog, setShowKycDialog] = useState(false);
   const [transferCustomerId, setTransferCustomerId] = useState("");
   const [transferSaving, setTransferSaving] = useState(false);
   const [adjustSaving, setAdjustSaving] = useState(false);
@@ -66,6 +68,8 @@ const StoreDetail = () => {
     pincode: "",
     store_type_id: "",
     route_id: "",
+    credit_limit_no_kyc: "",
+    credit_limit_kyc: "",
   });
 
   const { data: store, isLoading } = useQuery({
@@ -73,7 +77,7 @@ const StoreDetail = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("stores")
-        .select("*, customers(name, is_active), store_types(name), routes(name)")
+        .select("*, customers(id, name, is_active, kyc_status, kyc_selfie_url, kyc_aadhar_front_url, kyc_aadhar_back_url, kyc_rejection_reason, kyc_submitted_at, kyc_verified_at), store_types(name), routes(name)")
         .eq("id", id!)
         .maybeSingle();
       if (error) throw error;
@@ -109,6 +113,55 @@ const StoreDetail = () => {
     },
     enabled: canEdit,
   });
+
+  // Products with pricing hierarchy for the Products tab
+  const { data: storeProducts } = useQuery({
+    queryKey: ["store-products-tab", id, store?.store_type_id],
+    queryFn: async () => {
+      if (!store?.store_type_id) {
+        const { data } = await supabase.from("products").select("id, name, sku, base_price").eq("is_active", true).order("name");
+        return data || [];
+      }
+      const { data: accessData } = await supabase
+        .from("store_type_products")
+        .select("product_id, products(id, name, sku, base_price)")
+        .eq("store_type_id", store.store_type_id);
+      if (accessData && accessData.length > 0) {
+        return accessData.map((a: any) => a.products).filter(Boolean);
+      }
+      const { data } = await supabase.from("products").select("id, name, sku, base_price").eq("is_active", true).order("name");
+      return data || [];
+    },
+    enabled: !!store,
+  });
+
+  const { data: storeTypePricing } = useQuery({
+    queryKey: ["store-type-pricing-tab", store?.store_type_id],
+    queryFn: async () => {
+      const { data } = await supabase.from("store_type_pricing").select("product_id, price").eq("store_type_id", store!.store_type_id!);
+      const map: Record<string, number> = {};
+      data?.forEach((p) => { map[p.product_id] = Number(p.price); });
+      return map;
+    },
+    enabled: !!store?.store_type_id,
+  });
+
+  const { data: storePricingMap } = useQuery({
+    queryKey: ["store-pricing-tab", id],
+    queryFn: async () => {
+      const { data } = await supabase.from("store_pricing").select("product_id, price").eq("store_id", id!);
+      const map: Record<string, number> = {};
+      data?.forEach((p) => { map[p.product_id] = Number(p.price); });
+      return map;
+    },
+    enabled: !!id,
+  });
+
+  const getEffectivePrice = (productId: string, basePrice: number): { price: number; label: string } => {
+    if (storePricingMap && productId in storePricingMap) return { price: storePricingMap[productId], label: "store" };
+    if (storeTypePricing && productId in storeTypePricing) return { price: storeTypePricing[productId], label: "type" };
+    return { price: basePrice, label: "base" };
+  };
 
   const handleTransfer = async () => {
     if (!store || !id || !transferCustomerId) return;
@@ -269,6 +322,8 @@ const StoreDetail = () => {
       pincode: store.pincode || "",
       store_type_id: store.store_type_id || "",
       route_id: store.route_id || "",
+      credit_limit_no_kyc: String(store.credit_limit_no_kyc || 0),
+      credit_limit_kyc: String(store.credit_limit_kyc || 0),
     });
     setPhotoUrl(store.photo_url || null);
     setEditing(true);
@@ -294,6 +349,8 @@ const StoreDetail = () => {
         store_type_id: form.store_type_id || null,
         route_id: form.route_id || null,
         photo_url: photoUrl || null,
+        credit_limit_no_kyc: Number(form.credit_limit_no_kyc) || 0,
+        credit_limit_kyc: Number(form.credit_limit_kyc) || 0,
       })
       .eq("id", id);
     setSaving(false);
@@ -571,17 +628,70 @@ const StoreDetail = () => {
                   <div className="space-y-1.5"><Label className="text-xs">District</Label><Input value={form.district} onChange={(e) => setForm({ ...form, district: e.target.value })} /></div>
                   <div className="space-y-1.5"><Label className="text-xs">State</Label><Input value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} /></div>
                   <div className="space-y-1.5"><Label className="text-xs">Pincode</Label><Input value={form.pincode} onChange={(e) => setForm({ ...form, pincode: e.target.value })} /></div>
+                  {canEdit && (
+                    <>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-muted-foreground">Credit Limit (No KYC) ₹</Label>
+                        <Input type="number" min="0" value={form.credit_limit_no_kyc} onChange={(e) => setForm({ ...form, credit_limit_no_kyc: e.target.value })} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-muted-foreground">Credit Limit (KYC Done) ₹</Label>
+                        <Input type="number" min="0" value={form.credit_limit_kyc} onChange={(e) => setForm({ ...form, credit_limit_kyc: e.target.value })} />
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-x-6 gap-y-2">
-              <InfoItem label="Customer" value={(store as any).customers?.name || "—"} />
-              <InfoItem label="Route" value={(store as any).routes?.name || "Not assigned"} />
-              <InfoItem label="Phone" value={store.phone || "Not provided"} />
-              <InfoItem label="Address" value={fullAddress} />
-              <InfoItem label="Opening Bal." value={`₹${Number(store.opening_balance).toLocaleString()}`} />
-              <InfoItem label="Created" value={new Date(store.created_at).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" })} />
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-x-6 gap-y-2">
+                <InfoItem label="Customer" value={(store as any).customers?.name || "—"} />
+                <InfoItem label="Route" value={(store as any).routes?.name || "Not assigned"} />
+                <InfoItem label="Phone" value={store.phone || "Not provided"} />
+                <InfoItem label="Address" value={fullAddress} />
+                <InfoItem label="Opening Bal." value={`₹${Number(store.opening_balance).toLocaleString()}`} />
+                <InfoItem label="Created" value={new Date(store.created_at).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" })} />
+              </div>
+              {/* Credit Limits — visible to all staff */}
+              <div className="flex flex-wrap gap-4 pt-1 border-t border-border/50">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Credit (No KYC)</span>
+                  <span className="text-sm font-semibold text-foreground">₹{Number(store.credit_limit_no_kyc || 0).toLocaleString()}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Credit (KYC Done)</span>
+                  <span className="text-sm font-semibold text-success">₹{Number(store.credit_limit_kyc || 0).toLocaleString()}</span>
+                </div>
+                {/* Customer KYC status */}
+                {(() => {
+                  const cust = (store as any).customers;
+                  if (!cust) return null;
+                  const kycStatus: string = cust.kyc_status || "not_requested";
+                  return (
+                    <div className="flex items-center gap-2 ml-auto">
+                      <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Customer KYC:</span>
+                      <Badge
+                        variant="outline"
+                        className={
+                          kycStatus === "verified" ? "border-emerald-300 text-emerald-600 bg-emerald-50" :
+                          kycStatus === "pending" ? "border-amber-300 text-amber-600 bg-amber-50" :
+                          kycStatus === "rejected" ? "border-red-300 text-red-600 bg-red-50" :
+                          "text-muted-foreground"
+                        }
+                      >
+                        {kycStatus.replace("_", " ")}
+                      </Badge>
+                      {canEdit && (kycStatus === "pending" || kycStatus === "rejected") && (
+                        <Button size="sm" variant="outline" className="h-6 text-[10px] px-2 rounded-full" onClick={() => setShowKycDialog(true)}>
+                          Review KYC
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
           )}
         </CardContent>
@@ -598,6 +708,9 @@ const StoreDetail = () => {
         <TabsList className="w-full sm:w-auto overflow-x-auto">
           <TabsTrigger value="ledger" className="text-xs sm:text-sm">Ledger ({(sales?.length || 0) + (transactions?.length || 0)})</TabsTrigger>
           <TabsTrigger value="orders" className="text-xs sm:text-sm">Orders ({orders?.length || 0})</TabsTrigger>
+          <TabsTrigger value="products" className="text-xs sm:text-sm">
+            <Package className="h-3.5 w-3.5 mr-1" />Products ({storeProducts?.length || 0})
+          </TabsTrigger>
           <TabsTrigger value="visits" className="text-xs sm:text-sm">Visits ({visits?.length || 0})</TabsTrigger>
           <TabsTrigger value="qr" className="text-xs sm:text-sm">QR ({qrCodes?.length || 0})</TabsTrigger>
         </TabsList>
@@ -615,6 +728,35 @@ const StoreDetail = () => {
           {(orders?.length || 0) === 0 ? <EmptyTab label="No orders yet" /> : (
             <DataTable columns={orderColumns} data={orders || []} searchKey="display_id" searchPlaceholder="Search orders..."
               renderMobileCard={renderCompactCard("order")} />
+          )}
+        </TabsContent>
+        <TabsContent value="products" className="mt-4">
+          {(!storeProducts || storeProducts.length === 0) ? (
+            <EmptyTab label="No products assigned to this store type" />
+          ) : (
+            <div className="space-y-2">
+              {storeProducts.map((p: any) => {
+                const { price, label } = getEffectivePrice(p.id, Number(p.base_price));
+                return (
+                  <div key={p.id} className="flex items-center justify-between rounded-lg border bg-card px-4 py-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{p.name}</p>
+                      <Badge variant="outline" className="text-[10px] mt-0.5">{p.sku}</Badge>
+                    </div>
+                    <div className="text-right shrink-0 ml-4">
+                      <p className="text-sm font-bold">₹{price.toLocaleString()}</p>
+                      <span className={`text-[10px] font-medium capitalize px-1.5 py-0.5 rounded-full ${
+                        label === "store" ? "bg-primary/10 text-primary" :
+                        label === "type" ? "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400" :
+                        "bg-muted text-muted-foreground"
+                      }`}>
+                        {label} price
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </TabsContent>
         <TabsContent value="visits" className="mt-4">
@@ -709,6 +851,18 @@ const StoreDetail = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* KYC Review Dialog */}
+      {canEdit && showKycDialog && (store as any).customers && (
+        <KycReviewDialog
+          customer={(store as any).customers}
+          open={showKycDialog}
+          onOpenChange={setShowKycDialog}
+          onDone={() => {
+            setShowKycDialog(false);
+            qc.invalidateQueries({ queryKey: ["store", id] });
+          }}
+        />
+      )}
     </div>
   );
 };

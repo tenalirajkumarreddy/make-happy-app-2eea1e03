@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">BizManager</string>
-    <string name="title_activity_main">BizManager</string>
+    <string name="app_name">Aqua Prime</string>
+    <string name="title_activity_main">Aqua Prime</string>
     <string name="package_name">com.aquaprime.app</string>
     <string name="custom_url_scheme">com.aquaprime.app</string>
 </resources>

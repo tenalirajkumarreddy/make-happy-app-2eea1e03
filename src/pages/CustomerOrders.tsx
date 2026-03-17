@@ -4,6 +4,7 @@ import { StatusBadge } from "@/components/shared/StatusBadge";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveCustomer } from "@/lib/resolveCustomer";
+import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
@@ -26,7 +27,10 @@ const CustomerOrders = () => {
 
   const { data: customer } = useQuery({
     queryKey: ["my-customer", user?.id],
-    queryFn: async () => resolveCustomer(user!.id),
+    queryFn: async () => {
+      const res = await resolveCustomer(user!.id);
+      return res as any;
+    },
     enabled: !!user,
   });
 
@@ -77,6 +81,15 @@ const CustomerOrders = () => {
     setSaving(false);
     if (error) toast.error(error.message);
     else {
+      getAdminUserIds().then(admins => {
+        if (admins.length > 0) {
+          sendNotificationToMany(admins, {
+            title: "New Customer Order",
+            message: `Order ${displayId} placed by customer`,
+            type: "order" as any,
+          });
+        }
+      });
       toast.success("Order placed!");
       setShowOrder(false);
       setOrderStoreId("");

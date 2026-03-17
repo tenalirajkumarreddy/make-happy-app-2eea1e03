@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { getCurrentPosition, watchPosition, clearWatch } from "@/lib/capacitorUtils";
 
 function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number) {
   const R = 6371000;
@@ -101,28 +102,41 @@ export function RouteSessionPanel() {
   });
 
   // Continuously track agent location during an active session and push to DB
-  const locationWatchRef = useRef<number | null>(null);
+  const locationWatchRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!activeSession || !navigator.geolocation) return;
+    if (!activeSession) return;
+
+    let mounted = true;
 
     const pushLocation = async (lat: number, lng: number) => {
+      if (!mounted) return;
       setAgentLocation({ lat, lng });
-      await supabase.from("route_sessions").update({
+      await (supabase as any).from("route_sessions").update({
         current_lat: lat,
         current_lng: lng,
         location_updated_at: new Date().toISOString(),
       }).eq("id", activeSession.id);
     };
 
-    locationWatchRef.current = navigator.geolocation.watchPosition(
-      (pos) => pushLocation(pos.coords.latitude, pos.coords.longitude),
-      () => {},
-      { enableHighAccuracy: true, maximumAge: 30000, timeout: 10000 }
-    );
+    const setupWatch = async () => {
+      const id = await watchPosition((pos) => {
+        if (pos) {
+          pushLocation(pos.coords.latitude, pos.coords.longitude);
+        }
+      });
+      if (mounted) {
+        locationWatchRef.current = id;
+      } else if (id) {
+        clearWatch(id);
+      }
+    };
+
+    setupWatch();
 
     return () => {
-      if (locationWatchRef.current !== null) {
-        navigator.geolocation.clearWatch(locationWatchRef.current);
+      mounted = false;
+      if (locationWatchRef.current) {
+        clearWatch(locationWatchRef.current);
         locationWatchRef.current = null;
       }
     };
@@ -153,15 +167,8 @@ export function RouteSessionPanel() {
 
   const nextStore = sortedStores.find((s: any) => !visits?.has(s.id));
 
-  const getLocation = (): Promise<{ lat: number; lng: number } | null> => {
-    return new Promise((resolve) => {
-      if (!navigator.geolocation) { resolve(null); return; }
-      navigator.geolocation.getCurrentPosition(
-        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-        () => resolve(null),
-        { timeout: 5000 }
-      );
-    });
+  const getLocation = async (): Promise<{ lat: number; lng: number } | null> => {
+    return await getCurrentPosition();
   };
 
   const handleStart = async () => {

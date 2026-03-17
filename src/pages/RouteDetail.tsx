@@ -1,6 +1,7 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { getCurrentPosition } from "@/lib/capacitorUtils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
@@ -205,18 +206,16 @@ export default function RouteDetail() {
   };
 
   // ── Actions ───────────────────────────────────────────────────────────────
-  const handleUseGps = () => {
-    if (!navigator.geolocation) { toast.error("GPS not available"); return; }
+  const handleUseGps = async () => {
     setGettingGps(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setFactoryLatInput(String(pos.coords.latitude));
-        setFactoryLngInput(String(pos.coords.longitude));
-        setGettingGps(false);
-      },
-      () => { toast.error("Could not get GPS location"); setGettingGps(false); },
-      { timeout: 10000 }
-    );
+    const pos = await getCurrentPosition();
+    if (pos) {
+      setFactoryLatInput(String(pos.lat));
+      setFactoryLngInput(String(pos.lng));
+    } else {
+      toast.error("Could not get GPS location");
+    }
+    setGettingGps(false);
   };
 
   const handleSaveFactory = async (e: React.FormEvent) => {

@@ -19,6 +19,8 @@ import { toast } from "sonner";
 import {
   Alert, AlertDescription, AlertTitle,
 } from "@/components/ui/alert";
+import { getCurrentPosition } from "@/lib/capacitorUtils";
+import { useRouteAccess } from "@/hooks/useRouteAccess";
 
 interface CreateStoreWizardProps {
   open: boolean;
@@ -29,8 +31,9 @@ interface CreateStoreWizardProps {
 type Step = "customer" | "details" | "pricing";
 
 export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStoreWizardProps) {
-  const { role } = useAuth();
+  const { role, user } = useAuth();
   const { allowed: canSetOpeningBalance } = usePermission("opening_balance");
+  const { canAccessRoute, hasMatrixRestrictions, enabledRouteIds } = useRouteAccess(user?.id, role);
   const qc = useQueryClient();
   const [step, setStep] = useState<Step>("customer");
   const [saving, setSaving] = useState(false);
@@ -41,6 +44,7 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
   const [newCustName, setNewCustName] = useState("");
   const [newCustPhone, setNewCustPhone] = useState("");
   const [newCustEmail, setNewCustEmail] = useState("");
+  const [newCustPhotoUrl, setNewCustPhotoUrl] = useState("");
 
   // Details step
   const [name, setName] = useState("");
@@ -64,7 +68,6 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
   // Pricing step
   const [priceMap, setPriceMap] = useState<Record<string, string>>({});
   const [duplicateWarnings, setDuplicateWarnings] = useState<string[]>([]);
-  const [locationHardBlock, setLocationHardBlock] = useState(false);
   const [checkingDupes, setCheckingDupes] = useState(false);
   const [custDuplicate, setCustDuplicate] = useState<{ id: string; name: string; display_id: string } | null>(null);
 
@@ -81,7 +84,6 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
   const checkDuplicates = async () => {
     setCheckingDupes(true);
     const warnings: string[] = [];
-    let hardBlock = false;
     const { data: existingStores } = await supabase
       .from("stores")
       .select("id, name, phone, lat, lng, display_id")
@@ -91,7 +93,6 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
         const nameTrimmed = name.trim();
         const nameMatches = nameTrimmed && s.name.toLowerCase() === nameTrimmed.toLowerCase();
         if (nameMatches) {
-          // Suggest area-suffix when area is available
           const suffix = area.trim() || district.trim() || city.trim();
           const suggestion = suffix ? ` → Try "${nameTrimmed} (${suffix})" instead` : "";
           warnings.push(`Store "${s.name}" (${s.display_id}) has the same name.${suggestion}`);
@@ -102,19 +103,16 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
         if (lat && lng && s.lat && s.lng) {
           const dist = getDistanceMeters(lat, lng, s.lat, s.lng);
           if (dist < 5) {
-            // Hard block — same physical location
-            hardBlock = true;
-            warnings.push(`Store "${s.name}" (${s.display_id}) is at the same location (${Math.round(dist)}m away) — cannot create a duplicate store here`);
+            warnings.push(`Store "${s.name}" (${s.display_id}) is at the exact same location (${Math.round(dist)}m away)`);
           } else if (dist < 100) {
             warnings.push(`Store "${s.name}" (${s.display_id}) is only ${Math.round(dist)}m away`);
           }
         }
       }
     }
-    setLocationHardBlock(hardBlock);
     setDuplicateWarnings(warnings);
     setCheckingDupes(false);
-    return { warnings, hardBlock };
+    return { warnings };
   };
 
   const { data: customers } = useQuery({
@@ -127,21 +125,36 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
   });
 
   const { data: storeTypes } = useQuery({
-    queryKey: ["store-types"],
+    queryKey: ["store-types", hasMatrixRestrictions, enabledRouteIds.size],
     queryFn: async () => {
       const { data } = await supabase.from("store_types").select("*").eq("is_active", true);
-      return data || [];
+      let types = data || [];
+      if (hasMatrixRestrictions && enabledRouteIds.size > 0) {
+        const { data: accessibleRoutes } = await supabase
+          .from("routes")
+          .select("store_type_id")
+          .in("id", Array.from(enabledRouteIds));
+        const allowedTypeIds = new Set(accessibleRoutes?.map((r) => r.store_type_id));
+        types = types.filter((t) => allowedTypeIds.has(t.id));
+      } else if (hasMatrixRestrictions && enabledRouteIds.size === 0) {
+        types = [];
+      }
+      return types;
     },
     enabled: open,
   });
 
   const { data: routes } = useQuery({
-    queryKey: ["routes-list", storeTypeId],
+    queryKey: ["routes-list", storeTypeId, hasMatrixRestrictions],
     queryFn: async () => {
       let q = supabase.from("routes").select("*").eq("is_active", true);
       if (storeTypeId) q = q.eq("store_type_id", storeTypeId);
       const { data } = await q;
-      return data || [];
+      let fetchedRoutes = data || [];
+      if (hasMatrixRestrictions) {
+        fetchedRoutes = fetchedRoutes.filter((r) => canAccessRoute(r.id));
+      }
+      return fetchedRoutes;
     },
     enabled: open,
   });
@@ -178,51 +191,43 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
     enabled: open && step === "pricing",
   });
 
-  const captureLocation = () => {
-    if (!navigator.geolocation) {
-      toast.error("Geolocation not supported");
-      return;
-    }
+  const captureLocation = async () => {
     setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const lt = pos.coords.latitude;
-        const ln = pos.coords.longitude;
-        setLat(lt);
-        setLng(ln);
+    const pos = await getCurrentPosition();
+    if (pos) {
+      const lt = pos.lat;
+      const ln = pos.lng;
+      setLat(lt);
+      setLng(ln);
 
-        // Reverse geocode using Nominatim
-        try {
-          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lt}&lon=${ln}&format=json&addressdetails=1`, {
-            headers: { "Accept-Language": "en" },
-          });
-          const data = await res.json();
-          const addr = data.address || {};
-          setStreet(addr.road || addr.street || "");
-          setArea(addr.suburb || addr.neighbourhood || addr.village || "");
-          setCity(addr.city || addr.town || addr.municipality || "");
-          setDistrict(addr.county || addr.state_district || "");
-          setState(addr.state || "");
-          setPincode(addr.postcode || "");
-          setAddress(data.display_name || "");
-        } catch {
-          toast.error("Could not fetch address");
-        }
-        setLocating(false);
-      },
-      (err) => {
-        toast.error("Location error: " + err.message);
-        setLocating(false);
-      },
-      { enableHighAccuracy: true }
-    );
+      // Reverse geocode using Nominatim
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lt}&lon=${ln}&format=json&addressdetails=1`, {
+          headers: { "Accept-Language": "en" },
+        });
+        const data = await res.json();
+        const addr = data.address || {};
+        setStreet(addr.road || addr.street || "");
+        setArea(addr.suburb || addr.neighbourhood || addr.village || "");
+        setCity(addr.city || addr.town || addr.municipality || "");
+        setDistrict(addr.county || addr.state_district || "");
+        setState(addr.state || "");
+        setPincode(addr.postcode || "");
+        setAddress(data.display_name || "");
+      } catch {
+        toast.error("Could not fetch address");
+      }
+    } else {
+      toast.error("Location error");
+    }
+    setLocating(false);
   };
 
   const resetForm = () => {
     setStep("customer");
     setCustomerMode("select");
     setCustomerId("");
-    setNewCustName(""); setNewCustPhone(""); setNewCustEmail("");
+    setNewCustName(""); setNewCustPhone(""); setNewCustEmail(""); setNewCustPhotoUrl("");
     setName(""); setStoreTypeId(""); setRouteId(""); setPhone("");
     setPhotoUrl(""); setLat(null); setLng(null);
     setStreet(""); setArea(""); setCity(""); setDistrict(""); setState(""); setPincode(""); setAddress("");
@@ -230,7 +235,6 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
     setObType("debit");
     setPriceMap({});
     setDuplicateWarnings([]);
-    setLocationHardBlock(false);
   };
 
   const handleSave = async () => {
@@ -241,6 +245,8 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
       // Create customer if needed
       if (customerMode === "create") {
         if (!newCustName.trim()) { toast.error("Customer name required"); setSaving(false); return; }
+        if (!newCustPhone.trim() || newCustPhone.trim().length < 6) { toast.error("Valid customer phone number required"); setSaving(false); return; }
+
         const { data: allCusts } = await supabase.from("customers").select("id");
         const count = (allCusts?.length || 0) + 1;
         const displayId = `CUST-${String(count).padStart(6, "0")}`;
@@ -249,6 +255,7 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
           name: newCustName,
           phone: newCustPhone || null,
           email: newCustEmail || null,
+          photo_url: newCustPhotoUrl || null,
         }).select("id").single();
         if (custErr) { toast.error(custErr.message); setSaving(false); return; }
         finalCustomerId = newCust.id;
@@ -258,6 +265,17 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
         toast.error("Please fill required fields");
         setSaving(false);
         return;
+      }
+
+      // Resolve store phone: if blank, fall back to customer's phone
+      let storePhone = phone.trim() || null;
+      if (!storePhone) {
+        if (customerMode === "create") {
+          storePhone = newCustPhone.trim() || null;
+        } else {
+          const selectedCust = (customers || []).find((c) => c.id === finalCustomerId);
+          storePhone = selectedCust?.phone || null;
+        }
       }
 
       // Create store
@@ -272,7 +290,7 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
         customer_id: finalCustomerId,
         store_type_id: storeTypeId,
         route_id: routeId || null,
-        phone: phone || null,
+        phone: storePhone,
         photo_url: photoUrl || null,
         lat, lng,
         address: address || null,
@@ -312,7 +330,7 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
     setSaving(false);
   };
 
-  const canGoToDetails = customerMode === "select" ? !!customerId : !!newCustName.trim() && !(newCustPhone.trim() && custDuplicate);
+  const canGoToDetails = customerMode === "select" ? !!customerId : !!newCustName.trim() && newCustPhone.trim().length >= 6;
   const canGoToPricing = !!name.trim() && !!storeTypeId;
 
   // Debounced phone check for new customer
@@ -375,14 +393,17 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
               </div>
             ) : (
               <div className="space-y-3">
+                <div className="flex justify-center">
+                  <ImageUpload folder="customers" currentUrl={newCustPhotoUrl || null} onUploaded={setNewCustPhotoUrl} onRemoved={() => setNewCustPhotoUrl("")} />
+                </div>
                 <div><Label>Name *</Label><Input value={newCustName} onChange={e => setNewCustName(e.target.value)} className="mt-1" /></div>
                 <div>
-                  <Label>Phone</Label>
-                  <Input value={newCustPhone} onChange={e => setNewCustPhone(e.target.value)} className="mt-1" />
+                  <Label>Phone *</Label>
+                  <Input value={newCustPhone} onChange={e => setNewCustPhone(e.target.value)} className="mt-1" required placeholder="+91 98765 43210" />
                   {custDuplicate && newCustPhone.trim() && (
-                    <div className="flex items-start gap-2 mt-1.5 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                    <div className="flex items-start gap-2 mt-1.5 rounded-md border border-amber-300/60 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
                       <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                      <span>Phone already used by <span className="font-semibold">{custDuplicate.name}</span> ({custDuplicate.display_id}). Select them as the existing customer instead.</span>
+                      <span>Phone already used by <span className="font-semibold">{custDuplicate.name}</span> ({custDuplicate.display_id}). You can still proceed or select them as existing customer.</span>
                     </div>
                   )}
                 </div>
@@ -501,33 +522,31 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
             )}
 
             {duplicateWarnings.length > 0 && (
-              <Alert variant="destructive">
+              <Alert variant="default" className="border-amber-300/60 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 [&>svg]:text-amber-500">
                 <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>{locationHardBlock ? "Duplicate Location — Cannot Proceed" : "Possible Duplicates Found"}</AlertTitle>
+                <AlertTitle>Possible Duplicates Found</AlertTitle>
                 <AlertDescription>
                   <ul className="list-disc pl-4 text-xs space-y-0.5 mt-1">
                     {duplicateWarnings.map((w, i) => <li key={i}>{w}</li>)}
                   </ul>
-                  {!locationHardBlock && <p className="text-xs mt-2">You can still proceed if this is intentional.</p>}
+                  <p className="text-xs mt-2">You can still proceed if this is intentional.</p>
                 </AlertDescription>
               </Alert>
             )}
 
             <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => { setStep("customer"); setDuplicateWarnings([]); setLocationHardBlock(false); }}>
+              <Button variant="outline" className="flex-1" onClick={() => { setStep("customer"); setDuplicateWarnings([]); }}>
                 <ChevronLeft className="mr-1 h-4 w-4" /> Back
               </Button>
               <Button
                 className="flex-1"
-                disabled={!canGoToPricing || checkingDupes || locationHardBlock}
+                disabled={!canGoToPricing || checkingDupes}
                 onClick={async () => {
-                  const { warnings, hardBlock } = await checkDuplicates();
-                  if (hardBlock) return; // same-location hard block — cannot proceed
+                  const { warnings } = await checkDuplicates();
                   if (warnings.length === 0 || duplicateWarnings.length > 0) {
                     setStep("pricing");
                   }
-                  // If warnings found first time, show them but don't proceed.
-                  // Second click (warnings already shown) proceeds anyway.
+                  // If warnings found for first time, show them — second click proceeds anyway.
                 }}
               >
                 {checkingDupes ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}

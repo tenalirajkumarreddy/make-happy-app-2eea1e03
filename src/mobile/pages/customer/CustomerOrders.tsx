@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveCustomer } from "@/lib/resolveCustomer";
 import { useAuth } from "@/contexts/AuthContext";
+import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -50,7 +51,10 @@ export function CustomerOrders({ selectedStoreId, onStoreChange }: Props) {
 
   const { data: customer } = useQuery({
     queryKey: ["mobile-customer-orders-self", user?.id],
-    queryFn: async () => (await resolveCustomer(user!.id, "id")) as CustomerRow | null,
+    queryFn: async () => {
+      const res = await resolveCustomer(user!.id, "id");
+      return res as unknown as CustomerRow | null;
+    },
     enabled: !!user,
   });
 
@@ -130,6 +134,18 @@ export function CustomerOrders({ selectedStoreId, onStoreChange }: Props) {
       if (error) throw error;
 
       toast.success("Order placed");
+      
+      // Dispatch notification to admins
+      getAdminUserIds().then(admins => {
+        if (admins.length > 0) {
+          sendNotificationToMany(admins, {
+            title: "New Customer Order",
+            message: `Order ${displayId} placed by customer`,
+            type: "order" as any,
+          });
+        }
+      }).catch(err => console.error("Failed to notify admins", err));
+
       setOpenCreate(false);
       setOrderNote("");
       onStoreChange(orderStoreId);

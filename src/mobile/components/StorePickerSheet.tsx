@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { getCurrentPosition } from "@/lib/capacitorUtils";
 import { useRouteAccess } from "@/hooks/useRouteAccess";
 
 export interface StoreOption {
@@ -74,16 +75,13 @@ export function StorePickerSheet({ open, onOpenChange, onSelect, filterRouteId }
     fetchStores();
   }, [open, filterRouteId]);
 
-  const handleFindNearby = () => {
+  const handleFindNearby = async () => {
     setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setMyPos({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        setLocating(false);
-      },
-      () => setLocating(false),
-      { timeout: 8000 }
-    );
+    const pos = await getCurrentPosition();
+    if (pos) {
+      setMyPos({ lat: pos.lat, lng: pos.lng });
+    }
+    setLocating(false);
   };
 
   const filtered = stores

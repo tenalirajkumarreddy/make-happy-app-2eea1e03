@@ -1,6 +1,6 @@
 import { Capacitor } from "@capacitor/core";
 import { Camera, CameraResultType, CameraSource } from "@capacitor/camera";
-import { Geolocation } from "@capacitor/geolocation";
+import { Geolocation, WatchPositionCallback } from "@capacitor/geolocation";
 
 /**
  * Check if running as native app
@@ -69,6 +69,33 @@ export async function getCurrentPosition(): Promise<{ lat: number; lng: number }
   } catch (error) {
     console.error("Geolocation error:", error);
     return null;
+  }
+}
+
+/**
+ * Watch current position using native geolocation
+ */
+export async function watchPosition(callback: WatchPositionCallback): Promise<string> {
+  try {
+    return await Geolocation.watchPosition(
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
+      callback
+    );
+  } catch (error) {
+    console.error("Watch position error:", error);
+    return "";
+  }
+}
+
+/**
+ * Clear established watch
+ */
+export async function clearWatch(id: string): Promise<void> {
+  if (!id) return;
+  try {
+    await Geolocation.clearWatch({ id });
+  } catch (error) {
+    console.error("Clear watch error:", error);
   }
 }
 

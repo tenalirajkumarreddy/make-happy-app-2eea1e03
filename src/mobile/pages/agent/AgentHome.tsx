@@ -11,6 +11,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { StoreOption } from "@/mobile/components/StorePickerSheet";
+import { getCurrentPosition } from "@/lib/capacitorUtils";
 import { addToQueue } from "@/lib/offlineQueue";
 
 interface Props {
@@ -73,11 +74,10 @@ export function AgentHome({ onOpenStore, onGoRecord }: Props) {
   const [visitLoading, setVisitLoading] = useState(false);
 
   useEffect(() => {
-    navigator.geolocation.getCurrentPosition(
-      (pos) => setCurrentPosition({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => setCurrentPosition(null),
-      { timeout: 6000, enableHighAccuracy: true }
-    );
+    getCurrentPosition().then(pos => {
+      if (pos) setCurrentPosition({ lat: pos.lat, lng: pos.lng });
+      else setCurrentPosition(null);
+    });
   }, []);
 
   const { data: salesData } = useQuery({
@@ -229,14 +229,10 @@ export function AgentHome({ onOpenStore, onGoRecord }: Props) {
     try {
       let lat: number | null = null;
       let lng: number | null = null;
-      try {
-        const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
-          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 })
-        );
-        lat = pos.coords.latitude;
-        lng = pos.coords.longitude;
-      } catch {
-        void 0;
+      const pos = await getCurrentPosition();
+      if (pos) {
+        lat = pos.lat;
+        lng = pos.lng;
       }
 
       if (!navigator.onLine) {
