@@ -60,9 +60,14 @@ const Auth = () => {
 
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (phoneNumber.length !== 10) {
+      toast.error("Please enter a valid 10-digit phone number");
+      return;
+    }
     setLoading(true);
     try {
-      const normalized = await sendPhoneOtp(phoneNumber, "firebase-recaptcha-container");
+      const fullPhone = `+91${phoneNumber}`;
+      const normalized = await sendPhoneOtp(fullPhone, "firebase-recaptcha-container");
       setVerifiedPhone(normalized);
       setStep("otp");
       toast.success(`OTP sent to ${normalized}`);
@@ -382,18 +387,26 @@ const Auth = () => {
               <div>
                 <Label htmlFor="phone-number">Phone Number</Label>
                 <div className="relative mt-1">
-                  <Smartphone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 border-r pr-2 py-1 border-input/40 z-10">
+                    <Smartphone className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium text-foreground">+91</span>
+                  </div>
                   <Input
                     id="phone-number"
                     type="tel"
-                    placeholder="+91XXXXXXXXXX"
+                    inputMode="numeric"
+                    placeholder="9876543210"
                     value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value)}
-                    className="pl-9"
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, "");
+                      if (val.length <= 10) setPhoneNumber(val);
+                    }}
+                    className="pl-20"
                     required
+                    maxLength={10}
                   />
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">Include country code, e.g. +91…</p>
+                <p className="mt-1 text-xs text-muted-foreground">Enter your 10-digit mobile number</p>
               </div>
               <div id="firebase-recaptcha-container" />
               <Button type="submit" className="w-full" disabled={loading}>

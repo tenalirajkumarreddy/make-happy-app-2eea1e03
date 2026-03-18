@@ -76,8 +76,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // Defer to avoid Supabase deadlock where DB query waits for Auth headers
           setTimeout(async () => {
             if (!mounted) return;
-            await fetchUserData(session.user.id);
-            if (mounted) setLoading(false);
+            try {
+              await fetchUserData(session.user.id);
+            } finally {
+              if (mounted) setLoading(false);
+            }
           }, 0);
         } else {
           setRole(null);
