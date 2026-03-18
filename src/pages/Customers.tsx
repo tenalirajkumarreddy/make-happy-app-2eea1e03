@@ -1,11 +1,12 @@
 import { PageHeader } from "@/components/shared/PageHeader";
+import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import { DataTable } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { KycReviewDialog } from "@/components/customers/KycReviewDialog";
 import { ImageUpload } from "@/components/shared/ImageUpload";
 import { CsvImportDialog } from "@/components/shared/CsvImportDialog";
 import { AdvancedFilters, applyFilters, type FilterValues } from "@/components/shared/AdvancedFilters";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { logActivity } from "@/lib/activityLogger";
@@ -13,6 +14,8 @@ import { generateDisplayId } from "@/lib/displayId";
 import { Loader2, User, Upload, AlertCircle } from "lucide-react";
 import { usePermission } from "@/hooks/usePermission";
 import { useRouteAccess } from "@/hooks/useRouteAccess";
+import { addToQueue } from "@/lib/offlineQueue";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useState, useMemo, useEffect } from "react";
@@ -32,6 +35,7 @@ import { toast } from "sonner";
 const Customers = () => {
   const navigate = useNavigate();
   const { user, role } = useAuth();
+  const { isOnline } = useOnlineStatus();
   const { allowed: canCreateCustomers } = usePermission("create_customers");
   const [showAdd, setShowAdd] = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -51,24 +55,40 @@ const Customers = () => {
   const [filters, setFilters] = useState<FilterValues>({});
   const [duplicateCustomer, setDuplicateCustomer] = useState<any>(null);
   const qc = useQueryClient();
+  const PAGE_SIZE = 50;
+  // const [loadedPages, setLoadedPages] = useState(1); // No longer needed
   const canReviewKyc = role === "super_admin" || role === "manager";
   const canBulk = role === "super_admin" || role === "manager";
   const canEdit = role === "super_admin" || role === "manager";
 
   const { canAccessRoute, loading: routeLoading, hasMatrixRestrictions } = useRouteAccess(user?.id, role);
 
-  const { data: customers, isLoading } = useQuery({
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading
+  } = useInfiniteQuery({
     queryKey: ["customers"],
-    queryFn: async () => {
+    queryFn: async ({ pageParam = 0 }) => {
       const { data, error } = await supabase
         .from("customers")
         .select("*, stores(id, outstanding, route_id)")
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .range(pageParam * PAGE_SIZE, (pageParam + 1) * PAGE_SIZE - 1);
       if (error) throw error;
       return data;
     },
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => {
+      if (!lastPage || lastPage.length < PAGE_SIZE) return undefined;
+      return allPages.length;
+    },
   });
 
+  const customers = useMemo(() => data?.pages.flatMap((page) => page) || [], [data]);
+  
   // Real-time phone duplicate check
   useEffect(() => {
     if (!phone.trim() || phone.trim().length < 6) { setDuplicateCustomer(null); return; }
@@ -79,7 +99,7 @@ const Customers = () => {
     return () => clearTimeout(timer);
   }, [phone, customers]);
 
-  const handleAdd = async (e: React.FormEvent) => {
+    const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
       toast.error("Customer name is required");
@@ -94,6 +114,33 @@ const Customers = () => {
       return;
     }
     setSaving(true);
+
+    if (!isOnline) {
+       await addToQueue({
+        id: crypto.randomUUID(),
+        type: "customer",
+        payload: {
+          customerData: {
+            id: crypto.randomUUID(), // Generate ID on client for offline caching/relationships
+            name,
+            phone: phone || null,
+            email: email || null,
+            address: address || null,
+            photo_url: photoUrl || null,
+            created_at: new Date().toISOString(),
+          }
+        },
+        createdAt: new Date().toISOString(),
+      });
+      toast.warning("You're offline — customer queued and will sync automatically when back online");
+      setSaving(false);
+      setShowAdd(false);
+      setName(""); setPhone(""); setEmail(""); setAddress(""); setPhotoUrl("");
+      setDuplicateCustomer(null);
+      qc.invalidateQueries({ queryKey: ["customers"] });
+      return;
+    }
+
     const displayId = generateDisplayId("CUST");
 
     const { error } = await supabase.from("customers").insert({
@@ -115,7 +162,7 @@ const Customers = () => {
       setDuplicateCustomer(null);
       qc.invalidateQueries({ queryKey: ["customers"] });
     }
-  };
+    };
 
   const handleCsvImport = async (rows: Record<string, string>[]) => {
     let success = 0;
@@ -357,12 +404,13 @@ const Customers = () => {
         </div>
       )}
 
-      <DataTable
+      <VirtualDataTable
         columns={columns}
         data={filteredCustomers}
         searchKey="name"
         searchPlaceholder="Search customers..."
         onRowClick={(row) => { if (!editMode) navigate(`/customers/${row.id}`); }}
+        height="calc(100vh - 240px)"
         renderMobileCard={(row: any) => (
           <div className={`rounded-xl border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow active:bg-muted/30 ${!row.is_active ? "opacity-60" : ""}`}>
             <div className="flex">
@@ -391,6 +439,15 @@ const Customers = () => {
           </div>
         )}
       />
+
+      {hasNextPage && (
+        <div className="flex justify-center pt-2">
+          <Button variant="outline" size="sm" onClick={() => fetchNextPage()} disabled={isFetchingNextPage} className="gap-1.5">
+            {isFetchingNextPage ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+            Load more
+          </Button>
+        </div>
+      )}
 
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
         <DialogContent className="max-w-lg">

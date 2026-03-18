@@ -57,8 +57,8 @@ const MapPage = () => {
       const { data } = await supabase
         .from("route_sessions")
         .select("id, user_id, started_at, current_lat, current_lng, location_updated_at, routes(name), profiles(full_name)")
-        .eq("status", "active");
-      return data || [];
+        .eq("status", "active") as any;
+      return (data || []) as any[];
     },
     refetchInterval: 15000,
   });

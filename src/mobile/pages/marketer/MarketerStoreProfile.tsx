@@ -18,7 +18,7 @@ interface Props {
   store: StoreOption;
   onBack: () => void;
   onGoRecord: (store: StoreOption) => void;
-  onGoOrders: (store: StoreOption) => void;
+  onGoOrders?: (store: StoreOption) => void;
 }
 
 interface StoreProfileRow {
@@ -147,7 +147,7 @@ export function MarketerStoreProfile({ store, onBack, onGoRecord, onGoOrders }: 
           <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Quick Actions</p>
           <div className="grid grid-cols-2 gap-2">
             <button
-              onClick={() => onGoOrders(currentStore)}
+              onClick={() => onGoOrders?.(currentStore)}
               className="flex items-center justify-center gap-2 p-3 rounded-2xl bg-blue-600 hover:bg-blue-700 active:scale-95 transition-all shadow-sm"
             >
               <ClipboardList className="h-5 w-5 text-white" />

@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { showErrorToast } from "@/lib/errorUtils";
 
 function exportCSV(data: any[], columns: { header: string; key: string }[], filename: string) {
   const header = columns.map((c) => c.header).join(",");
@@ -416,11 +417,7 @@ const Sales = () => {
     });
 
     if (error) {
-      if (error.message.includes("credit_limit_exceeded")) {
-        toast.error("Credit limit exceeded. Increase payment or reduce items.");
-      } else {
-        toast.error(error.message);
-      }
+      showErrorToast(error);
       setSaving(false);
       return;
     }

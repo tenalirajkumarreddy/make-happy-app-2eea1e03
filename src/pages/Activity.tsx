@@ -1,69 +1,106 @@
 import { PageHeader } from "@/components/shared/PageHeader";
-import { DataTable } from "@/components/shared/DataTable";
+import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import { Badge } from "@/components/ui/badge";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useMemo } from "react";
 
 const Activity = () => {
   const { user } = useAuth();
+  const PAGE_SIZE = 50;
 
-  const { data: activities, isLoading } = useQuery({
+  const {
+    data,
+    isLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage
+  } = useInfiniteQuery({
     queryKey: ["activity-logs"],
-    queryFn: async () => {
+    queryFn: async ({ pageParam = 0 }) => {
       const { data, error } = await supabase
         .from("activity_logs")
         .select("*")
         .order("created_at", { ascending: false })
-        .limit(100);
+        .range(pageParam * PAGE_SIZE, (pageParam + 1) * PAGE_SIZE - 1);
       if (error) throw error;
       return data;
     },
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => {
+      if (!lastPage || lastPage.length < PAGE_SIZE) return undefined;
+      return allPages.length;
+    },
   });
 
+  const activities = useMemo(() => data?.pages.flatMap((page) => page) || [], [data]);
+
   const columns = [
-    { header: "Time", accessor: (row: any) => new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }), className: "font-mono text-xs" },
-    { header: "User", accessor: (row: any) => row.user_id?.slice(0, 8) || "System", className: "font-mono text-xs" },
-    { header: "Action", accessor: "action" as const },
-    { header: "Entity", accessor: (row: any) => row.entity_name || row.entity_id || "—", className: "text-muted-foreground" },
-    { header: "Type", accessor: (row: any) => <Badge variant="outline">{row.entity_type}</Badge> },
+    { 
+      header: "Time", 
+      accessor: (row: any) => new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }), 
+      className: "font-mono text-xs w-32" 
+    },
+    { 
+      header: "User", 
+      accessor: (row: any) => row.user_id?.slice(0, 8) || "System", 
+      className: "font-mono text-xs w-24" 
+    },
+    { 
+      header: "Action", 
+      accessor: "action" as const,
+      className: "font-medium"
+    },
+    { 
+      header: "Entity", 
+      accessor: (row: any) => row.entity_name || row.entity_id || "—", 
+      className: "text-muted-foreground hidden md:block" 
+    },
+    { 
+      header: "Type", 
+      accessor: (row: any) => <Badge variant="outline">{row.entity_type}</Badge>,
+      className: "w-24"
+    },
   ];
 
-  if (isLoading) {
-    return <div className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
-  }
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const bottom = e.currentTarget.scrollHeight - e.currentTarget.scrollTop === e.currentTarget.clientHeight;
+    if (bottom && hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+  };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in h-[calc(100vh-6rem)] flex flex-col">
       <PageHeader title="Activity Log" subtitle="Track all system actions and changes" />
-      {(!activities || activities.length === 0) ? (
-        <div className="rounded-xl border bg-card p-8 text-center text-muted-foreground">
-          No activity logs yet. Actions like recording sales, creating orders, and managing users will appear here.
-        </div>
-      ) : (
-        <DataTable
+      <div className="flex-1 min-h-0">
+        <VirtualDataTable
           columns={columns}
           data={activities}
           searchKey="action"
           searchPlaceholder="Search actions..."
+          height="100%"
           renderMobileCard={(row: any) => (
-            <div className="rounded-xl border bg-card p-4 space-y-2 shadow-sm hover:shadow-md transition-shadow">
-              <div className="flex items-start justify-between gap-2">
-                <p className="text-sm font-medium text-foreground leading-snug">{row.action}</p>
-                <Badge variant="outline" className="text-[10px] h-5 px-1.5 shrink-0">{row.entity_type}</Badge>
+            <div className="p-4 border-b space-y-2">
+              <div className="flex justify-between items-start">
+                <span className="font-medium text-sm">{row.action}</span>
+                <span className="text-xs text-muted-foreground">
+                  {new Date(row.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
               </div>
-              {(row.entity_name || row.entity_id) && (
-                <p className="text-xs text-muted-foreground">{row.entity_name || row.entity_id}</p>
-              )}
-              <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border/50">
-                <span className="font-mono">{row.user_id?.slice(0, 8) || "System"}</span>
-                <span>{new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}</span>
+              <div className="flex justify-between items-center text-xs">
+                 <span className="text-muted-foreground">{row.entity_name || row.entity_id}</span>
+                 <Badge variant="secondary" className="text-[10px]">{row.entity_type}</Badge>
+              </div>
+              <div className="text-[10px] text-muted-foreground font-mono">
+                User: {row.user_id?.slice(0, 8) || "System"}
               </div>
             </div>
           )}
         />
-      )}
+        {isFetchingNextPage && <div className="p-2 text-center text-xs text-muted-foreground">Loading more...</div>}
+      </div>
     </div>
   );
 };

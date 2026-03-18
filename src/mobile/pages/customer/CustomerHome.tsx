@@ -1,9 +1,10 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, Phone, ShoppingCart, Wallet, ClipboardList, UserCircle2 } from "lucide-react";
+import { Loader2, Phone, ShoppingCart, Wallet, ClipboardList, UserCircle2, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveCustomer } from "@/lib/resolveCustomer";
 import { useAuth } from "@/contexts/AuthContext";
+import { BannerCarousel } from "@/components/banners/BannerCarousel";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface Props {
@@ -26,6 +27,7 @@ interface StoreRow {
   id: string;
   name: string;
   outstanding: number;
+  store_type_id?: string;
 }
 
 interface OrderRow {
@@ -66,7 +68,7 @@ export function CustomerHome({
     queryFn: async () => {
       const { data, error } = await supabase
         .from("stores")
-        .select("id, name, outstanding")
+        .select("id, name, outstanding, store_type_id")
         .eq("customer_id", customer!.id)
         .eq("is_active", true)
         .order("name");
@@ -140,6 +142,12 @@ export function CustomerHome({
     return stores?.find((store) => store.id === selectedStoreId)?.name || "Store";
   }, [selectedStoreId, stores]);
 
+  const storeTypeIds = useMemo(() => {
+    if (!stores) return undefined;
+    const types = stores.map((s) => s.store_type_id).filter(Boolean) as string[];
+    return Array.from(new Set(types));
+  }, [stores]);
+
   const firstName = (profile?.full_name ?? customer?.name ?? "Customer").split(" ")[0];
 
   if (!customer) {
@@ -159,23 +167,27 @@ export function CustomerHome({
       </div>
 
       <div className="px-4 -mt-4 space-y-3">
-        <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-3 shadow-sm">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-2">Store</p>
-          <Select
-            value={selectedStoreId ?? "all"}
-            onValueChange={(value) => onStoreChange(value === "all" ? null : value)}
-          >
-            <SelectTrigger className="h-10 rounded-xl">
-              <SelectValue placeholder="Select store" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Stores</SelectItem>
-              {(stores || []).map((store) => (
-                <SelectItem key={store.id} value={store.id}>{store.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <BannerCarousel storeTypeIds={storeTypeIds} />
+        
+        {(stores || []).length > 1 && (
+          <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-3 shadow-sm">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-2">Store</p>
+            <Select
+              value={selectedStoreId ?? "all"}
+              onValueChange={(value) => onStoreChange(value === "all" ? null : value)}
+            >
+              <SelectTrigger className="h-10 rounded-xl">
+                <SelectValue placeholder="Select store" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Stores</SelectItem>
+                {(stores || []).map((store) => (
+                  <SelectItem key={store.id} value={store.id}>{store.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         <div className="grid grid-cols-3 gap-2">
           <MiniStat label="Pending Orders" value={String(pendingOrders)} icon={ShoppingCart} />
@@ -187,7 +199,7 @@ export function CustomerHome({
           <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Quick Actions</p>
           <div className="grid grid-cols-4 gap-2">
             <QuickButton label="Sales" onClick={onOpenSales} icon={ClipboardList} />
-            <QuickButton label="Order" onClick={onOpenOrders} icon={ShoppingCart} />
+            <QuickButton label="Order" onClick={onOpenOrders} icon={Plus} />
             <QuickButton label="Ledger" onClick={onOpenTransactions} icon={Wallet} />
             <QuickButton label="Profile" onClick={onOpenProfile} icon={UserCircle2} />
           </div>

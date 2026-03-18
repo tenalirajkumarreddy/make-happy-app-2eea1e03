@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { startOfDay } from "date-fns";
 import {
   CheckCircle2,
@@ -21,6 +21,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { useRouteAccess } from "@/hooks/useRouteAccess";
 import { getCurrentPosition } from "@/lib/capacitorUtils";
+import { getDistanceMeters } from "@/lib/proximity";
 
 interface RouteStore {
   id: string;
@@ -55,14 +56,6 @@ interface OrderRow {
   status: string;
   stores: { id: string; name: string; display_id: string; address: string | null; phone: string | null; lat: number | null; lng: number | null; route_id: string | null; routes: { name: string } | null } | null;
 }
-
-const haversineMeters = (lat1: number, lng1: number, lat2: number, lng2: number) => {
-  const R = 6371000;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLng = ((lng2 - lng1) * Math.PI) / 180;
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-};
 
 const formatDistance = (meters: number) => {
   if (meters < 1000) return `${Math.round(meters)}m`;
@@ -202,10 +195,10 @@ export function AgentRoutes() {
     if (agentPos) {
       entries.sort((a, b) => {
         const distA = a.store.lat != null && a.store.lng != null
-          ? haversineMeters(agentPos.lat, agentPos.lng, a.store.lat, a.store.lng)
+          ? getDistanceMeters(agentPos.lat, agentPos.lng, a.store.lat, a.store.lng)
           : Infinity;
         const distB = b.store.lat != null && b.store.lng != null
-          ? haversineMeters(agentPos.lat, agentPos.lng, b.store.lat, b.store.lng)
+          ? getDistanceMeters(agentPos.lat, agentPos.lng, b.store.lat, b.store.lng)
           : Infinity;
         return distA - distB;
       });
@@ -547,7 +540,7 @@ export function AgentRoutes() {
               <div className="space-y-2.5">
                 {ordersView.map(({ store, orderCount }, idx) => {
                   const distMeters = agentPos && store.lat != null && store.lng != null
-                    ? haversineMeters(agentPos.lat, agentPos.lng, store.lat, store.lng)
+                    ? getDistanceMeters(agentPos.lat, agentPos.lng, store.lat, store.lng)
                     : null;
                   const canNavigate = (store.lat != null && store.lng != null) || !!store.address;
 
