@@ -37,4 +37,4 @@ Located in `supabase/functions/`:
 - `invite-staff` — Create staff accounts with roles
 - `daily-store-reset` — Reset daily route session states
 - `daily-handover-snapshot` — Create daily balance snapshots
-- `auto-orders` — Auto-generate orders for eligible store types
+- `auto-orders` — Auto-generate orders for eligible store typez
