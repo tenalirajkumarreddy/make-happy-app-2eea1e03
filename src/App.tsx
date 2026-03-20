@@ -25,6 +25,8 @@ import Orders from "./pages/Orders";
 import Handovers from "./pages/Handovers";
 import Reports from "./pages/Reports";
 import Analytics from "./pages/Analytics";
+import Inventory from "./pages/Inventory";
+import Banners from "./pages/Banners";
 import Activity from "./pages/Activity";
 import AccessControl from "./pages/AccessControl";
 import Settings from "./pages/Settings";
@@ -81,6 +83,8 @@ const App = () => (
               <Route path="/" element={<DashboardRouter />} />
               {/* Admin & Manager only */}
               <Route path="/products" element={<RoleGuard allowed={["super_admin", "manager"]}><Products /></RoleGuard>} />
+              <Route path="/inventory" element={<RoleGuard allowed={["super_admin", "manager"]}><Inventory /></RoleGuard>} />
+              <Route path="/banners" element={<RoleGuard allowed={["super_admin", "manager"]}><Banners /></RoleGuard>} />
               <Route path="/analytics" element={<RoleGuard allowed={["super_admin", "manager"]}><Analytics /></RoleGuard>} />
               <Route path="/reports" element={<RoleGuard allowed={["super_admin", "manager"]}><Reports /></RoleGuard>} />
               <Route path="/reports/:type" element={<RoleGuard allowed={["super_admin", "manager"]}><Reports /></RoleGuard>} />

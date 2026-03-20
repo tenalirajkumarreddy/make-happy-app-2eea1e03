@@ -16,13 +16,29 @@ A full-featured business management web app built with React, Vite, TypeScript, 
 - Sales, Transactions, and Orders management with credit limits
 - Route management with GPS tracking and live agent location
 - Handovers & daily balance snapshots
-- Promotional banners, product categories, pricing tiers
-- Activity logs, analytics & reports
+- Promotional banners (`/banners`) with image upload management
+- Inventory tracking (`/inventory`) with virtual list for large datasets
+- Product catalog with pricing tiers and agent-facing product view
+- Smart Insights report with AI-powered `forecastEngine` (trend predictions)
+- Activity logs, analytics & reports (Smart Insights default)
 - Push notifications (Supabase Realtime in-app + Web Push service worker in production)
 - GPS route tracking with live agent location markers and historical trail polylines on map
 - Customer KYC self-upload (selfie + Aadhaar front/back → auto-submits for review)
+- Agent mobile: Product Catalog tab + Add Customer/Store overlay from home screen
 - Offline support (PWA service worker + offline queue)
 - Android APK via Capacitor (`npm run build:apk:debug` / `npm run build:apk:release`)
+
+## New Pages & Components (integrated from intelj branch)
+| File | Description |
+|------|-------------|
+| `src/pages/Inventory.tsx` | Inventory management page with stock levels and virtual scrolling |
+| `src/pages/Banners.tsx` | Promotional banner management with image uploads |
+| `src/components/reports/SmartInsightsReport.tsx` | AI-driven sales forecasts and trend insights |
+| `src/lib/forecastEngine.ts` | Forecast computation utilities (trend, anomaly detection) |
+| `src/components/shared/VirtualDataTable.tsx` | Virtualised table using `@tanstack/react-virtual` |
+| `src/mobile/pages/agent/AgentProducts.tsx` | Mobile agent product catalog view |
+| `src/mobile/pages/agent/AddCustomerStore.tsx` | Overlay form to add new customers/stores from agent home |
+| `src/lib/errorUtils.ts` | Shared error formatting and retry helpers |
 
 ## Environment Variables
 Set in `.env` and Replit `[userenv.shared]`:

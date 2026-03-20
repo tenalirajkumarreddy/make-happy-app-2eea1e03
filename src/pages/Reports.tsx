@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useEffect } from "react";
 import {
   Calendar, ShoppingCart, ClipboardList, Users, Package,
-  Banknote, TrendingDown,
+  Banknote, TrendingDown, Sparkles,
 } from "lucide-react";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -14,8 +14,10 @@ import OrderReport from "@/components/reports/OrderReport";
 import AgentPerformanceReport from "@/components/reports/AgentPerformanceReport";
 import ProductReport from "@/components/reports/ProductReport";
 import PaymentOutstandingReport from "@/components/reports/PaymentOutstandingReport";
+import SmartInsightsReport from "@/components/reports/SmartInsightsReport";
 
 const REPORT_SECTIONS = [
+  { key: "smart", label: "Smart Insights", icon: Sparkles },
   { key: "daily", label: "Daily Reports", icon: Calendar },
   { key: "sales", label: "Sales Reports", icon: ShoppingCart },
   { key: "orders", label: "Order Reports", icon: ClipboardList },
@@ -33,12 +35,12 @@ const Reports = () => {
   const navigate = useNavigate();
 
   const isValid = type && VALID_KEYS.includes(type);
-  const active: SectionKey = isValid ? (type as SectionKey) : "daily";
-  const ActiveIcon = REPORT_SECTIONS.find((s) => s.key === active)?.icon || Calendar;
+  const active: SectionKey = isValid ? (type as SectionKey) : "smart";
+  const ActiveIcon = REPORT_SECTIONS.find((s) => s.key === active)?.icon || Sparkles;
 
   useEffect(() => {
     if (!type || !VALID_KEYS.includes(type)) {
-      navigate("/reports/daily", { replace: true });
+      navigate("/reports/smart", { replace: true });
     }
   }, [type, navigate]);
 
@@ -74,6 +76,7 @@ const Reports = () => {
       </div>
 
       <div className="min-w-0">
+        {active === "smart" && <SmartInsightsReport />}
         {active === "daily" && <DailyReport />}
         {active === "sales" && <SalesReport />}
         {active === "orders" && <OrderReport />}

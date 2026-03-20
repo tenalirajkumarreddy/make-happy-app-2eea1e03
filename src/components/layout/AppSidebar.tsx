@@ -23,6 +23,8 @@ import {
   Megaphone,
   HandCoins,
   FileText,
+  Warehouse,
+  Image,
   Search,
   Map,
 } from "lucide-react";
@@ -45,6 +47,7 @@ interface NavItem {
 const REPORT_CHILDREN: NavChild[] = [
   { label: "Daily Reports", path: "/reports/daily" },
   { label: "Sales Reports", path: "/reports/sales" },
+  { label: "Smart Insights", path: "/reports/smart" },
   { label: "Order Reports", path: "/reports/orders" },
   { label: "Agent Performance", path: "/reports/agent" },
   { label: "Product Reports", path: "/reports/product" },
@@ -57,6 +60,8 @@ const NAV_BY_ROLE: Record<string, { main: NavItem[]; secondary: NavItem[] }> = {
     main: [
       { label: "Dashboard", path: "/", icon: LayoutDashboard },
       { label: "Products", path: "/products", icon: Package },
+      { label: "Inventory", path: "/inventory", icon: Warehouse },
+      { label: "Banners", path: "/banners", icon: Image },
       { label: "Customers", path: "/customers", icon: Users },
       { label: "Stores", path: "/stores", icon: Store },
       { label: "Routes", path: "/routes", icon: Route },
@@ -78,6 +83,8 @@ const NAV_BY_ROLE: Record<string, { main: NavItem[]; secondary: NavItem[] }> = {
     main: [
       { label: "Dashboard", path: "/", icon: LayoutDashboard },
       { label: "Products", path: "/products", icon: Package },
+      { label: "Inventory", path: "/inventory", icon: Warehouse },
+      { label: "Banners", path: "/banners", icon: Image },
       { label: "Customers", path: "/customers", icon: Users },
       { label: "Stores", path: "/stores", icon: Store },
       { label: "Routes", path: "/routes", icon: Route },

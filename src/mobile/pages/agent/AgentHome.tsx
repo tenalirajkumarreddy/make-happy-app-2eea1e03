@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   MapPin, Phone, Navigation2, TrendingUp,
-  Store, ShoppingCart, Loader2, Banknote, Wallet, ArrowRight, CheckCircle2, Eye,
+  Store, ShoppingCart, Loader2, Banknote, Wallet, ArrowRight, CheckCircle2, Eye, Package,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +17,8 @@ import { addToQueue } from "@/lib/offlineQueue";
 interface Props {
   onOpenStore: (store: StoreOption) => void;
   onGoRecord: (store: StoreOption, action: "sale" | "payment") => void;
+  onGoProducts?: () => void;
+  onOpenAddEntity?: () => void;
 }
 
 interface RouteStoreLite {
@@ -67,7 +69,7 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-export function AgentHome({ onOpenStore, onGoRecord }: Props) {
+export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEntity }: Props) {
   const { user, profile } = useAuth();
   const today = new Date().toISOString().split("T")[0];
   const [currentPosition, setCurrentPosition] = useState<{ lat: number; lng: number } | null>(null);
@@ -398,6 +400,30 @@ export function AgentHome({ onOpenStore, onGoRecord }: Props) {
           </div>
         </div>
       )}
+
+      {/* Quick Actions Grid */}
+      <div className="px-4 grid grid-cols-2 gap-3 mb-6 mt-4">
+        <Button
+          variant="outline"
+          className="h-20 flex flex-col items-center justify-center gap-2 border-slate-200 dark:border-slate-800 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-900"
+          onClick={() => onGoProducts?.()}
+        >
+          <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center">
+            <Package className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+          </div>
+          <span className="text-xs font-medium">Product Catalog</span>
+        </Button>
+        <Button
+          variant="outline"
+          className="h-20 flex flex-col items-center justify-center gap-2 border-slate-200 dark:border-slate-800 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-900"
+          onClick={() => onOpenAddEntity?.()}
+        >
+          <div className="h-8 w-8 rounded-full bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
+            <Store className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+          </div>
+          <span className="text-xs font-medium">Add Customer/Store</span>
+        </Button>
+      </div>
 
       {(pendingOrders?.length ?? 0) > 0 && (
         <div className="px-4 mt-5">
