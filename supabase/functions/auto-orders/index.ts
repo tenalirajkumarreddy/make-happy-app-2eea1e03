@@ -43,7 +43,7 @@ Deno.serve(async (req: Request) => {
     const ordersToInsert = [];
 
     for (const store of stores || []) {
-      const uniqueSuffix = `${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+      const uniqueSuffix = String(Math.floor(10000000 + Math.random() * 90000000));
       ordersToInsert.push({
         display_id: `ORD-${uniqueSuffix}`,
         store_id: store.id,
