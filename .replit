@@ -17,7 +17,6 @@ build = ["npm", "run", "build"]
 VITE_SUPABASE_URL = "https://vrhptrtgrpftycvojaqo.supabase.co"
 VITE_SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZyaHB0cnRncnBmdHljdm9qYXFvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxMTg5ODMsImV4cCI6MjA4ODY5NDk4M30.ek7gNnoghGYYNrdZr-BttzRn6xY0aVqGU31pVcQ67mU"
 VITE_SUPABASE_PROJECT_ID = "vrhptrtgrpftycvojaqo"
-GITHUB_TOKEN = "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"
 
 [workflows]
 runButton = "Project"
