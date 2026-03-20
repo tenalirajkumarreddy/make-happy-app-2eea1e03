@@ -15,6 +15,7 @@ import { usePermission } from "@/hooks/usePermission";
 import { addToQueue } from "@/lib/offlineQueue";
 import { logActivity } from "@/lib/activityLogger";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
+import { resolveCreditLimit } from "@/lib/creditLimit";
 import { StorePickerSheet, StoreOption } from "@/mobile/components/StorePickerSheet";
 import { cn } from "@/lib/utils";
 
@@ -140,21 +141,9 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
     },
   });
 
-  const creditLimitInfo = (() => {
-    if (!store || !storeTypes || !customers) return null;
-    const storeType = (storeTypes as any[]).find((st: any) => st.id === store.store_type_id);
-    if (!storeType) return null;
-    const customer = (customers as any[]).find((c: any) => c.id === store.customer_id);
-    if (!customer) return null;
-
-    if (customer.credit_limit_override !== null && customer.credit_limit_override !== undefined) {
-      return { limit: Number(customer.credit_limit_override), source: "customer override" };
-    }
-
-    const isKyc = customer.kyc_status === "approved";
-    const limit = isKyc ? Number(storeType.credit_limit_kyc || 0) : Number(storeType.credit_limit_no_kyc || 0);
-    return { limit, source: isKyc ? "KYC" : "Non-KYC" };
-  })();
+  const creditLimitInfo = store && storeTypes && customers
+    ? resolveCreditLimit(store, storeTypes as any[], customers as any[])
+    : null;
 
   const creditExceeded = !!(creditLimitInfo && creditLimitInfo.limit > 0 && newOutstanding > creditLimitInfo.limit);
   const creditWarning = !!(creditLimitInfo && creditLimitInfo.limit > 0 && newOutstanding > creditLimitInfo.limit * 0.8 && !creditExceeded);

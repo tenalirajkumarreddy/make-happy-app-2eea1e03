@@ -59,16 +59,6 @@ const Handovers = () => {
         }
       }
 
-      if (profiles.length === 0) {
-        const { data: fallbackProfiles, error: fallbackError } = await supabase
-          .from("profiles")
-          .select("user_id, full_name, email, phone")
-          .eq("is_active", true)
-          .neq("user_id", user!.id);
-        if (fallbackError) throw fallbackError;
-        profiles = (fallbackProfiles || []) as typeof profiles;
-      }
-
       const roleLabel: Record<string, string> = {
         super_admin: "Admin",
         manager: "Manager",

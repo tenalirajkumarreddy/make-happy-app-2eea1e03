@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { logActivity } from "@/lib/activityLogger";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { addToQueue } from "@/lib/offlineQueue";
+import { resolveCreditLimit } from "@/lib/creditLimit";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2, Plus, Trash2, Download, IndianRupee, CreditCard, Banknote, Clock, UserCircle, Store as StoreIcon, Package, X, CalendarIcon } from "lucide-react";
 import { QrStoreSelector } from "@/components/shared/QrStoreSelector";
@@ -249,22 +250,9 @@ const Sales = () => {
   const newOutstanding = oldOutstanding + outstandingFromSale;
 
   // Credit limit calculation
-  const creditLimitInfo = (() => {
-    if (!selectedStore || !storeTypes || !customers) return null;
-    const storeType = storeTypes.find((st) => st.id === selectedStore.store_type_id);
-    if (!storeType) return null;
-    const customer = customers.find((c) => c.id === selectedStore.customer_id);
-    if (!customer) return null;
-
-    // Check for customer-level override first
-    if (customer.credit_limit_override !== null && customer.credit_limit_override !== undefined) {
-      return { limit: Number(customer.credit_limit_override), source: "customer override", isKyc: customer.kyc_status === "approved" };
-    }
-
-    const isKyc = customer.kyc_status === "approved";
-    const limit = isKyc ? Number(storeType.credit_limit_kyc || 0) : Number(storeType.credit_limit_no_kyc || 0);
-    return { limit, source: isKyc ? "KYC" : "Non-KYC", isKyc };
-  })();
+  const creditLimitInfo = selectedStore && storeTypes && customers
+    ? resolveCreditLimit(selectedStore, storeTypes, customers)
+    : null;
 
   const creditExceeded = creditLimitInfo && creditLimitInfo.limit > 0 && newOutstanding > creditLimitInfo.limit;
   const creditWarning = creditLimitInfo && creditLimitInfo.limit > 0 && newOutstanding > creditLimitInfo.limit * 0.8 && !creditExceeded;

@@ -40,18 +40,12 @@ Deno.serve(async (req: Request) => {
 
     if (storesErr) throw storesErr;
 
-    // Get current order count for display_id generation
-    const { count } = await supabase
-      .from("orders")
-      .select("id", { count: "exact", head: true });
-
-    let orderNum = count || 0;
     const ordersToInsert = [];
 
     for (const store of stores || []) {
-      orderNum++;
+      const uniqueSuffix = `${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
       ordersToInsert.push({
-        display_id: `ORD-${String(orderNum).padStart(6, "0")}`,
+        display_id: `ORD-${uniqueSuffix}`,
         store_id: store.id,
         customer_id: store.customer_id,
         order_type: "simple",

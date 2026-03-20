@@ -26,7 +26,7 @@ const Dashboard = () => {
       const [salesRes, txnRes, customersRes, storesRes, ordersRes, todaySalesRes] = await Promise.all([
         supabase.from("sales").select("total_amount, cash_amount, upi_amount, created_at, stores(store_type_id, store_types(name))").gte("created_at", thirtyDaysAgo + "T00:00:00"),
         supabase.from("transactions").select("total_amount, cash_amount, upi_amount").gte("created_at", thirtyDaysAgo + "T00:00:00"),
-        supabase.from("customers").select("id").eq("is_active", true),
+        supabase.from("customers").select("*", { count: "exact", head: true }).eq("is_active", true),
         supabase.from("stores").select("id, outstanding").eq("is_active", true),
         supabase.from("orders").select("id, status, display_id, stores(name), created_at").eq("status", "pending").order("created_at", { ascending: false }).limit(5),
         supabase.from("sales").select("total_amount, cash_amount, upi_amount").gte("created_at", today + "T00:00:00"),
@@ -70,7 +70,7 @@ const Dashboard = () => {
 
       return {
         todayTotal, todayCash, todayUpi, totalOutstanding, overdueStores,
-        customerCount: customersRes.data?.length || 0,
+        customerCount: customersRes.count || 0,
         storeCount: allStores.length,
         pendingOrders: ordersRes.data || [],
         weeklySales,

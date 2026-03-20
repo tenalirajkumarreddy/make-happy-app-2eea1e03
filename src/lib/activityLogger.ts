@@ -8,7 +8,7 @@ export async function logActivity(
   entityId?: string,
   metadata?: Record<string, any>
 ) {
-  await supabase.from("activity_logs").insert({
+  const { error } = await supabase.from("activity_logs").insert({
     user_id: userId,
     action,
     entity_type: entityType,
@@ -16,4 +16,13 @@ export async function logActivity(
     entity_id: entityId || null,
     metadata: metadata || {},
   });
+
+  if (error) {
+    console.error("[activityLogger] Failed to log activity:", error.message, {
+      action,
+      entityType,
+      entityName,
+      entityId,
+    });
+  }
 }
