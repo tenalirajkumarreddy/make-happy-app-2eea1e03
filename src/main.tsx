@@ -25,8 +25,21 @@ async function initCapacitor() {
   }
 }
 
+// Register service worker for offline support and push notifications
+async function registerServiceWorker() {
+  if ("serviceWorker" in navigator && import.meta.env.PROD) {
+    try {
+      const reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+      console.log("[SW] Registered:", reg.scope);
+    } catch (err) {
+      console.error("[SW] Registration failed:", err);
+    }
+  }
+}
+
 // Render app first, then initialize native features
 createRoot(document.getElementById("root")!).render(<App />);
 
-// Initialize Capacitor after render
+// Initialize Capacitor and service worker after render
 initCapacitor();
+registerServiceWorker();

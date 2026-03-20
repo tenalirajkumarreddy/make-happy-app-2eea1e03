@@ -62,6 +62,7 @@ import { CustomerSales } from "./pages/customer/CustomerSales";
 import { CustomerOrders } from "./pages/customer/CustomerOrders";
 import { CustomerTransactions } from "./pages/customer/CustomerTransactions";
 import { CustomerProfile } from "./pages/customer/CustomerProfile";
+import { CustomerKyc } from "./pages/customer/CustomerKyc";
 import { PosHome } from "./pages/pos/PosHome";
 import type { StoreOption } from "./components/StorePickerSheet";
 
@@ -77,6 +78,7 @@ const TAB_TITLES: Record<MobileTab, string> = {
   transactions: "Transactions",
   profile: "Profile",
   handovers: "Handovers",
+  kyc: "KYC Verification",
 };
 
 type StaffRole = "super_admin" | "manager";
@@ -304,12 +306,14 @@ function CustomerApp() {
             onOpenOrders={() => setTab("orders")}
             onOpenTransactions={() => setTab("transactions")}
             onOpenProfile={() => setTab("profile")}
+            onOpenKyc={() => setTab("kyc")}
           />
         )}
         {tab === "sales" && <CustomerSales selectedStoreId={selectedStoreId} />}
         {tab === "orders" && <CustomerOrders selectedStoreId={selectedStoreId} onStoreChange={setSelectedStoreId} />}
         {tab === "transactions" && <CustomerTransactions selectedStoreId={selectedStoreId} />}
         {tab === "profile" && <CustomerProfile />}
+        {tab === "kyc" && <CustomerKyc />}
       </main>
 
       <BottomNav tab={tab} onChange={setTab} tabs={CUSTOMER_TABS} />

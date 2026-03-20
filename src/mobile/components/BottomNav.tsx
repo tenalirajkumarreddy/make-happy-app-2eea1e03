@@ -1,7 +1,7 @@
 import { Home, Map, ScanLine, History, Users, ClipboardList, ReceiptIndianRupee } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type MobileTab = "home" | "routes" | "scan" | "history" | "customers" | "orders" | "record" | "sales" | "transactions" | "profile";
+export type MobileTab = "home" | "routes" | "scan" | "history" | "customers" | "orders" | "record" | "sales" | "transactions" | "profile" | "kyc" | "handovers";
 
 interface MobileTabItem {
   id: MobileTab;

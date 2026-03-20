@@ -18,8 +18,11 @@ A full-featured business management web app built with React, Vite, TypeScript, 
 - Handovers & daily balance snapshots
 - Promotional banners, product categories, pricing tiers
 - Activity logs, analytics & reports
-- Push notifications (via Supabase Realtime)
-- Offline support (PWA + offline queue)
+- Push notifications (Supabase Realtime in-app + Web Push service worker in production)
+- GPS route tracking with live agent location markers and historical trail polylines on map
+- Customer KYC self-upload (selfie + Aadhaar front/back → auto-submits for review)
+- Offline support (PWA service worker + offline queue)
+- Android APK via Capacitor (`npm run build:apk:debug` / `npm run build:apk:release`)
 
 ## Environment Variables
 Set in `.env` and Replit `[userenv.shared]`:
@@ -30,6 +33,7 @@ Set in `.env` and Replit `[userenv.shared]`:
 - `VITE_FIREBASE_AUTH_DOMAIN` — Firebase auth domain
 - `VITE_FIREBASE_PROJECT_ID` — Firebase project ID
 - `VITE_FIREBASE_APP_ID` — Firebase app ID
+- `VITE_VAPID_PUBLIC_KEY` — VAPID public key for Web Push (optional, needed for background push)
 
 ## Supabase Edge Functions
 Located in `supabase/functions/` (deployed to Supabase, not Replit):
@@ -43,7 +47,18 @@ Located in `supabase/functions/` (deployed to Supabase, not Replit):
 ## Development
 - Run: `npm run dev` (served on port 5000)
 - Workflow: "Start application" → `npm run dev`
-- Build: `npm run build`
+- Build web: `npm run build`
+- Build Android debug APK: `npm run build:apk:debug`
+- Build Android release APK: `npm run build:apk:release`
+- Sync Capacitor: `npm run sync:android`
 
 ## Database
-Supabase PostgreSQL with full RLS policies. Schema migrations in `supabase/migrations/`. The complete SQL is also in `TOTAL_MIGRATION.sql`.
+Supabase PostgreSQL with full RLS policies. Schema migrations in `supabase/migrations/`. The complete consolidated SQL (all migrations combined) is in `aqua_prime_schema.sql` — run this on a fresh Supabase project to set up everything.
+
+### Key tables added in latest migration (20260320000001):
+- `location_pings` — GPS trail breadcrumbs per route session (indexed, RLS-protected)
+- `push_subscriptions` — Web Push endpoint/keys per user for background notifications
+
+### Storage buckets required (create in Supabase dashboard):
+- `kyc-documents` — private, max 10MB, for customer KYC uploads
+- `entity-photos` — public, max 5MB, for store/product/customer photos

@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, Phone, ShoppingCart, Wallet, ClipboardList, UserCircle2 } from "lucide-react";
+import { Loader2, Phone, ShoppingCart, Wallet, ClipboardList, UserCircle2, ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveCustomer } from "@/lib/resolveCustomer";
 import { useAuth } from "@/contexts/AuthContext";
@@ -13,6 +13,7 @@ interface Props {
   onOpenOrders: () => void;
   onOpenTransactions: () => void;
   onOpenProfile: () => void;
+  onOpenKyc?: () => void;
 }
 
 interface CustomerRow {
@@ -52,6 +53,7 @@ export function CustomerHome({
   onOpenOrders,
   onOpenTransactions,
   onOpenProfile,
+  onOpenKyc,
 }: Props) {
   const { user, profile } = useAuth();
 
@@ -190,6 +192,7 @@ export function CustomerHome({
             <QuickButton label="Order" onClick={onOpenOrders} icon={ShoppingCart} />
             <QuickButton label="Ledger" onClick={onOpenTransactions} icon={Wallet} />
             <QuickButton label="Profile" onClick={onOpenProfile} icon={UserCircle2} />
+            {onOpenKyc && <QuickButton label="KYC" onClick={onOpenKyc} icon={ShieldCheck} />}
           </div>
           {settings && (
             <button
