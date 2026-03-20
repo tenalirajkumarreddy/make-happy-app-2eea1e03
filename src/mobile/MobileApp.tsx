@@ -21,6 +21,8 @@ import {
   History,
   Shield,
   Settings,
+  Megaphone, 
+  Warehouse,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { isNativeApp } from "@/lib/capacitorUtils";
@@ -44,6 +46,8 @@ import Handovers from "@/pages/Handovers";
 import Reports from "@/pages/Reports";
 import Analytics from "@/pages/Analytics";
 import Activity from "@/pages/Activity";
+import Inventory from "@/pages/Inventory";
+import Banners from "@/pages/Banners";
 import AccessControl from "@/pages/AccessControl";
 import SettingsPage from "@/pages/Settings";
 import MapPage from "@/pages/MapPage";
@@ -96,35 +100,34 @@ const STAFF_MENU_BY_ROLE: Record<StaffRole, StaffMenuItem[]> = {
   super_admin: [
     { id: "dashboard", label: "Dashboard", path: "/", icon: LayoutDashboard },
     { id: "products", label: "Products", path: "/products", icon: Package },
+    { id: "inventory", label: "Inventory", path: "/inventory", icon: Warehouse },
     { id: "customers", label: "Customers", path: "/customers", icon: Users },
     { id: "stores", label: "Stores", path: "/stores", icon: Store },
-    { id: "routes", label: "Routes", path: "/routes", icon: Route },
-    { id: "sales", label: "Sales", path: "/sales", icon: ShoppingCart },
+    { id: "orders", label: "Orders", path: "/orders", icon: ShoppingCart },
+    { id: "sales", label: "Sales", path: "/sales", icon:  HandCoins },
     { id: "transactions", label: "Transactions", path: "/transactions", icon: Receipt },
-    { id: "orders", label: "Orders", path: "/orders", icon: ClipboardList },
-    { id: "handovers", label: "Handovers", path: "/handovers", icon: HandCoins },
-    { id: "map", label: "Map", path: "/map", icon: Map },
-    { id: "reports", label: "Reports", path: "/reports", icon: FileText },
-    { id: "analytics", label: "Analytics", path: "/analytics", icon: BarChart3 },
-    { id: "activity", label: "Activity Log", path: "/activity", icon: History },
+    { id: "routes", label: "Routes", path: "/routes", icon: Route },
+    { id: "handovers", label: "Handovers", path: "/handovers", icon: ClipboardList },
+    { id: "reports", label: "Reports", path: "/reports", icon: BarChart3 },
+    { id: "banners", label: "Banners", path: "/banners", icon: Megaphone },
+    { id: "activity", label: "Activity", path: "/activity", icon: History },
     { id: "access", label: "Access Control", path: "/access-control", icon: Shield },
     { id: "settings", label: "Settings", path: "/settings", icon: Settings },
   ],
   manager: [
     { id: "dashboard", label: "Dashboard", path: "/", icon: LayoutDashboard },
     { id: "products", label: "Products", path: "/products", icon: Package },
+    { id: "inventory", label: "Inventory", path: "/inventory", icon: Warehouse },
     { id: "customers", label: "Customers", path: "/customers", icon: Users },
     { id: "stores", label: "Stores", path: "/stores", icon: Store },
-    { id: "routes", label: "Routes", path: "/routes", icon: Route },
-    { id: "sales", label: "Sales", path: "/sales", icon: ShoppingCart },
+    { id: "orders", label: "Orders", path: "/orders", icon: ShoppingCart },
+    { id: "sales", label: "Sales", path: "/sales", icon: HandCoins },
     { id: "transactions", label: "Transactions", path: "/transactions", icon: Receipt },
-    { id: "orders", label: "Orders", path: "/orders", icon: ClipboardList },
-    { id: "handovers", label: "Handovers", path: "/handovers", icon: HandCoins },
-    { id: "map", label: "Map", path: "/map", icon: Map },
-    { id: "reports", label: "Reports", path: "/reports", icon: FileText },
-    { id: "analytics", label: "Analytics", path: "/analytics", icon: BarChart3 },
-    { id: "activity", label: "Activity Log", path: "/activity", icon: History },
-    { id: "settings", label: "Settings", path: "/settings", icon: Settings },
+    { id: "routes", label: "Routes", path: "/routes", icon: Route },
+    { id: "handovers", label: "Handovers", path: "/handovers", icon: ClipboardList },
+    { id: "reports", label: "Reports", path: "/reports", icon: BarChart3 },
+    { id: "banners", label: "Banners", path: "/banners", icon: Megaphone },
+    { id: "activity", label: "Activity", path: "/activity", icon: History },
   ],
 };
 
@@ -148,6 +151,8 @@ function StaffApp({ role }: { role: StaffRole }) {
     if (matchPath("/routes/:id", path)) return <RouteDetail />;
 
     if (path.startsWith("/reports")) return <Reports />;
+    if (path === "/inventory") return <Inventory />;
+    if (path === "/banners") return <Banners />;
     if (path === "/products") return <Products />;
     if (path === "/customers") return <Customers />;
     if (path === "/stores") return <Stores />;

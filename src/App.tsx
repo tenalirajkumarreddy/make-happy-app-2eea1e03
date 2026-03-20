@@ -13,6 +13,7 @@ import AgentDashboard from "./pages/AgentDashboard";
 import MarketerDashboard from "./pages/MarketerDashboard";
 import PosDashboard from "./pages/PosDashboard";
 import Products from "./pages/Products";
+import Inventory from "./pages/Inventory";
 import Customers from "./pages/Customers";
 import CustomerDetail from "./pages/CustomerDetail";
 import Stores from "./pages/Stores";
@@ -39,6 +40,7 @@ import CustomerProfile from "./pages/CustomerProfile";
 import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
+import Banners from "./pages/Banners";
 
 const queryClient = new QueryClient();
 
@@ -74,12 +76,14 @@ const App = () => (
               <Route path="/" element={<DashboardRouter />} />
               {/* Admin & Manager only */}
               <Route path="/products" element={<RoleGuard allowed={["super_admin", "manager"]}><Products /></RoleGuard>} />
+              <Route path="/inventory" element={<RoleGuard allowed={["super_admin", "manager", "pos"]}><Inventory /></RoleGuard>} />
               <Route path="/analytics" element={<RoleGuard allowed={["super_admin", "manager"]}><Analytics /></RoleGuard>} />
               <Route path="/reports" element={<RoleGuard allowed={["super_admin", "manager"]}><Reports /></RoleGuard>} />
               <Route path="/reports/:type" element={<RoleGuard allowed={["super_admin", "manager"]}><Reports /></RoleGuard>} />
               <Route path="/activity" element={<RoleGuard allowed={["super_admin", "manager"]}><Activity /></RoleGuard>} />
               <Route path="/access-control" element={<RoleGuard allowed={["super_admin"]}><AccessControl /></RoleGuard>} />
               <Route path="/settings" element={<RoleGuard allowed={["super_admin", "manager"]}><Settings /></RoleGuard>} />
+              <Route path="/banners" element={<RoleGuard allowed={["super_admin", "manager"]}><Banners /></RoleGuard>} />
               <Route path="/map" element={<RoleGuard allowed={["super_admin", "manager"]}><MapPage /></RoleGuard>} />
               {/* Admin, Manager, Agent, Marketer */}
               <Route path="/customers" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer"]}><Customers /></RoleGuard>} />

@@ -6,8 +6,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { useRouteAccess } from "@/hooks/useRouteAccess";
 import { addToQueue } from "@/lib/offlineQueue";
-import { getCurrentPosition } from "@/lib/capacitorUtils";
-import { ArrowLeft, Check, ChevronRight, Loader2, MapPin, Store, User, UserPlus } from "lucide-react";
+import { getCurrentPosition, takePhoto } from "@/lib/capacitorUtils";
+import { ArrowLeft, Check, ChevronRight, Loader2, MapPin, Store, User, UserPlus, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,7 +34,33 @@ export default function AddCustomerStore({ onClose }: { onClose: () => void }) {
   const [custPhone, setCustPhone] = useState("");
   const [custEmail, setCustEmail] = useState("");
   // const [custPhoto, setCustPhoto] = useState("");
-  const custPhoto = ""; // Optional feature for future
+  const [custPhoto, setCustPhoto] = useState("");
+  const [storePhoto, setStorePhoto] = useState("");
+
+  const handleTakePhoto = async (target: "customer" | "store") => {
+    const dataUrl = await takePhoto();
+    if (!dataUrl) return;
+
+    // Upload to Supabase
+    try {
+        const res = await fetch(dataUrl);
+        const blob = await res.blob();
+        const ext = "jpg";
+        const path = `${target}s/${crypto.randomUUID()}.${ext}`; // customers/uuid.jpg or stores/uuid.jpg
+
+        const { error } = await supabase.storage.from("entity-photos").upload(path, blob);
+        if (error) throw error;
+
+        const { data: { publicUrl } } = supabase.storage.from("entity-photos").getPublicUrl(path);
+        
+        if (target === "customer") setCustPhoto(publicUrl);
+        else setStorePhoto(publicUrl);
+        
+        toast.success("Photo uploaded");
+    } catch (err: any) {
+        toast.error("Photo upload failed: " + err.message);
+    }
+  };
 
   // Store Data
   const [storeName, setStoreName] = useState("");
@@ -343,6 +369,17 @@ export default function AddCustomerStore({ onClose }: { onClose: () => void }) {
                         <Label>Address (Optional)</Label>
                         <Textarea value={address} onChange={e => setAddress(e.target.value)} placeholder="Street, landmark..." />
                     </div>
+
+                    <div className="space-y-2">
+                        <Label>Store Photo</Label>
+                        <div className="flex gap-2">
+                            <Button variant="outline" className="h-12 flex-1" onClick={() => handleTakePhoto("store")} type="button">
+                                <Camera className="h-4 w-4 mr-2 text-blue-600" />
+                                Upload Photo
+                            </Button>
+                        </div>
+                        {storePhoto && <p className="text-xs text-blue-600 flex items-center mt-1"><Check className="h-3 w-3 mr-1" /> Photo uploaded</p>}
+                    </div>
                 </div>
             )}
 
@@ -401,6 +438,8 @@ export default function AddCustomerStore({ onClose }: { onClose: () => void }) {
     </div>
   );
 }
+
+
 
 
 

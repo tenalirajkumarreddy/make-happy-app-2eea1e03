@@ -25,6 +25,7 @@ import {
   FileText,
   Search,
   Map,
+  BoxSelect,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -57,6 +58,7 @@ const NAV_BY_ROLE: Record<string, { main: NavItem[]; secondary: NavItem[] }> = {
     main: [
       { label: "Dashboard", path: "/", icon: LayoutDashboard },
       { label: "Products", path: "/products", icon: Package },
+      { label: "Inventory", path: "/inventory", icon: BoxSelect },
       { label: "Customers", path: "/customers", icon: Users },
       { label: "Stores", path: "/stores", icon: Store },
       { label: "Routes", path: "/routes", icon: Route },
@@ -69,6 +71,7 @@ const NAV_BY_ROLE: Record<string, { main: NavItem[]; secondary: NavItem[] }> = {
     secondary: [
       { label: "Reports", path: "/reports", icon: FileText, children: REPORT_CHILDREN },
       { label: "Analytics", path: "/analytics", icon: BarChart3 },
+      { label: "Banners", path: "/banners", icon: Megaphone },
       { label: "Activity Log", path: "/activity", icon: History },
       { label: "Access Control", path: "/access-control", icon: Shield },
       { label: "Settings", path: "/settings", icon: Settings },
@@ -78,6 +81,7 @@ const NAV_BY_ROLE: Record<string, { main: NavItem[]; secondary: NavItem[] }> = {
     main: [
       { label: "Dashboard", path: "/", icon: LayoutDashboard },
       { label: "Products", path: "/products", icon: Package },
+      { label: "Inventory", path: "/inventory", icon: BoxSelect },
       { label: "Customers", path: "/customers", icon: Users },
       { label: "Stores", path: "/stores", icon: Store },
       { label: "Routes", path: "/routes", icon: Route },
@@ -89,6 +93,7 @@ const NAV_BY_ROLE: Record<string, { main: NavItem[]; secondary: NavItem[] }> = {
     ],
     secondary: [
       { label: "Reports", path: "/reports", icon: FileText, children: REPORT_CHILDREN },
+      { label: "Banners", path: "/banners", icon: Megaphone },
       { label: "Analytics", path: "/analytics", icon: BarChart3 },
       { label: "Activity Log", path: "/activity", icon: History },
       { label: "Settings", path: "/settings", icon: Settings },
@@ -122,6 +127,7 @@ const NAV_BY_ROLE: Record<string, { main: NavItem[]; secondary: NavItem[] }> = {
     main: [
       { label: "Dashboard", path: "/", icon: LayoutDashboard },
       { label: "Sales", path: "/sales", icon: ShoppingCart },
+      { label: "Inventory", path: "/inventory", icon: BoxSelect },
       { label: "Handovers", path: "/handovers", icon: HandCoins },
     ],
     secondary: [],

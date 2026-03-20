@@ -45,6 +45,7 @@ const Products = () => {
   const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+  const [initialStock, setInitialStock] = useState("0");
   const [saving, setSaving] = useState(false);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -78,7 +79,7 @@ const Products = () => {
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    const { error } = await supabase.from("products").insert({
+    const { data: newProduct, error } = await supabase.from("products").insert({
       name,
       sku,
       base_price: parseFloat(price) || 0,
@@ -86,16 +87,52 @@ const Products = () => {
       category: category || null,
       description: description || null,
       image_url: imageUrl || null,
-    });
-    setSaving(false);
+    }).select().single();
+    
     if (error) {
       toast.error(error.message);
+      setSaving(false);
     } else {
+      // Add initial stock if provided
+      const stockQty = parseFloat(initialStock);
+      if (stockQty > 0 && newProduct) {
+          try {
+              // Get Main Warehouse (or first available)
+              const { data: wh } = await supabase.from("warehouses").select("id").eq("type", "main").maybeSingle();
+              let warehouseId = wh?.id;
+              
+              if (!warehouseId) {
+                  const { data: anyWh } = await supabase.from("warehouses").select("id").limit(1).maybeSingle();
+                  warehouseId = anyWh?.id;
+              }
+
+              if (warehouseId) {
+                  await supabase.from("product_stock").insert({
+                      product_id: newProduct.id,
+                      warehouse_id: warehouseId,
+                      quantity: stockQty
+                  });
+                  
+                  await supabase.from("stock_movements").insert({
+                      product_id: newProduct.id,
+                      warehouse_id: warehouseId,
+                      quantity: stockQty,
+                      type: "adjustment",
+                      reason: "Initial Stock"
+                  });
+              }
+          } catch (err) {
+              console.error("Failed to set initial stock", err);
+              toast.error("Product created but failed to set initial stock");
+          }
+      }
+
       toast.success("Product added");
       logActivity(user!.id, "Added product", "product", name);
       setShowAdd(false);
       resetForm();
       qc.invalidateQueries({ queryKey: ["products"] });
+      setSaving(false);
     }
   };
 
@@ -147,7 +184,7 @@ const Products = () => {
   };
 
   const resetForm = () => {
-    setName(""); setSku(""); setPrice(""); setUnit("PCS"); setCategory(""); setDescription(""); setImageUrl("");
+    setName(""); setSku(""); setPrice(""); setUnit("PCS"); setCategory(""); setDescription(""); setImageUrl(""); setInitialStock("0");
   };
 
   const toggleSelect = (id: string) => {
@@ -310,6 +347,13 @@ const Products = () => {
               <div><Label>Base Price (₹)</Label><Input type="number" value={price} onChange={e => setPrice(e.target.value)} required className="mt-1" /></div>
               <div><Label>Unit</Label><Input value={unit} onChange={e => setUnit(e.target.value)} className="mt-1" /></div>
             </div>
+            
+            <div>
+                <Label>Initial Stock</Label>
+                <Input type="number" value={initialStock} onChange={e => setInitialStock(e.target.value)} className="mt-1" placeholder="0" />
+                <p className="text-[10px] text-muted-foreground mt-1">This will be added to the Main Warehouse.</p>
+            </div>
+
             <div>
               <Label>Category</Label>
               <Select value={category || "__none__"} onValueChange={(v) => setCategory(v === "__none__" ? "" : v)}>

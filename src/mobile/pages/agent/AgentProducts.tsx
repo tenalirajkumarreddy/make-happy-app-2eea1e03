@@ -17,7 +17,8 @@ export function AgentProducts() {
   const { data: products, isLoading } = useQuery({
     queryKey: ["mobile-products"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // Fetch products
+      const { data: productsData, error } = await supabase
         .from("products")
         .select(`
           *,
@@ -27,7 +28,23 @@ export function AgentProducts() {
         .order("name");
       
       if (error) throw error;
-      return data;
+
+      // Fetch stock levels
+      const { data: stockData } = await supabase
+        .from("product_stock")
+        .select("product_id, quantity");
+
+      // Map stock to products (sum quantity across warehouses if multiple)
+      const stockMap: Record<string, number> = {};
+      stockData?.forEach((item) => {
+        stockMap[item.product_id] = (stockMap[item.product_id] || 0) + Number(item.quantity);
+      });
+
+      // Merge
+      return productsData.map(p => ({
+        ...p,
+        stock_quantity: stockMap[p.id] || 0
+      }));
     },
     staleTime: 1000 * 60 * 5, // 5 minutes cache
   });
@@ -204,4 +221,3 @@ export function AgentProducts() {
     </div>
   );
 }
-
