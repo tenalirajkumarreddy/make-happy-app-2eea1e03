@@ -1,11 +1,9 @@
-/**
+﻿/**
  * Proximity validation utility.
  * Checks if the user is within a given radius of a target location.
  */
-
-const PROXIMITY_RADIUS_METERS = 100;
-
-function getDistanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+export const PROXIMITY_RADIUS_METERS = 100;
+export function getDistanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371000;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLng = ((lng2 - lng1) * Math.PI) / 180;
@@ -14,8 +12,7 @@ function getDistanceMeters(lat1: number, lng1: number, lat2: number, lng2: numbe
     Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
-
-function getCurrentPosition(): Promise<{ lat: number; lng: number } | null> {
+export function getCurrentPosition(): Promise<{ lat: number; lng: number } | null> {
   return new Promise((resolve) => {
     if (!navigator.geolocation) {
       resolve(null);
@@ -28,7 +25,6 @@ function getCurrentPosition(): Promise<{ lat: number; lng: number } | null> {
     );
   });
 }
-
 export interface ProximityResult {
   withinRange: boolean;
   distance: number | null;
@@ -37,7 +33,6 @@ export interface ProximityResult {
   /** true when the check was skipped because the store has no GPS coordinates */
   skippedNoGps: boolean;
 }
-
 /**
  * Checks if the user is within PROXIMITY_RADIUS_METERS of the target store.
  * Returns { withinRange, distance, userLocation, message, skippedNoGps }.
@@ -48,28 +43,85 @@ export async function checkProximity(
   storeLat: number | null,
   storeLng: number | null
 ): Promise<ProximityResult> {
-  // No store GPS → skip proximity check, but flag it explicitly
-  if (!storeLat || !storeLng) {
-    return { withinRange: true, distance: null, userLocation: null, message: "Store has no GPS coordinates — proximity check skipped", skippedNoGps: true };
+  const currentPos = await getCurrentPosition();
+  if (!currentPos) {
+    return {
+      withinRange: false,
+      distance: null,
+      userLocation: null,
+      message: "Could not retrieve user location.",
+      skippedNoGps: false,
+    };
   }
 
-  const loc = await getCurrentPosition();
-  if (!loc) {
-    return { withinRange: false, distance: null, userLocation: null, message: "Could not get your location. Please enable GPS and try again.", skippedNoGps: false };
+  if (storeLat === null || storeLng === null) {
+    return {
+      withinRange: true, // Allow bypassing if store has no GPS
+      distance: null,
+      userLocation: currentPos,
+      message: "Store has no GPS coordinates set. Proceeding...",
+      skippedNoGps: true,
+    };
   }
 
-  const dist = getDistanceMeters(loc.lat, loc.lng, storeLat, storeLng);
-  if (dist <= PROXIMITY_RADIUS_METERS) {
-    return { withinRange: true, distance: Math.round(dist), userLocation: loc, message: `You are ${Math.round(dist)}m from the store`, skippedNoGps: false };
-  }
+  const dist = getDistanceMeters(currentPos.lat, currentPos.lng, storeLat, storeLng);
+  const withinRange = dist <= PROXIMITY_RADIUS_METERS;
 
   return {
-    withinRange: false,
-    distance: Math.round(dist),
-    userLocation: loc,
-    message: `You are ${Math.round(dist)}m away. Must be within ${PROXIMITY_RADIUS_METERS}m of the store.`,
+    withinRange,
+    distance: dist,
+    userLocation: currentPos,
+    message: withinRange
+      ? "You are at the location."
+      : `You are ${(dist - PROXIMITY_RADIUS_METERS).toFixed(0)}m too far.`,
     skippedNoGps: false,
   };
 }
 
-export { PROXIMITY_RADIUS_METERS, getDistanceMeters, getCurrentPosition };
+/**
+ * Sorts a list of locations using a greedy Nearest Neighbor algorithm starting from the origin.
+ * Locations with missing coordinates are excluded from optimization but appended at the end.
+ */
+export function nearestNeighborOrder<T extends { id: string; lat: number | null; lng: number | null }>(
+  origin: { lat: number; lng: number },
+  locations: T[]
+): T[] {
+  const withCoords: T[] = [];
+  const withoutCoords: T[] = [];
+
+  locations.forEach((loc) => {
+    if (loc.lat != null && loc.lng != null) {
+      withCoords.push(loc);
+    } else {
+      withoutCoords.push(loc);
+    }
+  });
+
+  const sorted: T[] = [];
+  let currentPos = origin;
+
+  while (withCoords.length > 0) {
+    let nearestIndex = -1;
+    let minDist = Infinity;
+
+    for (let i = 0; i < withCoords.length; i++) {
+        // We know lat/lng are not null here because of the filter above
+        const dist = getDistanceMeters(currentPos.lat, currentPos.lng, withCoords[i].lat!, withCoords[i].lng!);
+        if (dist < minDist) {
+            minDist = dist;
+            nearestIndex = i;
+        }
+    }
+
+    if (nearestIndex !== -1) {
+        const nearest = withCoords[nearestIndex];
+        sorted.push(nearest);
+        withCoords.splice(nearestIndex, 1);
+        currentPos = { lat: nearest.lat!, lng: nearest.lng! };
+    } else {
+        break; 
+    }
+  }
+
+  return [...sorted, ...withoutCoords];
+}

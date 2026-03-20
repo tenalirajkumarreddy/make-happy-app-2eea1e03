@@ -28,6 +28,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermission } from "@/hooks/usePermission";
+import { showErrorToast } from "@/lib/errorUtils";
 import { QrScanner } from "@/components/shared/QrScanner";
 import { parseUpiQr } from "@/lib/upiParser";
 import { StoreLedger } from "@/components/stores/StoreLedger";
@@ -172,7 +173,7 @@ const StoreDetail = () => {
     setTransferSaving(true);
     const { error } = await supabase.from("stores").update({ customer_id: transferCustomerId }).eq("id", id);
     setTransferSaving(false);
-    if (error) { toast.error(error.message); return; }
+    if (error) { showErrorToast(error); return; }
     const newCust = allCustomers?.find((c) => c.id === transferCustomerId);
     logActivity(user!.id, `Transferred store to ${newCust?.name}`, "store", store.display_id, id);
     toast.success(`Store transferred to ${newCust?.name}`);
@@ -259,8 +260,7 @@ const StoreDetail = () => {
       raw_data: rawData,
     });
     if (error) {
-      if (error.message.includes("duplicate")) toast.error("This QR is already linked to a store");
-      else toast.error(error.message);
+      showErrorToast(error);
       return;
     }
     toast.success("QR code linked to store");
@@ -269,13 +269,17 @@ const StoreDetail = () => {
 
   const handleDeleteQr = async (qrId: string) => {
     const { error } = await supabase.from("store_qr_codes").delete().eq("id", qrId);
-    if (error) { toast.error(error.message); return; }
+    if (error) { showErrorToast(error); return; }
     toast.success("QR code removed");
     qc.invalidateQueries({ queryKey: ["store-qr-codes", id] });
   };
 
   const handleAdjustBalance = async () => {
     if (!store || !id || !user) return;
+    if (!canEditBalance) {
+      toast.error("You do not have permission to adjust balance");
+      return;
+    }
     const newBal = parseFloat(newBalanceInput);
     if (isNaN(newBal)) { toast.error("Enter a valid amount"); return; }
     const oldBal = Number(store.outstanding);
@@ -294,7 +298,7 @@ const StoreDetail = () => {
       adjusted_by: user.id,
     });
 
-    if (error) { toast.error(error.message); setAdjustSaving(false); return; }
+    if (error) { showErrorToast(error); setAdjustSaving(false); return; }
 
     await supabase.from("stores").update({ outstanding: newBal }).eq("id", id);
     logActivity(user.id, "Balance adjustment", "store", store.display_id, id, { old: oldBal, new: newBal, adjustment });
@@ -306,7 +310,7 @@ const StoreDetail = () => {
     setAdjustReason("");
     qc.invalidateQueries({ queryKey: ["store", id] });
     qc.invalidateQueries({ queryKey: ["balance-adjustments", id] });
-  };
+    };
 
   const startEditing = () => {
     if (!store || !store.is_active) return;
@@ -354,7 +358,7 @@ const StoreDetail = () => {
       })
       .eq("id", id);
     setSaving(false);
-    if (error) { toast.error(error.message); return; }
+    if (error) { showErrorToast(error); return; }
     toast.success("Store updated");
     setEditing(false);
     qc.invalidateQueries({ queryKey: ["store", id] });
@@ -373,7 +377,7 @@ const StoreDetail = () => {
     setToggling(true);
     const { error } = await supabase.from("stores").update({ is_active: newVal }).eq("id", id);
     setToggling(false);
-    if (error) { toast.error(error.message); return; }
+    if (error) { showErrorToast(error); return; }
     toast.success(`Store ${newVal ? "activated" : "deactivated"}`);
     setEditing(false);
     qc.invalidateQueries({ queryKey: ["store", id] });

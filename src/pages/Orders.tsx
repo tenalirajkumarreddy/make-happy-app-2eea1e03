@@ -1,12 +1,15 @@
 import { PageHeader } from "@/components/shared/PageHeader";
+import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import { DataTable } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { logActivity } from "@/lib/activityLogger";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
+import { addToQueue } from "@/lib/offlineQueue";
 import { useAuth } from "@/contexts/AuthContext";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { Loader2, Plus, Trash2, XCircle, CheckCircle2, Download, X, CalendarIcon } from "lucide-react";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { useState, useEffect } from "react";
@@ -25,6 +28,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { showErrorToast } from "@/lib/errorUtils";
 
 interface OrderItem {
   product_id: string;
@@ -34,13 +38,13 @@ interface OrderItem {
 const Orders = () => {
   const { user } = useAuth();
   const qc = useQueryClient();
+  const { isOnline } = useOnlineStatus();
   const [showAdd, setShowAdd] = useState(false);
   const [saving, setSaving] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
   const [cancelOrderId, setCancelOrderId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelling, setCancelling] = useState(false);
-  const [deliveringId, setDeliveringId] = useState<string | null>(null);
   const [confirmDeliverId, setConfirmDeliverId] = useState<string | null>(null);
   const [delivering, setDelivering] = useState(false);
 
@@ -50,14 +54,13 @@ const Orders = () => {
   const [filterFrom, setFilterFrom] = useState(thirtyDaysAgo);
   const [filterTo, setFilterTo] = useState(today);
   const [filterCustomer, setFilterCustomer] = useState("all");
-  const PAGE_SIZE = 100;
-  const [loadedPages, setLoadedPages] = useState(1);
+  const PAGE_SIZE = 50;
+  // const [loadedPages, setLoadedPages] = useState(1);
 
-  // Reset to page 1 whenever any filter changes
-  useEffect(() => {
-    setLoadedPages(1);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, filterFrom, filterTo, filterCustomer]);
+  // Reset to page 1 handled by query key change in useInfiniteQuery
+  // useEffect(() => {
+  //   setLoadedPages(1);
+  // }, [statusFilter, filterFrom, filterTo, filterCustomer]);
 
   // Form state
   const [customerId, setCustomerId] = useState("");
@@ -66,9 +69,15 @@ const Orders = () => {
   const [requirementNote, setRequirementNote] = useState("");
   const [orderItems, setOrderItems] = useState<OrderItem[]>([{ product_id: "", quantity: 1 }]);
 
-  const { data: orders, isLoading, isFetching } = useQuery({
-    queryKey: ["orders", statusFilter, filterFrom, filterTo, filterCustomer, loadedPages],
-    queryFn: async () => {
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading
+  } = useInfiniteQuery({
+    queryKey: ["orders", statusFilter, filterFrom, filterTo, filterCustomer],
+    queryFn: async ({ pageParam = 0 }) => {
       let query = supabase
         .from("orders")
         .select("*, stores(name), customers(name)")
@@ -79,14 +88,20 @@ const Orders = () => {
       if (filterTo) query = query.lte("created_at", filterTo + "T23:59:59");
       if (filterCustomer !== "all") query = query.eq("customer_id", filterCustomer);
       // Cursor pagination
-      query = query.range(0, loadedPages * PAGE_SIZE - 1);
+      query = query.range(pageParam * PAGE_SIZE, (pageParam + 1) * PAGE_SIZE - 1);
       const { data, error } = await query;
       if (error) throw error;
       return data;
     },
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => {
+      if (!lastPage || lastPage.length < PAGE_SIZE) return undefined;
+      return allPages.length;
+    },
   });
 
-  const hasMoreOrders = (orders?.length || 0) >= loadedPages * PAGE_SIZE;
+  const orders = data?.pages.flatMap((page) => page) || [];
+  const hasMoreOrders = hasNextPage;
 
   const { data: customers } = useQuery({
     queryKey: ["customers"],
@@ -130,51 +145,99 @@ const Orders = () => {
     if (orderType === "detailed" && !orderItems.some((i) => i.product_id)) { toast.error("Please add at least one product"); return; }
     setSaving(true);
 
-    const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "ORD", seq_name: "ord_display_seq" });
+    if (!isOnline) {
+      const offlineDisplayId = `ORD-OFF-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
+      const orderPayload = {
+        display_id: offlineDisplayId,
+        store_id: storeId,
+        customer_id: customerId,
+        order_type: orderType,
+        source: "manual",
+        created_by: user!.id,
+        requirement_note: requirementNote || null,
+        created_at: new Date().toISOString(),
+      };
 
-    const { data: order, error } = await supabase.from("orders").insert({
-      display_id: displayId,
-      store_id: storeId,
-      customer_id: customerId,
-      order_type: orderType,
-      source: "manual",
-      created_by: user!.id,
-      requirement_note: requirementNote || null,
-    }).select("id").single();
+      const orderItemsPayload = orderType === "detailed"
+        ? orderItems.filter((i) => i.product_id).map((i) => ({
+            product_id: i.product_id,
+            quantity: i.quantity,
+          }))
+        : [];
 
-    if (error) { toast.error(error.message); setSaving(false); return; }
+      await addToQueue({
+        id: crypto.randomUUID(),
+        type: "order",
+        payload: {
+          orderData: orderPayload,
+          orderItems: orderItemsPayload,
+        },
+        createdAt: new Date().toISOString(),
+      } as any);
 
-    if (orderType === "detailed") {
-      const validItems = orderItems.filter((i) => i.product_id);
-      if (validItems.length > 0) {
-        await supabase.from("order_items").insert(
-          validItems.map((i) => ({ order_id: order.id, product_id: i.product_id, quantity: i.quantity }))
-        );
-      }
+      toast.warning("You're offline — order queued");
+      setSaving(false);
+      setShowAdd(false);
+      resetForm();
+      qc.invalidateQueries({ queryKey: ["orders"] });
+      return;
     }
 
-    logActivity(user!.id, "Created order", "order", displayId, order.id);
-    toast.success("Order created");
+    try {
+      const client = supabase as any;
+      const rpcResult = await client.rpc("generate_display_id", { prefix: "ORD", seq_name: "ord_display_seq" });
+      if (rpcResult.error) throw rpcResult.error;
+      const displayId = rpcResult.data;
 
-    // Notify admins/managers
-    const storeName = stores?.find((s) => s.id === storeId)?.name || "store";
-    getAdminUserIds().then((ids) => {
-      const others = ids.filter((id) => id !== user!.id);
-      if (others.length > 0) {
-        sendNotificationToMany(others, {
-          title: "New Order Created",
-          message: `Order ${displayId} (${orderType}) placed for ${storeName}`,
-          type: "order",
-          entityType: "order",
-          entityId: order.id,
-        });
+      const ordersTable: any = client.from("orders");
+      const { data: order, error } = await ordersTable.insert({
+        display_id: displayId,
+        store_id: storeId,
+        customer_id: customerId,
+        order_type: orderType,
+        source: "manual",
+        created_by: user!.id,
+        requirement_note: requirementNote || null,
+      }).select("id").single();
+
+      if (error) throw error;
+
+      if (orderType === "detailed") {
+        const validItems = orderItems.filter((i) => i.product_id);
+        if (validItems.length > 0) {
+          const itemsTable: any = client.from("order_items");
+          await itemsTable.insert(
+            validItems.map((i) => ({ order_id: order.id, product_id: i.product_id, quantity: i.quantity }))
+          );
+        }
       }
-    });
 
-    setSaving(false);
-    setShowAdd(false);
-    resetForm();
-    qc.invalidateQueries({ queryKey: ["orders"] });
+      logActivity(user!.id, "Created order", "order", displayId, order.id);
+      toast.success("Order created");
+
+      // Notify admins/managers
+      const storeName = stores?.find((s) => s.id === storeId)?.name || "store";
+      getAdminUserIds().then((ids) => {
+        const others = ids.filter((id) => id !== user!.id);
+        if (others.length > 0) {
+          sendNotificationToMany(others, {
+            title: "New Order Created",
+            message: `Order ${displayId} (${orderType}) placed for ${storeName}`,
+            type: "order",
+            entityType: "order",
+            entityId: order.id,
+          });
+        }
+      });
+
+      setSaving(false);
+      setShowAdd(false);
+      resetForm();
+      qc.invalidateQueries({ queryKey: ["orders"] });
+    } catch (err: any) {
+      showErrorToast(err);
+      setSaving(false);
+    }
   };
 
   const handleMarkDelivered = async (orderId: string) => {
@@ -275,7 +338,7 @@ const Orders = () => {
       header: "Actions",
       accessor: (row: any) => row.status === "pending" ? (
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" className="h-7 text-xs text-green-600" onClick={() => setConfirmDeliverId(row.id)} disabled={deliveringId === row.id}>
+          <Button variant="ghost" size="sm" className="h-7 text-xs text-green-600" onClick={() => setConfirmDeliverId(row.id)}>
             <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
             Deliver
           </Button>
@@ -344,12 +407,13 @@ const Orders = () => {
         <span className="ml-auto text-xs text-muted-foreground">{filteredOrders.length}{hasMoreOrders ? "+" : ""} result{filteredOrders.length !== 1 ? "s" : ""}</span>
       </div>
 
-      <DataTable
+      <VirtualDataTable
         columns={columns}
         data={filteredOrders}
         searchKey="display_id"
         searchPlaceholder="Search by order ID..."
         emptyMessage={statusFilter === "all" ? "No orders created yet." : `No ${statusFilter} orders.`}
+        height="calc(100vh - 240px)"
         renderMobileCard={(row: any) => (
           <div className="rounded-xl border bg-card p-4 shadow-sm hover:shadow-md transition-shadow active:bg-muted/30">
             <div className="flex items-start justify-between gap-2">
@@ -386,8 +450,8 @@ const Orders = () => {
 
       {hasMoreOrders && (
         <div className="flex justify-center pt-2">
-          <Button variant="outline" size="sm" onClick={() => setLoadedPages((p) => p + 1)} disabled={isFetching} className="gap-1.5">
-            {isFetching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+          <Button variant="outline" size="sm" onClick={() => fetchNextPage()} disabled={isFetchingNextPage} className="gap-1.5">
+            {isFetchingNextPage ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
             Load more
           </Button>
         </div>

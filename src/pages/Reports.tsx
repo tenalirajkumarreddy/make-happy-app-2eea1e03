@@ -14,8 +14,10 @@ import OrderReport from "@/components/reports/OrderReport";
 import AgentPerformanceReport from "@/components/reports/AgentPerformanceReport";
 import ProductReport from "@/components/reports/ProductReport";
 import PaymentOutstandingReport from "@/components/reports/PaymentOutstandingReport";
+import SmartInsightsReport from "@/components/reports/SmartInsightsReport";
 
 const REPORT_SECTIONS = [
+  { key: "smart", label: "Smart Insights", icon: TrendingDown }, // Added Smart Insights as first option
   { key: "daily", label: "Daily Reports", icon: Calendar },
   { key: "sales", label: "Sales Reports", icon: ShoppingCart },
   { key: "orders", label: "Order Reports", icon: ClipboardList },
@@ -33,12 +35,12 @@ const Reports = () => {
   const navigate = useNavigate();
 
   const isValid = type && VALID_KEYS.includes(type);
-  const active: SectionKey = isValid ? (type as SectionKey) : "daily";
+  const active: SectionKey = isValid ? (type as SectionKey) : "smart"; // Default to smart
   const ActiveIcon = REPORT_SECTIONS.find((s) => s.key === active)?.icon || Calendar;
 
   useEffect(() => {
     if (!type || !VALID_KEYS.includes(type)) {
-      navigate("/reports/daily", { replace: true });
+      navigate("/reports/smart", { replace: true });
     }
   }, [type, navigate]);
 
@@ -80,6 +82,7 @@ const Reports = () => {
         {active === "agent" && <AgentPerformanceReport />}
         {active === "product" && <ProductReport />}
         {(active === "payment" || active === "outstanding") && <PaymentOutstandingReport />}
+        {active === "smart" && <SmartInsightsReport />}
       </div>
     </div>
   );

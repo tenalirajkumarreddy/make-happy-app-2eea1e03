@@ -2,15 +2,17 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, CalendarIcon } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { format } from "date-fns";
+import { format, addDays } from "date-fns";
+import { calculateSalesForecast } from "@/lib/forecastEngine";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  LineChart, Line, PieChart, Pie, Cell, AreaChart, Area, Legend,
+  LineChart, Line, PieChart, Pie, Cell, AreaChart, Area, Legend, ComposedChart, Scatter
 } from "recharts";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const COLORS = ["hsl(217, 91%, 50%)", "hsl(142, 72%, 42%)", "hsl(38, 92%, 50%)", "hsl(280, 65%, 60%)", "hsl(0, 72%, 51%)"];
 
@@ -152,52 +154,7 @@ const Analytics = () => {
         collections: dailyCollections[d],
       }));
 
-      // Top stores by sales in period
-      const storeSalesMap: Record<string, { name: string; amount: number; count: number }> = {};
-      sales.forEach((s: any) => {
-        const storeId = (s.stores as any)?.name ? (s.stores as any).name : "Unknown";
-        if (!storeSalesMap[storeId]) storeSalesMap[storeId] = { name: storeId, amount: 0, count: 0 };
-        storeSalesMap[storeId].amount += Number(s.total_amount);
-        storeSalesMap[storeId].count += 1;
-      });
-      const topStoresBySales = Object.values(storeSalesMap)
-        .sort((a, b) => b.amount - a.amount)
-        .slice(0, 10);
-
-      // KYC status distribution
-      const kycBuckets: Record<string, number> = { verified: 0, pending: 0, not_requested: 0, rejected: 0 };
-      customers.forEach((c) => { const k = c.kyc_status || "not_requested"; kycBuckets[k] = (kycBuckets[k] || 0) + 1; });
-      const kycData = [
-        { name: "Verified", value: kycBuckets.verified, color: "hsl(142, 72%, 42%)" },
-        { name: "Pending", value: kycBuckets.pending, color: "hsl(38, 92%, 50%)" },
-        { name: "Not Requested", value: kycBuckets.not_requested, color: "hsl(215, 20%, 65%)" },
-        { name: "Rejected", value: kycBuckets.rejected, color: "hsl(0, 72%, 51%)" },
-      ].filter((k) => k.value > 0);
-
-      // Outstanding distribution histogram
-      const outBuckets: Record<string, number> = { "₹0": 0, "₹1–1K": 0, "₹1K–5K": 0, "₹5K–20K": 0, "₹20K+": 0 };
-      stores.forEach((s) => {
-        const amt = Number(s.outstanding);
-        if (amt === 0) outBuckets["₹0"]++;
-        else if (amt <= 1000) outBuckets["₹1–1K"]++;
-        else if (amt <= 5000) outBuckets["₹1K–5K"]++;
-        else if (amt <= 20000) outBuckets["₹5K–20K"]++;
-        else outBuckets["₹20K+"]++;
-      });
-      const outstandingHistogram = Object.entries(outBuckets).map(([range, count]) => ({ range, count }));
-
-      // Route-wise sales & completion
-      const routeMap: Record<string, { name: string; sales: number; totalStores: number; visitedStores: Set<string> }> = {};
-      routes.forEach((r) => { routeMap[r.id] = { name: r.name, sales: 0, totalStores: 0, visitedStores: new Set() }; });
-      stores.forEach((s: any) => { if (s.route_id && routeMap[s.route_id]) routeMap[s.route_id].totalStores++; });
-      visits.forEach((v: any) => { const rid = v.stores?.route_id; if (rid && routeMap[rid]) routeMap[rid].visitedStores.add(v.store_id); });
-      sales.forEach((s: any) => { const rid = (s.stores as any)?.route_id; if (rid && routeMap[rid]) routeMap[rid].sales += Number(s.total_amount); });
-      const routeSalesData = Object.values(routeMap)
-        .filter((r) => r.totalStores > 0)
-        .map((r) => ({ name: r.name, sales: r.sales, completion: r.totalStores > 0 ? Math.round((r.visitedStores.size / r.totalStores) * 100) : 0 }))
-        .sort((a, b) => b.sales - a.sales);
-
-      return { salesTrend, paymentSplit, outstandingData, orderData, totalCash, totalUpi, leaderboard, customerGrowth, storeAnalytics, revenueVsCollections, topStoresBySales, kycData, outstandingHistogram, routeSalesData };
+      return { salesTrend, paymentSplit, outstandingData, orderData, totalCash, totalUpi, leaderboard, customerGrowth, storeAnalytics, revenueVsCollections, topStoresBySales, kycData, outstandingHistogram, routeSalesData, rangeDays };
     },
   });
 
@@ -208,43 +165,62 @@ const Analytics = () => {
   const d = data!;
   const hasData = d.salesTrend.some((s) => s.amount > 0) || d.paymentSplit.length > 0;
 
+  // Forecast Calculation
+  const forecastData = useMemo(() => {
+    if (!d || !d.salesTrend || d.salesTrend.length < 5) return [];
+
+    const trendData = d.salesTrend.map(s => ({ date: s.date, amount: s.amount }));
+    return calculateSalesForecast(trendData, d.rangeDays, 14).map(pt => ({
+      date: pt.date,
+      // Re-map to match recharts expected format for ComposedChart
+      actual: pt.actual,
+      forecast: pt.forecast,
+      fullDate: pt.fullDate,
+    }));
+  }, [d]);
+
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader title="Analytics" subtitle="Business intelligence and performance metrics" />
 
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-4">
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" className="h-8 text-xs gap-1.5 justify-start font-normal min-w-[110px]">
-              <CalendarIcon className="h-3 w-3 shrink-0" />
-              {from ? format(new Date(from + "T00:00:00"), "dd MMM yy") : "From"}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
-            <Calendar mode="single" selected={from ? new Date(from + "T00:00:00") : undefined} onSelect={(d) => setFrom(d ? format(d, "yyyy-MM-dd") : "")} initialFocus />
-          </PopoverContent>
-        </Popover>
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" className="h-8 text-xs gap-1.5 justify-start font-normal min-w-[110px]">
-              <CalendarIcon className="h-3 w-3 shrink-0" />
-              {to ? format(new Date(to + "T00:00:00"), "dd MMM yy") : "To"}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
-            <Calendar mode="single" selected={to ? new Date(to + "T00:00:00") : undefined} onSelect={(d) => setTo(d ? format(d, "yyyy-MM-dd") : "")} initialFocus />
-          </PopoverContent>
-        </Popover>
-        <Button size="sm" onClick={applyFilter} disabled={isLoading} className="h-8">
-          {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Apply"}
-        </Button>
-        <Button size="sm" variant="ghost" className="h-8 text-xs text-muted-foreground" onClick={() => {
-          const t = new Date(); const f = new Date(t); f.setDate(t.getDate() - 29);
-          const fStr = f.toISOString().split("T")[0]; const tStr = t.toISOString().split("T")[0];
-          setFrom(fStr); setTo(tStr); setPending({ from: fStr, to: tStr });
-        }}>Last 30 days</Button>
-      </div>
+      <Tabs defaultValue="overview" className="space-y-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <TabsList>
+                <TabsTrigger value="overview">Overview</TabsTrigger>
+                <TabsTrigger value="forecast">Sales Forecast</TabsTrigger>
+            </TabsList>
 
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-1">
+                <Popover>
+                <PopoverTrigger asChild>
+                    <Button variant="ghost" className="h-8 text-xs gap-1.5 justify-start font-normal min-w-[110px]">
+                    <CalendarIcon className="h-3 w-3 shrink-0" />
+                    {from ? format(new Date(from + "T00:00:00"), "dd MMM yy") : "From"}
+                    </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="end">
+                    <Calendar mode="single" selected={from ? new Date(from + "T00:00:00") : undefined} onSelect={(d) => setFrom(d ? format(d, "yyyy-MM-dd") : "")} initialFocus />
+                </PopoverContent>
+                </Popover>
+                <div className="text-muted-foreground">-</div>
+                <Popover>
+                <PopoverTrigger asChild>
+                    <Button variant="ghost" className="h-8 text-xs gap-1.5 justify-start font-normal min-w-[110px]">
+                    <CalendarIcon className="h-3 w-3 shrink-0" />
+                    {to ? format(new Date(to + "T00:00:00"), "dd MMM yy") : "To"}
+                    </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="end">
+                    <Calendar mode="single" selected={to ? new Date(to + "T00:00:00") : undefined} onSelect={(d) => setTo(d ? format(d, "yyyy-MM-dd") : "")} initialFocus />
+                </PopoverContent>
+                </Popover>
+                <Button size="sm" onClick={applyFilter} disabled={isLoading} className="h-8">
+                {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Apply"}
+                </Button>
+            </div>
+        </div>
+
+      <TabsContent value="overview" className="space-y-4">
       {!hasData && d.leaderboard.length === 0 ? (
         <div className="rounded-xl border bg-card p-12 text-center">
           <p className="text-lg font-semibold">No data yet</p>
@@ -521,6 +497,42 @@ const Analytics = () => {
           </div>
         </>
       )}
+      </TabsContent>
+
+      <TabsContent value="forecast" className="space-y-4">
+        <div className="rounded-xl border bg-card p-6">
+            <div className="mb-6">
+                <h3 className="text-lg font-semibold">Sales Forecast (Next 14 Days)</h3>
+                <p className="text-sm text-muted-foreground">Linear projection based on selected historical data.</p>
+            </div>
+            
+            {forecastData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={400}>
+                    <ComposedChart data={forecastData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                        <XAxis dataKey="date" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                        <YAxis tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => `₹${v}`} />
+                        <Tooltip 
+                            contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }}
+                            formatter={(v: number, name: string) => [
+                                `₹${v.toLocaleString()}`, 
+                                name === "actual" ? "Actual Sales" : "Trend/Forecast"
+                            ]}
+                            labelFormatter={(label) => `Date: ${label}`}
+                        />
+                        <Legend />
+                        <Area type="monotone" dataKey="actual" fill="hsl(var(--primary))" fillOpacity={0.1} stroke="hsl(var(--primary))" strokeWidth={2} name="Actual" />
+                        <Line type="monotone" dataKey="forecast" stroke="hsl(280, 65%, 60%)" strokeWidth={2} strokeDasharray="5 5" name="Forecast" dot={false} />
+                    </ComposedChart>
+                </ResponsiveContainer>
+            ) : (
+                <div className="py-20 text-center text-muted-foreground">
+                    Not enough data to generate a forecast. Please select a wider date range or record more sales.
+                </div>
+            )}
+        </div>
+      </TabsContent>
+      </Tabs>
     </div>
   );
 };

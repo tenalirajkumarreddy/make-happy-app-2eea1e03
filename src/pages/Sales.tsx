@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { showErrorToast } from "@/lib/errorUtils";
 
 function exportCSV(data: any[], columns: { header: string; key: string }[], filename: string) {
   const header = columns.map((c) => c.header).join(",");
@@ -181,10 +182,25 @@ const Sales = () => {
     },
   });
 
-  const selectedStore = stores?.find((s) => s.id === storeId);
-  const selectedStoreTypeId = selectedStore?.store_type_id;
+    const selectedStore = stores?.find((s) => s.id === storeId);
+    const selectedStoreTypeId = selectedStore?.store_type_id;
 
-  const { data: availableProducts } = useQuery({
+    // New: Fetch global stock levels
+    const { data: stockLevels } = useQuery({
+      queryKey: ["product-stock-levels"],
+      queryFn: async () => {
+          const { data } = await supabase.from("product_stock").select("product_id, quantity");
+          const map: Record<string, number> = {};
+          data?.forEach(s => {
+              map[s.product_id] = (map[s.product_id] || 0) + Number(s.quantity);
+          });
+          return map;
+      },
+      // Refresh often or use realtime if critical
+      staleTime: 1000 * 60, 
+    });
+
+    const { data: availableProducts } = useQuery({
     queryKey: ["products-for-sale", selectedStoreTypeId, storeId],
     queryFn: async () => {
       if (!selectedStoreTypeId) return [];
@@ -215,16 +231,33 @@ const Sales = () => {
       const storePriceMap: Record<string, number> = {};
       storePricing?.forEach((p) => { storePriceMap[p.product_id] = Number(p.price); });
 
+      // Merge price and stock logic
       return productList.map((p) => {
         let effectivePrice = Number(p.base_price);
         let priceSource = "base";
         if (typePriceMap[p.id]) { effectivePrice = typePriceMap[p.id]; priceSource = "type"; }
         if (storePriceMap[p.id]) { effectivePrice = storePriceMap[p.id]; priceSource = "store"; }
+
+        // Stock from parent scope query
+        // This is safe because useQuery hooks run in parallel and component re-renders when stockLevels arrives
+        // However, referencing `stockLevels` inside queryFn is risky if it's not a dependency.
+        // Better to fetch stock INSIDE this queryFn or just map it in the component render.
+        // Let's just return the price data here, and map stock in the render loop.
+
         return { ...p, effectivePrice, priceSource };
       });
     },
     enabled: !!storeId && !!selectedStoreTypeId,
-  });
+    });
+
+    // Calculate final products with stock for rendering
+    const productsWithStock = useMemo(() => {
+      if (!availableProducts) return [];
+      return availableProducts.map(p => ({
+          ...p,
+          stock: stockLevels?.[p.id] || 0
+      }));
+    }, [availableProducts, stockLevels]);
 
   // Fetch sale items for the selected sale detail
   const { data: saleItems, isLoading: loadingSaleItems } = useQuery({
@@ -416,11 +449,7 @@ const Sales = () => {
     });
 
     if (error) {
-      if (error.message.includes("credit_limit_exceeded")) {
-        toast.error("Credit limit exceeded. Increase payment or reduce items.");
-      } else {
-        toast.error(error.message);
-      }
+      showErrorToast(error);
       setSaving(false);
       return;
     }
@@ -795,11 +824,21 @@ const Sales = () => {
                   {items.map((item, idx) => (
                     <div key={idx} className="space-y-1">
                       <div className="flex items-center gap-2">
-                        <Select value={item.product_id} onValueChange={(v) => updateItem(idx, "product_id", v)}>
+                        <Select
+                          value={item.product_id}
+                          onValueChange={(v) => updateItem(idx, "product_id", v)}
+                        >
                           <SelectTrigger className="flex-1"><SelectValue placeholder="Product" /></SelectTrigger>
                           <SelectContent>
-                            {availableProducts?.map((p: any) => (
-                              <SelectItem key={p.id} value={p.id}>{p.name} ({p.sku})</SelectItem>
+                            {productsWithStock?.map((p: any) => (
+                              <SelectItem key={p.id} value={p.id} disabled={p.stock <= 0}>
+                                <div className="flex items-center justify-between w-full gap-2">
+                                  <span>{p.name} ({p.sku})</span>
+                                  <Badge variant={p.stock > 0 ? "outline" : "destructive"} className="ml-2 text-[10px] h-5">
+                                    {p.stock > 0 ? `${p.stock} in stock` : "Out of stock"}
+                                  </Badge>
+                                </div>
+                              </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>

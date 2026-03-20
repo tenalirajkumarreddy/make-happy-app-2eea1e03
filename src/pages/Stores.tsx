@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/shared/PageHeader";
+import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import { DataTable } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
@@ -6,7 +7,7 @@ import { StorePricingDialog } from "@/components/stores/StorePricingDialog";
 import { CreateStoreWizard } from "@/components/stores/CreateStoreWizard";
 import { CsvImportDialog } from "@/components/shared/CsvImportDialog";
 import { AdvancedFilters, applyFilters, type FilterValues } from "@/components/shared/AdvancedFilters";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { DollarSign, Store, Settings2, Upload, Loader2 } from "lucide-react";
@@ -42,21 +43,37 @@ const Stores = () => {
   const [confirmBulkDeactivate, setConfirmBulkDeactivate] = useState(false);
   const [filters, setFilters] = useState<FilterValues>({});
   const qc = useQueryClient();
+  const PAGE_SIZE = 50;
+  // const [loadedPages, setLoadedPages] = useState(1);
   const canManagePricing = role === "super_admin" || role === "manager";
   const canBulk = role === "super_admin" || role === "manager";
   const canEdit = role === "super_admin" || role === "manager";
 
-  const { data: stores, isLoading } = useQuery({
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading
+  } = useInfiniteQuery({
     queryKey: ["stores"],
-    queryFn: async () => {
+    queryFn: async ({ pageParam = 0 }) => {
       const { data, error } = await supabase
         .from("stores")
         .select("*, customers(name), store_types(name), routes(name)")
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .range(pageParam * PAGE_SIZE, (pageParam + 1) * PAGE_SIZE - 1);
       if (error) throw error;
       return data;
     },
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => {
+      if (!lastPage || lastPage.length < PAGE_SIZE) return undefined;
+      return allPages.length;
+    },
   });
+
+  const stores = useMemo(() => data?.pages.flatMap((page) => page) || [], [data]);
 
   const { data: allRoutes } = useQuery({
     queryKey: ["all-routes"],
@@ -283,10 +300,10 @@ const Stores = () => {
   const filteredStores = useMemo(() => {
     return applyFilters(stores || [], filters, {
       dateField: "created_at",
-      outstandingField: "outstanding",
-      storeTypeField: "store_type_id",
       routeField: "route_id",
+      storeTypeField: "store_type_id",
       statusField: "is_active",
+      outstandingField: "outstanding",
     });
   }, [stores, filters]);
 
@@ -350,14 +367,15 @@ const Stores = () => {
         </div>
       )}
 
-      <DataTable
+      <VirtualDataTable
         columns={columns}
         data={filteredStores}
         searchKey="name"
         searchPlaceholder="Search stores..."
         onRowClick={(row) => { if (!editMode) navigate(`/stores/${row.id}`); }}
+        height="calc(100vh - 240px)"
         renderMobileCard={(row: any) => (
-          <div className={`rounded-xl border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow active:bg-muted/30 ${!row.is_active ? "opacity-60" : ""}`}>
+          <div className={`rounded-xl border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow active:bg-muted/30 ${!row.is_active ? "opacity-60" : ""}`} onClick={() => { if (!editMode) navigate(`/stores/${row.id}`); }}>
             <div className="flex">
               <div className="w-24 self-stretch shrink-0 bg-muted flex items-center justify-center overflow-hidden">
                 {row.photo_url ? (
@@ -371,14 +389,13 @@ const Stores = () => {
                   <h3 className="font-semibold text-sm text-foreground truncate">{row.name}</h3>
                   <StatusBadge status={row.is_active ? "active" : "inactive"} />
                 </div>
-                <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                  {row.customers?.name || "—"}{row.routes?.name ? ` · ${row.routes.name}` : ""}
-                </p>
-                <div className="flex items-center gap-3 mt-1.5">
-                  <span className="text-sm font-bold text-foreground">₹{Number(row.outstanding).toLocaleString()}</span>
-                  {row.store_types?.name && (
-                    <Badge variant="secondary" className="text-[10px] h-5">{row.store_types.name}</Badge>
-                  )}
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <p className="text-xs text-muted-foreground font-mono truncate">{row.display_id}</p>
+                  {row.store_types?.name && <Badge variant="outline" className="text-[10px] h-4 px-1 rounded-sm border-muted-foreground/30 text-muted-foreground">{row.store_types.name}</Badge>}
+                </div>
+                <div className="mt-2 text-right">
+                   <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Outstanding</p>
+                   <p className="font-bold text-foreground">₹{Number(row.outstanding).toLocaleString()}</p>
                 </div>
               </div>
             </div>
@@ -386,7 +403,21 @@ const Stores = () => {
         )}
       />
 
-      <CreateStoreWizard open={showAdd} onOpenChange={setShowAdd} />
+      {hasNextPage && (
+        <div className="flex justify-center pt-2">
+          <Button variant="outline" size="sm" onClick={() => fetchNextPage()} disabled={isFetchingNextPage} className="gap-1.5">
+            {isFetchingNextPage ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+            Load more
+          </Button>
+        </div>
+      )}
+
+      {showAdd && (
+        <CreateStoreWizard
+          open={showAdd}
+          onOpenChange={setShowAdd}
+        />
+      )}
 
       <CsvImportDialog
         open={showImport}

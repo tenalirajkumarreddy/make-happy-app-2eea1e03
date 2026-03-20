@@ -88,34 +88,60 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
       const storePriceMap: Record<string, number> = {};
       storePricing?.forEach((p: any) => { storePriceMap[p.product_id] = Number(p.price); });
 
+      // Fetch stock
+      const { data: stockData } = await supabase.from("product_stock").select("product_id, quantity");
+      const stockMap: Record<string, number> = {};
+      stockData?.forEach((s: any) => {
+        stockMap[s.product_id] = (stockMap[s.product_id] || 0) + Number(s.quantity);
+      });
+
       return productList.map((p: any) => {
         let effectivePrice = Number(p.base_price);
         if (typePriceMap[p.id]) effectivePrice = typePriceMap[p.id];
         if (storePriceMap[p.id]) effectivePrice = storePriceMap[p.id];
-        return { ...p, effectivePrice };
+        return { ...p, effectivePrice, stock: stockMap[p.id] || 0 };
       });
     },
     enabled: !!store?.store_type_id && !!store?.id,
-  });
+    });
 
-  const addItem = (productId: string) => {
+    const addItem = (productId: string) => {
     const exists = items.find((i) => i.product_id === productId);
+    const product = availableProducts?.find((p: any) => p.id === productId);
+
+    if (!product) return;
+
+    // Check stock
+    const currentQty = exists ? exists.quantity : 0;
+    if (product.stock <= currentQty) {
+      toast.error(`Out of stock! Only ${product.stock} available.`);
+      return;
+    }
+
     if (exists) {
       setItems(items.map((i) => i.product_id === productId ? { ...i, quantity: i.quantity + 1 } : i));
     } else {
-      const p = availableProducts?.find((pr: any) => pr.id === productId);
-      if (p) setItems([...items, { product_id: productId, quantity: 1, unit_price: p.effectivePrice }]);
+      setItems([...items, { product_id: productId, quantity: 1, unit_price: product.effectivePrice }]);
     }
-  };
+    };
 
-  const updateQty = (productId: string, delta: number) => {
+    const updateQty = (productId: string, delta: number) => {
+    const product = availableProducts?.find((p: any) => p.id === productId);
+
     setItems(items.map((i) => {
       if (i.product_id !== productId) return i;
       const newQty = Math.max(0, i.quantity + delta);
+      
+      // Check stock limit on increase
+      if (delta > 0 && product && newQty > product.stock) {
+         toast.error(`Cannot exceed stock of ${product.stock}`);
+         return i;
+      }
+
       if (newQty === 0) return null as any;
       return { ...i, quantity: newQty };
     }).filter(Boolean));
-  };
+    };
 
   const totalAmount = items.reduce((s, i) => s + i.quantity * i.unit_price, 0);
   const cash = parseFloat(cashAmount) || 0;

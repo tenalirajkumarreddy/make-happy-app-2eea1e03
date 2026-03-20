@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { isNativeApp } from "@/lib/capacitorUtils";
 
 /**
  * Subscribes to Supabase Realtime changes on all key tables
@@ -40,11 +41,26 @@ export function useRealtimeSync() {
 
   const isStaff = role && STAFF_ROLES.includes(role);
   const isAdmin = role === "super_admin" || role === "manager";
+  const isMobile = isNativeApp();
 
   useEffect(() => {
     if (!isStaff) return;
 
-    const tables = Object.keys(TABLE_QUERY_MAP);
+    let tables = Object.keys(TABLE_QUERY_MAP);
+
+    // Optimize for mobile: restrict subscription to critical operational tables for field staff
+    if (isMobile && !isAdmin) {
+      const MOBILE_CRITICAL_TABLES = new Set([
+        "sales", "sale_items",
+        "orders", "order_items",
+        "transactions",
+        "stores", "store_visits",
+        "routes", "route_sessions",
+        "customers",
+        "handovers"
+      ]);
+      tables = tables.filter(t => MOBILE_CRITICAL_TABLES.has(t));
+    }
 
     let channel = supabase.channel("global-realtime-sync");
 

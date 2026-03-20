@@ -7,6 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { isNativeApp } from "@/lib/capacitorUtils";
 
 export interface PageAction {
   label: string;
@@ -36,12 +37,13 @@ interface PageHeaderProps {
 export function PageHeader({ title, subtitle, primaryAction, actions = [], filterNode }: PageHeaderProps) {
   // Sort by priority (lower = more important)
   const sorted = [...actions].sort((a, b) => (a.priority ?? 10) - (b.priority ?? 10));
+  const isNative = isNativeApp();
 
   return (
     <div className="flex items-center justify-between gap-3 pb-4 mb-2">
       <div className="min-w-0">
-        <h1 className="page-header">{title}</h1>
-        {subtitle && <p className="page-subtitle mt-0.5 hidden sm:block">{subtitle}</p>}
+        {!isNative && <h1 className="page-header">{title}</h1>}
+        {!isNative && subtitle && <p className="page-subtitle mt-0.5 hidden sm:block">{subtitle}</p>}
       </div>
 
       <div className="flex items-center gap-2 shrink-0">

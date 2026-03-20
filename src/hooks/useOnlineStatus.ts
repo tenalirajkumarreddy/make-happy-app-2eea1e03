@@ -81,6 +81,54 @@ export function useOnlineStatus() {
             lng: lng ?? null,
           });
           if (error) throw error;
+        } else if (action.type === "order") {
+          const { orderData, orderItems } = action.payload;
+          const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "ORD", seq_name: "ord_display_seq" });
+          
+          const { data: order, error: orderError } = await supabase.from("orders").insert({
+            ...orderData,
+            display_id: displayId,
+            created_at: orderData.created_at || new Date().toISOString()
+          }).select("id").single();
+          
+          if (orderError) throw orderError;
+
+          if (orderItems && orderItems.length > 0) {
+            const items = orderItems.map((item: any) => ({
+              ...item,
+              order_id: order.id
+            }));
+            const { error: itemsError } = await supabase.from("order_items").insert(items);
+            if (itemsError) throw itemsError;
+          }
+        } else if (action.type === "customer") {
+          const { customerData } = action.payload;
+          const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "CUST", seq_name: "cust_display_seq" });
+          
+          const { error } = await supabase.from("customers").insert({
+            ...customerData,
+            display_id: displayId
+          });
+          if (error) throw error;
+        } else if (action.type === "store") {
+          const { storeData, storePricing } = action.payload;
+          const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "STR", seq_name: "str_display_seq" });
+          
+          const { data: store, error: storeError } = await supabase.from("stores").insert({
+            ...storeData,
+            display_id: displayId
+          }).select("id").single();
+          
+          if (storeError) throw storeError;
+
+          if (storePricing && storePricing.length > 0) {
+            const pricing = storePricing.map((p: any) => ({
+              ...p,
+              store_id: store.id
+            }));
+            const { error: pricingError } = await supabase.from("store_pricing").insert(pricing);
+            if (pricingError) throw pricingError;
+          }
         }
         await removeFromQueue(action.id);
         synced++;

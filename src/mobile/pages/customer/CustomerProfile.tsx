@@ -11,12 +11,20 @@ interface CustomerRow {
   phone: string | null;
   email: string | null;
   address: string | null;
+  photo_url: string | null;
 }
 
 interface StoreRow {
   id: string;
   name: string;
   outstanding: number;
+  auto_order_enabled: boolean | null; // Need to join store_types if per type, or check store override? 
+  // Wait, auto_order is on store_types.
+  store_type_id: string;
+  store_types: {
+      name: string;
+      auto_order_enabled: boolean;
+  } | null;
 }
 
 export function CustomerProfile() {
@@ -24,7 +32,7 @@ export function CustomerProfile() {
 
   const { data: customer, isLoading } = useQuery({
     queryKey: ["mobile-customer-profile", user?.id],
-    queryFn: async () => (await resolveCustomer(user!.id, "id, name, display_id, phone, email, address")) as CustomerRow | null,
+    queryFn: async () => (await resolveCustomer(user!.id, "id, name, display_id, phone, email, address, photo_url")) as CustomerRow | null,
     enabled: !!user,
   });
 
@@ -33,12 +41,12 @@ export function CustomerProfile() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("stores")
-        .select("id, name, outstanding")
+        .select("id, name, outstanding, store_type_id, store_types(name, auto_order_enabled)")
         .eq("customer_id", customer!.id)
         .eq("is_active", true)
         .order("name");
       if (error) throw error;
-      return (data as StoreRow[]) || [];
+      return (data as unknown as StoreRow[]) || [];
     },
     enabled: !!customer,
   });
@@ -73,31 +81,59 @@ export function CustomerProfile() {
   return (
     <div className="px-4 pt-4 pb-6 space-y-3">
       <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-4 shadow-sm">
-        <p className="text-base font-bold text-slate-900 dark:text-white">{customer.name}</p>
-        <p className="text-xs text-slate-500 mt-0.5">{customer.display_id}</p>
+        <div className="flex items-start gap-4">
+            <div className="h-16 w-16 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden shrink-0 border border-slate-200 dark:border-slate-600">
+                {customer.photo_url ? (
+                    <img src={customer.photo_url} alt={customer.name} className="h-full w-full object-cover" />
+                ) : (
+                    <div className="h-full w-full flex items-center justify-center text-slate-400 font-bold text-xl">
+                        {customer.name.charAt(0)}
+                    </div>
+                )}
+            </div>
+            <div className="min-w-0 flex-1">
+                <p className="text-lg font-bold text-slate-900 dark:text-white truncate">{customer.name}</p>
+                <p className="text-xs text-slate-500 mt-0.5 font-mono">{customer.display_id}</p>
+            </div>
+        </div>
 
-        <div className="mt-3 space-y-2 text-sm">
-          <InfoRow label="Phone" value={customer.phone || "—"} />
-          <InfoRow label="Email" value={customer.email || "—"} />
-          <InfoRow label="Address" value={customer.address || "—"} />
+        <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700 space-y-2 text-sm">
+            <div className="flex justify-between py-1">
+                <span className="text-slate-500">Phone</span>
+                <span className="font-medium text-slate-900 dark:text-slate-200">{customer.phone || "-"}</span>
+            </div>
+            <div className="flex justify-between py-1">
+                <span className="text-slate-500">Email</span>
+                <span className="font-medium text-slate-900 dark:text-slate-200">{customer.email || "-"}</span>
+            </div>
+            <div className="flex justify-between py-1">
+                <span className="text-slate-500">Address</span>
+                <span className="font-medium text-slate-900 dark:text-slate-200 text-right max-w-[60%]">{customer.address || "-"}</span>
+            </div>
         </div>
       </div>
 
-      <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-4 shadow-sm">
-        <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Stores Summary</p>
-        <div className="mt-2 space-y-1.5 text-sm">
-          <InfoRow label="Total Stores" value={String((stores || []).length)} />
-          <InfoRow label="Outstanding" value={`₹${totalOutstanding.toLocaleString("en-IN")}`} />
-        </div>
-        <div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-700 space-y-1.5">
-          {(stores || []).map((store) => (
-            <div key={store.id} className="flex items-center justify-between text-xs">
-              <span className="text-slate-600 dark:text-slate-300 truncate">{store.name}</span>
-              <span className="font-semibold">₹{Number(store.outstanding || 0).toLocaleString("en-IN")}</span>
+      <div className="space-y-3">
+        <h3 className="px-1 text-sm font-bold text-slate-500 uppercase tracking-wider">Stores Summary</h3>
+        {stores?.map((store) => (
+            <div key={store.id} className="rounded-xl bg-white dark:bg-slate-800 p-4 border border-slate-100 dark:border-slate-700 shadow-sm flex justify-between items-center">
+                <div>
+                    <h4 className="font-bold text-slate-900 dark:text-white">{store.name}</h4>
+                    <p className="text-xs text-slate-500 mt-0.5">{store.store_types?.name || "Unknown Type"}</p>
+                    {store.store_types?.auto_order_enabled && (
+                       <span className="mt-1.5 inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
+                         Auto Order: ON
+                       </span>
+                    )}
+                </div>
+                <div className="text-right">
+                    <p className="text-xs text-slate-500">Outstanding</p>
+                    <p className={`text-sm font-bold ${Number(store.outstanding) > 0 ? "text-red-600" : "text-slate-700 dark:text-slate-300"}`}>
+                        ₹{store.outstanding?.toLocaleString("en-IN") || "0"}
+                    </p>
+                </div>
             </div>
-          ))}
-          {(stores || []).length === 0 && <p className="text-xs text-muted-foreground text-center">No active stores</p>}
-        </div>
+        ))}
       </div>
 
       {customerCare && (

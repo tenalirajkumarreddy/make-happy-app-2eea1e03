@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { showErrorToast } from "@/lib/errorUtils";
 
 const Transactions = () => {
   const { user, role } = useAuth();
@@ -209,36 +210,10 @@ const Transactions = () => {
       old_outstanding: oldOutstanding,
       new_outstanding: newOutstanding,
       notes: notes || null,
-      ...(txnDate ? { created_at: new Date(txnDate).toISOString() } : {}),
+      created_at: txnDate ? new Date(txnDate).toISOString() : new Date().toISOString(),
     });
 
-    if (error) { toast.error(error.message); setSaving(false); return; }
-
-    await supabase.from("stores").update({ outstanding: newOutstanding }).eq("id", storeId);
-
-    // If backdated, recalculate all running balances in chronological order
-    if (txnDate) {
-      const { data: storeRow } = await supabase.from("stores").select("opening_balance").eq("id", storeId).single();
-      let runBal = Number(storeRow?.opening_balance || 0);
-      const [{ data: allSales }, { data: allTxns }] = await Promise.all([
-        supabase.from("sales").select("id, created_at, total_amount, cash_amount, upi_amount").eq("store_id", storeId).order("created_at", { ascending: true }),
-        supabase.from("transactions").select("id, created_at, total_amount").eq("store_id", storeId).order("created_at", { ascending: true }),
-      ]);
-      const timeline = [
-        ...(allSales || []).map((s: any) => ({ type: "sale", id: s.id, date: s.created_at, delta: Number(s.total_amount) - Number(s.cash_amount) - Number(s.upi_amount) })),
-        ...(allTxns || []).map((t: any) => ({ type: "txn", id: t.id, date: t.created_at, delta: -Number(t.total_amount) })),
-      ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-      for (const entry of timeline) {
-        const oldBal = runBal;
-        runBal += entry.delta;
-        if (entry.type === "sale") {
-          await supabase.from("sales").update({ old_outstanding: oldBal, new_outstanding: runBal }).eq("id", entry.id);
-        } else {
-          await supabase.from("transactions").update({ old_outstanding: oldBal, new_outstanding: runBal }).eq("id", entry.id);
-        }
-      }
-      await supabase.from("stores").update({ outstanding: runBal }).eq("id", storeId);
-    }
+    if (error) { showErrorToast(error); setSaving(false); return; }
 
     logActivity(user!.id, "Recorded transaction", "transaction", displayId, undefined, { total: totalPayment, store: storeId });
     toast.success("Transaction recorded");
@@ -479,3 +454,4 @@ const Transactions = () => {
 };
 
 export default Transactions;
+

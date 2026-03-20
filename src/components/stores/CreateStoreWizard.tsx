@@ -21,6 +21,8 @@ import {
 } from "@/components/ui/alert";
 import { getCurrentPosition } from "@/lib/capacitorUtils";
 import { useRouteAccess } from "@/hooks/useRouteAccess";
+import { addToQueue } from "@/lib/offlineQueue";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 
 interface CreateStoreWizardProps {
   open: boolean;
@@ -32,6 +34,7 @@ type Step = "customer" | "details" | "pricing";
 
 export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStoreWizardProps) {
   const { role, user } = useAuth();
+  const { isOnline } = useOnlineStatus();
   const { allowed: canSetOpeningBalance } = usePermission("opening_balance");
   const { canAccessRoute, hasMatrixRestrictions, enabledRouteIds } = useRouteAccess(user?.id, role);
   const qc = useQueryClient();
@@ -247,18 +250,36 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
         if (!newCustName.trim()) { toast.error("Customer name required"); setSaving(false); return; }
         if (!newCustPhone.trim() || newCustPhone.trim().length < 6) { toast.error("Valid customer phone number required"); setSaving(false); return; }
 
-        const { data: allCusts } = await supabase.from("customers").select("id");
-        const count = (allCusts?.length || 0) + 1;
-        const displayId = `CUST-${String(count).padStart(6, "0")}`;
-        const { data: newCust, error: custErr } = await supabase.from("customers").insert({
-          display_id: displayId,
-          name: newCustName,
-          phone: newCustPhone || null,
-          email: newCustEmail || null,
-          photo_url: newCustPhotoUrl || null,
-        }).select("id").single();
-        if (custErr) { toast.error(custErr.message); setSaving(false); return; }
-        finalCustomerId = newCust.id;
+        if (!isOnline) {
+           finalCustomerId = crypto.randomUUID();
+           const newCustPayload = {
+              id: finalCustomerId,
+              name: newCustName,
+              phone: newCustPhone || null,
+              email: newCustEmail || null,
+              photo_url: newCustPhotoUrl || null,
+              created_at: new Date().toISOString(),
+           };
+           await addToQueue({
+             id: crypto.randomUUID(),
+             type: "customer",
+             payload: { customerData: newCustPayload },
+             createdAt: new Date().toISOString(),
+           });
+        } else {
+            const { data: allCusts } = await supabase.from("customers").select("id");
+            const count = (allCusts?.length || 0) + 1;
+            const displayId = `CUST-${String(count).padStart(6, "0")}`;
+            const { data: newCust, error: custErr } = await supabase.from("customers").insert({
+              display_id: displayId,
+              name: newCustName,
+              phone: newCustPhone || null,
+              email: newCustEmail || null,
+              photo_url: newCustPhotoUrl || null,
+            }).select("id").single();
+            if (custErr) { toast.error(custErr.message); setSaving(false); return; }
+            finalCustomerId = newCust.id;
+        }
       }
 
       if (!finalCustomerId || !name.trim() || !storeTypeId) {
@@ -278,12 +299,64 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
         }
       }
 
+      const ob = obAmount && Number(obAmount) > 0 ? (obType === "credit" ? -Number(obAmount) : Number(obAmount)) : 0;
+      
+      const pricingInserts = Object.entries(priceMap)
+        .filter(([, v]) => v && Number(v) > 0)
+        .map(([productId, price]) => ({
+          product_id: productId,
+          price: Number(price),
+        }));
+
+      if (!isOnline) {
+         const newStoreId = crypto.randomUUID();
+         const storePayload = {
+            id: newStoreId,
+            name,
+            customer_id: finalCustomerId,
+            store_type_id: storeTypeId,
+            route_id: routeId || null,
+            phone: storePhone,
+            photo_url: photoUrl || null,
+            lat, lng,
+            address: address || null,
+            street: street || null,
+            area: area || null,
+            city: city || null,
+            district: district || null,
+            state: state || null,
+            pincode: pincode || null,
+            opening_balance: ob,
+            outstanding: ob,
+            created_at: new Date().toISOString(),
+         };
+         
+         await addToQueue({
+            id: crypto.randomUUID(),
+            type: "store",
+            payload: {
+                storeData: storePayload,
+                storePricing: pricingInserts // will map store_id in sync
+            },
+            createdAt: new Date().toISOString(),
+         });
+         
+         toast.warning("You're offline — store queued and will sync automatically when back online");
+         resetForm();
+         onOpenChange(false);
+         // Optimistic invalidation or local update logic can go here
+         qc.invalidateQueries({ queryKey: ["stores"] });
+         qc.invalidateQueries({ queryKey: ["customers"] });
+         setSaving(false);
+         onCreated?.();
+         return;
+      }
+
       // Create store
       const { data: allStores } = await supabase.from("stores").select("id");
       const storeCount = (allStores?.length || 0) + 1;
       const storeDisplayId = `STR-${String(storeCount).padStart(6, "0")}`;
 
-      const ob = obAmount && Number(obAmount) > 0 ? (obType === "credit" ? -Number(obAmount) : Number(obAmount)) : 0;
       const { data: newStore, error: storeErr } = await supabase.from("stores").insert({
         display_id: storeDisplayId,
         name,
@@ -307,15 +380,9 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
       if (storeErr) { toast.error(storeErr.message); setSaving(false); return; }
 
       // Save store pricing if any
-      const pricingInserts = Object.entries(priceMap)
-        .filter(([, v]) => v && Number(v) > 0)
-        .map(([productId, price]) => ({
-          store_id: newStore.id,
-          product_id: productId,
-          price: Number(price),
-        }));
-      if (pricingInserts.length > 0) {
-        await supabase.from("store_pricing").insert(pricingInserts);
+      const pricingInsertsWithId = pricingInserts.map((p) => ({ ...p, store_id: newStore.id }));
+      if (pricingInsertsWithId.length > 0) {
+        await supabase.from("store_pricing").insert(pricingInsertsWithId);
       }
 
       toast.success("Store created successfully!");

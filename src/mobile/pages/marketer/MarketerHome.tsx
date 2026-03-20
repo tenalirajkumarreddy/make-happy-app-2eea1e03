@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { ClipboardList, Loader2, Smartphone, Users, Wallet } from "lucide-react";
+import { ClipboardList, Loader2, Smartphone, Users, Wallet, Package } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -7,9 +7,11 @@ interface Props {
   onOpenOrders: () => void;
   onOpenRecord: () => void;
   onOpenStores: () => void;
+  onOpenProducts?: () => void;
+  onOpenAddEntity?: () => void;
 }
 
-export function MarketerHome({ onOpenOrders, onOpenRecord, onOpenStores }: Props) {
+export function MarketerHome({ onOpenOrders, onOpenRecord, onOpenStores, onOpenProducts, onOpenAddEntity }: Props) {
   const { user, profile } = useAuth();
 
   const { data: stats, isLoading } = useQuery({
@@ -73,29 +75,92 @@ export function MarketerHome({ onOpenOrders, onOpenRecord, onOpenStores }: Props
 
         <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-4 shadow-sm">
           <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Quick Actions</p>
-          <div className="grid grid-cols-3 gap-2">
-            <button
+          <div className="grid grid-cols-2 gap-3">
+            <div
               onClick={onOpenOrders}
-              className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-blue-600 hover:bg-blue-700 active:scale-95 transition-all shadow-sm"
+              className="bg-card rounded-xl border p-4 flex flex-col items-center justify-center gap-2 shadow-sm active:scale-95 transition-transform"
             >
-              <ClipboardList className="h-5 w-5 text-white" />
-              <span className="text-[11px] font-bold text-white text-center">Orders</span>
-            </button>
-            <button
+              <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                <ClipboardList className="h-5 w-5" />
+              </div>
+              <span className="font-medium text-sm">Orders</span>
+            </div>
+
+            <div
               onClick={onOpenRecord}
-              className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95 transition-all shadow-sm"
+              className="bg-card rounded-xl border p-4 flex flex-col items-center justify-center gap-2 shadow-sm active:scale-95 transition-transform"
             >
-              <Wallet className="h-5 w-5 text-emerald-500" />
-              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200 text-center">Record Payment</span>
-            </button>
-            <button
+              <div className="h-10 w-10 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-green-600 dark:text-green-400">
+                <Wallet className="h-5 w-5" />
+              </div>
+              <span className="font-medium text-sm">Record Sale</span>
+            </div>
+
+            <div
               onClick={onOpenStores}
-              className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95 transition-all shadow-sm"
+              className="bg-card rounded-xl border p-4 flex flex-col items-center justify-center gap-2 shadow-sm active:scale-95 transition-transform"
             >
-              <Users className="h-5 w-5 text-blue-500" />
-              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200 text-center">Stores</span>
+              <div className="h-10 w-10 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center text-purple-600 dark:text-purple-400">
+                <Users className="h-5 w-5" />
+              </div>
+              <span className="font-medium text-sm">Stores</span>
+            </div>
+
+            <div
+              onClick={onOpenProducts}
+              className="bg-card rounded-xl border p-4 flex flex-col items-center justify-center gap-2 shadow-sm active:scale-95 transition-transform"
+            >
+              <div className="h-10 w-10 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-600 dark:text-orange-400">
+                <Package className="h-5 w-5" />
+              </div>
+              <span className="font-medium text-sm">Products</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-4 shadow-sm">
+          <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Manage Stores</p>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-4 flex flex-col items-center justify-center gap-3 active:scale-[0.98] transition-transform"
+              onClick={onOpenRecord}
+            >
+              <div className="h-10 w-10 rounded-full bg-orange-100 flex items-center justify-center">
+                <Smartphone className="h-5 w-5 text-orange-600" />
+              </div>
+              <p className="text-xs font-semibold text-slate-800 dark:text-white">Record Visit</p>
+            </button>
+
+            <button
+              className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-4 flex flex-col items-center justify-center gap-3 active:scale-[0.98] transition-transform"
+              onClick={onOpenStores}
+            >
+              <div className="h-10 w-10 rounded-full bg-violet-100 flex items-center justify-center">
+                <Users className="h-5 w-5 text-violet-600" />
+              </div>
+              <p className="text-xs font-semibold text-slate-800 dark:text-white">My Stores</p>
+            </button>
+            
+            <button
+               className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-4 flex flex-col items-center justify-center gap-3 active:scale-[0.98] transition-transform"
+               onClick={() => onOpenAddEntity?.()}
+            >
+              <div className="h-10 w-10 rounded-full bg-emerald-100 flex items-center justify-center">
+                 <Package className="h-5 w-5 text-emerald-600" />
+              </div>
+              <p className="text-xs font-semibold text-slate-800 dark:text-white">New Store</p>
             </button>
           </div>
+        </div>
+      </div>
+
+      <div className="px-4 mt-8">
+        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Today's Performance</p>
+        <div className="grid grid-cols-2 gap-3">
+          <MiniStat icon={Users} label="New Customers" value="5" />
+          <MiniStat icon={ClipboardList} label="Total Orders" value="32" subValue="12 pending" />
+          <MiniStat icon={Wallet} label="Total Sales" value="₹12,340" />
+          <MiniStat icon={Smartphone} label="UPI Payments" value="₹4,560" />
         </div>
       </div>
     </div>

@@ -19,47 +19,7 @@ import {
   Loader2, Route as RouteIcon, RefreshCw, Building2, AlertTriangle,
   ChevronRight, DollarSign, CheckCircle2,
 } from "lucide-react";
-
-// ── Haversine distance (metres) ──────────────────────────────────────────────
-function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number) {
-  const R = 6371000;
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-// ── Nearest-Neighbour greedy TSP ─────────────────────────────────────────────
-function nearestNeighborOrder(
-  origin: { lat: number; lng: number },
-  stores: { id: string; lat: number | null; lng: number | null; [key: string]: any }[]
-) {
-  const withCoords = stores.filter((s) => s.lat != null && s.lng != null);
-  const withoutCoords = stores.filter((s) => s.lat == null || s.lng == null);
-
-  const ordered: typeof stores = [];
-  const unvisited = [...withCoords];
-  let cur = origin;
-
-  while (unvisited.length > 0) {
-    let nearestIdx = 0;
-    let nearestDist = Infinity;
-    for (let i = 0; i < unvisited.length; i++) {
-      const d = haversineDistance(cur.lat, cur.lng, unvisited[i].lat!, unvisited[i].lng!);
-      if (d < nearestDist) { nearestDist = d; nearestIdx = i; }
-    }
-    ordered.push(unvisited[nearestIdx]);
-    cur = { lat: unvisited[nearestIdx].lat!, lng: unvisited[nearestIdx].lng! };
-    unvisited.splice(nearestIdx, 1);
-  }
-
-  return [...ordered, ...withoutCoords];
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
+import { nearestNeighborOrder, getDistanceMeters as haversineDistance } from "@/lib/proximity";
 
 // Local types compensate for migration columns not yet in generated types
 type RouteRow = {

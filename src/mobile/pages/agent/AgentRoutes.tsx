@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { startOfDay } from "date-fns";
 import {
   CheckCircle2,
@@ -21,6 +21,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { useRouteAccess } from "@/hooks/useRouteAccess";
 import { getCurrentPosition } from "@/lib/capacitorUtils";
+import { getDistanceMeters } from "@/lib/proximity";
 
 interface RouteStore {
   id: string;
@@ -56,14 +57,6 @@ interface OrderRow {
   stores: { id: string; name: string; display_id: string; address: string | null; phone: string | null; lat: number | null; lng: number | null; route_id: string | null; routes: { name: string } | null } | null;
 }
 
-const haversineMeters = (lat1: number, lng1: number, lat2: number, lng2: number) => {
-  const R = 6371000;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLng = ((lng2 - lng1) * Math.PI) / 180;
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-};
-
 const formatDistance = (meters: number) => {
   if (meters < 1000) return `${Math.round(meters)}m`;
   return `${(meters / 1000).toFixed(1)}km`;
@@ -71,12 +64,13 @@ const formatDistance = (meters: number) => {
 
 export function AgentRoutes() {
   const { user, role } = useAuth();
-  const [view, setView] = useState<"routes" | "orders">("routes");
-  const [expandedRouteId, setExpandedRouteId] = useState<string | null>(null);
-  const [agentPos, setAgentPos] = useState<{ lat: number; lng: number } | null>(null);
-  const [fetchingPos, setFetchingPos] = useState(false);
-  const todayStart = startOfDay(new Date()).toISOString();
-  const { canAccessRoute, loading: loadingRouteAccess } = useRouteAccess(user?.id, role);
+    const [view, setView] = useState<"routes" | "orders">("routes");
+    const [expandedRouteId, setExpandedRouteId] = useState<string | null>(null);
+    const [agentPos, setAgentPos] = useState<{ lat: number; lng: number } | null>(null);
+    const [fetchingPos, setFetchingPos] = useState(false);
+    const [sortByDistance, setSortByDistance] = useState(false);
+    const todayStart = startOfDay(new Date()).toISOString();
+    const { canAccessRoute, loading: loadingRouteAccess } = useRouteAccess(user?.id, role);
 
   const { data: routes, isLoading } = useQuery({
     queryKey: ["mobile-agent-routes", user?.id, role],
@@ -103,10 +97,34 @@ export function AgentRoutes() {
         : [],
     })));
 
-  const allStoreIds = useMemo(
+    const allStoreIds = useMemo(
     () => routeList.flatMap((route) => route.stores.map((store) => store.id)),
     [routeList]
-  );
+    );
+
+    const handleSortByDistance = async () => {
+    if (sortByDistance) {
+      setSortByDistance(false);
+      return;
+    }
+    setFetchingPos(true);
+    const pos = await getCurrentPosition();
+    if (pos) {
+      setAgentPos(pos);
+      setSortByDistance(true);
+    }
+    setFetchingPos(false);
+    };
+
+    const getSortedStores = (stores: RouteStore[]) => {
+    if (!sortByDistance || !agentPos) return stores;
+
+    return [...stores].sort((a, b) => {
+      const distA = (a.lat != null && a.lng != null) ? getDistanceMeters(agentPos.lat, agentPos.lng, a.lat, a.lng) : Infinity;
+      const distB = (b.lat != null && b.lng != null) ? getDistanceMeters(agentPos.lat, agentPos.lng, b.lat, b.lng) : Infinity;
+      return distA - distB;
+    });
+    };
 
   const { data: activeSession } = useQuery({
     queryKey: ["active-route-session", user?.id, "mobile-routes"],
@@ -202,10 +220,10 @@ export function AgentRoutes() {
     if (agentPos) {
       entries.sort((a, b) => {
         const distA = a.store.lat != null && a.store.lng != null
-          ? haversineMeters(agentPos.lat, agentPos.lng, a.store.lat, a.store.lng)
+          ? getDistanceMeters(agentPos.lat, agentPos.lng, a.store.lat, a.store.lng)
           : Infinity;
         const distB = b.store.lat != null && b.store.lng != null
-          ? haversineMeters(agentPos.lat, agentPos.lng, b.store.lat, b.store.lng)
+          ? getDistanceMeters(agentPos.lat, agentPos.lng, b.store.lat, b.store.lng)
           : Infinity;
         return distA - distB;
       });
@@ -311,12 +329,15 @@ export function AgentRoutes() {
                     const visitedCount = routeVisitSet.size;
                     const pendingOrders = route.stores.filter((store) => pendingOrderStoreIds?.has(store.id)).length;
                     const totalOutstanding = route.stores.reduce((sum, store) => sum + Number(store.outstanding || 0), 0);
-                    const sortedStores = [...route.stores].sort((left, right) => {
-                      if (left.store_order != null && right.store_order != null) return left.store_order - right.store_order;
-                      if (left.store_order != null) return -1;
-                      if (right.store_order != null) return 1;
-                      return left.name.localeCompare(right.name);
-                    });
+                    // Sort stores by order, unless sortByDistance is enabled
+                    const sortedStores = sortByDistance && agentPos
+                      ? getSortedStores(route.stores)
+                      : [...route.stores].sort((left, right) => {
+                          if (left.store_order != null && right.store_order != null) return left.store_order - right.store_order;
+                          if (left.store_order != null) return -1;
+                          if (right.store_order != null) return 1;
+                          return left.name.localeCompare(right.name);
+                        });
                     const isExpanded = expandedRouteId === route.id;
 
                     const gradients = [
@@ -382,6 +403,19 @@ export function AgentRoutes() {
                               </div>
 
                               <div className="flex items-center gap-2 shrink-0">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={(e) => { e.stopPropagation(); handleSortByDistance(); }}
+                                  disabled={fetchingPos}
+                                  aria-label="Sort by distance"
+                                >
+                                  {fetchingPos ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Navigation2 className={cn("h-4 w-4", sortByDistance ? "text-blue-600" : "text-slate-400")} />
+                                  )}
+                                </Button>
                                 {pendingOrders > 0 && (
                                   <Badge className="bg-amber-500 text-white text-[10px] font-bold h-5 px-1.5">
                                     {pendingOrders}
@@ -413,6 +447,9 @@ export function AgentRoutes() {
                                 {sortedStores.map((store) => {
                                   const visited = (visitedStoresByRoute?.get(route.id) || new Set<string>()).has(store.id);
                                   const canNavigate = (store.lat != null && store.lng != null) || !!store.address;
+                                  const dist = (sortByDistance && agentPos && store.lat != null && store.lng != null)
+                                    ? getDistanceMeters(agentPos.lat, agentPos.lng, store.lat, store.lng)
+                                    : null;
 
                                   return (
                                     <div
@@ -431,6 +468,12 @@ export function AgentRoutes() {
                                             <span className="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded-md font-mono">
                                               {store.display_id}
                                             </span>
+                                            {dist != null && (
+                                              <Badge variant="outline" className="text-[10px] font-semibold border-blue-200 dark:border-blue-700 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 ml-2">
+                                                <Navigation2 className="h-3 w-3 mr-1" />
+                                                {formatDistance(dist)}
+                                              </Badge>
+                                            )}
                                           </div>
 
                                           {store.customers?.name && (
@@ -547,7 +590,7 @@ export function AgentRoutes() {
               <div className="space-y-2.5">
                 {ordersView.map(({ store, orderCount }, idx) => {
                   const distMeters = agentPos && store.lat != null && store.lng != null
-                    ? haversineMeters(agentPos.lat, agentPos.lng, store.lat, store.lng)
+                    ? getDistanceMeters(agentPos.lat, agentPos.lng, store.lat, store.lng)
                     : null;
                   const canNavigate = (store.lat != null && store.lng != null) || !!store.address;
 
