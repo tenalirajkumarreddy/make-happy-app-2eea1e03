@@ -4,6 +4,7 @@ import { SplashScreen } from "@capacitor/splash-screen";
 import { StatusBar, Style } from "@capacitor/status-bar";
 import App from "./App.tsx";
 import "./index.css";
+import { logDebug, logError } from "@/lib/logger";
 
 // Initialize Capacitor plugins when running as native app
 async function initCapacitor() {
@@ -13,14 +14,14 @@ async function initCapacitor() {
       await StatusBar.setStyle({ style: Style.Dark });
       await StatusBar.setBackgroundColor({ color: "#1a1a2e" });
     } catch (e) {
-      console.log("StatusBar plugin not available");
+      logDebug("StatusBar plugin not available");
     }
 
     try {
       // Hide splash screen after app is ready
       await SplashScreen.hide();
     } catch (e) {
-      console.log("SplashScreen plugin not available");
+      logDebug("SplashScreen plugin not available");
     }
   }
 }
@@ -30,9 +31,9 @@ async function registerServiceWorker() {
   if ("serviceWorker" in navigator && import.meta.env.PROD) {
     try {
       const reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
-      console.log("[SW] Registered:", reg.scope);
+      logDebug("[SW] Registered", { scope: reg.scope });
     } catch (err) {
-      console.error("[SW] Registration failed:", err);
+      logError("[SW] Registration failed", err);
     }
   }
 }

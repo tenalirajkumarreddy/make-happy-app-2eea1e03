@@ -1,6 +1,7 @@
 import { Capacitor } from "@capacitor/core";
 import { Camera, CameraResultType, CameraSource } from "@capacitor/camera";
 import { Geolocation, WatchPositionCallback } from "@capacitor/geolocation";
+import { logError } from "@/lib/logger";
 
 /**
  * Check if running as native app
@@ -30,7 +31,7 @@ export async function takePhoto(): Promise<string | null> {
     });
     return image.base64String ? `data:image/jpeg;base64,${image.base64String}` : null;
   } catch (error) {
-    console.error("Camera error:", error);
+    logError("Camera error", error);
     return null;
   }
 }
@@ -48,7 +49,7 @@ export async function pickPhoto(): Promise<string | null> {
     });
     return image.base64String ? `data:image/jpeg;base64,${image.base64String}` : null;
   } catch (error) {
-    console.error("Gallery error:", error);
+    logError("Gallery error", error);
     return null;
   }
 }
@@ -67,7 +68,7 @@ export async function getCurrentPosition(): Promise<{ lat: number; lng: number }
       lng: position.coords.longitude,
     };
   } catch (error) {
-    console.error("Geolocation error:", error);
+    logError("Geolocation error", error);
     return null;
   }
 }
@@ -82,7 +83,7 @@ export async function watchPosition(callback: WatchPositionCallback): Promise<st
       callback
     );
   } catch (error) {
-    console.error("Watch position error:", error);
+    logError("Watch position error", error);
     return "";
   }
 }
@@ -95,7 +96,7 @@ export async function clearWatch(id: string): Promise<void> {
   try {
     await Geolocation.clearWatch({ id });
   } catch (error) {
-    console.error("Clear watch error:", error);
+    logError("Clear watch error", error);
   }
 }
 
@@ -107,7 +108,7 @@ export async function requestLocationPermission(): Promise<boolean> {
     const status = await Geolocation.requestPermissions();
     return status.location === "granted";
   } catch (error) {
-    console.error("Permission error:", error);
+    logError("Permission error", error);
     return false;
   }
 }
@@ -120,7 +121,7 @@ export async function requestCameraPermission(): Promise<boolean> {
     const status = await Camera.requestPermissions();
     return status.camera === "granted";
   } catch (error) {
-    console.error("Camera permission error:", error);
+    logError("Camera permission error", error);
     return false;
   }
 }

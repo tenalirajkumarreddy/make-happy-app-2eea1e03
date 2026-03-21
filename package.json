@@ -11,11 +11,16 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "build:android": "npm run build && npx cap sync android && npx cap open android",
     "sync:android": "npx cap sync android",
     "open:android": "npx cap open android",
     "build:apk:debug": "npm run build && npx cap sync android && cd android && ./gradlew assembleDebug",
-    "build:apk:release": "npm run build && npx cap sync android && cd android && ./gradlew assembleRelease"
+    "build:apk:release": "npm run build && npx cap sync android && cd android && ./gradlew assembleRelease",
+    "verify:build": "npm run lint && npm run test && npm run build",
+    "version:patch": "npm version patch && echo 'Remember to update android/app/build.gradle versionCode and versionName'",
+    "version:minor": "npm version minor && echo 'Remember to update android/app/build.gradle versionCode and versionName'",
+    "version:major": "npm version major && echo 'Remember to update android/app/build.gradle versionCode and versionName'"
   },
   "dependencies": {
     "@capacitor/android": "^8.2.0",

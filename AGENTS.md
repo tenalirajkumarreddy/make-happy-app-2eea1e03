@@ -13,14 +13,16 @@
 
 ## Data flow + business rules
 - Prefer React Query + Supabase in pages/hooks; query keys are domain-named and invalidated by realtime (`src/hooks/useRealtimeSync.ts`).
-- Sales creation is RPC-first (`record_sale`) in `src/pages/Sales.tsx`; this is the canonical path for atomic sale + items + credit-limit checks.
+- Sales creation is RPC-first via `record_sale` in both web and mobile flows (`src/pages/Sales.tsx`, `src/mobile/pages/agent/AgentRecord.tsx`); keep payload shape and validation rules aligned.
 - Offline-first behavior is explicit for field flows: queue in IndexedDB via `src/lib/offlineQueue.ts`, sync via `src/hooks/useOnlineStatus.ts`.
 - DB owns outstanding recalculation via triggers/functions in `supabase/migrations/20260311120001_atomic_sale_balance_trigger.sql`.
 - IDs are generated with `generate_display_id` RPC (examples in `src/pages/Sales.tsx`, `src/pages/Transactions.tsx`).
+- Proximity checks (`src/lib/proximity.ts`) enforce location constraints on sales and route visits; GPS pings are logged to `location_pings`.
 
 ## Auth and identity specifics
 - Staff auth uses Supabase email/password; customer auth uses Firebase phone OTP -> Supabase token exchange (`src/pages/Auth.tsx`, `src/lib/firebaseAuth.ts`, `supabase/functions/firebase-phone-exchange/index.ts`).
 - New customer self-registration relies on RLS policies in `supabase/migrations/20260317000001_customer_self_register_rls.sql`.
+- Customer KYC documents are stored in `kyc-documents` bucket (private) with RLS policies from `supabase/migrations/20260320000001_gps_pings_push_subs_kyc_storage.sql`.
 - Staff invitation + role assignment is done by edge function `supabase/functions/invite-staff/index.ts` (super_admin gated).
 
 ## Conventions to follow in changes
@@ -29,17 +31,27 @@
 - For permissions, use `usePermission(...)` instead of hardcoding capability checks in components.
 - For staff-scoped route visibility, use `useRouteAccess` (`src/hooks/useRouteAccess.ts`), and preserve its matrix semantics.
 - If you add new query domains, update invalidation mapping in `src/hooks/useRealtimeSync.ts`.
+- Mobile code lives in `src/mobile/`; ignore `mobile-redesign/` unless explicitly refactoring towards it.
 
 ## Developer workflows
 - Install/start: `npm install`, `npm run dev` (Vite dev server uses port 5000 in `vite.config.ts`).
-- Quality checks: `npm run lint`, `npm run test`, `npm run build`.
+- Build variants: `npm run build`, `npm run build:dev`.
+- Android builds: `npm run build:android` (syncs + opens Android Studio), `npm run build:apk:debug` (builds APK directly).
+- APK release build: `npm run build:apk:release`.
+- Quality checks: `npm run lint`, `npm run test`, `npm run test:watch`.
 - Tests currently include focused unit tests (example: `src/test/routeAccess.test.ts`); add colocated `src/test/*` tests for pure logic.
+
+## Docs to link (do not duplicate)
+- Product and feature requirements: `src/docs/business_requirements.md`.
+- Role UX references: `wireframes/ui_wireframes_agent.md`, `wireframes/ui_wireframes_marketer.md`, `wireframes/ui_wireframes_pos.md`, `wireframes/ui_wireframes_customer.md`.
+- DB evolution/source of truth: `supabase/migrations/*.sql`, `TOTAL_MIGRATION.sql`, `aqua_prime_schema.sql`.
 
 ## Integrations and boundaries
 - Supabase client is in `src/integrations/supabase/client.ts` and expects `VITE_SUPABASE_URL` + `VITE_SUPABASE_PUBLISHABLE_KEY`.
 - Capacitor native plugins are initialized in `src/main.tsx` (StatusBar/SplashScreen) and wrapped via helpers in `src/lib/capacitorUtils.ts`.
 - PWA caching is configured in `vite.config.ts` with NetworkFirst runtime caching for Supabase API calls.
-- Notification writes are DB inserts (`src/lib/notifications.ts`), not external push services.
+- Notification writes are DB inserts (`src/lib/notifications.ts`); Web Push support is enabled via `push_subscriptions` table and `src/lib/pushSubscription.ts`.
+- Active edge functions live under `supabase/functions/` (notably: `invite-staff`, `firebase-phone-exchange`, `auto-orders`, `daily-handover-snapshot`, `daily-store-reset`, `toggle-user-ban`).
 
 ## Safe-edit checklist for agents
 - Confirm whether the target flow is web-only, native-only, or shared (`AppLayout` switch).

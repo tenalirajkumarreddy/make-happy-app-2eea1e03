@@ -23,7 +23,11 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error("[ErrorBoundary] Caught unhandled error:", error, info.componentStack);
+    import("@/lib/logger").then(({ logError }) => {
+      logError("[ErrorBoundary] Caught unhandled error", error, {
+        componentStack: info.componentStack,
+      });
+    });
   }
 
   handleReset = () => {

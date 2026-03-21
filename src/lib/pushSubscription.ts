@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { logError } from "@/lib/logger";
 
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || "";
 
@@ -35,7 +36,7 @@ export async function registerPushSubscription(userId: string): Promise<void> {
       { onConflict: "user_id,endpoint" }
     );
   } catch (err) {
-    console.error("[pushSubscription] Failed to register:", err);
+    logError("[pushSubscription] Failed to register", err);
   }
 }
 
@@ -49,6 +50,6 @@ export async function unregisterPushSubscription(userId: string): Promise<void> 
     await subscription.unsubscribe();
     await supabase.from("push_subscriptions").delete().eq("user_id", userId).eq("endpoint", endpoint);
   } catch (err) {
-    console.error("[pushSubscription] Failed to unregister:", err);
+    logError("[pushSubscription] Failed to unregister", err);
   }
 }

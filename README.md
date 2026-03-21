@@ -2,6 +2,16 @@
 
 Business Management System - Sales, Inventory & Customer Management
 
+## 📚 Documentation
+
+- **[PRODUCTION_READY.md](./PRODUCTION_READY.md)** - Production readiness status & launch checklist
+- **[DEPLOYMENT.md](./DEPLOYMENT.md)** - Step-by-step deployment guide
+- **[SECURITY_SETUP.md](./SECURITY_SETUP.md)** - Credential rotation & security procedures
+- **[ENVIRONMENT_CONFIG.md](./ENVIRONMENT_CONFIG.md)** - Multi-environment configuration
+- **[VERSIONING.md](./VERSIONING.md)** - Version management & release process
+- **[SENTRY_SETUP.md](./SENTRY_SETUP.md)** - Error tracking setup (optional)
+- **[AGENTS.md](./AGENTS.md)** - Codebase architecture & conventions
+
 ## Tech Stack
 
 - **Frontend**: React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui

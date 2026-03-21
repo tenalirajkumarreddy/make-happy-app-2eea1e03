@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
+import { logError } from "@/lib/logger";
 
 type AppRole = "super_admin" | "manager" | "agent" | "marketer" | "pos" | "customer";
 
@@ -54,7 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setRole("customer");
       }
     } catch (error) {
-      console.error("Error fetching user data:", error);
+      logError("Error fetching user data", error);
       setRole("customer");
     }
   };

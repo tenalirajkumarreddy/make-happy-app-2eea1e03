@@ -296,7 +296,71 @@ export type Database = {
           upi_amount?: number
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "handovers_confirmed_by_fkey"
+            columns: ["confirmed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "handovers_handed_to_fkey"
+            columns: ["handed_to"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "handovers_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      location_pings: {
+        Row: {
+          id: string
+          session_id: string
+          user_id: string
+          lat: number
+          lng: number
+          recorded_at: string
+        }
+        Insert: {
+          id?: string
+          session_id: string
+          user_id: string
+          lat: number
+          lng: number
+          recorded_at?: string
+        }
+        Update: {
+          id?: string
+          session_id?: string
+          user_id?: string
+          lat?: number
+          lng?: number
+          recorded_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "location_pings_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "route_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "location_pings_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       notifications: {
         Row: {
@@ -594,6 +658,41 @@ export type Database = {
           },
         ]
       }
+      push_subscriptions: {
+        Row: {
+          id: string
+          user_id: string
+          endpoint: string
+          p256dh: string
+          auth: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          endpoint: string
+          p256dh: string
+          auth: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          endpoint?: string
+          p256dh?: string
+          auth?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "push_subscriptions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       route_sessions: {
         Row: {
           created_at: string
@@ -647,6 +746,8 @@ export type Database = {
       routes: {
         Row: {
           created_at: string
+          factory_lat: number | null
+          factory_lng: number | null
           id: string
           is_active: boolean
           name: string
@@ -654,6 +755,8 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          factory_lat?: number | null
+          factory_lng?: number | null
           id?: string
           is_active?: boolean
           name: string
@@ -661,6 +764,8 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          factory_lat?: number | null
+          factory_lng?: number | null
           id?: string
           is_active?: boolean
           name?: string
@@ -825,6 +930,52 @@ export type Database = {
           status?: string
         }
         Relationships: []
+      }
+      store_order: {
+        Row: {
+          created_at: string
+          customer_id: string
+          id: string
+          order_id: string
+          store_id: string
+        }
+        Insert: {
+          created_at?: string
+          customer_id: string
+          id?: string
+          order_id: string
+          store_id: string
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string
+          id?: string
+          order_id?: string
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "store_order_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "store_order_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "store_order_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       store_pricing: {
         Row: {
@@ -1081,6 +1232,7 @@ export type Database = {
           pincode: string | null
           route_id: string | null
           state: string | null
+          store_order: number | null
           store_type_id: string
           street: string | null
           updated_at: string
@@ -1106,6 +1258,7 @@ export type Database = {
           pincode?: string | null
           route_id?: string | null
           state?: string | null
+          store_order?: number | null
           store_type_id: string
           street?: string | null
           updated_at?: string
@@ -1131,6 +1284,7 @@ export type Database = {
           pincode?: string | null
           route_id?: string | null
           state?: string | null
+          store_order?: number | null
           store_type_id?: string
           street?: string | null
           updated_at?: string
@@ -1281,16 +1435,79 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      check_duplicate_customer_phone: {
+        Args: Record<PropertyKey, never>
+        Returns: unknown
+      }
+      generate_display_id: {
+        Args: {
+          prefix: string
+          seq_name: string
+        }
+        Returns: string
+      }
       get_user_role: {
-        Args: { _user_id: string }
+        Args: {
+          _user_id: string
+        }
         Returns: Database["public"]["Enums"]["app_role"]
+      }
+      handle_new_user: {
+        Args: Record<PropertyKey, never>
+        Returns: unknown
       }
       has_role: {
         Args: {
-          _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
+          _role: Database["public"]["Enums"]["app_role"]
         }
         Returns: boolean
+      }
+      link_customer_by_email: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          linked: boolean
+          customer_name: string
+          customer_id: string
+        }[]
+      }
+      protect_pos_system_records: {
+        Args: Record<PropertyKey, never>
+        Returns: unknown
+      }
+      recalc_running_balances: {
+        Args: {
+          p_store_id: string
+        }
+        Returns: undefined
+      }
+      recalc_store_outstanding: {
+        Args: Record<PropertyKey, never>
+        Returns: unknown
+      }
+      record_sale: {
+        Args: {
+          p_display_id: string
+          p_store_id: string
+          p_customer_id: string
+          p_recorded_by: string
+          p_logged_by: string
+          p_total_amount: number
+          p_cash_amount: number
+          p_upi_amount: number
+          p_outstanding_amount: number
+          p_sale_items: Json
+          p_created_at?: string | null
+        }
+        Returns: {
+          sale_id: string
+          sale_display_id: string
+          new_outstanding: number
+        }[]
+      }
+      update_updated_at_column: {
+        Args: Record<PropertyKey, never>
+        Returns: unknown
       }
     }
     Enums: {
@@ -1321,7 +1538,7 @@ export type Tables<
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }

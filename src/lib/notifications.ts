@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { logError } from "@/lib/logger";
 
 export type NotificationType = "order" | "payment" | "handover" | "system";
 
@@ -21,7 +22,7 @@ export async function sendNotification(params: NotifyParams) {
     entity_type: params.entityType || null,
     entity_id: params.entityId || null,
   });
-  if (error) console.error("Notification insert error:", error.message);
+  if (error) logError("Notification insert error", error);
 }
 
 /** Send the same notification to multiple users */
@@ -39,7 +40,7 @@ export async function sendNotificationToMany(
     entity_id: params.entityId || null,
   }));
   const { error } = await supabase.from("notifications").insert(rows);
-  if (error) console.error("Bulk notification error:", error.message);
+  if (error) logError("Bulk notification error", error);
 }
 
 /** Get admin/manager user IDs for broadcasting alerts */

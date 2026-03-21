@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { logError } from "@/lib/logger";
 
 export async function logActivity(
   userId: string,
@@ -18,7 +19,7 @@ export async function logActivity(
   });
 
   if (error) {
-    console.error("[activityLogger] Failed to log activity:", error.message, {
+    logError("[activityLogger] Failed to log activity", error, {
       action,
       entityType,
       entityName,
