@@ -6,8 +6,10 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { RoleRoute } from "@/components/auth/RoleRoute";
 import { RoleGuard } from "@/components/auth/RoleGuard";
+import * as Sentry from "@sentry/react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
+import { logError } from "@/lib/logger";
 import Dashboard from "./pages/Dashboard";
 import AgentDashboard from "./pages/AgentDashboard";
 import MarketerDashboard from "./pages/MarketerDashboard";
@@ -48,6 +50,11 @@ const queryClient = new QueryClient({
       retry: 1,
       staleTime: 30_000,
     },
+    mutations: {
+      onError: (error) => {
+        logError("Global mutation error", error);
+      },
+    },
   },
 });
 
@@ -64,7 +71,19 @@ function DashboardRouter() {
 }
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
+  <Sentry.ErrorBoundary fallback={({ error, resetError }: { error: any, resetError: () => void }) => (
+    <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4 text-center">
+      <h1 className="mb-2 text-2xl font-bold text-foreground">Something went wrong</h1>
+      <p className="mb-4 text-muted-foreground">{error?.message || "An unexpected error occurred."}</p>
+      <button 
+        onClick={resetError}
+        className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
+      >
+        Try again
+      </button>
+    </div>
+  )}>
+    <QueryClientProvider client={queryClient}>
     <AuthProvider>
       <TooltipProvider>
         <Sonner />
@@ -123,6 +142,7 @@ const App = () => (
       </TooltipProvider>
     </AuthProvider>
   </QueryClientProvider>
+  </Sentry.ErrorBoundary>
 );
 
 export default App;

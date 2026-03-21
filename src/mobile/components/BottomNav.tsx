@@ -64,8 +64,10 @@ export function BottomNav({ tab, onChange, tabs = AGENT_TABS }: Props) {
               return (
                 <button
                   key={t.id}
-                  className="flex-1 flex flex-col items-center justify-end pb-2 relative"
+                  className="flex-1 flex flex-col items-center justify-end pb-2 relative min-h-[48px]"
                   onClick={() => onChange(t.id)}
+                  aria-label={t.label}
+                  aria-current={isActive ? "page" : undefined}
                 >
                   {/* Raised circular button */}
                   <div
@@ -100,8 +102,10 @@ export function BottomNav({ tab, onChange, tabs = AGENT_TABS }: Props) {
             return (
               <button
                 key={t.id}
-                className="flex-1 flex flex-col items-center justify-center h-full gap-1 relative transition-all"
+                className="flex-1 flex flex-col items-center justify-center h-full gap-1 relative transition-all min-h-[48px]"
                 onClick={() => onChange(t.id)}
+                aria-label={t.label}
+                aria-current={isActive ? "page" : undefined}
               >
                 {/* Active pill indicator */}
                 {isActive && (

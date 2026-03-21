@@ -15,8 +15,8 @@ import { useQuery } from "@tanstack/react-query";
 type Step = "phone" | "otp" | "register" | "add-store";
 
 const Logo = () => (
-  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground font-bold text-xl mb-4">
-    AP
+  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl overflow-hidden mb-4">
+    <img src="/logo.png" alt="Aqua Prime Logo" className="h-full w-full object-contain" />
   </div>
 );
 

@@ -85,18 +85,28 @@ class Logger {
   }
 
   private sendToMonitoring(level: LogLevel, message: string, context?: LogContext) {
-    // TODO: Integrate with Sentry, LogRocket, or your monitoring service
-    // Example with Sentry:
-    // if (window.Sentry) {
-    //   window.Sentry.captureMessage(message, {
-    //     level: level as SeverityLevel,
-    //     extra: context,
-    //   });
-    // }
+    if (typeof window !== 'undefined' && (window as any).Sentry) {
+      const sentry = (window as any).Sentry;
+      
+      if (level === 'error') {
+        const error = context?.error instanceof Error 
+          ? context.error 
+          : new Error(message);
+        
+        sentry.captureException(error, {
+          level: 'error',
+          extra: context,
+        });
+      } else if (level === 'warn') {
+        sentry.captureMessage(message, {
+          level: 'warning',
+          extra: context,
+        });
+      }
+    }
     
-    // For now, we'll just ensure errors are captured
-    if (level === 'error' && context?.error instanceof Error) {
-      // Store in localStorage for debugging (temporary solution)
+    // Fallback/Legacy storage
+    if (level === 'error' && !this.isDevelopment) {
       try {
         const errors = JSON.parse(localStorage.getItem('app_errors') || '[]');
         errors.push({
@@ -104,7 +114,6 @@ class Logger {
           message,
           context,
         });
-        // Keep only last 50 errors
         localStorage.setItem('app_errors', JSON.stringify(errors.slice(-50)));
       } catch {
         // Silently fail if localStorage is unavailable

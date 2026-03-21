@@ -263,6 +263,7 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
               : "border-dashed border-slate-200 dark:border-slate-700 hover:border-blue-200 dark:hover:border-blue-700 hover:bg-slate-50 dark:hover:bg-slate-800/50"
           )}
           onClick={() => setStorePickerOpen(true)}
+          aria-label={store ? `Change store, currently ${store.name}` : "Select a store"}
         >
           <div className={cn(
             "h-10 w-10 rounded-xl flex items-center justify-center shrink-0",
@@ -370,6 +371,7 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
                           <button
                             className="h-8 w-8 rounded-xl border-2 border-slate-200 dark:border-slate-600 flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                             onClick={() => updateQty(product.id, -1)}
+                            aria-label={`Decrease ${product.name} quantity`}
                           >
                             <Minus className="h-3.5 w-3.5 text-slate-600 dark:text-slate-300" />
                           </button>
@@ -379,6 +381,7 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
                           <button
                             className="h-8 w-8 rounded-xl bg-blue-600 flex items-center justify-center hover:bg-blue-700 transition-colors"
                             onClick={() => updateQty(product.id, 1)}
+                            aria-label={`Increase ${product.name} quantity`}
                           >
                             <Plus className="h-3.5 w-3.5 text-white" />
                           </button>
@@ -387,6 +390,7 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
                         <button
                           className="h-9 w-9 rounded-xl bg-blue-600 flex items-center justify-center hover:bg-blue-700 active:scale-90 transition-all shadow-sm"
                           onClick={() => addItem(product.id)}
+                          aria-label={`Add ${product.name} to cart`}
                         >
                           <Plus className="h-4.5 w-4.5 text-white" />
                         </button>

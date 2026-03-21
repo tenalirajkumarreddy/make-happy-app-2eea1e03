@@ -11,6 +11,8 @@ interface Env {
   VITE_FIREBASE_AUTH_DOMAIN: string;
   VITE_FIREBASE_PROJECT_ID: string;
   VITE_FIREBASE_APP_ID: string;
+  VITE_SENTRY_DSN?: string;
+  VITE_SENTRY_ENVIRONMENT?: string;
 }
 
 function validateEnv(): Env {
@@ -71,6 +73,8 @@ function validateEnv(): Env {
     VITE_FIREBASE_AUTH_DOMAIN: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
     VITE_FIREBASE_PROJECT_ID: import.meta.env.VITE_FIREBASE_PROJECT_ID,
     VITE_FIREBASE_APP_ID: import.meta.env.VITE_FIREBASE_APP_ID,
+    VITE_SENTRY_DSN: import.meta.env.VITE_SENTRY_DSN,
+    VITE_SENTRY_ENVIRONMENT: import.meta.env.VITE_SENTRY_ENVIRONMENT,
   };
 }
 

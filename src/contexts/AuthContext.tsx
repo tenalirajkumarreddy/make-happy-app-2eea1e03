@@ -104,7 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await fetchUserData(session.user.id);
         }
       } catch (error) {
-        console.error("Auth context intialization error", error);
+        logError("Auth context initialization error", error);
       } finally {
         if (mounted) setLoading(false);
       }

@@ -2,9 +2,28 @@ import { createRoot } from "react-dom/client";
 import { Capacitor } from "@capacitor/core";
 import { SplashScreen } from "@capacitor/splash-screen";
 import { StatusBar, Style } from "@capacitor/status-bar";
+import * as Sentry from "@sentry/react";
 import App from "./App.tsx";
 import "./index.css";
+import { env } from "@/lib/env";
 import { logDebug, logError } from "@/lib/logger";
+
+if (env.VITE_SENTRY_DSN && import.meta.env.PROD) {
+  Sentry.init({
+    dsn: env.VITE_SENTRY_DSN,
+    environment: env.VITE_SENTRY_ENVIRONMENT || 'production',
+    integrations: [
+      Sentry.browserTracingIntegration(),
+      Sentry.replayIntegration({
+        maskAllText: true,
+        blockAllMedia: true,
+      }),
+    ],
+    tracesSampleRate: 0.1,
+    replaysSessionSampleRate: 0.1,
+    replaysOnErrorSampleRate: 1.0,
+  });
+}
 
 // Initialize Capacitor plugins when running as native app
 async function initCapacitor() {

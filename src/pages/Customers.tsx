@@ -9,6 +9,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { logActivity } from "@/lib/activityLogger";
 import { generateDisplayId } from "@/lib/displayId";
 import { Loader2, User, Upload, AlertCircle } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { DataTable } from "@/components/shared/DataTable";
+import { logError } from "@/lib/logger";
 import { usePermission } from "@/hooks/usePermission";
 import { useRouteAccess } from "@/hooks/useRouteAccess";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
@@ -63,13 +67,9 @@ const Customers = () => {
         .order("created_at", { ascending: false });
 
         if (hasMatrixRestrictions) {
-          // Filter by assigned routes if matrix applies
-          const allowedRouteIds = await canAccessRoute();
-          if (allowedRouteIds.length > 0) {
-            // Need to join via stores -> routes, but simplified:
-            // Just fetch all and filter in JS for now as Supabase join-filter is complex deep
-            // Or better: filter stores first
-          }
+          // If matrix applies, filtering happens on the client side since
+          // Supabase deep nested filtering is complex.
+          // The query remains the same, but we filter in filteredCustomers.
         }
       
       const { data, error } = await query;
@@ -181,7 +181,7 @@ const Customers = () => {
       // Also deactivate stores if customer is deactivated
       // Note: This matches original intent, though ideally should be done via DB trigger or edge function for atomicity
       const { error: storeError } = await supabase.from("stores").update({ is_active: false }).in("customer_id", ids);
-      if (storeError) console.error("Failed to deactivate stores", storeError);
+      if (storeError) logError("Failed to deactivate stores", storeError);
     }
 
     toast.success(`${ids.length} customers ${active ? "activated" : "deactivated"}`);

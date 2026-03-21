@@ -38,7 +38,7 @@ export function MobileHeader({ title }: Props) {
   const { isOnline, pendingCount } = useOnlineStatus();
   const { dark, toggle } = useTheme();
   const [notifOpen, setNotifOpen] = useState(false);
-  const [companyName, setCompanyName] = useState("BizManager");
+  const [companyName, setCompanyName] = useState("Aqua Prime");
   const [companyLogo, setCompanyLogo] = useState<string>("");
 
   useEffect(() => {
@@ -87,10 +87,8 @@ export function MobileHeader({ title }: Props) {
                   className="h-8 w-8 rounded-xl object-contain shrink-0 shadow-sm ring-1 ring-white/20"
                 />
               ) : (
-                <div className="h-8 w-8 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center shrink-0 ring-1 ring-white/30">
-                  <span className="text-white text-xs font-bold">
-                    {companyName.charAt(0).toUpperCase()}
-                  </span>
+                <div className="h-8 w-8 rounded-xl bg-white/10 backdrop-blur-sm flex items-center justify-center shrink-0 ring-1 ring-white/20 overflow-hidden">
+                  <img src="/logo.png" alt="Logo" className="h-full w-full object-contain p-0.5" />
                 </div>
               )}
               <div className="min-w-0">
@@ -137,8 +135,9 @@ export function MobileHeader({ title }: Props) {
 
               {/* Notifications */}
               <button
-                className="relative p-2 rounded-full text-white/80 hover:text-white hover:bg-white/10 transition-all"
+                className="relative p-2 rounded-full text-white/80 hover:text-white hover:bg-white/10 transition-all min-w-[44px] min-h-[44px] flex items-center justify-center"
                 onClick={() => setNotifOpen(true)}
+                aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ''}`}
               >
                 <Bell className="h-4 w-4" />
                 {unreadCount > 0 && (

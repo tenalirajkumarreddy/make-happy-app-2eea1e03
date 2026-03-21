@@ -896,7 +896,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;
 
 -- Default company settings
 INSERT INTO public.company_settings (key, value) VALUES
-  ('company_name', 'BizManager Corp'),
+  ('company_name', 'Aqua Prime'),
   ('gst_number', ''),
   ('customer_care_number', ''),
   ('address', ''),

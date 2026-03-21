@@ -311,7 +311,7 @@ td.num{font-family:'DM Mono',monospace}
 
   <div class="header">
     <div class="hd-brand">
-      <div class="biz">BizManager</div>
+      <div class="biz">Aqua Prime</div>
       <div class="sub">Daily Operations Report</div>
     </div>
     <div class="hd-center">
@@ -433,7 +433,7 @@ td.num{font-family:'DM Mono',monospace}
   </div>
 
   <div class="footer">
-    <span>Generated: ${new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })} · BizManager · Confidential</span>
+    <span>Generated: ${new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })} · Aqua Prime · Confidential</span>
     <span>Authorised Signature <span class="sig"></span></span>
     <span>Total Outstanding (All Stores): <strong style="color:var(--neg)">${fmt(d.totalOutstanding)}</strong> · Page 1 of 1</span>
   </div>

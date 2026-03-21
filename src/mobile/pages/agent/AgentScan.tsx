@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Html5Qrcode } from "html5-qrcode";
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
 import { parseUpiQr } from "@/lib/upiParser";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -82,11 +82,22 @@ export function AgentScan({ onGoRecord, onGoVisit, onOpenStore }: Props) {
         await scannerRef.current.stop().catch(() => {});
         scannerRef.current = null;
       }
-      const scanner = new Html5Qrcode(SCANNER_ID);
+      const scanner = new Html5Qrcode(SCANNER_ID, {
+        formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+        useBarCodeDetectorIfSupported: true,
+        verbose: false,
+      });
       scannerRef.current = scanner;
       await scanner.start(
         { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 220, height: 220 } },
+        {
+          fps: 15,
+          qrbox: (vw, vh) => {
+            const size = Math.min(vw, vh, 240);
+            return { width: size, height: size };
+          },
+          aspectRatio: 1.0,
+        },
         (decodedText) => { onScanRef.current?.(decodedText); },
         () => {}
       );
@@ -275,7 +286,7 @@ export function AgentScan({ onGoRecord, onGoVisit, onOpenStore }: Props) {
   };
 
   const hasResult = selectedStore || unknownUpi;
-  const cameraHeight = hasResult ? 200 : 320;
+  const cameraHeight = hasResult ? "min(200px, 30vh)" : "min(320px, 40vh)";
 
   const renderQuickActions = () => (
     <div className="grid grid-cols-3 gap-2">

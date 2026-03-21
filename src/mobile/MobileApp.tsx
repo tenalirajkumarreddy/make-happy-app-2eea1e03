@@ -204,6 +204,7 @@ function StaffApp({ role }: { role: StaffRole }) {
         onClick={() => setMenuOpen(true)}
         className="fixed left-4 z-50 h-9 w-9 shadow-sm"
         style={{ top: "calc(env(safe-area-inset-top) + 0.75rem)" }}
+        aria-label="Open navigation menu"
       >
         <Menu className="h-5 w-5" />
       </Button>
@@ -216,7 +217,7 @@ function StaffApp({ role }: { role: StaffRole }) {
                 BM
               </div>
               <div className="overflow-hidden">
-                <h1 className="text-sm font-bold text-sidebar-accent-foreground truncate">BizManager</h1>
+                <h1 className="text-sm font-bold text-sidebar-accent-foreground truncate">Aqua Prime</h1>
                 <p className="text-[11px] text-sidebar-muted truncate">{role === "super_admin" ? "Admin" : "Manager"}</p>
               </div>
             </div>
