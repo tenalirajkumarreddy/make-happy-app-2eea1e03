@@ -263,11 +263,11 @@ export function AppSidebar() {
     <div className="flex h-full flex-col">
       <div className={cn("flex items-center gap-3 px-4 py-5 border-b border-sidebar-border", collapsed && "justify-center px-2")}>
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground font-bold text-sm shrink-0">
-          BM
+          AP
         </div>
         {!collapsed && (
           <div className="overflow-hidden">
-            <h1 className="text-sm font-bold text-sidebar-accent-foreground truncate">BizManager</h1>
+            <h1 className="text-sm font-bold text-sidebar-accent-foreground truncate">Aqua Prime</h1>
             <p className="text-[11px] text-sidebar-muted truncate">Business Management</p>
           </div>
         )}

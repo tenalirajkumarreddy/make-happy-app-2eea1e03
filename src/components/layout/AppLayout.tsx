@@ -1,7 +1,6 @@
 import { Outlet } from "react-router-dom";
 import { AppSidebar } from "./AppSidebar";
 import { TopBar } from "./TopBar";
-import { GlobalSearch } from "@/components/shared/GlobalSearch";
 import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 import { isNativeApp } from "@/lib/capacitorUtils";
 import { MobileApp } from "@/mobile/MobileApp";
@@ -14,7 +13,8 @@ export function AppLayout() {
     return <MobileApp />;
   }
 
-  // Web: standard sidebar layout (unchanged)
+  // Web: standard sidebar layout
+  // GlobalSearch is rendered inside TopBar (layout/GlobalSearch.tsx)
   return (
     <div className="flex h-screen overflow-hidden">
       <AppSidebar />
@@ -24,7 +24,6 @@ export function AppLayout() {
           <Outlet />
         </main>
       </div>
-      <GlobalSearch />
     </div>
   );
 }

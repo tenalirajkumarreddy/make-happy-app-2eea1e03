@@ -30,33 +30,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const fetchUserData = async (userId: string) => {
-    try {
-      const [{ data: roleData }, { data: profileData }] = await Promise.all([
-        supabase.from("user_roles").select("role").eq("user_id", userId).maybeSingle(),
-        supabase.from("profiles").select("full_name, email, avatar_url, is_active").eq("user_id", userId).maybeSingle(),
-      ]);
+    const [{ data: roleData, error: roleError }, { data: profileData, error: profileError }] = await Promise.all([
+      supabase.from("user_roles").select("role").eq("user_id", userId).maybeSingle(),
+      supabase.from("profiles").select("full_name, email, avatar_url, is_active").eq("user_id", userId).maybeSingle(),
+    ]);
 
-      // If user is disabled, sign them out immediately
-      if (profileData && !profileData.is_active) {
-        await supabase.auth.signOut();
-        setUser(null);
-        setSession(null);
-        setRole(null);
-        setProfile(null);
-        return;
-      }
+    if (roleError) console.error("[Auth] Failed to fetch user role:", roleError.message);
+    if (profileError) console.error("[Auth] Failed to fetch user profile:", profileError.message);
 
-      if (profileData) setProfile(profileData);
+    // If user is disabled, sign them out immediately
+    if (profileData && !profileData.is_active) {
+      await supabase.auth.signOut();
+      setUser(null);
+      setSession(null);
+      setRole(null);
+      setProfile(null);
+      return;
+    }
 
-      if (roleData && roleData.role) {
-        setRole(roleData.role as AppRole);
-      } else {
-        setRole("customer");
-      }
-    } catch (error) {
-      console.error("Error fetching user data:", error);
+    if (profileData) setProfile(profileData);
+
+    // Only fall back to "customer" when the role row genuinely doesn't exist.
+    // If there was a network error we keep null so the app shows a retry state
+    // rather than silently granting the wrong access level.
+    if (roleData?.role) {
+      setRole(roleData.role as AppRole);
+    } else if (!roleError) {
+      // Row exists but role field is empty — default to customer
       setRole("customer");
     }
+    // If roleError is set, leave role as null; ProtectedRoute will handle it
   };
 
   useEffect(() => {
@@ -78,6 +81,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (!mounted) return;
             try {
               await fetchUserData(session.user.id);
+            } catch (err) {
+              console.error("[Auth] fetchUserData failed in onAuthStateChange:", err);
             } finally {
               if (mounted) setLoading(false);
             }
