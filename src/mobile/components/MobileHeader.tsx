@@ -38,7 +38,7 @@ export function MobileHeader({ title }: Props) {
   const { isOnline, pendingCount } = useOnlineStatus();
   const { dark, toggle } = useTheme();
   const [notifOpen, setNotifOpen] = useState(false);
-  const [companyName, setCompanyName] = useState("BizManager");
+  const [companyName, setCompanyName] = useState("Aqua Prime");
   const [companyLogo, setCompanyLogo] = useState<string>("");
 
   useEffect(() => {
