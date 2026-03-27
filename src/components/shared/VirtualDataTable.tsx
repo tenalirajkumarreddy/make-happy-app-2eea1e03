@@ -83,7 +83,7 @@ export function VirtualDataTable<T extends Record<string, any>>({
       <div className={cn("overflow-hidden", !shouldRenderCards && "rounded-xl border bg-card")}>
         {/* Header Row - Hide on mobile if rendering cards */}
         {!shouldRenderCards && (
-          <div className="flex items-center border-b bg-muted/50 h-10 font-medium text-muted-foreground text-sm">
+          <div className="flex items-center border-b border-border/50 bg-muted/30 font-bold text-muted-foreground text-[10px] uppercase tracking-wider py-2.5 px-0">
              {columns.map((col, i) => (
                 <div key={i} className={cn("flex-1 px-4 truncate", col.className)}>
                   {getHeaderValue(col)}
@@ -99,8 +99,11 @@ export function VirtualDataTable<T extends Record<string, any>>({
           style={{ height: typeof height === 'number' ? `${height}px` : height }}
         >
           {filteredData.length === 0 ? (
-            <div className="flex h-40 items-center justify-center text-muted-foreground text-sm">
-              {emptyMessage}
+            <div className="flex h-48 flex-col items-center justify-center gap-2 text-muted-foreground">
+              <div className="rounded-full bg-muted/50 p-3">
+                <Search className="h-6 w-6 text-muted-foreground/40" />
+              </div>
+              <p className="text-sm font-medium">{emptyMessage}</p>
             </div>
           ) : (
             <div

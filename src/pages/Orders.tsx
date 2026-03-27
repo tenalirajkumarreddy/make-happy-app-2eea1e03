@@ -297,20 +297,20 @@ const Orders = () => {
     <div className="space-y-6 animate-fade-in">
       <PageHeader title="Orders" subtitle="Manage customer orders and fulfillment" primaryAction={{ label: "Create Order", onClick: () => setShowAdd(true) }} actions={[{ label: "Export CSV", icon: Download, onClick: exportCSV, variant: "outline" as const }]} />
 
-      <Tabs value={statusFilter} onValueChange={setStatusFilter}>
-        <TabsList>
-          <TabsTrigger value="all">All</TabsTrigger>
-          <TabsTrigger value="pending">Pending</TabsTrigger>
-          <TabsTrigger value="delivered">Delivered</TabsTrigger>
-          <TabsTrigger value="cancelled">Cancelled</TabsTrigger>
+      <Tabs value={statusFilter} onValueChange={setStatusFilter} className="w-full">
+        <TabsList className="bg-muted/50 p-1 h-11">
+          <TabsTrigger value="all" className="px-6 rounded-md transition-all data-[state=active]:shadow-sm">All</TabsTrigger>
+          <TabsTrigger value="pending" className="px-6 rounded-md transition-all data-[state=active]:shadow-sm">Pending</TabsTrigger>
+          <TabsTrigger value="delivered" className="px-6 rounded-md transition-all data-[state=active]:shadow-sm">Delivered</TabsTrigger>
+          <TabsTrigger value="cancelled" className="px-6 rounded-md transition-all data-[state=active]:shadow-sm">Cancelled</TabsTrigger>
         </TabsList>
       </Tabs>
 
-      <div className="flex flex-wrap items-center gap-2 p-3 rounded-lg border bg-muted/30">
+      <div className="flex flex-wrap items-center gap-2 p-3 rounded-xl border bg-card shadow-sm">
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="outline" className="h-8 text-xs gap-1.5 justify-start font-normal flex-1 min-w-[100px] sm:flex-none">
-              <CalendarIcon className="h-3 w-3 shrink-0" />
+            <Button variant="outline" className="h-9 text-xs gap-1.5 justify-start font-medium flex-1 min-w-[110px] sm:flex-none bg-accent/5 focus:bg-accent/10 transition-colors">
+              <CalendarIcon className="h-3.5 w-3.5 shrink-0 text-primary/60" />
               {filterFrom ? format(new Date(filterFrom + "T00:00:00"), "dd MMM yy") : "From"}
             </Button>
           </PopoverTrigger>
@@ -320,8 +320,8 @@ const Orders = () => {
         </Popover>
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="outline" className="h-8 text-xs gap-1.5 justify-start font-normal flex-1 min-w-[100px] sm:flex-none">
-              <CalendarIcon className="h-3 w-3 shrink-0" />
+            <Button variant="outline" className="h-9 text-xs gap-1.5 justify-start font-medium flex-1 min-w-[110px] sm:flex-none bg-accent/5 focus:bg-accent/10 transition-colors">
+              <CalendarIcon className="h-3.5 w-3.5 shrink-0 text-primary/60" />
               {filterTo ? format(new Date(filterTo + "T00:00:00"), "dd MMM yy") : "To"}
             </Button>
           </PopoverTrigger>
@@ -330,7 +330,9 @@ const Orders = () => {
           </PopoverContent>
         </Popover>
         <Select value={filterCustomer} onValueChange={setFilterCustomer}>
-          <SelectTrigger className="h-8 text-xs flex-1 min-w-[120px] sm:flex-none sm:w-44"><SelectValue placeholder="All customers" /></SelectTrigger>
+          <SelectTrigger className="h-9 text-xs flex-1 min-w-[140px] sm:flex-none sm:w-48 bg-accent/5 focus:bg-accent/10 transition-colors font-medium">
+            <SelectValue placeholder="All customers" />
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All customers</SelectItem>
             {customers?.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}

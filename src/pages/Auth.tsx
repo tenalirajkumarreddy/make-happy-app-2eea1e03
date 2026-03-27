@@ -39,7 +39,8 @@ async function resolveUserIdentity(): Promise<IdentityResolution> {
 
 const Auth = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [sessionChecked, setSessionChecked] = useState(false);
   const [step, setStep] = useState<Step>("phone");
 
   // Phone / OTP
@@ -78,10 +79,14 @@ const Auth = () => {
   useEffect(() => {
     const resolveExistingSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) return;
       
-      // Show loading during OAuth callback resolution
-      setLoading(true);
+      if (!session?.user) {
+        setLoading(false);
+        setSessionChecked(true);
+        return;
+      }
+      
+      setLoading(true); // Ensure it stays loading
       
       try {
         const identity = await resolveUserIdentity();
@@ -106,6 +111,7 @@ const Auth = () => {
         navigate("/onboarding", { replace: true });
       } finally {
         setLoading(false);
+        setSessionChecked(true);
       }
     };
 
@@ -372,14 +378,15 @@ const Auth = () => {
     }
   };
 
-  // ── LOADING STATE (OAuth callback resolution) ──
-  // Show loading screen when resolving session/identity during OAuth callback
-  if (loading && step === "phone") {
+  if (loading || !sessionChecked) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-center space-y-4">
-          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
-          <p className="text-sm text-muted-foreground">Signing you in...</p>
+          <Logo />
+          <div className="flex flex-col items-center gap-3">
+            <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
+            <p className="text-sm font-medium animate-pulse">Buffering...</p>
+          </div>
         </div>
       </div>
     );
@@ -527,7 +534,8 @@ const Auth = () => {
     );
   }
 
-  // ── MAIN SCREEN (phone → otp) ──
+  // Removed duplicate loading block
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <div className="w-full max-w-md space-y-4">
@@ -547,7 +555,7 @@ const Auth = () => {
             disabled={loading}
             onClick={async () => {
               setLoading(true);
-              const { error } = await supabase.auth.signInWithOAuth({
+              const { error} = await supabase.auth.signInWithOAuth({
                 provider: "google",
                 options: { redirectTo: `${window.location.origin}/auth` },
               });

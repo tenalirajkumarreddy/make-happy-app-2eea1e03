@@ -16,6 +16,7 @@ import { useState } from "react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import { NoticeBox } from "@/components/shared/NoticeBox";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -240,12 +241,19 @@ const Products = () => {
       />
 
       {selectMode && selectedIds.size > 0 && (
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted/40 px-4 py-2.5">
-          <span className="text-sm font-medium">{selectedIds.size} selected</span>
-          <Button size="sm" variant="outline" className="h-7 text-xs text-green-600 border-green-600/40" onClick={() => handleBulkStatus(true)}>Activate</Button>
-          <Button size="sm" variant="outline" className="h-7 text-xs text-destructive border-destructive/40" onClick={() => setConfirmBulkDeactivate(true)}>Deactivate</Button>
-          <Button size="sm" variant="ghost" className="h-7 text-xs ml-auto" onClick={() => setSelectedIds(new Set())}>Clear</Button>
-        </div>
+        <NoticeBox
+          variant="premium"
+          message={
+            <div className="flex flex-wrap items-center gap-2 w-full">
+              <span className="font-semibold">{selectedIds.size} selected</span>
+              <div className="flex gap-2 ml-3">
+                <Button size="sm" variant="outline" className="h-8 bg-background text-green-600 border-green-600/40" onClick={() => handleBulkStatus(true)}>Activate</Button>
+                <Button size="sm" variant="outline" className="h-8 bg-background text-destructive border-destructive/40" onClick={() => setConfirmBulkDeactivate(true)}>Deactivate</Button>
+                <Button size="sm" variant="ghost" className="h-8 ml-auto" onClick={() => setSelectedIds(new Set())}>Clear</Button>
+              </div>
+            </div>
+          }
+        />
       )}
       <DataTable
         columns={columns}
@@ -338,10 +346,12 @@ const Products = () => {
             <DialogTitle>Edit Product</DialogTitle>
           </DialogHeader>
           {editProduct && !editProduct.is_active && (
-            <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 mb-2">
-              <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
-              <p className="text-xs text-destructive">This product is inactive. Activate it to use in sales.</p>
-            </div>
+            <NoticeBox
+              variant="error"
+              className="mb-4"
+              icon={AlertTriangle}
+              message="This product is inactive. Activate it to use in sales."
+            />
           )}
           <form onSubmit={handleEdit} className="space-y-4">
             <div className="flex items-start gap-4">

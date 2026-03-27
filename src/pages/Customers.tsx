@@ -23,6 +23,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import { NoticeBox } from "@/components/shared/NoticeBox";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -299,7 +300,7 @@ const Customers = () => {
         {row.photo_url && <img src={row.photo_url} alt="" loading="lazy" className="h-8 w-8 rounded-full object-cover" />}
         {editMode ? (
           <input
-            className="border border-input rounded px-2 py-0.5 text-sm bg-background w-32 focus:outline-none focus:ring-1 focus:ring-ring"
+            className="border-none bg-accent/30 rounded px-2 py-1 text-sm w-32 focus:bg-accent/50 focus:ring-1 focus:ring-primary/20 outline-none transition-all font-medium"
             value={editData[row.id]?.name ?? row.name ?? ""}
             onChange={(e) => setField(row.id, "name", e.target.value)}
             onClick={(e) => e.stopPropagation()}
@@ -311,7 +312,7 @@ const Customers = () => {
     )},
     { header: "Phone", accessor: (row: any) => editMode ? (
       <input
-        className="border border-input rounded px-2 py-0.5 text-sm bg-background w-32 focus:outline-none focus:ring-1 focus:ring-ring"
+        className="border-none bg-accent/30 rounded px-2 py-1 text-sm w-32 focus:bg-accent/50 focus:ring-1 focus:ring-primary/20 outline-none transition-all font-mono"
         value={editData[row.id]?.phone ?? row.phone ?? ""}
         onChange={(e) => setField(row.id, "phone", e.target.value)}
         onClick={(e) => e.stopPropagation()}
@@ -322,7 +323,7 @@ const Customers = () => {
     ), className: "hidden sm:table-cell" },
     { header: "Email", accessor: (row: any) => editMode ? (
       <input
-        className="border border-input rounded px-2 py-0.5 text-sm bg-background w-40 focus:outline-none focus:ring-1 focus:ring-ring"
+        className="border-none bg-accent/30 rounded px-2 py-1 text-sm w-44 focus:bg-accent/50 focus:ring-1 focus:ring-primary/20 outline-none transition-all"
         value={editData[row.id]?.email ?? row.email ?? ""}
         onChange={(e) => setField(row.id, "email", e.target.value)}
         onClick={(e) => e.stopPropagation()}
@@ -383,25 +384,38 @@ const Customers = () => {
       />
 
       {canBulk && selectMode && selected.size > 0 && (
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-accent/50 p-3">
-          <span className="text-sm font-medium">{selected.size} selected</span>
-          <Button variant="outline" size="sm" onClick={() => handleBulkStatus(true)}>Activate</Button>
-          <Button variant="outline" size="sm" className="text-destructive border-destructive/40" onClick={() => setConfirmBulkDeactivate(true)}>Deactivate</Button>
-          <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>Clear</Button>
-        </div>
+        <NoticeBox
+          variant="premium"
+          message={
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold">{selected.size} selected</span>
+              <div className="flex gap-2 ml-3">
+                <Button variant="outline" size="sm" className="h-8 bg-background" onClick={() => handleBulkStatus(true)}>Activate</Button>
+                <Button variant="outline" size="sm" className="h-8 text-destructive border-destructive/20 bg-background" onClick={() => setConfirmBulkDeactivate(true)}>Deactivate</Button>
+                <Button variant="ghost" size="sm" className="h-8" onClick={() => setSelected(new Set())}>Clear</Button>
+              </div>
+            </div>
+          }
+        />
       )}
 
       {editMode && (
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-primary/30 bg-primary/5 p-3">
-          <span className="text-sm font-medium text-primary">Bulk edit — modify any fields then save</span>
-          <div className="ml-auto flex gap-2">
-            <Button size="sm" variant="outline" onClick={cancelEditMode} disabled={bulkSaving}>Cancel</Button>
-            <Button size="sm" onClick={saveAllEdits} disabled={bulkSaving}>
-              {bulkSaving && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
-              Save All
-            </Button>
-          </div>
-        </div>
+        <NoticeBox
+          variant="premium"
+          className="border-primary/30"
+          message={
+            <div className="flex flex-wrap items-center justify-between w-full">
+              <span className="font-semibold text-primary">Bulk edit mode — modify any fields then save changes</span>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" className="h-8 bg-background" onClick={cancelEditMode} disabled={bulkSaving}>Cancel</Button>
+                <Button size="sm" className="h-8 shadow-sm" onClick={saveAllEdits} disabled={bulkSaving}>
+                  {bulkSaving && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+                  Save All Changes
+                </Button>
+              </div>
+            </div>
+          }
+        />
       )}
 
       <VirtualDataTable

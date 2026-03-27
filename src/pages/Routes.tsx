@@ -1,6 +1,6 @@
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MapPin, Store, Loader2, ChevronRight } from "lucide-react";
+import { MapPin, Store, Loader2, ChevronRight, Unlock } from "lucide-react";
 import { RouteSessionPanel } from "@/components/routes/RouteSessionPanel";
 import { RouteAccessMatrix } from "@/components/routes/RouteAccessMatrix";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -25,6 +25,7 @@ const Routes = () => {
   const isScopedStaff = role === "agent" || role === "marketer" || role === "pos";
   const navigate = useNavigate();
   const [showAdd, setShowAdd] = useState(false);
+  const [showAccessDialog, setShowAccessDialog] = useState(false);
   const [name, setName] = useState("");
   const [storeTypeId, setStoreTypeId] = useState("");
   const [saving, setSaving] = useState(false);
@@ -94,92 +95,45 @@ const Routes = () => {
       <PageHeader
         title="Routes"
         subtitle="Manage delivery routes by store type"
+        actions={
+          isAdmin
+            ? [
+                {
+                  label: "Route Access",
+                  icon: Unlock,
+                  onClick: () => setShowAccessDialog(true),
+                  variant: "outline",
+                  priority: 2, // Lower priority than primary action
+                },
+              ]
+            : undefined
+        }
         primaryAction={isAdmin ? { label: "Create Route", onClick: () => setShowAdd(true) } : undefined}
       />
 
       {role === "agent" && <RouteSessionPanel />}
 
-      {isAdmin ? (
-        <Tabs defaultValue="routes" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="routes">Routes</TabsTrigger>
-            <TabsTrigger value="route-access">Route Access</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="routes" className="space-y-4 mt-0">
-            {storeTypes && storeTypes.length > 0 ? (
-              <Tabs defaultValue={defaultTab}>
-                <TabsList>
-                  {storeTypes.map((type) => (
-                    <TabsTrigger key={type.id} value={type.id}>{type.name}</TabsTrigger>
-                  ))}
-                </TabsList>
-
-                {storeTypes.map((type) => {
-                  const typeRoutes = routes?.filter(r => r.store_type_id === type.id) || [];
-                  return (
-                    <TabsContent key={type.id} value={type.id} className="space-y-4 mt-4">
-                      {typeRoutes.length === 0 ? (
-                        <div className="rounded-xl border bg-card p-10 text-center text-muted-foreground">
-                          No routes for {type.name}. Create one to get started.
-                        </div>
-                      ) : (
-                        typeRoutes.map((route) => {
-                          const storeCount = route.stores?.length || 0;
-                          const totalOutstanding = route.stores?.reduce((sum: number, s: any) => sum + Number(s.outstanding || 0), 0) || 0;
-                          return (
-                            <div
-                              key={route.id}
-                              className="flex items-center justify-between rounded-xl border bg-card p-5 hover:shadow-md hover:bg-accent/20 transition-all cursor-pointer group"
-                              onClick={() => navigate(`/routes/${route.id}`)}
-                            >
-                              <div className="flex items-center gap-4">
-                                <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary/10">
-                                  <MapPin className="h-5 w-5 text-primary" />
-                                </div>
-                                <div>
-                                  <h3 className="font-semibold">{route.name}</h3>
-                                  <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
-                                    <span className="flex items-center gap-1"><Store className="h-3.5 w-3.5" />{storeCount} stores</span>
-                                    <span>Outstanding: <span className="font-medium text-foreground">₹{totalOutstanding.toLocaleString()}</span></span>
-                                  </div>
-                                </div>
-                              </div>
-                              <ChevronRight className="h-5 w-5 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors shrink-0" />
-                            </div>
-                          );
-                        })
-                      )}
-                    </TabsContent>
-                  );
-                })}
-              </Tabs>
-            ) : (
-              <div className="rounded-xl border bg-card p-10 text-center text-muted-foreground">
-                No store types configured. Add them in Settings first.
-              </div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="route-access" className="mt-0">
-            <RouteAccessMatrix />
-          </TabsContent>
-        </Tabs>
-      ) : storeTypes && storeTypes.length > 0 ? (
-        <Tabs defaultValue={defaultTab}>
-          <TabsList>
-            {storeTypes.map((type) => (
-              <TabsTrigger key={type.id} value={type.id}>{type.name}</TabsTrigger>
-            ))}
-          </TabsList>
+      {storeTypes && storeTypes.length > 0 ? (
+        <Tabs defaultValue={defaultTab} className="w-full">
+          <div className="w-full overflow-x-auto pb-2 scrollbar-none">
+            <TabsList className="bg-muted/50 p-1 h-11">
+              {storeTypes.map((type) => (
+                <TabsTrigger key={type.id} value={type.id}>{type.name}</TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
 
           {storeTypes.map((type) => {
             const typeRoutes = routes?.filter(r => r.store_type_id === type.id) || [];
             return (
               <TabsContent key={type.id} value={type.id} className="space-y-4 mt-4">
                 {typeRoutes.length === 0 ? (
-                  <div className="rounded-xl border bg-card p-10 text-center text-muted-foreground">
-                    No routes for {type.name}. Create one to get started.
+                  <div className="rounded-2xl border border-dashed bg-card/50 p-12 text-center flex flex-col items-center justify-center animate-in fade-in zoom-in-95 duration-300">
+                    <div className="h-12 w-12 rounded-full bg-muted/50 flex items-center justify-center mb-3">
+                      <MapPin className="h-6 w-6 text-muted-foreground/40" />
+                    </div>
+                    <p className="text-sm text-muted-foreground font-medium">No routes for {type.name}</p>
+                    {isAdmin && <p className="text-xs text-muted-foreground/60 mt-1">Create a new route to get started.</p>}
                   </div>
                 ) : (
                   typeRoutes.map((route) => {
@@ -237,6 +191,17 @@ const Routes = () => {
               Create Route
             </Button>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showAccessDialog} onOpenChange={setShowAccessDialog}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Route Access Matrix</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto min-h-0">
+            <RouteAccessMatrix />
+          </div>
         </DialogContent>
       </Dialog>
     </div>

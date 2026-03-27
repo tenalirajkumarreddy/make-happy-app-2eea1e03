@@ -20,7 +20,6 @@ data class SmsJob(
     @SerialName("webhook_url")
     val webhookUrl: String? = null,
 
-    @SerialName("status")
     val status: String = "pending",
 
     @SerialName("error_message")

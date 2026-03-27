@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 
-type Status = "active" | "inactive" | "pending" | "verified" | "rejected" | "delivered" | "cancelled";
+type Status = "active" | "inactive" | "pending" | "verified" | "rejected" | "delivered" | "cancelled" | "success" | "error" | "completed";
 
 const statusStyles: Record<Status, string> = {
   active: "bg-success/10 text-success",
@@ -10,6 +10,9 @@ const statusStyles: Record<Status, string> = {
   rejected: "bg-destructive/10 text-destructive",
   delivered: "bg-info/10 text-info",
   cancelled: "bg-destructive/10 text-destructive",
+  success: "bg-success/10 text-success",
+  error: "bg-destructive/10 text-destructive",
+  completed: "bg-success/10 text-success",
 };
 
 interface StatusBadgeProps {

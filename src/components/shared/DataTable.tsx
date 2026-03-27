@@ -100,9 +100,9 @@ export function DataTable<T extends Record<string, any>>({
       <div className="rounded-xl border bg-card overflow-x-auto -mx-3 sm:mx-0 hidden md:block">
         <Table>
           <TableHeader>
-            <TableRow className="bg-muted/50 hover:bg-muted/50">
+            <TableRow className="bg-muted/30 hover:bg-muted/30 border-b border-border/50">
               {columns.map((col, i) => (
-                <TableHead key={i} className={col.className}>
+                <TableHead key={i} className={cn("text-[10px] uppercase tracking-wider font-bold text-muted-foreground py-3 h-auto", col.className)}>
                   {typeof col.header === "function" ? col.header() : col.header}
                 </TableHead>
               ))}
@@ -111,8 +111,13 @@ export function DataTable<T extends Record<string, any>>({
           <TableBody>
             {paged.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={columns.length} className="h-36 text-center">
-                  <p className="text-sm text-muted-foreground">{resolvedEmptyMessage}</p>
+                <TableCell colSpan={columns.length} className="h-48 text-center">
+                  <div className="flex flex-col items-center justify-center gap-2">
+                    <div className="rounded-full bg-muted/50 p-3">
+                      <Search className="h-6 w-6 text-muted-foreground/40" />
+                    </div>
+                    <p className="text-sm font-medium text-muted-foreground">{resolvedEmptyMessage}</p>
+                  </div>
                 </TableCell>
               </TableRow>
             ) : (

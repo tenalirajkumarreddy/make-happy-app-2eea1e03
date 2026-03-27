@@ -66,13 +66,13 @@ export function BannerImageEditor({
   };
 
   const handleZoomIn = () => {
-    const newScale = Math.min(scale + 0.1, 3);
+    const newScale = Math.min(scale + 0.1, 5);
     setScale(newScale);
     emitChange(newScale, offsetX, offsetY);
   };
 
   const handleZoomOut = () => {
-    const newScale = Math.max(scale - 0.1, 0.5);
+    const newScale = Math.max(scale - 0.1, 0.1);
     setScale(newScale);
     emitChange(newScale, offsetX, offsetY);
   };
@@ -139,8 +139,8 @@ export function BannerImageEditor({
   const handleWheel = useCallback(
     (e: React.WheelEvent) => {
       e.preventDefault();
-      const delta = e.deltaY > 0 ? -0.05 : 0.05;
-      const newScale = Math.min(Math.max(scale + delta, 0.5), 3);
+      const delta = e.deltaY > 0 ? -0.1 : 0.1;
+      const newScale = Math.min(Math.max(scale + delta, 0.1), 5);
       setScale(newScale);
       emitChange(newScale, offsetX, offsetY);
     },
@@ -158,10 +158,10 @@ export function BannerImageEditor({
         </div>
         <div
           ref={containerRef}
-          className="relative rounded-lg overflow-hidden border-2 border-primary/30 bg-muted/50 select-none"
+          className="relative rounded-xl overflow-hidden border-2 border-primary/20 bg-muted/30 select-none shadow-inner"
           style={{
             aspectRatio: `${aspectRatio}`,
-            maxHeight: "250px",
+            maxHeight: "300px",
             cursor: isDragging ? "grabbing" : "grab",
           }}
           onMouseDown={handleMouseDown}
@@ -184,8 +184,8 @@ export function BannerImageEditor({
               transformOrigin: "center center",
               width: "100%",
               height: "100%",
-              objectFit: "cover",
-              transition: isDragging ? "none" : "transform 0.15s ease-out",
+              objectFit: "contain",
+              transition: isDragging ? "none" : "transform 0.1s ease-out",
             }}
           />
         </div>
@@ -204,8 +204,8 @@ export function BannerImageEditor({
         </Button>
         <Slider
           value={[scale]}
-          min={0.5}
-          max={3}
+          min={0.1}
+          max={5}
           step={0.05}
           onValueChange={handleScaleChange}
           className="flex-1"

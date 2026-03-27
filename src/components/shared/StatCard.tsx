@@ -30,8 +30,14 @@ export function StatCard({ title, value, change, changeType = "neutral", icon: I
             </p>
           )}
         </div>
-        <div className={cn("flex h-10 w-10 items-center justify-center rounded-lg", iconColor || "bg-accent")}>
-          <Icon className={cn("h-5 w-5", iconColor ? "text-primary-foreground" : "text-accent-foreground")} />
+        <div className={cn(
+          "flex h-11 w-11 items-center justify-center rounded-xl transition-colors shrink-0", 
+          iconColor ? `bg-${iconColor.replace('bg-', '')}/10` : "bg-accent/50"
+        )}>
+          <Icon className={cn(
+            "h-5 w-5", 
+            iconColor ? `text-${iconColor.replace('bg-', '')}` : "text-accent-foreground"
+          )} />
         </div>
       </div>
     </div>

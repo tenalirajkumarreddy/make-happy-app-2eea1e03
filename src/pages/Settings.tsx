@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2, Save, Upload, X, Navigation } from "lucide-react";
+import { Loader2, Save, Upload, X, Navigation, Trash2, Plus } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { PricingTab } from "@/components/settings/PricingTab";
@@ -101,89 +101,110 @@ const SettingsPage = () => {
     <div className="space-y-6 animate-fade-in">
       <PageHeader title="Settings" subtitle="Company settings and system configuration" />
       <Tabs defaultValue="company">
-        <TabsList>
-          <TabsTrigger value="company">Company</TabsTrigger>
-          <TabsTrigger value="pricing">Pricing</TabsTrigger>
-          {isAdmin && <TabsTrigger value="banners">Banners</TabsTrigger>}
-          <TabsTrigger value="features">Features</TabsTrigger>
-          {isAdmin && <TabsTrigger value="sms_gateway">SMS Gateway</TabsTrigger>}
-        </TabsList>
+        <div className="w-full overflow-x-auto pb-2">
+          <TabsList className="h-auto flex-wrap sm:flex-nowrap w-max min-w-full justify-start md:w-auto">
+            <TabsTrigger value="company">Company</TabsTrigger>
+            <TabsTrigger value="pricing">Pricing</TabsTrigger>
+            {isAdmin && <TabsTrigger value="banners">Banners</TabsTrigger>}
+            <TabsTrigger value="features">Features</TabsTrigger>
+            {isAdmin && <TabsTrigger value="sms_gateway">SMS Gateway</TabsTrigger>}
+          </TabsList>
+        </div>
 
-        <TabsContent value="company" className="mt-4 space-y-6">
-          <div className="rounded-xl border bg-card p-6 space-y-4 max-w-lg">
-            <h3 className="font-semibold">Company Information</h3>
-            <div className="space-y-3">
-              {/* Company Logo */}
-              <div>
-                <Label>Company Logo</Label>
-                <div className="mt-1 flex items-center gap-3">
+        <TabsContent value="company" className="mt-6 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+            {/* Logo and Primary Info */}
+            <div className="md:col-span-1 space-y-6">
+              <div className="rounded-xl border bg-card p-6 shadow-sm space-y-4">
+                <h3 className="font-semibold text-lg flex items-center gap-2">
+                  <Upload className="h-4 w-4 text-primary" />
+                  Branding
+                </h3>
+                <div className="flex flex-col items-center gap-4 py-2">
                   <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
-                  {settings.company_logo ? (
-                    <div className="relative h-16 w-16 rounded-lg border bg-muted overflow-hidden">
-                      <img src={settings.company_logo} alt="Logo" className="h-full w-full object-contain" />
-                      {isAdmin && (
-                        <button onClick={removeLogo} className="absolute top-0.5 right-0.5 rounded-full bg-destructive/80 p-0.5 text-destructive-foreground hover:bg-destructive">
-                          <X className="h-3 w-3" />
-                        </button>
-                      )}
-                    </div>
-                  ) : (
-                    <Button type="button" variant="outline" size="sm" onClick={() => logoInputRef.current?.click()} disabled={!isAdmin || uploadingLogo} className="gap-1.5">
-                      {uploadingLogo ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                  <div className="relative h-32 w-32 rounded-2xl border-2 border-dashed border-primary/20 bg-muted/30 flex items-center justify-center overflow-hidden group">
+                    {settings.company_logo ? (
+                      <>
+                        <img src={settings.company_logo} alt="Logo" className="h-full w-full object-contain p-2" />
+                        {isAdmin && (
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                            <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full" onClick={() => logoInputRef.current?.click()}>
+                              <Upload className="h-4 w-4" />
+                            </Button>
+                            <Button size="icon" variant="destructive" className="h-8 w-8 rounded-full" onClick={removeLogo}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="text-center p-4">
+                        <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground opacity-50" />
+                        <p className="text-xs text-muted-foreground">Premium Logo (Max 2MB)</p>
+                      </div>
+                    )}
+                  </div>
+                  {!settings.company_logo && (
+                    <Button type="button" variant="outline" size="sm" onClick={() => logoInputRef.current?.click()} disabled={!isAdmin || uploadingLogo} className="w-full gap-2">
+                      {uploadingLogo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                       Upload Logo
                     </Button>
                   )}
                 </div>
               </div>
-              <div><Label>Company Name</Label><Input value={settings.company_name || ""} onChange={(e) => setSettings({ ...settings, company_name: e.target.value })} className="mt-1" disabled={!isAdmin} /></div>
-              <div><Label>GST Number</Label><Input value={settings.gst_number || ""} onChange={(e) => setSettings({ ...settings, gst_number: e.target.value })} className="mt-1" disabled={!isAdmin} /></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><Label>Customer Care Number</Label><Input value={settings.customer_care_number || ""} onChange={(e) => setSettings({ ...settings, customer_care_number: e.target.value })} className="mt-1" disabled={!isAdmin} placeholder="+91 98765 43210" /></div>
-                <div><Label>Office Phone</Label><Input value={settings.company_phone || ""} onChange={(e) => setSettings({ ...settings, company_phone: e.target.value })} className="mt-1" disabled={!isAdmin} placeholder="+91 22 1234 5678" /></div>
-              </div>
-              <div><Label>Email</Label><Input type="email" value={settings.company_email || ""} onChange={(e) => setSettings({ ...settings, company_email: e.target.value })} className="mt-1" disabled={!isAdmin} placeholder="info@company.com" /></div>
-              <div><Label>Website</Label><Input value={settings.company_website || ""} onChange={(e) => setSettings({ ...settings, company_website: e.target.value })} className="mt-1" disabled={!isAdmin} placeholder="https://www.company.com" /></div>
-              <div><Label>Address</Label><Input value={settings.address || ""} onChange={(e) => setSettings({ ...settings, address: e.target.value })} className="mt-1" disabled={!isAdmin} /></div>
-              <div className="grid grid-cols-3 gap-3">
-                <div><Label>City</Label><Input value={settings.company_city || ""} onChange={(e) => setSettings({ ...settings, company_city: e.target.value })} className="mt-1" disabled={!isAdmin} /></div>
-                <div><Label>State</Label><Input value={settings.company_state || ""} onChange={(e) => setSettings({ ...settings, company_state: e.target.value })} className="mt-1" disabled={!isAdmin} /></div>
-                <div><Label>PIN Code</Label><Input value={settings.company_pin || ""} onChange={(e) => setSettings({ ...settings, company_pin: e.target.value })} className="mt-1" disabled={!isAdmin} placeholder="400001" /></div>
+
+              <div className="rounded-xl border bg-card p-6 shadow-sm space-y-4">
+                <h4 className="font-medium flex items-center gap-2 border-b pb-2">
+                  <Navigation className="h-4 w-4 text-primary" />
+                  Location HQ
+                </h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5"><Label className="text-[10px] uppercase text-muted-foreground">Latitude</Label><Input value={settings.company_lat || ""} onChange={(e) => setSettings({ ...settings, company_lat: e.target.value })} className="h-8 font-mono text-xs" disabled={!isAdmin} placeholder="19.0760" /></div>
+                  <div className="space-y-1.5"><Label className="text-[10px] uppercase text-muted-foreground">Longitude</Label><Input value={settings.company_lng || ""} onChange={(e) => setSettings({ ...settings, company_lng: e.target.value })} className="h-8 font-mono text-xs" disabled={!isAdmin} placeholder="72.8777" /></div>
+                </div>
+                {isAdmin && (
+                  <Button type="button" variant="outline" size="sm" className="w-full gap-2 text-xs" onClick={async () => {
+                    const p = await getCurrentPosition();
+                    if (p) setSettings((prev) => ({ ...prev, company_lat: p.lat.toFixed(6), company_lng: p.lng.toFixed(6) }));
+                  }}>
+                    Set current location
+                  </Button>
+                )}
               </div>
             </div>
-            <div className="pt-2 border-t">
-              <h4 className="text-sm font-medium mb-3 flex items-center gap-2"><Navigation className="h-4 w-4 text-primary" />Map Coordinates</h4>
-              <p className="text-xs text-muted-foreground mb-3">Set your company's coordinates to show it as a pinned location on the map.</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div><Label>Latitude</Label><Input value={settings.company_lat || ""} onChange={(e) => setSettings({ ...settings, company_lat: e.target.value })} className="mt-1 font-mono text-sm" disabled={!isAdmin} placeholder="e.g. 19.0760" /></div>
-                <div><Label>Longitude</Label><Input value={settings.company_lng || ""} onChange={(e) => setSettings({ ...settings, company_lng: e.target.value })} className="mt-1 font-mono text-sm" disabled={!isAdmin} placeholder="e.g. 72.8777" /></div>
+
+            {/* General Settings */}
+            <div className="md:col-span-2 space-y-6">
+              <div className="rounded-xl border bg-card p-8 shadow-sm space-y-6">
+                <div className="flex items-center justify-between border-b pb-4">
+                  <div>
+                    <h3 className="text-lg font-bold tracking-tight">Company Profile</h3>
+                    <p className="text-sm text-muted-foreground">Official business information for invoices and portals</p>
+                  </div>
+                  {isAdmin && (
+                    <Button onClick={handleSaveSettings} disabled={savingSettings} className="shadow-lg shadow-primary/20 transition-all active:scale-95">
+                      {savingSettings ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                      Save Profile
+                    </Button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
+                  <div className="space-y-2"><Label className="text-xs font-semibold">Business Name</Label><Input value={settings.company_name || ""} onChange={(e) => setSettings({ ...settings, company_name: e.target.value })} disabled={!isAdmin} placeholder="Aqua Prime Solutions" /></div>
+                  <div className="space-y-2"><Label className="text-xs font-semibold">GST Registration</Label><Input value={settings.gst_number || ""} onChange={(e) => setSettings({ ...settings, gst_number: e.target.value })} disabled={!isAdmin} placeholder="27XXXXX0000X1ZX" /></div>
+                  <div className="space-y-2"><Label className="text-xs font-semibold">Primary Email</Label><Input type="email" value={settings.company_email || ""} onChange={(e) => setSettings({ ...settings, company_email: e.target.value })} disabled={!isAdmin} placeholder="admin@aquaprime.com" /></div>
+                  <div className="space-y-2"><Label className="text-xs font-semibold">Official Website</Label><Input value={settings.company_website || ""} onChange={(e) => setSettings({ ...settings, company_website: e.target.value })} disabled={!isAdmin} placeholder="https://aquaprime.app" /></div>
+                  <div className="space-y-2"><Label className="text-xs font-semibold">Customer Support</Label><Input value={settings.customer_care_number || ""} onChange={(e) => setSettings({ ...settings, customer_care_number: e.target.value })} disabled={!isAdmin} placeholder="+91 999 000 1111" /></div>
+                  <div className="space-y-2"><Label className="text-xs font-semibold">Office Contact</Label><Input value={settings.company_phone || ""} onChange={(e) => setSettings({ ...settings, company_phone: e.target.value })} disabled={!isAdmin} /></div>
+                  <div className="sm:col-span-2 space-y-2"><Label className="text-xs font-semibold">Headquarters Address</Label><Input value={settings.address || ""} onChange={(e) => setSettings({ ...settings, address: e.target.value })} disabled={!isAdmin} /></div>
+                  <div className="space-y-2"><Label className="text-xs font-semibold">City</Label><Input value={settings.company_city || ""} onChange={(e) => setSettings({ ...settings, company_city: e.target.value })} disabled={!isAdmin} /></div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2"><Label className="text-xs font-semibold">State</Label><Input value={settings.company_state || ""} onChange={(e) => setSettings({ ...settings, company_state: e.target.value })} disabled={!isAdmin} /></div>
+                    <div className="space-y-2"><Label className="text-xs font-semibold">PIN Code</Label><Input value={settings.company_pin || ""} onChange={(e) => setSettings({ ...settings, company_pin: e.target.value })} disabled={!isAdmin} /></div>
+                  </div>
+                </div>
               </div>
-              <div className="mt-3">
-                <Label>Map Pin Label</Label>
-                <select value={settings.company_marker_label || "HQ"} onChange={(e) => isAdmin && setSettings({ ...settings, company_marker_label: e.target.value })} disabled={!isAdmin} className="mt-1 w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm">
-                  <option value="HQ">HQ (Headquarters)</option>
-                  <option value="Factory">Factory</option>
-                  <option value="Warehouse">Warehouse</option>
-                  <option value="Office">Office</option>
-                  <option value="Store">Store</option>
-                </select>
-              </div>
-              {isAdmin && (
-                <Button type="button" variant="outline" size="sm" className="mt-2 gap-1.5 text-xs" onClick={async () => {
-                  const p = await getCurrentPosition();
-                  if (p) {
-                    setSettings((prev) => ({ ...prev, company_lat: p.lat.toFixed(6), company_lng: p.lng.toFixed(6) }));
-                  }
-                }}>
-                  <Navigation className="h-3.5 w-3.5" /> Use My Current Location
-                </Button>
-              )}
             </div>
-            {isAdmin && (
-              <Button onClick={handleSaveSettings} disabled={savingSettings}>
-                {savingSettings ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                Save Settings
-              </Button>
-            )}
           </div>
         </TabsContent>
 
@@ -198,73 +219,80 @@ const SettingsPage = () => {
           </TabsContent>
         )}
 
-        <TabsContent value="features" className="mt-4 space-y-4">
-          <div className="rounded-xl border bg-card p-6 space-y-5 max-w-lg">
-            <h3 className="font-semibold">Authentication & Registration</h3>
-            {[
-              { key: "customer_signup_enabled", label: "Customer Sign-up", desc: "Allow new customers to register via phone OTP" },
-              { key: "google_linking_enabled", label: "Google Account Linking", desc: "Allow users to link their Google account for easier login" },
-            ].map((item) => (
-              <div key={item.key} className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium">{item.label}</p>
-                  <p className="text-xs text-muted-foreground">{item.desc}</p>
-                </div>
-                <Switch checked={settings[item.key] !== "false"} onCheckedChange={() => toggleFeature(item.key)} disabled={!isAdmin} />
+        <TabsContent value="features" className="mt-6 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="rounded-xl border bg-card p-6 shadow-sm space-y-5">
+              <h3 className="font-bold flex items-center gap-2">
+                <div className="h-2 w-2 rounded-full bg-primary" />
+                Access & Registration
+              </h3>
+              <div className="space-y-6">
+                {[
+                  { key: "customer_signup_enabled", label: "Self-service Registration", desc: "Allow new customers to register via phone OTP" },
+                  { key: "google_linking_enabled", label: "Google OAuth Linking", desc: "Enable seamless Google account connection" },
+                ].map((item) => (
+                  <div key={item.key} className="flex items-start justify-between gap-4">
+                    <div className="space-y-0.5">
+                      <p className="text-sm font-semibold">{item.label}</p>
+                      <p className="text-xs text-muted-foreground leading-relaxed">{item.desc}</p>
+                    </div>
+                    <Switch checked={settings[item.key] !== "false"} onCheckedChange={() => toggleFeature(item.key)} disabled={!isAdmin} className="mt-1" />
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-          <div className="rounded-xl border bg-card p-6 space-y-5 max-w-lg">
-            <h3 className="font-semibold">Store Defaults</h3>
-            <div>
-              <Label>Default Store Type for New Customers</Label>
-              <p className="text-xs text-muted-foreground mb-2">
-                Automatically assigned when customers register. Can be changed by agents later.
-              </p>
-              <Select 
-                value={settings.default_store_type_id || ""} 
-                onValueChange={(val) => setSettings({ ...settings, default_store_type_id: val })}
-                disabled={!isAdmin}
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Select default store type..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {storeTypes.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
-            {isAdmin && (
-              <Button onClick={handleSaveSettings} disabled={savingSettings} size="sm">
-                {savingSettings ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                Save
-              </Button>
-            )}
-          </div>
-          <div className="rounded-xl border bg-card p-6 space-y-5 max-w-lg">
-            <h3 className="font-semibold">Feature Toggles</h3>
-            {[
-              { key: "location_validation", label: "Location Validation", desc: "Require agents to be near store for sales" },
-              { key: "auto_orders", label: "Auto Orders", desc: "Enable automatic recurring orders" },
-              { key: "push_notifications", label: "Push Notifications", desc: "Send push notifications to users" },
-              { key: "partial_collections", label: "Partial Collections", desc: "Allow managers to collect partial amounts" },
-            ].map((item) => (
-              <div key={item.key} className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium">{item.label}</p>
-                  <p className="text-xs text-muted-foreground">{item.desc}</p>
-                </div>
-                <Switch checked={settings[item.key] === "true"} onCheckedChange={() => toggleFeature(item.key)} disabled={!isAdmin} />
+
+            <div className="rounded-xl border bg-card p-6 shadow-sm space-y-5">
+              <h3 className="font-bold flex items-center gap-2">
+                <div className="h-2 w-2 rounded-full bg-primary" />
+                Operational Toggles
+              </h3>
+              <div className="space-y-6">
+                {[
+                  { key: "location_validation", label: "Geofencing", desc: "Verify agent proximity to store during visits" },
+                  { key: "auto_orders", label: "Smart Auto-Orders", desc: "AI-driven recurring order generation" },
+                  { key: "push_notifications", label: "Push Engagement", desc: "Real-time system notifications to staff/customers" },
+                  { key: "partial_collections", label: "Collection Flexibility", desc: "Allow staff to record partial payment collections" },
+                ].map((item) => (
+                  <div key={item.key} className="flex items-start justify-between gap-4">
+                    <div className="space-y-0.5">
+                      <p className="text-sm font-semibold">{item.label}</p>
+                      <p className="text-xs text-muted-foreground leading-relaxed">{item.desc}</p>
+                    </div>
+                    <Switch checked={settings[item.key] === "true"} onCheckedChange={() => toggleFeature(item.key)} disabled={!isAdmin} className="mt-1" />
+                  </div>
+                ))}
               </div>
-            ))}
-            {isAdmin && (
-              <Button onClick={handleSaveSettings} disabled={savingSettings} className="mt-2">
-                {savingSettings ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                Save Features
-              </Button>
-            )}
+            </div>
+
+            <div className="md:col-span-2 rounded-xl border-t-4 border-t-primary bg-card p-6 shadow-md flex items-center justify-between gap-6">
+              <div className="flex-1">
+                <h3 className="font-bold text-lg mb-1">Store Defaults</h3>
+                <p className="text-sm text-muted-foreground">Define business rules for new customer onboarding</p>
+                <div className="mt-4 max-w-sm">
+                  <Select 
+                    value={settings.default_store_type_id || ""} 
+                    onValueChange={(val) => setSettings({ ...settings, default_store_type_id: val })}
+                    disabled={!isAdmin}
+                  >
+                    <SelectTrigger className="bg-muted/30">
+                      <SelectValue placeholder="Select primary industry..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {storeTypes.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              {isAdmin && (
+                <Button onClick={handleSaveSettings} disabled={savingSettings} size="lg" className="px-8 shadow-lg shadow-primary/20">
+                  {savingSettings ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                  Save All Controls
+                </Button>
+              )}
+            </div>
           </div>
         </TabsContent>
 
