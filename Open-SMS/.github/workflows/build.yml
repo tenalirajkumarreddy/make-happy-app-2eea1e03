@@ -1,0 +1,84 @@
+name: Build OpenSMS APK
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Download fonts
+        run: |
+          mkdir -p app/src/main/res/font
+          curl -fsSL "https://github.com/google/fonts/raw/main/ofl/syne/Syne%5Bwght%5D.ttf" \
+            -o app/src/main/res/font/syne_bold.ttf || \
+          curl -fsSL "https://fonts.gstatic.com/s/syne/v22/8vIS7w4qzmVxsWxjBZRjr0FKM_04uQ.woff2" \
+            -o app/src/main/res/font/syne_bold.ttf || true
+          cp app/src/main/res/font/syne_bold.ttf app/src/main/res/font/syne_extrabold.ttf
+          curl -fsSL "https://github.com/JetBrains/JetBrainsMono/raw/master/fonts/ttf/JetBrainsMono-Regular.ttf" \
+            -o app/src/main/res/font/jetbrainsmono_regular.ttf
+          curl -fsSL "https://github.com/JetBrains/JetBrainsMono/raw/master/fonts/ttf/JetBrainsMono-Medium.ttf" \
+            -o app/src/main/res/font/jetbrainsmono_medium.ttf
+          echo "Font files:"
+          ls -lh app/src/main/res/font/
+
+      - name: Generate signing keystore
+        run: |
+          keytool -genkeypair \
+            -alias opensms \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -keystore $HOME/opensms.jks \
+            -storepass opensms2024 \
+            -keypass opensms2024 \
+            -dname "CN=OpenSMS,OU=App,O=OpenSMS,L=Unknown,ST=Unknown,C=US"
+          echo "Keystore generated"
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build release APK
+        env:
+          KEYSTORE_FILE: /home/runner/opensms.jks
+          KEYSTORE_PASSWORD: opensms2024
+          KEY_ALIAS: opensms
+          KEY_PASSWORD: opensms2024
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Rename APK
+        run: |
+          mkdir -p output
+          cp app/build/outputs/apk/release/app-release.apk output/OpenSMS.apk
+          echo "APK size: $(du -sh output/OpenSMS.apk)"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenSMS-APK
+          path: output/OpenSMS.apk
+          retention-days: 90
+
+      - name: Build summary
+        run: |
+          echo "## OpenSMS APK Built Successfully" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**APK:** \`OpenSMS.apk\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Size:** $(du -sh output/OpenSMS.apk | cut -f1)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Download the APK from the **Artifacts** section below." >> $GITHUB_STEP_SUMMARY

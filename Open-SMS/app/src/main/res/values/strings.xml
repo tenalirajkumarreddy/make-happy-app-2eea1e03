@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">OpenSMS</string>
+    <string name="gateway_running">Gateway Running</string>
+    <string name="gateway_stopped">Gateway Stopped</string>
+    <string name="channel_name">SMS Gateway</string>
+    <string name="channel_description">OpenSMS gateway foreground service</string>
+</resources>

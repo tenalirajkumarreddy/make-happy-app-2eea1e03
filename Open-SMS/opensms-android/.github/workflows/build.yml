@@ -1,0 +1,98 @@
+name: Build OpenSMS APK
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Download fonts
+        run: |
+          mkdir -p app/src/main/res/font
+          # Download Syne fonts from Google Fonts
+          curl -L "https://fonts.gstatic.com/s/syne/v22/8vIZ7wMr0mhh-RQChysvqg.ttf" -o app/src/main/res/font/syne_bold.ttf
+          curl -L "https://fonts.gstatic.com/s/syne/v22/8vIZ7wMr0mhh-RQChysvqg.ttf" -o app/src/main/res/font/syne_extrabold.ttf
+          # Download JetBrains Mono fonts
+          curl -L "https://github.com/JetBrains/JetBrainsMono/raw/master/fonts/ttf/JetBrainsMono-Regular.ttf" -o app/src/main/res/font/jetbrainsmono_regular.ttf
+          curl -L "https://github.com/JetBrains/JetBrainsMono/raw/master/fonts/ttf/JetBrainsMono-Medium.ttf" -o app/src/main/res/font/jetbrainsmono_medium.ttf
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: opensms-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
+
+  release:
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Download fonts
+        run: |
+          mkdir -p app/src/main/res/font
+          curl -L "https://fonts.gstatic.com/s/syne/v22/8vIZ7wMr0mhh-RQChysvqg.ttf" -o app/src/main/res/font/syne_bold.ttf
+          curl -L "https://fonts.gstatic.com/s/syne/v22/8vIZ7wMr0mhh-RQChysvqg.ttf" -o app/src/main/res/font/syne_extrabold.ttf
+          curl -L "https://github.com/JetBrains/JetBrainsMono/raw/master/fonts/ttf/JetBrainsMono-Regular.ttf" -o app/src/main/res/font/jetbrainsmono_regular.ttf
+          curl -L "https://github.com/JetBrains/JetBrainsMono/raw/master/fonts/ttf/JetBrainsMono-Medium.ttf" -o app/src/main/res/font/jetbrainsmono_medium.ttf
+
+      - name: Decode Keystore
+        if: secrets.KEYSTORE_BASE64 != ''
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 -d > keystore.jks
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build release APK
+        env:
+          KEYSTORE_FILE: ${{ github.workspace }}/keystore.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            app/build/outputs/apk/release/app-release.apk
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

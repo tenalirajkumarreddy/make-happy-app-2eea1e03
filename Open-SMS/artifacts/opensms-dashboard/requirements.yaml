@@ -1,0 +1,17 @@
+packages:
+  "framer-motion": "For smooth page transitions and beautiful entry animations"
+  "date-fns": "For formatting timestamps in logs and dashboard"
+  "recharts": "For displaying statistics charts on the dashboard"
+  "clsx": "For conditional tailwind class merging"
+  "tailwind-merge": "For conditional tailwind class merging"
+  "lucide-react": "For beautiful consistent iconography"
+
+images:
+  - path: "artifacts/opensms-dashboard/public/images/hero-bg.png"
+    description: "Futuristic dark minimal gradient mesh with deep navy and subtle cyan/indigo glows, resembling a high-tech terminal background or data stream"
+    aspect_ratio: "16:9"
+
+notes:
+  - Assuming @workspace/api-client-react hooks are generated and available
+  - Wouter is used for routing
+  - Strict adherence to the OpenSMS dark futuristic terminal aesthetic

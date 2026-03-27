@@ -1,0 +1,49 @@
+{
+  "name": "opensms",
+  "version": "3.0.0",
+  "description": "OpenSMS — zero-infrastructure SMS gateway. Add 5 lines to your backend, scan a QR code, send SMS from any Android phone.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./server": {
+      "import": "./dist/server.js",
+      "types": "./dist/server.d.ts"
+    },
+    "./adapters/express": {
+      "import": "./dist/adapters/express.js",
+      "types": "./dist/adapters/express.d.ts"
+    },
+    "./adapters/nextjs": {
+      "import": "./dist/adapters/nextjs.js",
+      "types": "./dist/adapters/nextjs.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/qrcode": "^1.5.5",
+    "@types/ws": "^8.5.12",
+    "typescript": "^5.6.0"
+  },
+  "keywords": ["sms", "gateway", "websocket", "android", "opensms", "otp"],
+  "author": "OpenSMS",
+  "license": "MIT",
+  "files": ["dist"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tenalirajkumarreddy/Open-SMS.git"
+  }
+}

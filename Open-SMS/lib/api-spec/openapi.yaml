@@ -1,0 +1,640 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: OpenSMS Dashboard API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: gateway
+    description: Gateway connection management
+  - name: messages
+    description: Message operations
+  - name: templates
+    description: Template management
+  - name: logs
+    description: Message log operations
+  - name: settings
+    description: Settings management
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /gateway/config:
+    get:
+      operationId: getGatewayConfig
+      tags: [gateway]
+      summary: Get gateway configuration
+      responses:
+        "200":
+          description: Gateway configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GatewayConfig"
+    put:
+      operationId: updateGatewayConfig
+      tags: [gateway]
+      summary: Update gateway configuration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateGatewayConfigBody"
+      responses:
+        "200":
+          description: Updated gateway configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GatewayConfig"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /gateway/health:
+    get:
+      operationId: getGatewayHealth
+      tags: [gateway]
+      summary: Get phone gateway health status
+      responses:
+        "200":
+          description: Gateway health info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GatewayHealth"
+        "503":
+          description: Gateway unreachable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /messages/send:
+    post:
+      operationId: sendMessage
+      tags: [messages]
+      summary: Send an SMS message via the gateway
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendMessageBody"
+      responses:
+        "202":
+          description: Message queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendMessageResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Gateway unreachable or queue full
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /messages/{messageId}/status:
+    get:
+      operationId: getMessageStatus
+      tags: [messages]
+      summary: Get status of a specific message
+      parameters:
+        - in: path
+          name: messageId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Message status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageStatus"
+        "404":
+          description: Message not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /templates:
+    get:
+      operationId: listTemplates
+      tags: [templates]
+      summary: List all SMS templates
+      responses:
+        "200":
+          description: List of templates
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListTemplatesResponse"
+    post:
+      operationId: createTemplate
+      tags: [templates]
+      summary: Create a new SMS template
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTemplateBody"
+      responses:
+        "201":
+          description: Template created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Template"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Template name already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /templates/{name}:
+    get:
+      operationId: getTemplate
+      tags: [templates]
+      summary: Get a specific template
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Template detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Template"
+        "404":
+          description: Template not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: updateTemplate
+      tags: [templates]
+      summary: Update a template
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTemplateBody"
+      responses:
+        "200":
+          description: Template updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Template"
+        "404":
+          description: Template not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteTemplate
+      tags: [templates]
+      summary: Delete a template
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Template deleted
+        "404":
+          description: Template not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /logs:
+    get:
+      operationId: getLogs
+      tags: [logs]
+      summary: Get message logs
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [all, delivered, sent, failed, pending]
+          description: Filter logs by status
+        - in: query
+          name: limit
+          schema:
+            type: integer
+          description: Max number of logs to return
+      responses:
+        "200":
+          description: Message logs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListLogsResponse"
+
+  /logs/stats:
+    get:
+      operationId: getStats
+      tags: [logs]
+      summary: Get message statistics
+      responses:
+        "200":
+          description: Message statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatsResponse"
+
+  /settings:
+    get:
+      operationId: getSettings
+      tags: [settings]
+      summary: Get application settings
+      responses:
+        "200":
+          description: Application settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+    put:
+      operationId: updateSettings
+      tags: [settings]
+      summary: Update application settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSettingsBody"
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+      required:
+        - error
+
+    GatewayConfig:
+      type: object
+      properties:
+        id:
+          type: integer
+        gatewayUrl:
+          type: string
+        apiKey:
+          type: string
+        name:
+          type: string
+        isDefault:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - gatewayUrl
+        - apiKey
+        - name
+        - isDefault
+        - createdAt
+        - updatedAt
+
+    UpdateGatewayConfigBody:
+      type: object
+      properties:
+        gatewayUrl:
+          type: string
+        apiKey:
+          type: string
+        name:
+          type: string
+      required:
+        - gatewayUrl
+        - apiKey
+        - name
+
+    GatewayHealth:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok, error, unreachable]
+        uptimeSeconds:
+          type: ["integer", "null"]
+        queueDepth:
+          type: ["integer", "null"]
+        smsSentToday:
+          type: ["integer", "null"]
+        paused:
+          type: ["boolean", "null"]
+        version:
+          type: ["string", "null"]
+        gatewayUrl:
+          type: string
+      required:
+        - status
+        - uptimeSeconds
+        - queueDepth
+        - smsSentToday
+        - paused
+        - version
+        - gatewayUrl
+
+    SendMessageBody:
+      type: object
+      properties:
+        to:
+          type: string
+          description: Recipient phone number in E.164 format
+        template:
+          type: ["string", "null"]
+          description: Template name to use
+        vars:
+          type: object
+          additionalProperties:
+            type: string
+          description: Template variables
+        body:
+          type: ["string", "null"]
+          description: Raw message body (use instead of template)
+        callbackUrl:
+          type: ["string", "null"]
+          description: Webhook URL for delivery receipt
+      required:
+        - to
+
+    SendMessageResponse:
+      type: object
+      properties:
+        messageId:
+          type: string
+        status:
+          type: string
+        queuedAt:
+          type: string
+          format: date-time
+      required:
+        - messageId
+        - status
+        - queuedAt
+
+    MessageStatus:
+      type: object
+      properties:
+        messageId:
+          type: string
+        to:
+          type: string
+        template:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [queued, sent, delivered, failed, pending]
+        sentAt:
+          type: ["string", "null"]
+          format: date-time
+        deliveredAt:
+          type: ["string", "null"]
+          format: date-time
+        error:
+          type: ["string", "null"]
+      required:
+        - messageId
+        - to
+        - status
+
+    Template:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        body:
+          type: string
+        vars:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - body
+        - vars
+        - createdAt
+        - updatedAt
+
+    ListTemplatesResponse:
+      type: object
+      properties:
+        templates:
+          type: array
+          items:
+            $ref: "#/components/schemas/Template"
+      required:
+        - templates
+
+    CreateTemplateBody:
+      type: object
+      properties:
+        name:
+          type: string
+        body:
+          type: string
+      required:
+        - name
+        - body
+
+    UpdateTemplateBody:
+      type: object
+      properties:
+        body:
+          type: string
+      required:
+        - body
+
+    MessageLog:
+      type: object
+      properties:
+        id:
+          type: integer
+        messageId:
+          type: string
+        to:
+          type: string
+        toMasked:
+          type: string
+        template:
+          type: ["string", "null"]
+        body:
+          type: string
+        status:
+          type: string
+          enum: [queued, sent, delivered, failed, pending]
+        sentAt:
+          type: ["string", "null"]
+          format: date-time
+        deliveredAt:
+          type: ["string", "null"]
+          format: date-time
+        error:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - messageId
+        - to
+        - toMasked
+        - body
+        - status
+        - createdAt
+
+    ListLogsResponse:
+      type: object
+      properties:
+        logs:
+          type: array
+          items:
+            $ref: "#/components/schemas/MessageLog"
+        total:
+          type: integer
+      required:
+        - logs
+        - total
+
+    StatsResponse:
+      type: object
+      properties:
+        sentToday:
+          type: integer
+        sentThisWeek:
+          type: integer
+        failedToday:
+          type: integer
+        pending:
+          type: integer
+        delivered:
+          type: integer
+        total:
+          type: integer
+      required:
+        - sentToday
+        - sentThisWeek
+        - failedToday
+        - pending
+        - delivered
+        - total
+
+    Settings:
+      type: object
+      properties:
+        autoStart:
+          type: boolean
+        notifyOnFailure:
+          type: boolean
+        smsRateLimit:
+          type: integer
+        webhookUrl:
+          type: ["string", "null"]
+      required:
+        - autoStart
+        - notifyOnFailure
+        - smsRateLimit
+
+    UpdateSettingsBody:
+      type: object
+      properties:
+        autoStart:
+          type: boolean
+        notifyOnFailure:
+          type: boolean
+        smsRateLimit:
+          type: integer
+        webhookUrl:
+          type: ["string", "null"]

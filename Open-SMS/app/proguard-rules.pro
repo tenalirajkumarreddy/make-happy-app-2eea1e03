@@ -1,0 +1,5 @@
+-keep class dev.opensms.** { *; }
+-keep class fi.iki.elonen.** { *; }
+-keepattributes Signature
+-keepattributes *Annotation*
+-dontwarn fi.iki.elonen.**
