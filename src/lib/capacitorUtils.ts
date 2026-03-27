@@ -18,6 +18,15 @@ export const isAndroid = () => Capacitor.getPlatform() === "android";
  */
 export const isIOS = () => Capacitor.getPlatform() === "ios";
 
+const NATIVE_OAUTH_CALLBACK = "com.aquaprime.app://auth/callback";
+
+/**
+ * Build OAuth redirect URL for current runtime.
+ * Native uses app deep link scheme, web uses origin + provided path.
+ */
+export const getOAuthRedirectUrl = (webPath = "/") =>
+  isNativeApp() ? NATIVE_OAUTH_CALLBACK : `${window.location.origin}${webPath}`;
+
 /**
  * Take a photo using native camera (falls back to web if not native)
  */

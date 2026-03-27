@@ -46,7 +46,7 @@ interface StaffMember {
 }
 
 export function AdminStaffDirectory() {
-  const { role } = useAuth();
+  const { role, user } = useAuth();
   const qc = useQueryClient();
   const isAdmin = role === "super_admin";
 

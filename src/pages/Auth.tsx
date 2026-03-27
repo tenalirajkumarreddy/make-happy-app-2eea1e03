@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { Loader2, ArrowLeft, Smartphone, MapPin, Navigation } from "lucide-react";
 import { generateDisplayId } from "@/lib/displayId";
 import { useQuery } from "@tanstack/react-query";
-import { getCurrentPosition } from "@/lib/capacitorUtils";
+import { getCurrentPosition, getOAuthRedirectUrl } from "@/lib/capacitorUtils";
 
 type Step = "phone" | "otp" | "register" | "add-store" | "link-google";
 type IdentityResolution =
@@ -35,6 +35,19 @@ async function resolveUserIdentity(): Promise<IdentityResolution> {
   if (error) throw error;
   if (!data?.type) throw new Error("Invalid identity resolution response");
   return data as IdentityResolution;
+}
+
+async function hasStaffOrCustomerAccess(userId: string): Promise<boolean> {
+  const [{ data: roleData }, { data: customerData }] = await Promise.all([
+    supabase.from("user_roles").select("role").eq("user_id", userId).maybeSingle(),
+    supabase.from("customers").select("id").eq("user_id", userId).maybeSingle(),
+  ]);
+
+  if (roleData?.role && roleData.role !== "customer") {
+    return true;
+  }
+
+  return !!customerData;
 }
 
 const Auth = () => {
@@ -105,10 +118,27 @@ const Auth = () => {
           navigate("/auth", { replace: true });
           return;
         }
-        navigate("/onboarding", { replace: true });
+
+        if (await hasStaffOrCustomerAccess(session.user.id)) {
+          navigate("/", { replace: true });
+          return;
+        }
+
+        setVerifiedPhone(session.user.phone || "");
+        setStep("register");
       } catch (error) {
         console.error("Identity resolution failed", error);
-        navigate("/onboarding", { replace: true });
+
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user && await hasStaffOrCustomerAccess(user.id)) {
+          navigate("/", { replace: true });
+          return;
+        }
+
+        if (session.user?.phone) {
+          setVerifiedPhone(session.user.phone);
+        }
+        setStep("register");
       } finally {
         setLoading(false);
         setSessionChecked(true);
@@ -218,6 +248,13 @@ const Auth = () => {
         return;
       }
 
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user && await hasStaffOrCustomerAccess(user.id)) {
+        toast.success("Logged in successfully");
+        navigate("/");
+        return;
+      }
+
       // Brand-new customer — check if signup is enabled
       if (!customerSignupEnabled) {
         toast.error("New customer registration is currently disabled. Please contact support.");
@@ -226,7 +263,7 @@ const Auth = () => {
         return;
       }
 
-      // Collect their details
+      // Continue in detailed Auth onboarding (profile + location-rich store setup).
       setStep("register");
       toast.success("Phone verified! Complete your profile to continue.");
     } catch (error) {
@@ -369,7 +406,7 @@ const Auth = () => {
       if (googleLinkingEnabled && !providers.includes("google")) {
         setStep("link-google");
       } else {
-        navigate("/");
+        window.location.assign("/");
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not create store");
@@ -437,7 +474,7 @@ const Auth = () => {
               onClick={async () => {
                 const { error } = await supabase.auth.linkIdentity({
                   provider: "google",
-                  options: { redirectTo: `${window.location.origin}/auth` },
+                  options: { redirectTo: getOAuthRedirectUrl("/auth") },
                 });
                 if (error) {
                   if (error.message?.toLowerCase().includes("manual linking")) {
@@ -456,7 +493,7 @@ const Auth = () => {
               </svg>
               Link Google Account
             </Button>
-            <Button variant="ghost" className="w-full" onClick={() => navigate("/")}>Skip for now</Button>
+            <Button variant="ghost" className="w-full" onClick={() => window.location.assign("/")}>Skip for now</Button>
           </div>
         </div>
       </div>
@@ -557,7 +594,7 @@ const Auth = () => {
               setLoading(true);
               const { error} = await supabase.auth.signInWithOAuth({
                 provider: "google",
-                options: { redirectTo: `${window.location.origin}/auth` },
+                options: { redirectTo: getOAuthRedirectUrl("/auth") },
               });
               if (error) {
                 toast.error(error.message || "Google sign-in failed");

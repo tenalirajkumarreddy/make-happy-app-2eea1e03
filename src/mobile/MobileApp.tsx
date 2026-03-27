@@ -404,7 +404,6 @@ function MarketerApp() {
             onOpenOrders={() => setTab("orders")}
             onOpenRecord={() => setTab("record")}
             onOpenStores={() => setTab("customers")}
-            onOpenProducts={() => setTab("products")}
             onOpenAddEntity={() => setShowAddEntity(true)}
           />
         )}

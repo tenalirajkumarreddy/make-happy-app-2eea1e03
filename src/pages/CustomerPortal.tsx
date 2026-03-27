@@ -14,6 +14,7 @@ import { useNavigate } from "react-router-dom";
 import { DataTable } from "@/components/shared/DataTable";
 import { BannerCarousel } from "@/components/banners/BannerCarousel";
 import { NoticeBox } from "@/components/shared/NoticeBox";
+import { getOAuthRedirectUrl } from "@/lib/capacitorUtils";
 
 const CustomerPortal = () => {
   const { user } = useAuth();
@@ -23,16 +24,15 @@ const CustomerPortal = () => {
   );
   const [linkingGoogle, setLinkingGoogle] = useState(false);
 
-  // Check if Google is already linked
-  const isGoogleLinked = user?.app_metadata?.providers?.includes("google") || 
-    (user?.identities || []).some((i: any) => i?.provider === "google");
+  const googleIdentity = (user?.identities || []).find((i: any) => i?.provider === "google");
+  const isGoogleLinked = !!googleIdentity;
   const isPhoneOnlyUser = !!user?.email?.endsWith("@phone.aquaprime.app");
 
   const handleLinkGoogle = async () => {
     setLinkingGoogle(true);
     const { error } = await supabase.auth.linkIdentity({
       provider: "google",
-      options: { redirectTo: window.location.origin },
+      options: { redirectTo: getOAuthRedirectUrl("/") },
     });
     if (error) {
       if (error.message?.toLowerCase().includes("manual linking")) {

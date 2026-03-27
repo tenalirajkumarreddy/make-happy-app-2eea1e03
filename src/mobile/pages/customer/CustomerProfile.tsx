@@ -5,6 +5,7 @@ import { resolveCustomer } from "@/lib/resolveCustomer";
 import { useAuth } from "@/contexts/AuthContext";
 import { useState } from "react";
 import { toast } from "sonner";
+import { getOAuthRedirectUrl } from "@/lib/capacitorUtils";
 
 interface CustomerRow {
   id: string;
@@ -25,10 +26,18 @@ export function CustomerProfile() {
   const { user } = useAuth();
   const [linking, setLinking] = useState(false);
 
-  // Check if Google is already linked
-  const isGoogleLinked =
-    user?.app_metadata?.providers?.includes("google") ||
-    user?.identities?.some((identity) => identity.provider === "google");
+  const { data: liveAuthUser, refetch: refetchLiveAuthUser } = useQuery({
+    queryKey: ["mobile-auth-user-live", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.auth.getUser();
+      if (error) throw error;
+      return data.user;
+    },
+    enabled: !!user,
+  });
+
+  const googleIdentity = liveAuthUser?.identities?.find((identity) => identity.provider === "google");
+  const isGoogleLinked = !!googleIdentity;
 
   const { data: customer, isLoading } = useQuery({
     queryKey: ["mobile-customer-profile", user?.id],
@@ -89,7 +98,7 @@ export function CustomerProfile() {
       const { error } = await supabase.auth.linkIdentity({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/portal/profile`,
+          redirectTo: getOAuthRedirectUrl("/"),
         },
       });
 
@@ -110,20 +119,28 @@ export function CustomerProfile() {
   };
 
   const handleUnlinkGoogle = async () => {
-    const googleIdentity = user?.identities?.find((identity) => identity.provider === "google");
-    if (!googleIdentity) {
-      toast.error("No Google account linked");
+    const { data: latestAuthData } = await supabase.auth.getUser();
+    const latestGoogleIdentity = latestAuthData.user?.identities?.find((identity) => identity.provider === "google");
+
+    if (!latestGoogleIdentity) {
+      toast.success("Google account is already unlinked");
+      await refetchLiveAuthUser();
       return;
     }
 
     setLinking(true);
     try {
-      const { error } = await supabase.auth.unlinkIdentity(googleIdentity);
+      const { error } = await supabase.auth.unlinkIdentity(latestGoogleIdentity);
       if (error) {
-        toast.error(error.message);
+        if (error.message?.toLowerCase().includes("identity doesn't exist")) {
+          toast.success("Google account is already unlinked");
+          await refetchLiveAuthUser();
+        } else {
+          toast.error(error.message);
+        }
       } else {
         toast.success("Google account unlinked successfully");
-        window.location.reload();
+        await refetchLiveAuthUser();
       }
     } catch (error: any) {
       toast.error(error.message || "Failed to unlink Google account");

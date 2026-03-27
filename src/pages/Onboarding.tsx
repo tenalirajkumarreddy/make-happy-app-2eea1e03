@@ -69,6 +69,10 @@ export default function Onboarding() {
       return;
     }
 
+    // Detailed onboarding now lives in Auth flow.
+    navigate("/auth", { replace: true });
+    return;
+
     if (profile) {
       setName(profile.full_name || "");
     }
@@ -381,16 +385,6 @@ export default function Onboarding() {
             <Button onClick={createStoreAndFinish} disabled={loading} className="w-full">
               {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Create Store & Finish
-            </Button>
-            <Button
-              variant="ghost"
-              className="w-full"
-              onClick={() => {
-                toast.success("Profile created. You can add a store later.");
-                window.location.href = "/";
-              }}
-            >
-              Skip for now
             </Button>
           </div>
         )}
