@@ -437,7 +437,7 @@ export function AgentScan({ onGoRecord, onGoVisit, onOpenStore }: Props) {
             <div className="p-4 flex items-start gap-3">
               <button className="h-14 w-14 rounded-xl bg-slate-100 dark:bg-slate-700 overflow-hidden shrink-0" onClick={() => onOpenStore(selectedStore)}>
                 {selectedStore.photo_url ? (
-                  <img src={selectedStore.photo_url} alt={selectedStore.name} className="h-full w-full object-cover" />
+                  <img src={selectedStore.photo_url} alt={selectedStore.name} loading="lazy" className="h-full w-full object-cover" />
                 ) : (
                   <div className="h-full w-full flex items-center justify-center"><Store className="h-5 w-5 text-slate-400" /></div>
                 )}

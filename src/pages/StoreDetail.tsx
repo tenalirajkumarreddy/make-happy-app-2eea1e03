@@ -526,7 +526,7 @@ const StoreDetail = () => {
           <div className="flex items-end gap-4">
             <div className="h-20 w-20 sm:h-24 sm:w-24 rounded-xl border-4 border-card bg-muted flex items-center justify-center overflow-hidden shadow-md shrink-0">
               {store.photo_url ? (
-                <img src={store.photo_url} alt={store.name} className="w-full h-full object-cover" />
+                <img src={store.photo_url} alt={store.name} loading="lazy" className="w-full h-full object-cover" />
               ) : (
                 <StoreIcon className="h-10 w-10 text-muted-foreground/40" />
               )}

@@ -126,6 +126,31 @@ serve(async (req) => {
     const sessionToken = generateSessionToken()
 
     try {
+      // RATE LIMITING: Check for recent OTP requests from this phone
+      const { data: recentSessions, error: rateLimitError } = await supabase
+        .from('otp_sessions')
+        .select('created_at')
+        .eq('phone_number', normalizedPhone)
+        .gte('created_at', new Date(Date.now() - 5 * 60 * 1000).toISOString()) // Last 5 minutes
+        .order('created_at', { ascending: false });
+
+      if (rateLimitError) {
+        console.error('Rate limit check error:', rateLimitError);
+      }
+
+      // Allow max 3 OTP requests per 5 minutes
+      if (recentSessions && recentSessions.length >= 3) {
+        return new Response(
+          JSON.stringify({ 
+            error: 'Too many OTP requests. Please wait 5 minutes before trying again.' 
+          }),
+          {
+            status: 429,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          }
+        );
+      }
+
       // Store OTP session in database
       const { error: dbError } = await supabase
         .from('otp_sessions')

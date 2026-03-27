@@ -84,7 +84,8 @@ const Handovers = () => {
       const { data, error } = await supabase
         .from("handovers")
         .select("*")
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(500);
       if (error) throw error;
       return data || [];
     },
@@ -127,14 +128,14 @@ const Handovers = () => {
     queryKey: ["all-staff-balances"],
     queryFn: async () => {
       // Get all staff user IDs
-      const { data: roles } = await supabase.from("user_roles").select("user_id, role").neq("role", "customer");
+      const { data: roles } = await supabase.from("user_roles").select("user_id, role").neq("role", "customer").limit(200);
       const staffIds = (roles || []).map((r) => r.user_id);
 
       // Get all sales
-      const { data: allSales } = await supabase.from("sales").select("recorded_by, cash_amount, upi_amount");
+      const { data: allSales } = await supabase.from("sales").select("recorded_by, cash_amount, upi_amount").limit(5000);
 
       // Get all handovers
-      const { data: allHandovers } = await supabase.from("handovers").select("user_id, handed_to, cash_amount, upi_amount, status");
+      const { data: allHandovers } = await supabase.from("handovers").select("user_id, handed_to, cash_amount, upi_amount, status").limit(2000);
 
       const balances: Record<string, { sales: number; received: number; sentConfirmed: number; sentPending: number; total: number }> = {};
 

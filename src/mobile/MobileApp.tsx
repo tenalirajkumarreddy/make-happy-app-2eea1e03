@@ -21,6 +21,8 @@ import {
   History,
   Shield,
   Settings,
+  Warehouse,
+  User,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { isNativeApp } from "@/lib/capacitorUtils";
@@ -43,10 +45,12 @@ import Orders from "@/pages/Orders";
 import Handovers from "@/pages/Handovers";
 import Reports from "@/pages/Reports";
 import Analytics from "@/pages/Analytics";
+import Inventory from "@/pages/Inventory";
 import Activity from "@/pages/Activity";
 import AccessControl from "@/pages/AccessControl";
 import SettingsPage from "@/pages/Settings";
 import MapPage from "@/pages/MapPage";
+import UserProfile from "@/pages/UserProfile";
 import { AgentHome } from "./pages/agent/AgentHome";
 import { AgentRoutes } from "./pages/agent/AgentRoutes";
 import { AgentScan } from "./pages/agent/AgentScan";
@@ -96,6 +100,7 @@ const STAFF_MENU_BY_ROLE: Record<StaffRole, StaffMenuItem[]> = {
   super_admin: [
     { id: "dashboard", label: "Dashboard", path: "/", icon: LayoutDashboard },
     { id: "products", label: "Products", path: "/products", icon: Package },
+    { id: "inventory", label: "Inventory", path: "/inventory", icon: Warehouse },
     { id: "customers", label: "Customers", path: "/customers", icon: Users },
     { id: "stores", label: "Stores", path: "/stores", icon: Store },
     { id: "routes", label: "Routes", path: "/routes", icon: Route },
@@ -108,11 +113,13 @@ const STAFF_MENU_BY_ROLE: Record<StaffRole, StaffMenuItem[]> = {
     { id: "analytics", label: "Analytics", path: "/analytics", icon: BarChart3 },
     { id: "activity", label: "Activity Log", path: "/activity", icon: History },
     { id: "access", label: "Access Control", path: "/access-control", icon: Shield },
+    { id: "profile", label: "My Profile", path: "/profile", icon: User },
     { id: "settings", label: "Settings", path: "/settings", icon: Settings },
   ],
   manager: [
     { id: "dashboard", label: "Dashboard", path: "/", icon: LayoutDashboard },
     { id: "products", label: "Products", path: "/products", icon: Package },
+    { id: "inventory", label: "Inventory", path: "/inventory", icon: Warehouse },
     { id: "customers", label: "Customers", path: "/customers", icon: Users },
     { id: "stores", label: "Stores", path: "/stores", icon: Store },
     { id: "routes", label: "Routes", path: "/routes", icon: Route },
@@ -124,6 +131,7 @@ const STAFF_MENU_BY_ROLE: Record<StaffRole, StaffMenuItem[]> = {
     { id: "reports", label: "Reports", path: "/reports", icon: FileText },
     { id: "analytics", label: "Analytics", path: "/analytics", icon: BarChart3 },
     { id: "activity", label: "Activity Log", path: "/activity", icon: History },
+    { id: "profile", label: "My Profile", path: "/profile", icon: User },
     { id: "settings", label: "Settings", path: "/settings", icon: Settings },
   ],
 };
@@ -149,6 +157,7 @@ function StaffApp({ role }: { role: StaffRole }) {
 
     if (path.startsWith("/reports")) return <Reports />;
     if (path === "/products") return <Products />;
+    if (path === "/inventory") return <Inventory />;
     if (path === "/customers") return <Customers />;
     if (path === "/stores") return <Stores />;
     if (path === "/routes") return <RoutesPage />;
@@ -160,6 +169,7 @@ function StaffApp({ role }: { role: StaffRole }) {
     if (path === "/analytics") return <Analytics />;
     if (path === "/activity") return <Activity />;
     if (path === "/access-control" && role === "super_admin") return <AccessControl />;
+    if (path === "/profile") return <UserProfile />;
     if (path === "/settings") return <SettingsPage />;
 
     return <Dashboard />;

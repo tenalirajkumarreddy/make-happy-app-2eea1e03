@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
-import { Bell, Wifi, WifiOff, LogOut, Moon, Sun, ChevronDown } from "lucide-react";
+import { Bell, Wifi, WifiOff, LogOut, Moon, Sun, ChevronDown, User } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { supabase } from "@/integrations/supabase/client";
 import { NotificationsSheet } from "./NotificationsSheet";
 import { cn } from "@/lib/utils";
+import { useNavigate } from "react-router-dom";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,6 +38,7 @@ export function MobileHeader({ title }: Props) {
   const { unreadCount } = useNotifications();
   const { isOnline, pendingCount } = useOnlineStatus();
   const { dark, toggle } = useTheme();
+  const navigate = useNavigate();
   const [notifOpen, setNotifOpen] = useState(false);
   const [companyName, setCompanyName] = useState("Aqua Prime");
   const [companyLogo, setCompanyLogo] = useState<string>("");
@@ -170,6 +172,13 @@ export function MobileHeader({ title }: Props) {
                     </div>
                   </div>
                   <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => navigate(role === "customer" ? "/portal/profile" : "/profile")}
+                    className="gap-2 mx-1 rounded-lg"
+                  >
+                    <User className="h-4 w-4" />
+                    My Profile
+                  </DropdownMenuItem>
                   <DropdownMenuItem
                     onClick={signOut}
                     className="text-destructive focus:text-destructive gap-2 mx-1 mb-1 rounded-lg"

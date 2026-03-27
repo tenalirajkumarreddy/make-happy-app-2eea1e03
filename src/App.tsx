@@ -1,3 +1,4 @@
+import { Suspense, lazy } from "react";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -10,41 +11,56 @@ import * as Sentry from "@sentry/react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { logError } from "@/lib/logger";
+import { Loader2 } from "lucide-react";
+
+// Critical pages loaded eagerly for fast initial load
 import Dashboard from "./pages/Dashboard";
+import Auth from "./pages/Auth";
+import NotFound from "./pages/NotFound";
+
+// Role dashboards - loaded eagerly as they're immediate destinations
 import AgentDashboard from "./pages/AgentDashboard";
 import MarketerDashboard from "./pages/MarketerDashboard";
 import PosDashboard from "./pages/PosDashboard";
-import Products from "./pages/Products";
-import Customers from "./pages/Customers";
-import CustomerDetail from "./pages/CustomerDetail";
-import Stores from "./pages/Stores";
-import StoreDetail from "./pages/StoreDetail";
-import RoutesPage from "./pages/Routes";
-import RouteDetail from "./pages/RouteDetail";
-import Sales from "./pages/Sales";
-import Transactions from "./pages/Transactions";
-import Orders from "./pages/Orders";
-import Handovers from "./pages/Handovers";
-import Reports from "./pages/Reports";
-import Analytics from "./pages/Analytics";
-import Inventory from "./pages/Inventory";
-import Banners from "./pages/Banners";
-import Activity from "./pages/Activity";
-import AccessControl from "./pages/AccessControl";
-import { AdminStaffDirectory } from "./pages/AdminStaffDirectory";
-import Settings from "./pages/Settings";
-import StoreTypes from "./pages/StoreTypes";
-import StoreTypeAccess from "./pages/StoreTypeAccess";
 import CustomerPortal from "./pages/CustomerPortal";
-import MapPage from "./pages/MapPage";
-import CustomerSales from "./pages/CustomerSales";
-import CustomerOrders from "./pages/CustomerOrders";
-import CustomerTransactions from "./pages/CustomerTransactions";
-import CustomerProfile from "./pages/CustomerProfile";
-import Auth from "./pages/Auth";
-import Onboarding from "./pages/Onboarding";
-import ResetPassword from "./pages/ResetPassword";
-import NotFound from "./pages/NotFound";
+
+// Lazy-loaded pages (code splitting)
+const Products = lazy(() => import("./pages/Products"));
+const Customers = lazy(() => import("./pages/Customers"));
+const CustomerDetail = lazy(() => import("./pages/CustomerDetail"));
+const Stores = lazy(() => import("./pages/Stores"));
+const StoreDetail = lazy(() => import("./pages/StoreDetail"));
+const RoutesPage = lazy(() => import("./pages/Routes"));
+const RouteDetail = lazy(() => import("./pages/RouteDetail"));
+const Sales = lazy(() => import("./pages/Sales"));
+const Transactions = lazy(() => import("./pages/Transactions"));
+const Orders = lazy(() => import("./pages/Orders"));
+const Handovers = lazy(() => import("./pages/Handovers"));
+const Reports = lazy(() => import("./pages/Reports"));
+const Analytics = lazy(() => import("./pages/Analytics"));
+const Inventory = lazy(() => import("./pages/Inventory"));
+const Banners = lazy(() => import("./pages/Banners"));
+const Activity = lazy(() => import("./pages/Activity"));
+const AccessControl = lazy(() => import("./pages/AccessControl"));
+const AdminStaffDirectory = lazy(() => import("./pages/AdminStaffDirectory").then(m => ({ default: m.AdminStaffDirectory })));
+const Settings = lazy(() => import("./pages/Settings"));
+const StoreTypes = lazy(() => import("./pages/StoreTypes"));
+const StoreTypeAccess = lazy(() => import("./pages/StoreTypeAccess"));
+const MapPage = lazy(() => import("./pages/MapPage"));
+const CustomerSales = lazy(() => import("./pages/CustomerSales"));
+const CustomerOrders = lazy(() => import("./pages/CustomerOrders"));
+const CustomerTransactions = lazy(() => import("./pages/CustomerTransactions"));
+const CustomerProfile = lazy(() => import("./pages/CustomerProfile"));
+const UserProfile = lazy(() => import("./pages/UserProfile"));
+const Onboarding = lazy(() => import("./pages/Onboarding"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+
+// Loading fallback component
+const PageLoader = () => (
+  <div className="flex h-full items-center justify-center py-20">
+    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+  </div>
+);
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -91,6 +107,7 @@ const App = () => (
         <Sonner />
         <ErrorBoundary>
         <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <Suspense fallback={<PageLoader />}>
           <Routes>
             <Route path="/auth" element={<Auth />} />
             <Route path="/onboarding" element={<Onboarding />} />
@@ -133,6 +150,10 @@ const App = () => (
               <Route path="/orders" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer"]}><Orders /></RoleGuard>} />
               {/* Handovers: All staff */}
               <Route path="/handovers" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer", "pos"]}><Handovers /></RoleGuard>} />
+              
+              {/* User Profile: All authenticated users */}
+              <Route path="/profile" element={<UserProfile />} />
+              
               {/* Customer portal pages */}
               <Route path="/portal/sales" element={<RoleGuard allowed={["customer"]}><CustomerSales /></RoleGuard>} />
               <Route path="/portal/orders" element={<RoleGuard allowed={["customer"]}><CustomerOrders /></RoleGuard>} />
@@ -141,6 +162,7 @@ const App = () => (
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </Suspense>
         </BrowserRouter>
         </ErrorBoundary>
       </TooltipProvider>

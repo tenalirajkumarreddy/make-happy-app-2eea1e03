@@ -30,3 +30,7 @@ dist-ssr
 *.sln
 *.sw?
 .vercel
+
+# Replit config (may contain secrets)
+.replit
+replit.nix

@@ -54,6 +54,47 @@ export default function DailyReport() {
       const visits = visitsRes.data || [];
 
       const profileMap = Object.fromEntries(profiles.map((p) => [p.user_id, p.full_name]));
+      
+      // Pre-build lookup maps for O(1) access instead of O(n) find/filter in loops
+      const roleMap = new Map(roles.map((r) => [r.user_id, r.role]));
+      const salesByUser = new Map<string, typeof sales>();
+      const txnsByUser = new Map<string, typeof txns>();
+      const handoversBySender = new Map<string, typeof handovers>();
+      const handoversByReceiver = new Map<string, typeof handovers>();
+      const storesByRoute = new Map<string, typeof stores>();
+      const visitsByRoute = new Map<string, typeof visits>();
+      
+      // Group data by user/route for O(1) lookups
+      sales.forEach((s) => {
+        const key = s.recorded_by;
+        if (!salesByUser.has(key)) salesByUser.set(key, []);
+        salesByUser.get(key)!.push(s);
+      });
+      txns.forEach((t) => {
+        const key = t.recorded_by;
+        if (!txnsByUser.has(key)) txnsByUser.set(key, []);
+        txnsByUser.get(key)!.push(t);
+      });
+      handovers.forEach((h) => {
+        if (!handoversBySender.has(h.user_id)) handoversBySender.set(h.user_id, []);
+        handoversBySender.get(h.user_id)!.push(h);
+        if (!handoversByReceiver.has(h.handed_to)) handoversByReceiver.set(h.handed_to, []);
+        handoversByReceiver.get(h.handed_to)!.push(h);
+      });
+      stores.forEach((s) => {
+        const key = s.route_id;
+        if (key) {
+          if (!storesByRoute.has(key)) storesByRoute.set(key, []);
+          storesByRoute.get(key)!.push(s);
+        }
+      });
+      visits.forEach((v: any) => {
+        const key = v.stores?.route_id;
+        if (key) {
+          if (!visitsByRoute.has(key)) visitsByRoute.set(key, []);
+          visitsByRoute.get(key)!.push(v);
+        }
+      });
 
       // Sales metrics
       const totalSaleAmount = sales.reduce((s, r) => s + Number(r.total_amount), 0);
@@ -88,30 +129,31 @@ export default function DailyReport() {
       });
       const productBreakdown = Object.values(productMap).sort((a, b) => b.revenue - a.revenue);
 
-      // Staff-wise balance calculation
+      // Staff-wise balance calculation using pre-built maps (O(n) instead of O(n²))
       const staffIds = roles.map((r) => r.user_id);
       const staffBalances = staffIds.map((uid) => {
         const name = profileMap[uid] || "Unknown";
-        const role = roles.find((r) => r.user_id === uid)?.role || "";
+        const role = roleMap.get(uid) || "";
 
-        // Sales recorded by this user (cash + upi collected)
-        const userSales = sales.filter((s) => s.recorded_by === uid);
+        // Sales recorded by this user (cash + upi collected) - O(1) lookup
+        const userSales = salesByUser.get(uid) || [];
         const collectedFromSales = userSales.reduce((s, r) => s + Number(r.cash_amount) + Number(r.upi_amount), 0);
 
-        // Transactions/payments recorded by this user
-        const userTxns = txns.filter((t) => t.recorded_by === uid);
+        // Transactions/payments recorded by this user - O(1) lookup
+        const userTxns = txnsByUser.get(uid) || [];
         const collectedFromTxns = userTxns.reduce((s, r) => s + Number(r.total_amount), 0);
 
         const totalCollected = collectedFromSales + collectedFromTxns;
 
-        // Handovers sent (confirmed)
-        const sentConfirmed = handovers.filter((h) => h.user_id === uid && h.status === "confirmed")
+        // Handovers - O(1) lookup for sender/receiver
+        const sentHandovers = handoversBySender.get(uid) || [];
+        const receivedHandovers = handoversByReceiver.get(uid) || [];
+        
+        const sentConfirmed = sentHandovers.filter((h) => h.status === "confirmed")
           .reduce((s, h) => s + Number(h.cash_amount) + Number(h.upi_amount), 0);
-        // Handovers sent (pending)
-        const sentPending = handovers.filter((h) => h.user_id === uid && h.status === "pending")
+        const sentPending = sentHandovers.filter((h) => h.status === "pending")
           .reduce((s, h) => s + Number(h.cash_amount) + Number(h.upi_amount), 0);
-        // Handovers received (confirmed)
-        const receivedConfirmed = handovers.filter((h) => h.handed_to === uid && h.status === "confirmed")
+        const receivedConfirmed = receivedHandovers.filter((h) => h.status === "confirmed")
           .reduce((s, h) => s + Number(h.cash_amount) + Number(h.upi_amount), 0);
 
         const balance = totalCollected - sentConfirmed - sentPending + receivedConfirmed;
@@ -140,15 +182,12 @@ export default function DailyReport() {
       const pending = orders.filter((o) => o.status === "pending").length;
       const cancelled = orders.filter((o) => o.status === "cancelled").length;
 
-      // Route performance
+      // Route performance using pre-built maps (O(n) instead of O(n²))
       const routePerformance = routes.map((route) => {
-        const routeStores = stores.filter((s) => s.route_id === route.id);
+        const routeStores = storesByRoute.get(route.id) || [];
         const totalStores = routeStores.length;
-        const visitedStoreIds = new Set(
-          visits
-            .filter((v: any) => v.stores?.route_id === route.id)
-            .map((v: any) => v.store_id)
-        );
+        const routeVisits = visitsByRoute.get(route.id) || [];
+        const visitedStoreIds = new Set(routeVisits.map((v: any) => v.store_id));
         const storesCovered = visitedStoreIds.size;
         const pctCovered = totalStores > 0 ? Math.round((storesCovered / totalStores) * 100) : 0;
         const routeSales = sales.filter((s: any) => s.stores?.route_id === route.id)

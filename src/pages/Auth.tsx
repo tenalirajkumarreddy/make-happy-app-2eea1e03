@@ -79,6 +79,10 @@ const Auth = () => {
     const resolveExistingSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) return;
+      
+      // Show loading during OAuth callback resolution
+      setLoading(true);
+      
       try {
         const identity = await resolveUserIdentity();
         if (identity.type === "staff") {
@@ -100,6 +104,8 @@ const Auth = () => {
       } catch (error) {
         console.error("Identity resolution failed", error);
         navigate("/onboarding", { replace: true });
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -334,9 +340,13 @@ const Auth = () => {
     }
     setLoading(true);
     try {
+      // Get default store type from settings
+      const defaultStoreTypeId = appSettings?.default_store_type_id || '76efecec-3e6b-4142-beaa-885c06f41ba2'; // Fallback to Retail
+      
       const displayId = generateDisplayId("STR");
       const { error } = await supabase.from("stores").insert({
         customer_id: newCustomerId,
+        store_type_id: defaultStoreTypeId,
         display_id: displayId,
         name: storeName.trim(),
         address: storeAddress.trim(),
@@ -344,7 +354,6 @@ const Auth = () => {
         lat: storeLat,
         lng: storeLng,
         phone: verifiedPhone || null,
-        // store_type_id will be assigned by agent/manager later
       });
       if (error) throw error;
       toast.success("Account set up successfully! Welcome.");
@@ -362,6 +371,19 @@ const Auth = () => {
       setLoading(false);
     }
   };
+
+  // ── LOADING STATE (OAuth callback resolution) ──
+  // Show loading screen when resolving session/identity during OAuth callback
+  if (loading && step === "phone") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="text-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
+          <p className="text-sm text-muted-foreground">Signing you in...</p>
+        </div>
+      </div>
+    );
+  }
 
   // ── REGISTER STEP ──
   if (step === "register") {

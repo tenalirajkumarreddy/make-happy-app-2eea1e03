@@ -219,7 +219,7 @@ export function ProductCategories({ onBack }: ProductCategoriesProps) {
                       <div key={p.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/20 transition-colors">
                         <div className="w-8 h-8 rounded-md bg-muted flex items-center justify-center overflow-hidden shrink-0">
                           {p.image_url ? (
-                            <img src={p.image_url} alt="" className="w-full h-full object-cover" />
+                            <img src={p.image_url} alt="" loading="lazy" className="w-full h-full object-cover" />
                           ) : (
                             <Package className="h-4 w-4 text-muted-foreground/40" />
                           )}
@@ -257,7 +257,7 @@ export function ProductCategories({ onBack }: ProductCategoriesProps) {
                   <div key={p.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/20 transition-colors">
                     <div className="w-8 h-8 rounded-md bg-muted flex items-center justify-center overflow-hidden shrink-0">
                       {p.image_url ? (
-                        <img src={p.image_url} alt="" className="w-full h-full object-cover" />
+                        <img src={p.image_url} alt="" loading="lazy" className="w-full h-full object-cover" />
                       ) : (
                         <Package className="h-4 w-4 text-muted-foreground/40" />
                       )}

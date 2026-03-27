@@ -429,7 +429,7 @@ export default function RouteDetail() {
                     {/* Photo — hidden on very small screens */}
                     <div className="hidden xs:flex h-10 w-10 rounded-lg bg-muted overflow-hidden shrink-0 items-center justify-center sm:flex">
                       {store.photo_url ? (
-                        <img src={store.photo_url} alt={store.name} className="w-full h-full object-cover" />
+                        <img src={store.photo_url} alt={store.name} loading="lazy" className="w-full h-full object-cover" />
                       ) : (
                         <StoreIcon className="h-5 w-5 text-muted-foreground/40" />
                       )}

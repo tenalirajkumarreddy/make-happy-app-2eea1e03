@@ -1,4 +1,4 @@
-import { Bell, ChevronDown, LogOut, Moon, Sun, Check, CheckCheck, WifiOff, RefreshCw } from "lucide-react";
+import { Bell, ChevronDown, LogOut, Moon, Sun, Check, CheckCheck, WifiOff, RefreshCw, User } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   DropdownMenu,
@@ -233,6 +233,10 @@ export function TopBar() {
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => navigate(role === "customer" ? "/portal/profile" : "/profile")}>
+              <User className="mr-2 h-4 w-4" />
+              My Profile
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={handleSignOut}>
               <LogOut className="mr-2 h-4 w-4" />
               Sign Out

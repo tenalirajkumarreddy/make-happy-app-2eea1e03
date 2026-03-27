@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { getQueuedActions, removeFromQueue, getQueueCount } from "@/lib/offlineQueue";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { logError } from "@/lib/logger";
 
 export function useOnlineStatus() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -12,13 +13,17 @@ export function useOnlineStatus() {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
     const handleQueueChanged = () => {
-      getQueueCount().then(setPendingCount).catch(() => {});
+      getQueueCount().then(setPendingCount).catch((err) => {
+        logError(err, { context: "useOnlineStatus.handleQueueChanged" });
+      });
     };
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
     window.addEventListener("offline-queue-changed", handleQueueChanged);
     // Load initial pending count
-    getQueueCount().then(setPendingCount).catch(() => {});
+    getQueueCount().then(setPendingCount).catch((err) => {
+      logError(err, { context: "useOnlineStatus.initialLoad" });
+    });
     return () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
@@ -108,7 +113,8 @@ export function useOnlineStatus() {
         }
         await removeFromQueue(action.id);
         synced++;
-      } catch {
+      } catch (err) {
+        logError(err, { context: "useOnlineStatus.syncQueue", actionType: action.type, actionId: action.id });
         failed++;
       }
     }

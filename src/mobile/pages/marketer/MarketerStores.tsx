@@ -226,7 +226,7 @@ export function MarketerStores({ onOpenStore, onGoRecord, onGoOrders }: Props) {
                           onClick={() => onOpenStore(storeOption)}
                         >
                           {store.photo_url ? (
-                            <img src={store.photo_url} alt={store.name} className="h-full w-full object-cover" />
+                            <img src={store.photo_url} alt={store.name} loading="lazy" className="h-full w-full object-cover" />
                           ) : (
                             <div className="h-full w-full flex items-center justify-center">
                               <Store className="h-5 w-5 text-slate-400" />

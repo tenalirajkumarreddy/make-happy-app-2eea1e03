@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { resolveCustomer } from "@/lib/resolveCustomer";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2, Phone } from "lucide-react";
+import { GoogleAccountLink } from "@/components/shared/GoogleAccountLink";
 
 const CustomerProfile = () => {
   const { user } = useAuth();
@@ -107,6 +108,9 @@ const CustomerProfile = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Google Account Link */}
+      <GoogleAccountLink />
 
       {/* Call Agent */}
       {settings?.value && (

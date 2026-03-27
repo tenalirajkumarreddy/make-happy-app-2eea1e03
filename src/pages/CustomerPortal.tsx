@@ -22,6 +22,9 @@ const CustomerPortal = () => {
   );
   const [linkingGoogle, setLinkingGoogle] = useState(false);
 
+  // Check if Google is already linked
+  const isGoogleLinked = user?.app_metadata?.providers?.includes("google") || 
+    (user?.identities || []).some((i: any) => i?.provider === "google");
   const isPhoneOnlyUser = !!user?.email?.endsWith("@phone.aquaprime.app");
 
   const handleLinkGoogle = async () => {
@@ -112,8 +115,8 @@ const CustomerPortal = () => {
       {/* Promotional Banners */}
       <BannerCarousel storeTypeIds={stores?.map((s: any) => s.store_type_id).filter(Boolean)} />
 
-      {/* Link Google account prompt for phone-only users */}
-      {isPhoneOnlyUser && !linkDismissed && (
+      {/* Link Google account prompt for phone-only users who haven't linked yet */}
+      {isPhoneOnlyUser && !isGoogleLinked && !linkDismissed && (
         <div className="rounded-xl border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800 p-4 flex items-start justify-between gap-3">
           <div className="flex items-start gap-3">
             <Link2 className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />

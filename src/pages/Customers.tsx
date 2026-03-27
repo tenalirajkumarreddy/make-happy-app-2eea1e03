@@ -296,7 +296,7 @@ const Customers = () => {
     { header: "ID", accessor: "display_id" as const, className: "font-mono text-xs hidden lg:table-cell", hideOnMobile: true },
     { header: "Name", accessor: (row: any) => (
       <div className="flex items-center gap-2">
-        {row.photo_url && <img src={row.photo_url} alt="" className="h-8 w-8 rounded-full object-cover" />}
+        {row.photo_url && <img src={row.photo_url} alt="" loading="lazy" className="h-8 w-8 rounded-full object-cover" />}
         {editMode ? (
           <input
             className="border border-input rounded px-2 py-0.5 text-sm bg-background w-32 focus:outline-none focus:ring-1 focus:ring-ring"
@@ -416,7 +416,7 @@ const Customers = () => {
             <div className="flex">
               <div className="w-24 self-stretch shrink-0 bg-muted flex items-center justify-center overflow-hidden">
                 {row.photo_url ? (
-                  <img src={row.photo_url} alt={row.name} className="w-full h-full object-cover" />
+                  <img src={row.photo_url} alt={row.name} loading="lazy" className="w-full h-full object-cover" />
                 ) : (
                   <User className="h-8 w-8 text-muted-foreground/40" />
                 )}

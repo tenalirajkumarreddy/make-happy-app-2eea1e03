@@ -25,12 +25,12 @@ const Dashboard = () => {
       const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
 
       const [salesRes, txnRes, customersRes, storesRes, ordersRes, todaySalesRes] = await Promise.all([
-        supabase.from("sales").select("total_amount, cash_amount, upi_amount, created_at, stores(store_type_id, store_types(name))").gte("created_at", thirtyDaysAgo + "T00:00:00"),
-        supabase.from("transactions").select("total_amount, cash_amount, upi_amount").gte("created_at", thirtyDaysAgo + "T00:00:00"),
+        supabase.from("sales").select("total_amount, cash_amount, upi_amount, created_at, stores(store_type_id, store_types(name))").gte("created_at", thirtyDaysAgo + "T00:00:00").limit(2000),
+        supabase.from("transactions").select("total_amount, cash_amount, upi_amount").gte("created_at", thirtyDaysAgo + "T00:00:00").limit(2000),
         supabase.from("customers").select("*", { count: "exact", head: true }).eq("is_active", true),
-        supabase.from("stores").select("id, outstanding").eq("is_active", true),
+        supabase.from("stores").select("id, outstanding").eq("is_active", true).limit(1000),
         supabase.from("orders").select("id, status, display_id, stores(name), created_at").eq("status", "pending").order("created_at", { ascending: false }).limit(5),
-        supabase.from("sales").select("total_amount, cash_amount, upi_amount").gte("created_at", today + "T00:00:00"),
+        supabase.from("sales").select("total_amount, cash_amount, upi_amount").gte("created_at", today + "T00:00:00").limit(500),
       ]);
 
       const allSales = salesRes.data || [];

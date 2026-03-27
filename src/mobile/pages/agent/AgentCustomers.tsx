@@ -226,7 +226,7 @@ export function AgentCustomers({ onOpenStore, onGoRecord, onGoVisit }: Props) {
                           onClick={() => onOpenStore(storeOption)}
                         >
                           {s.photo_url ? (
-                            <img src={s.photo_url} alt={s.name} className="h-full w-full object-cover" />
+                            <img src={s.photo_url} alt={s.name} loading="lazy" className="h-full w-full object-cover" />
                           ) : (
                             <div className="h-full w-full flex items-center justify-center">
                               <Store className="h-5 w-5 text-slate-400" />

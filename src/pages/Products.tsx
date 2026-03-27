@@ -183,7 +183,7 @@ const Products = () => {
     }] : []),
     { header: "Product", accessor: (row: any) => (
       <div className="flex items-center gap-2">
-        {row.image_url && <img src={row.image_url} alt="" className="h-8 w-8 rounded-md object-cover" />}
+        {row.image_url && <img src={row.image_url} alt="" loading="lazy" className="h-8 w-8 rounded-md object-cover" />}
         <span className="font-medium">{row.name}</span>
       </div>
     )},
@@ -258,7 +258,7 @@ const Products = () => {
             <div className="flex">
               <div className="w-24 self-stretch shrink-0 bg-muted flex items-center justify-center overflow-hidden">
                 {row.image_url ? (
-                  <img src={row.image_url} alt={row.name} className="w-full h-full object-cover" />
+                  <img src={row.image_url} alt={row.name} loading="lazy" className="w-full h-full object-cover" />
                 ) : (
                   <Package className="h-8 w-8 text-muted-foreground/40" />
                 )}

@@ -149,7 +149,7 @@ const Banners = () => {
         header: "Image", 
         accessor: (row: any) => (
             <div className="h-12 w-24 overflow-hidden rounded bg-slate-100">
-                {row.image_url && <img src={row.image_url} alt={row.title} className="h-full w-full object-cover" />}
+                {row.image_url && <img src={row.image_url} alt={row.title} loading="lazy" className="h-full w-full object-cover" />}
             </div>
         ) 
     },

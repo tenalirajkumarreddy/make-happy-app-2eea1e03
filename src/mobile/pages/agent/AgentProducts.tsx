@@ -127,7 +127,7 @@ export function AgentProducts() {
             >
               <div className="h-14 w-14 rounded-lg bg-muted border overflow-hidden flex-shrink-0">
                 {p.image_url ? (
-                  <img src={p.image_url} alt={p.name} className="h-full w-full object-cover" />
+                  <img src={p.image_url} alt={p.name} loading="lazy" className="h-full w-full object-cover" />
                 ) : (
                   <div className="h-full w-full flex items-center justify-center text-muted-foreground">
                     <ScanLine className="h-6 w-6 opacity-30" />

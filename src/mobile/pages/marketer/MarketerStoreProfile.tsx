@@ -99,7 +99,7 @@ export function MarketerStoreProfile({ store, onBack, onGoRecord, onGoOrders }: 
         <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm overflow-hidden">
           <div className="h-44 w-full bg-slate-100 dark:bg-slate-700">
             {currentStore.photo_url ? (
-              <img src={currentStore.photo_url} alt={currentStore.name} className="h-full w-full object-cover" />
+              <img src={currentStore.photo_url} alt={currentStore.name} loading="lazy" className="h-full w-full object-cover" />
             ) : (
               <div className="h-full w-full flex items-center justify-center">
                 <Store className="h-10 w-10 text-slate-400" />

@@ -128,7 +128,7 @@ export function BannerManagement() {
         <div className="space-y-3">
           {banners?.map((b: any) => (
             <div key={b.id} className="rounded-xl border bg-card p-3 flex items-center gap-3">
-              <img src={b.image_url} alt={b.title} className="h-16 w-28 rounded-lg object-cover shrink-0" />
+              <img src={b.image_url} alt={b.title} loading="lazy" className="h-16 w-28 rounded-lg object-cover shrink-0" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-medium truncate">{b.title}</p>

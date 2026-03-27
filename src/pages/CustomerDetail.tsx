@@ -269,7 +269,7 @@ const CustomerDetail = () => {
           <div className="flex flex-col sm:flex-row sm:items-end gap-3">
             <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-xl border-4 border-card bg-muted flex items-center justify-center overflow-hidden shadow-md shrink-0">
               {customer.photo_url ? (
-                <img src={customer.photo_url} alt={customer.name} className="w-full h-full object-cover" />
+                <img src={customer.photo_url} alt={customer.name} loading="lazy" className="w-full h-full object-cover" />
               ) : (
                 <User className="h-8 w-8 text-muted-foreground/40" />
               )}
@@ -475,7 +475,7 @@ function KycDocCard({
       <p className="text-[11px] font-medium text-muted-foreground">{label}</p>
       {publicUrl ? (
         <div className="space-y-1.5">
-          <img src={publicUrl} alt={label} className="w-full h-16 object-cover rounded" />
+          <img src={publicUrl} alt={label} loading="lazy" className="w-full h-16 object-cover rounded" />
           <a href={publicUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline">
             View <ExternalLink className="h-3 w-3" />
           </a>
