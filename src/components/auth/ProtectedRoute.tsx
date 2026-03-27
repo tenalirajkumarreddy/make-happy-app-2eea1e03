@@ -3,7 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Loader2 } from "lucide-react";
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, role, customer, loading } = useAuth();
 
   if (loading) {
     return (
@@ -15,6 +15,10 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (!user) {
     return <Navigate to="/auth" replace />;
+  }
+
+  if (role === "customer" && !customer) {
+    return <Navigate to="/onboarding" replace />;
   }
 
   return <>{children}</>;

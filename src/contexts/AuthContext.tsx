@@ -10,6 +10,7 @@ interface AuthContextType {
   session: Session | null;
   role: AppRole | null;
   profile: { full_name: string; email: string; avatar_url: string | null } | null;
+  customer: { id: string; user_id: string | null; name: string; phone: string | null; email: string | null } | null;
   loading: boolean;
   signOut: () => Promise<void>;
 }
@@ -19,6 +20,7 @@ const AuthContext = createContext<AuthContextType>({
   session: null,
   role: null,
   profile: null,
+  customer: null,
   loading: true,
   signOut: async () => {},
 });
@@ -28,13 +30,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [role, setRole] = useState<AppRole | null>(null);
   const [profile, setProfile] = useState<AuthContextType["profile"]>(null);
+  const [customer, setCustomer] = useState<AuthContextType["customer"]>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchUserData = async (userId: string) => {
     try {
-      const [{ data: roleData }, { data: profileData }] = await Promise.all([
+      const [{ data: roleData }, { data: profileData }, { data: customerData }] = await Promise.all([
         supabase.from("user_roles").select("role").eq("user_id", userId).maybeSingle(),
         supabase.from("profiles").select("full_name, email, avatar_url, is_active").eq("user_id", userId).maybeSingle(),
+        supabase.from("customers").select("id, user_id, name, phone, email").eq("user_id", userId).maybeSingle(),
       ]);
 
       // If user is disabled, sign them out immediately
@@ -48,6 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (profileData) setProfile(profileData);
+      setCustomer(customerData || null);
 
       if (roleData && roleData.role) {
         setRole(roleData.role as AppRole);
@@ -57,6 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       logError("Error fetching user data", error);
       setRole("customer");
+      setCustomer(null);
     }
   };
 
@@ -86,6 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
           setRole(null);
           setProfile(null);
+          setCustomer(null);
           if (mounted) setLoading(false);
         }
       }
@@ -124,10 +131,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
     setRole(null);
     setProfile(null);
+    setCustomer(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, role, profile, loading, signOut }}>
+    <AuthContext.Provider value={{ user, session, role, profile, customer, loading, signOut }}>
       {children}
     </AuthContext.Provider>
   );

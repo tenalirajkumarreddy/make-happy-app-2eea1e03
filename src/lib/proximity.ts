@@ -5,6 +5,9 @@
 
 const PROXIMITY_RADIUS_METERS = 100;
 
+type LocationPoint = { lat: number; lng: number };
+type RouteStorePoint = { id: string; lat: number | null; lng: number | null };
+
 function getDistanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371000;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -70,6 +73,38 @@ export async function checkProximity(
     message: `You are ${Math.round(dist)}m away. Must be within ${PROXIMITY_RADIUS_METERS}m of the store.`,
     skippedNoGps: false,
   };
+}
+
+export function nearestNeighborOrder<T extends RouteStorePoint>(
+  origin: LocationPoint,
+  stores: T[]
+): T[] {
+  const validStores = stores.filter((store) => store.lat != null && store.lng != null);
+  const invalidStores = stores.filter((store) => store.lat == null || store.lng == null);
+
+  const remaining = [...validStores];
+  const ordered: T[] = [];
+  let current = origin;
+
+  while (remaining.length > 0) {
+    let nearestIndex = 0;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+
+    for (let index = 0; index < remaining.length; index += 1) {
+      const store = remaining[index];
+      const distance = getDistanceMeters(current.lat, current.lng, store.lat as number, store.lng as number);
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearestIndex = index;
+      }
+    }
+
+    const [nextStore] = remaining.splice(nearestIndex, 1);
+    ordered.push(nextStore);
+    current = { lat: nextStore.lat as number, lng: nextStore.lng as number };
+  }
+
+  return [...ordered, ...invalidStores];
 }
 
 export { PROXIMITY_RADIUS_METERS, getDistanceMeters, getCurrentPosition };

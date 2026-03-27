@@ -1,6 +1,6 @@
 {
-  "name": "BizManager",
-  "short_name": "BizManager",
+  "name": "Aqua Prime",
+  "short_name": "Aqua Prime",
   "description": "Business Management System - Sales, Inventory & Customer Management",
   "start_url": "/",
   "display": "standalone",

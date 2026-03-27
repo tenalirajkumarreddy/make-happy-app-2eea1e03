@@ -1,22 +1,24 @@
 import { PageHeader } from "@/components/shared/PageHeader";
+import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
+import { DataTable } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { KycReviewDialog } from "@/components/customers/KycReviewDialog";
 import { ImageUpload } from "@/components/shared/ImageUpload";
 import { CsvImportDialog } from "@/components/shared/CsvImportDialog";
 import { AdvancedFilters, applyFilters, type FilterValues } from "@/components/shared/AdvancedFilters";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { logActivity } from "@/lib/activityLogger";
 import { generateDisplayId } from "@/lib/displayId";
 import { Loader2, User, Upload, AlertCircle } from "lucide-react";
-import { useState, useEffect, useMemo } from "react";
-import { useAuth } from "@/contexts/AuthContext";
-import { DataTable } from "@/components/shared/DataTable";
-import { logError } from "@/lib/logger";
 import { usePermission } from "@/hooks/usePermission";
 import { useRouteAccess } from "@/hooks/useRouteAccess";
+import { addToQueue } from "@/lib/offlineQueue";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -33,6 +35,7 @@ import { toast } from "sonner";
 const Customers = () => {
   const navigate = useNavigate();
   const { user, role } = useAuth();
+  const { isOnline } = useOnlineStatus();
   const { allowed: canCreateCustomers } = usePermission("create_customers");
   const [showAdd, setShowAdd] = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -52,57 +55,94 @@ const Customers = () => {
   const [filters, setFilters] = useState<FilterValues>({});
   const [duplicateCustomer, setDuplicateCustomer] = useState<any>(null);
   const qc = useQueryClient();
+  const PAGE_SIZE = 50;
+  // const [loadedPages, setLoadedPages] = useState(1); // No longer needed
   const canReviewKyc = role === "super_admin" || role === "manager";
   const canBulk = role === "super_admin" || role === "manager";
   const canEdit = role === "super_admin" || role === "manager";
 
   const { canAccessRoute, loading: routeLoading, hasMatrixRestrictions } = useRouteAccess(user?.id, role);
 
-  const { data: customers, isLoading } = useQuery({
-    queryKey: ["customers", hasMatrixRestrictions, canAccessRoute],
-    queryFn: async () => {
-      let query = supabase
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading
+  } = useInfiniteQuery({
+    queryKey: ["customers"],
+    queryFn: async ({ pageParam = 0 }) => {
+      const { data, error } = await supabase
         .from("customers")
         .select("*, stores(id, outstanding, route_id)")
-        .order("created_at", { ascending: false });
-
-        if (hasMatrixRestrictions) {
-          // If matrix applies, filtering happens on the client side since
-          // Supabase deep nested filtering is complex.
-          // The query remains the same, but we filter in filteredCustomers.
-        }
-      
-      const { data, error } = await query;
+        .order("created_at", { ascending: false })
+        .range(pageParam * PAGE_SIZE, (pageParam + 1) * PAGE_SIZE - 1);
       if (error) throw error;
       return data;
     },
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => {
+      if (!lastPage || lastPage.length < PAGE_SIZE) return undefined;
+      return allPages.length;
+    },
   });
 
+  const customers = useMemo(() => data?.pages.flatMap((page) => page) || [], [data]);
+  
   // Real-time phone duplicate check
   useEffect(() => {
     if (!phone.trim() || phone.trim().length < 6) { setDuplicateCustomer(null); return; }
-    
     const timer = setTimeout(() => {
-      const match = customers?.find(c => c.phone === phone.trim());
+      const match = (customers || []).find((c: any) => c.phone && c.phone === phone.trim());
       setDuplicateCustomer(match || null);
     }, 400);
     return () => clearTimeout(timer);
   }, [phone, customers]);
 
-  const handleAdd = async (e: React.FormEvent) => {
+    const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
       toast.error("Customer name is required");
       return;
     }
-    
+    if (!phone.trim() || phone.trim().length < 6) {
+      toast.error("Valid phone number is required");
+      return;
+    }
     if (duplicateCustomer && phone.trim()) {
-      // Allow adding anyway, but warn? Or logic might be to block. 
-      // For now we just logged the warning in UI
+      toast.error(`Phone already in use by ${duplicateCustomer.name} (${duplicateCustomer.display_id})`);
+      return;
+    }
+    setSaving(true);
+
+    if (!isOnline) {
+       await addToQueue({
+        id: crypto.randomUUID(),
+        type: "customer",
+        payload: {
+          customerData: {
+            id: crypto.randomUUID(), // Generate ID on client for offline caching/relationships
+            name,
+            phone: phone || null,
+            email: email || null,
+            address: address || null,
+            photo_url: photoUrl || null,
+            created_at: new Date().toISOString(),
+          }
+        },
+        createdAt: new Date().toISOString(),
+      });
+      toast.warning("You're offline — customer queued and will sync automatically when back online");
+      setSaving(false);
+      setShowAdd(false);
+      setName(""); setPhone(""); setEmail(""); setAddress(""); setPhotoUrl("");
+      setDuplicateCustomer(null);
+      qc.invalidateQueries({ queryKey: ["customers"] });
+      return;
     }
 
-    setSaving(true);
     const displayId = generateDisplayId("CUST");
+
     const { error } = await supabase.from("customers").insert({
       display_id: displayId,
       name,
@@ -116,16 +156,13 @@ const Customers = () => {
       toast.error(error.message);
     } else {
       toast.success("Customer added");
-      setDuplicateCustomer(null);
-      setName("");
-      setPhone("");
-      setEmail("");
-      setAddress("");
-      setPhotoUrl("");
+      logActivity(user!.id, "Added customer", "customer", name);
       setShowAdd(false);
+      setName(""); setPhone(""); setEmail(""); setAddress(""); setPhotoUrl("");
+      setDuplicateCustomer(null);
       qc.invalidateQueries({ queryKey: ["customers"] });
     }
-  };
+    };
 
   const handleCsvImport = async (rows: Record<string, string>[]) => {
     let success = 0;
@@ -137,6 +174,7 @@ const Customers = () => {
       const { error } = await supabase.from("customers").insert({
         display_id: displayId,
         name: row.name,
+        phone: row.phone || null,
         email: row.email || null,
         address: row.address || null,
       });
@@ -155,33 +193,35 @@ const Customers = () => {
   };
 
   const toggleSelect = (id: string) => {
-    const next = new Set(selected);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    setSelected(next);
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
   };
 
-  const toggleAll = (active: boolean) => {
-    if (active) setSelected(new Set((customers || []).map((c: any) => c.id)));
-    else setSelected(new Set());
+  const toggleAll = () => {
+    if (selected.size === (customers?.length || 0)) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(customers?.map((c) => c.id) || []));
+    }
   };
 
   const handleBulkStatus = async (active: boolean) => {
     if (selected.size === 0) return;
     const ids = Array.from(selected);
-    
-    // Deactivate customers
     const { error } = await supabase.from("customers").update({ is_active: active }).in("id", ids);
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
+    if (error) { toast.error(error.message); return; }
 
     if (!active) {
-      // Also deactivate stores if customer is deactivated
-      // Note: This matches original intent, though ideally should be done via DB trigger or edge function for atomicity
-      const { error: storeError } = await supabase.from("stores").update({ is_active: false }).in("customer_id", ids);
-      if (storeError) logError("Failed to deactivate stores", storeError);
+      const { error: storeError } = await supabase
+        .from("stores")
+        .update({ is_active: false })
+        .in("customer_id", ids);
+      if (storeError) {
+        toast.error("Customers deactivated but failed to deactivate stores");
+      }
     }
 
     toast.success(`${ids.length} customers ${active ? "activated" : "deactivated"}`);
@@ -225,6 +265,7 @@ const Customers = () => {
     if (errCount > 0) { toast.error(`${errCount} update(s) failed`); }
     else {
       toast.success(`${changed.length} customer(s) updated`);
+      logActivity(user!.id, `Bulk updated ${changed.length} customers`, "customer");
     }
     setEditMode(false);
     setEditData({});
@@ -363,12 +404,13 @@ const Customers = () => {
         </div>
       )}
 
-      <DataTable
+      <VirtualDataTable
         columns={columns}
         data={filteredCustomers}
         searchKey="name"
         searchPlaceholder="Search customers..."
         onRowClick={(row) => { if (!editMode) navigate(`/customers/${row.id}`); }}
+        height="calc(100vh - 240px)"
         renderMobileCard={(row: any) => (
           <div className={`rounded-xl border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow active:bg-muted/30 ${!row.is_active ? "opacity-60" : ""}`}>
             <div className="flex">
@@ -398,6 +440,15 @@ const Customers = () => {
         )}
       />
 
+      {hasNextPage && (
+        <div className="flex justify-center pt-2">
+          <Button variant="outline" size="sm" onClick={() => fetchNextPage()} disabled={isFetchingNextPage} className="gap-1.5">
+            {isFetchingNextPage ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+            Load more
+          </Button>
+        </div>
+      )}
+
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
@@ -415,13 +466,13 @@ const Customers = () => {
               <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
                 <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
                 <span>Phone already used by <span className="font-semibold">{duplicateCustomer.name}</span> ({duplicateCustomer.display_id}).{" "}
-      DataTable
+                  <button type="button" className="underline" onClick={() => { setShowAdd(false); setDuplicateCustomer(null); navigate(`/customers/${duplicateCustomer.id}`); }}>View customer</button>
                 </span>
               </div>
             )}
             <div><Label>Email</Label><Input type="email" value={email} onChange={e => setEmail(e.target.value)} className="mt-1" /></div>
             <div><Label>Address</Label><Input value={address} onChange={e => setAddress(e.target.value)} className="mt-1" /></div>
-            <Button type="submit" disabled={saving} className="w-full">
+            <Button type="submit" className="w-full" disabled={saving || !!(duplicateCustomer && phone.trim())}>
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Add Customer
             </Button>

@@ -31,7 +31,11 @@ const CustomerPortal = () => {
       options: { redirectTo: window.location.origin },
     });
     if (error) {
-      toast.error(error.message);
+      if (error.message?.toLowerCase().includes("manual linking")) {
+        toast.error("Google linking is not configured. Please contact support.");
+      } else {
+        toast.error(error.message);
+      }
       setLinkingGoogle(false);
     }
     // On success the browser will redirect to Google — no further action needed here

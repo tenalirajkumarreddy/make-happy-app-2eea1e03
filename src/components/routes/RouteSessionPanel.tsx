@@ -110,24 +110,14 @@ export function RouteSessionPanel() {
     const pushLocation = async (lat: number, lng: number) => {
       setAgentLocation({ lat, lng });
       const now = Date.now();
-      // Throttle DB writes to at most once per 30 seconds
-      if (now - lastPushRef.current < 30000) return;
+      // Throttle DB writes to at most once per 15 seconds
+      if (now - lastPushRef.current < 15000) return;
       lastPushRef.current = now;
-      const ts = new Date().toISOString();
-      await Promise.all([
-        supabase.from("route_sessions").update({
-          current_lat: lat,
-          current_lng: lng,
-          location_updated_at: ts,
-        }).eq("id", activeSession.id),
-        supabase.from("location_pings").insert({
-          session_id: activeSession.id,
-          user_id: user!.id,
-          lat,
-          lng,
-          recorded_at: ts,
-        }),
-      ]);
+      await (supabase as any).from("route_sessions").update({
+        current_lat: lat,
+        current_lng: lng,
+        location_updated_at: new Date().toISOString(),
+      }).eq("id", activeSession.id);
     };
 
     locationWatchRef.current = navigator.geolocation.watchPosition(
@@ -193,7 +183,7 @@ export function RouteSessionPanel() {
   const handleEnd = async () => {
     if (!activeSession) return;
     setSaving(true);
-    const loc = await getLocation();
+    const loc = await getCurrentPosition();
     await supabase.from("route_sessions").update({
       status: "completed",
       ended_at: new Date().toISOString(),
@@ -218,7 +208,7 @@ export function RouteSessionPanel() {
         return;
       }
     }
-    const loc = await getLocation();
+    const loc = await getCurrentPosition();
     const { error } = await supabase.from("store_visits").insert({
       session_id: activeSession.id,
       store_id: storeId,

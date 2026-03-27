@@ -24,11 +24,10 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { isNativeApp } from "@/lib/capacitorUtils";
-import { cn } from "@/lib/utils";
 import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 import { PermissionSetup } from "./components/PermissionSetup";
 import { MobileHeader } from "./components/MobileHeader";
-import { BottomNav, CUSTOMER_TABS, MARKETER_TABS, MobileTab, POS_TABS } from "./components/BottomNav";
+import { BottomNav, CUSTOMER_TABS, MARKETER_TABS, MobileTab, POS_TABS, AGENT_TABS } from "./components/BottomNav";
 import Dashboard from "@/pages/Dashboard";
 import Products from "@/pages/Products";
 import Customers from "@/pages/Customers";
@@ -37,6 +36,7 @@ import Stores from "@/pages/Stores";
 import StoreDetail from "@/pages/StoreDetail";
 import RoutesPage from "@/pages/Routes";
 import RouteDetail from "@/pages/RouteDetail";
+import { cn } from "@/lib/utils";
 import Sales from "@/pages/Sales";
 import Transactions from "@/pages/Transactions";
 import Orders from "@/pages/Orders";
@@ -55,7 +55,6 @@ import { AgentHistory } from "./pages/agent/AgentHistory";
 import { AgentCustomers } from "./pages/agent/AgentCustomers";
 import { AgentStoreProfile } from "./pages/agent/AgentStoreProfile";
 import { AgentProducts } from "./pages/agent/AgentProducts";
-import AddCustomerStore from "./pages/agent/AddCustomerStore";
 import { MarketerHome } from "./pages/marketer/MarketerHome";
 import { MarketerOrders } from "./pages/marketer/MarketerOrders";
 import { MarketerStores } from "./pages/marketer/MarketerStores";
@@ -65,9 +64,9 @@ import { CustomerSales } from "./pages/customer/CustomerSales";
 import { CustomerOrders } from "./pages/customer/CustomerOrders";
 import { CustomerTransactions } from "./pages/customer/CustomerTransactions";
 import { CustomerProfile } from "./pages/customer/CustomerProfile";
-import { CustomerKyc } from "./pages/customer/CustomerKyc";
 import { PosHome } from "./pages/pos/PosHome";
 import type { StoreOption } from "./components/StorePickerSheet";
+import AddCustomerStore from "@/mobile/pages/agent/AddCustomerStore";
 
 const TAB_TITLES: Record<MobileTab, string> = {
   home: "Dashboard",
@@ -81,7 +80,6 @@ const TAB_TITLES: Record<MobileTab, string> = {
   transactions: "Transactions",
   profile: "Profile",
   handovers: "Handovers",
-  kyc: "KYC Verification",
   products: "Product Catalog",
 };
 
@@ -204,7 +202,6 @@ function StaffApp({ role }: { role: StaffRole }) {
         onClick={() => setMenuOpen(true)}
         className="fixed left-4 z-50 h-9 w-9 shadow-sm"
         style={{ top: "calc(env(safe-area-inset-top) + 0.75rem)" }}
-        aria-label="Open navigation menu"
       >
         <Menu className="h-5 w-5" />
       </Button>
@@ -217,7 +214,7 @@ function StaffApp({ role }: { role: StaffRole }) {
                 BM
               </div>
               <div className="overflow-hidden">
-                <h1 className="text-sm font-bold text-sidebar-accent-foreground truncate">Aqua Prime</h1>
+                <h1 className="text-sm font-bold text-sidebar-accent-foreground truncate">BizManager</h1>
                 <p className="text-[11px] text-sidebar-muted truncate">{role === "super_admin" ? "Admin" : "Manager"}</p>
               </div>
             </div>
@@ -266,7 +263,7 @@ function StaffApp({ role }: { role: StaffRole }) {
 }
 
 function CustomerApp() {
-  useRealtimeSync();
+  // useRealtimeSync(); // Excluded for customers to save connections
   const [tab, setTab] = useState<MobileTab>("home");
   const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null);
 
@@ -311,14 +308,12 @@ function CustomerApp() {
             onOpenOrders={() => setTab("orders")}
             onOpenTransactions={() => setTab("transactions")}
             onOpenProfile={() => setTab("profile")}
-            onOpenKyc={() => setTab("kyc")}
           />
         )}
         {tab === "sales" && <CustomerSales selectedStoreId={selectedStoreId} />}
         {tab === "orders" && <CustomerOrders selectedStoreId={selectedStoreId} onStoreChange={setSelectedStoreId} />}
         {tab === "transactions" && <CustomerTransactions selectedStoreId={selectedStoreId} />}
         {tab === "profile" && <CustomerProfile />}
-        {tab === "kyc" && <CustomerKyc />}
       </main>
 
       <BottomNav tab={tab} onChange={setTab} tabs={CUSTOMER_TABS} />
@@ -329,34 +324,9 @@ function CustomerApp() {
 function MarketerApp() {
   useRealtimeSync();
   const [tab, setTab] = useState<MobileTab>("home");
-  const [recordStore, setRecordStore] = useState<StoreOption | null>(null);
-  const [orderStore, setOrderStore] = useState<StoreOption | null>(null);
+  const [showAddEntity, setShowAddEntity] = useState(false);
+  const [recordAction, setRecordAction] = useState<"sale" | "payment" | null>(null);
   const [profileStore, setProfileStore] = useState<StoreOption | null>(null);
-
-  const handleOpenStoreProfile = (store: StoreOption) => {
-    setProfileStore(store);
-    setTab("customers");
-  };
-
-  const handleGoRecord = (store: StoreOption | null) => {
-    setRecordStore(store || null);
-    setTab("record");
-  };
-
-  const handleGoOrders = (store: StoreOption | null) => {
-    setOrderStore(store || null);
-    setTab("orders");
-  };
-
-  const handleTabChange = (nextTab: MobileTab) => {
-    if (nextTab !== "customers") {
-      setProfileStore(null);
-    }
-    if (nextTab !== "record") {
-      setRecordStore(null);
-    }
-    setTab(nextTab);
-  };
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
@@ -365,14 +335,16 @@ function MarketerApp() {
 
     const register = async () => {
       listenerHandle = await CapacitorApp.addListener("backButton", () => {
-        if (profileStore) {
-          setProfileStore(null);
+        if (showAddEntity) {
+          setShowAddEntity(false);
           return;
         }
-
-        if (tab !== "home") {
+        if (recordAction) {
+          setRecordAction(null);
+        } else if (profileStore) {
+          setProfileStore(null);
+        } else if (tab !== "home") {
           setTab("home");
-          return;
         }
       });
     };
@@ -384,19 +356,37 @@ function MarketerApp() {
         listenerHandle.remove();
       }
     };
-  }, [tab, profileStore]);
+  }, [tab, recordAction, profileStore, showAddEntity]);
+
+  const handleGoRecord = (store: StoreOption, action: "sale" | "payment" = "sale") => {
+    setRecordAction(action);
+    setTab("record");
+  };
+
+  const handleOpenStoreProfile = (store: StoreOption) => {
+    setProfileStore(store);
+  };
+  
+  const handleCloseStoreProfile = () => {
+    setProfileStore(null);
+  };
 
   const headerTitle = TAB_TITLES[tab];
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
-      <MobileHeader title={headerTitle} />
+      {showAddEntity && <AddCustomerStore onClose={() => setShowAddEntity(false)} />}
+      
+      {!showAddEntity && <MobileHeader title={headerTitle} />}
 
       <main
-        className="flex-1 overflow-y-auto"
+        className={cn(
+          "flex-1 overflow-y-auto",
+          showAddEntity && "hidden"
+         )}
         style={{
-          paddingTop: "calc(3.5rem + env(safe-area-inset-top))",
-          paddingBottom: "calc(4.5rem + env(safe-area-inset-bottom))",
+          paddingTop: showAddEntity ? 0 : "calc(3.5rem + env(safe-area-inset-top))",
+          paddingBottom: showAddEntity ? 0 : "calc(4.5rem + env(safe-area-inset-bottom))",
         }}
       >
         {tab === "home" && (
@@ -404,29 +394,30 @@ function MarketerApp() {
             onOpenOrders={() => setTab("orders")}
             onOpenRecord={() => setTab("record")}
             onOpenStores={() => setTab("customers")}
+            onOpenProducts={() => setTab("products")}
+            onOpenAddEntity={() => setShowAddEntity(true)}
           />
         )}
-        {tab === "orders" && <MarketerOrders preselectStore={orderStore} onStoreConsumed={() => setOrderStore(null)} />}
-        {tab === "record" && <AgentRecord preselectStore={recordStore} preselectTab="payment" allowSale={false} />}
+        {tab === "products" && <AgentProducts />}
+        {tab === "orders" && <MarketerOrders />}
+        {tab === "record" && <AgentRecord preselectTab="payment" allowSale={false} />}
         {tab === "history" && <AgentHistory />}
         {tab === "customers" && !profileStore && (
           <MarketerStores
             onOpenStore={handleOpenStoreProfile}
-            onGoRecord={(store) => handleGoRecord(store)}
-            onGoOrders={(store) => handleGoOrders(store)}
+            onGoRecord={handleGoRecord}
           />
         )}
         {tab === "customers" && !!profileStore && (
           <MarketerStoreProfile
             store={profileStore}
-            onBack={() => setProfileStore(null)}
-            onGoRecord={(store) => handleGoRecord(store)}
-            onGoOrders={(store) => handleGoOrders(store)}
+            onBack={handleCloseStoreProfile}
+            onGoRecord={handleGoRecord}
           />
         )}
       </main>
 
-      <BottomNav tab={tab} onChange={handleTabChange} tabs={MARKETER_TABS} />
+      <BottomNav tab={tab} onChange={setTab} tabs={MARKETER_TABS} />
     </div>
   );
 }
@@ -487,25 +478,12 @@ function AgentApp() {
           setShowAddEntity(false);
           return;
         }
-
-        if (profileStore) {
-          setProfileStore(null);
-          setTab(profileReturnTab);
-          return;
-        }
-
         if (recordAction) {
           setRecordAction(null);
-          setPreselectStore(null);
-          setTab("scan");
-          return;
-        }
-
-        if (tab !== "home") {
-          setPreselectStore(null);
-          setRecordAction(null);
+        } else if (profileStore) {
+          setProfileStore(null);
+        } else if (tab !== "home") {
           setTab("home");
-          return;
         }
       });
     };
@@ -517,19 +495,22 @@ function AgentApp() {
         listenerHandle.remove();
       }
     };
-  }, [tab, recordAction, profileStore, profileReturnTab, showAddEntity]);
+  }, [tab, recordAction, profileStore, showAddEntity]);
 
   const headerTitle = tab === "scan" && recordAction ? "Record" : TAB_TITLES[tab];
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
       {showAddEntity && <AddCustomerStore onClose={() => setShowAddEntity(false)} />}
-
+      
       {!showAddEntity && <MobileHeader title={headerTitle} />}
 
       {/* Scrollable content area between header and bottom nav */}
       <main
-        className={cn("flex-1 overflow-y-auto", showAddEntity && "hidden")}
+        className={cn(
+          "flex-1 overflow-y-auto",
+          showAddEntity && "hidden"
+         )}
         style={{
           paddingTop: showAddEntity ? 0 : "calc(3.5rem + env(safe-area-inset-top))",
           paddingBottom: showAddEntity ? 0 : "calc(4.5rem + env(safe-area-inset-bottom))",
@@ -570,7 +551,7 @@ function AgentApp() {
         )}
       </main>
 
-      <BottomNav tab={tab} onChange={handleTabChange} />
+      <BottomNav tab={tab} onChange={handleTabChange} tabs={AGENT_TABS} />
     </div>
   );
 }

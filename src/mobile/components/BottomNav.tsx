@@ -1,7 +1,7 @@
-import { Home, Map, ScanLine, History, Users, ClipboardList, ReceiptIndianRupee } from "lucide-react";
+import { Home, Map, ScanLine, History, Users, ClipboardList, ReceiptIndianRupee, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type MobileTab = "home" | "routes" | "scan" | "history" | "customers" | "orders" | "record" | "sales" | "transactions" | "profile" | "kyc" | "handovers" | "products";
+export type MobileTab = "home" | "routes" | "scan" | "history" | "customers" | "orders" | "record" | "sales" | "transactions" | "profile" | "products" | "handovers";
 
 interface MobileTabItem {
   id: MobileTab;
@@ -16,7 +16,7 @@ interface Props {
   tabs?: MobileTabItem[];
 }
 
-const AGENT_TABS: MobileTabItem[] = [
+export const AGENT_TABS: MobileTabItem[] = [
   { id: "home" as MobileTab, label: "Home", icon: Home },
   { id: "routes" as MobileTab, label: "Routes", icon: Map },
   { id: "scan" as MobileTab, label: "Scan", icon: ScanLine, centerAction: true },
@@ -33,11 +33,11 @@ export const MARKETER_TABS: MobileTabItem[] = [
 ];
 
 export const CUSTOMER_TABS: MobileTabItem[] = [
-  { id: "home", label: "Home", icon: Home },
-  { id: "sales", label: "Sales", icon: ClipboardList },
-  { id: "orders", label: "Order +", icon: ScanLine, centerAction: true },
-  { id: "transactions", label: "Ledger", icon: ReceiptIndianRupee },
-  { id: "profile", label: "Profile", icon: Users },
+  { id: "home" as MobileTab, label: "Home", icon: Home },
+  { id: "sales" as MobileTab, label: "Sales", icon: ClipboardList },
+  { id: "orders" as MobileTab, label: "Order", icon: Plus, centerAction: true },
+  { id: "transactions" as MobileTab, label: "Ledger", icon: ReceiptIndianRupee },
+  { id: "profile" as MobileTab, label: "Profile", icon: Users },
 ];
 
 export const POS_TABS: MobileTabItem[] = [
@@ -64,10 +64,8 @@ export function BottomNav({ tab, onChange, tabs = AGENT_TABS }: Props) {
               return (
                 <button
                   key={t.id}
-                  className="flex-1 flex flex-col items-center justify-end pb-2 relative min-h-[48px]"
+                  className="flex-1 flex flex-col items-center justify-end pb-2 relative"
                   onClick={() => onChange(t.id)}
-                  aria-label={t.label}
-                  aria-current={isActive ? "page" : undefined}
                 >
                   {/* Raised circular button */}
                   <div
@@ -102,10 +100,8 @@ export function BottomNav({ tab, onChange, tabs = AGENT_TABS }: Props) {
             return (
               <button
                 key={t.id}
-                className="flex-1 flex flex-col items-center justify-center h-full gap-1 relative transition-all min-h-[48px]"
+                className="flex-1 flex flex-col items-center justify-center h-full gap-1 relative transition-all"
                 onClick={() => onChange(t.id)}
-                aria-label={t.label}
-                aria-current={isActive ? "page" : undefined}
               >
                 {/* Active pill indicator */}
                 {isActive && (

@@ -898,6 +898,42 @@ export type Database = {
           },
         ]
       }
+      staff_directory: {
+        Row: {
+          id: string
+          user_id: string | null
+          phone: string
+          full_name: string | null
+          avatar_url: string | null
+          role: Database["public"]["Enums"]["app_role"]
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          phone: string
+          full_name?: string | null
+          avatar_url?: string | null
+          role?: Database["public"]["Enums"]["app_role"]
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          phone?: string
+          full_name?: string | null
+          avatar_url?: string | null
+          role?: Database["public"]["Enums"]["app_role"]
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       staff_invitations: {
         Row: {
           accepted_at: string | null
@@ -906,6 +942,7 @@ export type Database = {
           full_name: string
           id: string
           invited_by: string
+          phone: string | null
           role: Database["public"]["Enums"]["app_role"]
           status: string
         }
@@ -916,6 +953,7 @@ export type Database = {
           full_name: string
           id?: string
           invited_by: string
+          phone?: string | null
           role?: Database["public"]["Enums"]["app_role"]
           status?: string
         }
@@ -926,6 +964,7 @@ export type Database = {
           full_name?: string
           id?: string
           invited_by?: string
+          phone?: string | null
           role?: Database["public"]["Enums"]["app_role"]
           status?: string
         }

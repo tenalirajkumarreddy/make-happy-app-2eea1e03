@@ -63,7 +63,7 @@ interface StoreListItem {
 interface Props {
   onOpenStore: (store: StoreOption) => void;
   onGoRecord: (store: StoreOption) => void;
-  onGoOrders: (store: StoreOption) => void;
+  onGoOrders?: (store: StoreOption) => void;
 }
 
 export function MarketerStores({ onOpenStore, onGoRecord, onGoOrders }: Props) {
@@ -268,7 +268,7 @@ export function MarketerStores({ onOpenStore, onGoRecord, onGoOrders }: Props) {
                           variant="outline"
                           size="sm"
                           className="h-8 text-[11px] gap-1 rounded-lg"
-                          onClick={() => onGoOrders(storeOption)}
+                          onClick={() => onGoOrders?.(storeOption)}
                         >
                           <ClipboardList className="h-3 w-3" />
                           Order

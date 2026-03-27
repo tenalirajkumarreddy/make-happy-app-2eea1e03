@@ -81,6 +81,30 @@ export function useOnlineStatus() {
             lng: lng ?? null,
           });
           if (error) throw error;
+        } else if (action.type === "customer") {
+          const { customerData } = action.payload as {
+            customerData: {
+              name: string;
+              phone?: string | null;
+              email?: string | null;
+              address?: string | null;
+              photo_url?: string | null;
+            };
+          };
+          const { data: displayId } = await supabase.rpc("generate_display_id", {
+            prefix: "CUST",
+            seq_name: "customer_display_seq",
+          });
+
+          const { error } = await supabase.from("customers").insert({
+            display_id: String(displayId),
+            name: customerData.name,
+            phone: customerData.phone ?? null,
+            email: customerData.email ?? null,
+            address: customerData.address ?? null,
+            photo_url: customerData.photo_url ?? null,
+          });
+          if (error) throw error;
         }
         await removeFromQueue(action.id);
         synced++;

@@ -31,6 +31,7 @@ import Inventory from "./pages/Inventory";
 import Banners from "./pages/Banners";
 import Activity from "./pages/Activity";
 import AccessControl from "./pages/AccessControl";
+import { AdminStaffDirectory } from "./pages/AdminStaffDirectory";
 import Settings from "./pages/Settings";
 import StoreTypes from "./pages/StoreTypes";
 import StoreTypeAccess from "./pages/StoreTypeAccess";
@@ -41,6 +42,7 @@ import CustomerOrders from "./pages/CustomerOrders";
 import CustomerTransactions from "./pages/CustomerTransactions";
 import CustomerProfile from "./pages/CustomerProfile";
 import Auth from "./pages/Auth";
+import Onboarding from "./pages/Onboarding";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 
@@ -91,6 +93,7 @@ const App = () => (
         <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <Routes>
             <Route path="/auth" element={<Auth />} />
+            <Route path="/onboarding" element={<Onboarding />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route
               element={
@@ -109,6 +112,7 @@ const App = () => (
               <Route path="/reports/:type" element={<RoleGuard allowed={["super_admin", "manager"]}><Reports /></RoleGuard>} />
               <Route path="/activity" element={<RoleGuard allowed={["super_admin", "manager"]}><Activity /></RoleGuard>} />
               <Route path="/access-control" element={<RoleGuard allowed={["super_admin"]}><AccessControl /></RoleGuard>} />
+              <Route path="/admin/staff" element={<RoleGuard allowed={["super_admin"]}><AdminStaffDirectory /></RoleGuard>} />
               <Route path="/settings" element={<RoleGuard allowed={["super_admin", "manager"]}><Settings /></RoleGuard>} />
               <Route path="/map" element={<RoleGuard allowed={["super_admin", "manager"]}><MapPage /></RoleGuard>} />
               {/* Admin, Manager, Agent, Marketer */}

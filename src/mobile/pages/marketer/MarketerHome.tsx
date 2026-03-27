@@ -7,6 +7,7 @@ interface Props {
   onOpenOrders: () => void;
   onOpenRecord: () => void;
   onOpenStores: () => void;
+  onOpenAddEntity?: () => void;
 }
 
 export function MarketerHome({ onOpenOrders, onOpenRecord, onOpenStores }: Props) {

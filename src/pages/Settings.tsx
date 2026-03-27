@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -13,6 +14,7 @@ import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { PricingTab } from "@/components/settings/PricingTab";
 import { BannerManagement } from "@/components/banners/BannerManagement";
+import { SmsGatewayTab } from "@/components/settings/SmsGatewayTab";
 
 const SettingsPage = () => {
   const { role } = useAuth();
@@ -31,6 +33,14 @@ const SettingsPage = () => {
       const map: Record<string, string> = {};
       data?.forEach((s) => { map[s.key] = s.value || ""; });
       return map;
+    },
+  });
+
+  const { data: storeTypes = [] } = useQuery({
+    queryKey: ["store-types-settings"],
+    queryFn: async () => {
+      const { data } = await supabase.from("store_types").select("id, name").order("name");
+      return (data || []) as { id: string; name: string }[];
     },
   });
 
@@ -96,6 +106,7 @@ const SettingsPage = () => {
           <TabsTrigger value="pricing">Pricing</TabsTrigger>
           {isAdmin && <TabsTrigger value="banners">Banners</TabsTrigger>}
           <TabsTrigger value="features">Features</TabsTrigger>
+          {isAdmin && <TabsTrigger value="sms_gateway">SMS Gateway</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="company" className="mt-4 space-y-6">
@@ -189,6 +200,50 @@ const SettingsPage = () => {
 
         <TabsContent value="features" className="mt-4 space-y-4">
           <div className="rounded-xl border bg-card p-6 space-y-5 max-w-lg">
+            <h3 className="font-semibold">Authentication & Registration</h3>
+            {[
+              { key: "customer_signup_enabled", label: "Customer Sign-up", desc: "Allow new customers to register via phone OTP" },
+              { key: "google_linking_enabled", label: "Google Account Linking", desc: "Allow users to link their Google account for easier login" },
+            ].map((item) => (
+              <div key={item.key} className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">{item.label}</p>
+                  <p className="text-xs text-muted-foreground">{item.desc}</p>
+                </div>
+                <Switch checked={settings[item.key] !== "false"} onCheckedChange={() => toggleFeature(item.key)} disabled={!isAdmin} />
+              </div>
+            ))}
+          </div>
+          <div className="rounded-xl border bg-card p-6 space-y-5 max-w-lg">
+            <h3 className="font-semibold">Store Defaults</h3>
+            <div>
+              <Label>Default Store Type for New Customers</Label>
+              <p className="text-xs text-muted-foreground mb-2">
+                Automatically assigned when customers register. Can be changed by agents later.
+              </p>
+              <Select 
+                value={settings.default_store_type_id || ""} 
+                onValueChange={(val) => setSettings({ ...settings, default_store_type_id: val })}
+                disabled={!isAdmin}
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Select default store type..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {storeTypes.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {isAdmin && (
+              <Button onClick={handleSaveSettings} disabled={savingSettings} size="sm">
+                {savingSettings ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                Save
+              </Button>
+            )}
+          </div>
+          <div className="rounded-xl border bg-card p-6 space-y-5 max-w-lg">
             <h3 className="font-semibold">Feature Toggles</h3>
             {[
               { key: "location_validation", label: "Location Validation", desc: "Require agents to be near store for sales" },
@@ -212,6 +267,12 @@ const SettingsPage = () => {
             )}
           </div>
         </TabsContent>
+
+        {isAdmin && (
+          <TabsContent value="sms_gateway" className="mt-4">
+            <SmsGatewayTab />
+          </TabsContent>
+        )}
       </Tabs>
 
     </div>

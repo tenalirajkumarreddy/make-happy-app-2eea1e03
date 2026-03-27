@@ -24,7 +24,6 @@ const MapPage = () => {
   const leafletMap = useRef<L.Map | null>(null);
   const userMarkerRef = useRef<L.Marker | null>(null);
   const agentMarkersRef = useRef<L.Marker[]>([]);
-  const agentTrailsRef = useRef<L.Polyline[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<string>("");
   const [filterType, setFilterType] = useState<string>("");
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
@@ -58,36 +57,14 @@ const MapPage = () => {
       const { data } = await supabase
         .from("route_sessions")
         .select("id, user_id, started_at, current_lat, current_lng, location_updated_at, routes(name), profiles(full_name)")
-        .eq("status", "active");
-      return data || [];
+        .eq("status", "active") as any;
+      return (data || []) as any[];
     },
     refetchInterval: 15000,
   });
 
-  // Fetch GPS trail pings for active sessions
-  const activeSessionIds = activeSessions?.map((s) => s.id) || [];
-  const { data: locationTrails } = useQuery({
-    queryKey: ["location-trails-map", activeSessionIds],
-    queryFn: async () => {
-      if (activeSessionIds.length === 0) return {};
-      const { data } = await supabase
-        .from("location_pings")
-        .select("session_id, lat, lng, recorded_at")
-        .in("session_id", activeSessionIds)
-        .order("recorded_at", { ascending: true })
-        .limit(500);
-      const trails: Record<string, { lat: number; lng: number }[]> = {};
-      (data || []).forEach((p: any) => {
-        if (!trails[p.session_id]) trails[p.session_id] = [];
-        trails[p.session_id].push({ lat: p.lat, lng: p.lng });
-      });
-      return trails;
-    },
-    enabled: activeSessionIds.length > 0,
-    refetchInterval: 30000,
-  });
-
   // Get visited store IDs from active sessions
+  const activeSessionIds = activeSessions?.map((s) => s.id) || [];
   const { data: visitedStoreIds } = useQuery({
     queryKey: ["visited-stores-map", activeSessionIds],
     queryFn: async () => {
@@ -302,29 +279,12 @@ const MapPage = () => {
     return () => { userMarkerRef.current?.remove(); userMarkerRef.current = null; };
   }, [userLocation]);
 
-  // Agent location markers + trail polylines (real-time)
+  // Agent location markers (real-time)
   useEffect(() => {
     if (!leafletMap.current) return;
     agentMarkersRef.current.forEach((m) => m.remove());
     agentMarkersRef.current = [];
-    agentTrailsRef.current.forEach((p) => p.remove());
-    agentTrailsRef.current = [];
-
-    const AGENT_COLORS = ["#7c3aed", "#2563eb", "#16a34a", "#ea580c", "#db2777"];
-    (activeSessions || []).forEach((session: any, idx: number) => {
-      const color = AGENT_COLORS[idx % AGENT_COLORS.length];
-
-      // Draw GPS trail polyline
-      const trail = locationTrails?.[session.id] || [];
-      if (trail.length >= 2) {
-        const polyline = L.polyline(
-          trail.map((p) => [p.lat, p.lng] as [number, number]),
-          { color, weight: 3, opacity: 0.7, dashArray: "6 4" }
-        ).addTo(leafletMap.current!);
-        agentTrailsRef.current.push(polyline);
-      }
-
-      // Draw current-position marker
+    (activeSessions || []).forEach((session: any) => {
       if (!session.current_lat || !session.current_lng) return;
       const agentName = session.profiles?.full_name || "Agent";
       const routeName = session.routes?.name || "Route";
@@ -333,16 +293,16 @@ const MapPage = () => {
         : "";
       const icon = L.divIcon({
         className: "",
-        html: `<div style="background:${color};color:white;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:14px;border:2px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.35);">🚶</div>`,
+        html: `<div style="background:#7c3aed;color:white;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:14px;border:2px solid white;box-shadow:0 2px 8px rgba(124,58,237,0.5);">🚶</div>`,
         iconSize: [28, 28],
         iconAnchor: [14, 14],
       });
       const marker = L.marker([session.current_lat, session.current_lng], { icon, zIndexOffset: 3000 })
         .addTo(leafletMap.current!)
-        .bindPopup(`<div style="font-family:system-ui;min-width:150px;"><strong>${agentName}</strong><div style="color:${color};font-size:12px;">${routeName}</div>${updatedAt ? `<div style="color:#888;font-size:11px;">Updated: ${updatedAt}</div>` : ""}${trail.length > 0 ? `<div style="color:#888;font-size:11px;">${trail.length} location pings</div>` : ""}</div>`);
+        .bindPopup(`<div style="font-family:system-ui;min-width:150px;"><strong>${agentName}</strong><div style="color:#7c3aed;font-size:12px;">${routeName}</div>${updatedAt ? `<div style="color:#888;font-size:11px;">Updated: ${updatedAt}</div>` : ""}</div>`);
       agentMarkersRef.current.push(marker);
     });
-  }, [activeSessions, locationTrails]);
+  }, [activeSessions]);
 
   if (isLoading) return <TableSkeleton columns={3} rows={5} />;
 

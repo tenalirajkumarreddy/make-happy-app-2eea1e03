@@ -76,6 +76,7 @@ const NAV_BY_ROLE: Record<string, { main: NavItem[]; secondary: NavItem[] }> = {
       { label: "Analytics", path: "/analytics", icon: BarChart3 },
       { label: "Activity Log", path: "/activity", icon: History },
       { label: "Access Control", path: "/access-control", icon: Shield },
+      { label: "Staff Directory", path: "/admin/staff", icon: Users },
       { label: "Settings", path: "/settings", icon: Settings },
     ],
   },

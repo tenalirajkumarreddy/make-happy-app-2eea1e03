@@ -9,7 +9,7 @@ const STORE_NAME = "pending_actions";
 
 export interface PendingAction {
   id: string;
-  type: "sale" | "transaction" | "visit";
+  type: "sale" | "transaction" | "visit" | "customer";
   payload: unknown;
   createdAt: string;
 }
