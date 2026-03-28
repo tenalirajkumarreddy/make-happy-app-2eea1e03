@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, Phone, ShoppingCart, Wallet, ClipboardList, UserCircle2, ShieldCheck } from "lucide-react";
+import { Loader2, ShoppingCart, Wallet } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveCustomer } from "@/lib/resolveCustomer";
 import { useAuth } from "@/contexts/AuthContext";
@@ -9,18 +9,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 interface Props {
   selectedStoreId: string | null;
   onStoreChange: (storeId: string | null) => void;
-  onOpenSales: () => void;
-  onOpenOrders: () => void;
-  onOpenTransactions: () => void;
-  onOpenProfile: () => void;
-  onOpenKyc?: () => void;
 }
 
 interface CustomerRow {
   id: string;
   name: string;
   display_id: string;
-  kyc_status: string;
 }
 
 interface StoreRow {
@@ -49,17 +43,12 @@ interface SaleRow {
 export function CustomerHome({
   selectedStoreId,
   onStoreChange,
-  onOpenSales,
-  onOpenOrders,
-  onOpenTransactions,
-  onOpenProfile,
-  onOpenKyc,
 }: Props) {
   const { user, profile } = useAuth();
 
   const { data: customer } = useQuery({
     queryKey: ["mobile-customer-self", user?.id],
-    queryFn: async () => (await resolveCustomer(user!.id, "id, name, display_id, kyc_status")) as CustomerRow | null,
+    queryFn: async () => (await resolveCustomer(user!.id, "id, name, display_id")) as CustomerRow | null,
     enabled: !!user,
   });
 
@@ -179,37 +168,15 @@ export function CustomerHome({
           </Select>
         </div>
 
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           <MiniStat label="Pending Orders" value={String(pendingOrders)} icon={ShoppingCart} />
           <MiniStat label="Outstanding" value={`₹${totalOutstanding.toLocaleString("en-IN")}`} icon={Wallet} />
-          <MiniStat label="KYC" value={String(customer.kyc_status || "not_requested").replace("_", " ")} icon={UserCircle2} />
         </div>
 
-        <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-4 shadow-sm">
-          <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Quick Actions</p>
-          <div className="grid grid-cols-4 gap-2">
-            <QuickButton label="Sales" onClick={onOpenSales} icon={ClipboardList} />
-            <QuickButton label="Order" onClick={onOpenOrders} icon={ShoppingCart} />
-            <QuickButton label="Ledger" onClick={onOpenTransactions} icon={Wallet} />
-            <QuickButton label="Profile" onClick={onOpenProfile} icon={UserCircle2} />
-            {onOpenKyc && <QuickButton label="KYC" onClick={onOpenKyc} icon={ShieldCheck} />}
-          </div>
-          {settings && (
-            <button
-              type="button"
-              className="mt-3 w-full h-9 rounded-xl border border-primary/30 text-primary text-sm font-semibold flex items-center justify-center gap-2"
-              onClick={() => window.open(`tel:${settings}`, "_self")}
-            >
-              <Phone className="h-4 w-4" />
-              Call Support
-            </button>
-          )}
-        </div>
 
         <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Recent Sales</p>
-            <button type="button" className="text-xs font-semibold text-blue-600" onClick={onOpenSales}>View all</button>
           </div>
 
           {loadingSales ? (
@@ -252,15 +219,3 @@ function MiniStat({ label, value, icon: Icon }: { label: string; value: string; 
   );
 }
 
-function QuickButton({ label, onClick, icon: Icon }: { label: string; onClick: () => void; icon: React.ElementType }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="h-16 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex flex-col items-center justify-center gap-1"
-    >
-      <Icon className="h-4 w-4 text-blue-500" />
-      <span className="text-[10px] font-semibold text-slate-700 dark:text-slate-200">{label}</span>
-    </button>
-  );
-}

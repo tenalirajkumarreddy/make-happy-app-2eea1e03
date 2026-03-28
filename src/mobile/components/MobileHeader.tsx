@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Bell, Wifi, WifiOff, LogOut, Moon, Sun, ChevronDown, User } from "lucide-react";
+import { Bell, Wifi, WifiOff, LogOut, Moon, Sun, ChevronDown, User, Menu } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
@@ -31,9 +31,10 @@ function useTheme() {
 
 interface Props {
   title?: string;
+  onMenuClick?: () => void;
 }
 
-export function MobileHeader({ title }: Props) {
+export function MobileHeader({ title, onMenuClick }: Props) {
   const { profile, role, signOut } = useAuth();
   const { unreadCount } = useNotifications();
   const { isOnline, pendingCount } = useOnlineStatus();
@@ -82,6 +83,15 @@ export function MobileHeader({ title }: Props) {
           <div className="h-14 flex items-center px-4 gap-3">
             {/* Brand + page title */}
             <div className="flex items-center gap-2.5 min-w-0 flex-1">
+              {onMenuClick && (
+                <button
+                  onClick={onMenuClick}
+                  className="p-1.5 -ml-1 rounded-lg text-white/80 hover:text-white hover:bg-white/10 transition-all shrink-0"
+                  aria-label="Open menu"
+                >
+                  <Menu className="h-5 w-5" />
+                </button>
+              )}
               {companyLogo ? (
                 <img
                   src={companyLogo}

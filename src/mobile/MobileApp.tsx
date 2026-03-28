@@ -69,6 +69,17 @@ import { CustomerOrders } from "./pages/customer/CustomerOrders";
 import { CustomerTransactions } from "./pages/customer/CustomerTransactions";
 import { CustomerProfile } from "./pages/customer/CustomerProfile";
 import { PosHome } from "./pages/pos/PosHome";
+import { AdminHome } from "./pages/admin/AdminHome";
+import { AdminSales } from "./pages/admin/AdminSales";
+import { AdminOrders } from "./pages/admin/AdminOrders";
+import { AdminCustomers } from "./pages/admin/AdminCustomers";
+import { AdminStores } from "./pages/admin/AdminStores";
+import { AdminProducts } from "./pages/admin/AdminProducts";
+import { AdminTransactions } from "./pages/admin/AdminTransactions";
+import { AdminHandovers } from "./pages/admin/AdminHandovers";
+import { AdminRoutes } from "./pages/admin/AdminRoutes";
+import { AdminProfile } from "./pages/admin/AdminProfile";
+import { AdminSettings } from "./pages/admin/AdminSettings";
 import type { StoreOption } from "./components/StorePickerSheet";
 import AddCustomerStore from "@/mobile/pages/agent/AddCustomerStore";
 
@@ -144,35 +155,41 @@ function StaffApp({ role }: { role: StaffRole }) {
 
   const menuItems = STAFF_MENU_BY_ROLE[role];
 
+  // Header title: use menu items list to derive page name
   const activeMenuItem =
-    menuItems.find((item) => location.pathname === item.path || (item.path !== "/" && location.pathname.startsWith(item.path))) ||
-    menuItems[0];
+    menuItems.find(
+      (item) =>
+        location.pathname === item.path ||
+        (item.path !== "/" && location.pathname.startsWith(item.path))
+    ) || menuItems[0];
 
   const renderCurrentScreen = () => {
     const path = location.pathname;
 
+    // Detail pages (keep web versions for now as they handle complex routing)
     if (matchPath("/customers/:id", path)) return <CustomerDetail />;
     if (matchPath("/stores/:id", path)) return <StoreDetail />;
     if (matchPath("/routes/:id", path)) return <RouteDetail />;
 
-    if (path.startsWith("/reports")) return <Reports />;
-    if (path === "/products") return <Products />;
+    // Native admin pages
+    if (path === "/products") return <AdminProducts />;
     if (path === "/inventory") return <Inventory />;
-    if (path === "/customers") return <Customers />;
-    if (path === "/stores") return <Stores />;
-    if (path === "/routes") return <RoutesPage />;
-    if (path === "/sales") return <Sales />;
-    if (path === "/transactions") return <Transactions />;
-    if (path === "/orders") return <Orders />;
-    if (path === "/handovers") return <Handovers />;
+    if (path === "/customers") return <AdminCustomers />;
+    if (path === "/stores") return <AdminStores />;
+    if (path === "/routes") return <AdminRoutes />;
+    if (path === "/sales") return <AdminSales />;
+    if (path === "/transactions") return <AdminTransactions />;
+    if (path === "/orders") return <AdminOrders />;
+    if (path === "/handovers") return <AdminHandovers />;
     if (path === "/map") return <MapPage />;
+    if (path.startsWith("/reports")) return <Reports />;
     if (path === "/analytics") return <Analytics />;
     if (path === "/activity") return <Activity />;
     if (path === "/access-control" && role === "super_admin") return <AccessControl />;
-    if (path === "/profile") return <UserProfile />;
-    if (path === "/settings") return <SettingsPage />;
+    if (path === "/profile") return <AdminProfile />;
+    if (path === "/settings") return <AdminSettings />;
 
-    return <Dashboard />;
+    return <AdminHome onCloseMenu={() => setMenuOpen(false)} />;
   };
 
   useEffect(() => {
@@ -186,7 +203,6 @@ function StaffApp({ role }: { role: StaffRole }) {
           setMenuOpen(false);
           return;
         }
-
         if (location.pathname !== "/") {
           navigate("/");
         }
@@ -204,32 +220,27 @@ function StaffApp({ role }: { role: StaffRole }) {
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
-      <MobileHeader title={activeMenuItem?.label || "Dashboard"} />
+      <MobileHeader title={activeMenuItem?.label || "Dashboard"} onMenuClick={() => setMenuOpen(true)} />
 
-      <Button
-        variant="secondary"
-        size="icon"
-        onClick={() => setMenuOpen(true)}
-        className="fixed left-4 z-50 h-9 w-9 shadow-sm"
-        style={{ top: "calc(env(safe-area-inset-top) + 0.75rem)" }}
-      >
-        <Menu className="h-5 w-5" />
-      </Button>
-
+      {/* Navigation drawer — opened via hamburger in header */}
       <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
         <SheetContent side="left" className="w-72 p-0">
-          <div className="h-full bg-sidebar text-sidebar-foreground">
-            <div className="flex items-center gap-3 px-4 py-5 border-b border-sidebar-border">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground font-bold text-sm shrink-0">
-                BM
+          <div className="h-full bg-sidebar text-sidebar-foreground flex flex-col">
+            {/* Drawer header */}
+            <div className="flex items-center gap-3 px-4 py-5 border-b border-sidebar-border shrink-0">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 text-white font-bold text-sm shrink-0">
+                AP
               </div>
               <div className="overflow-hidden">
-                <h1 className="text-sm font-bold text-sidebar-accent-foreground truncate">BizManager</h1>
-                <p className="text-[11px] text-sidebar-muted truncate">{role === "super_admin" ? "Admin" : "Manager"}</p>
+                <h1 className="text-sm font-bold text-sidebar-accent-foreground truncate">Aqua Prime</h1>
+                <p className="text-[11px] text-sidebar-muted truncate">
+                  {role === "super_admin" ? "Super Admin" : "Manager"}
+                </p>
               </div>
             </div>
 
-            <nav className="p-3 space-y-1 overflow-y-auto h-[calc(100%-78px)]">
+            {/* Nav items */}
+            <nav className="p-3 space-y-0.5 overflow-y-auto flex-1">
               {menuItems.map((item) => {
                 const Icon = item.icon;
                 const isActive =
@@ -243,13 +254,13 @@ function StaffApp({ role }: { role: StaffRole }) {
                       navigate(item.path);
                       setMenuOpen(false);
                     }}
-                    className={`w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+                    className={`w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors ${
                       isActive
-                        ? "bg-sidebar-accent text-sidebar-primary font-medium"
+                        ? "bg-violet-600 text-white font-semibold"
                         : "text-sidebar-foreground/80 hover:bg-sidebar-accent/50"
                     }`}
                   >
-                    <Icon className="h-4 w-4" />
+                    <Icon className="h-4 w-4 shrink-0" />
                     <span className="truncate">{item.label}</span>
                   </button>
                 );
@@ -259,6 +270,7 @@ function StaffApp({ role }: { role: StaffRole }) {
         </SheetContent>
       </Sheet>
 
+      {/* Page content — padded for header only (no bottom nav) */}
       <main
         className="flex-1 overflow-y-auto"
         style={{
@@ -314,10 +326,6 @@ function CustomerApp() {
           <CustomerHome
             selectedStoreId={selectedStoreId}
             onStoreChange={setSelectedStoreId}
-            onOpenSales={() => setTab("sales")}
-            onOpenOrders={() => setTab("orders")}
-            onOpenTransactions={() => setTab("transactions")}
-            onOpenProfile={() => setTab("profile")}
           />
         )}
         {tab === "sales" && <CustomerSales selectedStoreId={selectedStoreId} />}
