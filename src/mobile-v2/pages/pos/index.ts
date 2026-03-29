@@ -1,0 +1,1 @@
+export { PosHome } from "./PosHome";

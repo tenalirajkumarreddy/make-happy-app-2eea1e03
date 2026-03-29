@@ -3,18 +3,11 @@ import { AppSidebar } from "./AppSidebar";
 import { TopBar } from "./TopBar";
 import { GlobalSearch } from "@/components/shared/GlobalSearch";
 import { useRealtimeSync } from "@/hooks/useRealtimeSync";
-import { isNativeApp } from "@/lib/capacitorUtils";
-import { MobileApp } from "@/mobile/MobileApp";
 
 export function AppLayout() {
   useRealtimeSync();
 
-  // Native APK: render dedicated mobile UI
-  if (isNativeApp()) {
-    return <MobileApp />;
-  }
-
-  // Web: standard sidebar layout (unchanged)
+  // Web: standard sidebar layout
   return (
     <div className="flex h-screen overflow-hidden">
       <AppSidebar />

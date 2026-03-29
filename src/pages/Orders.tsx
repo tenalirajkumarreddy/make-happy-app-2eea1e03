@@ -88,7 +88,7 @@ const Orders = () => {
 
   const hasMoreOrders = (orders?.length || 0) >= loadedPages * PAGE_SIZE;
 
-  const { data: customers } = useQuery({
+  const { data: customers = [] } = useQuery({
     queryKey: ["customers"],
     queryFn: async () => {
       const { data } = await supabase.from("customers").select("id, name").eq("is_active", true);

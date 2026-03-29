@@ -11,7 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { logActivity } from "@/lib/activityLogger";
 import { generateDisplayId } from "@/lib/displayId";
-import { Loader2, User, Upload, AlertCircle } from "lucide-react";
+import { Loader2, User, Upload, AlertCircle, Phone, Mail, Store as StoreIcon } from "lucide-react";
 import { usePermission } from "@/hooks/usePermission";
 import { useRouteAccess } from "@/hooks/useRouteAccess";
 import { addToQueue } from "@/lib/offlineQueue";
@@ -20,6 +20,7 @@ import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -37,6 +38,7 @@ const Customers = () => {
   const navigate = useNavigate();
   const { user, role } = useAuth();
   const { isOnline } = useOnlineStatus();
+  const isMobile = useIsMobile();
   const { allowed: canCreateCustomers } = usePermission("create_customers");
   const [showAdd, setShowAdd] = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -418,41 +420,124 @@ const Customers = () => {
         />
       )}
 
-      <VirtualDataTable
-        columns={columns}
-        data={filteredCustomers}
-        searchKey="name"
-        searchPlaceholder="Search customers..."
-        onRowClick={(row) => { if (!editMode) navigate(`/customers/${row.id}`); }}
-        height="calc(100vh - 240px)"
-        renderMobileCard={(row: any) => (
-          <div className={`rounded-xl border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow active:bg-muted/30 ${!row.is_active ? "opacity-60" : ""}`}>
-            <div className="flex">
-              <div className="w-24 self-stretch shrink-0 bg-muted flex items-center justify-center overflow-hidden">
-                {row.photo_url ? (
-                  <img src={row.photo_url} alt={row.name} loading="lazy" className="w-full h-full object-cover" />
-                ) : (
-                  <User className="h-8 w-8 text-muted-foreground/40" />
-                )}
-              </div>
-              <div className="flex-1 p-3 min-w-0">
-                <div className="flex items-start justify-between gap-2">
-                  <h3 className="font-semibold text-sm text-foreground truncate">{row.name}</h3>
-                  <StatusBadge status={row.is_active ? "active" : "inactive"} />
+      {/* Desktop: Card Grid, Mobile: Table */}
+      {!isMobile ? (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {filteredCustomers.map((row: any) => {
+              const totalOutstanding = (row.stores || []).reduce((s: number, st: any) => s + Number(st.outstanding || 0), 0);
+              const storeCount = row.stores?.length || 0;
+              
+              return (
+                <div
+                  key={row.id}
+                  onClick={() => { if (!editMode) navigate(`/customers/${row.id}`); }}
+                  className={`group rounded-xl border bg-card shadow-sm hover:shadow-lg transition-all duration-200 overflow-hidden cursor-pointer ${!row.is_active ? "opacity-60" : ""}`}
+                >
+                  {/* Header with image */}
+                  <div className="relative h-32 bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center">
+                    {row.photo_url ? (
+                      <img src={row.photo_url} alt={row.name} className="w-20 h-20 rounded-full object-cover border-4 border-background shadow-md" />
+                    ) : (
+                      <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center border-4 border-background shadow-md">
+                        <User className="h-10 w-10 text-muted-foreground" />
+                      </div>
+                    )}
+                    <div className="absolute top-2 right-2">
+                      <StatusBadge status={row.is_active ? "active" : "inactive"} />
+                    </div>
+                  </div>
+
+                  {/* Content */}
+                  <div className="p-4 space-y-3">
+                    <div className="text-center">
+                      <h3 className="font-semibold text-lg text-foreground truncate">{row.name}</h3>
+                      <p className="text-xs text-muted-foreground font-mono mt-0.5">{row.display_id}</p>
+                    </div>
+
+                    {/* Contact info */}
+                    <div className="space-y-1.5 text-sm">
+                      {row.phone && (
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Phone className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">{row.phone}</span>
+                        </div>
+                      )}
+                      {row.email && (
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Mail className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate text-xs">{row.email}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* KYC Status */}
+                    <div className="pt-2 border-t">
+                      <StatusBadge 
+                        status={row.kyc_status === "verified" ? "verified" : row.kyc_status === "pending" ? "pending" : "inactive"} 
+                        label={`KYC: ${row.kyc_status.replace("_", " ")}`} 
+                      />
+                    </div>
+
+                    {/* Stats */}
+                    <div className="pt-2 border-t flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-muted-foreground">
+                        <StoreIcon className="h-3.5 w-3.5" />
+                        <span className="text-xs">{storeCount} {storeCount === 1 ? 'store' : 'stores'}</span>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Outstanding</p>
+                        <p className="font-bold text-foreground">₹{totalOutstanding.toLocaleString()}</p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-center justify-between gap-2 mt-0.5">
-                  <p className="text-xs text-muted-foreground font-mono truncate">{row.display_id}</p>
-                  <StatusBadge status={row.kyc_status === "verified" ? "verified" : row.kyc_status === "pending" ? "pending" : "inactive"} label={`KYC: ${row.kyc_status.replace("_", " ")}`} />
+              );
+            })}
+          </div>
+          {filteredCustomers.length === 0 && (
+            <div className="text-center py-12 text-muted-foreground">
+              No customers found.
+            </div>
+          )}
+        </div>
+      ) : (
+        <VirtualDataTable
+          columns={columns}
+          data={filteredCustomers}
+          searchKey="name"
+          searchPlaceholder="Search customers..."
+          onRowClick={(row) => { if (!editMode) navigate(`/customers/${row.id}`); }}
+          height="calc(100vh - 240px)"
+          renderMobileCard={(row: any) => (
+            <div className={`rounded-xl border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow active:bg-muted/30 ${!row.is_active ? "opacity-60" : ""}`}>
+              <div className="flex">
+                <div className="w-24 self-stretch shrink-0 bg-muted flex items-center justify-center overflow-hidden">
+                  {row.photo_url ? (
+                    <img src={row.photo_url} alt={row.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <User className="h-8 w-8 text-muted-foreground/40" />
+                  )}
                 </div>
-                <div className="flex items-center gap-3 mt-1.5">
-                  <span className="text-sm font-bold text-foreground">₹{(row.stores || []).reduce((s: number, st: any) => s + Number(st.outstanding || 0), 0).toLocaleString()}</span>
-                  <span className="text-xs text-muted-foreground">{row.stores?.length || 0} stores</span>
+                <div className="flex-1 p-3 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="font-semibold text-sm text-foreground truncate">{row.name}</h3>
+                    <StatusBadge status={row.is_active ? "active" : "inactive"} />
+                  </div>
+                  <div className="flex items-center justify-between gap-2 mt-0.5">
+                    <p className="text-xs text-muted-foreground font-mono truncate">{row.display_id}</p>
+                    <StatusBadge status={row.kyc_status === "verified" ? "verified" : row.kyc_status === "pending" ? "pending" : "inactive"} label={`KYC: ${row.kyc_status.replace("_", " ")}`} />
+                  </div>
+                  <div className="flex items-center gap-3 mt-1.5">
+                    <span className="text-sm font-bold text-foreground">₹{(row.stores || []).reduce((s: number, st: any) => s + Number(st.outstanding || 0), 0).toLocaleString()}</span>
+                    <span className="text-xs text-muted-foreground">{row.stores?.length || 0} stores</span>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
-      />
+          )}
+        />
+      )}
 
       {hasNextPage && (
         <div className="flex justify-center pt-2">

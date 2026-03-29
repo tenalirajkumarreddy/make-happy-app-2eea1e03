@@ -12,6 +12,8 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { logError } from "@/lib/logger";
 import { Loader2 } from "lucide-react";
+import { isNativeApp } from "@/lib/capacitorUtils";
+import { MobileAppV2 } from "@/mobile-v2";
 
 // Critical pages loaded eagerly for fast initial load
 import Dashboard from "./pages/Dashboard";
@@ -88,39 +90,56 @@ function DashboardRouter() {
   );
 }
 
-const App = () => (
-  <Sentry.ErrorBoundary fallback={({ error, resetError }: { error: any, resetError: () => void }) => (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4 text-center">
-      <h1 className="mb-2 text-2xl font-bold text-foreground">Something went wrong</h1>
-      <p className="mb-4 text-muted-foreground">{error?.message || "An unexpected error occurred."}</p>
-      <button 
-        onClick={resetError}
-        className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
-      >
-        Try again
-      </button>
-    </div>
-  )}>
-    <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <TooltipProvider>
-        <Sonner />
-        <ErrorBoundary>
-        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-          <Suspense fallback={<PageLoader />}>
-          <Routes>
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/onboarding" element={<Onboarding />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-            <Route
-              element={
-                <ProtectedRoute>
-                  <AppLayout />
-                </ProtectedRoute>
-              }
-            >
-              <Route path="/" element={<DashboardRouter />} />
-              {/* Admin & Manager only */}
+const App = () => {
+  const isMobile = isNativeApp();
+
+  return (
+    <Sentry.ErrorBoundary fallback={({ error, resetError }: { error: any, resetError: () => void }) => (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4 text-center">
+        <h1 className="mb-2 text-2xl font-bold text-foreground">Something went wrong</h1>
+        <p className="mb-4 text-muted-foreground">{error?.message || "An unexpected error occurred."}</p>
+        <button 
+          onClick={resetError}
+          className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
+        >
+          Try again
+        </button>
+      </div>
+    )}>
+      <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <TooltipProvider>
+          <Sonner />
+          <ErrorBoundary>
+          <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+            <Suspense fallback={<PageLoader />}>
+            {isMobile ? (
+              // Mobile APK: Use dedicated mobile routing
+              <Routes>
+                <Route path="/auth" element={<Auth />} />
+                <Route path="/onboarding" element={<Onboarding />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
+                <Route path="/*" element={
+                  <ProtectedRoute>
+                    <MobileAppV2 />
+                  </ProtectedRoute>
+                } />
+              </Routes>
+            ) : (
+              // Web: Standard routing
+            <Routes>
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/onboarding" element={<Onboarding />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+              <Route
+                element={
+                  <ProtectedRoute>
+                    <AppLayout />
+                  </ProtectedRoute>
+                }
+              >
+                <Route path="/" element={<DashboardRouter />} />
+                {/* Admin & Manager only */}
               <Route path="/products" element={<RoleGuard allowed={["super_admin", "manager"]}><Products /></RoleGuard>} />
               <Route path="/inventory" element={<RoleGuard allowed={["super_admin", "manager"]}><Inventory /></RoleGuard>} />
               <Route path="/banners" element={<RoleGuard allowed={["super_admin", "manager"]}><Banners /></RoleGuard>} />
@@ -162,6 +181,7 @@ const App = () => (
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
+            )}
           </Suspense>
         </BrowserRouter>
         </ErrorBoundary>
@@ -169,6 +189,7 @@ const App = () => (
     </AuthProvider>
   </QueryClientProvider>
   </Sentry.ErrorBoundary>
-);
+  );
+};
 
 export default App;

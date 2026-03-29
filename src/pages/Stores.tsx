@@ -10,12 +10,13 @@ import { AdvancedFilters, applyFilters, type FilterValues } from "@/components/s
 import { useInfiniteQuery, useQueryClient, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { DollarSign, Store, Settings2, Upload, Loader2 } from "lucide-react";
+import { DollarSign, Store, Settings2, Upload, Loader2, Phone, MapPin } from "lucide-react";
 import { usePermission } from "@/hooks/usePermission";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -30,6 +31,7 @@ import {
 const Stores = () => {
   const navigate = useNavigate();
   const { user, role } = useAuth();
+  const isMobile = useIsMobile();
   const { allowed: canCreateStores } = usePermission("create_stores");
   const [showAdd, setShowAdd] = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -367,41 +369,143 @@ const Stores = () => {
         </div>
       )}
 
-      <VirtualDataTable
-        columns={columns}
-        data={filteredStores}
-        searchKey="name"
-        searchPlaceholder="Search stores..."
-        onRowClick={(row) => { if (!editMode) navigate(`/stores/${row.id}`); }}
-        height="calc(100vh - 240px)"
-        renderMobileCard={(row: any) => (
-          <div className={`rounded-xl border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow active:bg-muted/30 ${!row.is_active ? "opacity-60" : ""}`} onClick={() => { if (!editMode) navigate(`/stores/${row.id}`); }}>
-            <div className="flex">
-              <div className="w-24 self-stretch shrink-0 bg-muted flex items-center justify-center overflow-hidden">
-                {row.photo_url ? (
-                  <img src={row.photo_url} alt={row.name} loading="lazy" className="w-full h-full object-cover" />
-                ) : (
-                  <Store className="h-8 w-8 text-muted-foreground/40" />
-                )}
-              </div>
-              <div className="flex-1 p-3 min-w-0">
-                <div className="flex items-start justify-between gap-2">
-                  <h3 className="font-semibold text-sm text-foreground truncate">{row.name}</h3>
-                  <StatusBadge status={row.is_active ? "active" : "inactive"} />
+      {/* Desktop: Card Grid, Mobile: Table */}
+      {!isMobile ? (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {filteredStores.map((row: any) => {
+              return (
+                <div
+                  key={row.id}
+                  onClick={() => { if (!editMode) navigate(`/stores/${row.id}`); }}
+                  className={`group rounded-xl border bg-card shadow-sm hover:shadow-lg transition-all duration-200 overflow-hidden cursor-pointer ${!row.is_active ? "opacity-60" : ""}`}
+                >
+                  {/* Header with image */}
+                  <div className="relative h-32 bg-gradient-to-br from-blue-500/10 to-blue-500/5 flex items-center justify-center">
+                    {row.photo_url ? (
+                      <img src={row.photo_url} alt={row.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-16 h-16 rounded-lg bg-muted flex items-center justify-center">
+                        <Store className="h-8 w-8 text-muted-foreground" />
+                      </div>
+                    )}
+                    <div className="absolute top-2 right-2">
+                      <StatusBadge status={row.is_active ? "active" : "inactive"} />
+                    </div>
+                    {row.store_types?.name && (
+                      <div className="absolute bottom-2 left-2">
+                        <Badge variant="secondary" className="text-xs">{row.store_types.name}</Badge>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Content */}
+                  <div className="p-4 space-y-3">
+                    <div>
+                      <h3 className="font-semibold text-lg text-foreground truncate">{row.name}</h3>
+                      <p className="text-xs text-muted-foreground font-mono mt-0.5">{row.display_id}</p>
+                    </div>
+
+                    {/* Customer */}
+                    <div className="text-sm">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Customer</p>
+                      <p className="font-medium text-foreground truncate">{row.customers?.name || "—"}</p>
+                    </div>
+
+                    {/* Contact info */}
+                    <div className="space-y-1.5 text-sm">
+                      {row.phone && (
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Phone className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">{row.phone}</span>
+                        </div>
+                      )}
+                      {row.address && (
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <MapPin className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate text-xs">{row.address}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Route */}
+                    {row.routes?.name && (
+                      <div className="pt-2 border-t text-sm">
+                        <p className="text-xs text-muted-foreground">Route: <span className="font-medium text-foreground">{row.routes.name}</span></p>
+                      </div>
+                    )}
+
+                    {/* Outstanding */}
+                    <div className="pt-2 border-t">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wider">Outstanding</p>
+                        <p className="font-bold text-lg text-foreground">₹{Number(row.outstanding).toLocaleString()}</p>
+                      </div>
+                    </div>
+
+                    {/* Pricing button for admins */}
+                    {canManagePricing && (
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="w-full text-xs" 
+                        onClick={(e: React.MouseEvent) => { 
+                          e.stopPropagation(); 
+                          setPricingStore(row); 
+                        }}
+                      >
+                        <DollarSign className="mr-1 h-3 w-3" />
+                        Set Prices
+                      </Button>
+                    )}
+                  </div>
                 </div>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  <p className="text-xs text-muted-foreground font-mono truncate">{row.display_id}</p>
-                  {row.store_types?.name && <Badge variant="outline" className="text-[10px] h-4 px-1 rounded-sm border-muted-foreground/30 text-muted-foreground">{row.store_types.name}</Badge>}
+              );
+            })}
+          </div>
+          {filteredStores.length === 0 && (
+            <div className="text-center py-12 text-muted-foreground">
+              No stores found.
+            </div>
+          )}
+        </div>
+      ) : (
+        <VirtualDataTable
+          columns={columns}
+          data={filteredStores}
+          searchKey="name"
+          searchPlaceholder="Search stores..."
+          onRowClick={(row) => { if (!editMode) navigate(`/stores/${row.id}`); }}
+          height="calc(100vh - 240px)"
+          renderMobileCard={(row: any) => (
+            <div className={`rounded-xl border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow active:bg-muted/30 ${!row.is_active ? "opacity-60" : ""}`} onClick={() => { if (!editMode) navigate(`/stores/${row.id}`); }}>
+              <div className="flex">
+                <div className="w-24 self-stretch shrink-0 bg-muted flex items-center justify-center overflow-hidden">
+                  {row.photo_url ? (
+                    <img src={row.photo_url} alt={row.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <Store className="h-8 w-8 text-muted-foreground/40" />
+                  )}
                 </div>
-                <div className="mt-2 text-right">
-                   <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Outstanding</p>
-                   <p className="font-bold text-foreground">₹{Number(row.outstanding).toLocaleString()}</p>
+                <div className="flex-1 p-3 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="font-semibold text-sm text-foreground truncate">{row.name}</h3>
+                    <StatusBadge status={row.is_active ? "active" : "inactive"} />
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <p className="text-xs text-muted-foreground font-mono truncate">{row.display_id}</p>
+                    {row.store_types?.name && <Badge variant="outline" className="text-[10px] h-4 px-1 rounded-sm border-muted-foreground/30 text-muted-foreground">{row.store_types.name}</Badge>}
+                  </div>
+                  <div className="mt-2 text-right">
+                     <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Outstanding</p>
+                     <p className="font-bold text-foreground">₹{Number(row.outstanding).toLocaleString()}</p>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
-      />
+          )}
+        />
+      )}
 
       {hasNextPage && (
         <div className="flex justify-center pt-2">
