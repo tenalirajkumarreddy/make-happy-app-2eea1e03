@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Loader2, Plus, Trash2, Package } from "lucide-react";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -237,6 +237,15 @@ const Purchases = () => {
         title="Purchases"
         subtitle="Record inventory purchases from vendors"
         primaryAction={{ label: "New Purchase", onClick: () => { resetForm(); setShowAdd(true); } }}
+        actions={[
+          {
+            label: "Raw Materials",
+            icon: Package,
+            onClick: () => navigate("/raw-materials"),
+            priority: 1,
+            variant: "outline"
+          }
+        ]}
       />
 
       <DataTable

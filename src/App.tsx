@@ -65,6 +65,7 @@ const CustomerProfile = lazy(() => import("./pages/CustomerProfile"));
 const UserProfile = lazy(() => import("./pages/UserProfile"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const Expenses = lazy(() => import("./pages/Expenses"));
 
 // Loading fallback component
 const PageLoader = () => (
@@ -161,6 +162,7 @@ const App = () => {
               <Route path="/invoices/:id" element={<RoleGuard allowed={["super_admin", "manager"]}><InvoiceView /></RoleGuard>} />
               <Route path="/invoices/:id/print" element={<RoleGuard allowed={["super_admin", "manager"]}><InvoiceView /></RoleGuard>} />
               <Route path="/attendance" element={<RoleGuard allowed={["super_admin", "manager"]}><Attendance /></RoleGuard>} />
+              <Route path="/expenses" element={<RoleGuard allowed={["super_admin", "manager"]}><Expenses /></RoleGuard>} />
               <Route path="/banners" element={<RoleGuard allowed={["super_admin", "manager"]}><Banners /></RoleGuard>} />
               <Route path="/analytics" element={<RoleGuard allowed={["super_admin", "manager"]}><Analytics /></RoleGuard>} />
               <Route path="/reports" element={<RoleGuard allowed={["super_admin", "manager"]}><Reports /></RoleGuard>} />

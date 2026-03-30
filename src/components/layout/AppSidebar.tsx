@@ -30,6 +30,7 @@ import {
   Building2,
   CreditCard,
   Calendar,
+  Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -67,6 +68,7 @@ const NAV_BY_ROLE: Record<string, { main: NavItem[]; secondary: NavItem[] }> = {
       { label: "Vendors", path: "/vendors", icon: Building2 },
       { label: "Purchases", path: "/purchases", icon: ShoppingCart },
       { label: "Vendor Payments", path: "/vendor-payments", icon: CreditCard },
+      { label: "Expenses", path: "/expenses", icon: Wallet },
       { label: "Attendance", path: "/attendance", icon: Calendar },
       { label: "Invoices", path: "/invoices", icon: FileText },
       { label: "Banners", path: "/banners", icon: Image },
@@ -96,6 +98,7 @@ const NAV_BY_ROLE: Record<string, { main: NavItem[]; secondary: NavItem[] }> = {
       { label: "Vendors", path: "/vendors", icon: Building2 },
       { label: "Purchases", path: "/purchases", icon: ShoppingCart },
       { label: "Vendor Payments", path: "/vendor-payments", icon: CreditCard },
+      { label: "Expenses", path: "/expenses", icon: Wallet },
       { label: "Attendance", path: "/attendance", icon: Calendar },
       { label: "Invoices", path: "/invoices", icon: FileText },
       { label: "Banners", path: "/banners", icon: Image },
