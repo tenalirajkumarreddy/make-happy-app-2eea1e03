@@ -42,10 +42,10 @@ const PosDashboard = () => {
       <PageHeader title="POS Dashboard" subtitle={`Welcome, ${profile?.full_name || "POS"}! Here's your daily summary.`} />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-        <StatCard title="Sales Today" value={`₹${s.totalSales.toLocaleString()}`} icon={ShoppingCart} iconColor="bg-primary" />
-        <StatCard title="Cash Collected" value={`₹${s.totalCash.toLocaleString()}`} icon={Banknote} iconColor="bg-success" />
-        <StatCard title="UPI Collected" value={`₹${s.totalUpi.toLocaleString()}`} icon={Smartphone} iconColor="bg-info" />
-        <StatCard title="Pending Handover" value={`₹${s.pendingHandover.toLocaleString()}`} icon={HandCoins} iconColor="bg-warning" />
+        <StatCard title="Sales Today" value={`₹${s.totalSales.toLocaleString()}`} icon={ShoppingCart} iconColor="primary" />
+        <StatCard title="Cash Collected" value={`₹${s.totalCash.toLocaleString()}`} icon={Banknote} iconColor="success" />
+        <StatCard title="UPI Collected" value={`₹${s.totalUpi.toLocaleString()}`} icon={Smartphone} iconColor="info" />
+        <StatCard title="Pending Handover" value={`₹${s.pendingHandover.toLocaleString()}`} icon={HandCoins} iconColor="warning" />
       </div>
     </div>
   );

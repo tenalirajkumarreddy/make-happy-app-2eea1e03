@@ -174,12 +174,12 @@ export default function OrderReport() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-        <StatCard title="Total Orders" value={String(d.total)} icon={ClipboardList} iconColor="bg-primary" />
-        <StatCard title="Delivered" value={String(d.delivered)} icon={CheckCircle} iconColor="bg-success" />
-        <StatCard title="Pending" value={String(d.pending)} icon={Clock} iconColor="bg-warning" />
-        <StatCard title="Cancelled" value={String(d.cancelled)} icon={XCircle} iconColor="bg-destructive" />
-        <StatCard title="Fulfillment" value={d.fulfillmentRate + "%"} icon={TrendingUp} iconColor="bg-success" />
-        <StatCard title="Avg Delivery" value={d.avgDeliveryHours.toFixed(1) + "h"} icon={Truck} iconColor="bg-accent" />
+        <StatCard title="Total Orders" value={String(d.total)} icon={ClipboardList} iconColor="primary" />
+        <StatCard title="Delivered" value={String(d.delivered)} icon={CheckCircle} iconColor="success" />
+        <StatCard title="Pending" value={String(d.pending)} icon={Clock} iconColor="warning" />
+        <StatCard title="Cancelled" value={String(d.cancelled)} icon={XCircle} iconColor="destructive" />
+        <StatCard title="Fulfillment" value={d.fulfillmentRate + "%"} icon={TrendingUp} iconColor="success" />
+        <StatCard title="Avg Delivery" value={d.avgDeliveryHours.toFixed(1) + "h"} icon={Truck} iconColor="purple" />
       </div>
 
       <Tabs defaultValue="status">

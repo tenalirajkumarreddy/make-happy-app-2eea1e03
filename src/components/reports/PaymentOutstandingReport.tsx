@@ -243,14 +243,14 @@ export default function PaymentOutstandingReport() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <StatCard title="Total Outstanding" value={fmt(d.totalOutstanding)} icon={TrendingDown} iconColor="bg-destructive" />
-        <StatCard title="Collections (90d)" value={fmt(d.totalCollections)} icon={Banknote} iconColor="bg-success" />
-        <StatCard title="Collection Rate" value={d.collectionRate + "%"} icon={Percent} iconColor="bg-primary" />
-        <StatCard title="Stores w/ Dues" value={String(d.storesWithOutstanding)} icon={DollarSign} iconColor="bg-warning" />
-        <StatCard title="Danger" value={String(d.dangerCustomers.length)} icon={AlertTriangle} iconColor="bg-destructive" />
-        <StatCard title="Inactive" value={String(d.inactiveCustomers.length)} icon={UserX} iconColor="bg-warning" />
-        <StatCard title="Credit Exceeded" value={String(d.creditExceededStores.length)} icon={Shield} iconColor="bg-destructive" />
-        <StatCard title="No Orders (15d)" value={String(d.noRecentOrdersStores.length)} icon={Clock} iconColor="bg-warning" />
+        <StatCard title="Total Outstanding" value={fmt(d.totalOutstanding)} icon={TrendingDown} iconColor="destructive" />
+        <StatCard title="Collections (90d)" value={fmt(d.totalCollections)} icon={Banknote} iconColor="success" />
+        <StatCard title="Collection Rate" value={d.collectionRate + "%"} icon={Percent} iconColor="primary" />
+        <StatCard title="Stores w/ Dues" value={String(d.storesWithOutstanding)} icon={DollarSign} iconColor="warning" />
+        <StatCard title="Danger" value={String(d.dangerCustomers.length)} icon={AlertTriangle} iconColor="destructive" />
+        <StatCard title="Inactive" value={String(d.inactiveCustomers.length)} icon={UserX} iconColor="warning" />
+        <StatCard title="Credit Exceeded" value={String(d.creditExceededStores.length)} icon={Shield} iconColor="destructive" />
+        <StatCard title="No Orders (15d)" value={String(d.noRecentOrdersStores.length)} icon={Clock} iconColor="warning" />
       </div>
 
       <Tabs defaultValue="danger">

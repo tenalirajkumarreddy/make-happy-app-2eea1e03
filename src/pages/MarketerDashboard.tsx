@@ -42,10 +42,10 @@ const MarketerDashboard = () => {
       <PageHeader title="Dashboard" subtitle={`Welcome, ${profile?.full_name || "Marketer"}!`} />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-        <StatCard title="Active Customers" value={String(s.customerCount)} icon={Users} iconColor="bg-primary" />
-        <StatCard title="My Orders" value={String(s.totalOrders)} change={`${s.pendingOrders} pending`} changeType={s.pendingOrders > 0 ? "negative" : "positive"} icon={ClipboardList} iconColor="bg-info" />
-        <StatCard title="Cash Collected" value={`₹${s.todayCash.toLocaleString()}`} icon={Banknote} iconColor="bg-warning" />
-        <StatCard title="UPI Collected" value={`₹${s.todayUpi.toLocaleString()}`} icon={Smartphone} iconColor="bg-success" />
+        <StatCard title="Active Customers" value={String(s.customerCount)} icon={Users} iconColor="primary" />
+        <StatCard title="My Orders" value={String(s.totalOrders)} change={`${s.pendingOrders} pending`} changeType={s.pendingOrders > 0 ? "negative" : "positive"} icon={ClipboardList} iconColor="info" />
+        <StatCard title="Cash Collected" value={`₹${s.todayCash.toLocaleString()}`} icon={Banknote} iconColor="warning" />
+        <StatCard title="UPI Collected" value={`₹${s.todayUpi.toLocaleString()}`} icon={Smartphone} iconColor="success" />
       </div>
     </div>
   );

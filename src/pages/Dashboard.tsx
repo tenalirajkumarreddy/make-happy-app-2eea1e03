@@ -98,17 +98,17 @@ const Dashboard = () => {
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <StatCard title="Total Sales (Today)" value={`₹${s.todayTotal.toLocaleString()}`} icon={DollarSign} iconColor="bg-primary" />
-        <StatCard title="Cash Collected" value={`₹${s.todayCash.toLocaleString()}`} icon={Banknote} iconColor="bg-success" />
-        <StatCard title="UPI Collected" value={`₹${s.todayUpi.toLocaleString()}`} icon={Smartphone} iconColor="bg-info" />
-        <StatCard title="Pending Outstanding" value={`₹${s.totalOutstanding.toLocaleString()}`} change={`${s.overdueStores} stores with balance`} changeType="negative" icon={Clock} iconColor="bg-warning" />
+        <StatCard title="Total Sales (Today)" value={`₹${s.todayTotal.toLocaleString()}`} icon={DollarSign} iconColor="primary" />
+        <StatCard title="Cash Collected" value={`₹${s.todayCash.toLocaleString()}`} icon={Banknote} iconColor="success" />
+        <StatCard title="UPI Collected" value={`₹${s.todayUpi.toLocaleString()}`} icon={Smartphone} iconColor="info" />
+        <StatCard title="Pending Outstanding" value={`₹${s.totalOutstanding.toLocaleString()}`} change={`${s.overdueStores} stores with balance`} changeType="negative" icon={Clock} iconColor="warning" />
       </div>
 
       <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-        <StatCard title="Active Customers" value={String(s.customerCount)} icon={Users} />
-        <StatCard title="Active Stores" value={String(s.storeCount)} icon={Store} />
-        <StatCard title="Pending Orders" value={String(s.pendingOrders.length)} icon={ShoppingCart} />
-        <StatCard title="Store Types" value={String(s.storeTypeData.filter((t) => t.name !== "No data").length)} icon={TrendingUp} />
+        <StatCard title="Active Customers" value={String(s.customerCount)} icon={Users} iconColor="cyan" />
+        <StatCard title="Active Stores" value={String(s.storeCount)} icon={Store} iconColor="purple" />
+        <StatCard title="Pending Orders" value={String(s.pendingOrders.length)} icon={ShoppingCart} iconColor="orange" />
+        <StatCard title="Store Types" value={String(s.storeTypeData.filter((t) => t.name !== "No data").length)} icon={TrendingUp} iconColor="emerald" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

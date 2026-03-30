@@ -150,9 +150,9 @@ const CustomerPortal = () => {
       )}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-        <StatCard title="My Stores" value={String(stores?.length || 0)} icon={Store} />
-        <StatCard title="Total Outstanding" value={`₹${totalOutstanding.toLocaleString()}`} icon={DollarSign} iconColor="bg-warning" />
-        <StatCard title="Pending Orders" value={String(pendingOrders)} icon={ShoppingCart} />
+        <StatCard title="My Stores" value={String(stores?.length || 0)} icon={Store} iconColor="primary" />
+        <StatCard title="Total Outstanding" value={`₹${totalOutstanding.toLocaleString()}`} icon={DollarSign} iconColor="warning" />
+        <StatCard title="Pending Orders" value={String(pendingOrders)} icon={ShoppingCart} iconColor="info" />
       </div>
 
       {/* Quick Actions */}

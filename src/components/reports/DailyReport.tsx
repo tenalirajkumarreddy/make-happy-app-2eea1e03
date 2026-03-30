@@ -584,19 +584,19 @@ td.num{font-family:'DM Mono',monospace}
 
       {/* Summary stat cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <StatCard title="Total Income" value={fmt(d.totalIncome)} change="Sales + Collections" changeType="positive" icon={TrendingUp} iconColor="bg-primary" />
-        <StatCard title="Sale Amount" value={fmt(d.totalSaleAmount)} change={`${d.salesCount} sales`} changeType="neutral" icon={ShoppingCart} />
-        <StatCard title="Collections" value={fmt(d.totalCollections)} change={`${d.txnCount} payments`} changeType="neutral" icon={DollarSign} iconColor="bg-success" />
-        <StatCard title="Cash" value={fmt(d.totalCash)} icon={Banknote} iconColor="bg-warning" />
-        <StatCard title="UPI" value={fmt(d.totalUpi)} icon={Smartphone} iconColor="bg-info" />
-        <StatCard title="Items Sold" value={String(d.totalItemsSold)} icon={Package} />
+        <StatCard title="Total Income" value={fmt(d.totalIncome)} change="Sales + Collections" changeType="positive" icon={TrendingUp} iconColor="primary" />
+        <StatCard title="Sale Amount" value={fmt(d.totalSaleAmount)} change={`${d.salesCount} sales`} changeType="neutral" icon={ShoppingCart} iconColor="purple" />
+        <StatCard title="Collections" value={fmt(d.totalCollections)} change={`${d.txnCount} payments`} changeType="neutral" icon={DollarSign} iconColor="success" />
+        <StatCard title="Cash" value={fmt(d.totalCash)} icon={Banknote} iconColor="warning" />
+        <StatCard title="UPI" value={fmt(d.totalUpi)} icon={Smartphone} iconColor="info" />
+        <StatCard title="Items Sold" value={String(d.totalItemsSold)} icon={Package} iconColor="cyan" />
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard title="Credit Given" value={fmt(d.salesOutstanding)} icon={HandCoins} iconColor="bg-destructive" />
-        <StatCard title="Total Outstanding" value={fmt(d.totalOutstanding)} icon={DollarSign} iconColor="bg-destructive" />
-        <StatCard title="Orders Delivered" value={String(d.ordersDelivered)} change={`${d.ordersPending} pending`} changeType="neutral" icon={ShoppingCart} iconColor="bg-success" />
-        <StatCard title="Orders Cancelled" value={String(d.ordersCancelled)} icon={ShoppingCart} iconColor="bg-destructive" />
+        <StatCard title="Credit Given" value={fmt(d.salesOutstanding)} icon={HandCoins} iconColor="destructive" />
+        <StatCard title="Total Outstanding" value={fmt(d.totalOutstanding)} icon={DollarSign} iconColor="destructive" />
+        <StatCard title="Orders Delivered" value={String(d.ordersDelivered)} change={`${d.ordersPending} pending`} changeType="neutral" icon={ShoppingCart} iconColor="success" />
+        <StatCard title="Orders Cancelled" value={String(d.ordersCancelled)} icon={ShoppingCart} iconColor="destructive" />
       </div>
 
       {/* Detailed tabs */}

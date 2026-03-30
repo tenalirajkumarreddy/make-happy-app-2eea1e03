@@ -215,12 +215,12 @@ export default function SalesReport() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-        <StatCard title="Total Sales" value={fmt(d.totalSales)} icon={ShoppingCart} iconColor="bg-primary" />
-        <StatCard title="Sale Count" value={String(d.salesCount)} icon={ShoppingCart} iconColor="bg-accent" />
-        <StatCard title="Cash" value={fmt(d.totalCash)} icon={Banknote} iconColor="bg-success" />
-        <StatCard title="UPI" value={fmt(d.totalUpi)} icon={Smartphone} iconColor="bg-info" />
-        <StatCard title="Credit Given" value={fmt(d.totalCredit)} icon={TrendingDown} iconColor="bg-destructive" />
-        <StatCard title="Avg Sale" value={fmt(d.avgSale)} icon={DollarSign} iconColor="bg-warning" />
+        <StatCard title="Total Sales" value={fmt(d.totalSales)} icon={ShoppingCart} iconColor="primary" />
+        <StatCard title="Sale Count" value={String(d.salesCount)} icon={ShoppingCart} iconColor="purple" />
+        <StatCard title="Cash" value={fmt(d.totalCash)} icon={Banknote} iconColor="success" />
+        <StatCard title="UPI" value={fmt(d.totalUpi)} icon={Smartphone} iconColor="info" />
+        <StatCard title="Credit Given" value={fmt(d.totalCredit)} icon={TrendingDown} iconColor="destructive" />
+        <StatCard title="Avg Sale" value={fmt(d.avgSale)} icon={DollarSign} iconColor="warning" />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">

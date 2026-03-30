@@ -190,10 +190,10 @@ export default function AgentPerformanceReport() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard title="Total Sales" value={fmt(d.totalSalesAll)} icon={DollarSign} iconColor="bg-primary" />
-        <StatCard title="Total Collections" value={fmt(d.totalCollectAll)} icon={HandCoins} iconColor="bg-success" />
-        <StatCard title="Combined Value" value={fmt(d.totalValueAll)} icon={TrendingUp} iconColor="bg-accent" />
-        <StatCard title="Active Agents" value={String(d.agentCount)} icon={Users} iconColor="bg-info" />
+        <StatCard title="Total Sales" value={fmt(d.totalSalesAll)} icon={DollarSign} iconColor="primary" />
+        <StatCard title="Total Collections" value={fmt(d.totalCollectAll)} icon={HandCoins} iconColor="success" />
+        <StatCard title="Combined Value" value={fmt(d.totalValueAll)} icon={TrendingUp} iconColor="purple" />
+        <StatCard title="Active Agents" value={String(d.agentCount)} icon={Users} iconColor="info" />
       </div>
 
       <Tabs defaultValue="ranking">

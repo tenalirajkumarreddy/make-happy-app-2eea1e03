@@ -168,10 +168,10 @@ export default function ProductReport() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard title="Total Qty Sold" value={String(d.totalQty)} icon={Package} iconColor="bg-primary" />
-        <StatCard title="Total Revenue" value={fmt(d.totalRevenue)} icon={TrendingUp} iconColor="bg-success" />
-        <StatCard title="Products Sold" value={String(d.uniqueProducts)} icon={Layers} iconColor="bg-accent" />
-        <StatCard title="Not Sold" value={String(d.notSold.length)} icon={TrendingDown} iconColor="bg-destructive" />
+        <StatCard title="Total Qty Sold" value={String(d.totalQty)} icon={Package} iconColor="primary" />
+        <StatCard title="Total Revenue" value={fmt(d.totalRevenue)} icon={TrendingUp} iconColor="success" />
+        <StatCard title="Products Sold" value={String(d.uniqueProducts)} icon={Layers} iconColor="purple" />
+        <StatCard title="Not Sold" value={String(d.notSold.length)} icon={TrendingDown} iconColor="destructive" />
       </div>
 
       <Tabs defaultValue="fast">

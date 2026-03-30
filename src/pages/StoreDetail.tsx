@@ -697,10 +697,10 @@ const StoreDetail = () => {
       </Card>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <StatCard title="Total Sales" value={`₹${totalSales.toLocaleString()}`} icon={DollarSign} iconColor="bg-primary" />
-        <StatCard title="Collections" value={`₹${totalCollected.toLocaleString()}`} icon={Banknote} iconColor="bg-success" />
-        <StatCard title="Outstanding" value={`₹${Number(store.outstanding).toLocaleString()}`} icon={Banknote} iconColor="bg-warning" />
-        <StatCard title="Orders" value={String(orders?.length || 0)} icon={ShoppingCart} iconColor="bg-info" />
+        <StatCard title="Total Sales" value={`₹${totalSales.toLocaleString()}`} icon={DollarSign} iconColor="primary" />
+        <StatCard title="Collections" value={`₹${totalCollected.toLocaleString()}`} icon={Banknote} iconColor="success" />
+        <StatCard title="Outstanding" value={`₹${Number(store.outstanding).toLocaleString()}`} icon={Banknote} iconColor="warning" />
+        <StatCard title="Orders" value={String(orders?.length || 0)} icon={ShoppingCart} iconColor="info" />
       </div>
 
       <Tabs defaultValue="ledger">
