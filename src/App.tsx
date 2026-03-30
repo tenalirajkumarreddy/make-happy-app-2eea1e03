@@ -41,6 +41,15 @@ const Handovers = lazy(() => import("./pages/Handovers"));
 const Reports = lazy(() => import("./pages/Reports"));
 const Analytics = lazy(() => import("./pages/Analytics"));
 const Inventory = lazy(() => import("./pages/Inventory"));
+const Vendors = lazy(() => import("./pages/Vendors"));
+const VendorDetail = lazy(() => import("./pages/VendorDetail"));
+const Purchases = lazy(() => import("./pages/Purchases"));
+const VendorPayments = lazy(() => import("./pages/VendorPayments"));
+const RawMaterials = lazy(() => import("./pages/RawMaterials"));
+const Invoices = lazy(() => import("./pages/Invoices"));
+const InvoiceForm = lazy(() => import("./pages/InvoiceForm"));
+const InvoiceView = lazy(() => import("./pages/InvoiceView"));
+const Attendance = lazy(() => import("./pages/Attendance"));
 const Banners = lazy(() => import("./pages/Banners"));
 const Activity = lazy(() => import("./pages/Activity"));
 const AccessControl = lazy(() => import("./pages/AccessControl"));
@@ -142,6 +151,16 @@ const App = () => {
                 {/* Admin & Manager only */}
               <Route path="/products" element={<RoleGuard allowed={["super_admin", "manager"]}><Products /></RoleGuard>} />
               <Route path="/inventory" element={<RoleGuard allowed={["super_admin", "manager"]}><Inventory /></RoleGuard>} />
+              <Route path="/vendors" element={<RoleGuard allowed={["super_admin", "manager"]}><Vendors /></RoleGuard>} />
+              <Route path="/vendors/:id" element={<RoleGuard allowed={["super_admin", "manager"]}><VendorDetail /></RoleGuard>} />
+              <Route path="/purchases" element={<RoleGuard allowed={["super_admin", "manager"]}><Purchases /></RoleGuard>} />
+              <Route path="/vendor-payments" element={<RoleGuard allowed={["super_admin", "manager"]}><VendorPayments /></RoleGuard>} />
+              <Route path="/raw-materials" element={<RoleGuard allowed={["super_admin", "manager"]}><RawMaterials /></RoleGuard>} />
+              <Route path="/invoices" element={<RoleGuard allowed={["super_admin", "manager"]}><Invoices /></RoleGuard>} />
+              <Route path="/invoices/new" element={<RoleGuard allowed={["super_admin", "manager"]}><InvoiceForm /></RoleGuard>} />
+              <Route path="/invoices/:id" element={<RoleGuard allowed={["super_admin", "manager"]}><InvoiceView /></RoleGuard>} />
+              <Route path="/invoices/:id/print" element={<RoleGuard allowed={["super_admin", "manager"]}><InvoiceView /></RoleGuard>} />
+              <Route path="/attendance" element={<RoleGuard allowed={["super_admin", "manager"]}><Attendance /></RoleGuard>} />
               <Route path="/banners" element={<RoleGuard allowed={["super_admin", "manager"]}><Banners /></RoleGuard>} />
               <Route path="/analytics" element={<RoleGuard allowed={["super_admin", "manager"]}><Analytics /></RoleGuard>} />
               <Route path="/reports" element={<RoleGuard allowed={["super_admin", "manager"]}><Reports /></RoleGuard>} />

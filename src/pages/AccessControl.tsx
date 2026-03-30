@@ -50,6 +50,14 @@ const PERM_HEADERS: { key: PermissionKey; label: string }[] = [
   { key: "opening_balance", label: "Opening Balance" },
   { key: "finalizer", label: "Finalizer" },
   { key: "see_handover_balance", label: "See Balances" },
+  { key: "view_vendors", label: "View Vendors" },
+  { key: "manage_vendors", label: "Manage Vendors" },
+  { key: "view_purchases", label: "View Purchases" },
+  { key: "manage_purchases", label: "Manage Purchases" },
+  { key: "view_vendor_payments", label: "View Payments" },
+  { key: "manage_vendor_payments", label: "Manage Payments" },
+  { key: "view_raw_materials", label: "View Raw Materials" },
+  { key: "manage_raw_materials", label: "Manage Raw Materials" },
 ];
 
 const AccessControl = () => {

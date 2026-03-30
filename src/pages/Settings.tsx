@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { PricingTab } from "@/components/settings/PricingTab";
 import { BannerManagement } from "@/components/banners/BannerManagement";
 import { SmsGatewayTab } from "@/components/settings/SmsGatewayTab";
+import { WarehouseManagement } from "@/components/settings/WarehouseManagement";
 
 const SettingsPage = () => {
   const { role } = useAuth();
@@ -105,6 +106,8 @@ const SettingsPage = () => {
           <TabsList className="h-auto flex-wrap sm:flex-nowrap w-max min-w-full justify-start md:w-auto">
             <TabsTrigger value="company">Company</TabsTrigger>
             <TabsTrigger value="pricing">Pricing</TabsTrigger>
+            {isAdmin && <TabsTrigger value="invoice">Invoice</TabsTrigger>}
+            {isAdmin && <TabsTrigger value="warehouses">Warehouses</TabsTrigger>}
             {isAdmin && <TabsTrigger value="banners">Banners</TabsTrigger>}
             <TabsTrigger value="features">Features</TabsTrigger>
             {isAdmin && <TabsTrigger value="sms_gateway">SMS Gateway</TabsTrigger>}
@@ -212,6 +215,140 @@ const SettingsPage = () => {
         <TabsContent value="pricing" className="mt-4">
           <PricingTab isAdmin={isAdmin} />
         </TabsContent>
+
+        {isAdmin && (
+          <TabsContent value="invoice" className="mt-6 space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Business Details for Invoice */}
+              <div className="rounded-xl border bg-card p-6 shadow-sm space-y-5">
+                <div className="flex items-center justify-between border-b pb-4">
+                  <div>
+                    <h3 className="font-bold">Invoice Business Details</h3>
+                    <p className="text-xs text-muted-foreground">These appear on generated invoices</p>
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold">Business Name (for Invoice)</Label>
+                    <Input value={settings.business_name || ""} onChange={(e) => setSettings({ ...settings, business_name: e.target.value })} placeholder="Your Company Name" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold">Business Address</Label>
+                    <Input value={settings.business_address || ""} onChange={(e) => setSettings({ ...settings, business_address: e.target.value })} placeholder="Street address" />
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="space-y-2">
+                      <Label className="text-xs font-semibold">City</Label>
+                      <Input value={settings.business_city || ""} onChange={(e) => setSettings({ ...settings, business_city: e.target.value })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-semibold">State</Label>
+                      <Input value={settings.business_state || ""} onChange={(e) => setSettings({ ...settings, business_state: e.target.value })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-semibold">PIN</Label>
+                      <Input value={settings.business_pincode || ""} onChange={(e) => setSettings({ ...settings, business_pincode: e.target.value })} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label className="text-xs font-semibold">Phone</Label>
+                      <Input value={settings.business_phone || ""} onChange={(e) => setSettings({ ...settings, business_phone: e.target.value })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-semibold">Email</Label>
+                      <Input type="email" value={settings.business_email || ""} onChange={(e) => setSettings({ ...settings, business_email: e.target.value })} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="space-y-2">
+                      <Label className="text-xs font-semibold">GSTIN</Label>
+                      <Input value={settings.business_gstin || ""} onChange={(e) => setSettings({ ...settings, business_gstin: e.target.value.toUpperCase() })} placeholder="27XXXXX0000X1ZX" className="font-mono" maxLength={15} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-semibold">PAN</Label>
+                      <Input value={settings.business_pan || ""} onChange={(e) => setSettings({ ...settings, business_pan: e.target.value.toUpperCase() })} placeholder="XXXXX0000X" className="font-mono" maxLength={10} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-semibold">State Code</Label>
+                      <Input value={settings.business_state_code || ""} onChange={(e) => setSettings({ ...settings, business_state_code: e.target.value })} placeholder="27" className="font-mono" maxLength={2} />
+                      <p className="text-[10px] text-muted-foreground">First 2 digits of GSTIN</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold">Logo URL</Label>
+                    <Input value={settings.business_logo_url || ""} onChange={(e) => setSettings({ ...settings, business_logo_url: e.target.value })} placeholder="https://..." />
+                  </div>
+                </div>
+              </div>
+
+              {/* Bank Details */}
+              <div className="space-y-6">
+                <div className="rounded-xl border bg-card p-6 shadow-sm space-y-5">
+                  <div className="border-b pb-4">
+                    <h3 className="font-bold">Bank Details</h3>
+                    <p className="text-xs text-muted-foreground">For payment collection via invoice</p>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label className="text-xs font-semibold">Bank Name</Label>
+                      <Input value={settings.bank_name || ""} onChange={(e) => setSettings({ ...settings, bank_name: e.target.value })} placeholder="State Bank of India" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-semibold">Account Number</Label>
+                      <Input value={settings.bank_account_number || ""} onChange={(e) => setSettings({ ...settings, bank_account_number: e.target.value })} placeholder="XXXXXXXXXXXX" className="font-mono" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <Label className="text-xs font-semibold">IFSC Code</Label>
+                        <Input value={settings.bank_ifsc || ""} onChange={(e) => setSettings({ ...settings, bank_ifsc: e.target.value.toUpperCase() })} placeholder="SBIN0000XXX" className="font-mono" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs font-semibold">Branch</Label>
+                        <Input value={settings.bank_branch || ""} onChange={(e) => setSettings({ ...settings, bank_branch: e.target.value })} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border bg-card p-6 shadow-sm space-y-5">
+                  <div className="border-b pb-4">
+                    <h3 className="font-bold">Invoice Settings</h3>
+                    <p className="text-xs text-muted-foreground">Customize invoice numbering and terms</p>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label className="text-xs font-semibold">Invoice Prefix</Label>
+                      <Input value={settings.invoice_prefix || "INV"} onChange={(e) => setSettings({ ...settings, invoice_prefix: e.target.value.toUpperCase() })} placeholder="INV" className="font-mono w-32" maxLength={10} />
+                      <p className="text-[10px] text-muted-foreground">e.g., INV-000001</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-semibold">Terms & Conditions</Label>
+                      <textarea 
+                        className="w-full min-h-[80px] rounded-md border bg-background px-3 py-2 text-sm"
+                        value={settings.invoice_terms || ""} 
+                        onChange={(e) => setSettings({ ...settings, invoice_terms: e.target.value })} 
+                        placeholder="Goods once sold will not be taken back..."
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <Button onClick={handleSaveSettings} disabled={savingSettings} className="shadow-lg">
+                {savingSettings ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                Save Invoice Settings
+              </Button>
+            </div>
+          </TabsContent>
+        )}
+
+        {isAdmin && (
+          <TabsContent value="warehouses" className="mt-6">
+            <WarehouseManagement />
+          </TabsContent>
+        )}
 
         {isAdmin && (
           <TabsContent value="banners" className="mt-4">

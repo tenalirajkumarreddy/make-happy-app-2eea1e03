@@ -2,7 +2,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
-import { Package, Pencil, X, Save, AlertTriangle, Grid3X3, Download, Tags, CheckSquare } from "lucide-react";
+import { Package, Pencil, X, Save, AlertTriangle, Grid3X3, Download, Tags, CheckSquare, DollarSign, Box } from "lucide-react";
 import { ImageUpload } from "@/components/shared/ImageUpload";
 import { ProductAccessMatrix } from "@/components/products/ProductAccessMatrix";
 import { ProductCategories } from "@/components/products/ProductCategories";
@@ -12,7 +12,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { logActivity } from "@/lib/activityLogger";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -34,6 +35,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 const Products = () => {
   const { user, role } = useAuth();
+  const isMobile = useIsMobile();
   const canEdit = role === "super_admin" || role === "manager";
   const [showAdd, setShowAdd] = useState(false);
   const [showMatrix, setShowMatrix] = useState(false);
@@ -46,10 +48,13 @@ const Products = () => {
   const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+  const [hsnCode, setHsnCode] = useState("");
+  const [gstRate, setGstRate] = useState("18");
   const [saving, setSaving] = useState(false);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirmBulkDeactivate, setConfirmBulkDeactivate] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
   const qc = useQueryClient();
 
   const { data: products, isLoading } = useQuery({
@@ -76,6 +81,18 @@ const Products = () => {
     },
   });
 
+  // Filter products based on search term
+  const filteredProducts = useMemo(() => {
+    if (!products) return [];
+    if (!searchTerm.trim()) return products;
+    const term = searchTerm.toLowerCase();
+    return products.filter((p: any) => 
+      p.name?.toLowerCase().includes(term) || 
+      p.sku?.toLowerCase().includes(term) ||
+      p.category?.toLowerCase().includes(term)
+    );
+  }, [products, searchTerm]);
+
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -87,6 +104,9 @@ const Products = () => {
       category: category || null,
       description: description || null,
       image_url: imageUrl || null,
+      hsn_code: hsnCode.trim() || null,
+      gst_rate: parseFloat(gstRate) || 18,
+      is_gst_inclusive: true,
     });
     setSaving(false);
     if (error) {
@@ -109,6 +129,8 @@ const Products = () => {
     setCategory(product.category || "");
     setDescription(product.description || "");
     setImageUrl(product.image_url || "");
+    setHsnCode(product.hsn_code || "");
+    setGstRate(String(product.gst_rate || 18));
   };
 
   const handleEdit = async (e: React.FormEvent) => {
@@ -123,6 +145,8 @@ const Products = () => {
       category: category || null,
       description: description || null,
       image_url: imageUrl || null,
+      hsn_code: hsnCode.trim() || null,
+      gst_rate: parseFloat(gstRate) || 18,
     }).eq("id", editProduct.id);
     setSaving(false);
     if (error) {
@@ -148,7 +172,7 @@ const Products = () => {
   };
 
   const resetForm = () => {
-    setName(""); setSku(""); setPrice(""); setUnit("PCS"); setCategory(""); setDescription(""); setImageUrl("");
+    setName(""); setSku(""); setPrice(""); setUnit("PCS"); setCategory(""); setDescription(""); setImageUrl(""); setHsnCode(""); setGstRate("18");
   };
 
   const toggleSelect = (id: string) => {
@@ -255,50 +279,150 @@ const Products = () => {
           }
         />
       )}
-      <DataTable
-        columns={columns}
-        data={products || []}
-        searchKey="name"
-        searchPlaceholder="Search products..."
-        onRowClick={(row) => { if (canEdit && !selectMode) openEdit(row); }}
-        renderMobileCard={(row: any) => (
-          <div className="rounded-xl border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow active:bg-muted/30" onClick={() => { if (selectMode) { toggleSelect(row.id); } else if (canEdit) { openEdit(row); } }}>
-            <div className="flex">
-              <div className="w-24 self-stretch shrink-0 bg-muted flex items-center justify-center overflow-hidden">
-                {row.image_url ? (
-                  <img src={row.image_url} alt={row.name} loading="lazy" className="w-full h-full object-cover" />
-                ) : (
-                  <Package className="h-8 w-8 text-muted-foreground/40" />
-                )}
-              </div>
-              <div className="flex-1 p-3 min-w-0">
-                <div className="flex items-start justify-between gap-2">
-                  <h3 className="font-semibold text-sm text-foreground truncate">{row.name}</h3>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <StatusBadge status={row.is_active ? "active" : "inactive"} />
-                    {canEdit && (
-                      <Switch
-                        checked={row.is_active}
-                        onCheckedChange={(e) => { handleToggleActive(row); }}
-                        onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                        className="scale-75"
+
+      {/* Desktop: Card Grid, Mobile: DataTable */}
+      {!isMobile ? (
+        <div className="space-y-4">
+          {/* Search bar for desktop */}
+          <Input 
+            placeholder="Search products..." 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="max-w-sm"
+          />
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {filteredProducts.map((row: any) => (
+              <div
+                key={row.id}
+                onClick={() => { if (selectMode) { toggleSelect(row.id); } else if (canEdit) { openEdit(row); } }}
+                className={`group rounded-xl border bg-card shadow-sm hover:shadow-lg transition-all duration-200 overflow-hidden cursor-pointer ${!row.is_active ? "opacity-60" : ""} ${selectedIds.has(row.id) ? "ring-2 ring-primary" : ""}`}
+              >
+                {/* Header with image */}
+                <div className="relative h-40 bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center overflow-hidden">
+                  {row.image_url ? (
+                    <img src={row.image_url} alt={row.name} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" />
+                  ) : (
+                    <Package className="h-16 w-16 text-muted-foreground/30" />
+                  )}
+                  <div className="absolute top-2 right-2 flex items-center gap-2">
+                    {selectMode && (
+                      <Checkbox 
+                        checked={selectedIds.has(row.id)}
+                        onClick={(e: React.MouseEvent) => { e.stopPropagation(); toggleSelect(row.id); }}
+                        className="bg-background"
                       />
                     )}
+                    <StatusBadge status={row.is_active ? "active" : "inactive"} />
                   </div>
                 </div>
-                <p className="text-xs text-muted-foreground font-mono mt-0.5">{row.sku}</p>
-                <div className="flex items-center gap-2 mt-1.5">
-                  <span className="text-sm font-bold text-foreground">₹{Number(row.base_price).toLocaleString()}</span>
-                  <span className="text-xs text-muted-foreground">/ {row.unit}</span>
+
+                {/* Content */}
+                <div className="p-4 space-y-3">
+                  <div>
+                    <h3 className="font-semibold text-foreground truncate">{row.name}</h3>
+                    <p className="text-xs text-muted-foreground font-mono mt-0.5">{row.sku}</p>
+                  </div>
+
+                  {row.category && (
+                    <Badge variant="secondary" className="text-xs">{row.category}</Badge>
+                  )}
+
+                  {/* HSN and GST info */}
+                  {(row.hsn_code || row.gst_rate) && (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      {row.hsn_code && <span>HSN: {row.hsn_code}</span>}
+                      {row.gst_rate && <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">{row.gst_rate}% GST</span>}
+                    </div>
+                  )}
+
+                  {/* Price and unit */}
+                  <div className="pt-2 border-t flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                      <Box className="h-3.5 w-3.5" />
+                      <span className="text-xs">{row.unit}</span>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Price (incl. GST)</p>
+                      <p className="font-bold text-foreground">₹{Number(row.base_price).toLocaleString()}</p>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  {canEdit && (
+                    <div className="pt-2 border-t flex items-center justify-between">
+                      <Switch
+                        checked={row.is_active}
+                        onCheckedChange={() => handleToggleActive(row)}
+                        onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                        className="scale-90"
+                      />
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-8 text-xs gap-1.5"
+                        onClick={(e: React.MouseEvent) => { e.stopPropagation(); openEdit(row); }}
+                      >
+                        <Pencil className="h-3.5 w-3.5" /> Edit
+                      </Button>
+                    </div>
+                  )}
                 </div>
-                {row.category && (
-                  <Badge variant="secondary" className="mt-1.5 text-[10px] h-5">{row.category}</Badge>
-                )}
+              </div>
+            ))}
+          </div>
+          {filteredProducts.length === 0 && (
+            <div className="text-center py-12 text-muted-foreground">
+              No products found.
+            </div>
+          )}
+        </div>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={products || []}
+          searchKey="name"
+          searchPlaceholder="Search products..."
+          onRowClick={(row) => { if (canEdit && !selectMode) openEdit(row); }}
+          renderMobileCard={(row: any) => (
+            <div className="rounded-xl border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow active:bg-muted/30" onClick={() => { if (selectMode) { toggleSelect(row.id); } else if (canEdit) { openEdit(row); } }}>
+              <div className="flex">
+                <div className="w-24 self-stretch shrink-0 bg-muted flex items-center justify-center overflow-hidden">
+                  {row.image_url ? (
+                    <img src={row.image_url} alt={row.name} loading="lazy" className="w-full h-full object-cover" />
+                  ) : (
+                    <Package className="h-8 w-8 text-muted-foreground/40" />
+                  )}
+                </div>
+                <div className="flex-1 p-3 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="font-semibold text-sm text-foreground truncate">{row.name}</h3>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <StatusBadge status={row.is_active ? "active" : "inactive"} />
+                      {canEdit && (
+                        <Switch
+                          checked={row.is_active}
+                          onCheckedChange={(e) => { handleToggleActive(row); }}
+                          onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                          className="scale-75"
+                        />
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground font-mono mt-0.5">{row.sku}</p>
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <span className="text-sm font-bold text-foreground">₹{Number(row.base_price).toLocaleString()}</span>
+                    <span className="text-xs text-muted-foreground">/ {row.unit}</span>
+                  </div>
+                  {row.category && (
+                    <Badge variant="secondary" className="mt-1.5 text-[10px] h-5">{row.category}</Badge>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        )}
-      />
+          )}
+        />
+      )}
 
       {/* Add Product Dialog */}
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
@@ -315,8 +439,24 @@ const Products = () => {
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div><Label>Base Price (₹)</Label><Input type="number" value={price} onChange={e => setPrice(e.target.value)} required className="mt-1" /></div>
+              <div><Label>Price (₹) <span className="text-xs text-muted-foreground">(incl. GST)</span></Label><Input type="number" value={price} onChange={e => setPrice(e.target.value)} required className="mt-1" /></div>
               <div><Label>Unit</Label><Input value={unit} onChange={e => setUnit(e.target.value)} className="mt-1" /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div><Label>HSN Code</Label><Input value={hsnCode} onChange={e => setHsnCode(e.target.value)} className="mt-1" placeholder="22011010" /></div>
+              <div>
+                <Label>GST Rate (%)</Label>
+                <Select value={gstRate} onValueChange={setGstRate}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">0% (Exempt)</SelectItem>
+                    <SelectItem value="5">5%</SelectItem>
+                    <SelectItem value="12">12%</SelectItem>
+                    <SelectItem value="18">18%</SelectItem>
+                    <SelectItem value="28">28%</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div>
               <Label>Category</Label>
@@ -362,8 +502,24 @@ const Products = () => {
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div><Label>Base Price (₹)</Label><Input type="number" value={price} onChange={e => setPrice(e.target.value)} required className="mt-1" /></div>
+              <div><Label>Price (₹) <span className="text-xs text-muted-foreground">(incl. GST)</span></Label><Input type="number" value={price} onChange={e => setPrice(e.target.value)} required className="mt-1" /></div>
               <div><Label>Unit</Label><Input value={unit} onChange={e => setUnit(e.target.value)} className="mt-1" /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div><Label>HSN Code</Label><Input value={hsnCode} onChange={e => setHsnCode(e.target.value)} className="mt-1" placeholder="22011010" /></div>
+              <div>
+                <Label>GST Rate (%)</Label>
+                <Select value={gstRate} onValueChange={setGstRate}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">0% (Exempt)</SelectItem>
+                    <SelectItem value="5">5%</SelectItem>
+                    <SelectItem value="12">12%</SelectItem>
+                    <SelectItem value="18">18%</SelectItem>
+                    <SelectItem value="28">28%</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div>
               <Label>Category</Label>

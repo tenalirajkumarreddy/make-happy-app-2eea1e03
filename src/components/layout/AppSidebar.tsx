@@ -27,6 +27,9 @@ import {
   Image,
   Search,
   Map,
+  Building2,
+  CreditCard,
+  Calendar,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -61,6 +64,11 @@ const NAV_BY_ROLE: Record<string, { main: NavItem[]; secondary: NavItem[] }> = {
       { label: "Dashboard", path: "/", icon: LayoutDashboard },
       { label: "Products", path: "/products", icon: Package },
       { label: "Inventory", path: "/inventory", icon: Warehouse },
+      { label: "Vendors", path: "/vendors", icon: Building2 },
+      { label: "Purchases", path: "/purchases", icon: ShoppingCart },
+      { label: "Vendor Payments", path: "/vendor-payments", icon: CreditCard },
+      { label: "Attendance", path: "/attendance", icon: Calendar },
+      { label: "Invoices", path: "/invoices", icon: FileText },
       { label: "Banners", path: "/banners", icon: Image },
       { label: "Customers", path: "/customers", icon: Users },
       { label: "Stores", path: "/stores", icon: Store },
@@ -85,6 +93,11 @@ const NAV_BY_ROLE: Record<string, { main: NavItem[]; secondary: NavItem[] }> = {
       { label: "Dashboard", path: "/", icon: LayoutDashboard },
       { label: "Products", path: "/products", icon: Package },
       { label: "Inventory", path: "/inventory", icon: Warehouse },
+      { label: "Vendors", path: "/vendors", icon: Building2 },
+      { label: "Purchases", path: "/purchases", icon: ShoppingCart },
+      { label: "Vendor Payments", path: "/vendor-payments", icon: CreditCard },
+      { label: "Attendance", path: "/attendance", icon: Calendar },
+      { label: "Invoices", path: "/invoices", icon: FileText },
       { label: "Banners", path: "/banners", icon: Image },
       { label: "Customers", path: "/customers", icon: Users },
       { label: "Stores", path: "/stores", icon: Store },

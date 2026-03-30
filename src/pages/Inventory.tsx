@@ -6,8 +6,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { logActivity } from "@/lib/activityLogger";
-import { Loader2, Package, Plus, Minus, History, BoxSelect } from "lucide-react";
-import { useState } from "react";
+import { Loader2, Package, Plus, Minus, History, BoxSelect, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { useState, useMemo } from "react";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
@@ -36,6 +37,7 @@ const MOVEMENT_TYPES: Record<MovementType, string> = {
 const Inventory = () => {
   const { user, role } = useAuth();
   const qc = useQueryClient();
+  const isMobile = useIsMobile();
   const canEdit = ["super_admin", "manager", "pos"].includes(role || "");
   
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>("");
@@ -45,6 +47,7 @@ const Inventory = () => {
   const [adjustQty, setAdjustQty] = useState("");
   const [adjustReason, setAdjustReason] = useState("");
   const [saving, setSaving] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Fetch Warehouses
   const { data: warehouses, isLoading: loadWh } = useQuery({
@@ -92,6 +95,18 @@ const Inventory = () => {
     },
     enabled: !!selectedWarehouseId,
   });
+
+  // Filter inventory based on search term
+  const filteredInventory = useMemo(() => {
+    if (!inventory) return [];
+    if (!searchTerm.trim()) return inventory;
+    const term = searchTerm.toLowerCase();
+    return inventory.filter((item: any) =>
+      item.name?.toLowerCase().includes(term) ||
+      item.sku?.toLowerCase().includes(term) ||
+      item.category?.toLowerCase().includes(term)
+    );
+  }, [inventory, searchTerm]);
 
   // Fetch Recent Movements
   const { data: movements } = useQuery({
@@ -232,7 +247,93 @@ const Inventory = () => {
             <TabsContent value="stock" className="space-y-4">
                 {loadInv ? (
                     <div className="flex items-center justify-center py-10"><Loader2 className="animate-spin" /></div>
+                ) : !isMobile ? (
+                    /* Desktop: Card Grid */
+                    <div className="space-y-4">
+                      <Input 
+                        placeholder="Search products..." 
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="max-w-sm"
+                      />
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5">
+                        {filteredInventory.map((row: any) => {
+                          const stockStatus = row.quantity < 0 ? "critical" : row.quantity === 0 ? "empty" : row.quantity < 10 ? "low" : "good";
+                          const statusColors = {
+                            critical: { bg: "from-red-500/20 to-red-500/5", text: "text-red-600", border: "border-red-200", badge: "bg-red-100 text-red-700" },
+                            empty: { bg: "from-slate-400/20 to-slate-400/5", text: "text-slate-500", border: "border-slate-200", badge: "bg-slate-100 text-slate-600" },
+                            low: { bg: "from-amber-500/20 to-amber-500/5", text: "text-amber-600", border: "border-amber-200", badge: "bg-amber-100 text-amber-700" },
+                            good: { bg: "from-emerald-500/20 to-emerald-500/5", text: "text-emerald-600", border: "border-emerald-200", badge: "bg-emerald-100 text-emerald-700" },
+                          };
+                          const colors = statusColors[stockStatus];
+                          
+                          return (
+                            <div
+                              key={row.id}
+                              className={`group rounded-2xl border ${colors.border} bg-card shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden`}
+                            >
+                              {/* Gradient Header */}
+                              <div className={`h-24 bg-gradient-to-br ${colors.bg} flex items-center justify-center relative`}>
+                                <Package className="h-12 w-12 text-muted-foreground/30 group-hover:scale-110 transition-transform" />
+                                {/* Status Badge */}
+                                <div className={`absolute top-3 right-3 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${colors.badge}`}>
+                                  {stockStatus === "critical" ? "Critical" : stockStatus === "empty" ? "Out of Stock" : stockStatus === "low" ? "Low Stock" : "In Stock"}
+                                </div>
+                              </div>
+                              
+                              {/* Content */}
+                              <div className="p-4 space-y-4">
+                                <div>
+                                  <h3 className="font-semibold text-base text-foreground line-clamp-2 leading-tight">{row.name}</h3>
+                                  <p className="text-xs text-muted-foreground font-mono mt-1">{row.sku}</p>
+                                </div>
+
+                                {row.category && (
+                                  <Badge variant="outline" className="text-xs font-normal">{row.category}</Badge>
+                                )}
+
+                                {/* Stock display */}
+                                <div className="bg-muted/50 rounded-xl p-3">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Current Stock</span>
+                                  </div>
+                                  <div className="flex items-baseline gap-1.5 mt-1">
+                                    <span className={`text-3xl font-bold tracking-tight ${colors.text}`}>
+                                      {row.quantity}
+                                    </span>
+                                    <span className="text-sm text-muted-foreground font-medium">{row.unit}</span>
+                                  </div>
+                                </div>
+
+                                {/* Actions */}
+                                {canEdit && (
+                                  <Button 
+                                    variant="default" 
+                                    size="sm" 
+                                    className="w-full h-9 font-medium"
+                                    onClick={() => {
+                                      setAdjustProduct(row);
+                                      setAdjustType("adjustment");
+                                      setShowAdjust(true);
+                                    }}
+                                  >
+                                    <Plus className="h-4 w-4 mr-1.5" />
+                                    Adjust Stock
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {filteredInventory.length === 0 && (
+                        <div className="text-center py-12 text-muted-foreground">
+                          No products found.
+                        </div>
+                      )}
+                    </div>
                 ) : (
+                    /* Mobile: DataTable */
                     <DataTable 
                         data={inventory || []} 
                         columns={columns} 

@@ -10,11 +10,12 @@ import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { addToQueue } from "@/lib/offlineQueue";
 import { resolveCreditLimit } from "@/lib/creditLimit";
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2, Plus, Trash2, Download, IndianRupee, CreditCard, Banknote, Clock, UserCircle, Store as StoreIcon, Package, X, CalendarIcon } from "lucide-react";
+import { Loader2, Plus, Trash2, Download, IndianRupee, CreditCard, Banknote, Clock, UserCircle, Store as StoreIcon, Package, X, CalendarIcon, Receipt, FileText } from "lucide-react";
 import { QrStoreSelector } from "@/components/shared/QrStoreSelector";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
+import { SaleReceipt } from "@/components/shared/SaleReceipt";
 import { useState, useMemo, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { usePermission } from "@/hooks/usePermission";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -61,6 +62,7 @@ const PAGE_SIZE = 100;
 
 const Sales = () => {
   const { user, role } = useAuth();
+  const navigate = useNavigate();
   const isPosUser = role === "pos";
   const { allowed: canOverridePrice } = usePermission("price_override");
   const { allowed: canRecordBehalf } = usePermission("record_behalf");
@@ -68,6 +70,7 @@ const Sales = () => {
   const [showAdd, setShowAdd] = useState(false);
   const [saving, setSaving] = useState(false);
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
+  const [receiptSaleId, setReceiptSaleId] = useState<string | null>(null);
 
   // POS users are locked to the POS store
   const isAdmin = role === "super_admin" || role === "manager";
@@ -482,6 +485,33 @@ const Sales = () => {
     { header: "Date", accessor: (row: any) => (
       <span className="text-xs text-muted-foreground">{format(new Date(row.created_at), "dd MMM yy, hh:mm a")}</span>
     ), className: "hidden sm:table-cell" },
+    { header: "Actions", accessor: (row: any) => (
+      <div className="flex items-center gap-1">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          onClick={(e) => { e.stopPropagation(); setReceiptSaleId(row.id); }}
+          title="View Receipt"
+        >
+          <Receipt className="h-3.5 w-3.5" />
+        </Button>
+        {isAdmin && !row.has_invoice && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={(e) => { e.stopPropagation(); navigate("/invoices/new", { state: { saleIds: [row.id] } }); }}
+            title="Generate Invoice"
+          >
+            <FileText className="h-3.5 w-3.5" />
+          </Button>
+        )}
+        {row.has_invoice && (
+          <Badge variant="outline" className="text-[10px] px-1.5">Invoiced</Badge>
+        )}
+      </div>
+    ), className: "hidden sm:table-cell" },
   ];
 
   if (isLoading) {
@@ -849,6 +879,13 @@ const Sales = () => {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Receipt Modal */}
+      <SaleReceipt
+        saleId={receiptSaleId || ""}
+        open={!!receiptSaleId}
+        onClose={() => setReceiptSaleId(null)}
+      />
     </div>
   );
 };

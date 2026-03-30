@@ -14,14 +14,34 @@ const PERMISSION_KEYS = [
   "opening_balance",
   "finalizer",
   "see_handover_balance",
+  "view_vendors",
+  "manage_vendors",
+  "view_purchases",
+  "manage_purchases",
+  "view_vendor_payments",
+  "manage_vendor_payments",
+  "view_raw_materials",
+  "manage_raw_materials",
+  "view_attendance",
+  "manage_attendance",
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
 
 /** Default permissions per role — these are the "inherent" ones that can't be toggled off */
 const ROLE_DEFAULTS: Record<string, PermissionKey[]> = {
-  super_admin: ["price_override", "record_behalf", "create_customers", "create_stores", "edit_balance", "opening_balance"],
-  manager: ["price_override", "record_behalf", "create_customers", "create_stores", "edit_balance", "opening_balance"],
+  super_admin: [
+    "price_override", "record_behalf", "create_customers", "create_stores", 
+    "edit_balance", "opening_balance", "view_vendors", "manage_vendors",
+    "view_purchases", "manage_purchases", "view_vendor_payments", "manage_vendor_payments",
+    "view_raw_materials", "manage_raw_materials", "view_attendance", "manage_attendance"
+  ],
+  manager: [
+    "price_override", "record_behalf", "create_customers", "create_stores", 
+    "edit_balance", "opening_balance", "view_vendors", "manage_vendors",
+    "view_purchases", "manage_purchases", "view_vendor_payments", "manage_vendor_payments",
+    "view_raw_materials", "manage_raw_materials", "view_attendance", "manage_attendance"
+  ],
   agent: ["create_customers", "create_stores"],
   marketer: ["create_customers", "create_stores"],
   pos: [],
