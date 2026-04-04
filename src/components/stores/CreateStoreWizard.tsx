@@ -84,32 +84,54 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
   const checkDuplicates = async () => {
     setCheckingDupes(true);
     const warnings: string[] = [];
-    const { data: existingStores } = await supabase
-      .from("stores")
-      .select("id, name, phone, lat, lng, display_id")
-      .eq("is_active", true);
-    if (existingStores) {
-      for (const s of existingStores) {
-        const nameTrimmed = name.trim();
-        const nameMatches = nameTrimmed && s.name.toLowerCase() === nameTrimmed.toLowerCase();
-        if (nameMatches) {
-          const suffix = area.trim() || district.trim() || city.trim();
-          const suggestion = suffix ? ` → Try "${nameTrimmed} (${suffix})" instead` : "";
-          warnings.push(`Store "${s.name}" (${s.display_id}) has the same name.${suggestion}`);
-        }
-        if (phone.trim() && s.phone && s.phone === phone.trim()) {
-          warnings.push(`Store "${s.name}" (${s.display_id}) has the same phone number`);
-        }
-        if (lat && lng && s.lat && s.lng) {
-          const dist = getDistanceMeters(lat, lng, s.lat, s.lng);
-          if (dist < 5) {
-            warnings.push(`Store "${s.name}" (${s.display_id}) is at the exact same location (${Math.round(dist)}m away)`);
-          } else if (dist < 100) {
-            warnings.push(`Store "${s.name}" (${s.display_id}) is only ${Math.round(dist)}m away`);
-          }
-        }
-      }
+    
+    // 1. Check matching names
+    const nameTrimmed = name.trim();
+    if (nameTrimmed) {
+        const { data: nameMatches } = await supabase
+            .from("stores")
+            .select("id, name, display_id, area, district, city")
+            .eq("is_active", true)
+            .ilike("name", nameTrimmed);
+        
+        nameMatches?.forEach(s => {
+            const suffix = s.area?.trim() || s.district?.trim() || s.city?.trim() || "";
+            const suggestion = suffix ? ` → Try "${nameTrimmed} (${suffix})" instead` : "";
+            warnings.push(`Store "${s.name}" (${s.display_id}) has the same name.${suggestion}`);
+        });
     }
+
+    // 2. Check matching phones
+    const phoneTrimmed = phone.trim();
+    if (phoneTrimmed) {
+        const { data: phoneMatches } = await supabase
+            .from("stores")
+            .select("id, name, display_id")
+            .eq("is_active", true)
+            .eq("phone", phoneTrimmed);
+        
+        phoneMatches?.forEach(s => {
+            warnings.push(`Store "${s.name}" (${s.display_id}) has the same phone number`);
+        });
+    }
+
+    // 3. Advanced proximity detection
+    if (lat && lng) {
+        const { data: closeStores } = await supabase.rpc("check_store_proximity", {
+           p_lat: lat,
+           p_lng: lng,
+           p_radius_m: 100
+        });
+
+        closeStores?.forEach(s => {
+           if (s.distance_meters < 5) {
+               warnings.push(`Store "${s.name}" (${s.display_id}) is at the exact same location (${Math.round(s.distance_meters)}m away)`);
+           } else {
+               warnings.push(`Store "${s.name}" (${s.display_id}) is only ${Math.round(s.distance_meters)}m away`);
+           }
+        });
+    }
+
     setDuplicateWarnings(warnings);
     setCheckingDupes(false);
     return { warnings };

@@ -193,22 +193,22 @@ const Invoices = () => {
         emptyMessage="No invoices yet"
         onRowClick={(row) => navigate(`/invoices/${row.id}`)}
         renderMobileCard={(row: any) => (
-          <div className="rounded-xl border bg-card p-4 shadow-sm">
-            <div className="flex items-start justify-between mb-2">
-              <div>
-                <p className="font-mono text-xs font-medium text-muted-foreground">{row.invoice_number}</p>
-                <h3 className="font-semibold text-sm mt-1">{row.customer_name}</h3>
+          <div className="entity-card-mobile flex-col !items-stretch">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="entity-card-subtitle">{row.invoice_number}</p>
+                <h3 className="font-semibold text-sm mt-0.5 truncate">{row.customer_name}</h3>
                 {row.stores?.name && (
-                  <p className="text-xs text-muted-foreground">{row.stores.name}</p>
+                  <p className="text-xs text-muted-foreground truncate">{row.stores.name}</p>
                 )}
               </div>
               <StatusBadge status={getStatusColor(row.status) as any} label={row.status} />
             </div>
-            <div className="flex items-center justify-between mt-3 pt-3 border-t">
+            <div className="flex items-center justify-between mt-2 pt-2 border-t">
               <span className="text-xs text-muted-foreground">
                 {new Date(row.invoice_date).toLocaleDateString("en-IN")}
               </span>
-              <span className="font-semibold">₹{Number(row.total_amount).toLocaleString()}</span>
+              <span className="font-semibold text-primary">₹{Number(row.total_amount).toLocaleString()}</span>
             </div>
           </div>
         )}

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Plus, XCircle, CheckCircle2, Package, ShoppingCart } from "lucide-react";
+import { Loader2, Plus, XCircle, Package, ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -23,6 +23,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { useRouteAccess } from "@/hooks/useRouteAccess";
+import { OrderFulfillmentDialog } from "@/components/orders/OrderFulfillmentDialog";
 import type { StoreOption } from "@/mobile/components/StorePickerSheet";
 
 interface Props {
@@ -65,6 +66,35 @@ interface OrderItemInput {
   quantity: number;
 }
 
+interface FulfillOrder {
+  id: string;
+  display_id: string;
+  store_id: string;
+  customer_id: string | null;
+  order_type: "simple" | "detailed";
+  status: string;
+  requirement_note: string | null;
+  order_items?: Array<{
+    id: string;
+    product_id: string;
+    quantity: number;
+    unit_price: number | null;
+    products?: {
+      id: string;
+      name: string;
+      sku: string;
+      base_price: number;
+      image_url?: string;
+    };
+  }>;
+  stores?: {
+    id: string;
+    name: string;
+    store_type_id: string | null;
+    customer_id: string | null;
+  };
+}
+
 interface SupabaseRpcClient {
   rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: string | null; error: Error | null }>;
 }
@@ -88,7 +118,8 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
   const [cancelOrderId, setCancelOrderId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelling, setCancelling] = useState(false);
-  const [deliveringId, setDeliveringId] = useState<string | null>(null);
+  const [fulfillOrder, setFulfillOrder] = useState<FulfillOrder | null>(null);
+  const [loadingOrderId, setLoadingOrderId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!preselectStore) return;
@@ -273,23 +304,27 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
     }
   };
 
-  const handleDeliverOrder = async (orderId: string) => {
-    setDeliveringId(orderId);
+  // Open fulfillment dialog for an order
+  const handleOpenFulfillment = async (orderId: string) => {
+    setLoadingOrderId(orderId);
     try {
-      const { error } = await supabase
+      const { data: orderData, error } = await supabase
         .from("orders")
-        .update({ status: "delivered", delivered_at: new Date().toISOString() })
+        .select(`
+          *,
+          stores(id, name, store_type_id, customer_id),
+          order_items(id, product_id, quantity, unit_price, products(id, name, sku, base_price, image_url))
+        `)
         .eq("id", orderId)
-        .eq("status", "pending");
-      if (error) throw error;
+        .single();
 
-      toast.success("Order marked delivered");
-      qc.invalidateQueries({ queryKey: ["mobile-marketer-orders"] });
+      if (error) throw error;
+      setFulfillOrder(orderData as unknown as FulfillOrder);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to mark delivered";
+      const message = error instanceof Error ? error.message : "Failed to load order details";
       toast.error(message);
     } finally {
-      setDeliveringId(null);
+      setLoadingOrderId(null);
     }
   };
 
@@ -373,9 +408,9 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
 
                 {order.status === "pending" && (
                   <div className="grid grid-cols-2 gap-2 mt-3">
-                    <Button size="sm" className="h-9 rounded-xl" onClick={() => handleDeliverOrder(order.id)} disabled={deliveringId === order.id}>
-                      {deliveringId === order.id ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-1.5" />}
-                      Deliver
+                    <Button size="sm" className="h-9 rounded-xl" onClick={() => handleOpenFulfillment(order.id)} disabled={loadingOrderId === order.id}>
+                      {loadingOrderId === order.id ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Package className="h-4 w-4 mr-1.5" />}
+                      Fulfill
                     </Button>
                     <Button size="sm" variant="outline" className="h-9 rounded-xl" onClick={() => setCancelOrderId(order.id)}>
                       <XCircle className="h-4 w-4 mr-1.5" />
@@ -549,6 +584,18 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* Order Fulfillment Dialog */}
+      <OrderFulfillmentDialog
+        order={fulfillOrder}
+        open={!!fulfillOrder}
+        onOpenChange={(open) => { if (!open) setFulfillOrder(null); }}
+        onFulfilled={() => {
+          qc.invalidateQueries({ queryKey: ["mobile-marketer-orders"] });
+          qc.invalidateQueries({ queryKey: ["orders"] });
+          qc.invalidateQueries({ queryKey: ["sales"] });
+        }}
+      />
     </div>
   );
 }

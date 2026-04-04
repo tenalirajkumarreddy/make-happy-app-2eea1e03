@@ -1,9 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
-import { Banknote, HandCoins, History, Loader2, ShoppingCart, Smartphone } from "lucide-react";
+import { Banknote, HandCoins, History, ShoppingCart, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type Props = {
   onOpenRecord: () => void;
@@ -51,9 +52,28 @@ export function PosHome({ onOpenRecord, onOpenHistory }: Props) {
 
   if (isLoading) {
     return (
-      <div className="p-4 flex items-center justify-center text-muted-foreground">
-        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-        Loading POS summary...
+      <div className="p-4 space-y-4 animate-pulse">
+        <div>
+          <Skeleton className="h-4 w-16 mb-1" />
+          <Skeleton className="h-7 w-28" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i}>
+              <CardContent className="p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-4 w-4" />
+                </div>
+                <Skeleton className="h-6 w-16" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 gap-3 pt-1">
+          <Skeleton className="h-10 w-full rounded-md" />
+          <Skeleton className="h-10 w-full rounded-md" />
+        </div>
       </div>
     );
   }

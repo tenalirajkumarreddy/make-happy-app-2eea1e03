@@ -14,6 +14,7 @@ const PERMISSION_KEYS = [
   "opening_balance",
   "finalizer",
   "see_handover_balance",
+  "submit_expenses",
   "view_vendors",
   "manage_vendors",
   "view_purchases",

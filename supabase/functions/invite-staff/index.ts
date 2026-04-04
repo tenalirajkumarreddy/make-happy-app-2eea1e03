@@ -44,6 +44,12 @@ Deno.serve(async (req) => {
       throw new Error("Missing required fields: full_name, role, and at least one of (phone or email)");
     }
 
+    // Validate role against allowed values
+    const validRoles = ['super_admin', 'manager', 'agent', 'marketer', 'pos'];
+    if (!validRoles.includes(role)) {
+      throw new Error(`Invalid role: ${role}. Must be one of: ${validRoles.join(', ')}`);
+    }
+
     // If phone provided, handle phone-based registration
     if (phone) {
       const phoneKey = significantPhone(phone);

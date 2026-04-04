@@ -14,6 +14,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useFixedCostReminders } from "@/hooks/useFixedCostReminders";
 import { 
   Loader2, Receipt, Calendar, TrendingUp, AlertCircle, 
   Users, Truck, Zap, Car, Megaphone, Briefcase, Wrench, MoreHorizontal,
@@ -40,6 +41,9 @@ const Expenses = () => {
   const { user, role } = useAuth();
   const qc = useQueryClient();
   const isAdmin = role === "super_admin" || role === "manager";
+
+  // Check and send fixed cost reminders
+  useFixedCostReminders();
 
   // Dialog states
   const [showAddExpense, setShowAddExpense] = useState(false);

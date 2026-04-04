@@ -109,6 +109,27 @@
   h1, h2, h3, h4, h5, h6 {
     @apply font-semibold tracking-tight;
   }
+
+  /* Prevent scroll from changing input values */
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+
+  /* Smooth transitions for responsive layout changes */
+  .grid {
+    transition: gap 200ms ease-out;
+  }
+
+  /* Smooth container width transitions */
+  .container, main, [role="main"] {
+    transition: padding 200ms ease-out, margin 200ms ease-out;
+  }
 }
 
 @layer utilities {
@@ -118,6 +139,87 @@
 
   .stat-card {
     @apply bg-card rounded-xl border border-border/50 p-5 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.03)] transition-all duration-300 hover:shadow-[0_8px_20px_-6px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 hover:border-primary/20;
+  }
+
+  /* Standardized entity card for desktop - used in Customers, Products, Stores, Vendors, Inventory */
+  /* Note: 'group' class must be added directly in HTML, not via @apply */
+  .entity-card {
+    @apply rounded-xl border bg-card shadow-sm overflow-hidden cursor-pointer;
+    @apply transition-all duration-200 ease-out;
+    @apply hover:shadow-lg hover:-translate-y-0.5 hover:border-primary/20;
+  }
+
+  .entity-card-inactive {
+    @apply opacity-60 grayscale-[30%];
+  }
+
+  .entity-card-selected {
+    @apply ring-2 ring-primary ring-offset-2;
+  }
+
+  /* Entity card header with gradient */
+  .entity-card-header {
+    @apply relative h-32 flex items-center justify-center;
+    @apply bg-gradient-to-br from-primary/10 to-primary/5;
+  }
+
+  /* Avatar/icon container in card header */
+  .entity-card-avatar {
+    @apply w-20 h-20 rounded-full bg-background border-4 border-background shadow-lg;
+    @apply flex items-center justify-center overflow-hidden;
+    @apply transition-transform duration-200 group-hover:scale-105;
+  }
+
+  /* Rectangular icon box alternative */
+  .entity-card-icon-box {
+    @apply w-16 h-16 rounded-lg bg-muted/50 backdrop-blur-sm;
+    @apply flex items-center justify-center;
+    @apply transition-transform duration-200 group-hover:scale-105;
+  }
+
+  /* Card content area */
+  .entity-card-content {
+    @apply p-4 space-y-3;
+  }
+
+  /* Card title */
+  .entity-card-title {
+    @apply font-semibold text-lg text-foreground truncate;
+  }
+
+  /* Card subtitle (display ID, SKU, etc.) */
+  .entity-card-subtitle {
+    @apply text-xs text-muted-foreground font-mono;
+  }
+
+  /* Section label */
+  .entity-card-label {
+    @apply text-xs text-muted-foreground uppercase tracking-wide;
+  }
+
+  /* Stat section at bottom of card */
+  .entity-card-stat {
+    @apply pt-3 border-t flex items-center justify-between;
+  }
+
+  /* Mobile card (compact row style) */
+  .entity-card-mobile {
+    @apply flex items-center gap-3 p-4 rounded-xl border bg-card shadow-sm;
+    @apply transition-all duration-200 ease-out;
+    @apply hover:shadow-md active:bg-muted/30;
+  }
+
+  /* Standardized grid layouts */
+  .entity-grid {
+    @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4;
+  }
+
+  .entity-grid-5col {
+    @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4;
+  }
+
+  .stat-grid {
+    @apply grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4;
   }
 
   .premium-info-box {

@@ -103,6 +103,11 @@ function calculateShiftPay(hoursWorked: number, shiftRates: any[]): { rate: numb
   }
   
   // Calculate proportional pay based on closest shift
+  // Guard against division by zero
+  if (!closestShift.duration_hours || closestShift.duration_hours <= 0) {
+    return { rate: 0, amount: 0 };
+  }
+  
   const proportionalAmount = (hoursWorked / closestShift.duration_hours) * closestShift.rate_amount;
   
   return {
@@ -712,16 +717,16 @@ export default function Attendance() {
                 searchPlaceholder="Search by ID..."
                 emptyMessage="No attendance records yet"
                 renderMobileCard={(r: AttendanceRecord) => (
-                  <div className="rounded-xl border bg-card p-4 shadow-sm">
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <p className="font-mono text-xs text-muted-foreground">{r.display_id}</p>
+                  <div className="entity-card-mobile flex-col !items-stretch">
+                    <div className="flex items-start justify-between">
+                      <div className="min-w-0">
+                        <p className="entity-card-subtitle">{r.display_id}</p>
                         <p className="font-semibold">{format(parseISO(r.attendance_date), "dd MMM yyyy")}</p>
                         <p className="text-sm text-muted-foreground">{r.factory_start_time} - {r.factory_end_time}</p>
                       </div>
                       <StatusBadge status={r.is_finalized ? "active" : "pending"} label={r.is_finalized ? "Final" : "Draft"} />
                     </div>
-                    <div className="flex items-center justify-between mt-3 pt-3 border-t">
+                    <div className="flex items-center justify-between mt-2 pt-2 border-t">
                       <span className="text-sm">{r.entries_count} entries</span>
                       <Button variant="outline" size="sm" onClick={() => loadEntriesForEdit(r)}>
                         <Pencil className="h-4 w-4 mr-1" />
@@ -774,16 +779,16 @@ export default function Attendance() {
                 searchPlaceholder="Search workers..."
                 emptyMessage="No workers added yet"
                 renderMobileCard={(w: Worker) => (
-                  <div className="rounded-xl border bg-card p-4 shadow-sm">
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <p className="font-mono text-xs text-muted-foreground">{w.display_id}</p>
+                  <div className="entity-card-mobile flex-col !items-stretch">
+                    <div className="flex items-start justify-between">
+                      <div className="min-w-0">
+                        <p className="entity-card-subtitle">{w.display_id}</p>
                         <p className="font-semibold">{w.name}</p>
                         <p className="text-sm text-muted-foreground">{w.phone || "No phone"}</p>
                       </div>
                       <StatusBadge status={w.is_active ? "active" : "inactive"} />
                     </div>
-                    <div className="flex items-center justify-between mt-3 pt-3 border-t">
+                    <div className="flex items-center justify-between mt-2 pt-2 border-t">
                       <span className="font-medium">₹{w.hourly_rate}/hr</span>
                       <div className="flex gap-2">
                         <Button variant="outline" size="sm" onClick={() => handleEditWorker(w)}>
@@ -837,9 +842,9 @@ export default function Attendance() {
                 searchPlaceholder="Search..."
                 emptyMessage="No balance records yet"
                 renderMobileCard={(b: WorkerBalance) => (
-                  <div className="rounded-xl border bg-card p-4 shadow-sm">
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
+                  <div className="entity-card-mobile flex-col !items-stretch">
+                    <div className="flex items-start justify-between">
+                      <div className="min-w-0">
                         <p className="font-semibold">{b.workers?.name || (b as any).profiles?.full_name || "Unknown"}</p>
                         <p className="text-xs text-muted-foreground">{b.worker_id ? "Worker" : "Staff"}</p>
                       </div>
@@ -849,7 +854,7 @@ export default function Attendance() {
                         <span className="px-2 py-1 rounded-full text-xs bg-green-500/10 text-green-600 font-medium">Advance</span>
                       ) : null}
                     </div>
-                    <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t text-sm">
+                    <div className="grid grid-cols-3 gap-2 mt-2 pt-2 border-t text-sm">
                       <div>
                         <p className="text-muted-foreground text-xs">Earned</p>
                         <p className="font-medium">₹{Number(b.total_earned).toLocaleString()}</p>

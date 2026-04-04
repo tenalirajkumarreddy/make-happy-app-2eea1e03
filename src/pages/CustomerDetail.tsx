@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
   Loader2, ArrowLeft, Store, User, Pencil, X, Save, AlertTriangle,
-  Shield, CheckCircle2, XCircle, ExternalLink, Upload, Camera, Receipt,
+  Shield, CheckCircle2, XCircle, ExternalLink, Upload, Camera, Receipt, FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useRef } from "react";
@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { logActivity } from "@/lib/activityLogger";
 import { ImageUpload } from "@/components/shared/ImageUpload";
+import { CustomerStatement } from "@/components/reports/CustomerStatement";
 
 const CustomerDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -35,6 +36,7 @@ const CustomerDetail = () => {
   const [rejectionReason, setRejectionReason] = useState("");
   const [kycSaving, setKycSaving] = useState(false);
   const [uploadingKyc, setUploadingKyc] = useState(false);
+  const [showStatement, setShowStatement] = useState(false);
   const [form, setForm] = useState({
     name: "",
     phone: "",
@@ -290,7 +292,10 @@ const CustomerDetail = () => {
                   </div>
                   {!isInactive && (
                     !editing ? (
-                      <Button variant="outline" size="sm" onClick={startEditing} className="gap-1.5"><Pencil className="h-3.5 w-3.5" /> Edit</Button>
+                      <div className="flex gap-1.5">
+                        <Button variant="outline" size="sm" onClick={() => setShowStatement(true)} className="gap-1.5"><FileText className="h-3.5 w-3.5" /> Statement</Button>
+                        <Button variant="outline" size="sm" onClick={startEditing} className="gap-1.5"><Pencil className="h-3.5 w-3.5" /> Edit</Button>
+                      </div>
                     ) : (
                       <div className="flex gap-1.5">
                         <Button variant="ghost" size="sm" onClick={() => setEditing(false)} disabled={saving}><X className="h-4 w-4" /></Button>
@@ -444,6 +449,19 @@ const CustomerDetail = () => {
           />
         )}
       </div>
+
+      {/* Customer Statement Modal */}
+      {showStatement && customer && (
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm overflow-y-auto">
+          <div className="container max-w-4xl py-6">
+            <CustomerStatement
+              customerId={customer.id}
+              customerName={customer.name}
+              onClose={() => setShowStatement(false)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

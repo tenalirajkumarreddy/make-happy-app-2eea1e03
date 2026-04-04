@@ -50,7 +50,6 @@ export function AdminStaffDirectory() {
   const qc = useQueryClient();
   const isAdmin = role === "super_admin";
 
-  const [showAdd, setShowAdd] = useState(false);
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
   
@@ -63,12 +62,8 @@ export function AdminStaffDirectory() {
   const [inviteNotes, setInviteNotes] = useState("");
   const [inviteSaving, setInviteSaving] = useState(false);
 
-  // Form states
-  const [formPhone, setFormPhone] = useState("");
-  const [formEmail, setFormEmail] = useState("");
-  const [formName, setFormName] = useState("");
+  // Edit form states
   const [formRole, setFormRole] = useState("agent");
-  const [formAvatar, setFormAvatar] = useState("");
   const [formActive, setFormActive] = useState(true);
   const [formSaving, setFormSaving] = useState(false);
 
@@ -78,6 +73,7 @@ export function AdminStaffDirectory() {
       const { data, error } = await supabase
         .from("staff_directory" as any)
         .select("*")
+        .not("user_id", "is", null) // Only show staff who have joined (have user_id)
         .order("full_name");
       if (error) throw error;
       return (data || []) as unknown as StaffMember[];
@@ -90,21 +86,13 @@ export function AdminStaffDirectory() {
       const { data, error } = await supabase
         .from("staff_invitations")
         .select("*")
+        .eq("status", "pending") // Only show pending invitations
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data || [];
     },
   });
 
-  const resetForm = () => {
-    setFormPhone("");
-    setFormEmail("");
-    setFormName("");
-    setFormRole("agent");
-    setFormAvatar("");
-    setFormActive(true);
-  };
-  
   const resetInviteForm = () => {
     setInvitePhone("");
     setInviteEmail("");
@@ -113,104 +101,33 @@ export function AdminStaffDirectory() {
     setInviteNotes("");
   };
 
-  const handleAddClick = () => {
-    resetForm();
-    setEditingStaff(null);
-    setShowAdd(true);
-  };
-
   const handleEditClick = (s: StaffMember) => {
-    setFormPhone(s.phone || "");
-    setFormEmail(s.email || "");
-    setFormName(s.full_name || "");
     setFormRole(s.role);
-    setFormAvatar(s.avatar_url || "");
     setFormActive(s.is_active);
     setEditingStaff(s);
-    setShowAdd(true);
   };
 
   const handleSave = async () => {
-    // At least one identifier required
-    if (!formPhone.trim() && !formEmail.trim()) {
-      toast.error("Please provide at least Phone or Email");
-      return;
-    }
-    if (!formRole.trim()) {
-      toast.error("Role is required");
-      return;
-    }
+    if (!editingStaff) return;
 
     setFormSaving(true);
     try {
-      if (editingStaff) {
-        // Update existing staff directory entry
-        const { error } = await supabase
-          .from("staff_directory" as any)
-          .update({
-            phone: formPhone.trim() || null,
-            email: formEmail.trim().toLowerCase() || null,
-            full_name: formName.trim() || null,
-            role: formRole as any,
-            avatar_url: formAvatar.trim() || null,
-            is_active: formActive,
-          })
-          .eq("id", editingStaff.id);
+      // Update existing staff directory entry (role and active status only)
+      const { error } = await supabase
+        .from("staff_directory" as any)
+        .update({
+          role: formRole as any,
+          is_active: formActive,
+        })
+        .eq("id", editingStaff.id);
 
-        if (error) throw error;
-        toast.success("Staff updated");
-      } else {
-        // New staff - try email provisioning first if email provided
-        if (formEmail.trim()) {
-          try {
-            // Call invite-staff edge function to provision in auth system
-            const { data: inviteResult, error: inviteError } = await supabase.functions.invoke(
-              "invite-staff",
-              {
-                body: {
-                  email: formEmail.trim(),
-                  phone: formPhone.trim() || null,
-                  full_name: formName.trim() || "Staff",
-                  role: formRole,
-                  avatar_url: formAvatar.trim() || null,
-                },
-              }
-            );
-
-            if (inviteError) throw inviteError;
-            toast.success(
-              inviteResult?.mode === "staff_email_provisioned"
-                ? "Staff provisioned with Google OAuth login"
-                : "Staff provisioned"
-            );
-          } catch (emailErr: any) {
-            // If email provisioning fails, still try phone-based directory entry
-            console.warn("Email provisioning failed, falling back to phone directory", emailErr);
-            if (!formPhone.trim()) throw emailErr;
-          }
-        }
-
-        // Insert into staff_directory (works with or without email)
-        const { error } = await supabase
-          .from("staff_directory" as any)
-          .insert({
-            phone: formPhone.trim() || null,
-            email: formEmail.trim().toLowerCase() || null,
-            full_name: formName.trim() || "Staff",
-            role: formRole as any,
-            avatar_url: formAvatar.trim() || null,
-            is_active: formActive,
-          });
-
-        if (error) throw error;
-        toast.success(formEmail.trim() ? "Staff added (can login via Google)" : "Staff added (phone OTP login)");
-      }
+      if (error) throw error;
+      toast.success("Staff updated");
 
       qc.invalidateQueries({ queryKey: ["staff-directory"] });
-      setShowAdd(false);
-      resetForm();
+      setEditingStaff(null);
     } catch (err: any) {
-      toast.error(err.message || "Error saving staff");
+      toast.error(err.message || "Error updating staff");
     } finally {
       setFormSaving(false);
     }
@@ -284,12 +201,9 @@ export function AdminStaffDirectory() {
     <div className="space-y-6 animate-fade-in">
       <PageHeader
         title="Staff Directory"
-        subtitle="Manage staff phone numbers, roles, and profiles"
-        actions={
-          isAdmin ? [{ label: "Invite Staff", icon: UserCheck, onClick: () => { resetInviteForm(); setShowInvite(true); }, variant: "outline", priority: 1 }] : undefined
-        }
+        subtitle="Manage staff members and invitations"
         primaryAction={
-          isAdmin ? { label: "Add Staff", icon: UserPlus, onClick: handleAddClick } : undefined
+          isAdmin ? { label: "Invite Staff", icon: UserCheck, onClick: () => { resetInviteForm(); setShowInvite(true); } } : undefined
         }
       />
 
@@ -331,7 +245,7 @@ export function AdminStaffDirectory() {
                 {staff && staff.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={isAdmin ? 7 : 6} className="text-center py-8 text-muted-foreground">
-                      No staff members yet. Create one to get started.
+                      No staff members have joined yet. Send invitations from the "Invitations" tab.
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -476,53 +390,17 @@ export function AdminStaffDirectory() {
         </TabsContent>
       </Tabs>
 
-      {/* Add/Edit Dialog */}
-      <Dialog open={showAdd} onOpenChange={setShowAdd}>
+      {/* Edit Staff Dialog */}
+      <Dialog open={!!editingStaff} onOpenChange={(open) => { if (!open) setEditingStaff(null); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingStaff ? "Edit Staff" : "Add Staff Member"}</DialogTitle>
+            <DialogTitle>Edit Staff Member</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4">
-            <NoticeBox
-              variant="premium"
-              title="Staff Onboarding"
-              message="Adding a user here allows them to skip customer onboarding and directly access their staff dashboard upon login."
-            />
-            <div>
-              <Label htmlFor="phone">Phone Number</Label>
-              <Input
-                id="phone"
-                placeholder="e.g. 254712345678"
-                value={formPhone}
-                onChange={(e) => setFormPhone(e.target.value)}
-                disabled={formSaving}
-              />
-              <p className="text-xs text-muted-foreground mt-1">Last 10 digits will be used for phone OTP login</p>
-            </div>
-
-            <div>
-              <Label htmlFor="email">Email <span className="text-xs text-muted-foreground">(for Google OAuth login)</span></Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="john.doe@company.com"
-                value={formEmail}
-                onChange={(e) => setFormEmail(e.target.value)}
-                disabled={formSaving}
-              />
-              <p className="text-xs text-muted-foreground mt-1">Staff can login with Gmail using this email</p>
-            </div>
-
-            <div>
-              <Label htmlFor="name">Full Name</Label>
-              <Input
-                id="name"
-                placeholder="John Doe"
-                value={formName}
-                onChange={(e) => setFormName(e.target.value)}
-                disabled={formSaving}
-              />
+            <div className="rounded-lg border bg-muted/50 p-3 space-y-1">
+              <p className="text-sm font-medium">{editingStaff?.full_name}</p>
+              <p className="text-xs text-muted-foreground">{editingStaff?.email || editingStaff?.phone}</p>
             </div>
 
             <div>
@@ -541,17 +419,6 @@ export function AdminStaffDirectory() {
               </Select>
             </div>
 
-            <div>
-              <Label htmlFor="avatar">Avatar URL</Label>
-              <Input
-                id="avatar"
-                placeholder="https://..."
-                value={formAvatar}
-                onChange={(e) => setFormAvatar(e.target.value)}
-                disabled={formSaving}
-              />
-            </div>
-
             <div className="flex items-center gap-2">
               <Checkbox
                 id="active"
@@ -567,7 +434,7 @@ export function AdminStaffDirectory() {
             <div className="flex gap-2 justify-end pt-4">
               <Button
                 variant="outline"
-                onClick={() => setShowAdd(false)}
+                onClick={() => setEditingStaff(null)}
                 disabled={formSaving}
               >
                 Cancel
@@ -577,7 +444,7 @@ export function AdminStaffDirectory() {
                 disabled={formSaving}
               >
                 {formSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-                {editingStaff ? "Update" : "Add"} Staff
+                Update Staff
               </Button>
             </div>
           </div>

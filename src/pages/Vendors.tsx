@@ -199,17 +199,17 @@ const Vendors = () => {
       {/* Desktop: Card Grid, Mobile: Table */}
       {!isMobile ? (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="entity-grid">
             {vendors.map((vendor: any) => (
               <div
                 key={vendor.id}
                 onClick={() => navigate(`/vendors/${vendor.id}`)}
-                className={`group rounded-xl border bg-card shadow-sm hover:shadow-lg transition-all duration-200 overflow-hidden cursor-pointer ${!vendor.is_active ? "opacity-60" : ""}`}
+                className={`group entity-card ${!vendor.is_active ? "entity-card-inactive" : ""}`}
               >
                 {/* Header */}
-                <div className="relative h-24 bg-gradient-to-br from-purple-500/10 to-purple-500/5 flex items-center justify-center">
-                  <div className="w-16 h-16 rounded-lg bg-muted flex items-center justify-center">
-                    <Building2 className="h-8 w-8 text-purple-600" />
+                <div className="entity-card-header">
+                  <div className="entity-card-icon-box">
+                    <Building2 className="h-8 w-8 text-primary" />
                   </div>
                   <div className="absolute top-2 right-2">
                     <StatusBadge status={vendor.is_active ? "active" : "inactive"} />
@@ -217,15 +217,15 @@ const Vendors = () => {
                 </div>
 
                 {/* Content */}
-                <div className="p-4 space-y-3">
+                <div className="entity-card-content">
                   <div>
-                    <h3 className="font-semibold text-lg text-foreground truncate">{vendor.name}</h3>
-                    <p className="text-xs text-muted-foreground font-mono mt-0.5">{vendor.display_id}</p>
+                    <h3 className="entity-card-title">{vendor.name}</h3>
+                    <p className="entity-card-subtitle mt-0.5">{vendor.display_id}</p>
                   </div>
 
                   {vendor.contact_person && (
                     <div className="text-sm">
-                      <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Contact Person</p>
+                      <p className="entity-card-label mb-1">Contact Person</p>
                       <p className="font-medium text-foreground truncate">{vendor.contact_person}</p>
                     </div>
                   )}
@@ -253,13 +253,11 @@ const Vendors = () => {
                   </div>
 
                   {/* Outstanding */}
-                  <div className="pt-2 border-t">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs text-muted-foreground uppercase tracking-wider">Outstanding</p>
-                      <p className={`font-bold text-lg ${Number(vendor.outstanding) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                        ₹{Number(vendor.outstanding).toLocaleString()}
-                      </p>
-                    </div>
+                  <div className="entity-card-stat">
+                    <p className="entity-card-label">Outstanding</p>
+                    <p className={`font-bold text-lg ${Number(vendor.outstanding) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      ₹{Number(vendor.outstanding).toLocaleString()}
+                    </p>
                   </div>
 
                   {/* Edit button */}
@@ -293,20 +291,23 @@ const Vendors = () => {
           onRowClick={(row) => navigate(`/vendors/${row.id}`)}
           height="calc(100vh - 240px)"
           renderMobileCard={(row: any) => (
-            <div className={`rounded-xl border bg-card p-4 shadow-sm hover:shadow-md transition-shadow ${!row.is_active ? "opacity-60" : ""}`}>
-              <div className="flex items-start justify-between gap-2 mb-2">
-                <div className="min-w-0 flex-1">
-                  <h3 className="font-semibold text-sm text-foreground truncate">{row.name}</h3>
-                  <p className="text-xs text-muted-foreground font-mono">{row.display_id}</p>
-                  {row.contact_person && <p className="text-xs text-muted-foreground mt-1">{row.contact_person}</p>}
-                </div>
-                <StatusBadge status={row.is_active ? "active" : "inactive"} />
+            <div className={`entity-card-mobile ${!row.is_active ? "entity-card-inactive" : ""}`}>
+              <div className="w-14 h-14 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                <Building2 className="h-6 w-6 text-primary" />
               </div>
-              <div className="flex items-center justify-between mt-3 pt-3 border-t">
-                <span className="text-xs text-muted-foreground">Outstanding</span>
-                <span className={`font-bold ${Number(row.outstanding) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                  ₹{Number(row.outstanding).toLocaleString()}
-                </span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="font-semibold text-sm text-foreground truncate">{row.name}</h3>
+                  <StatusBadge status={row.is_active ? "active" : "inactive"} />
+                </div>
+                <p className="entity-card-subtitle">{row.display_id}</p>
+                {row.contact_person && <p className="text-xs text-muted-foreground mt-0.5">{row.contact_person}</p>}
+                <div className="flex items-center justify-between mt-1.5">
+                  <span className="text-xs text-muted-foreground">Outstanding</span>
+                  <span className={`font-bold text-sm ${Number(row.outstanding) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                    ₹{Number(row.outstanding).toLocaleString()}
+                  </span>
+                </div>
               </div>
             </div>
           )}

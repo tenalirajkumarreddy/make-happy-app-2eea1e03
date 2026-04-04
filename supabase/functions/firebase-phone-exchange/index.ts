@@ -34,6 +34,13 @@ function significantPhone(phone: string) {
   return digits;
 }
 
+const VALID_STAFF_ROLES = ['super_admin', 'manager', 'agent', 'marketer', 'pos'] as const;
+type ValidStaffRole = typeof VALID_STAFF_ROLES[number];
+
+function isValidStaffRole(role: string): role is ValidStaffRole {
+  return VALID_STAFF_ROLES.includes(role as ValidStaffRole);
+}
+
 function syntheticEmailFromPhone(phone: string) {
   const digits = phone.replace(/\D/g, "");
   return `phone_${digits}@phone.aquaprime.app`;
@@ -141,11 +148,17 @@ Deno.serve(async (req) => {
       if (matchingStaff.length === 1) {
         const staff = matchingStaff[0];
 
+        // Validate staff role before assignment
+        if (!isValidStaffRole(staff.role)) {
+          throw new Error(`Invalid staff role: ${staff.role}. Contact admin to correct staff directory.`);
+        }
+
         if (staff.user_id !== appUserId) {
           const { error: linkStaffError } = await supabaseAdmin
             .from("staff_directory")
             .update({ user_id: appUserId })
-            .eq("id", staff.id);
+            .eq("id", staff.id)
+            .eq("user_id", staff.user_id); // Optimistic lock - only update if user_id unchanged
           if (linkStaffError) throw linkStaffError;
         }
 

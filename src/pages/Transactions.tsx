@@ -218,26 +218,31 @@ const Transactions = () => {
 
     // If backdated, recalculate all running balances in chronological order
     if (txnDate) {
-      const { data: storeRow } = await supabase.from("stores").select("opening_balance").eq("id", storeId).single();
-      let runBal = Number(storeRow?.opening_balance || 0);
-      const [{ data: allSales }, { data: allTxns }] = await Promise.all([
-        supabase.from("sales").select("id, created_at, total_amount, cash_amount, upi_amount").eq("store_id", storeId).order("created_at", { ascending: true }),
-        supabase.from("transactions").select("id, created_at, total_amount").eq("store_id", storeId).order("created_at", { ascending: true }),
-      ]);
-      const timeline = [
-        ...(allSales || []).map((s: any) => ({ type: "sale", id: s.id, date: s.created_at, delta: Number(s.total_amount) - Number(s.cash_amount) - Number(s.upi_amount) })),
-        ...(allTxns || []).map((t: any) => ({ type: "txn", id: t.id, date: t.created_at, delta: -Number(t.total_amount) })),
-      ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-      for (const entry of timeline) {
-        const oldBal = runBal;
-        runBal += entry.delta;
-        if (entry.type === "sale") {
-          await supabase.from("sales").update({ old_outstanding: oldBal, new_outstanding: runBal }).eq("id", entry.id);
-        } else {
-          await supabase.from("transactions").update({ old_outstanding: oldBal, new_outstanding: runBal }).eq("id", entry.id);
+      try {
+        const { data: storeRow } = await supabase.from("stores").select("opening_balance").eq("id", storeId).maybeSingle();
+        let runBal = Number(storeRow?.opening_balance || 0);
+        const [{ data: allSales }, { data: allTxns }] = await Promise.all([
+          supabase.from("sales").select("id, created_at, total_amount, cash_amount, upi_amount").eq("store_id", storeId).order("created_at", { ascending: true }),
+          supabase.from("transactions").select("id, created_at, total_amount").eq("store_id", storeId).order("created_at", { ascending: true }),
+        ]);
+        const timeline = [
+          ...(allSales || []).map((s: any) => ({ type: "sale", id: s.id, date: s.created_at, delta: Number(s.total_amount) - Number(s.cash_amount) - Number(s.upi_amount) })),
+          ...(allTxns || []).map((t: any) => ({ type: "txn", id: t.id, date: t.created_at, delta: -Number(t.total_amount) })),
+        ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        for (const entry of timeline) {
+          const oldBal = runBal;
+          runBal += entry.delta;
+          if (entry.type === "sale") {
+            await supabase.from("sales").update({ old_outstanding: oldBal, new_outstanding: runBal }).eq("id", entry.id);
+          } else {
+            await supabase.from("transactions").update({ old_outstanding: oldBal, new_outstanding: runBal }).eq("id", entry.id);
+          }
         }
+        await supabase.from("stores").update({ outstanding: runBal }).eq("id", storeId);
+      } catch (recalcError) {
+        console.error("Balance recalculation failed:", recalcError);
+        toast.error("Transaction saved but balance recalculation failed. Please contact admin.");
       }
-      await supabase.from("stores").update({ outstanding: runBal }).eq("id", storeId);
     }
 
     logActivity(user!.id, "Recorded transaction", "transaction", displayId, undefined, { total: totalPayment, store: storeId });
@@ -245,18 +250,23 @@ const Transactions = () => {
 
     // Notify admins/managers
     const storeName = stores?.find((s) => s.id === storeId)?.name || "store";
-    getAdminUserIds().then((ids) => {
-      const others = ids.filter((id) => id !== user!.id);
-      if (others.length > 0) {
-        sendNotificationToMany(others, {
-          title: "Payment Collected",
-          message: `₹${totalPayment.toLocaleString()} collected from ${storeName} (${displayId})`,
-          type: "payment",
-          entityType: "transaction",
-          entityId: displayId,
-        });
-      }
-    });
+    getAdminUserIds()
+      .then((ids) => {
+        const others = ids.filter((id) => id !== user!.id);
+        if (others.length > 0) {
+          sendNotificationToMany(others, {
+            title: "Payment Collected",
+            message: `₹${totalPayment.toLocaleString()} collected from ${storeName} (${displayId})`,
+            type: "payment",
+            entityType: "transaction",
+            entityId: displayId,
+          });
+        }
+      })
+      .catch((err) => {
+        // Don't block on notification failures
+        console.warn("Failed to notify admins:", err);
+      });
 
     setSaving(false);
     setShowAdd(false);
@@ -359,44 +369,37 @@ const Transactions = () => {
         searchPlaceholder="Search by payment ID..."
         emptyMessage="No transactions recorded yet."
         renderMobileCard={(row: any) => (
-          <div className="rounded-xl border bg-card p-4 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between mb-3">
-              <span className="font-mono text-xs text-muted-foreground">{row.display_id}</span>
-              <span className="text-[11px] text-muted-foreground">{format(new Date(row.created_at), "dd MMM yy, hh:mm a")}</span>
+          <div className="rounded-lg border bg-card p-3">
+            {/* Header row: ID + Date */}
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="font-mono text-xs text-primary font-medium">{row.display_id}</span>
+              <span className="text-[10px] text-muted-foreground">{format(new Date(row.created_at), "dd MMM yy, hh:mm a")}</span>
             </div>
-            <div className="mb-3">
+            {/* Store name */}
+            <div className="flex items-center gap-1.5 mb-2">
+              <StoreIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <span className="font-medium text-sm truncate">{row.stores?.name || "—"}</span>
+            </div>
+            {/* Amounts row - inline compact */}
+            <div className="flex items-center gap-3 text-xs">
+              <span className="font-bold text-foreground">₹{Number(row.total_amount).toLocaleString()}</span>
+              <span className="text-muted-foreground">Cash: ₹{Number(row.cash_amount).toLocaleString()}</span>
+              <span className="text-muted-foreground">UPI: ₹{Number(row.upi_amount).toLocaleString()}</span>
+            </div>
+            {/* Footer: Recorder + Balance */}
+            <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
               <div className="flex items-center gap-1.5">
-                <StoreIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="font-semibold text-sm text-foreground">{row.stores?.name || "—"}</span>
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-2 mb-3">
-              <div className="rounded-lg bg-muted/50 p-2 text-center">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Total</p>
-                <p className="text-sm font-bold text-foreground">₹{Number(row.total_amount).toLocaleString()}</p>
-              </div>
-              <div className="rounded-lg bg-muted/50 p-2 text-center">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Cash</p>
-                <p className="text-sm font-medium text-foreground">₹{Number(row.cash_amount).toLocaleString()}</p>
-              </div>
-              <div className="rounded-lg bg-muted/50 p-2 text-center">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">UPI</p>
-                <p className="text-sm font-medium text-foreground">₹{Number(row.upi_amount).toLocaleString()}</p>
-              </div>
-            </div>
-            <div className="flex items-center justify-between pt-2 border-t border-border">
-              <div className="flex items-center gap-1.5">
-                <Avatar className="h-5 w-5">
+                <Avatar className="h-4 w-4">
                   <AvatarImage src={getRecorderAvatar(row.recorded_by) || undefined} />
-                  <AvatarFallback className="text-[9px] bg-primary/10 text-primary">{getRecorderName(row.recorded_by).charAt(0)}</AvatarFallback>
+                  <AvatarFallback className="text-[8px] bg-primary/10 text-primary">{getRecorderName(row.recorded_by).charAt(0)}</AvatarFallback>
                 </Avatar>
-                <span className="text-[11px] text-muted-foreground">{getRecorderName(row.recorded_by)}</span>
+                <span className="text-[10px] text-muted-foreground truncate max-w-[100px]">{getRecorderName(row.recorded_by)}</span>
               </div>
-              <div className="text-right">
-                <p className="text-[10px] text-muted-foreground">New Balance</p>
-                <p className={`text-sm font-semibold ${Number(row.new_outstanding) < Number(row.old_outstanding) ? "text-green-500" : "text-muted-foreground"}`}>
+              <div className="flex items-center gap-1.5 text-xs">
+                <span className="text-muted-foreground">Bal:</span>
+                <span className={Number(row.new_outstanding) < Number(row.old_outstanding) ? "font-semibold text-green-600" : "text-muted-foreground"}>
                   ₹{Number(row.new_outstanding).toLocaleString()}
-                </p>
+                </span>
               </div>
             </div>
           </div>

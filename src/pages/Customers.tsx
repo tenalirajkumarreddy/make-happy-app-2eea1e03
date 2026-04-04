@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { logActivity } from "@/lib/activityLogger";
 import { generateDisplayId } from "@/lib/displayId";
+import { validatePhone, validateEmail, normalizePhone } from "@/lib/validation";
 import { Loader2, User, Upload, AlertCircle, Phone, Mail, Store as StoreIcon } from "lucide-react";
 import { usePermission } from "@/hooks/usePermission";
 import { useRouteAccess } from "@/hooks/useRouteAccess";
@@ -71,7 +72,9 @@ const Customers = () => {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-    isLoading
+    isLoading,
+    isError,
+    error: queryError
   } = useInfiniteQuery({
     queryKey: ["customers"],
     queryFn: async ({ pageParam = 0 }) => {
@@ -108,15 +111,29 @@ const Customers = () => {
       toast.error("Customer name is required");
       return;
     }
-    if (!phone.trim() || phone.trim().length < 6) {
-      toast.error("Valid phone number is required");
+    
+    // Validate phone with proper format check
+    const phoneValidation = validatePhone(phone, true);
+    if (!phoneValidation.valid) {
+      toast.error(phoneValidation.message);
       return;
     }
+    
+    // Validate email if provided
+    const emailValidation = validateEmail(email, false);
+    if (!emailValidation.valid) {
+      toast.error(emailValidation.message);
+      return;
+    }
+    
     if (duplicateCustomer && phone.trim()) {
       toast.error(`Phone already in use by ${duplicateCustomer.name} (${duplicateCustomer.display_id})`);
       return;
     }
     setSaving(true);
+    
+    // Normalize phone number for storage
+    const normalizedPhone = normalizePhone(phone);
 
     if (!isOnline) {
        await addToQueue({
@@ -126,8 +143,8 @@ const Customers = () => {
           customerData: {
             id: crypto.randomUUID(), // Generate ID on client for offline caching/relationships
             name,
-            phone: phone || null,
-            email: email || null,
+            phone: normalizedPhone || null,
+            email: email?.trim().toLowerCase() || null,
             address: address || null,
             photo_url: photoUrl || null,
             created_at: new Date().toISOString(),
@@ -149,8 +166,8 @@ const Customers = () => {
     const { error } = await supabase.from("customers").insert({
       display_id: displayId,
       name,
-      phone: phone || null,
-      email: email || null,
+      phone: normalizedPhone || null,
+      email: email?.trim().toLowerCase() || null,
       address: address || null,
       photo_url: photoUrl || null,
     });
@@ -173,13 +190,38 @@ const Customers = () => {
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
+      
+      // Validate required name
+      if (!row.name?.trim()) {
+        errors.push(`Row ${i + 2}: Customer name is required`);
+        continue;
+      }
+      
+      // Validate phone if provided
+      if (row.phone) {
+        const phoneValidation = validatePhone(row.phone);
+        if (!phoneValidation.valid) {
+          errors.push(`Row ${i + 2}: ${phoneValidation.message}`);
+          continue;
+        }
+      }
+      
+      // Validate email if provided
+      if (row.email) {
+        const emailValidation = validateEmail(row.email);
+        if (!emailValidation.valid) {
+          errors.push(`Row ${i + 2}: ${emailValidation.message}`);
+          continue;
+        }
+      }
+      
       const displayId = generateDisplayId("CUST");
       const { error } = await supabase.from("customers").insert({
         display_id: displayId,
-        name: row.name,
-        phone: row.phone || null,
-        email: row.email || null,
-        address: row.address || null,
+        name: row.name.trim(),
+        phone: row.phone ? normalizePhone(row.phone) : null,
+        email: row.email?.trim().toLowerCase() || null,
+        address: row.address?.trim() || null,
       });
       if (error) {
         errors.push(`Row ${i + 2}: ${error.message}`);
@@ -365,6 +407,21 @@ const Customers = () => {
     return <TableSkeleton columns={7} />;
   }
 
+  if (isError) {
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <PageHeader title="Customers" subtitle="Manage customer relationships" />
+        <NoticeBox variant="destructive" icon={AlertCircle}>
+          <p className="font-medium">Failed to load customers</p>
+          <p className="text-sm mt-1">{queryError?.message || "An error occurred while fetching customer data. Please try again."}</p>
+          <Button variant="outline" size="sm" className="mt-3" onClick={() => qc.invalidateQueries({ queryKey: ["customers"] })}>
+            Retry
+          </Button>
+        </NoticeBox>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader
@@ -423,7 +480,7 @@ const Customers = () => {
       {/* Desktop: Card Grid, Mobile: Table */}
       {!isMobile ? (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="entity-grid">
             {filteredCustomers.map((row: any) => {
               const totalOutstanding = (row.stores || []).reduce((s: number, st: any) => s + Number(st.outstanding || 0), 0);
               const storeCount = row.stores?.length || 0;
@@ -432,14 +489,14 @@ const Customers = () => {
                 <div
                   key={row.id}
                   onClick={() => { if (!editMode) navigate(`/customers/${row.id}`); }}
-                  className={`group rounded-xl border bg-card shadow-sm hover:shadow-lg transition-all duration-200 overflow-hidden cursor-pointer ${!row.is_active ? "opacity-60" : ""}`}
+                  className={`group entity-card ${!row.is_active ? "entity-card-inactive" : ""}`}
                 >
                   {/* Header with image */}
-                  <div className="relative h-32 bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center">
+                  <div className="entity-card-header">
                     {row.photo_url ? (
-                      <img src={row.photo_url} alt={row.name} className="w-20 h-20 rounded-full object-cover border-4 border-background shadow-md" />
+                      <img src={row.photo_url} alt={row.name} className="entity-card-avatar object-cover" />
                     ) : (
-                      <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center border-4 border-background shadow-md">
+                      <div className="entity-card-avatar">
                         <User className="h-10 w-10 text-muted-foreground" />
                       </div>
                     )}
@@ -449,10 +506,10 @@ const Customers = () => {
                   </div>
 
                   {/* Content */}
-                  <div className="p-4 space-y-3">
+                  <div className="entity-card-content">
                     <div className="text-center">
-                      <h3 className="font-semibold text-lg text-foreground truncate">{row.name}</h3>
-                      <p className="text-xs text-muted-foreground font-mono mt-0.5">{row.display_id}</p>
+                      <h3 className="entity-card-title">{row.name}</h3>
+                      <p className="entity-card-subtitle mt-0.5">{row.display_id}</p>
                     </div>
 
                     {/* Contact info */}
@@ -480,13 +537,13 @@ const Customers = () => {
                     </div>
 
                     {/* Stats */}
-                    <div className="pt-2 border-t flex items-center justify-between">
+                    <div className="entity-card-stat">
                       <div className="flex items-center gap-1.5 text-muted-foreground">
                         <StoreIcon className="h-3.5 w-3.5" />
                         <span className="text-xs">{storeCount} {storeCount === 1 ? 'store' : 'stores'}</span>
                       </div>
                       <div className="text-right">
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Outstanding</p>
+                        <p className="entity-card-label">Outstanding</p>
                         <p className="font-bold text-foreground">₹{totalOutstanding.toLocaleString()}</p>
                       </div>
                     </div>
@@ -510,28 +567,23 @@ const Customers = () => {
           onRowClick={(row) => { if (!editMode) navigate(`/customers/${row.id}`); }}
           height="calc(100vh - 240px)"
           renderMobileCard={(row: any) => (
-            <div className={`rounded-xl border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow active:bg-muted/30 ${!row.is_active ? "opacity-60" : ""}`}>
-              <div className="flex">
-                <div className="w-24 self-stretch shrink-0 bg-muted flex items-center justify-center overflow-hidden">
-                  {row.photo_url ? (
-                    <img src={row.photo_url} alt={row.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <User className="h-8 w-8 text-muted-foreground/40" />
-                  )}
+            <div className={`entity-card-mobile ${!row.is_active ? "entity-card-inactive" : ""}`}>
+              <div className="w-14 h-14 rounded-lg bg-muted flex items-center justify-center overflow-hidden shrink-0">
+                {row.photo_url ? (
+                  <img src={row.photo_url} alt={row.name} className="w-full h-full object-cover" />
+                ) : (
+                  <User className="h-6 w-6 text-muted-foreground/40" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="font-semibold text-sm text-foreground truncate">{row.name}</h3>
+                  <StatusBadge status={row.is_active ? "active" : "inactive"} />
                 </div>
-                <div className="flex-1 p-3 min-w-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <h3 className="font-semibold text-sm text-foreground truncate">{row.name}</h3>
-                    <StatusBadge status={row.is_active ? "active" : "inactive"} />
-                  </div>
-                  <div className="flex items-center justify-between gap-2 mt-0.5">
-                    <p className="text-xs text-muted-foreground font-mono truncate">{row.display_id}</p>
-                    <StatusBadge status={row.kyc_status === "verified" ? "verified" : row.kyc_status === "pending" ? "pending" : "inactive"} label={`KYC: ${row.kyc_status.replace("_", " ")}`} />
-                  </div>
-                  <div className="flex items-center gap-3 mt-1.5">
-                    <span className="text-sm font-bold text-foreground">₹{(row.stores || []).reduce((s: number, st: any) => s + Number(st.outstanding || 0), 0).toLocaleString()}</span>
-                    <span className="text-xs text-muted-foreground">{row.stores?.length || 0} stores</span>
-                  </div>
+                <p className="entity-card-subtitle truncate">{row.display_id}</p>
+                <div className="flex items-center gap-3 mt-1">
+                  <span className="text-sm font-bold text-foreground">₹{(row.stores || []).reduce((s: number, st: any) => s + Number(st.outstanding || 0), 0).toLocaleString()}</span>
+                  <span className="text-xs text-muted-foreground">{row.stores?.length || 0} stores</span>
                 </div>
               </div>
             </div>

@@ -66,6 +66,8 @@ const UserProfile = lazy(() => import("./pages/UserProfile"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const Expenses = lazy(() => import("./pages/Expenses"));
+const SaleReturns = lazy(() => import("./pages/SaleReturns"));
+const PurchaseReturns = lazy(() => import("./pages/PurchaseReturns"));
 
 // Loading fallback component
 const PageLoader = () => (
@@ -184,8 +186,12 @@ const App = () => {
               <Route path="/routes/:id" element={<RoleGuard allowed={["super_admin", "manager", "agent"]}><RouteDetail /></RoleGuard>} />
               {/* Sales: Admin, Manager, Agent, POS */}
               <Route path="/sales" element={<RoleGuard allowed={["super_admin", "manager", "agent", "pos"]}><Sales /></RoleGuard>} />
+              {/* Sale Returns: Admin, Manager */}
+              <Route path="/sale-returns" element={<RoleGuard allowed={["super_admin", "manager"]}><SaleReturns /></RoleGuard>} />
               {/* Transactions: Admin, Manager, Agent, Marketer */}
               <Route path="/transactions" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer"]}><Transactions /></RoleGuard>} />
+              {/* Purchase Returns: Admin, Manager */}
+              <Route path="/purchase-returns" element={<RoleGuard allowed={["super_admin", "manager"]}><PurchaseReturns /></RoleGuard>} />
               {/* Orders: Admin, Manager, Agent, Marketer */}
               <Route path="/orders" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer"]}><Orders /></RoleGuard>} />
               {/* Handovers: All staff */}

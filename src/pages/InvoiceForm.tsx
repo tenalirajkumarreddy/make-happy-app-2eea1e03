@@ -100,13 +100,17 @@ const InvoiceForm = () => {
       if (!customerId) return [];
       const { data } = await supabase
         .from("stores")
-        .select("id, name, address, phone, gstin")
+        .select("id, name, address, phone, store_type_id")
         .eq("customer_id", customerId)
         .eq("is_active", true);
       return data || [];
     },
     enabled: !!customerId,
   });
+
+  // Get selected store's type for product filtering
+  const selectedStore = stores.find((s: any) => s.id === storeId);
+  const selectedStoreTypeId = selectedStore?.store_type_id;
 
   // Fetch warehouses
   const { data: warehouses = [] } = useQuery({
@@ -120,10 +124,23 @@ const InvoiceForm = () => {
     },
   });
 
-  // Fetch products
+  // Fetch products - filtered by store type if selected, else all active products
   const { data: products = [] } = useQuery({
-    queryKey: ["products-for-invoice"],
+    queryKey: ["products-for-invoice", selectedStoreTypeId],
     queryFn: async () => {
+      // If store is selected, get products for that store type
+      if (selectedStoreTypeId) {
+        const { data: storeTypeProducts } = await supabase
+          .from("store_type_products")
+          .select("product_id, products(id, name, hsn_code, mrp, gst_rate)")
+          .eq("store_type_id", selectedStoreTypeId);
+        
+        if (storeTypeProducts && storeTypeProducts.length > 0) {
+          return storeTypeProducts.map((stp: any) => stp.products).filter(Boolean);
+        }
+      }
+      
+      // Fallback: all active products (when no store selected or no store_type_products configured)
       const { data } = await supabase
         .from("products")
         .select("id, name, hsn_code, mrp, gst_rate")
@@ -140,18 +157,17 @@ const InvoiceForm = () => {
       let query = supabase
         .from("sales")
         .select(`
-          id, display_id, sale_date, total_amount, status,
+          id, display_id, created_at, total_amount,
           sale_items(id, product_id, quantity, unit_price, total_amount, products(name, hsn_code, gst_rate))
         `)
         .eq("customer_id", customerId)
-        .eq("has_invoice", false)
-        .in("status", ["completed", "partial"]);
+        .eq("has_invoice", false);
       
       if (storeId) {
         query = query.eq("store_id", storeId);
       }
       
-      const { data } = await query.order("sale_date", { ascending: false });
+      const { data } = await query.order("created_at", { ascending: false });
       return data || [];
     },
     enabled: !!customerId,
@@ -569,7 +585,7 @@ const InvoiceForm = () => {
                       <div className="flex-1">
                         <p className="font-mono text-sm font-medium">{sale.display_id}</p>
                         <p className="text-xs text-muted-foreground">
-                          {new Date(sale.sale_date).toLocaleDateString("en-IN")} • {sale.sale_items?.length || 0} items
+                          {new Date(sale.created_at).toLocaleDateString("en-IN")} • {sale.sale_items?.length || 0} items
                         </p>
                       </div>
                       <span className="font-semibold">₹{Number(sale.total_amount).toLocaleString()}</span>

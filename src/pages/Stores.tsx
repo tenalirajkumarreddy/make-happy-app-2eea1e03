@@ -372,20 +372,20 @@ const Stores = () => {
       {/* Desktop: Card Grid, Mobile: Table */}
       {!isMobile ? (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="entity-grid">
             {filteredStores.map((row: any) => {
               return (
                 <div
                   key={row.id}
                   onClick={() => { if (!editMode) navigate(`/stores/${row.id}`); }}
-                  className={`group rounded-xl border bg-card shadow-sm hover:shadow-lg transition-all duration-200 overflow-hidden cursor-pointer ${!row.is_active ? "opacity-60" : ""}`}
+                  className={`group entity-card ${!row.is_active ? "entity-card-inactive" : ""}`}
                 >
                   {/* Header with image */}
-                  <div className="relative h-32 bg-gradient-to-br from-blue-500/10 to-blue-500/5 flex items-center justify-center">
+                  <div className="entity-card-header">
                     {row.photo_url ? (
-                      <img src={row.photo_url} alt={row.name} className="w-full h-full object-cover" />
+                      <img src={row.photo_url} alt={row.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" />
                     ) : (
-                      <div className="w-16 h-16 rounded-lg bg-muted flex items-center justify-center">
+                      <div className="entity-card-icon-box">
                         <Store className="h-8 w-8 text-muted-foreground" />
                       </div>
                     )}
@@ -400,15 +400,15 @@ const Stores = () => {
                   </div>
 
                   {/* Content */}
-                  <div className="p-4 space-y-3">
+                  <div className="entity-card-content">
                     <div>
-                      <h3 className="font-semibold text-lg text-foreground truncate">{row.name}</h3>
-                      <p className="text-xs text-muted-foreground font-mono mt-0.5">{row.display_id}</p>
+                      <h3 className="entity-card-title">{row.name}</h3>
+                      <p className="entity-card-subtitle mt-0.5">{row.display_id}</p>
                     </div>
 
                     {/* Customer */}
                     <div className="text-sm">
-                      <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Customer</p>
+                      <p className="entity-card-label mb-1">Customer</p>
                       <p className="font-medium text-foreground truncate">{row.customers?.name || "—"}</p>
                     </div>
 
@@ -436,11 +436,9 @@ const Stores = () => {
                     )}
 
                     {/* Outstanding */}
-                    <div className="pt-2 border-t">
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs text-muted-foreground uppercase tracking-wider">Outstanding</p>
-                        <p className="font-bold text-lg text-foreground">₹{Number(row.outstanding).toLocaleString()}</p>
-                      </div>
+                    <div className="entity-card-stat">
+                      <p className="entity-card-label">Outstanding</p>
+                      <p className="font-bold text-lg text-foreground">₹{Number(row.outstanding).toLocaleString()}</p>
                     </div>
 
                     {/* Pricing button for admins */}
@@ -478,28 +476,26 @@ const Stores = () => {
           onRowClick={(row) => { if (!editMode) navigate(`/stores/${row.id}`); }}
           height="calc(100vh - 240px)"
           renderMobileCard={(row: any) => (
-            <div className={`rounded-xl border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow active:bg-muted/30 ${!row.is_active ? "opacity-60" : ""}`} onClick={() => { if (!editMode) navigate(`/stores/${row.id}`); }}>
-              <div className="flex">
-                <div className="w-24 self-stretch shrink-0 bg-muted flex items-center justify-center overflow-hidden">
-                  {row.photo_url ? (
-                    <img src={row.photo_url} alt={row.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <Store className="h-8 w-8 text-muted-foreground/40" />
-                  )}
+            <div className={`entity-card-mobile ${!row.is_active ? "entity-card-inactive" : ""}`} onClick={() => { if (!editMode) navigate(`/stores/${row.id}`); }}>
+              <div className="w-14 h-14 rounded-lg bg-muted flex items-center justify-center overflow-hidden shrink-0">
+                {row.photo_url ? (
+                  <img src={row.photo_url} alt={row.name} className="w-full h-full object-cover" />
+                ) : (
+                  <Store className="h-6 w-6 text-muted-foreground/40" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="font-semibold text-sm text-foreground truncate">{row.name}</h3>
+                  <StatusBadge status={row.is_active ? "active" : "inactive"} />
                 </div>
-                <div className="flex-1 p-3 min-w-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <h3 className="font-semibold text-sm text-foreground truncate">{row.name}</h3>
-                    <StatusBadge status={row.is_active ? "active" : "inactive"} />
-                  </div>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <p className="text-xs text-muted-foreground font-mono truncate">{row.display_id}</p>
-                    {row.store_types?.name && <Badge variant="outline" className="text-[10px] h-4 px-1 rounded-sm border-muted-foreground/30 text-muted-foreground">{row.store_types.name}</Badge>}
-                  </div>
-                  <div className="mt-2 text-right">
-                     <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Outstanding</p>
-                     <p className="font-bold text-foreground">₹{Number(row.outstanding).toLocaleString()}</p>
-                  </div>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <p className="entity-card-subtitle truncate">{row.display_id}</p>
+                  {row.store_types?.name && <Badge variant="outline" className="text-xs h-5 px-1.5 rounded-sm border-muted-foreground/30 text-muted-foreground">{row.store_types.name}</Badge>}
+                </div>
+                <div className="flex items-center justify-between mt-1.5">
+                  <span className="text-xs text-muted-foreground truncate">{row.customers?.name || "—"}</span>
+                  <p className={`font-bold text-sm ${Number(row.outstanding) > 0 ? 'text-red-600' : 'text-foreground'}`}>₹{Number(row.outstanding).toLocaleString()}</p>
                 </div>
               </div>
             </div>

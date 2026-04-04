@@ -18,7 +18,7 @@ import {
 import {
   Loader2, ArrowLeft, DollarSign, ShoppingCart, Banknote,
   MapPin, Store as StoreIcon, Phone,
-  Pencil, X, Save, AlertTriangle, ScanLine, Trash2, Scale, ArrowRightLeft, Package, ShieldCheck,
+  Pencil, X, Save, AlertTriangle, ScanLine, Trash2, Scale, ArrowRightLeft, Package, ShieldCheck, FileText,
 } from "lucide-react";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -33,6 +33,7 @@ import { StoreLedger } from "@/components/stores/StoreLedger";
 import { logActivity } from "@/lib/activityLogger";
 import { ImageUpload } from "@/components/shared/ImageUpload";
 import { KycReviewDialog } from "@/components/customers/KycReviewDialog";
+import { CustomerStatement } from "@/components/reports/CustomerStatement";
 
 const StoreDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -48,6 +49,7 @@ const StoreDetail = () => {
   const [showQrScanner, setShowQrScanner] = useState(false);
   const [showAdjustBalance, setShowAdjustBalance] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
+  const [showStatement, setShowStatement] = useState(false);
   const [showKycDialog, setShowKycDialog] = useState(false);
   const [transferCustomerId, setTransferCustomerId] = useState("");
   const [transferSaving, setTransferSaving] = useState(false);
@@ -67,8 +69,6 @@ const StoreDetail = () => {
     pincode: "",
     store_type_id: "",
     route_id: "",
-    credit_limit_no_kyc: "",
-    credit_limit_kyc: "",
   });
 
   const { data: store, isLoading } = useQuery({
@@ -76,7 +76,7 @@ const StoreDetail = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("stores")
-        .select("*, customers(id, name, is_active, kyc_status, kyc_selfie_url, kyc_aadhar_front_url, kyc_aadhar_back_url, kyc_rejection_reason, kyc_submitted_at, kyc_verified_at), store_types(name), routes(name)")
+        .select("*, customers(id, name, is_active, kyc_status, kyc_selfie_url, kyc_aadhar_front_url, kyc_aadhar_back_url, kyc_rejection_reason, kyc_submitted_at, kyc_verified_at), store_types(name, credit_limit_kyc, credit_limit_no_kyc), routes(name)")
         .eq("id", id!)
         .maybeSingle();
       if (error) throw error;
@@ -321,8 +321,6 @@ const StoreDetail = () => {
       pincode: store.pincode || "",
       store_type_id: store.store_type_id || "",
       route_id: store.route_id || "",
-      credit_limit_no_kyc: String(store.credit_limit_no_kyc || 0),
-      credit_limit_kyc: String(store.credit_limit_kyc || 0),
     });
     setPhotoUrl(store.photo_url || null);
     setEditing(true);
@@ -348,8 +346,6 @@ const StoreDetail = () => {
         store_type_id: form.store_type_id || null,
         route_id: form.route_id || null,
         photo_url: photoUrl || null,
-        credit_limit_no_kyc: Number(form.credit_limit_no_kyc) || 0,
-        credit_limit_kyc: Number(form.credit_limit_kyc) || 0,
       })
       .eq("id", id);
     setSaving(false);
@@ -589,6 +585,9 @@ const StoreDetail = () => {
                 <ArrowRightLeft className="h-3.5 w-3.5" /> Transfer
               </Button>
             )}
+            <Button variant="outline" size="sm" onClick={() => setShowStatement(true)} className="gap-1.5 rounded-full h-8">
+              <FileText className="h-3.5 w-3.5" /> Statement
+            </Button>
           </div>
 
           <Separator className="my-4" />
@@ -627,18 +626,6 @@ const StoreDetail = () => {
                   <div className="space-y-1.5"><Label className="text-xs">District</Label><Input value={form.district} onChange={(e) => setForm({ ...form, district: e.target.value })} /></div>
                   <div className="space-y-1.5"><Label className="text-xs">State</Label><Input value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} /></div>
                   <div className="space-y-1.5"><Label className="text-xs">Pincode</Label><Input value={form.pincode} onChange={(e) => setForm({ ...form, pincode: e.target.value })} /></div>
-                  {canEdit && (
-                    <>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs text-muted-foreground">Credit Limit (No KYC) ₹</Label>
-                        <Input type="number" min="0" value={form.credit_limit_no_kyc} onChange={(e) => setForm({ ...form, credit_limit_no_kyc: e.target.value })} />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs text-muted-foreground">Credit Limit (KYC Done) ₹</Label>
-                        <Input type="number" min="0" value={form.credit_limit_kyc} onChange={(e) => setForm({ ...form, credit_limit_kyc: e.target.value })} />
-                      </div>
-                    </>
-                  )}
                 </div>
               </div>
             </div>
@@ -652,15 +639,15 @@ const StoreDetail = () => {
                 <InfoItem label="Opening Bal." value={`₹${Number(store.opening_balance).toLocaleString()}`} />
                 <InfoItem label="Created" value={new Date(store.created_at).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" })} />
               </div>
-              {/* Credit Limits — visible to all staff */}
+              {/* Credit Limits — visible to all staff (from store_types) */}
               <div className="flex flex-wrap gap-4 pt-1 border-t border-border/50">
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Credit (No KYC)</span>
-                  <span className="text-sm font-semibold text-foreground">₹{Number(store.credit_limit_no_kyc || 0).toLocaleString()}</span>
+                  <span className="text-sm font-semibold text-foreground">₹{Number((store as any).store_types?.credit_limit_no_kyc || 0).toLocaleString()}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Credit (KYC Done)</span>
-                  <span className="text-sm font-semibold text-success">₹{Number(store.credit_limit_kyc || 0).toLocaleString()}</span>
+                  <span className="text-sm font-semibold text-success">₹{Number((store as any).store_types?.credit_limit_kyc || 0).toLocaleString()}</span>
                 </div>
                 {/* Customer KYC status */}
                 {(() => {
@@ -861,6 +848,21 @@ const StoreDetail = () => {
             qc.invalidateQueries({ queryKey: ["store", id] });
           }}
         />
+      )}
+
+      {/* Statement Modal */}
+      {showStatement && store && (
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm overflow-y-auto">
+          <div className="container max-w-4xl py-6">
+            <CustomerStatement
+              customerId={store.customer_id}
+              customerName={store.customers?.name || "Customer"}
+              storeId={store.id}
+              storeName={store.name}
+              onClose={() => setShowStatement(false)}
+            />
+          </div>
+        </div>
       )}
     </div>
   );

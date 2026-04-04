@@ -291,19 +291,19 @@ const Products = () => {
             className="max-w-sm"
           />
           
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="entity-grid">
             {filteredProducts.map((row: any) => (
               <div
                 key={row.id}
                 onClick={() => { if (selectMode) { toggleSelect(row.id); } else if (canEdit) { openEdit(row); } }}
-                className={`group rounded-xl border bg-card shadow-sm hover:shadow-lg transition-all duration-200 overflow-hidden cursor-pointer ${!row.is_active ? "opacity-60" : ""} ${selectedIds.has(row.id) ? "ring-2 ring-primary" : ""}`}
+                className={`group entity-card ${!row.is_active ? "entity-card-inactive" : ""} ${selectedIds.has(row.id) ? "entity-card-selected" : ""}`}
               >
                 {/* Header with image */}
-                <div className="relative h-40 bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center overflow-hidden">
+                <div className="entity-card-header !h-36">
                   {row.image_url ? (
                     <img src={row.image_url} alt={row.name} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" />
                   ) : (
-                    <Package className="h-16 w-16 text-muted-foreground/30" />
+                    <Package className="h-12 w-12 text-muted-foreground/30" />
                   )}
                   <div className="absolute top-2 right-2 flex items-center gap-2">
                     {selectMode && (
@@ -318,10 +318,10 @@ const Products = () => {
                 </div>
 
                 {/* Content */}
-                <div className="p-4 space-y-3">
+                <div className="entity-card-content">
                   <div>
-                    <h3 className="font-semibold text-foreground truncate">{row.name}</h3>
-                    <p className="text-xs text-muted-foreground font-mono mt-0.5">{row.sku}</p>
+                    <h3 className="entity-card-title">{row.name}</h3>
+                    <p className="entity-card-subtitle mt-0.5">{row.sku}</p>
                   </div>
 
                   {row.category && (
@@ -337,13 +337,13 @@ const Products = () => {
                   )}
 
                   {/* Price and unit */}
-                  <div className="pt-2 border-t flex items-center justify-between">
+                  <div className="entity-card-stat">
                     <div className="flex items-center gap-1.5 text-muted-foreground">
                       <Box className="h-3.5 w-3.5" />
                       <span className="text-xs">{row.unit}</span>
                     </div>
                     <div className="text-right">
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Price (incl. GST)</p>
+                      <p className="entity-card-label">Price (incl. GST)</p>
                       <p className="font-bold text-foreground">₹{Number(row.base_price).toLocaleString()}</p>
                     </div>
                   </div>
@@ -385,39 +385,37 @@ const Products = () => {
           searchPlaceholder="Search products..."
           onRowClick={(row) => { if (canEdit && !selectMode) openEdit(row); }}
           renderMobileCard={(row: any) => (
-            <div className="rounded-xl border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow active:bg-muted/30" onClick={() => { if (selectMode) { toggleSelect(row.id); } else if (canEdit) { openEdit(row); } }}>
-              <div className="flex">
-                <div className="w-24 self-stretch shrink-0 bg-muted flex items-center justify-center overflow-hidden">
-                  {row.image_url ? (
-                    <img src={row.image_url} alt={row.name} loading="lazy" className="w-full h-full object-cover" />
-                  ) : (
-                    <Package className="h-8 w-8 text-muted-foreground/40" />
-                  )}
-                </div>
-                <div className="flex-1 p-3 min-w-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <h3 className="font-semibold text-sm text-foreground truncate">{row.name}</h3>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <StatusBadge status={row.is_active ? "active" : "inactive"} />
-                      {canEdit && (
-                        <Switch
-                          checked={row.is_active}
-                          onCheckedChange={(e) => { handleToggleActive(row); }}
-                          onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                          className="scale-75"
-                        />
-                      )}
-                    </div>
+            <div className={`entity-card-mobile ${!row.is_active ? "entity-card-inactive" : ""}`} onClick={() => { if (selectMode) { toggleSelect(row.id); } else if (canEdit) { openEdit(row); } }}>
+              <div className="w-14 h-14 rounded-lg bg-muted flex items-center justify-center overflow-hidden shrink-0">
+                {row.image_url ? (
+                  <img src={row.image_url} alt={row.name} loading="lazy" className="w-full h-full object-cover" />
+                ) : (
+                  <Package className="h-6 w-6 text-muted-foreground/40" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="font-semibold text-sm text-foreground truncate">{row.name}</h3>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <StatusBadge status={row.is_active ? "active" : "inactive"} />
+                    {canEdit && (
+                      <Switch
+                        checked={row.is_active}
+                        onCheckedChange={(e) => { handleToggleActive(row); }}
+                        onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                        className="scale-90"
+                      />
+                    )}
                   </div>
-                  <p className="text-xs text-muted-foreground font-mono mt-0.5">{row.sku}</p>
-                  <div className="flex items-center gap-2 mt-1.5">
-                    <span className="text-sm font-bold text-foreground">₹{Number(row.base_price).toLocaleString()}</span>
-                    <span className="text-xs text-muted-foreground">/ {row.unit}</span>
-                  </div>
-                  {row.category && (
-                    <Badge variant="secondary" className="mt-1.5 text-[10px] h-5">{row.category}</Badge>
-                  )}
                 </div>
+                <p className="entity-card-subtitle mt-0.5">{row.sku}</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-sm font-bold text-foreground">₹{Number(row.base_price).toLocaleString()}</span>
+                  <span className="text-xs text-muted-foreground">/ {row.unit}</span>
+                </div>
+                {row.category && (
+                  <Badge variant="secondary" className="mt-1 text-xs h-5">{row.category}</Badge>
+                )}
               </div>
             </div>
           )}

@@ -156,20 +156,25 @@ const VendorPayments = () => {
         searchPlaceholder="Search payments..."
         emptyMessage="No payments recorded yet"
         renderMobileCard={(row: any) => (
-          <div className="rounded-xl border bg-card p-4 shadow-sm">
-            <div className="flex items-start justify-between mb-2">
-              <div>
-                <p className="font-mono text-xs font-medium text-muted-foreground">{row.display_id}</p>
-                <h3 className="font-semibold text-sm mt-1">{row.vendors?.name || "Unknown Vendor"}</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {new Date(row.payment_date).toLocaleDateString("en-IN")}
-                </p>
-              </div>
-              <StatusBadge status={row.status === "completed" ? "active" : row.status as any} label={row.status} />
+          <div className="entity-card-mobile">
+            <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center shrink-0">
+              <CreditCard className="h-5 w-5 text-green-600" />
             </div>
-            <div className="flex items-center justify-between mt-3 pt-3 border-t">
-              <Badge variant="outline" className="capitalize">{row.payment_method}</Badge>
-              <span className="font-semibold text-green-600">₹{Number(row.amount).toLocaleString()}</span>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <h3 className="font-semibold text-sm truncate">{row.vendors?.name || "Unknown Vendor"}</h3>
+                  <p className="entity-card-subtitle">{row.display_id}</p>
+                </div>
+                <StatusBadge status={row.status === "completed" ? "active" : row.status as any} label={row.status} />
+              </div>
+              <div className="flex items-center justify-between mt-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">{new Date(row.payment_date).toLocaleDateString("en-IN")}</span>
+                  <Badge variant="outline" className="capitalize text-[10px] h-5">{row.payment_method}</Badge>
+                </div>
+                <span className="font-bold text-green-600">₹{Number(row.amount).toLocaleString()}</span>
+              </div>
             </div>
           </div>
         )}

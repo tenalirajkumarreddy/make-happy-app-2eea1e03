@@ -11,7 +11,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { StoreOption } from "@/mobile/components/StorePickerSheet";
-import { getCurrentPosition } from "@/lib/capacitorUtils";
+import { getCurrentPosition, checkAndRequestLocationPermission, isNativeApp } from "@/lib/capacitorUtils";
 import { addToQueue } from "@/lib/offlineQueue";
 
 interface Props {
@@ -76,10 +76,22 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
   const [visitLoading, setVisitLoading] = useState(false);
 
   useEffect(() => {
-    getCurrentPosition().then(pos => {
+    const initLocation = async () => {
+      // Check permission first on native platforms
+      if (isNativeApp()) {
+        const hasPermission = await checkAndRequestLocationPermission();
+        if (!hasPermission) {
+          toast.error("Location permission required for nearby stores. Please enable in settings.");
+          return;
+        }
+      }
+      
+      const pos = await getCurrentPosition();
       if (pos) setCurrentPosition({ lat: pos.lat, lng: pos.lng });
       else setCurrentPosition(null);
-    });
+    };
+    
+    initLocation();
   }, []);
 
   const { data: salesData } = useQuery({

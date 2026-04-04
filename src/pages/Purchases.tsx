@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2, Plus, Trash2, Package } from "lucide-react";
+import { Loader2, Plus, Trash2, Package, RotateCcw } from "lucide-react";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -93,15 +93,9 @@ const Purchases = () => {
         console.error("Error fetching raw materials:", error);
         return [];
       }
-      console.log("Raw materials fetched:", data);
       return data || [];
     },
   });
-
-  // Debug: Log when items state changes
-  useEffect(() => {
-    console.log("Items state updated:", items);
-  }, [items]);
 
   const resetForm = () => {
     setVendorId(location.state?.vendorId || "");
@@ -124,10 +118,8 @@ const Purchases = () => {
   };
 
   const updateItem = (index: number, field: keyof PurchaseItem, value: any) => {
-    console.log('updateItem called:', { index, field, value, currentItems: items });
     const newItems = [...items];
     newItems[index] = { ...newItems[index], [field]: value };
-    console.log('newItems after update:', newItems);
     setItems(newItems);
   };
 
@@ -239,6 +231,12 @@ const Purchases = () => {
         primaryAction={{ label: "New Purchase", onClick: () => { resetForm(); setShowAdd(true); } }}
         actions={[
           {
+            label: "Returns",
+            icon: RotateCcw,
+            onClick: () => navigate("/purchase-returns"),
+            priority: 0,
+          },
+          {
             label: "Raw Materials",
             icon: Package,
             onClick: () => navigate("/raw-materials"),
@@ -255,20 +253,26 @@ const Purchases = () => {
         searchPlaceholder="Search purchases..."
         emptyMessage="No purchases recorded yet"
         renderMobileCard={(row: any) => (
-          <div className="rounded-xl border bg-card p-4 shadow-sm">
-            <div className="flex items-start justify-between mb-2">
-              <div>
-                <p className="font-mono text-xs font-medium text-muted-foreground">{row.display_id}</p>
-                <h3 className="font-semibold text-sm mt-1">{row.vendors?.name || "Unknown Vendor"}</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {new Date(row.purchase_date).toLocaleDateString("en-IN")}
-                </p>
-              </div>
-              <StatusBadge status={row.status === "completed" ? "active" : row.status as any} label={row.status} />
+          <div className="entity-card-mobile">
+            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+              <Package className="h-5 w-5 text-primary" />
             </div>
-            <div className="flex items-center justify-between mt-3 pt-3 border-t">
-              <span className="text-xs text-muted-foreground">{row.purchase_items?.length || 0} items</span>
-              <span className="font-semibold">₹{Number(row.total_amount).toLocaleString()}</span>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <h3 className="font-semibold text-sm truncate">{row.vendors?.name || "Unknown Vendor"}</h3>
+                  <p className="entity-card-subtitle">{row.display_id}</p>
+                </div>
+                <StatusBadge status={row.status === "completed" ? "active" : row.status as any} label={row.status} />
+              </div>
+              <div className="flex items-center justify-between mt-1">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span>{new Date(row.purchase_date).toLocaleDateString("en-IN")}</span>
+                  <span>•</span>
+                  <span>{row.purchase_items?.length || 0} items</span>
+                </div>
+                <span className="font-bold text-sm">₹{Number(row.total_amount).toLocaleString()}</span>
+              </div>
             </div>
           </div>
         )}
@@ -338,7 +342,6 @@ const Purchases = () => {
                       <Label className="text-xs text-muted-foreground mb-1 block">Type</Label>
                       <Select value={item.item_type} onValueChange={(value) => {
                         const newType = value as "product" | "raw_material";
-                        console.log('Type changed to:', newType);
                         // Update both item_type and clear item_id in a single state update
                         setItems(prevItems => {
                           const newItems = [...prevItems];

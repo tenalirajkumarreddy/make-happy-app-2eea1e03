@@ -210,12 +210,10 @@ serve(async (req) => {
         .delete()
         .eq('session_token', sessionToken)
 
+      console.error('SMS dispatch failed:', smsError)
       return new Response(
         JSON.stringify({
-          error: 'Failed to initiate SMS dispatch',
-          details: smsError instanceof Error ? smsError.message : 'Unknown error',
-          otp_for_dev: Deno.env.get('DENO_DEPLOYMENT_ID') ? undefined : otp,
-          session_token: Deno.env.get('DENO_DEPLOYMENT_ID') ? undefined : sessionToken,
+          error: 'Failed to initiate SMS dispatch'
         }),
         {
           status: 500,
@@ -229,8 +227,7 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({
-        error: 'Internal server error',
-        details: error instanceof Error ? error.message : 'Unknown error'
+        error: 'Internal server error'
       }),
       {
         status: 500,

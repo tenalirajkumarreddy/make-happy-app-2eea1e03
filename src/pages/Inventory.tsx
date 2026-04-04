@@ -6,8 +6,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { logActivity } from "@/lib/activityLogger";
-import { Loader2, Package, Plus, Minus, History, BoxSelect, ArrowUpRight, ArrowDownRight } from "lucide-react";
-import { useState, useMemo } from "react";
+import { Loader2, Package, Plus, Minus, History, BoxSelect, ArrowUpRight, ArrowDownRight, FlaskConical, ImageIcon } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -22,8 +22,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { format } from "date-fns";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 type MovementType = "purchase" | "sale" | "adjustment" | "return" | "transfer_in" | "transfer_out";
+type RawMaterialAdjustType = "used" | "remaining";
 
 const MOVEMENT_TYPES: Record<MovementType, string> = {
   purchase: "Purchase (In)",
@@ -32,6 +34,11 @@ const MOVEMENT_TYPES: Record<MovementType, string> = {
   return: "Return (In)",
   transfer_in: "Transfer (In)",
   transfer_out: "Transfer (Out)",
+};
+
+const RAW_MATERIAL_ADJUST_TYPES: Record<RawMaterialAdjustType, string> = {
+  used: "Used (Consumption)",
+  remaining: "Remaining (Physical Count)",
 };
 
 const Inventory = () => {
@@ -48,6 +55,14 @@ const Inventory = () => {
   const [adjustReason, setAdjustReason] = useState("");
   const [saving, setSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  
+  // Raw materials state
+  const [showRawMaterialAdjust, setShowRawMaterialAdjust] = useState(false);
+  const [adjustRawMaterial, setAdjustRawMaterial] = useState<any>(null);
+  const [rawMaterialAdjustType, setRawMaterialAdjustType] = useState<RawMaterialAdjustType>("used");
+  const [rawMaterialQty, setRawMaterialQty] = useState("");
+  const [rawMaterialReason, setRawMaterialReason] = useState("");
+  const [rawMaterialSearchTerm, setRawMaterialSearchTerm] = useState("");
 
   // Fetch Warehouses
   const { data: warehouses, isLoading: loadWh } = useQuery({
@@ -58,10 +73,12 @@ const Inventory = () => {
     },
   });
 
-  // Set default warehouse
-  if (warehouses?.length && !selectedWarehouseId) {
-    setSelectedWarehouseId(warehouses[0].id);
-  }
+  // Set default warehouse - must be in useEffect to avoid state mutation during render
+  useEffect(() => {
+    if (warehouses?.length && !selectedWarehouseId) {
+      setSelectedWarehouseId(warehouses[0].id);
+    }
+  }, [warehouses, selectedWarehouseId]);
 
   // Fetch Inventory for selected warehouse
   const { data: inventory, isLoading: loadInv } = useQuery({
@@ -75,7 +92,7 @@ const Inventory = () => {
       // Strategy: Fetch all products, then fetch stock for this warehouse
       const { data: products } = await supabase
         .from("products")
-        .select("id, name, sku, unit, category")
+        .select("id, name, sku, unit, category, image_url")
         .eq("is_active", true)
         .order("name");
         
@@ -95,6 +112,49 @@ const Inventory = () => {
     },
     enabled: !!selectedWarehouseId,
   });
+
+  // Fetch Raw Materials for selected warehouse
+  const { data: rawMaterials, isLoading: loadRawMaterials } = useQuery({
+    queryKey: ["raw-materials-inventory", selectedWarehouseId],
+    queryFn: async () => {
+      if (!selectedWarehouseId) return [];
+      
+      // Get raw materials with their stock in this warehouse
+      const { data: materials, error: matError } = await supabase
+        .from("raw_materials")
+        .select("id, display_id, name, unit, category, min_stock_level, current_stock, unit_cost, image_url")
+        .eq("is_active", true)
+        .order("name");
+        
+      if (matError || !materials) return [];
+
+      // Get per-warehouse stock
+      const { data: stocks } = await supabase
+        .from("raw_material_stock")
+        .select("raw_material_id, quantity")
+        .eq("warehouse_id", selectedWarehouseId);
+      
+      const stockMap = new Map(stocks?.map(s => [s.raw_material_id, s.quantity]));
+
+      return materials.map(m => ({
+        ...m,
+        warehouse_quantity: stockMap.get(m.id) || 0,
+      }));
+    },
+    enabled: !!selectedWarehouseId,
+  });
+
+  // Filter raw materials based on search term
+  const filteredRawMaterials = useMemo(() => {
+    if (!rawMaterials) return [];
+    if (!rawMaterialSearchTerm.trim()) return rawMaterials;
+    const term = rawMaterialSearchTerm.toLowerCase();
+    return rawMaterials.filter((item: any) =>
+      item.name?.toLowerCase().includes(term) ||
+      item.display_id?.toLowerCase().includes(term) ||
+      item.category?.toLowerCase().includes(term)
+    );
+  }, [rawMaterials, rawMaterialSearchTerm]);
 
   // Filter inventory based on search term
   const filteredInventory = useMemo(() => {
@@ -178,6 +238,84 @@ const Inventory = () => {
     }
   };
 
+  // Handle raw material adjustment
+  const handleRawMaterialAdjust = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedWarehouseId || !adjustRawMaterial) return;
+    setSaving(true);
+    
+    try {
+        const qty = parseFloat(rawMaterialQty);
+        if (isNaN(qty) || qty < 0) throw new Error("Invalid quantity");
+
+        const currentStock = adjustRawMaterial.warehouse_quantity || 0;
+        let quantityChange: number;
+        let quantityAfter: number;
+
+        if (rawMaterialAdjustType === "used") {
+            // "Used" reduces stock by the entered amount
+            if (qty > currentStock) throw new Error(`Cannot use more than available stock (${currentStock})`);
+            quantityChange = -qty;
+            quantityAfter = currentStock - qty;
+        } else {
+            // "Remaining" sets stock to the entered value (physical count)
+            quantityChange = qty - currentStock;
+            quantityAfter = qty;
+        }
+
+        // Insert adjustment record
+        const { error: adjError } = await supabase
+            .from("raw_material_adjustments")
+            .insert({
+                raw_material_id: adjustRawMaterial.id,
+                warehouse_id: selectedWarehouseId,
+                adjustment_type: rawMaterialAdjustType,
+                quantity_before: currentStock,
+                quantity_change: quantityChange,
+                quantity_after: quantityAfter,
+                reason: rawMaterialReason || (rawMaterialAdjustType === "used" ? "Consumption" : "Physical count"),
+                performed_by: user?.id,
+            });
+
+        if (adjError) throw adjError;
+
+        // Update or insert stock record
+        const { data: existingStock } = await supabase
+            .from("raw_material_stock")
+            .select("id")
+            .eq("raw_material_id", adjustRawMaterial.id)
+            .eq("warehouse_id", selectedWarehouseId)
+            .single();
+
+        if (existingStock) {
+            await supabase
+                .from("raw_material_stock")
+                .update({ quantity: quantityAfter, updated_at: new Date().toISOString() })
+                .eq("id", existingStock.id);
+        } else {
+            await supabase
+                .from("raw_material_stock")
+                .insert({
+                    raw_material_id: adjustRawMaterial.id,
+                    warehouse_id: selectedWarehouseId,
+                    quantity: quantityAfter,
+                });
+        }
+
+        toast.success(`Raw material ${rawMaterialAdjustType === "used" ? "consumption" : "count"} recorded`);
+        setShowRawMaterialAdjust(false);
+        setRawMaterialQty("");
+        setRawMaterialReason("");
+        qc.invalidateQueries({ queryKey: ["raw-materials-inventory"] });
+        logActivity(user!.id, `Adjusted raw material: ${adjustRawMaterial.name} (${rawMaterialAdjustType})`, "raw_material", adjustRawMaterial.id);
+
+    } catch (err: any) {
+        toast.error(err.message);
+    } finally {
+        setSaving(false);
+    }
+  };
+
   const columns = [
     { header: "SKU", accessor: "sku", className: "w-[100px] font-mono text-xs" },
     { header: "Product", accessor: "name", className: "font-medium" },
@@ -240,7 +378,8 @@ const Inventory = () => {
 
         <Tabs defaultValue="stock">
             <TabsList>
-                <TabsTrigger value="stock">Current Stock</TabsTrigger>
+                <TabsTrigger value="stock">Products</TabsTrigger>
+                <TabsTrigger value="raw-materials">Raw Materials</TabsTrigger>
                 <TabsTrigger value="movements">Recent Movements</TabsTrigger>
             </TabsList>
 
@@ -256,36 +395,47 @@ const Inventory = () => {
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="max-w-sm"
                       />
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5">
+                      <div className="entity-grid">
                         {filteredInventory.map((row: any) => {
                           const stockStatus = row.quantity < 0 ? "critical" : row.quantity === 0 ? "empty" : row.quantity < 10 ? "low" : "good";
                           const statusColors = {
-                            critical: { bg: "from-red-500/20 to-red-500/5", text: "text-red-600", border: "border-red-200", badge: "bg-red-100 text-red-700" },
-                            empty: { bg: "from-slate-400/20 to-slate-400/5", text: "text-slate-500", border: "border-slate-200", badge: "bg-slate-100 text-slate-600" },
-                            low: { bg: "from-amber-500/20 to-amber-500/5", text: "text-amber-600", border: "border-amber-200", badge: "bg-amber-100 text-amber-700" },
-                            good: { bg: "from-emerald-500/20 to-emerald-500/5", text: "text-emerald-600", border: "border-emerald-200", badge: "bg-emerald-100 text-emerald-700" },
+                            critical: { badge: "bg-red-100 text-red-700", text: "text-red-600" },
+                            empty: { badge: "bg-slate-100 text-slate-600", text: "text-slate-500" },
+                            low: { badge: "bg-amber-100 text-amber-700", text: "text-amber-600" },
+                            good: { badge: "bg-emerald-100 text-emerald-700", text: "text-emerald-600" },
                           };
                           const colors = statusColors[stockStatus];
                           
                           return (
                             <div
                               key={row.id}
-                              className={`group rounded-2xl border ${colors.border} bg-card shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden`}
+                              className="group entity-card"
                             >
-                              {/* Gradient Header */}
-                              <div className={`h-24 bg-gradient-to-br ${colors.bg} flex items-center justify-center relative`}>
-                                <Package className="h-12 w-12 text-muted-foreground/30 group-hover:scale-110 transition-transform" />
+                              {/* Header */}
+                              <div className="entity-card-header">
+                                <div className="entity-card-icon-box">
+                                  {row.image_url ? (
+                                    <Avatar className="h-12 w-12 rounded-lg">
+                                      <AvatarImage src={row.image_url} alt={row.name} className="object-cover" />
+                                      <AvatarFallback className="rounded-lg bg-muted">
+                                        <Package className={`h-6 w-6 ${colors.text}`} />
+                                      </AvatarFallback>
+                                    </Avatar>
+                                  ) : (
+                                    <Package className={`h-8 w-8 ${colors.text}`} />
+                                  )}
+                                </div>
                                 {/* Status Badge */}
-                                <div className={`absolute top-3 right-3 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${colors.badge}`}>
+                                <div className={`absolute top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${colors.badge}`}>
                                   {stockStatus === "critical" ? "Critical" : stockStatus === "empty" ? "Out of Stock" : stockStatus === "low" ? "Low Stock" : "In Stock"}
                                 </div>
                               </div>
                               
                               {/* Content */}
-                              <div className="p-4 space-y-4">
+                              <div className="entity-card-content">
                                 <div>
-                                  <h3 className="font-semibold text-base text-foreground line-clamp-2 leading-tight">{row.name}</h3>
-                                  <p className="text-xs text-muted-foreground font-mono mt-1">{row.sku}</p>
+                                  <h3 className="entity-card-title">{row.name}</h3>
+                                  <p className="entity-card-subtitle mt-0.5">{row.sku}</p>
                                 </div>
 
                                 {row.category && (
@@ -295,13 +445,13 @@ const Inventory = () => {
                                 {/* Stock display */}
                                 <div className="bg-muted/50 rounded-xl p-3">
                                   <div className="flex items-center justify-between">
-                                    <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Current Stock</span>
+                                    <span className="entity-card-label">Current Stock</span>
                                   </div>
                                   <div className="flex items-baseline gap-1.5 mt-1">
-                                    <span className={`text-3xl font-bold tracking-tight ${colors.text}`}>
+                                    <span className={`text-2xl font-bold tracking-tight ${colors.text}`}>
                                       {row.quantity}
                                     </span>
-                                    <span className="text-sm text-muted-foreground font-medium">{row.unit}</span>
+                                    <span className="text-sm text-muted-foreground">{row.unit}</span>
                                   </div>
                                 </div>
 
@@ -333,12 +483,53 @@ const Inventory = () => {
                       )}
                     </div>
                 ) : (
-                    /* Mobile: DataTable */
+                    /* Mobile: DataTable with compact cards */
                     <DataTable 
-                        data={inventory || []} 
+                        data={filteredInventory || []} 
                         columns={columns} 
-                        searchable 
-                        searchKeys={["name", "sku"]}
+                        searchKey="name"
+                        searchPlaceholder="Search products..."
+                        renderMobileCard={(row: any) => {
+                          const stockStatus = row.quantity < 0 ? "critical" : row.quantity === 0 ? "empty" : row.quantity < 10 ? "low" : "good";
+                          const statusColors = {
+                            critical: "text-red-600",
+                            empty: "text-slate-400",
+                            low: "text-amber-600",
+                            good: "text-emerald-600",
+                          };
+                          return (
+                            <div className="rounded-lg border bg-card p-3">
+                              {/* SKU + Stock in one row */}
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="font-mono text-xs text-muted-foreground">{row.sku}</span>
+                                <span className={`font-bold text-sm ${statusColors[stockStatus]}`}>
+                                  {row.quantity} <span className="text-xs font-normal text-muted-foreground">{row.unit}</span>
+                                </span>
+                              </div>
+                              {/* Product name */}
+                              <p className="font-medium text-sm truncate">{row.name}</p>
+                              {/* Category + Action */}
+                              <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
+                                <span className="text-xs text-muted-foreground">{row.category || "—"}</span>
+                                {canEdit && (
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    className="h-7 text-xs"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setAdjustProduct(row);
+                                      setAdjustType("adjustment");
+                                      setShowAdjust(true);
+                                    }}
+                                  >
+                                    Adjust
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        }}
                     />
                 )}
             </TabsContent>
@@ -350,6 +541,177 @@ const Inventory = () => {
                         columns={movementColumns} 
                     />
                  </div>
+            </TabsContent>
+
+            {/* Raw Materials Tab */}
+            <TabsContent value="raw-materials" className="space-y-4">
+                {loadRawMaterials ? (
+                    <div className="flex items-center justify-center py-10"><Loader2 className="animate-spin" /></div>
+                ) : !isMobile ? (
+                    /* Desktop: Card Grid for Raw Materials */
+                    <div className="space-y-4">
+                      <Input 
+                        placeholder="Search raw materials..." 
+                        value={rawMaterialSearchTerm}
+                        onChange={(e) => setRawMaterialSearchTerm(e.target.value)}
+                        className="max-w-sm"
+                      />
+                      <div className="entity-grid">
+                        {filteredRawMaterials.map((row: any) => {
+                          const minStock = row.min_stock_level || 0;
+                          const stockStatus = row.warehouse_quantity < 0 ? "critical" 
+                            : row.warehouse_quantity === 0 ? "empty" 
+                            : row.warehouse_quantity <= minStock ? "low" 
+                            : "good";
+                          const statusColors = {
+                            critical: { badge: "bg-red-100 text-red-700", text: "text-red-600" },
+                            empty: { badge: "bg-slate-100 text-slate-600", text: "text-slate-500" },
+                            low: { badge: "bg-amber-100 text-amber-700", text: "text-amber-600" },
+                            good: { badge: "bg-emerald-100 text-emerald-700", text: "text-emerald-600" },
+                          };
+                          const colors = statusColors[stockStatus];
+                          
+                          return (
+                            <div
+                              key={row.id}
+                              className="group entity-card"
+                            >
+                              {/* Header */}
+                              <div className="entity-card-header">
+                                <div className="entity-card-icon-box">
+                                  {row.image_url ? (
+                                    <Avatar className="h-12 w-12 rounded-lg">
+                                      <AvatarImage src={row.image_url} alt={row.name} className="object-cover" />
+                                      <AvatarFallback className="rounded-lg bg-muted">
+                                        <FlaskConical className={`h-6 w-6 ${colors.text}`} />
+                                      </AvatarFallback>
+                                    </Avatar>
+                                  ) : (
+                                    <FlaskConical className={`h-8 w-8 ${colors.text}`} />
+                                  )}
+                                </div>
+                                {/* Status Badge */}
+                                <div className={`absolute top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${colors.badge}`}>
+                                  {stockStatus === "critical" ? "Critical" : stockStatus === "empty" ? "Out of Stock" : stockStatus === "low" ? "Low Stock" : "In Stock"}
+                                </div>
+                              </div>
+                              
+                              {/* Content */}
+                              <div className="entity-card-content">
+                                <div>
+                                  <h3 className="entity-card-title">{row.name}</h3>
+                                  <p className="entity-card-subtitle mt-0.5">{row.display_id}</p>
+                                </div>
+
+                                {row.category && (
+                                  <Badge variant="outline" className="text-xs font-normal">{row.category}</Badge>
+                                )}
+
+                                {/* Stock display */}
+                                <div className="bg-muted/50 rounded-xl p-3">
+                                  <div className="flex items-center justify-between">
+                                    <span className="entity-card-label">Warehouse Stock</span>
+                                    {minStock > 0 && (
+                                      <span className="text-xs text-muted-foreground">Min: {minStock}</span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-baseline gap-1.5 mt-1">
+                                    <span className={`text-2xl font-bold tracking-tight ${colors.text}`}>
+                                      {row.warehouse_quantity}
+                                    </span>
+                                    <span className="text-sm text-muted-foreground">{row.unit}</span>
+                                  </div>
+                                  {row.unit_cost > 0 && (
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      Unit cost: ₹{row.unit_cost?.toFixed(2)}
+                                    </p>
+                                  )}
+                                </div>
+
+                                {/* Actions - Used/Remaining */}
+                                {canEdit && (
+                                  <div className="flex gap-2">
+                                    <Button 
+                                      variant="outline" 
+                                      size="sm" 
+                                      className="flex-1 h-9 font-medium"
+                                      onClick={() => {
+                                        setAdjustRawMaterial(row);
+                                        setRawMaterialAdjustType("used");
+                                        setShowRawMaterialAdjust(true);
+                                      }}
+                                    >
+                                      <Minus className="h-4 w-4 mr-1.5" />
+                                      Used
+                                    </Button>
+                                    <Button 
+                                      variant="default" 
+                                      size="sm" 
+                                      className="flex-1 h-9 font-medium"
+                                      onClick={() => {
+                                        setAdjustRawMaterial(row);
+                                        setRawMaterialAdjustType("remaining");
+                                        setShowRawMaterialAdjust(true);
+                                      }}
+                                    >
+                                      <Plus className="h-4 w-4 mr-1.5" />
+                                      Remaining
+                                    </Button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {filteredRawMaterials.length === 0 && (
+                        <div className="text-center py-12 text-muted-foreground">
+                          No raw materials found. Add raw materials in the Purchases section.
+                        </div>
+                      )}
+                    </div>
+                ) : (
+                    /* Mobile: DataTable for Raw Materials */
+                    <DataTable 
+                        data={filteredRawMaterials || []} 
+                        columns={[
+                          { header: "ID", accessor: "display_id", className: "w-[80px] font-mono text-xs" },
+                          { header: "Material", accessor: "name", className: "font-medium" },
+                          { header: "Category", accessor: "category" },
+                          { 
+                              header: "Stock", 
+                              accessor: (row: any) => (
+                                  <div className={`font-bold ${row.warehouse_quantity < 0 ? "text-red-500" : row.warehouse_quantity === 0 ? "text-slate-400" : "text-green-600"}`}>
+                                      {row.warehouse_quantity} <span className="text-xs font-normal text-slate-500">{row.unit}</span>
+                                  </div>
+                              ) 
+                          },
+                          {
+                              header: "Action",
+                              accessor: (row: any) => canEdit && (
+                                <div className="flex gap-1">
+                                  <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => {
+                                      setAdjustRawMaterial(row);
+                                      setRawMaterialAdjustType("used");
+                                      setShowRawMaterialAdjust(true);
+                                  }}>
+                                      Used
+                                  </Button>
+                                  <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => {
+                                      setAdjustRawMaterial(row);
+                                      setRawMaterialAdjustType("remaining");
+                                      setShowRawMaterialAdjust(true);
+                                  }}>
+                                      Count
+                                  </Button>
+                                </div>
+                              )
+                          }
+                        ]} 
+                        searchKey="name"
+                        searchPlaceholder="Search raw materials..."
+                    />
+                )}
             </TabsContent>
         </Tabs>
 
@@ -410,10 +772,81 @@ const Inventory = () => {
                 </form>
             </DialogContent>
         </Dialog>
+
+        {/* Raw Material Adjustment Dialog */}
+        <Dialog open={showRawMaterialAdjust} onOpenChange={setShowRawMaterialAdjust}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>
+                        {rawMaterialAdjustType === "used" ? "Record Usage" : "Physical Count"} - {adjustRawMaterial?.name}
+                    </DialogTitle>
+                    <DialogDescription>
+                        {rawMaterialAdjustType === "used" 
+                            ? `Record how much was consumed. Current stock: ${adjustRawMaterial?.warehouse_quantity || 0} ${adjustRawMaterial?.unit}`
+                            : `Enter the actual remaining quantity. Current stock: ${adjustRawMaterial?.warehouse_quantity || 0} ${adjustRawMaterial?.unit}`
+                        }
+                    </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleRawMaterialAdjust} className="space-y-4">
+                    <div className="space-y-2">
+                        <Label>Adjustment Type</Label>
+                        <Select value={rawMaterialAdjustType} onValueChange={(v) => setRawMaterialAdjustType(v as RawMaterialAdjustType)}>
+                            <SelectTrigger>
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {Object.entries(RAW_MATERIAL_ADJUST_TYPES).map(([k, v]) => (
+                                    <SelectItem key={k} value={k}>{v}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label>
+                            {rawMaterialAdjustType === "used" ? "Quantity Used" : "Remaining Quantity"} ({adjustRawMaterial?.unit})
+                        </Label>
+                        <Input 
+                            type="number" 
+                            step="0.01"
+                            min="0"
+                            placeholder="0.00" 
+                            value={rawMaterialQty}
+                            onChange={(e) => setRawMaterialQty(e.target.value)}
+                            required
+                        />
+                        <p className="text-xs text-muted-foreground">
+                            {rawMaterialAdjustType === "used" 
+                                ? "This amount will be deducted from stock."
+                                : "Stock will be set to this value. Difference = consumption."
+                            }
+                        </p>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label>Reason / Note (optional)</Label>
+                        <Textarea 
+                            value={rawMaterialReason}
+                            onChange={(e) => setRawMaterialReason(e.target.value)}
+                            placeholder={rawMaterialAdjustType === "used" 
+                                ? "e.g. Used for batch #123, Daily production"
+                                : "e.g. Physical count, Stock audit"
+                            }
+                        />
+                    </div>
+
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setShowRawMaterialAdjust(false)}>Cancel</Button>
+                        <Button type="submit" disabled={saving}>
+                            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            {rawMaterialAdjustType === "used" ? "Record Usage" : "Update Count"}
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
     </div>
   );
 };
 
 export default Inventory;
-
-

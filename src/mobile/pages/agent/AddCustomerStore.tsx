@@ -5,9 +5,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { useRouteAccess } from "@/hooks/useRouteAccess";
-import { addToQueue } from "@/lib/offlineQueue";
+import { addToQueue, queueFileUpload, fileToArrayBuffer } from "@/lib/offlineQueue";
 import { getCurrentPosition, takePhoto } from "@/lib/capacitorUtils";
-import { ArrowLeft, Check, ChevronRight, Loader2, MapPin, Store, User, UserPlus, Camera } from "lucide-react";
+import { ArrowLeft, Check, ChevronRight, Loader2, MapPin, Store, User, UserPlus, Camera, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,25 +36,70 @@ export default function AddCustomerStore({ onClose }: { onClose: () => void }) {
   // const [custPhoto, setCustPhoto] = useState("");
   const [custPhoto, setCustPhoto] = useState("");
   const [storePhoto, setStorePhoto] = useState("");
+  // Track pending offline photos (stored as data URLs until sync)
+  const [pendingCustPhoto, setPendingCustPhoto] = useState<string | null>(null);
+  const [pendingStorePhoto, setPendingStorePhoto] = useState<string | null>(null);
 
   const handleTakePhoto = async (target: "customer" | "store") => {
     const dataUrl = await takePhoto();
     if (!dataUrl) return;
 
-    // Upload to Supabase
+    const ext = "jpg";
+    const path = `${target}s/${crypto.randomUUID()}.${ext}`; // customers/uuid.jpg or stores/uuid.jpg
+
+    // If offline, queue for later upload
+    if (!isOnline) {
+      try {
+        const res = await fetch(dataUrl);
+        const blob = await res.blob();
+        const fileData = await fileToArrayBuffer(blob);
+        
+        await queueFileUpload({
+          id: `entity-photo-${target}-${Date.now()}`,
+          type: target === "customer" ? "entity_photo" : "store_photo",
+          fileName: `${target}_${Date.now()}.jpg`,
+          bucket: "entity-photos",
+          path,
+          fileData,
+          contentType: "image/jpeg",
+          metadata: { target },
+        });
+        
+        // Store locally to show preview (data URL)
+        if (target === "customer") {
+          setPendingCustPhoto(dataUrl);
+          setCustPhoto(path); // Store path for later reference
+        } else {
+          setPendingStorePhoto(dataUrl);
+          setStorePhoto(path);
+        }
+        
+        toast.success("Photo saved for upload when online", {
+          icon: <WifiOff className="h-4 w-4" />,
+        });
+      } catch (err: any) {
+        toast.error("Failed to queue photo: " + err.message);
+      }
+      return;
+    }
+
+    // Online: Upload to Supabase immediately
     try {
         const res = await fetch(dataUrl);
         const blob = await res.blob();
-        const ext = "jpg";
-        const path = `${target}s/${crypto.randomUUID()}.${ext}`; // customers/uuid.jpg or stores/uuid.jpg
 
         const { error } = await supabase.storage.from("entity-photos").upload(path, blob);
         if (error) throw error;
 
         const { data: { publicUrl } } = supabase.storage.from("entity-photos").getPublicUrl(path);
         
-        if (target === "customer") setCustPhoto(publicUrl);
-        else setStorePhoto(publicUrl);
+        if (target === "customer") {
+          setCustPhoto(publicUrl);
+          setPendingCustPhoto(null);
+        } else {
+          setStorePhoto(publicUrl);
+          setPendingStorePhoto(null);
+        }
         
         toast.success("Photo uploaded");
     } catch (err: any) {
@@ -152,6 +197,32 @@ export default function AddCustomerStore({ onClose }: { onClose: () => void }) {
     if (mode !== "store" && (!custPhone || custPhone.length < 10)) return toast.error("Valid customer phone required");
 
     setSaving(true);
+
+    // Duplicate check if online
+    if (isOnline && (mode === "store" || mode === "both")) {
+        try {
+            const warnings: string[] = [];
+            const nameTrimmed = storeName.trim();
+            if (nameTrimmed) {
+                const { data: nameMatches } = await supabase.from("stores").select("name").eq("is_active", true).ilike("name", nameTrimmed);
+                if (nameMatches && nameMatches.length > 0) warnings.push(`A store named "${nameTrimmed}" already exists.`);
+            }
+            if (lat && lng) {
+                const { data: closeStores } = await supabase.rpc("check_store_proximity", { p_lat: lat, p_lng: lng, p_radius_m: 50 });
+                if (closeStores && closeStores.length > 0) warnings.push(`There is already a store within 50 meters of this location.`);
+            }
+            if (warnings.length > 0) {
+                const proceed = window.confirm(`WARNING:\n\n${warnings.join('\n')}\n\nDo you still want to create this store?`);
+                if (!proceed) {
+                    setSaving(false);
+                    return;
+                }
+            }
+        } catch (err) {
+            console.error("Dupe check failed", err);
+        }
+    }
+
     try {
       await processSubmission();
 

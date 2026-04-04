@@ -33,7 +33,32 @@ export function calculateSalesForecast(salesTrend: SalesPoint[], rangeDays: stri
   const sumXX = x.reduce((sum, xi) => sum + xi * xi, 0);
   
   // Calculate slope (m) and intercept (b) for y = mx + b
-  const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+  const denominator = n * sumXX - sumX * sumX;
+  
+  // Guard against division by zero (happens when all X values are identical)
+  if (denominator === 0 || !isFinite(denominator)) {
+    // Use average as a flat forecast when no trend can be calculated
+    const avgAmount = sumY / n;
+    const history = salesTrend.map((s, i) => ({
+      date: s.date,
+      actual: s.amount,
+      forecast: Math.round(avgAmount),
+      fullDate: new Date(rangeDays[i]),
+    }));
+    const lastDateStr = rangeDays[rangeDays.length - 1];
+    const nextDays = Array.from({ length: forecastDays }, (_, i) => {
+      const nextDate = addDays(new Date(lastDateStr), i + 1);
+      return {
+        date: format(nextDate, "MM-dd"),
+        actual: null,
+        forecast: Math.round(avgAmount),
+        fullDate: nextDate,
+      };
+    });
+    return [...history, ...nextDays];
+  }
+  
+  const slope = (n * sumXY - sumX * sumY) / denominator;
   const intercept = (sumY - slope * sumX) / n;
 
   // 1. Generate trend line for historical data

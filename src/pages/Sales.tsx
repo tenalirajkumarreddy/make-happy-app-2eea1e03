@@ -10,10 +10,11 @@ import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { addToQueue } from "@/lib/offlineQueue";
 import { resolveCreditLimit } from "@/lib/creditLimit";
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2, Plus, Trash2, Download, IndianRupee, CreditCard, Banknote, Clock, UserCircle, Store as StoreIcon, Package, X, CalendarIcon, Receipt, FileText } from "lucide-react";
+import { Loader2, Plus, Trash2, Download, IndianRupee, CreditCard, Banknote, Clock, UserCircle, Store as StoreIcon, Package, X, CalendarIcon, Receipt, FileText, RotateCcw, ShoppingCart, ChevronRight } from "lucide-react";
 import { QrStoreSelector } from "@/components/shared/QrStoreSelector";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { SaleReceipt } from "@/components/shared/SaleReceipt";
+import { OrderFulfillmentDialog } from "@/components/orders/OrderFulfillmentDialog";
 import { useState, useMemo, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { usePermission } from "@/hooks/usePermission";
@@ -28,6 +29,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import { format } from "date-fns";
 
@@ -60,6 +62,36 @@ interface SaleItem {
 const POS_STORE_ID = "00000000-0000-0000-0000-000000000001";
 const PAGE_SIZE = 100;
 
+// Type for order fulfillment
+interface FulfillOrder {
+  id: string;
+  display_id: string;
+  store_id: string;
+  customer_id: string | null;
+  order_type: "simple" | "detailed";
+  status: string;
+  requirement_note: string | null;
+  order_items?: Array<{
+    id: string;
+    product_id: string;
+    quantity: number;
+    unit_price: number | null;
+    products?: {
+      id: string;
+      name: string;
+      sku: string;
+      base_price: number;
+      image_url?: string;
+    };
+  }>;
+  stores?: {
+    id: string;
+    name: string;
+    store_type_id: string | null;
+    customer_id: string | null;
+  };
+}
+
 const Sales = () => {
   const { user, role } = useAuth();
   const navigate = useNavigate();
@@ -71,6 +103,8 @@ const Sales = () => {
   const [saving, setSaving] = useState(false);
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
   const [receiptSaleId, setReceiptSaleId] = useState<string | null>(null);
+  const [fulfillOrder, setFulfillOrder] = useState<FulfillOrder | null>(null);
+  const [loadingOrderId, setLoadingOrderId] = useState<string | null>(null);
 
   // POS users are locked to the POS store
   const isAdmin = role === "super_admin" || role === "manager";
@@ -85,8 +119,7 @@ const Sales = () => {
       setShowAdd(true);
       setSearchParams({}, { replace: true });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [searchParams, isPosUser, setSearchParams]);
   const [cashAmount, setCashAmount] = useState("");
   const [upiAmount, setUpiAmount] = useState("");
   const [recordedFor, setRecordedFor] = useState("");
@@ -230,6 +263,25 @@ const Sales = () => {
     enabled: !!storeId && !!selectedStoreTypeId,
   });
 
+  // Fetch pending orders for the selected store (shown in record sale dialog)
+  const { data: pendingOrders, isLoading: loadingPendingOrders } = useQuery({
+    queryKey: ["pending-orders-for-store", storeId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("orders")
+        .select(`
+          id, display_id, order_type, requirement_note, created_at,
+          order_items(id, product_id, quantity, unit_price, products(id, name, sku))
+        `)
+        .eq("store_id", storeId)
+        .eq("status", "pending")
+        .order("created_at", { ascending: false })
+        .limit(10);
+      return data || [];
+    },
+    enabled: !!storeId && showAdd,
+  });
+
   // Fetch sale items for the selected sale detail
   const { data: saleItems, isLoading: loadingSaleItems } = useQuery({
     queryKey: ["sale-items", selectedSaleId],
@@ -292,6 +344,31 @@ const Sales = () => {
   const handleStoreChange = (newStoreId: string) => {
     setStoreId(newStoreId);
     setItems([{ product_id: "", quantity: 1, unit_price: 0 }]);
+  };
+
+  // Open fulfillment dialog for a pending order
+  const handleFulfillOrder = async (orderId: string) => {
+    setLoadingOrderId(orderId);
+    try {
+      const { data: orderData, error } = await supabase
+        .from("orders")
+        .select(`
+          *,
+          stores(id, name, store_type_id, customer_id),
+          order_items(id, product_id, quantity, unit_price, products(id, name, sku, base_price, image_url))
+        `)
+        .eq("id", orderId)
+        .single();
+
+      if (error) throw error;
+      setShowAdd(false); // Close the record sale dialog
+      setFulfillOrder(orderData as unknown as FulfillOrder);
+    } catch (error) {
+      console.error("Error loading order:", error);
+      toast.error("Failed to load order details");
+    } finally {
+      setLoadingOrderId(null);
+    }
   };
 
   const handleAdd = async (e: React.FormEvent) => {
@@ -426,20 +503,25 @@ const Sales = () => {
       toast.success("Sale recorded successfully");
     }
 
-    // Notify admins/managers
+    // Notify admins/managers (fire-and-forget with error handling)
     const storeName = stores?.find((s) => s.id === storeId)?.name || "store";
-    getAdminUserIds().then((ids) => {
-      const others = ids.filter((id) => id !== user!.id);
-      if (others.length > 0) {
-        sendNotificationToMany(others, {
-          title: "New Sale Recorded",
-          message: `Sale ${displayId} of ₹${totalAmount.toLocaleString()} at ${storeName}`,
-          type: "payment",
-          entityType: "sale",
-          entityId: saleRow?.sale_id,
-        });
-      }
-    });
+    getAdminUserIds()
+      .then((ids) => {
+        const others = ids.filter((id) => id !== user!.id);
+        if (others.length > 0) {
+          sendNotificationToMany(others, {
+            title: "New Sale Recorded",
+            message: `Sale ${displayId} of ₹${totalAmount.toLocaleString()} at ${storeName}`,
+            type: "payment",
+            entityType: "sale",
+            entityId: saleRow?.sale_id,
+          });
+        }
+      })
+      .catch((err) => {
+        // Don't block on notification failures
+        console.warn("Failed to notify admins:", err);
+      });
 
     setSaving(false);
     setShowAdd(false);
@@ -532,6 +614,12 @@ const Sales = () => {
         primaryAction={{ label: "Record Sale", onClick: () => setShowAdd(true) }}
         actions={[
           {
+            label: "Returns",
+            icon: RotateCcw,
+            priority: 0,
+            onClick: () => navigate("/sale-returns"),
+          },
+          {
             label: "Export CSV",
             icon: Download,
             priority: 1,
@@ -618,45 +706,35 @@ const Sales = () => {
         emptyMessage="No sales recorded yet."
         onRowClick={(row: any) => setSelectedSaleId(row.id)}
         renderMobileCard={(row: any) => (
-          <div className="rounded-xl border bg-card p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => setSelectedSaleId(row.id)}>
-            <div className="flex items-center justify-between mb-3">
-              <span className="font-mono text-xs text-muted-foreground">{row.display_id}</span>
-              <span className="text-[11px] text-muted-foreground">{format(new Date(row.created_at), "dd MMM yy, hh:mm a")}</span>
+          <div className="rounded-lg border bg-card p-3 cursor-pointer active:bg-muted/30" onClick={() => setSelectedSaleId(row.id)}>
+            {/* Header row: ID + Date */}
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="font-mono text-xs text-primary font-medium">{row.display_id}</span>
+              <span className="text-[10px] text-muted-foreground">{format(new Date(row.created_at), "dd MMM yy, hh:mm a")}</span>
             </div>
-            <div className="mb-3">
+            {/* Store name */}
+            <div className="flex items-center gap-1.5 mb-2">
+              <StoreIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <span className="font-medium text-sm truncate">{row.stores?.name || "—"}</span>
+            </div>
+            {/* Amounts row - inline compact */}
+            <div className="flex items-center gap-3 text-xs">
+              <span className="font-bold text-foreground">₹{Number(row.total_amount).toLocaleString()}</span>
+              <span className="text-muted-foreground">Cash: ₹{Number(row.cash_amount).toLocaleString()}</span>
+              <span className="text-muted-foreground">UPI: ₹{Number(row.upi_amount).toLocaleString()}</span>
+            </div>
+            {/* Footer: Recorder + Outstanding */}
+            <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
               <div className="flex items-center gap-1.5">
-                <StoreIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="font-semibold text-sm text-foreground">{row.stores?.name || "—"}</span>
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-2 mb-3">
-              <div className="rounded-lg bg-muted/50 p-2 text-center">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Total</p>
-                <p className="text-sm font-bold text-foreground">₹{Number(row.total_amount).toLocaleString()}</p>
-              </div>
-              <div className="rounded-lg bg-muted/50 p-2 text-center">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Cash</p>
-                <p className="text-sm font-medium text-foreground">₹{Number(row.cash_amount).toLocaleString()}</p>
-              </div>
-              <div className="rounded-lg bg-muted/50 p-2 text-center">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">UPI</p>
-                <p className="text-sm font-medium text-foreground">₹{Number(row.upi_amount).toLocaleString()}</p>
-              </div>
-            </div>
-            <div className="flex items-center justify-between pt-2 border-t border-border">
-              <div className="flex items-center gap-1.5">
-                <Avatar className="h-5 w-5">
+                <Avatar className="h-4 w-4">
                   <AvatarImage src={getRecorderAvatar(row.recorded_by) || undefined} />
-                  <AvatarFallback className="text-[9px] bg-primary/10 text-primary">{getRecorderName(row.recorded_by).charAt(0)}</AvatarFallback>
+                  <AvatarFallback className="text-[8px] bg-primary/10 text-primary">{getRecorderName(row.recorded_by).charAt(0)}</AvatarFallback>
                 </Avatar>
-                <span className="text-[11px] text-muted-foreground">{getRecorderName(row.recorded_by)}</span>
+                <span className="text-[10px] text-muted-foreground truncate max-w-[100px]">{getRecorderName(row.recorded_by)}</span>
               </div>
-              <div className="text-right">
-                <p className="text-[10px] text-muted-foreground">Outstanding</p>
-                <p className={`text-sm font-semibold ${Number(row.outstanding_amount) > 0 ? "text-destructive" : "text-muted-foreground"}`}>
-                  ₹{Number(row.outstanding_amount).toLocaleString()}
-                </p>
-              </div>
+              {Number(row.outstanding_amount) > 0 && (
+                <span className="text-xs font-semibold text-destructive">Due: ₹{Number(row.outstanding_amount).toLocaleString()}</span>
+              )}
             </div>
           </div>
         )}
@@ -800,6 +878,63 @@ const Sales = () => {
               )}
             </div>
 
+            {/* Pending Orders Section - Show before products to encourage fulfillment */}
+            {storeId && pendingOrders && pendingOrders.length > 0 && (
+              <div className="rounded-lg border-2 border-primary/30 bg-primary/5 p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <ShoppingCart className="h-4 w-4 text-primary" />
+                  <span className="text-sm font-medium">Pending Orders ({pendingOrders.length})</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  This store has pending orders. Click to fulfill an order instead of creating a new sale.
+                </p>
+                <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                  {pendingOrders.map((order: any) => (
+                    <Card 
+                      key={order.id} 
+                      className="cursor-pointer hover:bg-accent/50 transition-colors"
+                      onClick={() => handleFulfillOrder(order.id)}
+                    >
+                      <CardContent className="p-2.5 flex items-center justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            <span className="font-mono text-xs font-medium text-primary">{order.display_id}</span>
+                            <Badge variant="secondary" className="text-[10px] h-4 px-1">
+                              {order.order_type}
+                            </Badge>
+                          </div>
+                          {order.order_type === "detailed" && order.order_items?.length > 0 ? (
+                            <p className="text-[11px] text-muted-foreground truncate">
+                              {order.order_items.slice(0, 2).map((i: any) => i.products?.name || "Item").join(", ")}
+                              {order.order_items.length > 2 && ` +${order.order_items.length - 2} more`}
+                            </p>
+                          ) : order.requirement_note ? (
+                            <p className="text-[11px] text-muted-foreground truncate">{order.requirement_note}</p>
+                          ) : null}
+                          <p className="text-[10px] text-muted-foreground/70">
+                            {format(new Date(order.created_at), "dd MMM, hh:mm a")}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {loadingOrderId === order.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                          ) : (
+                            <>
+                              <span className="text-xs text-primary font-medium">Fulfill</span>
+                              <ChevronRight className="h-4 w-4 text-primary" />
+                            </>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+                <div className="pt-1 border-t border-primary/20">
+                  <p className="text-[11px] text-center text-muted-foreground">— or create a new sale below —</p>
+                </div>
+              </div>
+            )}
+
             {storeId && (
               <div>
                 <div className="flex items-center justify-between mb-2">
@@ -885,6 +1020,18 @@ const Sales = () => {
         saleId={receiptSaleId || ""}
         open={!!receiptSaleId}
         onClose={() => setReceiptSaleId(null)}
+      />
+
+      {/* Order Fulfillment Dialog */}
+      <OrderFulfillmentDialog
+        order={fulfillOrder}
+        open={!!fulfillOrder}
+        onOpenChange={(open) => { if (!open) setFulfillOrder(null); }}
+        onFulfilled={() => {
+          qc.invalidateQueries({ queryKey: ["orders"] });
+          qc.invalidateQueries({ queryKey: ["sales"] });
+          qc.invalidateQueries({ queryKey: ["pending-orders-for-store"] });
+        }}
       />
     </div>
   );

@@ -7,9 +7,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { logActivity } from "@/lib/activityLogger";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2, Plus, Trash2, XCircle, CheckCircle2, Download, X, CalendarIcon } from "lucide-react";
+import { Loader2, Plus, Trash2, XCircle, Package, Download, X, CalendarIcon } from "lucide-react";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { useState, useEffect } from "react";
+import { OrderFulfillmentDialog } from "@/components/orders/OrderFulfillmentDialog";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -29,6 +30,36 @@ import { format } from "date-fns";
 interface OrderItem {
   product_id: string;
   quantity: number;
+  unit_price?: number;
+}
+
+interface FulfillOrder {
+  id: string;
+  display_id: string;
+  store_id: string;
+  customer_id: string | null;
+  order_type: "simple" | "detailed";
+  status: string;
+  requirement_note: string | null;
+  order_items?: Array<{
+    id: string;
+    product_id: string;
+    quantity: number;
+    unit_price: number | null;
+    products?: {
+      id: string;
+      name: string;
+      sku: string;
+      base_price: number;
+      image_url?: string;
+    };
+  }>;
+  stores?: {
+    id: string;
+    name: string;
+    store_type_id: string | null;
+    customer_id: string | null;
+  };
 }
 
 const Orders = () => {
@@ -40,9 +71,8 @@ const Orders = () => {
   const [cancelOrderId, setCancelOrderId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelling, setCancelling] = useState(false);
-  const [deliveringId, setDeliveringId] = useState<string | null>(null);
-  const [confirmDeliverId, setConfirmDeliverId] = useState<string | null>(null);
-  const [delivering, setDelivering] = useState(false);
+  const [fulfillOrder, setFulfillOrder] = useState<FulfillOrder | null>(null);
+  const [loadingOrderDetails, setLoadingOrderDetails] = useState<string | null>(null);
 
   // List filters
   const today = new Date().toISOString().split("T")[0];
@@ -99,7 +129,7 @@ const Orders = () => {
   const { data: stores } = useQuery({
     queryKey: ["stores-for-order", customerId],
     queryFn: async () => {
-      let q = supabase.from("stores").select("id, name, display_id").eq("is_active", true);
+      let q = supabase.from("stores").select("id, name, display_id, store_type_id, customer_id").eq("is_active", true);
       if (customerId) q = q.eq("customer_id", customerId);
       const { data } = await q;
       return data || [];
@@ -110,10 +140,40 @@ const Orders = () => {
   const { data: products } = useQuery({
     queryKey: ["products"],
     queryFn: async () => {
-      const { data } = await supabase.from("products").select("id, name, sku").eq("is_active", true);
+      const { data } = await supabase.from("products").select("id, name, sku, base_price, image_url").eq("is_active", true);
       return data || [];
     },
   });
+
+  // Load store pricing data for order creation
+  const { data: storePricing } = useQuery({
+    queryKey: ["store-pricing", storeId],
+    queryFn: async () => {
+      const { data } = await supabase.from("store_pricing").select("product_id, custom_price").eq("store_id", storeId);
+      return new Map((data || []).map(sp => [sp.product_id, sp.custom_price]));
+    },
+    enabled: !!storeId,
+  });
+
+  const { data: storeTypePricing } = useQuery({
+    queryKey: ["store-type-pricing", storeId],
+    queryFn: async () => {
+      const store = stores?.find(s => s.id === storeId);
+      if (!store?.store_type_id) return new Map<string, number>();
+      const { data } = await supabase.from("store_type_pricing").select("product_id, price").eq("store_type_id", store.store_type_id);
+      return new Map((data || []).map(tp => [tp.product_id, tp.price]));
+    },
+    enabled: !!storeId && !!stores,
+  });
+
+  // Get price for product using hierarchy: store > store_type > base
+  const getProductPrice = (productId: string): number => {
+    const product = products?.find(p => p.id === productId);
+    if (!product) return 0;
+    if (storePricing?.has(productId)) return storePricing.get(productId)!;
+    if (storeTypePricing?.has(productId)) return storeTypePricing.get(productId)!;
+    return product.base_price;
+  };
 
   const addItem = () => setOrderItems([...orderItems, { product_id: "", quantity: 1 }]);
   const removeItem = (idx: number) => setOrderItems(orderItems.filter((_, i) => i !== idx));
@@ -148,7 +208,12 @@ const Orders = () => {
       const validItems = orderItems.filter((i) => i.product_id);
       if (validItems.length > 0) {
         await supabase.from("order_items").insert(
-          validItems.map((i) => ({ order_id: order.id, product_id: i.product_id, quantity: i.quantity }))
+          validItems.map((i) => ({ 
+            order_id: order.id, 
+            product_id: i.product_id, 
+            quantity: i.quantity,
+            unit_price: getProductPrice(i.product_id)
+          }))
         );
       }
     }
@@ -177,20 +242,30 @@ const Orders = () => {
     qc.invalidateQueries({ queryKey: ["orders"] });
   };
 
-  const handleMarkDelivered = async (orderId: string) => {
-    setDelivering(true);
-    const { error } = await supabase
-      .from("orders")
-      .update({ status: "delivered", delivered_at: new Date().toISOString() })
-      .eq("id", orderId)
-      .eq("status", "pending");
-    setDelivering(false);
-    if (error) { toast.error(error.message); return; }
-    const order = orders?.find((o) => o.id === orderId);
-    logActivity(user!.id, "Marked order delivered", "order", order?.display_id || "", orderId);
-    toast.success("Order marked as delivered");
-    setConfirmDeliverId(null);
-    qc.invalidateQueries({ queryKey: ["orders"] });
+  // Open fulfillment dialog with full order details
+  const handleOpenFulfillment = async (orderId: string) => {
+    setLoadingOrderDetails(orderId);
+    try {
+      // Fetch order with items and store info for the dialog
+      const { data: orderData, error } = await supabase
+        .from("orders")
+        .select(`
+          *,
+          stores(id, name, store_type_id, customer_id),
+          order_items(id, product_id, quantity, unit_price, products(id, name, sku, base_price, image_url))
+        `)
+        .eq("id", orderId)
+        .single();
+
+      if (error) throw error;
+
+      setFulfillOrder(orderData as unknown as FulfillOrder);
+    } catch (error) {
+      console.error("Error loading order details:", error);
+      toast.error("Failed to load order details");
+    } finally {
+      setLoadingOrderDetails(null);
+    }
   };
 
   const exportCSV = () => {
@@ -204,7 +279,14 @@ const Orders = () => {
       "Note": o.requirement_note || "",
       "Created": new Date(o.created_at).toLocaleString("en-IN"),
     }));
-    const header = Object.keys(rows[0] || {}).join(",");
+    
+    // Handle empty data case
+    if (rows.length === 0) {
+      toast.info("No orders to export");
+      return;
+    }
+    
+    const header = Object.keys(rows[0]).join(",");
     const csv = [header, ...rows.map((r) => Object.values(r).map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -275,9 +357,9 @@ const Orders = () => {
       header: "Actions",
       accessor: (row: any) => row.status === "pending" ? (
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" className="h-7 text-xs text-green-600" onClick={() => setConfirmDeliverId(row.id)} disabled={deliveringId === row.id}>
-            <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-            Deliver
+          <Button variant="ghost" size="sm" className="h-7 text-xs text-green-600" onClick={() => handleOpenFulfillment(row.id)} disabled={loadingOrderDetails === row.id}>
+            {loadingOrderDetails === row.id ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Package className="h-3.5 w-3.5 mr-1" />}
+            Fulfill
           </Button>
           <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive" onClick={() => setCancelOrderId(row.id)}>
             <XCircle className="h-3.5 w-3.5 mr-1" /> Cancel
@@ -353,25 +435,25 @@ const Orders = () => {
         searchPlaceholder="Search by order ID..."
         emptyMessage={statusFilter === "all" ? "No orders created yet." : `No ${statusFilter} orders.`}
         renderMobileCard={(row: any) => (
-          <div className="rounded-xl border bg-card p-4 shadow-sm hover:shadow-md transition-shadow active:bg-muted/30">
+          <div className="rounded-lg border bg-card p-3">
             <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-mono text-xs font-medium text-muted-foreground">{row.display_id}</span>
-                  <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{row.order_type}</Badge>
-                  <Badge variant="outline" className="text-[10px] h-4 px-1.5">{row.source}</Badge>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                  <span className="font-mono text-xs text-primary font-medium">{row.display_id}</span>
+                  <Badge variant="secondary" className="text-xs h-5 px-1.5">{row.order_type}</Badge>
+                  <Badge variant="outline" className="text-xs h-5 px-1.5">{row.source}</Badge>
                 </div>
-                <h3 className="font-semibold text-sm text-foreground truncate mt-0.5">{row.stores?.name || "—"}</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">{row.customers?.name || "—"}</p>
+                <h3 className="font-semibold text-sm text-foreground truncate">{row.stores?.name || "—"}</h3>
+                <p className="text-xs text-muted-foreground truncate">{row.customers?.name || "—"}</p>
               </div>
               <StatusBadge status={row.status === "delivered" ? "active" : row.status as any} label={row.status} />
             </div>
-            <div className="flex items-center justify-between mt-3 gap-2 flex-wrap">
-              <p className="text-xs text-muted-foreground">{new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}</p>
+            <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50 gap-2 flex-wrap">
+              <p className="text-[10px] text-muted-foreground">{new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}</p>
               {row.status === "pending" && (
                 <div className="flex items-center gap-1.5">
-                  <Button variant="outline" size="sm" className="h-7 text-xs text-green-600 border-green-600/40" onClick={(e) => { e.stopPropagation(); setConfirmDeliverId(row.id); }}>
-                    <CheckCircle2 className="h-3 w-3 mr-1" />Deliver
+                  <Button variant="outline" size="sm" className="h-7 text-xs text-green-600 border-green-600/40" onClick={(e) => { e.stopPropagation(); handleOpenFulfillment(row.id); }} disabled={loadingOrderDetails === row.id}>
+                    {loadingOrderDetails === row.id ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Package className="h-3 w-3 mr-1" />}Fulfill
                   </Button>
                   <Button variant="outline" size="sm" className="h-7 text-xs text-destructive border-destructive/40" onClick={(e) => { e.stopPropagation(); setCancelOrderId(row.id); }}>
                     <XCircle className="h-3 w-3 mr-1" />Cancel
@@ -460,24 +542,13 @@ const Orders = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Confirm Delivery Dialog */}
-      <Dialog open={!!confirmDeliverId} onOpenChange={(v) => { if (!v) setConfirmDeliverId(null); }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Mark as Delivered</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Confirm that order <span className="font-mono font-medium text-foreground">{orders?.find((o) => o.id === confirmDeliverId)?.display_id}</span> has been delivered to the store?
-            </p>
-            <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={() => setConfirmDeliverId(null)}>Cancel</Button>
-              <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={() => confirmDeliverId && handleMarkDelivered(confirmDeliverId)} disabled={delivering}>
-                {delivering && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Confirm Delivery
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Order Fulfillment Dialog */}
+      <OrderFulfillmentDialog
+        order={fulfillOrder}
+        open={!!fulfillOrder}
+        onOpenChange={(open) => { if (!open) setFulfillOrder(null); }}
+        onFulfilled={() => qc.invalidateQueries({ queryKey: ["orders"] })}
+      />
 
       {/* Cancel Order Dialog */}
       <Dialog open={!!cancelOrderId} onOpenChange={(v) => { if (!v) { setCancelOrderId(null); setCancelReason(""); } }}>

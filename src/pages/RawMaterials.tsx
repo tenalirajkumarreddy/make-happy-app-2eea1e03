@@ -315,17 +315,17 @@ const RawMaterials = () => {
         searchPlaceholder="Search materials..."
         emptyMessage="No raw materials yet"
         renderMobileCard={(row: RawMaterial) => (
-          <div className="rounded-xl border bg-card p-4 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-start justify-between mb-3">
-              <div className="flex-1">
-                <p className="font-mono text-xs text-muted-foreground mb-1">{row.display_id}</p>
-                <h3 className="font-semibold text-base mb-1">{row.name}</h3>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+          <div className="entity-card-mobile flex-col !items-stretch">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1 min-w-0">
+                <p className="entity-card-subtitle">{row.display_id}</p>
+                <h3 className="font-semibold text-sm truncate">{row.name}</h3>
+                <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
                     {row.category || "Uncategorized"}
                   </span>
                   {row.vendors?.name && (
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-700 dark:text-purple-300">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">
                       {row.vendors.name}
                     </span>
                   )}
@@ -338,28 +338,28 @@ const RawMaterials = () => {
             </div>
             
             {/* Stock and Cost Info */}
-            <div className="grid grid-cols-2 gap-3 mt-3 pt-3 border-t">
+            <div className="flex items-center justify-between mt-2 pt-2 border-t">
               <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Current Stock</p>
-                <p className="font-semibold">{row.current_stock} {row.unit}</p>
+                <p className="entity-card-label">Stock</p>
+                <p className="font-semibold text-sm">{row.current_stock} {row.unit}</p>
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Unit Cost</p>
-                <p className="font-semibold">₹{row.unit_cost?.toLocaleString() || 0}/{row.unit}</p>
+              <div className="text-right">
+                <p className="entity-card-label">Unit Cost</p>
+                <p className="font-semibold text-sm">₹{row.unit_cost?.toLocaleString() || 0}</p>
               </div>
             </div>
 
             {/* Actions */}
-            <div className="flex gap-2 mt-3 pt-3 border-t">
-              <Button variant="outline" size="sm" className="flex-1" onClick={() => { setLinkMaterialId(row.id); setShowLinkVendor(true); }}>
-                <Link2 className="h-4 w-4 mr-1" />
+            <div className="flex gap-2 mt-2 pt-2 border-t">
+              <Button variant="outline" size="sm" className="flex-1 h-8 text-xs" onClick={() => { setLinkMaterialId(row.id); setShowLinkVendor(true); }}>
+                <Link2 className="h-3.5 w-3.5 mr-1" />
                 Link Vendor
               </Button>
-              <Button variant="outline" size="sm" onClick={() => handleEdit(row)}>
-                <Pencil className="h-4 w-4" />
+              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleEdit(row)}>
+                <Pencil className="h-3.5 w-3.5" />
               </Button>
-              <Button variant="outline" size="sm" className="text-destructive" onClick={() => setDeletingId(row.id)}>
-                <Trash2 className="h-4 w-4" />
+              <Button variant="outline" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeletingId(row.id)}>
+                <Trash2 className="h-3.5 w-3.5" />
               </Button>
             </div>
           </div>

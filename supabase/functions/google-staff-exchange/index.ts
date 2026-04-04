@@ -1,6 +1,7 @@
 // @ts-nocheck
 // Google OAuth staff login handler
 // Takes Google auth data and verifies/links staff directory entry by email
+// SECURITY: user_id is extracted from validated JWT, not request body
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -23,13 +24,37 @@ Deno.serve(async (req) => {
       throw new Error("Supabase env secrets are not configured");
     }
 
-    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+    // ─────────────────────────────────────────────────────────────────────────
+    // AUTHENTICATION: Extract user_id from JWT, NOT from request body
+    // ─────────────────────────────────────────────────────────────────────────
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized - missing auth token" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
-    // The request should contain the user_id of the logged-in user (after Google OAuth redirect)
-    const { user_id, email } = await req.json();
+    const token = authHeader.replace("Bearer ", "");
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
     
-    if (!user_id || !email) {
-      throw new Error("Missing user_id or email");
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized - invalid token" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Extract user_id and email from VALIDATED token, not request body
+    const user_id = user.id;
+    const email = user.email;
+
+    if (!email) {
+      return new Response(
+        JSON.stringify({ error: "User email not available in token" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const normalizedEmail = email.toLowerCase().trim();
@@ -194,12 +219,13 @@ Deno.serve(async (req) => {
       }
     );
   } catch (error: any) {
+    console.error("google-staff-exchange error:", error);
     return new Response(
       JSON.stringify({
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: "Internal server error",
       }),
       {
-        status: 400,
+        status: 500,
         headers: {
           ...corsHeaders,
           "Content-Type": "application/json",

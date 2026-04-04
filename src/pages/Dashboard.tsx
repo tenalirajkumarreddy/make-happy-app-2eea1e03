@@ -12,53 +12,94 @@ import {
 } from "recharts";
 import { QuickActionDrawer } from "@/components/agent/QuickActionDrawer";
 import { isNativeApp } from "@/lib/capacitorUtils";
+import { useFixedCostReminders } from "@/hooks/useFixedCostReminders";
 
 const COLORS = ["hsl(217, 91%, 50%)", "hsl(142, 72%, 42%)", "hsl(38, 92%, 50%)", "hsl(280, 65%, 60%)", "hsl(0, 72%, 51%)"];
 
+// Only fetch the most recent days for chart data to avoid unbounded queries
+const CHART_DAYS = 7;
+const MAX_SALES_FOR_CHART = 500;
+
 const Dashboard = () => {
   const { profile } = useAuth();
+  
+  // Check and send fixed cost reminders when dashboard loads
+  useFixedCostReminders();
 
   const { data: stats, isLoading } = useQuery({
     queryKey: ["dashboard-stats"],
     queryFn: async () => {
       const today = new Date().toISOString().split("T")[0];
-      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+      const sevenDaysAgo = new Date(Date.now() - CHART_DAYS * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
 
-      const [salesRes, txnRes, customersRes, storesRes, ordersRes, todaySalesRes] = await Promise.all([
-        supabase.from("sales").select("total_amount, cash_amount, upi_amount, created_at, stores(store_type_id, store_types(name))").gte("created_at", thirtyDaysAgo + "T00:00:00").limit(2000),
-        supabase.from("transactions").select("total_amount, cash_amount, upi_amount").gte("created_at", thirtyDaysAgo + "T00:00:00").limit(2000),
-        supabase.from("customers").select("*", { count: "exact", head: true }).eq("is_active", true),
-        supabase.from("stores").select("id, outstanding").eq("is_active", true).limit(1000),
-        supabase.from("orders").select("id, status, display_id, stores(name), created_at").eq("status", "pending").order("created_at", { ascending: false }).limit(5),
-        supabase.from("sales").select("total_amount, cash_amount, upi_amount").gte("created_at", today + "T00:00:00").limit(500),
+      // Optimize: Separate queries for different purposes
+      // 1. Today's sales aggregates (small dataset)
+      // 2. Last 7 days for charts (bounded)
+      // 3. Counts only where possible (head: true)
+      const [
+        todaySalesRes,
+        recentSalesRes,
+        customersRes,
+        storesRes,
+        ordersRes,
+      ] = await Promise.all([
+        // Today's sales - usually small, get full data for precise totals
+        supabase.from("sales")
+          .select("total_amount, cash_amount, upi_amount")
+          .gte("created_at", today + "T00:00:00")
+          .limit(500),
+        // Recent sales for charts - bounded to 7 days and limited rows
+        supabase.from("sales")
+          .select("total_amount, created_at, stores(store_type_id, store_types(name))")
+          .gte("created_at", sevenDaysAgo + "T00:00:00")
+          .order("created_at", { ascending: false })
+          .limit(MAX_SALES_FOR_CHART),
+        // Customer count only
+        supabase.from("customers")
+          .select("*", { count: "exact", head: true })
+          .eq("is_active", true),
+        // Stores with outstanding - bounded and selected columns
+        supabase.from("stores")
+          .select("id, outstanding")
+          .eq("is_active", true)
+          .limit(500),
+        // Pending orders - just a few for display
+        supabase.from("orders")
+          .select("id, status, display_id, stores(name), created_at")
+          .eq("status", "pending")
+          .order("created_at", { ascending: false })
+          .limit(5),
       ]);
 
-      const allSales = salesRes.data || [];
       const todaySales = todaySalesRes.data || [];
+      const recentSales = recentSalesRes.data || [];
       const allStores = storesRes.data || [];
 
+      // Calculate today's totals
       const todayTotal = todaySales.reduce((s, r) => s + Number(r.total_amount), 0);
       const todayCash = todaySales.reduce((s, r) => s + Number(r.cash_amount), 0);
       const todayUpi = todaySales.reduce((s, r) => s + Number(r.upi_amount), 0);
+      
+      // Calculate store outstanding totals
       const totalOutstanding = allStores.reduce((s, r) => s + Number(r.outstanding), 0);
       const overdueStores = allStores.filter((s) => Number(s.outstanding) > 0).length;
 
       // Sales by day of week (last 7 days)
       const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-      const last7 = Array.from({ length: 7 }, (_, i) => {
+      const last7 = Array.from({ length: CHART_DAYS }, (_, i) => {
         const d = new Date();
-        d.setDate(d.getDate() - (6 - i));
+        d.setDate(d.getDate() - (CHART_DAYS - 1 - i));
         return d;
       });
       const weeklySales = last7.map((d) => {
         const dateStr = d.toISOString().split("T")[0];
-        const daySales = allSales.filter((s) => s.created_at.startsWith(dateStr));
+        const daySales = recentSales.filter((s) => s.created_at.startsWith(dateStr));
         return { day: dayNames[d.getDay()], sales: daySales.reduce((sum, s) => sum + Number(s.total_amount), 0) };
       });
 
-      // Sales by store type
+      // Sales by store type (from recent sales only)
       const storeTypeSales: Record<string, number> = {};
-      allSales.forEach((s) => {
+      recentSales.forEach((s) => {
         const typeName = (s.stores as any)?.store_types?.name || "Other";
         storeTypeSales[typeName] = (storeTypeSales[typeName] || 0) + Number(s.total_amount);
       });

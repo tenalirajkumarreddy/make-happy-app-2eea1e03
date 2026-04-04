@@ -2,9 +2,11 @@ import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import { queueFileUpload, fileToArrayBuffer, PendingFileUpload } from "@/lib/offlineQueue";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Upload, CheckCircle2, Clock, XCircle, Camera, Image as ImageIcon, FileText } from "lucide-react";
+import { Loader2, Upload, CheckCircle2, Clock, XCircle, Camera, Image as ImageIcon, FileText, WifiOff } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -38,6 +40,7 @@ function StatusBadge({ status }: { status: string | null }) {
 export function CustomerKyc() {
   const { user } = useAuth();
   const qc = useQueryClient();
+  const { isOnline } = useOnlineStatus();
   const [uploading, setUploading] = useState<KycField | null>(null);
   const fileRefs = {
     kyc_selfie_url: useRef<HTMLInputElement>(null),
@@ -64,10 +67,40 @@ export function CustomerKyc() {
     const allowed = ["image/jpeg", "image/png", "image/heic", "image/webp"];
     if (!allowed.includes(file.type)) { toast.error("Only JPG, PNG, HEIC or WebP images allowed."); return; }
 
-    setUploading(field);
     const ext = file.name.split(".").pop() || "jpg";
     const path = `${customer.id}/${field}_${Date.now()}.${ext}`;
 
+    // If offline, queue the file upload for later
+    if (!isOnline) {
+      try {
+        setUploading(field);
+        const fileData = await fileToArrayBuffer(file);
+        await queueFileUpload({
+          id: `kyc-${customer.id}-${field}-${Date.now()}`,
+          type: "kyc",
+          fileName: file.name,
+          bucket: "kyc-documents",
+          path,
+          fileData,
+          contentType: file.type,
+          metadata: {
+            customerId: customer.id,
+            field,
+          },
+        });
+        setUploading(null);
+        toast.success("Document saved for upload when online", {
+          icon: <WifiOff className="h-4 w-4" />,
+        });
+        return;
+      } catch (err: any) {
+        setUploading(null);
+        toast.error("Failed to queue file: " + err.message);
+        return;
+      }
+    }
+
+    setUploading(field);
     const { error: uploadErr } = await supabase.storage
       .from("kyc-documents")
       .upload(path, file, { upsert: true });

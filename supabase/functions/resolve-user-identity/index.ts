@@ -318,12 +318,13 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
+    console.error("resolve-user-identity error:", error);
     return new Response(
       JSON.stringify({
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: "Internal server error",
       }),
       {
-        status: 400,
+        status: 500,
         headers: {
           ...corsHeaders,
           "Content-Type": "application/json",

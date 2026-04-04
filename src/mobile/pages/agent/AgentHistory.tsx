@@ -28,6 +28,16 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -52,6 +62,7 @@ export function AgentHistory() {
   const [view, setView] = useState<"activity" | "handovers">("activity");
   const [selectedActivityDate, setSelectedActivityDate] = useState<string | null>(null);
   const [handoverOpen, setHandoverOpen] = useState(false);
+  const [showHandoverConfirm, setShowHandoverConfirm] = useState(false);
   const [amount, setAmount] = useState("");
   const [handoverNotes, setHandoverNotes] = useState("");
   const [toUserId, setToUserId] = useState("");
@@ -299,7 +310,17 @@ export function AgentHistory() {
     return format(new Date(`${date}T12:00:00`), "dd MMM yyyy");
   };
 
+  const validateAndConfirmHandover = () => {
+    if (!toUserId || !amount || Number(amount) <= 0) {
+      toast.error("Select a recipient and enter a valid amount");
+      return;
+    }
+    setShowHandoverConfirm(true);
+  };
+
   const handleHandover = async () => {
+    setShowHandoverConfirm(false);
+    
     if (!toUserId || !amount || Number(amount) <= 0) {
       toast.error("Select a recipient and enter a valid amount");
       return;
@@ -696,7 +717,7 @@ export function AgentHistory() {
                     ? "bg-blue-400 text-white cursor-not-allowed"
                     : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-sm active:scale-[0.98]"
                 )}
-                onClick={handleHandover}
+                onClick={validateAndConfirmHandover}
                 disabled={submitting}
               >
                 {submitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <><Send className="h-4 w-4" />Submit Handover</>}
@@ -705,6 +726,48 @@ export function AgentHistory() {
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* Handover Confirmation Dialog */}
+      <AlertDialog open={showHandoverConfirm} onOpenChange={setShowHandoverConfirm}>
+        <AlertDialogContent className="max-w-sm mx-4">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Handover</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p className="text-amber-600 dark:text-amber-400 font-medium">
+                  ⚠️ Please verify the amount before submitting!
+                </p>
+                <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-3 text-sm space-y-2">
+                  <div className="flex justify-between">
+                    <span>Amount:</span>
+                    <span className="font-bold text-lg text-blue-600">₹{Number(amount || 0).toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>To:</span>
+                    <span className="font-medium">
+                      {managerStaff?.find(s => s.user_id === toUserId)?.full_name || "Staff"}
+                    </span>
+                  </div>
+                  {handoverNotes && (
+                    <div className="border-t pt-2 mt-2">
+                      <span className="text-xs text-slate-500">Notes: {handoverNotes}</span>
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500 mt-2">
+                  This action cannot be undone. The recipient will need to confirm receipt.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleHandover} disabled={submitting}>
+              {submitting ? "Submitting..." : "Confirm Handover"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

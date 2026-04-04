@@ -50,6 +50,7 @@ const PERM_HEADERS: { key: PermissionKey; label: string }[] = [
   { key: "opening_balance", label: "Opening Balance" },
   { key: "finalizer", label: "Finalizer" },
   { key: "see_handover_balance", label: "See Balances" },
+  { key: "submit_expenses", label: "Submit Expenses" },
   { key: "view_vendors", label: "View Vendors" },
   { key: "manage_vendors", label: "Manage Vendors" },
   { key: "view_purchases", label: "View Purchases" },

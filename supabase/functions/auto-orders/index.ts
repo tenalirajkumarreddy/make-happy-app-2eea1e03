@@ -15,6 +15,48 @@ Deno.serve(async (req: Request) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
+    // Authenticate the request - require super_admin or system cron
+    const authHeader = req.headers.get("Authorization");
+    const cronSecret = req.headers.get("x-cron-secret");
+    const expectedCronSecret = Deno.env.get("CRON_SECRET");
+
+    // Allow if valid cron secret provided (for scheduled invocations)
+    const isValidCron = cronSecret && expectedCronSecret && cronSecret === expectedCronSecret;
+
+    if (!isValidCron) {
+      // Otherwise require authenticated super_admin
+      if (!authHeader) {
+        return new Response(
+          JSON.stringify({ error: "Missing authorization" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const token = authHeader.replace("Bearer ", "");
+      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+      
+      if (authError || !user) {
+        return new Response(
+          JSON.stringify({ error: "Invalid token" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Check if user is super_admin
+      const { data: roleData } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .single();
+
+      if (roleData?.role !== "super_admin") {
+        return new Response(
+          JSON.stringify({ error: "Forbidden: super_admin required" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     // Get store types with auto_order_enabled
     const { data: autoTypes, error: typesErr } = await supabase
       .from("store_types")

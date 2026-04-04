@@ -238,8 +238,7 @@ serve(async (req) => {
 
       return new Response(
         JSON.stringify({
-          error: 'Failed to create authentication session',
-          details: authError instanceof Error ? authError.message : 'Unknown auth error'
+          error: 'Failed to create authentication session'
         }),
         {
           status: 500,
@@ -253,8 +252,7 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({
-        error: 'Internal server error',
-        details: error instanceof Error ? error.message : 'Unknown error'
+        error: 'Internal server error'
       }),
       {
         status: 500,

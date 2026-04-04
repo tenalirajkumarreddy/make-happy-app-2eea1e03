@@ -22,6 +22,7 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
   store_visits: ["session-visits", "store-visits"],
   handovers: ["handovers", "dashboard", "agent-dashboard"],
   handover_snapshots: ["handover-snapshots"],
+  expense_claims: ["expense-claims", "handovers", "dashboard"],
   customers: ["customers", "dashboard", "customer-detail"],
   products: ["products", "products-active"],
   routes: ["routes", "routes-list-active"],
@@ -63,6 +64,10 @@ export function useRealtimeSync() {
               const sender = payload.new?.user_id ?? payload.old?.user_id;
               const receiver = payload.new?.handed_to ?? payload.old?.handed_to;
               if (sender !== user?.id && receiver !== user?.id) return;
+            }
+            if (table === "expense_claims") {
+              const claimOwner = payload.new?.user_id ?? payload.old?.user_id;
+              if (claimOwner && claimOwner !== user?.id) return;
             }
           }
           const keys = TABLE_QUERY_MAP[table] || [];

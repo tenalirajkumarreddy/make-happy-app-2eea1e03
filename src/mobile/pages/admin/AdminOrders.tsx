@@ -1,9 +1,13 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Search, X, Loader2, ClipboardList, Clock, CheckCircle2, Truck, XCircle } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Search, X, ClipboardList, Clock, CheckCircle2, Truck, XCircle, Package, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
+import { toast } from "sonner";
+import { MobileListSkeleton } from "@/components/shared/MobileListSkeleton";
+import { OrderFulfillmentDialog } from "@/components/orders/OrderFulfillmentDialog";
+import { Button } from "@/components/ui/button";
 
 const STATUS_CONFIG: Record<string, { color: string; icon: React.ElementType }> = {
   pending: { color: "amber", icon: Clock },
@@ -12,9 +16,42 @@ const STATUS_CONFIG: Record<string, { color: string; icon: React.ElementType }> 
   cancelled: { color: "red", icon: XCircle },
 };
 
+// Type for order fulfillment
+interface FulfillOrder {
+  id: string;
+  display_id: string;
+  store_id: string;
+  customer_id: string | null;
+  order_type: "simple" | "detailed";
+  status: string;
+  requirement_note: string | null;
+  order_items?: Array<{
+    id: string;
+    product_id: string;
+    quantity: number;
+    unit_price: number | null;
+    products?: {
+      id: string;
+      name: string;
+      sku: string;
+      base_price: number;
+      image_url?: string;
+    };
+  }>;
+  stores?: {
+    id: string;
+    name: string;
+    store_type_id: string | null;
+    customer_id: string | null;
+  };
+}
+
 export function AdminOrders() {
+  const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [fulfillOrder, setFulfillOrder] = useState<FulfillOrder | null>(null);
+  const [loadingOrderId, setLoadingOrderId] = useState<string | null>(null);
 
   const { data: orders, isLoading } = useQuery({
     queryKey: ["admin-mobile-orders"],
@@ -45,6 +82,29 @@ export function AdminOrders() {
       o.customers?.name?.toLowerCase().includes(q)
     );
   });
+
+  // Open fulfillment dialog for an order
+  const handleOpenFulfillment = async (orderId: string) => {
+    setLoadingOrderId(orderId);
+    try {
+      const { data: orderData, error } = await supabase
+        .from("orders")
+        .select(`
+          *,
+          stores(id, name, store_type_id, customer_id),
+          order_items(id, product_id, quantity, unit_price, products(id, name, sku, base_price, image_url))
+        `)
+        .eq("id", orderId)
+        .single();
+
+      if (error) throw error;
+      setFulfillOrder(orderData as unknown as FulfillOrder);
+    } catch (error) {
+      toast.error("Failed to load order details");
+    } finally {
+      setLoadingOrderId(null);
+    }
+  };
 
   return (
     <div className="pb-8 bg-slate-50 dark:bg-[#0f1115] min-h-full">
@@ -125,9 +185,7 @@ export function AdminOrders() {
         </div>
 
         {isLoading ? (
-          <div className="flex justify-center py-10">
-            <Loader2 className="h-6 w-6 animate-spin text-orange-500" />
-          </div>
+          <MobileListSkeleton items={6} showStats={false} titleWidth="w-40" />
         ) : filtered.length === 0 ? (
           <div className="bg-white dark:bg-[#1a1d24] rounded-2xl py-12 text-center shadow-sm">
             <div className="h-14 w-14 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -153,7 +211,7 @@ export function AdminOrders() {
               return (
                 <div 
                   key={order.id} 
-                  className="bg-white dark:bg-[#1a1d24] rounded-2xl shadow-sm p-4 active:scale-[0.98] transition-all cursor-pointer border border-transparent hover:border-slate-100 dark:hover:border-slate-800"
+                  className="bg-white dark:bg-[#1a1d24] rounded-2xl shadow-sm p-4 active:scale-[0.98] transition-all border border-transparent hover:border-slate-100 dark:hover:border-slate-800"
                 >
                   <div className="flex justify-between items-start mb-2">
                     <div className="flex-1 min-w-0 pr-3">
@@ -186,7 +244,22 @@ export function AdminOrders() {
                       {format(new Date(order.created_at), "dd MMM, hh:mm a")}
                     </div>
                     
-                    <div className="text-right shrink-0">
+                    <div className="flex items-center gap-2 shrink-0">
+                      {order.status === "pending" && (
+                        <Button 
+                          size="sm" 
+                          className="h-7 text-xs rounded-lg"
+                          onClick={() => handleOpenFulfillment(order.id)}
+                          disabled={loadingOrderId === order.id}
+                        >
+                          {loadingOrderId === order.id ? (
+                            <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                          ) : (
+                            <Package className="h-3.5 w-3.5 mr-1" />
+                          )}
+                          Fulfill
+                        </Button>
+                      )}
                       <span className="text-[10px] font-bold text-slate-400 tracking-widest uppercase bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
                         {order.display_id}
                       </span>
@@ -198,6 +271,18 @@ export function AdminOrders() {
           </div>
         )}
       </div>
+
+      {/* Order Fulfillment Dialog */}
+      <OrderFulfillmentDialog
+        order={fulfillOrder}
+        open={!!fulfillOrder}
+        onOpenChange={(open) => { if (!open) setFulfillOrder(null); }}
+        onFulfilled={() => {
+          qc.invalidateQueries({ queryKey: ["admin-mobile-orders"] });
+          qc.invalidateQueries({ queryKey: ["orders"] });
+          qc.invalidateQueries({ queryKey: ["sales"] });
+        }}
+      />
     </div>
   );
 }

@@ -6,6 +6,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { Loader2, Printer, Share2 } from "lucide-react";
 import { toast } from "sonner";
 
+// Simple HTML escape function to prevent XSS
+const escapeHtml = (str: string): string => {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+};
+
 interface SaleReceiptProps {
   saleId: string;
   open: boolean;
@@ -47,9 +54,12 @@ export const SaleReceipt = ({ saleId, open, onClose }: SaleReceiptProps) => {
     },
   });
 
+  // Calculate amounts from sale data (since sales table uses cash_amount, upi_amount, outstanding_amount)
+  const amountPaid = Number(sale?.cash_amount || 0) + Number(sale?.upi_amount || 0);
+  const outstandingAmount = Number(sale?.outstanding_amount || 0);
+
   const handlePrint = () => {
-    const content = printRef.current;
-    if (!content) return;
+    if (!sale) return;
 
     const printWindow = window.open("", "_blank");
     if (!printWindow) {
@@ -57,11 +67,24 @@ export const SaleReceipt = ({ saleId, open, onClose }: SaleReceiptProps) => {
       return;
     }
 
-    printWindow.document.write(`
+    // Generate safe HTML content using escaped values
+    const itemsHtml = (sale.sale_items || []).map((item: any) => `
+      <div style="margin: 8px 0;">
+        <div style="display: flex; justify-content: space-between;">
+          <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 8px;">${escapeHtml(item.products?.name || "Unknown")}</span>
+          <span style="font-weight: 600;">₹${Number(item.total_amount).toLocaleString()}</span>
+        </div>
+        <div style="font-size: 10px; color: #666;">
+          ${item.quantity} x ₹${Number(item.unit_price).toLocaleString()}
+        </div>
+      </div>
+    `).join("");
+
+    const safeContent = `
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Receipt ${sale?.display_id}</title>
+          <title>Receipt ${escapeHtml(sale.display_id || "")}</title>
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body { 
@@ -71,21 +94,78 @@ export const SaleReceipt = ({ saleId, open, onClose }: SaleReceiptProps) => {
               max-width: 80mm;
             }
             .center { text-align: center; }
-            .right { text-align: right; }
+            .divider { border-top: 1px dashed #000; margin: 12px 0; }
+            .row { display: flex; justify-content: space-between; margin: 4px 0; }
             .bold { font-weight: bold; }
-            .divider { border-top: 1px dashed #000; margin: 8px 0; }
-            .item-row { display: flex; justify-content: space-between; margin: 4px 0; }
-            .total-row { display: flex; justify-content: space-between; font-weight: bold; margin-top: 8px; }
             h1 { font-size: 16px; margin-bottom: 4px; }
-            h2 { font-size: 14px; margin-bottom: 8px; }
             .small { font-size: 10px; color: #666; }
           </style>
         </head>
         <body>
-          ${content.innerHTML}
+          <div class="center">
+            <h1>${escapeHtml(settings.business_name || "BizManager")}</h1>
+            ${settings.business_address ? `<p class="small">${escapeHtml(settings.business_address)}</p>` : ""}
+            ${settings.business_phone ? `<p class="small">Tel: ${escapeHtml(settings.business_phone)}</p>` : ""}
+            ${settings.business_gstin ? `<p class="small">GSTIN: ${escapeHtml(settings.business_gstin)}</p>` : ""}
+          </div>
+          
+          <div class="divider"></div>
+          
+          <div>
+            <div class="row">
+              <span>Receipt No:</span>
+              <span class="bold">${escapeHtml(sale.display_id || "")}</span>
+            </div>
+            <div class="row">
+              <span>Date:</span>
+              <span>${new Date(sale.created_at).toLocaleDateString("en-IN", {
+                day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit"
+              })}</span>
+            </div>
+            ${sale.customers ? `<div class="row"><span>Customer:</span><span>${escapeHtml(sale.customers.name || "")}</span></div>` : ""}
+            ${sale.stores?.name ? `<div class="row"><span>Store:</span><span>${escapeHtml(sale.stores.name)}</span></div>` : ""}
+          </div>
+          
+          <div class="divider"></div>
+          
+          <div>
+            <div class="row bold">
+              <span>Item</span>
+              <span>Amount</span>
+            </div>
+            ${itemsHtml}
+          </div>
+          
+          <div class="divider"></div>
+          
+          <div>
+            <div class="row bold" style="font-size: 14px; padding-top: 4px; border-top: 1px solid #000;">
+              <span>TOTAL:</span>
+              <span>₹${Number(sale.total_amount).toLocaleString()}</span>
+            </div>
+            <div class="row">
+              <span>Cash:</span>
+              <span>₹${Number(sale.cash_amount || 0).toLocaleString()}</span>
+            </div>
+            <div class="row">
+              <span>UPI:</span>
+              <span>₹${Number(sale.upi_amount || 0).toLocaleString()}</span>
+            </div>
+            ${outstandingAmount > 0 ? `<div class="row bold" style="color: #c00;"><span>Balance Due:</span><span>₹${outstandingAmount.toLocaleString()}</span></div>` : ""}
+          </div>
+          
+          <div class="divider"></div>
+          
+          <div class="center">
+            <p class="bold">Thank you for your business!</p>
+            ${sale.profiles?.full_name ? `<p class="small">Served by: ${escapeHtml(sale.profiles.full_name)}</p>` : ""}
+            <p class="small" style="margin-top: 8px;">This is a computer generated receipt</p>
+          </div>
         </body>
       </html>
-    `);
+    `;
+
+    printWindow.document.write(safeContent);
     printWindow.document.close();
     printWindow.print();
     printWindow.close();
@@ -96,7 +176,7 @@ export const SaleReceipt = ({ saleId, open, onClose }: SaleReceiptProps) => {
 
     const receiptText = `
 Receipt: ${sale.display_id}
-Date: ${new Date(sale.sale_date).toLocaleDateString("en-IN")}
+Date: ${new Date(sale.created_at).toLocaleDateString("en-IN")}
 Customer: ${sale.customers?.name || "Walk-in"}
 ${sale.stores?.name ? `Store: ${sale.stores.name}` : ""}
 
@@ -106,8 +186,8 @@ ${sale.sale_items?.map((item: any) =>
 ).join("\n")}
 
 Total: ₹${Number(sale.total_amount).toLocaleString()}
-Paid: ₹${Number(sale.amount_collected || 0).toLocaleString()}
-${Number(sale.outstanding) > 0 ? `Due: ₹${Number(sale.outstanding).toLocaleString()}` : ""}
+Paid: ₹${amountPaid.toLocaleString()}
+${outstandingAmount > 0 ? `Due: ₹${outstandingAmount.toLocaleString()}` : ""}
 
 Thank you for your business!
 ${settings.business_name || ""}
@@ -175,7 +255,7 @@ ${settings.business_name || ""}
               </div>
               <div className="flex justify-between">
                 <span>Date:</span>
-                <span>{new Date(sale.sale_date).toLocaleDateString("en-IN", {
+                <span>{new Date(sale.created_at).toLocaleDateString("en-IN", {
                   day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit"
                 })}</span>
               </div>
@@ -218,28 +298,22 @@ ${settings.business_name || ""}
 
             {/* Totals */}
             <div className="space-y-1 text-xs">
-              <div className="flex justify-between">
-                <span>Subtotal:</span>
-                <span>₹{Number(sale.subtotal || sale.total_amount).toLocaleString()}</span>
-              </div>
-              {Number(sale.discount_amount) > 0 && (
-                <div className="flex justify-between text-green-600">
-                  <span>Discount:</span>
-                  <span>-₹{Number(sale.discount_amount).toLocaleString()}</span>
-                </div>
-              )}
               <div className="flex justify-between font-bold text-base pt-1 border-t">
                 <span>TOTAL:</span>
                 <span>₹{Number(sale.total_amount).toLocaleString()}</span>
               </div>
               <div className="flex justify-between">
-                <span>Paid:</span>
-                <span>₹{Number(sale.amount_collected || 0).toLocaleString()}</span>
+                <span>Cash:</span>
+                <span>₹{Number(sale.cash_amount || 0).toLocaleString()}</span>
               </div>
-              {Number(sale.outstanding) > 0 && (
+              <div className="flex justify-between">
+                <span>UPI:</span>
+                <span>₹{Number(sale.upi_amount || 0).toLocaleString()}</span>
+              </div>
+              {outstandingAmount > 0 && (
                 <div className="flex justify-between text-red-600 font-semibold">
                   <span>Balance Due:</span>
-                  <span>₹{Number(sale.outstanding).toLocaleString()}</span>
+                  <span>₹{outstandingAmount.toLocaleString()}</span>
                 </div>
               )}
             </div>

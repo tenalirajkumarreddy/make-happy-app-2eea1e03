@@ -64,6 +64,32 @@ export async function pickPhoto(): Promise<string | null> {
 }
 
 /**
+ * Check and request geolocation permission
+ * Returns true if permission is granted, false otherwise
+ */
+export async function checkAndRequestLocationPermission(): Promise<boolean> {
+  try {
+    const status = await Geolocation.checkPermissions();
+    
+    if (status.location === 'granted' || status.coarseLocation === 'granted') {
+      return true;
+    }
+    
+    if (status.location === 'denied') {
+      // Permission was previously denied - user needs to enable in settings
+      return false;
+    }
+    
+    // Request permission
+    const requestStatus = await Geolocation.requestPermissions();
+    return requestStatus.location === 'granted' || requestStatus.coarseLocation === 'granted';
+  } catch (error) {
+    logError("Location permission check error", error);
+    return false;
+  }
+}
+
+/**
  * Get current position using native geolocation
  */
 export async function getCurrentPosition(): Promise<{ lat: number; lng: number } | null> {

@@ -1,3 +1,4 @@
+import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { useEffect, useState } from "react";
 import { App as CapacitorApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
@@ -633,25 +634,25 @@ export function MobileApp() {
     return <PermissionSetup onComplete={() => setPermissionsSetupComplete(true)} />;
   }
 
-  // Role-based routing
+  // Role-based routing with error boundaries
   if (role === "agent") {
-    return <AgentApp />;
+    return <ErrorBoundary><AgentApp /></ErrorBoundary>;
   }
 
   if (role === "super_admin" || role === "manager") {
-    return <StaffApp role={role} />;
+    return <ErrorBoundary><StaffApp role={role} /></ErrorBoundary>;
   }
 
   if (role === "marketer") {
-    return <MarketerApp />;
+    return <ErrorBoundary><MarketerApp /></ErrorBoundary>;
   }
 
   if (role === "customer") {
-    return <CustomerApp />;
+    return <ErrorBoundary><CustomerApp /></ErrorBoundary>;
   }
 
   if (role === "pos") {
-    return <PosApp />;
+    return <ErrorBoundary><PosApp /></ErrorBoundary>;
   }
 
   return (

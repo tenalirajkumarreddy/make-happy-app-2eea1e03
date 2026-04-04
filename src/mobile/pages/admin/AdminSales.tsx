@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Search, X, Loader2, ShoppingCart, Calendar, TrendingUp } from "lucide-react";
+import { Search, X, ShoppingCart, Calendar, TrendingUp } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { MobileListSkeleton } from "@/components/shared/MobileListSkeleton";
 
 export function AdminSales() {
   const [search, setSearch] = useState("");
@@ -91,9 +92,7 @@ export function AdminSales() {
         </div>
 
         {isLoading ? (
-          <div className="flex justify-center py-10">
-            <Loader2 className="h-6 w-6 animate-spin text-violet-500" />
-          </div>
+          <MobileListSkeleton items={6} showStats={false} titleWidth="w-36" />
         ) : filtered.length === 0 ? (
           <div className="bg-white dark:bg-[#1a1d24] rounded-2xl py-12 text-center shadow-sm">
             <div className="h-14 w-14 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-3">

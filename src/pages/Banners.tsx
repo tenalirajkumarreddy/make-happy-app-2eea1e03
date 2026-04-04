@@ -140,7 +140,7 @@ const Banners = () => {
     setSaving(true);
 
     try {
-      const payload = {
+      const basePayload = {
         title,
         description: description || null,
         image_url: imageUrl || "https://placehold.co/600x200?text=No+Image",
@@ -148,7 +148,6 @@ const Banners = () => {
         store_type_id: selectedStoreTypeIds.length === 1 ? selectedStoreTypeIds[0] : null,
         is_active: isActive,
         sort_order: parseInt(sortOrder) || 0,
-        created_by: user?.id,
         crop_data: cropData,
       };
 
@@ -157,7 +156,7 @@ const Banners = () => {
       if (editingBanner) {
         const { error } = await supabase
           .from("promotional_banners")
-          .update(payload)
+          .update(basePayload)
           .eq("id", editingBanner.id);
         if (error) throw error;
         bannerId = editingBanner.id;
@@ -165,7 +164,7 @@ const Banners = () => {
       } else {
         const { data: inserted, error } = await supabase
           .from("promotional_banners")
-          .insert(payload)
+          .insert({ ...basePayload, created_by: user?.id })
           .select("id")
           .single();
         if (error) throw error;
@@ -192,7 +191,7 @@ const Banners = () => {
       setShowAdd(false);
       resetForm();
       qc.invalidateQueries({ queryKey: ["promotional-banners"] });
-      logActivity(user!.id, `${editingBanner ? "Updated" : "Created"} banner: ${title}`, "system", "banner");
+      logActivity(user!.id, `${editingBanner ? "Updated" : "Created"} banner: ${title}`, "banner", title, editingBanner?.id || bannerId);
     } catch (err: any) {
       toast.error(err.message);
     } finally {

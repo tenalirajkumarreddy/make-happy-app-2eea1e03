@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
-import { ClipboardList, Loader2, Smartphone, Users, Wallet } from "lucide-react";
+import { ClipboardList, Smartphone, Users, Wallet } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface Props {
   onOpenOrders: () => void;
@@ -59,8 +60,16 @@ export function MarketerHome({ onOpenOrders, onOpenRecord, onOpenStores }: Props
         <div className="rounded-2xl bg-white dark:bg-slate-800 shadow-xl border border-slate-100 dark:border-slate-700 p-4">
           <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">Today Snapshot</p>
           {isLoading ? (
-            <div className="flex justify-center py-10">
-              <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+            <div className="grid grid-cols-2 gap-3 animate-pulse">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="rounded-xl border border-slate-100 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/30 p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <Skeleton className="h-3 w-20" />
+                    <Skeleton className="h-4 w-4" />
+                  </div>
+                  <Skeleton className="h-6 w-16 mt-2" />
+                </div>
+              ))}
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-3">

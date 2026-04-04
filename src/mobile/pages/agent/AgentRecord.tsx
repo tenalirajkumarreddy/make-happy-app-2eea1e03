@@ -8,6 +8,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -32,6 +42,7 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
   const { allowed: canRecordBehalf } = usePermission("record_behalf");
   const qc = useQueryClient();
   const [saving, setSaving] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [store, setStore] = useState<StoreOption | null>(null);
   const [storePickerOpen, setStorePickerOpen] = useState(false);
   const [items, setItems] = useState<SaleItem[]>([]);
@@ -154,7 +165,8 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
     setItems(items.map((item) => item.product_id === productId ? { ...item, unit_price: parsed } : item));
   };
 
-  const handleSubmit = async () => {
+  // Validation before showing confirmation
+  const validateAndConfirm = () => {
     if (!store) { toast.error("Please select a store"); return; }
     if (items.length === 0) { toast.error("Add at least one product"); return; }
     if (totalAmount === 0) { toast.error("Sale total cannot be zero"); return; }
@@ -164,6 +176,14 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
       return;
     }
     if (creditExceeded) { toast.error("Credit limit exceeded. Increase payment or reduce items."); return; }
+    
+    // Show confirmation dialog
+    setShowConfirmDialog(true);
+  };
+
+  const handleSubmit = async () => {
+    if (!store) { toast.error("Please select a store"); return; }
+    setShowConfirmDialog(false);
 
     setSaving(true);
 
@@ -532,7 +552,7 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
                 ? "bg-blue-400 cursor-not-allowed"
                 : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 active:scale-[0.98]"
             )}
-            onClick={handleSubmit}
+            onClick={validateAndConfirm}
             disabled={saving}
           >
             {saving ? (
@@ -546,6 +566,54 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
           </button>
         </div>
       )}
+
+      {/* Confirmation Dialog */}
+      <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <AlertDialogContent className="max-w-sm mx-4">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Sale</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>Please review before recording:</p>
+                <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-3 text-sm space-y-1">
+                  <div className="flex justify-between">
+                    <span>Store:</span>
+                    <span className="font-medium">{store?.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Items:</span>
+                    <span className="font-medium">{items.length} products</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Total:</span>
+                    <span className="font-bold text-blue-600">₹{totalAmount.toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Cash:</span>
+                    <span>₹{cash.toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>UPI:</span>
+                    <span>₹{upi.toLocaleString("en-IN")}</span>
+                  </div>
+                  {outstandingFromSale > 0 && (
+                    <div className="flex justify-between text-amber-600 dark:text-amber-400">
+                      <span>Outstanding:</span>
+                      <span>₹{outstandingFromSale.toLocaleString("en-IN")}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleSubmit} disabled={saving}>
+              {saving ? "Recording..." : "Confirm Sale"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <StorePickerSheet
         open={storePickerOpen}
