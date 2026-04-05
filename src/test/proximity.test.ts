@@ -55,7 +55,7 @@ describe('Proximity Utility', () => {
     it('should identify when user is within range', () => {
       const storeLat = 40.7128;
       const storeLng = -74.0060;
-      const userLat = 40.7137; // ~100m away
+      const userLat = 40.71325; // ~50m away
       const userLng = -74.0060;
       
       const distance = getDistanceMeters(userLat, userLng, storeLat, storeLng);

@@ -589,23 +589,27 @@ const Expenses = () => {
       <PageHeader
         title="Expenses"
         subtitle="Track and manage all business expenses"
-        action={isAdmin ? (
-          <div className="flex gap-2 flex-wrap">
-            <Button variant="outline" onClick={() => setShowAddCategory(true)}>
-              <Tag className="h-4 w-4 mr-2" /> Create Category
-            </Button>
-            <Button variant="outline" onClick={() => setShowAddFixedCost(true)}>
-              <Calendar className="h-4 w-4 mr-2" /> Add Fixed Cost
-            </Button>
-            <Button onClick={() => setShowAddExpense(true)}>
-              <Receipt className="h-4 w-4 mr-2" /> Record Expense
-            </Button>
-          </div>
-        ) : (
-          <Button onClick={() => setShowAddExpense(true)}>
-            <Receipt className="h-4 w-4 mr-2" /> Record Expense
-          </Button>
-        )}
+        primaryAction={{
+          label: "Add Expense",
+          icon: Receipt,
+          onClick: () => setShowAddExpense(true),
+        }}
+        actions={isAdmin ? [
+          {
+            label: "Create Category",
+            icon: Tag,
+            onClick: () => setShowAddCategory(true),
+            variant: "outline",
+            priority: 1,
+          },
+          {
+            label: "Add Fixed Cost",
+            icon: Calendar,
+            onClick: () => setShowAddFixedCost(true),
+            variant: "outline",
+            priority: 2,
+          },
+        ] : []}
       />
 
       {/* Summary Cards */}

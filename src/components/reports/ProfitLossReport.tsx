@@ -2,15 +2,13 @@ import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Loader2, TrendingUp, TrendingDown, DollarSign, ShoppingCart, Package, Receipt, Wallet, PieChart } from "lucide-react";
-import { format, subDays, startOfMonth, endOfMonth } from "date-fns";
+import { TrendingUp, TrendingDown, DollarSign, ShoppingCart, Package, Receipt, Wallet, BarChart2 } from "lucide-react";
+import { format, startOfMonth } from "date-fns";
 import { ReportFilters, DateRange } from "./ReportFilters";
-import { ReportExportBar } from "./ReportExportBar";
-import { ReportSummaryCards } from "./ReportSummaryCards";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RechartsPie, Pie, Cell, Legend } from "recharts";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RechartsPie, Pie, Cell } from "recharts";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { generatePrintHTML } from "@/utils/printUtils";
+import { ReportContainer, ReportKPICard } from "@/components/reports/ReportContainer";
 
 const EXPENSE_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#84cc16"];
 
@@ -19,6 +17,7 @@ export default function ProfitLossReport() {
     from: startOfMonth(new Date()),
     to: new Date(),
   });
+  const { data: companyInfo } = useCompanySettings();
 
   // Fetch sales for revenue
   const { data: sales = [], isLoading: salesLoading } = useQuery({
@@ -162,46 +161,109 @@ export default function ProfitLossReport() {
     { name: "Net Profit", value: plData.netProfit, fill: plData.netProfit >= 0 ? "#10b981" : "#ef4444" },
   ];
 
-  const exportPDF = () => {
-    const doc = new jsPDF();
-    doc.setFontSize(16);
-    doc.text("Profit & Loss Statement", 14, 20);
-    doc.setFontSize(10);
-    doc.text(`Period: ${format(dateRange.from, "MMM d, yyyy")} - ${format(dateRange.to, "MMM d, yyyy")}`, 14, 28);
+  const generateHTML = () => {
+    const expensesHtml = Object.entries(plData.expensesByCategory)
+      .map(([cat, amt]) => `
+        <tr>
+          <td style="padding-left: 20pt; color: #64748b;">${cat}</td>
+          <td></td>
+          <td class="text-right text-neg">(₹${amt.toLocaleString()})</td>
+        </tr>
+      `).join("");
 
-    const rows = [
-      ["Gross Revenue", "", `₹${plData.grossRevenue.toLocaleString()}`],
-      ["Less: Sales Returns", "", `(₹${plData.totalReturns.toLocaleString()})`],
-      ["Net Revenue", "", `₹${plData.netRevenue.toLocaleString()}`],
-      ["", "", ""],
-      ["Less: Cost of Goods Sold", "", `(₹${plData.cogs.toLocaleString()})`],
-      ["Gross Profit", `${plData.grossMargin.toFixed(1)}%`, `₹${plData.grossProfit.toLocaleString()}`],
-      ["", "", ""],
-      ["Operating Expenses:", "", ""],
-      ...Object.entries(plData.expensesByCategory).map(([cat, amt]) => [
-        `  ${cat}`, "", `(₹${amt.toLocaleString()})`
-      ]),
-      ["Total Operating Expenses", "", `(₹${plData.totalExpenses.toLocaleString()})`],
-      ["", "", ""],
-      ["Operating Profit (EBIT)", `${plData.operatingMargin.toFixed(1)}%`, `₹${plData.operatingProfit.toLocaleString()}`],
-      ["", "", ""],
-      ["Net Profit", `${plData.netMargin.toFixed(1)}%`, `₹${plData.netProfit.toLocaleString()}`],
-    ];
+    const htmlContent = `
+      <div class="kpi-row">
+        <div class="kpi-card highlight">
+          <div class="kpi-label">Gross Revenue</div>
+          <div class="kpi-value">₹${plData.grossRevenue.toLocaleString()}</div>
+        </div>
+        <div class="kpi-card highlight">
+          <div class="kpi-label">Gross Profit</div>
+          <div class="kpi-value">₹${plData.grossProfit.toLocaleString()}</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Expenses</div>
+          <div class="kpi-value text-neg">₹${plData.totalExpenses.toLocaleString()}</div>
+        </div>
+        <div class="kpi-card ${plData.netProfit >= 0 ? "highlight" : ""}">
+          <div class="kpi-label">Net Profit</div>
+          <div class="kpi-value ${plData.netProfit >= 0 ? "text-pos" : "text-neg"}">₹${plData.netProfit.toLocaleString()}</div>
+        </div>
+      </div>
 
-    autoTable(doc, {
-      startY: 35,
-      head: [["Description", "Margin", "Amount"]],
-      body: rows,
-      styles: { fontSize: 10 },
-      headStyles: { fillColor: [41, 128, 185] },
-      columnStyles: {
-        0: { cellWidth: 100 },
-        1: { cellWidth: 30, halign: "right" },
-        2: { cellWidth: 50, halign: "right" },
-      },
+      <table>
+        <thead>
+          <tr>
+            <th>Description</th>
+            <th class="text-right" style="width: 100px;">Margin</th>
+            <th class="text-right" style="width: 150px;">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="font-medium">Gross Revenue</td>
+            <td></td>
+            <td class="text-right font-mono">₹${plData.grossRevenue.toLocaleString()}</td>
+          </tr>
+          <tr>
+            <td class="text-muted">Less: Sales Returns</td>
+            <td></td>
+            <td class="text-right font-mono text-neg">(₹${plData.totalReturns.toLocaleString()})</td>
+          </tr>
+          <tr class="total-row">
+            <td class="font-bold">Net Revenue</td>
+            <td></td>
+            <td class="text-right font-mono font-bold">₹${plData.netRevenue.toLocaleString()}</td>
+          </tr>
+          <tr><td colspan="3" style="height: 10pt;"></td></tr>
+          
+          <tr>
+            <td class="text-muted">Less: Cost of Goods Sold</td>
+            <td></td>
+            <td class="text-right font-mono text-neg">(₹${plData.cogs.toLocaleString()})</td>
+          </tr>
+          <tr class="total-row">
+            <td class="font-bold">Gross Profit</td>
+            <td class="text-right text-muted">${plData.grossMargin.toFixed(1)}%</td>
+            <td class="text-right font-mono font-bold">₹${plData.grossProfit.toLocaleString()}</td>
+          </tr>
+          <tr><td colspan="3" style="height: 10pt;"></td></tr>
+          
+          <tr>
+            <td class="font-bold">Operating Expenses:</td>
+            <td></td>
+            <td></td>
+          </tr>
+          ${expensesHtml}
+          <tr class="total-row">
+            <td class="font-bold">Total Operating Expenses</td>
+            <td></td>
+            <td class="text-right font-mono font-bold text-neg">(₹${plData.totalExpenses.toLocaleString()})</td>
+          </tr>
+          <tr><td colspan="3" style="height: 10pt;"></td></tr>
+          
+          <tr class="total-row" style="background-color: #f8fafc;">
+            <td class="font-bold text-lg">Operating Profit (EBIT)</td>
+            <td class="text-right text-muted">${plData.operatingMargin.toFixed(1)}%</td>
+            <td class="text-right font-mono font-bold text-lg">₹${plData.operatingProfit.toLocaleString()}</td>
+          </tr>
+          <tr><td colspan="3" style="height: 10pt;"></td></tr>
+
+          <tr class="total-row" style="background-color: #f0fdf4;">
+            <td class="font-bold text-lg">Net Profit</td>
+            <td class="text-right text-muted">${plData.netMargin.toFixed(1)}%</td>
+            <td class="text-right font-mono font-bold text-lg ${plData.netProfit >= 0 ? "text-pos" : "text-neg"}">₹${plData.netProfit.toLocaleString()}</td>
+          </tr>
+        </tbody>
+      </table>
+    `;
+
+    return generatePrintHTML({
+      title: "Profit & Loss Statement",
+      dateRange: `${format(dateRange.from, "MMM d, yyyy")} - ${format(dateRange.to, "MMM d, yyyy")}`,
+      companyInfo: companyInfo || { companyName: "System", address: "", phone: "", email: "", gstin: "" },
+      htmlContent,
     });
-
-    doc.save(`profit-loss-${format(dateRange.from, "yyyyMMdd")}-${format(dateRange.to, "yyyyMMdd")}.pdf`);
   };
 
   const summaryCards = [
@@ -213,157 +275,160 @@ export default function ProfitLossReport() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-semibold">Profit & Loss Statement</h2>
-          <p className="text-sm text-muted-foreground">Revenue, costs, and profitability analysis</p>
-        </div>
-        <ReportExportBar onExportPDF={exportPDF} showExcel={false} showCSV={false} showPrint={false} />
-      </div>
-
-      <ReportFilters dateRange={dateRange} onDateRangeChange={setDateRange} />
-
-      {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      ) : (
+    <ReportContainer
+      title="Profit & Loss Statement"
+      subtitle="Revenue, costs, and profitability analysis"
+      icon={<BarChart2 className="h-5 w-5" />}
+      dateRange={`${format(dateRange.from, "MMM d, yyyy")} - ${format(dateRange.to, "MMM d, yyyy")}`}
+      onPrint={() => {
+        const html = generateHTML();
+        const w = window.open("", "_blank");
+        if (w) { w.document.write(html); w.document.close(); }
+      }}
+      isLoading={isLoading}
+      filters={<ReportFilters dateRange={dateRange} onDateRangeChange={setDateRange} />}
+      summaryCards={
         <>
-          <ReportSummaryCards cards={summaryCards} columns={5} />
-
-          <div className="grid lg:grid-cols-2 gap-6">
-            {/* P&L Breakdown Chart */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">P&L Breakdown</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={plBreakdown} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
-                    <YAxis type="category" dataKey="name" width={100} />
-                    <Tooltip formatter={(v: number) => `₹${v.toLocaleString()}`} />
-                    <Bar dataKey="value" fill="#3b82f6" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-
-            {/* Expense Breakdown Pie */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Expense Breakdown</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {expenseChartData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <RechartsPie>
-                      <Pie
-                        data={expenseChartData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={100}
-                        paddingAngle={2}
-                        dataKey="value"
-                        label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
-                      >
-                        {expenseChartData.map((_, idx) => (
-                          <Cell key={idx} fill={EXPENSE_COLORS[idx % EXPENSE_COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(v: number) => `₹${v.toLocaleString()}`} />
-                    </RechartsPie>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex items-center justify-center h-[300px] text-muted-foreground">
-                    No expenses recorded
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Detailed P&L Statement */}
-          <Card>
+          <ReportKPICard label="Net Revenue" value={`₹${(plData.netRevenue / 1000).toFixed(0)}K`} icon={<ShoppingCart className="h-4 w-4" />} />
+          <ReportKPICard label="COGS" value={`₹${(plData.cogs / 1000).toFixed(0)}K`} icon={<Package className="h-4 w-4" />} />
+          <ReportKPICard label="Gross Profit" value={`₹${(plData.grossProfit / 1000).toFixed(0)}K`} subValue={`${plData.grossMargin.toFixed(1)}% margin`} highlight icon={<TrendingUp className="h-4 w-4" />} />
+          <ReportKPICard label="Expenses" value={`₹${(plData.totalExpenses / 1000).toFixed(0)}K`} trend="down" icon={<Receipt className="h-4 w-4" />} />
+          <ReportKPICard label="Net Profit" value={`₹${(plData.netProfit / 1000).toFixed(0)}K`} subValue={`${plData.netMargin.toFixed(1)}% margin`} trend={plData.netProfit >= 0 ? "up" : "down"} highlight={plData.netProfit >= 0} icon={<Wallet className="h-4 w-4" />} />
+        </>
+      }
+    >
+      <div className="space-y-6">
+        <div className="grid lg:grid-cols-2 gap-6">
+          {/* P&L Breakdown Chart */}
+          <Card className="border-0 shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">Detailed Statement</CardTitle>
+              <CardTitle className="text-base font-semibold">P&L Breakdown</CardTitle>
             </CardHeader>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-muted/50">
-                    <tr>
-                      <th className="px-4 py-3 text-left font-medium">Description</th>
-                      <th className="px-4 py-3 text-right font-medium">Amount</th>
-                      <th className="px-4 py-3 text-right font-medium">% of Revenue</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    <tr className="bg-green-50 dark:bg-green-900/20">
-                      <td className="px-4 py-3 font-medium">Gross Revenue</td>
-                      <td className="px-4 py-3 text-right font-medium text-green-600">₹{plData.grossRevenue.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-right">100%</td>
-                    </tr>
-                    <tr>
-                      <td className="px-4 py-3 pl-8 text-muted-foreground">Less: Sales Returns</td>
-                      <td className="px-4 py-3 text-right text-red-600">(₹{plData.totalReturns.toLocaleString()})</td>
-                      <td className="px-4 py-3 text-right text-muted-foreground">
-                        {plData.grossRevenue > 0 ? ((plData.totalReturns / plData.grossRevenue) * 100).toFixed(1) : 0}%
-                      </td>
-                    </tr>
-                    <tr className="bg-blue-50 dark:bg-blue-900/20 font-medium">
-                      <td className="px-4 py-3">Net Revenue</td>
-                      <td className="px-4 py-3 text-right text-blue-600">₹{plData.netRevenue.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-right">—</td>
-                    </tr>
-                    <tr>
-                      <td className="px-4 py-3 pl-8 text-muted-foreground">Less: Cost of Goods Sold</td>
-                      <td className="px-4 py-3 text-right text-red-600">(₹{plData.cogs.toLocaleString()})</td>
-                      <td className="px-4 py-3 text-right text-muted-foreground">
-                        {plData.netRevenue > 0 ? ((plData.cogs / plData.netRevenue) * 100).toFixed(1) : 0}%
-                      </td>
-                    </tr>
-                    <tr className="bg-blue-50 dark:bg-blue-900/20 font-medium">
-                      <td className="px-4 py-3">Gross Profit</td>
-                      <td className="px-4 py-3 text-right text-blue-600">₹{plData.grossProfit.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-right">{plData.grossMargin.toFixed(1)}%</td>
-                    </tr>
-                    <tr>
-                      <td className="px-4 py-3 font-medium" colSpan={3}>Operating Expenses</td>
-                    </tr>
-                    {Object.entries(plData.expensesByCategory).map(([category, amount]) => (
-                      <tr key={category}>
-                        <td className="px-4 py-3 pl-8 text-muted-foreground">{category}</td>
-                        <td className="px-4 py-3 text-right text-red-600">(₹{amount.toLocaleString()})</td>
-                        <td className="px-4 py-3 text-right text-muted-foreground">
-                          {plData.netRevenue > 0 ? ((amount / plData.netRevenue) * 100).toFixed(1) : 0}%
-                        </td>
-                      </tr>
-                    ))}
-                    <tr className="border-t-2">
-                      <td className="px-4 py-3 pl-8 font-medium">Total Operating Expenses</td>
-                      <td className="px-4 py-3 text-right font-medium text-red-600">(₹{plData.totalExpenses.toLocaleString()})</td>
-                      <td className="px-4 py-3 text-right">
-                        {plData.netRevenue > 0 ? ((plData.totalExpenses / plData.netRevenue) * 100).toFixed(1) : 0}%
-                      </td>
-                    </tr>
-                    <tr className={`font-bold text-lg ${plData.netProfit >= 0 ? "bg-green-100 dark:bg-green-900/30" : "bg-red-100 dark:bg-red-900/30"}`}>
-                      <td className="px-4 py-4">Net Profit</td>
-                      <td className={`px-4 py-4 text-right ${plData.netProfit >= 0 ? "text-green-600" : "text-red-600"}`}>
-                        ₹{plData.netProfit.toLocaleString()}
-                      </td>
-                      <td className="px-4 py-4 text-right">{plData.netMargin.toFixed(1)}%</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={plBreakdown} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis type="number" tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
+                  <YAxis type="category" dataKey="name" width={100} />
+                  <Tooltip formatter={(v: number) => `₹${v.toLocaleString()}`} />
+                  <Bar dataKey="value" fill="#3b82f6" />
+                </BarChart>
+              </ResponsiveContainer>
             </CardContent>
           </Card>
-        </>
-      )}
-    </div>
+
+          {/* Expense Breakdown Pie */}
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold">Expense Breakdown</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {expenseChartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <RechartsPie>
+                    <Pie
+                      data={expenseChartData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={100}
+                      paddingAngle={2}
+                      dataKey="value"
+                      label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                    >
+                      {expenseChartData.map((_, idx) => (
+                        <Cell key={idx} fill={EXPENSE_COLORS[idx % EXPENSE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(v: number) => `₹${v.toLocaleString()}`} />
+                  </RechartsPie>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                  No expenses recorded
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Detailed P&L Statement */}
+        <Card className="border-0 shadow-sm overflow-hidden">
+          <CardHeader className="pb-2 bg-muted/30">
+            <CardTitle className="text-base font-semibold">Detailed Statement</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-semibold text-sm">Description</th>
+                    <th className="px-4 py-3 text-right font-semibold text-sm">Amount</th>
+                    <th className="px-4 py-3 text-right font-semibold text-sm">% of Revenue</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y text-sm">
+                  <tr className="bg-green-50 dark:bg-green-900/20">
+                    <td className="px-4 py-3 font-medium">Gross Revenue</td>
+                    <td className="px-4 py-3 text-right font-semibold text-green-600">₹{plData.grossRevenue.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right text-muted-foreground">100%</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 pl-8 text-muted-foreground">Less: Sales Returns</td>
+                    <td className="px-4 py-3 text-right text-red-600">(₹{plData.totalReturns.toLocaleString()})</td>
+                    <td className="px-4 py-3 text-right text-muted-foreground">
+                      {plData.grossRevenue > 0 ? ((plData.totalReturns / plData.grossRevenue) * 100).toFixed(1) : 0}%
+                    </td>
+                  </tr>
+                  <tr className="bg-blue-50 dark:bg-blue-900/20 font-medium">
+                    <td className="px-4 py-3">Net Revenue</td>
+                    <td className="px-4 py-3 text-right text-blue-600 font-semibold">₹{plData.netRevenue.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right">—</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 pl-8 text-muted-foreground">Less: Cost of Goods Sold</td>
+                    <td className="px-4 py-3 text-right text-red-600">(₹{plData.cogs.toLocaleString()})</td>
+                    <td className="px-4 py-3 text-right text-muted-foreground">
+                      {plData.netRevenue > 0 ? ((plData.cogs / plData.netRevenue) * 100).toFixed(1) : 0}%
+                    </td>
+                  </tr>
+                  <tr className="bg-blue-50 dark:bg-blue-900/20 font-medium">
+                    <td className="px-4 py-3">Gross Profit</td>
+                    <td className="px-4 py-3 text-right text-blue-600 font-semibold">₹{plData.grossProfit.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right">{plData.grossMargin.toFixed(1)}%</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-semibold" colSpan={3}>Operating Expenses</td>
+                  </tr>
+                  {Object.entries(plData.expensesByCategory).map(([category, amount]) => (
+                    <tr key={category}>
+                      <td className="px-4 py-3 pl-8 text-muted-foreground">{category}</td>
+                      <td className="px-4 py-3 text-right text-red-600">(₹{amount.toLocaleString()})</td>
+                      <td className="px-4 py-3 text-right text-muted-foreground">
+                        {plData.netRevenue > 0 ? ((amount / plData.netRevenue) * 100).toFixed(1) : 0}%
+                      </td>
+                    </tr>
+                  ))}
+                  <tr className="border-t-2">
+                    <td className="px-4 py-3 pl-8 font-semibold">Total Operating Expenses</td>
+                    <td className="px-4 py-3 text-right font-semibold text-red-600">(₹{plData.totalExpenses.toLocaleString()})</td>
+                    <td className="px-4 py-3 text-right">
+                      {plData.netRevenue > 0 ? ((plData.totalExpenses / plData.netRevenue) * 100).toFixed(1) : 0}%
+                    </td>
+                  </tr>
+                  <tr className={`font-bold text-base ${plData.netProfit >= 0 ? "bg-green-100 dark:bg-green-900/30" : "bg-red-100 dark:bg-red-900/30"}`}>
+                    <td className="px-4 py-4">Net Profit</td>
+                    <td className={`px-4 py-4 text-right ${plData.netProfit >= 0 ? "text-green-600" : "text-red-600"}`}>
+                      ₹{plData.netProfit.toLocaleString()}
+                    </td>
+                    <td className="px-4 py-4 text-right">{plData.netMargin.toFixed(1)}%</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </ReportContainer>
   );
 }

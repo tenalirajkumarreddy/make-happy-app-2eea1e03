@@ -35,7 +35,7 @@ const Invoices = () => {
   const { data: invoices = [], isLoading } = useQuery({
     queryKey: ["invoices"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase
         .from("invoices")
         .select(`
           *,
@@ -44,7 +44,7 @@ const Invoices = () => {
           warehouses:dispatch_warehouse_id(name),
           invoice_sales(sale_id)
         `)
-        .order("invoice_date", { ascending: false });
+        .order("invoice_date", { ascending: false }) as any);
       if (error) throw error;
       return data;
     },

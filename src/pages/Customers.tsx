@@ -411,13 +411,19 @@ const Customers = () => {
     return (
       <div className="space-y-6 animate-fade-in">
         <PageHeader title="Customers" subtitle="Manage customer relationships" />
-        <NoticeBox variant="destructive" icon={AlertCircle}>
-          <p className="font-medium">Failed to load customers</p>
-          <p className="text-sm mt-1">{queryError?.message || "An error occurred while fetching customer data. Please try again."}</p>
-          <Button variant="outline" size="sm" className="mt-3" onClick={() => qc.invalidateQueries({ queryKey: ["customers"] })}>
-            Retry
-          </Button>
-        </NoticeBox>
+        <NoticeBox 
+          variant="error" 
+          icon={AlertCircle} 
+          message={
+            <div className="space-y-1">
+              <p className="font-medium">Failed to load customers</p>
+              <p className="text-sm">{queryError?.message || "An error occurred while fetching customer data. Please try again."}</p>
+              <Button variant="outline" size="sm" className="mt-3" onClick={() => qc.invalidateQueries({ queryKey: ["customers"] })}>
+                Retry
+              </Button>
+            </div>
+          }
+        />
       </div>
     );
   }

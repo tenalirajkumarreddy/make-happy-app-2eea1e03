@@ -2,15 +2,15 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { useParams, useNavigate } from "react-router-dom";
 import { useEffect } from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
 import {
   Calendar, ShoppingCart, ClipboardList, Users, Package,
   Banknote, TrendingDown, Sparkles, BookOpen, RotateCcw, 
-  Truck, Archive, DollarSign, Receipt, FileText, PieChart,
-  History, ArrowLeftRight, Wallet, CreditCard, Tag, AlertTriangle
+  Truck, Archive, DollarSign, PieChart,
+  History, Wallet, Tag, AlertTriangle
 } from "lucide-react";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
 import DailyReport from "@/components/reports/DailyReport";
 import DayBookReport from "@/components/reports/DayBookReport";
 import SalesReport from "@/components/reports/SalesReport";
@@ -32,62 +32,72 @@ import SalesReturnReport from "@/components/reports/SalesReturnReport";
 import PurchaseReturnReport from "@/components/reports/PurchaseReturnReport";
 import PurchaseReport from "@/components/reports/PurchaseReport";
 
-// Organized report sections by category
 const REPORT_CATEGORIES = {
   overview: {
     label: "Overview",
+    description: "Daily summaries and insights",
+    color: "bg-violet-500/10 text-violet-600 border-violet-200",
     reports: [
-      { key: "smart", label: "Smart Insights", icon: Sparkles, component: SmartInsightsReport },
-      { key: "daily", label: "Daily Reports", icon: Calendar, component: DailyReport },
-      { key: "daybook", label: "Day Book", icon: BookOpen, component: DayBookReport },
+      { key: "smart", label: "Smart Insights", icon: Sparkles, component: SmartInsightsReport, description: "AI-powered business insights" },
+      { key: "daily", label: "Daily Reports", icon: Calendar, component: DailyReport, description: "Complete daily summary" },
+      { key: "daybook", label: "Day Book", icon: BookOpen, component: DayBookReport, description: "Traditional ledger view" },
     ],
   },
   sales: {
     label: "Sales & Revenue",
+    description: "Track sales performance and collections",
+    color: "bg-emerald-500/10 text-emerald-600 border-emerald-200",
     reports: [
-      { key: "sales", label: "Sales Reports", icon: ShoppingCart, component: SalesReport },
-      { key: "orders", label: "Order Reports", icon: ClipboardList, component: OrderReport },
-      { key: "sales-returns", label: "Sales Returns", icon: RotateCcw, component: SalesReturnReport },
-      { key: "payment", label: "Collections", icon: Banknote, component: PaymentOutstandingReport },
-      { key: "outstanding", label: "Outstanding", icon: TrendingDown, component: PaymentOutstandingReport },
-      { key: "risk-engine", label: "Risk Engine", icon: AlertTriangle, component: CustomerRiskReport },
-      { key: "customers", label: "Customer Analysis", icon: Users, component: CustomerReport },
+      { key: "sales", label: "Sales Reports", icon: ShoppingCart, component: SalesReport, description: "Sales performance analysis" },
+      { key: "orders", label: "Order Reports", icon: ClipboardList, component: OrderReport, description: "Order tracking and status" },
+      { key: "sales-returns", label: "Sales Returns", icon: RotateCcw, component: SalesReturnReport, description: "Return analysis" },
+      { key: "payment", label: "Collections", icon: Banknote, component: PaymentOutstandingReport, description: "Payment collections" },
+      { key: "outstanding", label: "Outstanding", icon: TrendingDown, component: PaymentOutstandingReport, description: "Pending receivables" },
+      { key: "risk-engine", label: "Risk Engine", icon: AlertTriangle, component: CustomerRiskReport, description: "Customer risk scoring" },
+      { key: "customers", label: "Customer Analysis", icon: Users, component: CustomerReport, description: "Customer insights" },
     ],
   },
   purchases: {
     label: "Purchases",
+    description: "Vendor and purchase tracking",
+    color: "bg-amber-500/10 text-amber-600 border-amber-200",
     reports: [
-      { key: "purchase", label: "Purchase Reports", icon: Truck, component: PurchaseReport },
-      { key: "purchase-returns", label: "Purchase Returns", icon: RotateCcw, component: PurchaseReturnReport },
-      { key: "vendors", label: "Vendor Analysis", icon: Truck, component: VendorReport },
+      { key: "purchase", label: "Purchase Reports", icon: Truck, component: PurchaseReport, description: "Purchase analysis" },
+      { key: "purchase-returns", label: "Purchase Returns", icon: RotateCcw, component: PurchaseReturnReport, description: "Return to vendors" },
+      { key: "vendors", label: "Vendor Analysis", icon: Truck, component: VendorReport, description: "Vendor performance" },
     ],
   },
   inventory: {
     label: "Inventory",
+    description: "Stock levels and movements",
+    color: "bg-blue-500/10 text-blue-600 border-blue-200",
     reports: [
-      { key: "product", label: "Product Reports", icon: Package, component: ProductReport },
-      { key: "stock", label: "Stock Summary", icon: Archive, component: StockSummaryReport },
-      { key: "inventory-timeline", label: "Stock Timeline", icon: History, component: InventoryTimelineReport },
-      { key: "price-changes", label: "Price Changes", icon: Tag, component: PriceChangeReport },
+      { key: "product", label: "Product Reports", icon: Package, component: ProductReport, description: "Product performance" },
+      { key: "stock", label: "Stock Summary", icon: Archive, component: StockSummaryReport, description: "Current stock levels" },
+      { key: "inventory-timeline", label: "Stock Timeline", icon: History, component: InventoryTimelineReport, description: "Stock movement history" },
+      { key: "price-changes", label: "Price Changes", icon: Tag, component: PriceChangeReport, description: "Price revision history" },
     ],
   },
   financial: {
     label: "Financial",
+    description: "Profit, loss and cash flow",
+    color: "bg-rose-500/10 text-rose-600 border-rose-200",
     reports: [
-      { key: "pnl", label: "Profit & Loss", icon: PieChart, component: ProfitLossReport },
-      { key: "item-pnl", label: "Item-wise P&L", icon: DollarSign, component: ItemWisePLReport },
-      { key: "cashflow", label: "Cash Flow", icon: Wallet, component: PaymentFlowReport },
+      { key: "pnl", label: "Profit & Loss", icon: PieChart, component: ProfitLossReport, description: "Company P&L statement" },
+      { key: "item-pnl", label: "Item-wise P&L", icon: DollarSign, component: ItemWisePLReport, description: "Product-level profitability" },
+      { key: "cashflow", label: "Cash Flow", icon: Wallet, component: PaymentFlowReport, description: "Cash flow analysis" },
     ],
   },
   operations: {
     label: "Operations",
+    description: "Team and route performance",
+    color: "bg-cyan-500/10 text-cyan-600 border-cyan-200",
     reports: [
-      { key: "agent", label: "Agent Performance", icon: Users, component: AgentPerformanceReport },
+      { key: "agent", label: "Agent Performance", icon: Users, component: AgentPerformanceReport, description: "Agent productivity metrics" },
     ],
   },
 };
 
-// Flatten for easy lookup
 const ALL_REPORTS = Object.values(REPORT_CATEGORIES).flatMap((cat) => cat.reports);
 const VALID_KEYS = ALL_REPORTS.map((r) => r.key);
 
@@ -96,91 +106,94 @@ const Reports = () => {
   const navigate = useNavigate();
 
   const isValid = type && VALID_KEYS.includes(type);
-  const active = isValid ? type : "smart";
-  const activeReport = ALL_REPORTS.find((r) => r.key === active);
-  const ActiveIcon = activeReport?.icon || Sparkles;
-  const ActiveComponent = activeReport?.component || SmartInsightsReport;
+  const activeReport = isValid ? ALL_REPORTS.find((r) => r.key === type) : null;
+  const ActiveComponent = activeReport?.component;
 
   useEffect(() => {
-    if (!type || !VALID_KEYS.includes(type)) {
-      navigate("/reports/smart", { replace: true });
+    // Only redirect if URL has an invalid report type (not just missing)
+    if (type && !VALID_KEYS.includes(type)) {
+      navigate("/reports", { replace: true });
     }
   }, [type, navigate]);
 
-  const handleChange = (v: string) => {
-    navigate(`/reports/${v}`, { replace: true });
+  const handleReportSelect = (key: string) => {
+    navigate(`/reports/${key}`);
   };
 
-  return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <PageHeader title="Reports" subtitle="Generate and analyze business reports" />
-        
-        {/* Report Selector */}
-        <Select value={active} onValueChange={handleChange}>
-          <SelectTrigger className="w-full sm:w-[280px]" data-testid="select-report-type">
-            <div className="flex items-center gap-2">
-              <ActiveIcon className="h-4 w-4" />
-              <SelectValue />
-            </div>
-          </SelectTrigger>
-          <SelectContent>
-            {Object.entries(REPORT_CATEGORIES).map(([catKey, category]) => (
-              <div key={catKey}>
-                <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  {category.label}
-                </div>
-                {category.reports.map((report) => {
-                  const Icon = report.icon;
-                  return (
-                    <SelectItem key={report.key} value={report.key} data-testid={`select-report-${report.key}`}>
-                      <div className="flex items-center gap-2">
-                        <Icon className="h-4 w-4" />
-                        {report.label}
-                      </div>
-                    </SelectItem>
-                  );
-                })}
-              </div>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Quick Navigation Tabs (Desktop) */}
-      <div className="hidden lg:block overflow-x-auto pb-1">
-        <div className="flex gap-1 border-b">
-          {Object.entries(REPORT_CATEGORIES).map(([catKey, category]) => (
-            <div key={catKey} className="flex">
-              {category.reports.map((report) => {
-                const Icon = report.icon;
-                const isActive = active === report.key;
-                return (
-                  <button
-                    key={report.key}
-                    onClick={() => handleChange(report.key)}
-                    className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap
-                      ${isActive 
-                        ? "border-primary text-primary" 
-                        : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30"
-                      }`}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {report.label}
-                  </button>
-                );
-              })}
-              {catKey !== "operations" && <div className="w-px bg-border mx-2" />}
-            </div>
-          ))}
+  // If a specific report is selected, show that report
+  if (activeReport && ActiveComponent) {
+    return (
+      <div className="animate-fade-in flex flex-col h-full gap-4 pb-12">
+        <div className="shrink-0 flex items-center gap-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate("/reports")}
+            className="gap-2"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            All Reports
+          </Button>
+        </div>
+        <div className="flex-1 bg-card rounded-xl border border-border/60 overflow-y-auto shadow-sm p-4 md:p-6 custom-scrollbar">
+          <ErrorBoundary>
+            <ActiveComponent />
+          </ErrorBoundary>
         </div>
       </div>
+    );
+  }
 
-      {/* Report Content */}
-      <div className="min-w-0">
-        <ErrorBoundary>
-          <ActiveComponent />
-        </ErrorBoundary>
+  // Report selection page - clean category-based UI
+  return (
+    <div className="animate-fade-in flex flex-col gap-6 pb-12">
+      <PageHeader 
+        title="Reports" 
+        subtitle="Select a report to generate and analyze business data" 
+      />
+
+      <div className="grid gap-8">
+        {Object.entries(REPORT_CATEGORIES).map(([catKey, category]) => (
+          <section key={catKey} className="space-y-3">
+            {/* Category Header */}
+            <div className="flex items-center gap-3">
+              <h2 className="text-sm font-semibold text-foreground uppercase tracking-wider">
+                {category.label}
+              </h2>
+              <span className="text-xs text-muted-foreground">
+                {category.description}
+              </span>
+            </div>
+
+            {/* Report Cards Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              {category.reports.map((report) => {
+                const Icon = report.icon;
+                return (
+                  <Card
+                    key={report.key}
+                    className={`cursor-pointer transition-all hover:shadow-md hover:border-primary/40 group border-border/60`}
+                    onClick={() => handleReportSelect(report.key)}
+                  >
+                    <CardContent className="p-4 flex items-start gap-3">
+                      <div className={`shrink-0 h-10 w-10 rounded-lg flex items-center justify-center ${category.color} group-hover:scale-105 transition-transform`}>
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-medium text-sm truncate group-hover:text-primary transition-colors">
+                          {report.label}
+                        </h3>
+                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                          {report.description}
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </section>
+        ))}
       </div>
     </div>
   );

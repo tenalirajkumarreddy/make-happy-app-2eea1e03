@@ -218,16 +218,22 @@ export default function Attendance() {
     },
   });
 
-  const { data: attendanceRecords = [], isLoading: loadingRecords } = useQuery({
-    queryKey: ["attendance-records"],
+  const PAGE_SIZE = 100;
+  const [loadedPages, setLoadedPages] = useState(1);
+
+  const { data: attendanceRecords = [], isLoading: loadingRecords, isFetching: fetchingRecords } = useQuery({
+    queryKey: ["attendance-records", loadedPages],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("attendance_records")
         .select(`
           *,
           attendance_entries(count)
         `)
         .order("attendance_date", { ascending: false });
+        
+      query = query.range(0, loadedPages * PAGE_SIZE - 1);
+      const { data, error } = await query;
       if (error) throw error;
       return data.map(r => ({
         ...r,
@@ -235,6 +241,8 @@ export default function Attendance() {
       })) as AttendanceRecord[];
     },
   });
+
+  const hasMoreRecords = attendanceRecords.length >= loadedPages * PAGE_SIZE;
 
   const { data: balances = [], isLoading: loadingBalances } = useQuery({
     queryKey: ["worker-balances"],
@@ -736,6 +744,14 @@ export default function Attendance() {
                   </div>
                 )}
               />
+              {hasMoreRecords && (
+                <div className="flex justify-center pt-4">
+                  <Button variant="outline" size="sm" onClick={() => setLoadedPages((p) => p + 1)} disabled={fetchingRecords} className="gap-1.5">
+                    {fetchingRecords ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                    Load more
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

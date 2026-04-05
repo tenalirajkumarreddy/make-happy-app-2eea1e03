@@ -4,16 +4,19 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, AlertTriangle, TrendingDown, Clock, AlertOctagon, ArrowRight, PackageX } from "lucide-react";
+import { Loader2, AlertTriangle, TrendingDown, Clock, AlertOctagon, ArrowRight, PackageX, Printer } from "lucide-react";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useNavigate } from "react-router-dom";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format } from "date-fns";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { generatePrintHTML } from "@/utils/printUtils";
 
 const SmartInsightsReport = () => {
   const navigate = useNavigate();
+  const { data: companySettings } = useCompanySettings();
 
   // Fetch logic for insights
   const { data: insights, isLoading } = useQuery({
@@ -96,8 +99,82 @@ const SmartInsightsReport = () => {
 
   const d = insights!;
 
+  const handlePrintHTML = () => {
+    if (!companySettings) return;
+    const fmt = (n: number) => `₹${n.toLocaleString("en-IN")}`;
+    const htmlContent = `
+      <div class="kpi-row">
+        <div class="kpi-card" style="border-left:3px solid #ef4444;"><div class="kpi-label">At Risk Amount</div><div class="kpi-value text-neg">${fmt(d.totalAtRiskAmount)}</div></div>
+        <div class="kpi-card" style="border-left:3px solid #f59e0b;"><div class="kpi-label">Churn Risk Stores</div><div class="kpi-value">${d.churnRisk.length}</div></div>
+        <div class="kpi-card" style="border-left:3px solid #64748b;"><div class="kpi-label">Dead Stock Value</div><div class="kpi-value">${fmt(d.totalDeadStockValue)}</div></div>
+      </div>
+
+      <h2>High Risk Collections (${d.debtAtRisk.length} stores)</h2>
+      <table>
+        <thead><tr><th>#</th><th>Store</th><th>Route</th><th class="text-right">Outstanding</th><th>Last Payment</th></tr></thead>
+        <tbody>
+          ${d.debtAtRisk.length === 0 ? '<tr><td colspan="5" style="text-align:center;padding:16px;opacity:0.6;">All clear!</td></tr>' : d.debtAtRisk.map((s: any, i: number) => `
+            <tr>
+              <td>${i + 1}</td>
+              <td class="font-semibold">${s.name}</td>
+              <td>${s.routes?.name || '—'}</td>
+              <td class="text-right font-semibold text-neg">${fmt(s.outstanding)}</td>
+              <td>${s.last_payment_date ? formatDistanceToNow(new Date(s.last_payment_date), { addSuffix: true }) : '<span style="color:#ef4444;font-weight:600;">Never</span>'}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+
+      <h2>Dead / Slow-Moving Inventory (${d.deadStock.length} products)</h2>
+      <table>
+        <thead><tr><th>#</th><th>Product</th><th class="text-right">Stock</th><th class="text-right">Value</th></tr></thead>
+        <tbody>
+          ${d.deadStock.length === 0 ? '<tr><td colspan="4" style="text-align:center;padding:16px;opacity:0.6;">Inventory moving fast!</td></tr>' : d.deadStock.map((p: any, i: number) => `
+            <tr>
+              <td>${i + 1}</td>
+              <td class="font-semibold">${p.name}</td>
+              <td class="text-right">${p.stock}</td>
+              <td class="text-right font-semibold">${fmt(p.value)}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+        ${d.deadStock.length > 0 ? `<tfoot><tr style="background:var(--accent);color:white;font-weight:700;"><td colspan="3">TOTAL DEAD STOCK VALUE</td><td class="text-right">${fmt(d.totalDeadStockValue)}</td></tr></tfoot>` : ''}
+      </table>
+
+      <h2>Churn Risk — Inactive Accounts (${d.churnRisk.length} stores)</h2>
+      <table>
+        <thead><tr><th>#</th><th>Store</th><th class="text-right">Outstanding</th><th>Last Order</th></tr></thead>
+        <tbody>
+          ${d.churnRisk.length === 0 ? '<tr><td colspan="4" style="text-align:center;padding:16px;opacity:0.6;">No churn risk detected.</td></tr>' : d.churnRisk.map((s: any, i: number) => `
+            <tr>
+              <td>${i + 1}</td>
+              <td class="font-semibold">${s.name}</td>
+              <td class="text-right font-semibold text-neg">${fmt(s.outstanding)}</td>
+              <td>${s.last_order_date ? formatDistanceToNow(new Date(s.last_order_date), { addSuffix: true }) : 'N/A'}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `;
+    const html = generatePrintHTML({
+      title: "Smart Business Insights",
+      dateRange: `Generated ${format(new Date(), "MMM d, yyyy 'at' HH:mm")}`,
+      metadata: { "At Risk": fmt(d.totalAtRiskAmount), "Churn": `${d.churnRisk.length} stores`, "Dead Stock": fmt(d.totalDeadStockValue) },
+      companyInfo: companySettings,
+      htmlContent,
+    });
+    const win = window.open("", "_blank");
+    if (win) { win.document.write(html); win.document.close(); win.onload = () => { win.print(); }; }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in pb-10">
+      <div className="flex justify-end">
+        <Button variant="outline" size="sm" onClick={handlePrintHTML}>
+          <Printer className="h-4 w-4 mr-2" />
+          Print / PDF
+        </Button>
+      </div>
       
       {/* Top Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

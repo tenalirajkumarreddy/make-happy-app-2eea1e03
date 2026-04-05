@@ -1,26 +1,25 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { StatCard } from "@/components/shared/StatCard";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
 import {
-  ShoppingCart, TrendingUp, TrendingDown, DollarSign, Banknote,
-  Smartphone, Download, FileText, FileSpreadsheet, Users, Store,
+  ShoppingCart, TrendingUp, DollarSign, Banknote,
+  Smartphone,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line, PieChart, Pie, Cell,
 } from "recharts";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { generatePrintHTML } from "@/utils/printUtils";
+import { ReportContainer, ReportKPICard } from "@/components/reports/ReportContainer";
 import * as XLSX from "xlsx";
 
 const fmt = (n: number) => `₹${n.toLocaleString("en-IN")}`;
@@ -33,6 +32,7 @@ export default function SalesReport() {
   thirtyAgo.setDate(thirtyAgo.getDate() - 30);
   const [from, setFrom] = useState(thirtyAgo.toISOString().split("T")[0]);
   const [to, setTo] = useState(today.toISOString().split("T")[0]);
+  const { data: companyInfo } = useCompanySettings();
 
   const { data, isLoading } = useQuery({
     queryKey: ["sales-report", from, to],
@@ -143,42 +143,91 @@ export default function SalesReport() {
     },
   });
 
-  const exportPDF = () => {
-    if (!data) return;
-    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-    const pw = doc.internal.pageSize.getWidth();
+  const generateHTML = () => {
+    if (!data) return "";
+    
+    const htmlContent = `
+      <div class="kpi-row">
+        <div class="kpi-card highlight">
+          <div class="kpi-label">Total Sales</div>
+          <div class="kpi-value">${fmt(data.totalSales)}</div>
+        </div>
+        <div class="kpi-card highlight">
+          <div class="kpi-label">Avg Sale</div>
+          <div class="kpi-value">${fmt(data.avgSale)}</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Cash</div>
+          <div class="kpi-value text-pos">${fmt(data.totalCash)}</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">UPI</div>
+          <div class="kpi-value text-pos">${fmt(data.totalUpi)}</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Credit Given</div>
+          <div class="kpi-value text-neg">${fmt(data.totalCredit)}</div>
+        </div>
+      </div>
 
-    doc.setFillColor(30, 41, 59);
-    doc.rect(0, 0, pw, 18, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(14);
-    doc.text("Sales Report", 10, 12);
-    doc.setFontSize(9);
-    doc.text(`${from} to ${to}`, pw - 10, 12, { align: "right" });
+      <div style="display: flex; gap: 20pt; margin-bottom: 20pt; page-break-inside: avoid;">
+        <div style="flex: 1;">
+          <h2>Daily Trend</h2>
+          <table>
+            <thead><tr><th>Date</th><th class="text-right">Sales</th><th class="text-right">Amount</th></tr></thead>
+            <tbody>
+              ${data.dailyTrend.map((d: any) => `<tr>
+                <td class="font-medium">${d.date}</td>
+                <td class="text-right font-mono">${d.count}</td>
+                <td class="text-right font-mono font-bold">${fmt(d.amount)}</td>
+              </tr>`).join("")}
+            </tbody>
+          </table>
+        </div>
 
-    let y = 24;
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(8);
+        <div style="flex: 1;">
+          <h2>Agent Ranking</h2>
+          <table>
+            <thead><tr><th>Agent</th><th class="text-right">Sales</th><th class="text-right">Amount</th></tr></thead>
+            <tbody>
+              ${data.agentRanking.map((a: any) => `<tr>
+                <td class="font-medium">${a.name}</td>
+                <td class="text-right font-mono">${a.count}</td>
+                <td class="text-right font-mono font-bold">${fmt(a.amount)}</td>
+              </tr>`).join("")}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-    // Summary
-    const summaryData = [
-      ["Total Sales", fmt(data.totalSales), "Avg Sale", fmt(data.avgSale)],
-      ["Cash", fmt(data.totalCash), "UPI", fmt(data.totalUpi)],
-      ["Credit Given", fmt(data.totalCredit), "Sale Count", String(data.salesCount)],
-      ["Daily Avg", fmt(data.dailyAvgSales), "Est. EOM", fmt(data.estimatedEOM)],
-      ["Growth Rate", data.growthRate + "%", "", ""],
-    ];
-    autoTable(doc, { startY: y, head: [["Metric", "Value", "Metric", "Value"]], body: summaryData, theme: "grid", styles: { fontSize: 7, cellPadding: 1.5 }, headStyles: { fillColor: [30, 41, 59] }, margin: { left: 10 }, tableWidth: 120 });
+      <div style="page-break-inside: avoid;">
+        <h2>Store Ranking (Top 20)</h2>
+        <table>
+          <thead><tr><th>Store</th><th>Type</th><th class="text-right">Avg Sale</th><th class="text-right">Total Amount</th></tr></thead>
+          <tbody>
+            ${data.storeRanking.slice(0, 20).map((s: any) => `<tr>
+              <td class="font-medium">${s.name}</td>
+              <td class="text-muted">${s.type}</td>
+              <td class="text-right font-mono">${fmt(s.avgSale)}</td>
+              <td class="text-right font-mono font-bold">${fmt(s.amount)}</td>
+            </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>
+    `;
 
-    // Agent ranking
-    y = (doc as any).lastAutoTable.finalY + 4;
-    autoTable(doc, { startY: y, head: [["Agent", "Sales", "Count", "Cash", "UPI", "Credit"]], body: data.agentRanking.map(a => [a.name, fmt(a.amount), a.count, fmt(a.cash), fmt(a.upi), fmt(a.credit)]), theme: "grid", styles: { fontSize: 6, cellPadding: 1.2 }, headStyles: { fillColor: [30, 41, 59] }, margin: { left: 10 }, tableWidth: 130 });
-
-    // Store ranking on right side
-    autoTable(doc, { startY: 24, head: [["Store", "Type", "Sales", "Count", "Avg"]], body: data.storeRanking.slice(0, 20).map(s => [s.name, s.type, fmt(s.amount), s.count, fmt(s.avgSale)]), theme: "grid", styles: { fontSize: 6, cellPadding: 1.2 }, headStyles: { fillColor: [30, 41, 59] }, margin: { left: 150 }, tableWidth: 137 });
-
-    doc.save(`sales-report-${from}-to-${to}.pdf`);
-    toast.success("PDF downloaded");
+    return generatePrintHTML({
+      title: "Sales Report",
+      dateRange: `${new Date(from).toLocaleDateString("en-IN")} to ${new Date(to).toLocaleDateString("en-IN")}`,
+      companyInfo: companyInfo || { companyName: "System", address: "", phone: "", email: "", gstin: "" },
+      htmlContent,
+      metadata: {
+        "Sale Count": String(data.salesCount),
+        "Daily Avg": fmt(data.dailyAvgSales),
+        "Estimated EOM": fmt(data.estimatedEOM),
+        "Growth Rate": `${data.growthRate}%`
+      }
+    });
   };
 
   const exportExcel = () => {
@@ -205,137 +254,246 @@ export default function SalesReport() {
   if (!data) return null;
   const d = data;
 
+  const dateRangeLabel = `${new Date(from).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} - ${new Date(to).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`;
+
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-end gap-3">
-        <div><Label className="text-xs">From</Label><Input type="date" value={from} onChange={e => setFrom(e.target.value)} className="w-40" /></div>
-        <div><Label className="text-xs">To</Label><Input type="date" value={to} onChange={e => setTo(e.target.value)} className="w-40" /></div>
-        <Button variant="outline" size="sm" onClick={exportPDF}><FileText className="h-4 w-4 mr-1" />PDF</Button>
-        <Button variant="outline" size="sm" onClick={exportExcel}><FileSpreadsheet className="h-4 w-4 mr-1" />Excel</Button>
+    <ReportContainer
+      title="Sales Report"
+      subtitle="Comprehensive sales analysis with trends and rankings"
+      icon={<ShoppingCart className="h-5 w-5" />}
+      dateRange={dateRangeLabel}
+      onPrint={() => {
+        const html = generateHTML();
+        const w = window.open("", "_blank");
+        if (w) { w.document.write(html); w.document.close(); }
+      }}
+      onExportExcel={exportExcel}
+      isLoading={isLoading}
+      filters={
+        <>
+          <div>
+            <Label className="text-xs text-muted-foreground">From</Label>
+            <Input type="date" value={from} onChange={e => setFrom(e.target.value)} className="w-36 mt-1 h-9" />
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">To</Label>
+            <Input type="date" value={to} onChange={e => setTo(e.target.value)} className="w-36 mt-1 h-9" />
+          </div>
+        </>
+      }
+      summaryCards={
+        <>
+          <ReportKPICard label="Total Sales" value={fmt(d.totalSales)} highlight icon={<ShoppingCart className="h-4 w-4" />} />
+          <ReportKPICard label="Sale Count" value={String(d.salesCount)} icon={<TrendingUp className="h-4 w-4" />} />
+          <ReportKPICard label="Cash Collected" value={fmt(d.totalCash)} trend="up" icon={<Banknote className="h-4 w-4" />} />
+          <ReportKPICard label="UPI Payments" value={fmt(d.totalUpi)} icon={<Smartphone className="h-4 w-4" />} />
+          <ReportKPICard label="Credit Given" value={fmt(d.totalCredit)} trend="down" icon={<DollarSign className="h-4 w-4" />} />
+          <ReportKPICard label="Avg Sale Value" value={fmt(d.avgSale)} subValue={`${d.salesCount} sales`} />
+        </>
+      }
+    >
+      <div className="space-y-6">
+        {/* Projection Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card className="bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/30 dark:to-blue-900/20 border-blue-200/50">
+            <CardContent className="pt-4 text-center">
+              <p className="text-xs font-medium text-blue-700 dark:text-blue-300 uppercase tracking-wider">Daily Average</p>
+              <p className="text-2xl font-bold mt-1 text-blue-900 dark:text-blue-100">{fmt(d.dailyAvgSales)}</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-950/30 dark:to-emerald-900/20 border-emerald-200/50">
+            <CardContent className="pt-4 text-center">
+              <p className="text-xs font-medium text-emerald-700 dark:text-emerald-300 uppercase tracking-wider">Estimated EOM</p>
+              <p className="text-2xl font-bold mt-1 text-emerald-900 dark:text-emerald-100">{fmt(d.estimatedEOM)}</p>
+            </CardContent>
+          </Card>
+          <Card className={`bg-gradient-to-br ${Number(d.growthRate) >= 0 ? "from-green-50 to-green-100/50 dark:from-green-950/30 dark:to-green-900/20 border-green-200/50" : "from-red-50 to-red-100/50 dark:from-red-950/30 dark:to-red-900/20 border-red-200/50"}`}>
+            <CardContent className="pt-4 text-center">
+              <p className={`text-xs font-medium uppercase tracking-wider ${Number(d.growthRate) >= 0 ? "text-green-700 dark:text-green-300" : "text-red-700 dark:text-red-300"}`}>Growth Rate</p>
+              <p className={`text-2xl font-bold mt-1 ${Number(d.growthRate) >= 0 ? "text-green-900 dark:text-green-100" : "text-red-900 dark:text-red-100"}`}>
+                {Number(d.growthRate) >= 0 ? "↑" : "↓"} {d.growthRate}%
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Tabs */}
+        <Tabs defaultValue="trend" className="space-y-4">
+          <TabsList className="bg-muted/50 p-1">
+            <TabsTrigger value="trend" className="text-xs">Sales Trend</TabsTrigger>
+            <TabsTrigger value="agents" className="text-xs">Agent Ranking</TabsTrigger>
+            <TabsTrigger value="stores" className="text-xs">Store Ranking</TabsTrigger>
+            <TabsTrigger value="types" className="text-xs">By Store Type</TabsTrigger>
+            <TabsTrigger value="split" className="text-xs">Payment Split</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="trend">
+            <Card className="border-border/50">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Daily Sales Trend</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {d.dailyTrend.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-12">No data available for this period</p>
+                ) : (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <LineChart data={d.dailyTrend}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis dataKey="date" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                      <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => `₹${(v/1000).toFixed(0)}k`} />
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} 
+                        formatter={(value: number) => [fmt(value), "Sales"]}
+                      />
+                      <Line type="monotone" dataKey="amount" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} name="Amount" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="agents">
+            <Card className="border-border/50">
+              <CardContent className="pt-4">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead className="w-12">#</TableHead>
+                        <TableHead>Agent</TableHead>
+                        <TableHead className="text-right">Total Sales</TableHead>
+                        <TableHead className="text-right">Count</TableHead>
+                        <TableHead className="text-right">Cash</TableHead>
+                        <TableHead className="text-right">UPI</TableHead>
+                        <TableHead className="text-right">Credit</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {d.agentRanking.map((a, i) => (
+                        <TableRow key={i}>
+                          <TableCell>
+                            <Badge variant={i === 0 ? "default" : i < 3 ? "secondary" : "outline"} className="w-7 justify-center">
+                              {i + 1}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="font-medium">{a.name}</TableCell>
+                          <TableCell className="text-right font-mono font-semibold">{fmt(a.amount)}</TableCell>
+                          <TableCell className="text-right font-mono text-muted-foreground">{a.count}</TableCell>
+                          <TableCell className="text-right font-mono text-green-600">{fmt(a.cash)}</TableCell>
+                          <TableCell className="text-right font-mono text-blue-600">{fmt(a.upi)}</TableCell>
+                          <TableCell className="text-right font-mono text-red-600">{fmt(a.credit)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="stores">
+            <Card className="border-border/50">
+              <CardContent className="pt-4">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead className="w-12">#</TableHead>
+                        <TableHead>Store</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead className="text-right">Total Sales</TableHead>
+                        <TableHead className="text-right">Count</TableHead>
+                        <TableHead className="text-right">Avg Sale</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {d.storeRanking.slice(0, 30).map((s, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="text-muted-foreground font-mono text-xs">{i + 1}</TableCell>
+                          <TableCell className="font-medium">{s.name}</TableCell>
+                          <TableCell><Badge variant="outline" className="text-xs">{s.type}</Badge></TableCell>
+                          <TableCell className="text-right font-mono font-semibold">{fmt(s.amount)}</TableCell>
+                          <TableCell className="text-right font-mono text-muted-foreground">{s.count}</TableCell>
+                          <TableCell className="text-right font-mono">{fmt(s.avgSale)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="types">
+            <Card className="border-border/50">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Sales by Store Type</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {d.storeTypeData.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-12">No data available</p>
+                ) : (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={d.storeTypeData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis dataKey="name" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                      <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => `₹${(v/1000).toFixed(0)}k`} />
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }}
+                        formatter={(value: number) => [fmt(value), "Sales"]}
+                      />
+                      <Bar dataKey="amount" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} name="Sales" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="split">
+            <Card className="border-border/50">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Payment Method Distribution</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {d.paymentSplit.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-12">No data available</p>
+                ) : (
+                  <div className="flex flex-col md:flex-row items-center justify-center gap-8">
+                    <ResponsiveContainer width={280} height={280}>
+                      <PieChart>
+                        <Pie 
+                          data={d.paymentSplit} 
+                          cx="50%" 
+                          cy="50%" 
+                          innerRadius={60} 
+                          outerRadius={100} 
+                          paddingAngle={3} 
+                          dataKey="value"
+                        >
+                          {d.paymentSplit.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                        </Pie>
+                        <Tooltip formatter={(v: number) => fmt(v)} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="space-y-3">
+                      {d.paymentSplit.map((item, i) => (
+                        <div key={i} className="flex items-center gap-3">
+                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                          <span className="text-sm font-medium w-16">{item.name}</span>
+                          <span className="text-sm font-mono">{fmt(item.value)}</span>
+                          <span className="text-xs text-muted-foreground">({pct(item.value, d.totalSales)})</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-        <StatCard title="Total Sales" value={fmt(d.totalSales)} icon={ShoppingCart} iconColor="primary" />
-        <StatCard title="Sale Count" value={String(d.salesCount)} icon={ShoppingCart} iconColor="purple" />
-        <StatCard title="Cash" value={fmt(d.totalCash)} icon={Banknote} iconColor="success" />
-        <StatCard title="UPI" value={fmt(d.totalUpi)} icon={Smartphone} iconColor="info" />
-        <StatCard title="Credit Given" value={fmt(d.totalCredit)} icon={TrendingDown} iconColor="destructive" />
-        <StatCard title="Avg Sale" value={fmt(d.avgSale)} icon={DollarSign} iconColor="warning" />
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <Card><CardContent className="pt-4 text-center">
-          <p className="text-xs text-muted-foreground">Daily Average</p>
-          <p className="text-xl font-bold">{fmt(d.dailyAvgSales)}</p>
-        </CardContent></Card>
-        <Card><CardContent className="pt-4 text-center">
-          <p className="text-xs text-muted-foreground">Estimated EOM</p>
-          <p className="text-xl font-bold">{fmt(d.estimatedEOM)}</p>
-        </CardContent></Card>
-        <Card><CardContent className="pt-4 text-center">
-          <p className="text-xs text-muted-foreground">Growth Rate</p>
-          <p className={`text-xl font-bold ${Number(d.growthRate) >= 0 ? "text-success" : "text-destructive"}`}>{d.growthRate}%</p>
-        </CardContent></Card>
-      </div>
-
-      <Tabs defaultValue="trend">
-        <TabsList className="flex-wrap h-auto">
-          <TabsTrigger value="trend">Sales Trend</TabsTrigger>
-          <TabsTrigger value="agents">Agent Ranking</TabsTrigger>
-          <TabsTrigger value="stores">Store Ranking</TabsTrigger>
-          <TabsTrigger value="types">By Store Type</TabsTrigger>
-          <TabsTrigger value="split">Payment Split</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="trend">
-          <Card><CardHeader><CardTitle className="text-sm">Daily Sales Trend</CardTitle></CardHeader><CardContent>
-            {d.dailyTrend.length === 0 ? <p className="text-sm text-muted-foreground text-center py-8">No data</p> : (
-              <ResponsiveContainer width="100%" height={280}>
-                <LineChart data={d.dailyTrend}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="date" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-                  <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-                  <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }} />
-                  <Line type="monotone" dataKey="amount" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} name="Amount" />
-                </LineChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent></Card>
-        </TabsContent>
-
-        <TabsContent value="agents">
-          <Card><CardContent className="pt-4">
-            <Table><TableHeader><TableRow>
-              <TableHead>#</TableHead><TableHead>Agent</TableHead><TableHead className="text-right">Sales</TableHead>
-              <TableHead className="text-right">Count</TableHead><TableHead className="text-right">Cash</TableHead>
-              <TableHead className="text-right">UPI</TableHead><TableHead className="text-right">Credit</TableHead>
-            </TableRow></TableHeader><TableBody>
-              {d.agentRanking.map((a, i) => (
-                <TableRow key={i}>
-                  <TableCell><Badge variant={i === 0 ? "default" : "secondary"}>{i + 1}</Badge></TableCell>
-                  <TableCell className="font-medium">{a.name}</TableCell>
-                  <TableCell className="text-right">{fmt(a.amount)}</TableCell>
-                  <TableCell className="text-right">{a.count}</TableCell>
-                  <TableCell className="text-right">{fmt(a.cash)}</TableCell>
-                  <TableCell className="text-right">{fmt(a.upi)}</TableCell>
-                  <TableCell className="text-right text-destructive">{fmt(a.credit)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody></Table>
-          </CardContent></Card>
-        </TabsContent>
-
-        <TabsContent value="stores">
-          <Card><CardContent className="pt-4">
-            <Table><TableHeader><TableRow>
-              <TableHead>#</TableHead><TableHead>Store</TableHead><TableHead>Type</TableHead>
-              <TableHead className="text-right">Sales</TableHead><TableHead className="text-right">Count</TableHead>
-              <TableHead className="text-right">Avg Sale</TableHead>
-            </TableRow></TableHeader><TableBody>
-              {d.storeRanking.slice(0, 30).map((s, i) => (
-                <TableRow key={i}>
-                  <TableCell>{i + 1}</TableCell>
-                  <TableCell className="font-medium">{s.name}</TableCell>
-                  <TableCell><Badge variant="outline">{s.type}</Badge></TableCell>
-                  <TableCell className="text-right">{fmt(s.amount)}</TableCell>
-                  <TableCell className="text-right">{s.count}</TableCell>
-                  <TableCell className="text-right">{fmt(s.avgSale)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody></Table>
-          </CardContent></Card>
-        </TabsContent>
-
-        <TabsContent value="types">
-          <Card><CardHeader><CardTitle className="text-sm">Sales by Store Type</CardTitle></CardHeader><CardContent>
-            {d.storeTypeData.length === 0 ? <p className="text-sm text-muted-foreground text-center py-8">No data</p> : (
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={d.storeTypeData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="name" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-                  <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-                  <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }} />
-                  <Bar dataKey="amount" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} name="Sales" />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent></Card>
-        </TabsContent>
-
-        <TabsContent value="split">
-          <Card><CardHeader><CardTitle className="text-sm">Payment Method Split</CardTitle></CardHeader><CardContent>
-            {d.paymentSplit.length === 0 ? <p className="text-sm text-muted-foreground text-center py-8">No data</p> : (
-              <div className="flex flex-col items-center">
-                <ResponsiveContainer width="100%" height={250}>
-                  <PieChart><Pie data={d.paymentSplit} cx="50%" cy="50%" innerRadius={50} outerRadius={90} paddingAngle={3} dataKey="value" label={({ name, value }) => `${name}: ${fmt(value)}`}>
-                    {d.paymentSplit.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                  </Pie><Tooltip formatter={(v: number) => fmt(v)} /></PieChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </CardContent></Card>
-        </TabsContent>
-      </Tabs>
-    </div>
+    </ReportContainer>
   );
 }

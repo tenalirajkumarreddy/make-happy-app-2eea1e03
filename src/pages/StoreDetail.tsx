@@ -542,10 +542,10 @@ const StoreDetail = () => {
           </div>
 
           {/* Action bar — separate row, always wraps cleanly */}
-          <div className="mt-3 flex flex-wrap items-center gap-2">
+          <div className="mt-3 flex flex-nowrap sm:flex-wrap items-center gap-2 overflow-x-auto pb-1">
             {canEdit && (
               <>
-                <div className="flex items-center gap-2 rounded-full border bg-muted/50 px-3 py-1.5">
+                <div className="flex shrink-0 items-center gap-2 rounded-full border bg-muted/50 px-3 py-1.5">
                   <Label htmlFor="store-active-toggle" className="text-xs font-medium text-muted-foreground cursor-pointer select-none">
                     {store.is_active ? "Active" : "Inactive"}
                   </Label>
@@ -558,7 +558,7 @@ const StoreDetail = () => {
                 </div>
                 {!isInactive && (
                   !editing ? (
-                    <Button variant="outline" size="sm" onClick={startEditing} className="gap-1.5 rounded-full h-8">
+                    <Button variant="outline" size="sm" onClick={startEditing} className="gap-1.5 rounded-full h-8 shrink-0">
                       <Pencil className="h-3.5 w-3.5" /> Edit
                     </Button>
                   ) : (
@@ -566,7 +566,7 @@ const StoreDetail = () => {
                       <Button variant="ghost" size="sm" onClick={() => setEditing(false)} disabled={saving} className="rounded-full h-8 w-8 p-0">
                         <X className="h-4 w-4" />
                       </Button>
-                      <Button size="sm" onClick={handleSave} disabled={saving} className="gap-1.5 rounded-full h-8">
+                      <Button size="sm" onClick={handleSave} disabled={saving} className="gap-1.5 rounded-full h-8 shrink-0">
                         {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                         Save
                       </Button>
@@ -576,16 +576,16 @@ const StoreDetail = () => {
               </>
             )}
             {canEditBalance && !isInactive && (
-              <Button variant="outline" size="sm" onClick={() => { setNewBalanceInput(String(store.outstanding)); setShowAdjustBalance(true); }} className="gap-1.5 rounded-full h-8">
+              <Button variant="outline" size="sm" onClick={() => { setNewBalanceInput(String(store.outstanding)); setShowAdjustBalance(true); }} className="gap-1.5 rounded-full h-8 shrink-0">
                 <Scale className="h-3.5 w-3.5" /> Adjust Balance
               </Button>
             )}
             {canEdit && (
-              <Button variant="outline" size="sm" onClick={() => setShowTransfer(true)} className="gap-1.5 rounded-full h-8">
+              <Button variant="outline" size="sm" onClick={() => setShowTransfer(true)} className="gap-1.5 rounded-full h-8 shrink-0">
                 <ArrowRightLeft className="h-3.5 w-3.5" /> Transfer
               </Button>
             )}
-            <Button variant="outline" size="sm" onClick={() => setShowStatement(true)} className="gap-1.5 rounded-full h-8">
+            <Button variant="outline" size="sm" onClick={() => setShowStatement(true)} className="gap-1.5 rounded-full h-8 shrink-0">
               <FileText className="h-3.5 w-3.5" /> Statement
             </Button>
           </div>
@@ -631,7 +631,7 @@ const StoreDetail = () => {
             </div>
           ) : (
             <div className="space-y-3">
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-x-6 gap-y-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 <InfoItem label="Customer" value={(store as any).customers?.name || "—"} />
                 <InfoItem label="Route" value={(store as any).routes?.name || "Not assigned"} />
                 <InfoItem label="Phone" value={store.phone || "Not provided"} />
@@ -655,7 +655,7 @@ const StoreDetail = () => {
                   if (!cust) return null;
                   const kycStatus: string = cust.kyc_status || "not_requested";
                   return (
-                    <div className="flex items-center gap-2 ml-auto">
+                    <div className="flex w-full sm:w-auto items-center gap-2 sm:ml-auto">
                       <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground" />
                       <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Customer KYC:</span>
                       <Badge
@@ -870,9 +870,9 @@ const StoreDetail = () => {
 
 function InfoItem({ label, value }: { label: string; value: string }) {
   return (
-    <div className="min-w-0">
+    <div className="min-w-0 rounded-lg border bg-muted/30 px-3 py-2.5">
       <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{label}</p>
-      <p className="text-sm font-medium text-foreground truncate">{value}</p>
+      <p className="text-sm font-medium text-foreground mt-0.5 break-words">{value}</p>
     </div>
   );
 }

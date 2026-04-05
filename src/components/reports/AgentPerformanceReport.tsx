@@ -1,26 +1,20 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { StatCard } from "@/components/shared/StatCard";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import {
-  Users, DollarSign, Banknote, TrendingUp, Award,
-  FileText, FileSpreadsheet, MapPin, HandCoins,
-} from "lucide-react";
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
-} from "recharts";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import { Users, DollarSign, TrendingUp, HandCoins } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import * as XLSX from "xlsx";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { generatePrintHTML } from "@/utils/printUtils";
+import { ReportContainer, ReportKPICard } from "@/components/reports/ReportContainer";
 
 const fmt = (n: number) => `₹${n.toLocaleString("en-IN")}`;
 
@@ -29,6 +23,7 @@ export default function AgentPerformanceReport() {
   const thirtyAgo = new Date(today); thirtyAgo.setDate(thirtyAgo.getDate() - 30);
   const [from, setFrom] = useState(thirtyAgo.toISOString().split("T")[0]);
   const [to, setTo] = useState(today.toISOString().split("T")[0]);
+  const { data: companyInfo } = useCompanySettings();
 
   const { data, isLoading } = useQuery({
     queryKey: ["agent-perf-report", from, to],
@@ -139,28 +134,68 @@ export default function AgentPerformanceReport() {
     },
   });
 
-  const exportPDF = () => {
-    if (!data) return;
-    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-    const pw = doc.internal.pageSize.getWidth();
-    doc.setFillColor(30, 41, 59); doc.rect(0, 0, pw, 18, "F");
-    doc.setTextColor(255, 255, 255); doc.setFontSize(14);
-    doc.text("Agent Performance Report", 10, 12);
-    doc.setFontSize(9); doc.text(`${from} to ${to}`, pw - 10, 12, { align: "right" });
+  const generateHTML = () => {
+    if (!data) return "";
+    
+    // Create rows
+    const rowsHtml = data.agentList.map((a: any, i: number) => `
+      <tr>
+        <td class="text-right">${i + 1}</td>
+        <td class="font-medium">${a.name}</td>
+        <td class="text-right font-mono">${fmt(a.salesAmount)}</td>
+        <td class="text-right font-mono">${fmt(a.collectAmount)}</td>
+        <td class="text-right font-mono font-bold">${fmt(a.totalValue)}</td>
+        <td class="text-right font-mono text-neg">${fmt(a.creditGiven)}</td>
+        <td class="text-right font-mono">${fmt(a.cashCollected)}</td>
+        <td class="text-right font-mono">${fmt(a.upiCollected)}</td>
+      </tr>
+    `).join("");
 
-    doc.setTextColor(0, 0, 0);
-    autoTable(doc, {
-      startY: 24,
-      head: [["#", "Agent", "Sales", "Sales #", "Collections", "Collect #", "Total", "Credit Given", "Cash", "UPI"]],
-      body: data.agentList.map((a, i) => [
-        i + 1, a.name, fmt(a.salesAmount), a.salesCount, fmt(a.collectAmount), a.collectCount,
-        fmt(a.totalValue), fmt(a.creditGiven), fmt(a.cashCollected), fmt(a.upiCollected),
-      ]),
-      theme: "grid", styles: { fontSize: 6, cellPadding: 1.2 }, headStyles: { fillColor: [30, 41, 59] },
-      margin: { left: 10, right: 10 },
+    const htmlContent = `
+      <div class="kpi-row">
+        <div class="kpi-card highlight">
+          <div class="kpi-label">Total Sales</div>
+          <div class="kpi-value">${fmt(data.totalSalesAll)}</div>
+        </div>
+        <div class="kpi-card highlight text-success">
+          <div class="kpi-label">Total Collections</div>
+          <div class="kpi-value text-success">${fmt(data.totalCollectAll)}</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Combined Value</div>
+          <div class="kpi-value">${fmt(data.totalValueAll)}</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Active Agents</div>
+          <div class="kpi-value">${data.agentCount}</div>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th class="text-right">#</th>
+            <th>Agent</th>
+            <th class="text-right">Sales</th>
+            <th class="text-right">Collections</th>
+            <th class="text-right">Total</th>
+            <th class="text-right">Credit</th>
+            <th class="text-right">Cash</th>
+            <th class="text-right">UPI</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml}
+        </tbody>
+      </table>
+    `;
+
+    return generatePrintHTML({
+      title: "Agent Performance Report",
+      dateRange: `${from} to ${to}`,
+      companyInfo: companyInfo || { companyName: "System", address: "", phone: "", email: "", gstin: "" },
+      htmlContent,
     });
-    doc.save(`agent-performance-${from}-to-${to}.pdf`);
-    toast.success("PDF downloaded");
   };
 
   const exportExcel = () => {
@@ -181,46 +216,58 @@ export default function AgentPerformanceReport() {
   const d = data;
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-end gap-3">
-        <div><Label className="text-xs">From</Label><Input type="date" value={from} onChange={e => setFrom(e.target.value)} className="w-40" /></div>
-        <div><Label className="text-xs">To</Label><Input type="date" value={to} onChange={e => setTo(e.target.value)} className="w-40" /></div>
-        <Button variant="outline" size="sm" onClick={exportPDF}><FileText className="h-4 w-4 mr-1" />PDF</Button>
-        <Button variant="outline" size="sm" onClick={exportExcel}><FileSpreadsheet className="h-4 w-4 mr-1" />Excel</Button>
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard title="Total Sales" value={fmt(d.totalSalesAll)} icon={DollarSign} iconColor="primary" />
-        <StatCard title="Total Collections" value={fmt(d.totalCollectAll)} icon={HandCoins} iconColor="success" />
-        <StatCard title="Combined Value" value={fmt(d.totalValueAll)} icon={TrendingUp} iconColor="purple" />
-        <StatCard title="Active Agents" value={String(d.agentCount)} icon={Users} iconColor="info" />
-      </div>
-
-      <Tabs defaultValue="ranking">
-        <TabsList className="flex-wrap h-auto">
-          <TabsTrigger value="ranking">Rankings</TabsTrigger>
-          <TabsTrigger value="comparison">Comparison</TabsTrigger>
-          <TabsTrigger value="details">Detailed View</TabsTrigger>
+    <ReportContainer
+      title="Agent Performance Report"
+      subtitle="Sales and collections performance by team member"
+      icon={<Users className="h-5 w-5" />}
+      dateRange={`${from} to ${to}`}
+      onPrint={() => {
+        const html = generateHTML();
+        const w = window.open("", "_blank");
+        if (w) { w.document.write(html); w.document.close(); }
+      }}
+      onExportExcel={exportExcel}
+      isLoading={false}
+      filters={
+        <div className="flex items-end gap-3">
+          <div><Label className="text-xs text-muted-foreground">From</Label><Input type="date" value={from} onChange={e => setFrom(e.target.value)} className="w-40 h-9" /></div>
+          <div><Label className="text-xs text-muted-foreground">To</Label><Input type="date" value={to} onChange={e => setTo(e.target.value)} className="w-40 h-9" /></div>
+        </div>
+      }
+      summaryCards={
+        <>
+          <ReportKPICard label="Total Sales" value={fmt(d.totalSalesAll)} highlight icon={<DollarSign className="h-4 w-4" />} />
+          <ReportKPICard label="Total Collections" value={fmt(d.totalCollectAll)} trend="up" icon={<HandCoins className="h-4 w-4" />} />
+          <ReportKPICard label="Combined Value" value={fmt(d.totalValueAll)} icon={<TrendingUp className="h-4 w-4" />} />
+          <ReportKPICard label="Active Agents" value={String(d.agentCount)} icon={<Users className="h-4 w-4" />} />
+        </>
+      }
+    >
+      <Tabs defaultValue="ranking" className="space-y-4">
+        <TabsList className="bg-muted/50 p-1 flex-wrap h-auto">
+          <TabsTrigger value="ranking" className="text-xs">Rankings</TabsTrigger>
+          <TabsTrigger value="comparison" className="text-xs">Comparison</TabsTrigger>
+          <TabsTrigger value="details" className="text-xs">Detailed View</TabsTrigger>
         </TabsList>
 
         <TabsContent value="ranking">
-          <Card><CardContent className="pt-4">
-            <Table><TableHeader><TableRow>
-              <TableHead>#</TableHead><TableHead>Agent</TableHead>
-              <TableHead className="text-right">Sales</TableHead><TableHead className="text-right">Sales #</TableHead>
-              <TableHead className="text-right">Collections</TableHead><TableHead className="text-right"># Collect</TableHead>
-              <TableHead className="text-right">Total</TableHead><TableHead className="text-right">Credit</TableHead>
+          <Card className="border-0 shadow-sm"><CardContent className="pt-4 p-0">
+            <Table><TableHeader><TableRow className="bg-muted/50">
+              <TableHead className="font-semibold">#</TableHead><TableHead className="font-semibold">Agent</TableHead>
+              <TableHead className="text-right font-semibold">Sales</TableHead><TableHead className="text-right font-semibold">Sales #</TableHead>
+              <TableHead className="text-right font-semibold">Collections</TableHead><TableHead className="text-right font-semibold"># Collect</TableHead>
+              <TableHead className="text-right font-semibold">Total</TableHead><TableHead className="text-right font-semibold">Credit</TableHead>
             </TableRow></TableHeader><TableBody>
               {d.agentList.map((a, i) => (
-                <TableRow key={a.id}>
+                <TableRow key={a.id} className="hover:bg-muted/30">
                   <TableCell><Badge variant={i < 3 ? "default" : "secondary"}>{i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}</Badge></TableCell>
                   <TableCell className="font-medium">{a.name}</TableCell>
                   <TableCell className="text-right">{fmt(a.salesAmount)}</TableCell>
                   <TableCell className="text-right">{a.salesCount}</TableCell>
-                  <TableCell className="text-right">{fmt(a.collectAmount)}</TableCell>
+                  <TableCell className="text-right text-green-600">{fmt(a.collectAmount)}</TableCell>
                   <TableCell className="text-right">{a.collectCount}</TableCell>
                   <TableCell className="text-right font-bold">{fmt(a.totalValue)}</TableCell>
-                  <TableCell className="text-right text-destructive">{fmt(a.creditGiven)}</TableCell>
+                  <TableCell className="text-right text-red-600">{fmt(a.creditGiven)}</TableCell>
                 </TableRow>
               ))}
             </TableBody></Table>
@@ -228,7 +275,7 @@ export default function AgentPerformanceReport() {
         </TabsContent>
 
         <TabsContent value="comparison">
-          <Card><CardHeader><CardTitle className="text-sm">Sales vs Collections (Top 10)</CardTitle></CardHeader><CardContent>
+          <Card className="border-0 shadow-sm"><CardHeader className="pb-2"><CardTitle className="text-base font-semibold">Sales vs Collections (Top 10)</CardTitle></CardHeader><CardContent>
             {d.comparisonData.length === 0 ? <p className="text-sm text-muted-foreground text-center py-8">No data</p> : (
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={d.comparisonData}>
@@ -246,19 +293,19 @@ export default function AgentPerformanceReport() {
         </TabsContent>
 
         <TabsContent value="details">
-          <Card><CardContent className="pt-4">
-            <Table><TableHeader><TableRow>
-              <TableHead>Agent</TableHead><TableHead className="text-right">Cash</TableHead>
-              <TableHead className="text-right">UPI</TableHead><TableHead className="text-right">Handover Done</TableHead>
-              <TableHead className="text-right">Handover Pending</TableHead><TableHead className="text-right">Avg Daily Sales</TableHead>
+          <Card className="border-0 shadow-sm"><CardContent className="pt-4 p-0">
+            <Table><TableHeader><TableRow className="bg-muted/50">
+              <TableHead className="font-semibold">Agent</TableHead><TableHead className="text-right font-semibold">Cash</TableHead>
+              <TableHead className="text-right font-semibold">UPI</TableHead><TableHead className="text-right font-semibold">Handover Done</TableHead>
+              <TableHead className="text-right font-semibold">Handover Pending</TableHead><TableHead className="text-right font-semibold">Avg Daily Sales</TableHead>
             </TableRow></TableHeader><TableBody>
               {d.agentList.map((a) => (
-                <TableRow key={a.id}>
+                <TableRow key={a.id} className="hover:bg-muted/30">
                   <TableCell className="font-medium">{a.name}</TableCell>
                   <TableCell className="text-right">{fmt(a.cashCollected)}</TableCell>
                   <TableCell className="text-right">{fmt(a.upiCollected)}</TableCell>
-                  <TableCell className="text-right text-success">{fmt(a.handoverAmount)}</TableCell>
-                  <TableCell className="text-right text-warning">{fmt(a.handoverPending)}</TableCell>
+                  <TableCell className="text-right text-green-600">{fmt(a.handoverAmount)}</TableCell>
+                  <TableCell className="text-right text-amber-600">{fmt(a.handoverPending)}</TableCell>
                   <TableCell className="text-right">{fmt(a.avgDailySales)}</TableCell>
                 </TableRow>
               ))}
@@ -266,6 +313,6 @@ export default function AgentPerformanceReport() {
           </CardContent></Card>
         </TabsContent>
       </Tabs>
-    </div>
+    </ReportContainer>
   );
 }

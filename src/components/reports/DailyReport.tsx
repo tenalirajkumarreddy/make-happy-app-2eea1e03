@@ -1,27 +1,29 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { StatCard } from "@/components/shared/StatCard";
 import { DataTable } from "@/components/shared/DataTable";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
-  DollarSign, Banknote, Smartphone, TrendingUp, Download,
-  ShoppingCart, Package, Users, HandCoins, FileText, FileSpreadsheet,
+  DollarSign, Banknote, Smartphone, TrendingUp,
+  ShoppingCart, Package, Calendar,
 } from "lucide-react";
 import * as XLSX from "xlsx";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { generatePrintHTML } from "@/utils/printUtils";
+import { ReportContainer, ReportKPICard } from "@/components/reports/ReportContainer";
 
 const fmt = (n: number) => `₹${n.toLocaleString("en-IN")}`;
 
 export default function DailyReport() {
   const today = new Date().toISOString().split("T")[0];
   const [date, setDate] = useState(today);
+  const { data: companyInfo } = useCompanySettings();
 
   const startOfDay = date + "T00:00:00";
   const endOfDay = date + "T23:59:59";
@@ -252,9 +254,7 @@ export default function DailyReport() {
   ];
 
   // ── Export functions ──
-  const generatePDF = () => {
-    const dateStr = new Date(date).toLocaleDateString("en-IN", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-
+  const generateHTML = () => {
     // Combine sales + payments into chronological list
     const chronological = [
       ...d.sales.map((s: any) => ({
@@ -287,210 +287,138 @@ export default function DailyReport() {
       })),
     ].sort((a, b) => a.sortKey - b.sortKey);
 
-    const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>Daily Report - ${date}</title>
-<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@600;700&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-:root{--ink:#111820;--mid:#4a5560;--muted:#8a9aa8;--rule:#dde4ea;--accent:#0f2d4a;--tint:#e8f0f8;--pos:#155a38;--neg:#7a1c1c;--pay:#6a4a10}
-body{background:#c8d4de;display:flex;justify-content:center;padding:24px;font-family:'DM Sans',sans-serif}
-.page{width:297mm;min-height:210mm;background:#fff;padding:7mm 9mm 6mm;box-shadow:0 6px 40px rgba(0,0,0,.20);display:flex;flex-direction:column;gap:3.5mm}
-.header{display:grid;grid-template-columns:70mm 1fr 58mm;border:1.5px solid var(--accent)}
-.hd-brand{background:var(--accent);color:#fff;padding:3.5mm 5mm;display:flex;flex-direction:column;justify-content:center}
-.hd-brand .biz{font-family:'Crimson Pro',serif;font-size:18pt;line-height:1}
-.hd-brand .sub{font-size:6.5pt;letter-spacing:2.5px;text-transform:uppercase;opacity:.6;margin-top:2px}
-.hd-center{border-left:1.5px solid var(--accent);border-right:1.5px solid var(--accent);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:3mm}
-.hd-center .title{font-size:11pt;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:var(--accent)}
-.hd-center .date{font-size:8.5pt;color:var(--mid);font-weight:300;margin-top:2px}
-.hd-meta{padding:3mm 4mm;display:flex;flex-direction:column;justify-content:center;gap:3px}
-.hd-meta .mrow{display:flex;justify-content:space-between;font-size:7pt}
-.hd-meta .ml{color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
-.hd-meta .mv{font-family:'DM Mono',monospace;font-weight:500;color:var(--ink)}
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(28mm,1fr));border:1.5px solid var(--accent)}
-.card{padding:2.5mm 3mm;border-right:1px solid var(--rule);text-align:center}
-.card:last-child{border-right:none}
-.card.hi{background:var(--tint)}
-.card-label{font-size:5.5pt;text-transform:uppercase;letter-spacing:1px;color:var(--muted);font-weight:500;margin-bottom:2px}
-.card-value{font-family:'DM Mono',monospace;font-size:12pt;font-weight:500;color:var(--ink)}
-.card-value.accent{color:var(--accent);font-size:13pt;font-weight:600}
-.card-value.pos{color:var(--pos)}
-.card-value.neg{color:var(--neg)}
-.card-sub{font-size:5.5pt;color:var(--muted);margin-top:1px}
-.mid-row{display:grid;grid-template-columns:1fr 1fr;gap:3.5mm}
-.box{border:1.5px solid var(--accent);overflow:hidden}
-.box-head{background:var(--accent);color:#fff;padding:1.5mm 3mm;font-size:6.5pt;font-weight:600;letter-spacing:2px;text-transform:uppercase;display:flex;justify-content:space-between;align-items:center}
-.box-head em{opacity:.5;font-style:normal;font-size:6pt;font-weight:400}
-table{width:100%;border-collapse:collapse;font-size:7.5pt}
-thead th{background:var(--tint);color:var(--accent);font-weight:600;font-size:6.5pt;text-transform:uppercase;letter-spacing:.5px;padding:1.5mm 2.5mm;border-bottom:1.5px solid var(--rule);text-align:left;white-space:nowrap}
-th.r,td.r{text-align:right}
-th.c,td.c{text-align:center}
-tbody tr{border-bottom:1px solid var(--rule)}
-tbody tr:last-child{border-bottom:none}
-tbody tr:nth-child(even){background:#fafcfe}
-td{padding:1.5mm 2.5mm;color:var(--ink);vertical-align:middle}
-td.mono{font-family:'DM Mono',monospace;font-size:7pt}
-td.muted{color:var(--muted);font-size:7pt}
-td.pos{color:var(--pos);font-family:'DM Mono',monospace}
-td.neg{color:var(--neg);font-family:'DM Mono',monospace}
-td.num{font-family:'DM Mono',monospace}
-.pill{display:inline-block;padding:1px 5px;border-radius:2px;font-size:6pt;font-weight:600;letter-spacing:.5px;text-transform:uppercase}
-.pill.sale{background:#dff0eb;color:var(--pos)}
-.pill.pay{background:#fff0d5;color:var(--pay)}
-.footer{border-top:1.5px solid var(--accent);padding-top:2mm;display:flex;justify-content:space-between;align-items:flex-end;font-size:6.5pt;color:var(--muted);margin-top:auto}
-.sig{border-bottom:1px solid var(--rule);display:inline-block;width:40mm;margin-left:2mm;vertical-align:bottom}
-@media print{body{background:none;padding:0}.page{box-shadow:none;width:297mm;height:210mm}}
-@page{size:A4 landscape;margin:0}
-</style>
-</head>
-<body>
-<div class="page">
+    const htmlContent = `
+      <div class="kpi-row">
+        <div class="kpi-card highlight">
+          <div class="kpi-label">Total Sales</div>
+          <div class="kpi-value">${fmt(d.totalSaleAmount)}</div>
+        </div>
+        <div class="kpi-card highlight">
+          <div class="kpi-label">Collections</div>
+          <div class="kpi-value">${fmt(d.totalCollections)}</div>
+        </div>
+        <div class="kpi-card highlight">
+          <div class="kpi-label">Total Income</div>
+          <div class="kpi-value">${fmt(d.totalIncome)}</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Cash In</div>
+          <div class="kpi-value text-pos">${fmt(d.totalCash)}</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">UPI In</div>
+          <div class="kpi-value text-pos">${fmt(d.totalUpi)}</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Credit Given</div>
+          <div class="kpi-value text-neg">${fmt(d.salesOutstanding)}</div>
+        </div>
+      </div>
 
-  <div class="header">
-    <div class="hd-brand">
-      <div class="biz">Aqua Prime</div>
-      <div class="sub">Daily Operations Report</div>
-    </div>
-    <div class="hd-center">
-      <div class="title">Daily Report</div>
-      <div class="date">${dateStr}</div>
-    </div>
-    <div class="hd-meta">
-      <div class="mrow"><span class="ml">Sales Count</span><span class="mv">${d.salesCount}</span></div>
-      <div class="mrow"><span class="ml">Payments</span><span class="mv">${d.txnCount}</span></div>
-      <div class="mrow"><span class="ml">Delivered</span><span class="mv">${d.ordersDelivered}</span></div>
-      <div class="mrow"><span class="ml">Pending</span><span class="mv">${d.ordersPending}</span></div>
-    </div>
-  </div>
+      <div style="display: flex; gap: 20pt; margin-bottom: 20pt; page-break-inside: avoid;">
+        <div style="flex: 1;">
+          <h2>Products Sold</h2>
+          <table>
+            <thead><tr><th>Product</th><th class="text-right">Qty</th><th class="text-right">Revenue</th></tr></thead>
+            <tbody>
+              ${d.productBreakdown.length === 0 
+                ? '<tr><td colspan="3" class="empty-state">No products sold</td></tr>'
+                : d.productBreakdown.map((p: any) => `<tr>
+                  <td>${p.name}</td>
+                  <td class="font-mono text-right">${p.qty} ${p.unit}</td>
+                  <td class="font-mono text-right">${fmt(p.revenue)}</td>
+                </tr>`).join("")}
+            </tbody>
+          </table>
+        </div>
 
-  <div class="cards">
-    <div class="card hi">
-      <div class="card-label">Total Sales</div>
-      <div class="card-value accent">${fmt(d.totalSaleAmount)}</div>
-      <div class="card-sub">${d.salesCount} sales</div>
-    </div>
-    <div class="card hi">
-      <div class="card-label">Collections</div>
-      <div class="card-value accent">${fmt(d.totalCollections)}</div>
-      <div class="card-sub">${d.txnCount} payments</div>
-    </div>
-    <div class="card hi">
-      <div class="card-label">Total Income</div>
-      <div class="card-value accent">${fmt(d.totalIncome)}</div>
-      <div class="card-sub">Sales + Collections</div>
-    </div>
-    <div class="card">
-      <div class="card-label">Cash Collected</div>
-      <div class="card-value pos">${fmt(d.totalCash)}</div>
-    </div>
-    <div class="card">
-      <div class="card-label">UPI Collected</div>
-      <div class="card-value pos">${fmt(d.totalUpi)}</div>
-    </div>
-    <div class="card">
-      <div class="card-label">Credit Given</div>
-      <div class="card-value neg">${fmt(d.salesOutstanding)}</div>
-      <div class="card-sub">Today's outstanding</div>
-    </div>
-    <div class="card">
-      <div class="card-label">All-Store Outstanding</div>
-      <div class="card-value neg">${fmt(d.totalOutstanding)}</div>
-      <div class="card-sub">Cumulative</div>
-    </div>
-  </div>
+        <div style="flex: 1;">
+          <h2>Route Performance</h2>
+          <table>
+            <thead><tr><th>Route</th><th class="text-center">Target</th><th class="text-right">Sales</th><th class="text-right">Coll.</th></tr></thead>
+            <tbody>
+              ${d.routePerformance.length === 0
+                ? '<tr><td colspan="4" class="empty-state">No route activity</td></tr>'
+                : d.routePerformance.map((r: any) => `<tr>
+                  <td class="font-medium">${r.name}</td>
+                  <td class="text-center font-mono">${r.storesCovered}/${r.totalStores} <span class="text-muted">(${r.pctCovered}%)</span></td>
+                  <td class="text-right font-mono">${fmt(r.sales)}</td>
+                  <td class="text-right font-mono text-pos">${fmt(r.collected)}</td>
+                </tr>`).join("")}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-  <div class="mid-row">
-    <div class="box">
-      <div class="box-head">Products Sold</div>
+      <div style="page-break-inside: avoid;">
+        <h2>Order Fulfillment</h2>
+        <table>
+          <thead><tr><th>Metric</th><th>Count</th></tr></thead>
+          <tbody>
+            <tr><td>Orders Delivered</td><td class="font-mono">${d.ordersDelivered}</td></tr>
+            <tr><td>Orders Pending</td><td class="font-mono">${d.ordersPending}</td></tr>
+            <tr><td>Orders Cancelled</td><td class="font-mono">${d.ordersCancelled}</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2>Staff Balances</h2>
       <table>
-        <thead><tr><th>Product</th><th class="r">Qty</th><th class="r">Avg Price</th><th class="r">Revenue</th></tr></thead>
-        <tbody>
-          ${d.productBreakdown.length === 0 
-            ? '<tr><td colspan="4" class="muted" style="text-align:center">No products sold</td></tr>'
-            : d.productBreakdown.map((p: any) => `<tr>
-              <td>${p.name}</td>
-              <td class="r num">${p.qty} ${p.unit}</td>
-              <td class="r num">${fmt(Math.round(p.revenue / p.qty))}</td>
-              <td class="r num">${fmt(p.revenue)}</td>
-            </tr>`).join("")}
-        </tbody>
-      </table>
-    </div>
-
-    <div class="box">
-      <div class="box-head">Staff Balances</div>
-      <table>
-        <thead><tr><th>Name</th><th>Role</th><th class="r">Collected</th><th class="r">Handed Over</th><th class="r">Received</th><th class="r">Balance</th></tr></thead>
+        <thead><tr><th>Name</th><th>Role</th><th class="text-right">Collected</th><th class="text-right">Handover</th><th class="text-right">Received</th><th class="text-right">Balance</th></tr></thead>
         <tbody>
           ${d.staffBalances.length === 0
-            ? '<tr><td colspan="6" class="muted" style="text-align:center">No staff activity</td></tr>'
+            ? '<tr><td colspan="6" class="empty-state">No staff activity</td></tr>'
             : d.staffBalances.map((s: any) => `<tr>
-              <td><strong>${s.name}</strong></td>
-              <td><span class="pill ${s.role === "agent" ? "pay" : "sale"}">${s.role.replace("_", " ")}</span></td>
-              <td class="r num">${fmt(s.collected)}</td>
-              <td class="r num">${fmt(s.handed_over)}</td>
-              <td class="r num">${fmt(s.received)}</td>
-              <td class="r ${s.balance > 0 ? "pos" : s.balance < 0 ? "neg" : "num"}">${fmt(s.balance)}</td>
+              <td class="font-bold">${s.name}</td>
+              <td><span class="pill pill-${s.role === "agent" ? "warning" : "success"}">${s.role.replace("_", " ")}</span></td>
+              <td class="text-right font-mono">${fmt(s.collected)}</td>
+              <td class="text-right font-mono">${fmt(s.handed_over)}</td>
+              <td class="text-right font-mono">${fmt(s.received)}</td>
+              <td class="text-right font-mono ${s.balance > 0 ? "text-pos font-bold" : s.balance < 0 ? "text-neg" : ""}">${fmt(s.balance)}</td>
             </tr>`).join("")}
         </tbody>
       </table>
-    </div>
-  </div>
 
-  <div class="box">
-    <div class="box-head">Sales &amp; Payments — Chronological <em>${chronological.length} entries</em></div>
-    <table>
-      <thead><tr>
-        <th class="c" style="width:14mm">Time</th>
-        <th style="width:16mm">Type</th>
-        <th style="width:24mm">ID</th>
-        <th>Store</th>
-        <th>Product / Note</th>
-        <th class="r">Total</th>
-        <th class="r">Cash</th>
-        <th class="r">UPI</th>
-        <th class="r">Credit</th>
-      </tr></thead>
-      <tbody>
-        ${chronological.length === 0
-          ? '<tr><td colspan="9" class="muted" style="text-align:center">No entries</td></tr>'
-          : chronological.map((e: any) => `<tr>
-            <td class="mono c">${e.time}</td>
-            <td><span class="pill ${e.type === "Sale" ? "sale" : "pay"}">${e.type}</span></td>
-            <td class="mono muted">${e.id}</td>
-            <td>${e.store}</td>
-            <td class="muted">${e.detail}</td>
-            <td class="r num">${fmt(e.total)}</td>
-            <td class="r ${e.cash > 0 ? "pos" : "num"}">${fmt(e.cash)}</td>
-            <td class="r ${e.upi > 0 ? "pos" : "num"}">${fmt(e.upi)}</td>
-            <td class="r ${e.type === "Sale" && e.credit > 0 ? "neg" : "num"}">${e.type === "Payment" ? "—" : fmt(e.credit)}</td>
-          </tr>`).join("")}
-      </tbody>
-    </table>
-  </div>
+      <h2>Sales & Payments Timeline</h2>
+      <table>
+        <thead><tr>
+          <th class="text-center">Time</th>
+          <th>Type</th>
+          <th>Store</th>
+          <th>Notes</th>
+          <th class="text-right">Cash</th>
+          <th class="text-right">UPI</th>
+          <th class="text-right">Credit</th>
+          <th class="text-right">Total</th>
+        </tr></thead>
+        <tbody>
+          ${chronological.length === 0
+            ? '<tr><td colspan="8" class="empty-state">No entries in timeline</td></tr>'
+            : chronological.map((e: any) => `<tr>
+              <td class="font-mono text-center text-muted">${e.time}</td>
+              <td><span class="pill pill-${e.type === "Sale" ? "success" : "warning"}">${e.type}</span></td>
+              <td class="font-medium">${e.store} <div class="font-mono text-muted" style="font-size: 8pt;">${e.id}</div></td>
+              <td class="text-muted" style="font-size: 9pt;">${e.detail}</td>
+              <td class="text-right font-mono ${e.cash > 0 ? "text-pos" : ""}">${fmt(e.cash)}</td>
+              <td class="text-right font-mono ${e.upi > 0 ? "text-pos" : ""}">${fmt(e.upi)}</td>
+              <td class="text-right font-mono ${e.type === "Sale" && e.credit > 0 ? "text-neg" : ""}">${e.type === "Payment" ? "—" : fmt(e.credit)}</td>
+              <td class="text-right font-mono font-bold">${fmt(e.total)}</td>
+            </tr>`).join("")}
+        </tbody>
+      </table>
+    `;
 
-  <div class="footer">
-    <span>Generated: ${new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })} · Aqua Prime · Confidential</span>
-    <span>Authorised Signature <span class="sig"></span></span>
-    <span>Total Outstanding (All Stores): <strong style="color:var(--neg)">${fmt(d.totalOutstanding)}</strong> · Page 1 of 1</span>
-  </div>
-
-</div>
-</body>
-</html>`;
-
-    const blob = new Blob([html], { type: "text/html" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `daily-report-${date}.html`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    toast.success("Report downloaded — open it in a browser and print to save as PDF");
+    return generatePrintHTML({
+      title: "Daily Operations Report",
+      dateRange: date,
+      companyInfo: companyInfo || { companyName: "System", address: "", phone: "", email: "", gstin: "" },
+      htmlContent,
+      metadata: {
+        "Sales Count": String(d.salesCount),
+        "Payments Count": String(d.txnCount),
+        "Total Outstanding MTD": fmt(d.totalOutstanding),
+      }
+    });
   };
 
   const generateExcel = () => {
@@ -565,132 +493,158 @@ td.num{font-family:'DM Mono',monospace}
   };
 
   return (
-    <div className="space-y-6">
-      {/* Date picker & export */}
-      <div className="flex flex-wrap items-end gap-3">
+    <ReportContainer
+      title="Daily Operations Report"
+      subtitle="Complete daily summary of sales, collections, and operations"
+      icon={<Calendar className="h-5 w-5" />}
+      dateRange={new Date(date).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+      onPrint={() => {
+        const html = generateHTML();
+        const w = window.open("", "_blank");
+        if (w) { w.document.write(html); w.document.close(); }
+      }}
+      onExportExcel={generateExcel}
+      isLoading={isLoading}
+      filters={
         <div>
-          <Label className="text-xs">Date</Label>
-          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-44 mt-1" />
+          <Label className="text-xs text-muted-foreground">Date</Label>
+          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-44 mt-1 h-9" />
         </div>
-        <Button variant="outline" size="sm" className="h-9" onClick={generatePDF}>
-          <FileText className="mr-1.5 h-4 w-4" />
-          Download PDF
-        </Button>
-        <Button variant="outline" size="sm" className="h-9" onClick={generateExcel}>
-          <FileSpreadsheet className="mr-1.5 h-4 w-4" />
-          Download Excel
-        </Button>
+      }
+      summaryCards={
+        <>
+          <ReportKPICard label="Total Income" value={fmt(d.totalIncome)} highlight subValue="Sales + Collections" icon={<TrendingUp className="h-4 w-4" />} />
+          <ReportKPICard label="Sale Amount" value={fmt(d.totalSaleAmount)} subValue={`${d.salesCount} sales`} icon={<ShoppingCart className="h-4 w-4" />} />
+          <ReportKPICard label="Collections" value={fmt(d.totalCollections)} subValue={`${d.txnCount} payments`} trend="up" icon={<DollarSign className="h-4 w-4" />} />
+          <ReportKPICard label="Cash Collected" value={fmt(d.totalCash)} icon={<Banknote className="h-4 w-4" />} />
+          <ReportKPICard label="UPI Collected" value={fmt(d.totalUpi)} icon={<Smartphone className="h-4 w-4" />} />
+          <ReportKPICard label="Items Sold" value={String(d.totalItemsSold)} icon={<Package className="h-4 w-4" />} />
+        </>
+      }
+    >
+      <div className="space-y-6">
+        {/* Secondary Stats Row */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <Card className="bg-gradient-to-br from-red-50 to-red-100/50 dark:from-red-950/30 dark:to-red-900/20 border-red-200/50">
+            <CardContent className="pt-4 text-center">
+              <p className="text-xs font-medium text-red-700 dark:text-red-300 uppercase tracking-wider">Credit Given</p>
+              <p className="text-xl font-bold mt-1 text-red-900 dark:text-red-100">{fmt(d.salesOutstanding)}</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-gradient-to-br from-orange-50 to-orange-100/50 dark:from-orange-950/30 dark:to-orange-900/20 border-orange-200/50">
+            <CardContent className="pt-4 text-center">
+              <p className="text-xs font-medium text-orange-700 dark:text-orange-300 uppercase tracking-wider">Total Outstanding</p>
+              <p className="text-xl font-bold mt-1 text-orange-900 dark:text-orange-100">{fmt(d.totalOutstanding)}</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-gradient-to-br from-green-50 to-green-100/50 dark:from-green-950/30 dark:to-green-900/20 border-green-200/50">
+            <CardContent className="pt-4 text-center">
+              <p className="text-xs font-medium text-green-700 dark:text-green-300 uppercase tracking-wider">Orders Delivered</p>
+              <p className="text-xl font-bold mt-1 text-green-900 dark:text-green-100">{d.ordersDelivered}</p>
+              <p className="text-xs text-muted-foreground">{d.ordersPending} pending</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-gradient-to-br from-gray-50 to-gray-100/50 dark:from-gray-950/30 dark:to-gray-900/20 border-gray-200/50">
+            <CardContent className="pt-4 text-center">
+              <p className="text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider">Orders Cancelled</p>
+              <p className="text-xl font-bold mt-1 text-gray-900 dark:text-gray-100">{d.ordersCancelled}</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Detailed tabs */}
+        <Tabs defaultValue="sales" className="space-y-4">
+          <TabsList className="bg-muted/50 p-1 flex-wrap h-auto">
+            <TabsTrigger value="sales" className="text-xs">Sales ({d.salesCount})</TabsTrigger>
+            <TabsTrigger value="payments" className="text-xs">Payments ({d.txnCount})</TabsTrigger>
+            <TabsTrigger value="products" className="text-xs">Products ({d.productBreakdown.length})</TabsTrigger>
+            <TabsTrigger value="routes" className="text-xs">Routes ({d.routePerformance.length})</TabsTrigger>
+            <TabsTrigger value="staff" className="text-xs">Staff ({d.staffBalances.length})</TabsTrigger>
+            <TabsTrigger value="outstanding" className="text-xs">Outstanding ({d.storesWithOutstanding.length})</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="sales">
+            {d.sales.length === 0 ? (
+              <Card className="border-dashed"><CardContent className="py-12 text-center text-muted-foreground">No sales recorded for this date</CardContent></Card>
+            ) : (
+              <DataTable columns={salesCols} data={d.sales} searchKey="display_id" searchPlaceholder="Search sales..." />
+            )}
+          </TabsContent>
+
+          <TabsContent value="payments">
+            {d.txns.length === 0 ? (
+              <Card className="border-dashed"><CardContent className="py-12 text-center text-muted-foreground">No payments recorded for this date</CardContent></Card>
+            ) : (
+              <DataTable columns={txnCols} data={d.txns} searchKey="display_id" searchPlaceholder="Search payments..." />
+            )}
+          </TabsContent>
+
+          <TabsContent value="products">
+            {d.productBreakdown.length === 0 ? (
+              <Card className="border-dashed"><CardContent className="py-12 text-center text-muted-foreground">No products sold</CardContent></Card>
+            ) : (
+              <DataTable columns={productCols} data={d.productBreakdown} searchKey="name" searchPlaceholder="Search products..." />
+            )}
+          </TabsContent>
+
+          <TabsContent value="routes">
+            {d.routePerformance.length === 0 ? (
+              <Card className="border-dashed"><CardContent className="py-12 text-center text-muted-foreground">No routes configured</CardContent></Card>
+            ) : (
+              <DataTable
+                columns={[
+                  { header: "Route", accessor: "name" as const, className: "font-medium" },
+                  { header: "Total Stores", accessor: "totalStores" as const, className: "text-center" },
+                  { header: "Covered", accessor: (r: any) => `${r.storesCovered} / ${r.totalStores}`, className: "text-center" },
+                  { header: "% Done", accessor: (r: any) => (
+                    <span className={r.pctCovered === 100 ? "text-green-600 font-bold" : r.pctCovered >= 50 ? "text-amber-600 font-semibold" : "text-red-600 font-semibold"}>
+                      {r.pctCovered}%
+                    </span>
+                  ), className: "text-center" },
+                  { header: "Sales", accessor: (r: any) => fmt(r.sales), className: "font-semibold" },
+                  { header: "Collected", accessor: (r: any) => fmt(r.collected), className: "text-green-600" },
+                  { header: "Outstanding", accessor: (r: any) => fmt(r.pending), className: "text-red-600" },
+                ]}
+                data={d.routePerformance}
+                searchKey="name"
+                searchPlaceholder="Search routes..."
+              />
+            )}
+          </TabsContent>
+
+          <TabsContent value="staff">
+            {d.staffBalances.length === 0 ? (
+              <Card className="border-dashed"><CardContent className="py-12 text-center text-muted-foreground">No staff activity</CardContent></Card>
+            ) : (
+              <>
+                <Card className="mb-4 border-amber-200/50 bg-amber-50/50 dark:bg-amber-950/20">
+                  <CardContent className="py-3 px-4 text-sm text-amber-800 dark:text-amber-200">
+                    <strong>Balance Formula:</strong> Total Collected − Handed Over − Pending Handover + Received from others
+                  </CardContent>
+                </Card>
+                <DataTable columns={staffCols} data={d.staffBalances} searchKey="name" searchPlaceholder="Search staff..." />
+              </>
+            )}
+          </TabsContent>
+
+          <TabsContent value="outstanding">
+            {d.storesWithOutstanding.length === 0 ? (
+              <Card className="border-dashed"><CardContent className="py-12 text-center text-muted-foreground">No stores with outstanding balances</CardContent></Card>
+            ) : (
+              <DataTable
+                columns={[
+                  { header: "Store ID", accessor: "display_id" as const, className: "font-mono text-xs" },
+                  { header: "Store", accessor: "name" as const, className: "font-medium" },
+                  { header: "Outstanding", accessor: (r: any) => fmt(Number(r.outstanding)), className: "font-semibold text-red-600" },
+                ]}
+                data={d.storesWithOutstanding}
+                searchKey="name"
+                searchPlaceholder="Search stores..."
+              />
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
-
-      {/* Summary stat cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <StatCard title="Total Income" value={fmt(d.totalIncome)} change="Sales + Collections" changeType="positive" icon={TrendingUp} iconColor="primary" />
-        <StatCard title="Sale Amount" value={fmt(d.totalSaleAmount)} change={`${d.salesCount} sales`} changeType="neutral" icon={ShoppingCart} iconColor="purple" />
-        <StatCard title="Collections" value={fmt(d.totalCollections)} change={`${d.txnCount} payments`} changeType="neutral" icon={DollarSign} iconColor="success" />
-        <StatCard title="Cash" value={fmt(d.totalCash)} icon={Banknote} iconColor="warning" />
-        <StatCard title="UPI" value={fmt(d.totalUpi)} icon={Smartphone} iconColor="info" />
-        <StatCard title="Items Sold" value={String(d.totalItemsSold)} icon={Package} iconColor="cyan" />
-      </div>
-
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard title="Credit Given" value={fmt(d.salesOutstanding)} icon={HandCoins} iconColor="destructive" />
-        <StatCard title="Total Outstanding" value={fmt(d.totalOutstanding)} icon={DollarSign} iconColor="destructive" />
-        <StatCard title="Orders Delivered" value={String(d.ordersDelivered)} change={`${d.ordersPending} pending`} changeType="neutral" icon={ShoppingCart} iconColor="success" />
-        <StatCard title="Orders Cancelled" value={String(d.ordersCancelled)} icon={ShoppingCart} iconColor="destructive" />
-      </div>
-
-      {/* Detailed tabs */}
-      <Tabs defaultValue="sales">
-        <TabsList className="flex-wrap h-auto">
-          <TabsTrigger value="sales">Sales ({d.salesCount})</TabsTrigger>
-          <TabsTrigger value="payments">Payments ({d.txnCount})</TabsTrigger>
-          <TabsTrigger value="products">Products ({d.productBreakdown.length})</TabsTrigger>
-          <TabsTrigger value="routes">Routes ({d.routePerformance.length})</TabsTrigger>
-          <TabsTrigger value="staff">Staff Balances ({d.staffBalances.length})</TabsTrigger>
-          <TabsTrigger value="outstanding">Outstanding ({d.storesWithOutstanding.length})</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="sales" className="mt-4">
-          {d.sales.length === 0 ? (
-            <Card><CardContent className="py-8 text-center text-muted-foreground">No sales recorded</CardContent></Card>
-          ) : (
-            <DataTable columns={salesCols} data={d.sales} searchKey="display_id" searchPlaceholder="Search sales..." />
-          )}
-        </TabsContent>
-
-        <TabsContent value="payments" className="mt-4">
-          {d.txns.length === 0 ? (
-            <Card><CardContent className="py-8 text-center text-muted-foreground">No payments recorded</CardContent></Card>
-          ) : (
-            <DataTable columns={txnCols} data={d.txns} searchKey="display_id" searchPlaceholder="Search payments..." />
-          )}
-        </TabsContent>
-
-        <TabsContent value="products" className="mt-4">
-          {d.productBreakdown.length === 0 ? (
-            <Card><CardContent className="py-8 text-center text-muted-foreground">No products sold</CardContent></Card>
-          ) : (
-            <DataTable columns={productCols} data={d.productBreakdown} searchKey="name" searchPlaceholder="Search products..." />
-          )}
-        </TabsContent>
-
-        <TabsContent value="routes" className="mt-4">
-          {d.routePerformance.length === 0 ? (
-            <Card><CardContent className="py-8 text-center text-muted-foreground">No routes configured</CardContent></Card>
-          ) : (
-            <DataTable
-              columns={[
-                { header: "Route", accessor: "name" as const, className: "font-medium" },
-                { header: "Total Stores", accessor: "totalStores" as const, className: "text-center" },
-                { header: "Covered", accessor: (r: any) => `${r.storesCovered} / ${r.totalStores}`, className: "text-center" },
-                { header: "% Done", accessor: (r: any) => (
-                  <span className={r.pctCovered === 100 ? "text-success font-bold" : r.pctCovered >= 50 ? "text-warning font-semibold" : "text-destructive font-semibold"}>
-                    {r.pctCovered}%
-                  </span>
-                ), className: "text-center" },
-                { header: "Sales", accessor: (r: any) => fmt(r.sales), className: "font-semibold" },
-                { header: "Collected", accessor: (r: any) => fmt(r.collected), className: "text-success" },
-                { header: "Outstanding", accessor: (r: any) => fmt(r.pending), className: "text-destructive" },
-              ]}
-              data={d.routePerformance}
-              searchKey="name"
-              searchPlaceholder="Search routes..."
-            />
-          )}
-        </TabsContent>
-
-        <TabsContent value="staff" className="mt-4">
-          {d.staffBalances.length === 0 ? (
-            <Card><CardContent className="py-8 text-center text-muted-foreground">No staff activity</CardContent></Card>
-          ) : (
-            <>
-              <Card className="mb-4 border-warning/30 bg-warning/5">
-                <CardContent className="py-3 px-4 text-sm text-muted-foreground">
-                  Balance = Total Collected − Handed Over − Pending Handover + Received from others
-                </CardContent>
-              </Card>
-              <DataTable columns={staffCols} data={d.staffBalances} searchKey="name" searchPlaceholder="Search staff..." />
-            </>
-          )}
-        </TabsContent>
-
-        <TabsContent value="outstanding" className="mt-4">
-          {d.storesWithOutstanding.length === 0 ? (
-            <Card><CardContent className="py-8 text-center text-muted-foreground">No stores with outstanding</CardContent></Card>
-          ) : (
-            <DataTable
-              columns={[
-                { header: "Store ID", accessor: "display_id" as const, className: "font-mono text-xs" },
-                { header: "Store", accessor: "name" as const, className: "font-medium" },
-                { header: "Outstanding", accessor: (r: any) => fmt(Number(r.outstanding)), className: "font-semibold text-destructive" },
-              ]}
-              data={d.storesWithOutstanding}
-              searchKey="name"
-              searchPlaceholder="Search stores..."
-            />
-          )}
-        </TabsContent>
-      </Tabs>
-    </div>
+    </ReportContainer>
   );
 }

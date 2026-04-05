@@ -161,9 +161,19 @@ export function useOnlineStatus() {
         } else if (action.type === "transaction") {
           const { txData } = action.payload as any;
           const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "PAY", seq_name: "pay_display_seq" });
-          const { error } = await supabase.from("transactions").insert({ ...txData, display_id: displayId });
+          // Use atomic RPC — server computes outstanding, locks store row
+          const { error } = await supabase.rpc("record_transaction", {
+            p_display_id: displayId,
+            p_store_id: txData.store_id,
+            p_customer_id: txData.customer_id,
+            p_recorded_by: txData.recorded_by,
+            p_logged_by: txData.logged_by ?? null,
+            p_cash_amount: txData.cash_amount,
+            p_upi_amount: txData.upi_amount,
+            p_notes: txData.notes ?? null,
+            p_created_at: txData.created_at ?? null,
+          });
           if (error) throw error;
-          // DB trigger trg_transactions_recalc_outstanding handles store.outstanding update automatically
         } else if (action.type === "visit") {
           const { userId, storeId, lat, lng } = action.payload as any;
           const { data: session, error: sessionError } = await supabase

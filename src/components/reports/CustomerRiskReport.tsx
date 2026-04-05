@@ -4,11 +4,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, AlertTriangle, UserX, ShieldAlert, CheckCircle2 } from "lucide-react";
+import { Loader2, AlertTriangle, UserX, ShieldAlert, CheckCircle2, Printer } from "lucide-react";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { generatePrintHTML } from "@/utils/printUtils";
+import { format } from "date-fns";
 
 type RiskCategory = "exceeds_limit" | "dormant_with_balance" | "dormant" | "healthy";
 
@@ -38,6 +41,7 @@ const getCategoryDetails = (category: RiskCategory) => {
 const CustomerRiskReport = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategory, setFilterCategory] = useState<RiskCategory | "all">("all");
+  const { data: companySettings } = useCompanySettings();
 
   const { data: riskData, isLoading, error } = useQuery({
     queryKey: ["customer-risk-report"],
@@ -72,6 +76,50 @@ const CustomerRiskReport = () => {
     healthy: d.filter(r => r.risk_category === "healthy").length,
   };
 
+  const totalOutstanding = d.reduce((s, r) => s + Number(r.total_outstanding), 0);
+
+  const handlePrintHTML = () => {
+    if (!companySettings) return;
+    const fmt = (n: number) => `₹${n.toLocaleString("en-IN")}`;
+    const htmlContent = `
+      <div class="kpi-row">
+        <div class="kpi-card" style="border-left:3px solid #ef4444;"><div class="kpi-label">Credit Exceeded</div><div class="kpi-value text-neg">${totals.exceeds_limit}</div></div>
+        <div class="kpi-card" style="border-left:3px solid #f59e0b;"><div class="kpi-label">Debt & Dormant</div><div class="kpi-value">${totals.dormant_with_balance}</div></div>
+        <div class="kpi-card" style="border-left:3px solid #94a3b8;"><div class="kpi-label">Dormant</div><div class="kpi-value">${totals.dormant}</div></div>
+        <div class="kpi-card" style="border-left:3px solid #22c55e;"><div class="kpi-label">Healthy</div><div class="kpi-value text-pos">${totals.healthy}</div></div>
+      </div>
+
+      <h2>Customer Risk Assessment (${filteredData.length} records)</h2>
+      <table>
+        <thead><tr><th>#</th><th>Customer</th><th>Contact</th><th class="text-right">Outstanding</th><th class="text-right">Credit Limit</th><th>Last Order</th><th>Risk</th></tr></thead>
+        <tbody>
+          ${filteredData.map((row, i) => {
+            const cat = getCategoryDetails(row.risk_category);
+            return `
+            <tr>
+              <td>${i + 1}</td>
+              <td class="font-semibold">${row.customer_name}</td>
+              <td>${row.phone || '—'}</td>
+              <td class="text-right font-semibold ${row.total_outstanding > 0 ? 'text-neg' : ''}">${fmt(Number(row.total_outstanding))}</td>
+              <td class="text-right">${fmt(Number(row.calculated_credit_limit))}</td>
+              <td>${row.days_since_last_order > 3650 ? 'Never' : row.days_since_last_order + ' days ago'}</td>
+              <td><span style="padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;color:white;background:${row.risk_category === 'exceeds_limit' ? '#ef4444' : row.risk_category === 'dormant_with_balance' ? '#f59e0b' : row.risk_category === 'healthy' ? '#22c55e' : '#94a3b8'};">${cat.label}</span></td>
+            </tr>`;
+          }).join("")}
+        </tbody>
+      </table>
+    `;
+    const html = generatePrintHTML({
+      title: "Customer Risk Report",
+      dateRange: `As of ${format(new Date(), "MMM d, yyyy")}`,
+      metadata: { "Total Customers": `${d.length}`, "At Risk": `${totals.exceeds_limit + totals.dormant_with_balance}`, "Outstanding": fmt(totalOutstanding) },
+      companyInfo: companySettings,
+      htmlContent,
+    });
+    const win = window.open("", "_blank");
+    if (win) { win.document.write(html); win.document.close(); win.onload = () => { win.print(); }; }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in pb-10">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -103,6 +151,13 @@ const CustomerRiskReport = () => {
                 <div className="text-xs font-medium text-green-600 uppercase tracking-widest mt-1">Healthy</div>
             </CardContent>
          </Card>
+      </div>
+
+      <div className="flex justify-end">
+        <Button variant="outline" size="sm" onClick={handlePrintHTML}>
+          <Printer className="h-4 w-4 mr-2" />
+          Print / PDF
+        </Button>
       </div>
 
       <Card>

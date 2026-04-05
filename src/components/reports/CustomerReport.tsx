@@ -4,15 +4,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Loader2, Users, ShoppingCart, CreditCard, TrendingUp, TrendingDown, Search, Package, DollarSign } from "lucide-react";
+import { Users, ShoppingCart, TrendingUp, Search, DollarSign } from "lucide-react";
 import { format, subMonths, startOfMonth } from "date-fns";
 import { ReportFilters, DateRange } from "./ReportFilters";
-import { ReportExportBar } from "./ReportExportBar";
-import { ReportSummaryCards } from "./ReportSummaryCards";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from "recharts";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { generatePrintHTML } from "@/utils/printUtils";
+import { ReportContainer, ReportKPICard } from "@/components/reports/ReportContainer";
 
 interface CustomerData {
   id: string;
@@ -38,6 +37,7 @@ export default function CustomerReport() {
   });
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<"sales" | "orders" | "outstanding">("sales");
+  const { data: companyInfo } = useCompanySettings();
 
   // Fetch customers
   const { data: customers = [], isLoading: custLoading } = useQuery({
@@ -169,29 +169,61 @@ export default function CustomerReport() {
     { label: "Outstanding", value: `₹${(summary.totalOutstanding / 1000).toFixed(0)}K`, icon: DollarSign, iconColor: "red" },
   ];
 
-  const exportPDF = () => {
-    const doc = new jsPDF();
-    doc.setFontSize(16);
-    doc.text("Customer Report", 14, 15);
-    doc.setFontSize(10);
-    doc.text(`Period: ${format(dateRange.from, "MMM d, yyyy")} - ${format(dateRange.to, "MMM d, yyyy")}`, 14, 23);
+  const generateHTML = () => {
+    const customerRows = filteredData.map((c: CustomerData) => `
+      <tr>
+        <td class="font-medium">${c.name}</td>
+        <td>${c.store_type}</td>
+        <td class="text-center">${c.total_orders}</td>
+        <td class="text-right font-mono">₹${c.total_sales.toLocaleString()}</td>
+        <td class="text-right font-mono text-pos">₹${c.total_payments.toLocaleString()}</td>
+        <td class="text-right font-mono ${c.outstanding > 0 ? 'text-neg font-bold' : ''}">₹${c.outstanding.toLocaleString()}</td>
+      </tr>
+    `).join("");
 
-    autoTable(doc, {
-      startY: 30,
-      head: [["Customer", "Type", "Orders", "Sales", "Payments", "Outstanding"]],
-      body: filteredData.map((c: CustomerData) => [
-        c.name,
-        c.store_type,
-        c.total_orders.toString(),
-        `₹${c.total_sales.toLocaleString()}`,
-        `₹${c.total_payments.toLocaleString()}`,
-        `₹${c.outstanding.toLocaleString()}`,
-      ]),
-      styles: { fontSize: 8 },
-      headStyles: { fillColor: [59, 130, 246] },
+    const htmlContent = `
+      <div class="kpi-row">
+        <div class="kpi-card highlight">
+          <div class="kpi-label">Total Customers</div>
+          <div class="kpi-value">${summary.totalCustomers}</div>
+        </div>
+        <div class="kpi-card highlight">
+          <div class="kpi-label">Active Customers</div>
+          <div class="kpi-value text-success">${summary.activeCustomers}</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Total Revenue</div>
+          <div class="kpi-value text-pos">₹${(summary.totalRevenue / 1000).toFixed(0)}K</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Outstanding</div>
+          <div class="kpi-value text-neg">₹${(summary.totalOutstanding / 1000).toFixed(0)}K</div>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Customer</th>
+            <th>Type</th>
+            <th class="text-center">Orders</th>
+            <th class="text-right">Sales</th>
+            <th class="text-right">Payments</th>
+            <th class="text-right">Outstanding</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${customerRows}
+        </tbody>
+      </table>
+    `;
+
+    return generatePrintHTML({
+      title: "Customer Report",
+      dateRange: `${format(dateRange.from, "MMM d, yyyy")} - ${format(dateRange.to, "MMM d, yyyy")}`,
+      companyInfo: companyInfo || { companyName: "System", address: "", phone: "", email: "", gstin: "" },
+      htmlContent,
     });
-
-    doc.save(`customer-report-${format(dateRange.from, "yyyyMMdd")}-${format(dateRange.to, "yyyyMMdd")}.pdf`);
   };
 
   const exportExcel = () => {
@@ -214,173 +246,184 @@ export default function CustomerReport() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col lg:flex-row lg:items-end gap-4">
-        <ReportFilters dateRange={dateRange} onDateRangeChange={setDateRange} />
-        <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search customers..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-        <div className="flex gap-2">
-          <Badge 
-            variant={sortBy === "sales" ? "default" : "outline"} 
-            className="cursor-pointer"
-            onClick={() => setSortBy("sales")}
-          >
-            By Sales
-          </Badge>
-          <Badge 
-            variant={sortBy === "orders" ? "default" : "outline"} 
-            className="cursor-pointer"
-            onClick={() => setSortBy("orders")}
-          >
-            By Orders
-          </Badge>
-          <Badge 
-            variant={sortBy === "outstanding" ? "default" : "outline"} 
-            className="cursor-pointer"
-            onClick={() => setSortBy("outstanding")}
-          >
-            By Outstanding
-          </Badge>
-        </div>
-      </div>
-
-      <ReportExportBar onExportPDF={exportPDF} onExportExcel={exportExcel} />
-
-      {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      ) : (
-        <>
-          <ReportSummaryCards cards={summaryCards} />
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Top Customers Chart */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Top 10 Customers</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {topCustomersChart.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={topCustomersChart} layout="vertical">
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis type="number" tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}K`} />
-                      <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 11 }} />
-                      <Tooltip formatter={(v: number) => `₹${v.toLocaleString()}`} />
-                      <Legend />
-                      <Bar dataKey="sales" name="Sales" fill="#3b82f6" />
-                      <Bar dataKey="payments" name="Payments" fill="#10b981" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <p className="text-center text-muted-foreground py-12">No customer data</p>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Outstanding by Type */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Outstanding by Store Type</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {outstandingByType.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <PieChart>
-                      <Pie
-                        data={outstandingByType}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
-                        outerRadius={100}
-                        fill="#8884d8"
-                        dataKey="value"
-                      >
-                        {outstandingByType.map((_, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(v: number) => `₹${v.toLocaleString()}`} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <p className="text-center text-muted-foreground py-12">No outstanding balances</p>
-                )}
-              </CardContent>
-            </Card>
+    <ReportContainer
+      title="Customer Report"
+      subtitle="Customer analysis with sales and outstanding insights"
+      icon={<Users className="h-5 w-5" />}
+      dateRange={`${format(dateRange.from, "MMM d, yyyy")} - ${format(dateRange.to, "MMM d, yyyy")}`}
+      onPrint={() => {
+        const html = generateHTML();
+        const w = window.open("", "_blank");
+        if (w) { w.document.write(html); w.document.close(); }
+      }}
+      onExportExcel={exportExcel}
+      isLoading={isLoading}
+      filters={
+        <div className="flex flex-wrap items-center gap-4">
+          <ReportFilters dateRange={dateRange} onDateRangeChange={setDateRange} />
+          <div className="relative flex-1 min-w-[200px] max-w-xs">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search customers..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 h-9"
+            />
           </div>
-
-          {/* Customer Table */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Customer Details ({filteredData.length})</CardTitle>
+          <div className="flex gap-2">
+            <Badge 
+              variant={sortBy === "sales" ? "default" : "outline"} 
+              className="cursor-pointer hover:bg-primary/90"
+              onClick={() => setSortBy("sales")}
+            >
+              By Sales
+            </Badge>
+            <Badge 
+              variant={sortBy === "orders" ? "default" : "outline"} 
+              className="cursor-pointer hover:bg-primary/90"
+              onClick={() => setSortBy("orders")}
+            >
+              By Orders
+            </Badge>
+            <Badge 
+              variant={sortBy === "outstanding" ? "default" : "outline"} 
+              className="cursor-pointer hover:bg-primary/90"
+              onClick={() => setSortBy("outstanding")}
+            >
+              By Outstanding
+            </Badge>
+          </div>
+        </div>
+      }
+      summaryCards={
+        <>
+          <ReportKPICard label="Total Customers" value={summary.totalCustomers.toString()} icon={<Users className="h-4 w-4" />} />
+          <ReportKPICard label="Active Customers" value={summary.activeCustomers.toString()} trend="up" icon={<ShoppingCart className="h-4 w-4" />} />
+          <ReportKPICard label="Total Revenue" value={`₹${(summary.totalRevenue / 1000).toFixed(0)}K`} highlight icon={<TrendingUp className="h-4 w-4" />} />
+          <ReportKPICard label="Outstanding" value={`₹${(summary.totalOutstanding / 1000).toFixed(0)}K`} trend={summary.totalOutstanding > 0 ? "down" : undefined} icon={<DollarSign className="h-4 w-4" />} />
+        </>
+      }
+    >
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Top Customers Chart */}
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold">Top 10 Customers</CardTitle>
             </CardHeader>
             <CardContent>
-              {filteredData.length === 0 ? (
-                <p className="text-center text-muted-foreground py-12">No customers found</p>
+              {topCustomersChart.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={topCustomersChart} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis type="number" tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}K`} />
+                    <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 11 }} />
+                    <Tooltip formatter={(v: number) => `₹${v.toLocaleString()}`} />
+                    <Legend />
+                    <Bar dataKey="sales" name="Sales" fill="#3b82f6" />
+                    <Bar dataKey="payments" name="Payments" fill="#10b981" />
+                  </BarChart>
+                </ResponsiveContainer>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b bg-muted/50">
-                        <th className="text-left p-3 font-medium">Customer</th>
-                        <th className="text-left p-3 font-medium hidden md:table-cell">Type</th>
-                        <th className="text-center p-3 font-medium">Orders</th>
-                        <th className="text-right p-3 font-medium">Sales</th>
-                        <th className="text-right p-3 font-medium hidden lg:table-cell">Payments</th>
-                        <th className="text-right p-3 font-medium">Outstanding</th>
-                        <th className="text-center p-3 font-medium hidden xl:table-cell">Pay %</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredData.slice(0, 50).map((c: CustomerData) => (
-                        <tr key={c.id} className="border-b hover:bg-muted/30">
-                          <td className="p-3">
-                            <p className="font-medium">{c.name}</p>
-                            <p className="text-xs text-muted-foreground">{c.display_id}</p>
-                          </td>
-                          <td className="p-3 hidden md:table-cell">
-                            <Badge variant="outline" className="text-xs">{c.store_type}</Badge>
-                          </td>
-                          <td className="p-3 text-center">{c.total_orders}</td>
-                          <td className="p-3 text-right font-medium">₹{c.total_sales.toLocaleString()}</td>
-                          <td className="p-3 text-right hidden lg:table-cell text-green-600">
-                            ₹{c.total_payments.toLocaleString()}
-                          </td>
-                          <td className="p-3 text-right">
-                            <span className={c.outstanding > 0 ? "text-red-600 font-semibold" : "text-green-600"}>
-                              ₹{c.outstanding.toLocaleString()}
-                            </span>
-                          </td>
-                          <td className="p-3 text-center hidden xl:table-cell">
-                            <Badge variant={c.payment_ratio >= 80 ? "default" : c.payment_ratio >= 50 ? "secondary" : "destructive"}>
-                              {c.payment_ratio.toFixed(0)}%
-                            </Badge>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-              {filteredData.length > 50 && (
-                <p className="text-center text-muted-foreground mt-4 text-sm">
-                  Showing 50 of {filteredData.length} customers. Export to see all.
-                </p>
+                <p className="text-center text-muted-foreground py-12">No customer data</p>
               )}
             </CardContent>
           </Card>
-        </>
-      )}
-    </div>
+
+          {/* Outstanding by Type */}
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold">Outstanding by Store Type</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {outstandingByType.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={outstandingByType}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                      outerRadius={100}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {outstandingByType.map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(v: number) => `₹${v.toLocaleString()}`} />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="text-center text-muted-foreground py-12">No outstanding balances</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Customer Table */}
+        <Card className="border-0 shadow-sm overflow-hidden">
+          <CardHeader className="pb-2 bg-muted/30">
+            <CardTitle className="text-base font-semibold">Customer Details ({filteredData.length})</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            {filteredData.length === 0 ? (
+              <p className="text-center text-muted-foreground py-12">No customers found</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/50">
+                      <th className="text-left p-3 font-semibold">Customer</th>
+                      <th className="text-left p-3 font-semibold hidden md:table-cell">Type</th>
+                      <th className="text-center p-3 font-semibold">Orders</th>
+                      <th className="text-right p-3 font-semibold">Sales</th>
+                      <th className="text-right p-3 font-semibold hidden lg:table-cell">Payments</th>
+                      <th className="text-right p-3 font-semibold">Outstanding</th>
+                      <th className="text-center p-3 font-semibold hidden xl:table-cell">Pay %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredData.slice(0, 50).map((c: CustomerData) => (
+                      <tr key={c.id} className="border-b hover:bg-muted/30">
+                        <td className="p-3">
+                          <p className="font-medium">{c.name}</p>
+                          <p className="text-xs text-muted-foreground">{c.display_id}</p>
+                        </td>
+                        <td className="p-3 hidden md:table-cell">
+                          <Badge variant="outline" className="text-xs">{c.store_type}</Badge>
+                        </td>
+                        <td className="p-3 text-center">{c.total_orders}</td>
+                        <td className="p-3 text-right font-medium">₹{c.total_sales.toLocaleString()}</td>
+                        <td className="p-3 text-right hidden lg:table-cell text-green-600">
+                          ₹{c.total_payments.toLocaleString()}
+                        </td>
+                        <td className="p-3 text-right">
+                          <span className={c.outstanding > 0 ? "text-red-600 font-semibold" : "text-green-600"}>
+                            ₹{c.outstanding.toLocaleString()}
+                          </span>
+                        </td>
+                        <td className="p-3 text-center hidden xl:table-cell">
+                          <Badge variant={c.payment_ratio >= 80 ? "default" : c.payment_ratio >= 50 ? "secondary" : "destructive"}>
+                            {c.payment_ratio.toFixed(0)}%
+                          </Badge>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {filteredData.length > 50 && (
+              <p className="text-center text-muted-foreground py-4 text-sm border-t">
+                Showing 50 of {filteredData.length} customers. Export to see all.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </ReportContainer>
   );
 }

@@ -3,13 +3,12 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ShoppingCart, CreditCard, RotateCcw, Receipt, Wallet, TrendingUp, TrendingDown } from "lucide-react";
-import { format, subDays, startOfDay, endOfDay } from "date-fns";
+import { ShoppingCart, CreditCard, RotateCcw, Receipt, Wallet, TrendingUp, TrendingDown } from "lucide-react";
+import { format, subDays } from "date-fns";
 import { ReportFilters, DateRange } from "./ReportFilters";
-import { ReportExportBar } from "./ReportExportBar";
-import { ReportSummaryCards } from "./ReportSummaryCards";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { generatePrintHTML } from "@/utils/printUtils";
+import { ReportContainer, ReportKPICard } from "@/components/reports/ReportContainer";
 
 interface DayBookEntry {
   id: string;
@@ -31,6 +30,7 @@ export default function DayBookReport() {
     from: subDays(new Date(), 0),
     to: new Date(),
   });
+  const { data: companyInfo } = useCompanySettings();
 
   // Fetch all data sources
   const { data: sales = [], isLoading: salesLoading } = useQuery({
@@ -290,34 +290,87 @@ export default function DayBookReport() {
     return <Badge variant={config.variant} className="text-xs">{config.label}</Badge>;
   };
 
-  const exportPDF = () => {
-    const doc = new jsPDF();
-    doc.setFontSize(16);
-    doc.text("Day Book Report", 14, 20);
-    doc.setFontSize(10);
-    doc.text(`${format(dateRange.from, "MMM d, yyyy")} - ${format(dateRange.to, "MMM d, yyyy")}`, 14, 28);
+  const generateHTML = () => {
+    const entryRows = entries.map((e) => `
+      <tr>
+        <td>
+          <div class="font-medium">${format(new Date(e.date), "dd MMM")}</div>
+          <div style="font-size: 0.75rem; color: #64748b;">${e.time}</div>
+        </td>
+        <td>${e.type.replace("_", " ").toUpperCase()}</td>
+        <td class="font-mono" style="font-size: 0.75rem;">${e.display_id}</td>
+        <td class="font-medium">${e.party_name}</td>
+        <td>
+          <div>${e.description}</div>
+          ${e.payment_method ? `<div style="font-size: 0.75rem; color: #64748b;">${e.payment_method.replace("_", " ")}</div>` : ""}
+        </td>
+        <td class="text-right font-mono ${e.debit > 0 ? 'text-neg font-bold' : ''}">
+          ${e.debit > 0 ? `₹${e.debit.toLocaleString()}` : "—"}
+        </td>
+        <td class="text-right font-mono ${e.credit > 0 ? 'text-pos font-bold' : ''}">
+          ${e.credit > 0 ? `₹${e.credit.toLocaleString()}` : "—"}
+        </td>
+        <td class="text-right font-mono font-bold ${e.balance >= 0 ? 'text-pos' : 'text-neg'}">
+          ₹${e.balance.toLocaleString()}
+        </td>
+      </tr>
+    `).join("");
 
-    autoTable(doc, {
-      startY: 35,
-      head: [["Date", "Time", "Type", "ID", "Party", "Description", "Debit", "Credit", "Balance"]],
-      body: entries.map((e) => [
-        format(new Date(e.date), "dd/MM/yy"),
-        e.time,
-        e.type.replace("_", " ").toUpperCase(),
-        e.display_id,
-        e.party_name,
-        e.description,
-        e.debit > 0 ? `₹${e.debit.toLocaleString()}` : "",
-        e.credit > 0 ? `₹${e.credit.toLocaleString()}` : "",
-        `₹${e.balance.toLocaleString()}`,
-      ]),
-      foot: [["", "", "", "", "", "TOTAL", `₹${totals.totalDebit.toLocaleString()}`, `₹${totals.totalCredit.toLocaleString()}`, `₹${totals.netBalance.toLocaleString()}`]],
-      styles: { fontSize: 8 },
-      headStyles: { fillColor: [41, 128, 185] },
-      footStyles: { fillColor: [236, 240, 241], textColor: [0, 0, 0], fontStyle: "bold" },
+    const htmlContent = `
+      <div class="kpi-row">
+        <div class="kpi-card highlight">
+          <div class="kpi-label">Total Credits</div>
+          <div class="kpi-value text-pos">₹${totals.totalCredit.toLocaleString()}</div>
+        </div>
+        <div class="kpi-card highlight">
+          <div class="kpi-label">Total Debits</div>
+          <div class="kpi-value text-neg">₹${totals.totalDebit.toLocaleString()}</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Net Balance</div>
+          <div class="kpi-value ${totals.netBalance >= 0 ? 'text-pos' : 'text-neg'}">₹${totals.netBalance.toLocaleString()}</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Entries</div>
+          <div class="kpi-value">${entries.length}</div>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Type</th>
+            <th>ID</th>
+            <th>Party</th>
+            <th>Description</th>
+            <th class="text-right">Debit</th>
+            <th class="text-right">Credit</th>
+            <th class="text-right">Balance</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${entryRows}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="5" class="text-right font-bold">TOTAL</td>
+            <td class="text-right font-mono font-bold text-neg">₹${totals.totalDebit.toLocaleString()}</td>
+            <td class="text-right font-mono font-bold text-pos">₹${totals.totalCredit.toLocaleString()}</td>
+            <td class="text-right font-mono font-bold ${totals.netBalance >= 0 ? 'text-pos' : 'text-neg'}">
+              ₹${totals.netBalance.toLocaleString()}
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+    `;
+
+    return generatePrintHTML({
+      title: "Day Book Ledger",
+      dateRange: `${format(dateRange.from, "MMM d, yyyy")} - ${format(dateRange.to, "MMM d, yyyy")}`,
+      companyInfo: companyInfo || { companyName: "System", address: "", phone: "", email: "", gstin: "" },
+      htmlContent,
     });
-
-    doc.save(`daybook-${format(dateRange.from, "yyyy-MM-dd")}-${format(dateRange.to, "yyyy-MM-dd")}.pdf`);
   };
 
   const summaryCards = [
@@ -327,83 +380,110 @@ export default function DayBookReport() {
     { label: "Transactions", value: entries.length.toString(), icon: Receipt, iconColor: "blue" },
   ];
 
+  const filtersSection = (
+    <ReportFilters dateRange={dateRange} onDateRangeChange={setDateRange} />
+  );
+
+  const summaryCardsSection = (
+    <>
+      <ReportKPICard
+        label="Total Credits"
+        value={`₹${totals.totalCredit.toLocaleString()}`}
+        icon={TrendingUp}
+        trend="up"
+        highlight
+      />
+      <ReportKPICard
+        label="Total Debits"
+        value={`₹${totals.totalDebit.toLocaleString()}`}
+        icon={TrendingDown}
+        trend="down"
+      />
+      <ReportKPICard
+        label="Net Balance"
+        value={`₹${totals.netBalance.toLocaleString()}`}
+        icon={Wallet}
+        trend={totals.netBalance >= 0 ? "up" : "down"}
+        highlight
+      />
+      <ReportKPICard
+        label="Transactions"
+        value={entries.length.toString()}
+        icon={Receipt}
+      />
+    </>
+  );
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-semibold">Day Book</h2>
-          <p className="text-sm text-muted-foreground">Complete chronological record of all financial transactions</p>
-        </div>
-        <ReportExportBar onExportPDF={exportPDF} showExcel={false} showCSV={false} showPrint={false} />
-      </div>
-
-      <ReportFilters dateRange={dateRange} onDateRangeChange={setDateRange} />
-
-      <ReportSummaryCards cards={summaryCards} />
-
-      {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      ) : entries.length === 0 ? (
-        <Card>
+    <ReportContainer
+      title="Day Book"
+      subtitle="Complete chronological record of all financial transactions"
+      icon={Receipt}
+      dateRange={`${format(dateRange.from, "MMM d, yyyy")} - ${format(dateRange.to, "MMM d, yyyy")}`}
+      onPrint={generateHTML}
+      isLoading={isLoading}
+      filters={filtersSection}
+      summaryCards={summaryCardsSection}
+    >
+      {entries.length === 0 ? (
+        <Card className="border-0 shadow-sm">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Receipt className="h-12 w-12 text-muted-foreground/30 mb-4" />
             <p className="text-muted-foreground">No transactions found for this period</p>
           </CardContent>
         </Card>
       ) : (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Transaction Ledger</CardTitle>
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Transaction Ledger</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full text-sm">
                 <thead className="bg-muted/50">
-                  <tr className="text-left text-sm">
-                    <th className="px-4 py-3 font-medium">Date</th>
-                    <th className="px-4 py-3 font-medium">Type</th>
-                    <th className="px-4 py-3 font-medium">ID</th>
-                    <th className="px-4 py-3 font-medium">Party</th>
-                    <th className="px-4 py-3 font-medium">Description</th>
-                    <th className="px-4 py-3 font-medium text-right">Debit</th>
-                    <th className="px-4 py-3 font-medium text-right">Credit</th>
-                    <th className="px-4 py-3 font-medium text-right">Balance</th>
+                  <tr>
+                    <th className="text-left p-3 font-semibold text-xs">Date</th>
+                    <th className="text-left p-3 font-semibold text-xs">Type</th>
+                    <th className="text-left p-3 font-semibold text-xs">ID</th>
+                    <th className="text-left p-3 font-semibold text-xs">Party</th>
+                    <th className="text-left p-3 font-semibold text-xs">Description</th>
+                    <th className="text-right p-3 font-semibold text-xs">Debit</th>
+                    <th className="text-right p-3 font-semibold text-xs">Credit</th>
+                    <th className="text-right p-3 font-semibold text-xs">Balance</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y">
+                <tbody>
                   {entries.map((entry) => (
-                    <tr key={`${entry.type}-${entry.id}`} className="hover:bg-muted/30 transition-colors">
-                      <td className="px-4 py-3 text-sm">
+                    <tr key={`${entry.type}-${entry.id}`} className="border-b hover:bg-muted/30">
+                      <td className="p-3">
                         <div className="flex flex-col">
-                          <span className="font-medium">{format(new Date(entry.date), "dd MMM")}</span>
+                          <span className="font-medium text-sm">{format(new Date(entry.date), "dd MMM")}</span>
                           <span className="text-xs text-muted-foreground">{entry.time}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="p-3">
                         <div className="flex items-center gap-2">
                           {getTypeIcon(entry.type)}
                           {getTypeBadge(entry.type)}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-sm font-mono text-muted-foreground">{entry.display_id}</td>
-                      <td className="px-4 py-3 text-sm font-medium">{entry.party_name}</td>
-                      <td className="px-4 py-3 text-sm">
+                      <td className="p-3 font-mono text-xs text-muted-foreground">{entry.display_id}</td>
+                      <td className="p-3 font-medium">{entry.party_name}</td>
+                      <td className="p-3">
                         <div className="flex flex-col">
-                          <span>{entry.description}</span>
+                          <span className="text-sm">{entry.description}</span>
                           {entry.payment_method && (
                             <span className="text-xs text-muted-foreground capitalize">{entry.payment_method.replace("_", " ")}</span>
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-right font-medium text-red-600">
+                      <td className="p-3 text-right font-medium text-red-600">
                         {entry.debit > 0 ? `₹${entry.debit.toLocaleString()}` : "—"}
                       </td>
-                      <td className="px-4 py-3 text-sm text-right font-medium text-green-600">
+                      <td className="p-3 text-right font-medium text-green-600">
                         {entry.credit > 0 ? `₹${entry.credit.toLocaleString()}` : "—"}
                       </td>
-                      <td className="px-4 py-3 text-sm text-right font-bold">
+                      <td className="p-3 text-right font-bold">
                         <span className={entry.balance >= 0 ? "text-green-600" : "text-red-600"}>
                           ₹{entry.balance.toLocaleString()}
                         </span>
@@ -411,12 +491,12 @@ export default function DayBookReport() {
                     </tr>
                   ))}
                 </tbody>
-                <tfoot className="bg-muted/70 font-semibold">
+                <tfoot className="bg-muted/50 font-semibold">
                   <tr>
-                    <td colSpan={5} className="px-4 py-3 text-right">TOTAL</td>
-                    <td className="px-4 py-3 text-right text-red-600">₹{totals.totalDebit.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-right text-green-600">₹{totals.totalCredit.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-right">
+                    <td colSpan={5} className="p-3 text-right">TOTAL</td>
+                    <td className="p-3 text-right text-red-600">₹{totals.totalDebit.toLocaleString()}</td>
+                    <td className="p-3 text-right text-green-600">₹{totals.totalCredit.toLocaleString()}</td>
+                    <td className="p-3 text-right">
                       <span className={totals.netBalance >= 0 ? "text-green-600" : "text-red-600"}>
                         ₹{totals.netBalance.toLocaleString()}
                       </span>
@@ -428,6 +508,6 @@ export default function DayBookReport() {
           </CardContent>
         </Card>
       )}
-    </div>
+    </ReportContainer>
   );
 }

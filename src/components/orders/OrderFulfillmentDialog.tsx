@@ -164,12 +164,12 @@ export function OrderFulfillmentDialog({
         if (order.store_id) {
           const { data: storePrices, error: storePricesError } = await supabase
             .from("store_pricing")
-            .select("product_id, custom_price")
+            .select("product_id, price")
             .eq("store_id", order.store_id);
 
           if (!storePricesError && storePrices) {
             const priceMap = new Map<string, number>();
-            storePrices.forEach((sp) => priceMap.set(sp.product_id, sp.custom_price));
+            storePrices.forEach((sp) => priceMap.set(sp.product_id, sp.price));
             setStorePricing(priceMap);
           }
 
@@ -188,16 +188,16 @@ export function OrderFulfillmentDialog({
           }
         }
 
-        // Load customer outstanding balance
-        if (order.stores?.customer_id) {
-          const { data: balanceData, error: balanceError } = await supabase
-            .from("customer_balances")
-            .select("outstanding_balance")
-            .eq("customer_id", order.stores.customer_id)
+        // Load current store outstanding directly from stores table.
+        if (order.store_id) {
+          const { data: storeData, error: storeError } = await supabase
+            .from("stores")
+            .select("outstanding")
+            .eq("id", order.store_id)
             .maybeSingle();
 
-          if (!balanceError && balanceData) {
-            setOldOutstanding(balanceData.outstanding_balance || 0);
+          if (!storeError && storeData) {
+            setOldOutstanding(Number(storeData.outstanding || 0));
           }
         }
 
@@ -350,7 +350,7 @@ export function OrderFulfillmentDialog({
       // Generate display ID for sale
       const { data: displayIdData, error: displayIdError } = await supabase.rpc(
         "generate_display_id",
-        { prefix: "SALE" }
+        { prefix: "SALE", seq_name: "sale_display_seq" }
       );
       if (displayIdError) throw displayIdError;
 
@@ -367,6 +367,7 @@ export function OrderFulfillmentDialog({
         product_id: item.product_id,
         quantity: item.quantity,
         unit_price: item.unit_price,
+        total_price: item.quantity * item.unit_price,
       }));
 
       // Call record_sale RPC
@@ -375,14 +376,13 @@ export function OrderFulfillmentDialog({
         p_store_id: order.store_id,
         p_customer_id: order.stores?.customer_id || null,
         p_recorded_by: user.id,
+        p_logged_by: null,
         p_total_amount: subtotal,
         p_cash_amount: parseFloat(cashAmount) || 0,
         p_upi_amount: parseFloat(upiAmount) || 0,
         p_outstanding_amount: outstandingAmount,
-        p_old_outstanding: oldOutstanding,
-        p_new_outstanding: newOutstanding,
-        p_notes: notes || null,
-        p_items: saleItems,
+        p_sale_items: saleItems,
+        p_created_at: null,
       });
 
       if (saleError) throw saleError;

@@ -44,17 +44,26 @@ const Purchases = () => {
   const [notes, setNotes] = useState("");
   const [items, setItems] = useState<PurchaseItem[]>([{ item_type: "product", item_id: "", quantity: 1, unit_cost: 0 }]);
 
-  const { data: purchases = [], isLoading } = useQuery({
-    queryKey: ["purchases"],
+  const PAGE_SIZE = 100;
+  const [loadedPages, setLoadedPages] = useState(1);
+
+  const { data: purchases = [], isLoading, isFetching } = useQuery({
+    queryKey: ["purchases", loadedPages],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("purchases")
         .select("*, vendors(name), purchase_items(*, products(name))")
         .order("purchase_date", { ascending: false });
+
+      query = query.range(0, loadedPages * PAGE_SIZE - 1);
+
+      const { data, error } = await query;
       if (error) throw error;
       return data;
     },
   });
+
+  const hasMorePurchases = purchases.length >= loadedPages * PAGE_SIZE;
 
   const { data: vendors = [] } = useQuery({
     queryKey: ["vendors-list"],
@@ -277,6 +286,15 @@ const Purchases = () => {
           </div>
         )}
       />
+
+      {hasMorePurchases && (
+        <div className="flex justify-center pt-2">
+          <Button variant="outline" size="sm" onClick={() => setLoadedPages((p) => p + 1)} disabled={isFetching} className="gap-1.5">
+            {isFetching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+            Load more
+          </Button>
+        </div>
+      )}
 
       {/* Add Purchase Dialog */}
       <Dialog open={showAdd} onOpenChange={(open) => { setShowAdd(open); if (!open) resetForm(); }}>

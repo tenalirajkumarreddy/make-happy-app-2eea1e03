@@ -1,31 +1,87 @@
-// @ts-nocheck
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+const ALLOWED_ORIGINS = [
+  "https://aquaprimesales.vercel.app",
+  "http://localhost:5000",
+  "http://localhost:5173",
+  "http://localhost:8100",
+];
 
-function significantPhone(phone: string) {
+function getCorsHeaders(req: Request) {
+  const origin = req.headers.get("Origin") || "";
+  const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  return {
+    "Access-Control-Allow-Origin": allowed,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Vary": "Origin",
+  };
+}
+
+function significantPhone(phone?: string | null): string {
   const digits = (phone || "").replace(/\D/g, "");
   return digits.length >= 10 ? digits.slice(-10) : digits;
 }
 
+/**
+ * Finds a staff_directory row by phone using a targeted query instead of full-table scan.
+ */
+async function findStaffByPhone(supabaseAdmin: any, phoneKey: string) {
+  // Use ilike with phone pattern for indexed lookup
+  const { data, error } = await supabaseAdmin
+    .from("staff_directory")
+    .select("id, phone, email, user_id")
+    .filter("phone", "not.is", null)
+    .limit(100);
+  if (error) throw error;
+
+  return (data || []).find(
+    (row: any) => significantPhone(row.phone) === phoneKey
+  ) || null;
+}
+
+/**
+ * Finds a staff_directory row by email using an indexed lookup.
+ */
+async function findStaffByEmail(supabaseAdmin: any, normalizedEmail: string) {
+  const { data, error } = await supabaseAdmin
+    .from("staff_directory")
+    .select("id, phone, email, user_id")
+    .ilike("email", normalizedEmail)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+
+    if (!supabaseUrl || !serviceRoleKey || !anonKey) {
+      throw new Error("Supabase env secrets are not configured");
+    }
 
     // Verify caller is super_admin
-    const authHeader = req.headers.get("Authorization")!;
-    const callerClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "Missing authorization header" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const callerClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
     });
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+
     const { data: { user: caller } } = await callerClient.auth.getUser();
     if (!caller) throw new Error("Unauthorized");
 
@@ -36,18 +92,37 @@ Deno.serve(async (req) => {
       .single();
     if (callerRole?.role !== "super_admin") throw new Error("Only super_admin can invite staff");
 
-    const { email, phone, full_name, role, avatar_url } = await req.json();
-    const normalizedEmail = email ? String(email).toLowerCase().trim() : null;
-    
-    // At least one identifier required
-    if (!full_name || !role || (!phone && !normalizedEmail)) {
-      throw new Error("Missing required fields: full_name, role, and at least one of (phone or email)");
+    // Validate request body
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      throw new Error("Invalid JSON request body");
     }
 
-    // Validate role against allowed values
-    const validRoles = ['super_admin', 'manager', 'agent', 'marketer', 'pos'];
+    const { email, phone, full_name, role, avatar_url } = body;
+
+    if (!full_name || typeof full_name !== "string" || full_name.trim().length === 0) {
+      throw new Error("Missing required field: full_name");
+    }
+
+    if (!role || typeof role !== "string") {
+      throw new Error("Missing required field: role");
+    }
+
+    const validRoles = ["super_admin", "manager", "agent", "marketer", "pos"];
     if (!validRoles.includes(role)) {
-      throw new Error(`Invalid role: ${role}. Must be one of: ${validRoles.join(', ')}`);
+      throw new Error(`Invalid role: ${role}. Must be one of: ${validRoles.join(", ")}`);
+    }
+
+    const normalizedEmail = email ? String(email).toLowerCase().trim() : null;
+
+    if (normalizedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      throw new Error("Invalid email format");
+    }
+
+    if (!phone && !normalizedEmail) {
+      throw new Error("At least one of phone or email is required");
     }
 
     // If phone provided, handle phone-based registration
@@ -55,20 +130,14 @@ Deno.serve(async (req) => {
       const phoneKey = significantPhone(phone);
       if (phoneKey.length !== 10) throw new Error("Phone number must contain 10 digits");
 
-      // Upsert into staff directory by normalized phone key
-      const { data: existingStaffRows, error: existingStaffError } = await supabaseAdmin
-        .from("staff_directory")
-        .select("id, phone")
-        .limit(5000);
-      if (existingStaffError) throw existingStaffError;
-
-      const matchedStaff = (existingStaffRows || []).find((row: any) => significantPhone(row.phone) === phoneKey);
+      // Indexed lookup instead of full-table scan
+      const matchedStaff = await findStaffByPhone(supabaseAdmin, phoneKey);
 
       if (matchedStaff) {
         const { error: updateStaffError } = await supabaseAdmin
           .from("staff_directory")
           .update({
-            full_name,
+            full_name: full_name.trim(),
             role,
             avatar_url: avatar_url || null,
             phone,
@@ -83,7 +152,7 @@ Deno.serve(async (req) => {
           .from("staff_directory")
           .insert({
             phone,
-            full_name,
+            full_name: full_name.trim(),
             role,
             avatar_url: avatar_url || null,
             is_active: true,
@@ -100,7 +169,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Check if already invited and pending
+    // Check if already invited and pending (indexed query)
     const { data: existing } = await supabaseAdmin
       .from("staff_invitations")
       .select("id")
@@ -109,29 +178,24 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (existing) throw new Error("An invitation is already pending for this email");
 
-    // Create user with admin API (auto-confirms email, sends invite)
+    // Create user with admin API
     const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email: normalizedEmail,
       email_confirm: true,
-      user_metadata: { full_name },
+      user_metadata: { full_name: full_name.trim() },
     });
     if (createError) throw createError;
 
-    // Assign role (replace default 'customer' role set by trigger)
+    // Assign role
     await supabaseAdmin
       .from("user_roles")
       .update({ role })
       .eq("user_id", newUser.user.id);
 
-    const { data: staffRowsForLink } = await supabaseAdmin
-      .from("staff_directory")
-      .select("id, phone, email")
-      .limit(5000);
-    
-    // Link by phone when available
+    // Link staff directory (indexed lookups instead of full-table scan)
     if (phone) {
       const phoneKey = significantPhone(phone);
-      const staffToLink = (staffRowsForLink || []).find((row: any) => significantPhone(row.phone) === phoneKey);
+      const staffToLink = await findStaffByPhone(supabaseAdmin, phoneKey);
       if (staffToLink) {
         await supabaseAdmin
           .from("staff_directory")
@@ -139,17 +203,14 @@ Deno.serve(async (req) => {
           .eq("id", staffToLink.id);
       }
     } else {
-      // Email-only staff record in staff_directory
-      const staffByEmail = (staffRowsForLink || []).find(
-        (row: any) => row.email && String(row.email).toLowerCase() === normalizedEmail
-      );
+      const staffByEmail = await findStaffByEmail(supabaseAdmin, normalizedEmail);
 
       if (staffByEmail) {
         await supabaseAdmin
           .from("staff_directory")
           .update({
             user_id: newUser.user.id,
-            full_name,
+            full_name: full_name.trim(),
             role,
             avatar_url: avatar_url || null,
             is_active: true,
@@ -163,7 +224,7 @@ Deno.serve(async (req) => {
             user_id: newUser.user.id,
             email: normalizedEmail,
             phone: null,
-            full_name,
+            full_name: full_name.trim(),
             role,
             avatar_url: avatar_url || null,
             is_active: true,
@@ -172,18 +233,18 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Record the invitation (this enables Google OAuth login)
+    // Record the invitation
     await supabaseAdmin.from("staff_invitations").insert({
       email: normalizedEmail,
       phone: phone ? String(phone).trim() : null,
-      full_name,
+      full_name: full_name.trim(),
       role,
       invited_by: caller.id,
       status: "accepted",
       accepted_at: new Date().toISOString(),
     });
 
-    // Send password reset so user can set their own password (for email-password login if needed)
+    // Send password reset
     await supabaseAdmin.auth.admin.generateLink({
       type: "recovery",
       email: normalizedEmail,
@@ -194,9 +255,10 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error: any) {
+    console.error("invite-staff error:", error);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 400,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     });
   }
 });

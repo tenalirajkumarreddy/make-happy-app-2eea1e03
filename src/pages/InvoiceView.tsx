@@ -49,7 +49,7 @@ const InvoiceView = () => {
           *,
           customers(name, phone),
           stores(name),
-          warehouses:dispatch_warehouse_id(name, address, city, state),
+          warehouses:dispatch_warehouse_id(name, address, city, pincode, phone),
           invoice_items(*),
           invoice_sales(sale_id, sales(display_id))
         `)
@@ -123,6 +123,131 @@ const InvoiceView = () => {
 
   const amountInWords = numberToWords(Number(invoice.total_amount));
 
+  const renderPrintCopy = (copyTitle: string, isLast: boolean) => (
+    <section className={`mx-auto max-w-4xl bg-white p-8 text-black ${isLast ? "" : "print:break-after-page"}`}>
+      <div className="flex justify-between items-start mb-6 pb-4 border-b-2 border-black">
+        <div>
+          <h1 className="text-2xl font-bold">{businessInfo?.name || settings.business_name || "Your Company"}</h1>
+          <p className="text-sm whitespace-pre-line">
+            {businessInfo?.address || settings.business_address}
+            {(businessInfo?.city || settings.business_city) && `, ${businessInfo?.city || settings.business_city}`}
+            {(businessInfo?.pincode || settings.business_pincode) && ` - ${businessInfo?.pincode || settings.business_pincode}`}
+          </p>
+          {(businessInfo?.phone || settings.business_phone) && <p className="text-sm">Phone: {businessInfo?.phone || settings.business_phone}</p>}
+          {(businessInfo?.email || settings.business_email) && <p className="text-sm">Email: {businessInfo?.email || settings.business_email}</p>}
+          {(businessInfo?.gstin || settings.business_gstin) && <p className="text-sm font-mono font-semibold">GSTIN: {businessInfo?.gstin || settings.business_gstin}</p>}
+        </div>
+        <div className="text-right">
+          <h2 className="text-3xl font-bold text-primary">TAX INVOICE</h2>
+          <p className="font-mono text-lg font-semibold mt-2">{invoice.invoice_number}</p>
+          <p className="text-sm">Date: {new Date(invoice.invoice_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</p>
+          <Badge variant="outline" className="mt-2">{copyTitle}</Badge>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-8 mb-6">
+        <div>
+          <h3 className="font-semibold text-sm text-muted-foreground mb-2">BILL TO</h3>
+          <p className="font-semibold">{invoice.customer_name}</p>
+          {invoice.stores?.name && <p className="text-sm">{invoice.stores.name}</p>}
+          {invoice.customer_address && <p className="text-sm whitespace-pre-line">{invoice.customer_address}</p>}
+          {invoice.customer_phone && <p className="text-sm">Phone: {invoice.customer_phone}</p>}
+          {invoice.customer_gstin && <p className="text-sm font-mono">GSTIN: {invoice.customer_gstin}</p>}
+        </div>
+        <div>
+          <h3 className="font-semibold text-sm text-muted-foreground mb-2">DISPATCH FROM</h3>
+          {invoice.warehouses ? (
+            <>
+              <p className="font-semibold">{invoice.warehouses.name}</p>
+              <p className="text-sm whitespace-pre-line">
+                {invoice.warehouses.address}
+                {invoice.warehouses.city && `, ${invoice.warehouses.city}`}
+                {invoice.warehouses.pincode && ` - ${invoice.warehouses.pincode}`}
+              </p>
+              {invoice.warehouses.phone && <p className="text-sm">Phone: {invoice.warehouses.phone}</p>}
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">—</p>
+          )}
+        </div>
+      </div>
+
+      <table className="w-full mb-6 text-sm border-collapse">
+        <thead>
+          <tr className="bg-gray-100">
+            <th className="text-left p-2 border">#</th>
+            <th className="text-left p-2 border">Description</th>
+            <th className="text-left p-2 border">HSN</th>
+            <th className="text-right p-2 border">Qty</th>
+            <th className="text-right p-2 border">Rate</th>
+            <th className="text-right p-2 border">Taxable</th>
+            <th className="text-right p-2 border">GST %</th>
+            <th className="text-right p-2 border">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {invoice.invoice_items?.map((item: any, index: number) => {
+            const lineTotal = Number(item.total_amount ?? item.quantity * item.unit_price);
+            const gstRate = item.gst_rate || item.tax_rate || 0;
+            const taxableAmt = item.taxable_amount || (gstRate > 0 ? lineTotal / (1 + gstRate / 100) : lineTotal);
+            return (
+              <tr key={item.id}>
+                <td className="p-2 border">{index + 1}</td>
+                <td className="p-2 border">{item.product_name}</td>
+                <td className="p-2 border font-mono text-xs">{item.hsn_code || "—"}</td>
+                <td className="p-2 border text-right">{item.quantity}</td>
+                <td className="p-2 border text-right">₹{Number(item.unit_price).toLocaleString()}</td>
+                <td className="p-2 border text-right">₹{Number(taxableAmt).toLocaleString()}</td>
+                <td className="p-2 border text-right">{gstRate}%</td>
+                <td className="p-2 border text-right font-semibold">₹{Number(lineTotal).toLocaleString()}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      <div className="flex justify-end mb-6">
+        <div className="w-80 border rounded-lg overflow-hidden">
+          <div className="flex justify-between py-2 px-3 bg-gray-50 border-b">
+            <span>Taxable Amount</span>
+            <span className="font-medium">₹{Number(invoice.taxable_amount || invoice.subtotal).toLocaleString()}</span>
+          </div>
+          {invoice.is_inter_state ? (
+            <div className="flex justify-between py-2 px-3 border-b">
+              <span>IGST</span>
+              <span>₹{Number(invoice.igst_amount || invoice.tax_amount).toLocaleString()}</span>
+            </div>
+          ) : (
+            <>
+              <div className="flex justify-between py-2 px-3 border-b">
+                <span>CGST</span>
+                <span>₹{Number(invoice.cgst_amount || (invoice.tax_amount / 2)).toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between py-2 px-3 border-b">
+                <span>SGST</span>
+                <span>₹{Number(invoice.sgst_amount || (invoice.tax_amount / 2)).toLocaleString()}</span>
+              </div>
+            </>
+          )}
+          {Number(invoice.discount_amount) > 0 && (
+            <div className="flex justify-between py-2 px-3 text-green-600 border-b">
+              <span>Discount</span>
+              <span>-₹{Number(invoice.discount_amount).toLocaleString()}</span>
+            </div>
+          )}
+          <div className="flex justify-between py-3 px-3 bg-primary/10 font-bold text-lg">
+            <span>Grand Total</span>
+            <span>₹{Number(invoice.total_amount).toLocaleString()}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-gray-50 p-3 rounded">
+        <p className="text-sm"><span className="font-semibold">Amount in Words: </span>{amountInWords}</p>
+      </div>
+    </section>
+  );
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header - Hide in print */}
@@ -144,7 +269,7 @@ const InvoiceView = () => {
       </div>
 
       {/* Invoice Template */}
-      <Card className="max-w-4xl mx-auto print:shadow-none print:border-none">
+      <Card className="max-w-4xl mx-auto print:hidden">
         <CardContent className="p-8 print:p-4" ref={printRef}>
           {/* Cancelled Watermark */}
           {invoice.status === "cancelled" && (
@@ -165,7 +290,6 @@ const InvoiceView = () => {
               <p className="text-sm text-muted-foreground whitespace-pre-line">
                 {businessInfo?.address || settings.business_address}
                 {(businessInfo?.city || settings.business_city) && `, ${businessInfo?.city || settings.business_city}`}
-                {(businessInfo?.state || settings.business_state) && `, ${businessInfo?.state || settings.business_state}`}
                 {(businessInfo?.pincode || settings.business_pincode) && ` - ${businessInfo?.pincode || settings.business_pincode}`}
               </p>
               {(businessInfo?.phone || settings.business_phone) && <p className="text-sm">Phone: {businessInfo?.phone || settings.business_phone}</p>}
@@ -174,7 +298,6 @@ const InvoiceView = () => {
                 <p className="text-sm font-mono font-semibold">GSTIN: {businessInfo?.gstin || settings.business_gstin}</p>
               )}
               {businessInfo?.pan && <p className="text-sm font-mono">PAN: {businessInfo.pan}</p>}
-              {businessInfo?.state_code && <p className="text-sm">State Code: {businessInfo.state_code}</p>}
             </div>
             <div className="text-right">
               <h2 className="text-3xl font-bold text-primary">TAX INVOICE</h2>
@@ -210,8 +333,9 @@ const InvoiceView = () => {
                   <p className="text-sm whitespace-pre-line">
                     {invoice.warehouses.address}
                     {invoice.warehouses.city && `, ${invoice.warehouses.city}`}
-                    {invoice.warehouses.state && `, ${invoice.warehouses.state}`}
+                    {invoice.warehouses.pincode && ` - ${invoice.warehouses.pincode}`}
                   </p>
+                  {invoice.warehouses.phone && <p className="text-sm">Phone: {invoice.warehouses.phone}</p>}
                 </>
               ) : (
                 <p className="text-sm text-muted-foreground">—</p>
@@ -352,19 +476,17 @@ const InvoiceView = () => {
         </CardContent>
       </Card>
 
-      {/* Print Styles */}
+      <div className="hidden print:block print:space-y-8">
+        {renderPrintCopy("Original Copy", false)}
+        {renderPrintCopy("Customer Copy", true)}
+      </div>
+
       <style>{`
         @media print {
-          body * { visibility: hidden; }
-          .print\\:hidden { display: none !important; }
-          [class*="CardContent"] * { visibility: visible; }
-          [class*="CardContent"] { 
-            position: absolute; 
-            left: 0; 
-            top: 0; 
-            width: 100%;
-            padding: 20px !important;
-          }
+          @page { margin: 12mm; }
+          body { background: white !important; }
+          .print\:hidden { display: none !important; }
+          .print\:block { display: block !important; }
         }
       `}</style>
     </div>

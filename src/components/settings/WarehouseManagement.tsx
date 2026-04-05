@@ -17,6 +17,7 @@ interface Warehouse {
   city?: string;
   state?: string;
   pincode?: string;
+  phone?: string;
   is_active: boolean;
   is_default: boolean;
   created_at: string;
@@ -28,6 +29,7 @@ interface WarehouseFormData {
   city: string;
   state: string;
   pincode: string;
+  phone: string;
   is_active: boolean;
   is_default: boolean;
 }
@@ -38,6 +40,7 @@ const defaultFormData: WarehouseFormData = {
   city: "",
   state: "",
   pincode: "",
+  phone: "",
   is_active: true,
   is_default: false,
 };
@@ -78,6 +81,7 @@ export function WarehouseManagement() {
             city: data.city || null,
             state: data.state || null,
             pincode: data.pincode || null,
+            phone: data.phone || null,
             is_active: data.is_active,
             is_default: data.is_default,
           })
@@ -90,6 +94,7 @@ export function WarehouseManagement() {
           city: data.city || null,
           state: data.state || null,
           pincode: data.pincode || null,
+          phone: data.phone || null,
           is_active: data.is_active,
           is_default: data.is_default,
         });
@@ -143,6 +148,7 @@ export function WarehouseManagement() {
         city: warehouse.city || "",
         state: warehouse.state || "",
         pincode: warehouse.pincode || "",
+        phone: warehouse.phone || "",
         is_active: warehouse.is_active,
         is_default: warehouse.is_default,
       });
@@ -312,6 +318,14 @@ export function WarehouseManagement() {
                 value={formData.pincode}
                 onChange={(e) => setFormData({ ...formData, pincode: e.target.value })}
                 maxLength={6}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Phone</Label>
+              <Input
+                value={formData.phone}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                placeholder="+91 98765 43210"
               />
             </div>
             <div className="flex items-center justify-between border-t pt-4">

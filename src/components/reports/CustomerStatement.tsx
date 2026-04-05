@@ -4,12 +4,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, FileText, ShoppingCart, CreditCard, RotateCcw, Download, Printer, X } from "lucide-react";
+import { Loader2, FileText, ShoppingCart, CreditCard, RotateCcw, Printer, X } from "lucide-react";
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
 import { ReportFilters, DateRange } from "./ReportFilters";
-import { PrintPreview, PrintHeader, PrintFooter, PrintTable } from "./PrintPreview";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { generatePrintHTML } from "@/utils/printUtils";
 
 interface CustomerStatementProps {
   customerId: string;
@@ -38,7 +37,7 @@ export function CustomerStatement({ customerId, customerName, storeId, storeName
     from: startOfMonth(subMonths(new Date(), 2)),
     to: new Date(),
   });
-  const [showPrint, setShowPrint] = useState(false);
+  const { data: companySettings } = useCompanySettings();
 
   // Fetch business info
   const { data: businessInfo } = useQuery({
@@ -266,57 +265,57 @@ export function CustomerStatement({ customerId, customerName, storeId, storeName
     }
   };
 
-  const exportPDF = () => {
-    const doc = new jsPDF();
-    
-    // Header
-    if (businessInfo) {
-      doc.setFontSize(14);
-      doc.text(businessInfo.company_name || "Company", 14, 15);
-      doc.setFontSize(9);
-      if (businessInfo.address) doc.text(businessInfo.address, 14, 22);
-      if (businessInfo.gstin) doc.text(`GSTIN: ${businessInfo.gstin}`, 14, 27);
-    }
-    
-    doc.setFontSize(12);
-    doc.text("Customer Statement", 14, 38);
-    doc.setFontSize(10);
-    doc.text(`Customer: ${customerName}`, 14, 45);
-    if (storeName) doc.text(`Store: ${storeName}`, 14, 51);
-    doc.text(`Period: ${format(dateRange.from, "MMM d, yyyy")} - ${format(dateRange.to, "MMM d, yyyy")}`, 14, storeName ? 57 : 51);
+  const handlePrintHTML = () => {
+    const info = companySettings || businessInfo;
+    if (!info) return;
+    const fmt = (n: number) => `₹${Math.abs(n).toLocaleString("en-IN")}`;
+    const htmlContent = `
+      <div style="margin-bottom:16px;padding:12px 16px;background:#f8f9fa;border-radius:6px;">
+        <p style="margin:0 0 4px;font-size:13px;"><strong>Customer:</strong> ${customerName}${storeName ? ` • ${storeName}` : ""}</p>
+      </div>
 
-    const startY = storeName ? 65 : 58;
+      <div class="kpi-row">
+        <div class="kpi-card"><div class="kpi-label">Opening Balance</div><div class="kpi-value">${fmt(openingBalance)}</div></div>
+        <div class="kpi-card"><div class="kpi-label">Total Debit</div><div class="kpi-value">${fmt(totals.totalDebit)}</div></div>
+        <div class="kpi-card"><div class="kpi-label">Total Credit</div><div class="kpi-value">${fmt(totals.totalCredit)}</div></div>
+        <div class="kpi-card highlight"><div class="kpi-label">Closing Balance</div><div class="kpi-value ${totals.closingBalance >= 0 ? 'text-neg' : 'text-pos'}">${fmt(totals.closingBalance)} ${totals.closingBalance >= 0 ? 'Due' : 'Advance'}</div></div>
+      </div>
 
-    autoTable(doc, {
-      startY,
-      head: [["Date", "ID", "Description", "Debit (₹)", "Credit (₹)", "Balance (₹)"]],
-      body: entries.map((e) => [
-        format(new Date(e.date), "dd/MM/yyyy"),
-        e.display_id,
-        e.description + (e.payment_method ? ` (${e.payment_method})` : ""),
-        e.debit > 0 ? e.debit.toLocaleString() : "",
-        e.credit > 0 ? e.credit.toLocaleString() : "",
-        e.balance.toLocaleString(),
-      ]),
-      foot: [[
-        "", "", "TOTAL",
-        totals.totalDebit.toLocaleString(),
-        totals.totalCredit.toLocaleString(),
-        totals.closingBalance.toLocaleString()
-      ]],
-      styles: { fontSize: 9 },
-      headStyles: { fillColor: [59, 130, 246] },
-      footStyles: { fillColor: [229, 231, 235], textColor: [0, 0, 0], fontStyle: "bold" },
+      <h2>Account Ledger</h2>
+      <table>
+        <thead><tr><th>Date</th><th>Type</th><th>ID</th><th>Description</th><th class="text-right">Debit</th><th class="text-right">Credit</th><th class="text-right">Balance</th></tr></thead>
+        <tbody>
+          ${entries.map(e => `
+            <tr${e.type === 'opening' ? ' style="background:#f1f5f9;"' : ''}>
+              <td>${format(new Date(e.date), "dd/MM/yy")}</td>
+              <td><span style="text-transform:capitalize;">${e.type}</span></td>
+              <td class="font-mono">${e.display_id}</td>
+              <td>${e.description}${e.payment_method ? ` <span style="opacity:0.6;">(${e.payment_method})</span>` : ''}</td>
+              <td class="text-right font-semibold" style="color:#2563eb;">${e.debit > 0 ? fmt(e.debit) : '—'}</td>
+              <td class="text-right font-semibold" style="color:#16a34a;">${e.credit > 0 ? fmt(e.credit) : '—'}</td>
+              <td class="text-right font-semibold" style="color:${e.balance >= 0 ? '#dc2626' : '#16a34a'};">${fmt(e.balance)}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+        <tfoot>
+          <tr style="background:var(--accent);color:white;font-weight:700;">
+            <td colspan="4">TOTAL</td>
+            <td class="text-right">${fmt(totals.totalDebit)}</td>
+            <td class="text-right">${fmt(totals.totalCredit)}</td>
+            <td class="text-right">${fmt(totals.closingBalance)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    `;
+    const html = generatePrintHTML({
+      title: "Customer Statement",
+      dateRange: `${format(dateRange.from, "MMM d, yyyy")} — ${format(dateRange.to, "MMM d, yyyy")}`,
+      metadata: { "Customer": customerName, "Debit": fmt(totals.totalDebit), "Credit": fmt(totals.totalCredit), "Closing": `${fmt(totals.closingBalance)} ${totals.closingBalance >= 0 ? 'Due' : 'Adv'}` },
+      companyInfo: info,
+      htmlContent,
     });
-
-    // Closing summary
-    const finalY = (doc as any).lastAutoTable.finalY || startY + 50;
-    doc.setFontSize(10);
-    doc.text(`Closing Balance: ₹${totals.closingBalance.toLocaleString()}`, 14, finalY + 10);
-    doc.setFontSize(8);
-    doc.text(`Generated on ${format(new Date(), "dd/MM/yyyy HH:mm")}`, 14, finalY + 18);
-
-    doc.save(`statement-${customerName.replace(/\s+/g, "-")}-${format(dateRange.from, "yyyyMMdd")}-${format(dateRange.to, "yyyyMMdd")}.pdf`);
+    const win = window.open("", "_blank");
+    if (win) { win.document.write(html); win.document.close(); win.onload = () => { win.print(); }; }
   };
 
   return (
@@ -329,13 +328,9 @@ export function CustomerStatement({ customerId, customerName, storeId, storeName
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={exportPDF}>
-            <Download className="h-4 w-4 mr-2" />
-            Download PDF
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setShowPrint(true)}>
+          <Button variant="outline" size="sm" onClick={handlePrintHTML}>
             <Printer className="h-4 w-4 mr-2" />
-            Print
+            Print / PDF
           </Button>
           {onClose && (
             <Button variant="ghost" size="sm" onClick={onClose}>
@@ -442,60 +437,7 @@ export function CustomerStatement({ customerId, customerName, storeId, storeName
         </Card>
       )}
 
-      {/* Print Preview Dialog */}
-      <PrintPreview 
-        open={showPrint} 
-        onOpenChange={setShowPrint}
-        title="Customer Statement"
-        onDownloadPDF={exportPDF}
-      >
-        <PrintHeader
-          companyName={businessInfo?.company_name}
-          address={businessInfo?.address}
-          phone={businessInfo?.phone}
-          gstin={businessInfo?.gstin}
-          title="Customer Statement"
-          subtitle={`${customerName}${storeName ? ` • ${storeName}` : ""}`}
-          dateRange={`${format(dateRange.from, "dd MMM yyyy")} - ${format(dateRange.to, "dd MMM yyyy")}`}
-        />
 
-        <div className="mb-4 p-3 bg-gray-50 rounded">
-          <div className="grid grid-cols-4 gap-4 text-sm">
-            <div>
-              <p className="text-gray-500">Opening Balance</p>
-              <p className="font-semibold">₹{openingBalance.toLocaleString()}</p>
-            </div>
-            <div>
-              <p className="text-gray-500">Total Debit</p>
-              <p className="font-semibold">₹{totals.totalDebit.toLocaleString()}</p>
-            </div>
-            <div>
-              <p className="text-gray-500">Total Credit</p>
-              <p className="font-semibold">₹{totals.totalCredit.toLocaleString()}</p>
-            </div>
-            <div>
-              <p className="text-gray-500">Closing Balance</p>
-              <p className="font-bold text-lg">₹{Math.abs(totals.closingBalance).toLocaleString()} {totals.closingBalance >= 0 ? "Due" : "Advance"}</p>
-            </div>
-          </div>
-        </div>
-
-        <PrintTable
-          headers={["Date", "Type", "ID", "Description", "Debit", "Credit", "Balance"]}
-          rows={entries.map((e) => [
-            format(new Date(e.date), "dd/MM/yy"),
-            e.type.charAt(0).toUpperCase() + e.type.slice(1),
-            e.display_id,
-            `${e.description}${e.payment_method ? ` (${e.payment_method})` : ""}`,
-            e.debit > 0 ? `₹${e.debit.toLocaleString()}` : "—",
-            e.credit > 0 ? `₹${e.credit.toLocaleString()}` : "—",
-            `₹${Math.abs(e.balance).toLocaleString()}`,
-          ])}
-          footer={["", "", "", "TOTAL", `₹${totals.totalDebit.toLocaleString()}`, `₹${totals.totalCredit.toLocaleString()}`, `₹${Math.abs(totals.closingBalance).toLocaleString()}`]}
-        />
-
-        <PrintFooter generatedAt={format(new Date(), "dd/MM/yyyy HH:mm")} />
-      </PrintPreview>
     </div>
   );
 }

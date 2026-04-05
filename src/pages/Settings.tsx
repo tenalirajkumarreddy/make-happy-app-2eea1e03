@@ -13,7 +13,6 @@ import { Loader2, Save, Upload, X, Navigation, Trash2, Plus } from "lucide-react
 import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { PricingTab } from "@/components/settings/PricingTab";
-import { BannerManagement } from "@/components/banners/BannerManagement";
 import { SmsGatewayTab } from "@/components/settings/SmsGatewayTab";
 import { WarehouseManagement } from "@/components/settings/WarehouseManagement";
 
@@ -108,7 +107,6 @@ const SettingsPage = () => {
             <TabsTrigger value="pricing">Pricing</TabsTrigger>
             {isAdmin && <TabsTrigger value="invoice">Invoice</TabsTrigger>}
             {isAdmin && <TabsTrigger value="warehouses">Warehouses</TabsTrigger>}
-            {isAdmin && <TabsTrigger value="banners">Banners</TabsTrigger>}
             <TabsTrigger value="features">Features</TabsTrigger>
             {isAdmin && <TabsTrigger value="sms_gateway">SMS Gateway</TabsTrigger>}
           </TabsList>
@@ -347,12 +345,6 @@ const SettingsPage = () => {
         {isAdmin && (
           <TabsContent value="warehouses" className="mt-6">
             <WarehouseManagement />
-          </TabsContent>
-        )}
-
-        {isAdmin && (
-          <TabsContent value="banners" className="mt-4">
-            <BannerManagement />
           </TabsContent>
         )}
 

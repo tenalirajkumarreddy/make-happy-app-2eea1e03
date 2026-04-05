@@ -119,7 +119,7 @@ const Orders = () => {
   const hasMoreOrders = (orders?.length || 0) >= loadedPages * PAGE_SIZE;
 
   const { data: customers = [] } = useQuery({
-    queryKey: ["customers"],
+    queryKey: ["customers-for-orders"],
     queryFn: async () => {
       const { data } = await supabase.from("customers").select("id, name").eq("is_active", true);
       return data || [];
@@ -149,8 +149,8 @@ const Orders = () => {
   const { data: storePricing } = useQuery({
     queryKey: ["store-pricing", storeId],
     queryFn: async () => {
-      const { data } = await supabase.from("store_pricing").select("product_id, custom_price").eq("store_id", storeId);
-      return new Map((data || []).map(sp => [sp.product_id, sp.custom_price]));
+      const { data } = await supabase.from("store_pricing").select("product_id, price").eq("store_id", storeId);
+      return new Map((data || []).map(sp => [sp.product_id, sp.price]));
     },
     enabled: !!storeId,
   });

@@ -1,27 +1,20 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { StatCard } from "@/components/shared/StatCard";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import {
-  Banknote, TrendingDown, AlertTriangle, UserX, Clock,
-  FileText, FileSpreadsheet, Shield, DollarSign, Percent,
-} from "lucide-react";
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line,
-} from "recharts";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import { Banknote, TrendingDown, AlertTriangle, UserX, Clock, DollarSign, Percent, Shield } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from "recharts";
 import * as XLSX from "xlsx";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { generatePrintHTML } from "@/utils/printUtils";
+import { ReportContainer, ReportKPICard } from "@/components/reports/ReportContainer";
 
 const fmt = (n: number) => `₹${n.toLocaleString("en-IN")}`;
 const COLORS = ["hsl(142, 72%, 42%)", "hsl(38, 92%, 50%)", "hsl(280, 65%, 60%)", "hsl(0, 72%, 51%)"];
@@ -29,6 +22,7 @@ const COLORS = ["hsl(142, 72%, 42%)", "hsl(38, 92%, 50%)", "hsl(280, 65%, 60%)",
 export default function PaymentOutstandingReport() {
   const today = new Date();
   const [inactiveDays, setInactiveDays] = useState(7);
+  const { data: companyInfo } = useCompanySettings();
 
   const { data, isLoading } = useQuery({
     queryKey: ["payment-outstanding-report", inactiveDays],
@@ -174,43 +168,103 @@ export default function PaymentOutstandingReport() {
     },
   });
 
-  const exportPDF = () => {
-    if (!data) return;
-    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-    const pw = doc.internal.pageSize.getWidth();
-    doc.setFillColor(30, 41, 59); doc.rect(0, 0, pw, 18, "F");
-    doc.setTextColor(255, 255, 255); doc.setFontSize(14);
-    doc.text("Payment & Outstanding Report", 10, 12);
-    doc.setFontSize(9); doc.text(`Generated: ${new Date().toLocaleDateString()}`, pw - 10, 12, { align: "right" });
+  const generateHTML = () => {
+    if (!data) return "";
 
-    doc.setTextColor(0, 0, 0);
+    const activeStoresHtml = data.storeAnalysis.map((s: any, i: number) => `
+      <tr>
+        <td class="text-right">${i + 1}</td>
+        <td class="font-medium">${s.name}</td>
+        <td class="text-right">${s.customerName}</td>
+        <td class="text-right">${s.customerPhone}</td>
+        <td class="text-right font-mono font-bold text-neg">${fmt(s.outstanding)}</td>
+        <td class="text-right font-mono">${fmt(s.openingBalance)}</td>
+        <td class="text-right">${s.daysSinceLastSale < 999 ? s.daysSinceLastSale + "d ago" : "Never"}</td>
+        <td class="text-right">${s.daysSinceLastPayment < 999 ? s.daysSinceLastPayment + "d ago" : "Never"}</td>
+      </tr>
+    `).join("");
 
-    // Summary + Aging on left
-    autoTable(doc, { startY: 24, head: [["Metric", "Value"]], body: [
-      ["Total Outstanding", fmt(data.totalOutstanding)],
-      ["Collections (90d)", fmt(data.totalCollections)],
-      ["Collection Rate", data.collectionRate + "%"],
-      ["Stores with Outstanding", data.storesWithOutstanding],
-      ["Danger Customers", data.dangerCustomers.length],
-      ["Inactive Customers", data.inactiveCustomers.length],
-    ], theme: "grid", styles: { fontSize: 7, cellPadding: 1.5 }, headStyles: { fillColor: [30, 41, 59] }, margin: { left: 10 }, tableWidth: 80 });
+    const agingRows = data.agingData.map((a: any) => `
+      <tr>
+        <td>${a.name} days</td>
+        <td class="text-right font-mono font-bold text-neg">${fmt(a.value)}</td>
+      </tr>
+    `).join("");
 
-    let y = (doc as any).lastAutoTable.finalY + 3;
-    autoTable(doc, { startY: y, head: [["Aging Bucket", "Amount"]], body: data.agingData.map(a => [a.name + " days", fmt(a.value)]), theme: "grid", styles: { fontSize: 7, cellPadding: 1.5 }, headStyles: { fillColor: [150, 40, 40] }, margin: { left: 10 }, tableWidth: 80 });
+    const htmlContent = `
+      <div class="kpi-row">
+        <div class="kpi-card highlight">
+          <div class="kpi-label">Total Outstanding</div>
+          <div class="kpi-value text-neg">${fmt(data.totalOutstanding)}</div>
+        </div>
+        <div class="kpi-card highlight">
+          <div class="kpi-label">Collections (90d)</div>
+          <div class="kpi-value text-pos">${fmt(data.totalCollections)}</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Collection Rate</div>
+          <div class="kpi-value">${data.collectionRate}%</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Stores w/ Dues</div>
+          <div class="kpi-value">${data.storesWithOutstanding}</div>
+        </div>
+      </div>
 
-    // Danger customers on right
-    autoTable(doc, { startY: 24, head: [["Store", "Outstanding", "Last Sale", "Last Payment", "Type"]], body: data.dangerCustomers.slice(0, 20).map(s => [s.name, fmt(s.outstanding), s.daysSinceLastSale + "d ago", s.daysSinceLastPayment + "d ago", s.type]),
-      theme: "grid", styles: { fontSize: 6, cellPadding: 1.2 }, headStyles: { fillColor: [150, 40, 40] }, margin: { left: 100 }, tableWidth: 187 });
+      <div style="display: flex; gap: 20px; align-items: flex-start;">
+        <div style="flex: 2;">
+          <h2>Store Overview</h2>
+          <table>
+            <thead>
+              <tr>
+                <th class="text-right">#</th>
+                <th>Store</th>
+                <th class="text-right">Customer</th>
+                <th class="text-right">Phone</th>
+                <th class="text-right">Outstanding</th>
+                <th class="text-right">Opening Bal</th>
+                <th class="text-right">Last Sale</th>
+                <th class="text-right">Last Payment</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${activeStoresHtml}
+            </tbody>
+          </table>
+        </div>
+        <div style="flex: 1;">
+          <h2>Aging Summary</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Bucket</th>
+                <th class="text-right">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${agingRows}
+            </tbody>
+          </table>
 
-    // Top outstanding stores on page 2
-    doc.addPage();
-    autoTable(doc, { startY: 10, head: [["#", "Store", "Customer", "Phone", "Outstanding", "Opening Bal", "Last Sale", "Last Payment"]],
-      body: data.storeAnalysis.slice(0, 40).map((s, i) => [i + 1, s.name, s.customerName, s.customerPhone, fmt(s.outstanding), fmt(s.openingBalance), s.daysSinceLastSale + "d", s.daysSinceLastPayment + "d"]),
-      theme: "grid", styles: { fontSize: 6, cellPadding: 1.2 }, headStyles: { fillColor: [30, 41, 59] }, margin: { left: 10, right: 10 },
+          <h2 style="margin-top: 20px;">Danger Accounts</h2>
+          <div style="color: #ef4444; font-weight: bold; font-size: 1.5rem;">
+            ${data.dangerCustomers.length} <span style="font-size: 1rem; color: #64748b;">accounts</span>
+          </div>
+          
+          <h2 style="margin-top: 20px;">Inactive Accounts</h2>
+          <div style="color: #f59e0b; font-weight: bold; font-size: 1.5rem;">
+            ${data.inactiveCustomers.length} <span style="font-size: 1rem; color: #64748b;">accounts</span>
+          </div>
+        </div>
+      </div>
+    `;
+
+    return generatePrintHTML({
+      title: "Payment & Outstanding Report",
+      dateRange: "Current Snapshot",
+      companyInfo: companyInfo || { companyName: "System", address: "", phone: "", email: "", gstin: "" },
+      htmlContent,
     });
-
-    doc.save(`payment-outstanding-report.pdf`);
-    toast.success("PDF downloaded");
   };
 
   const exportExcel = () => {
@@ -234,217 +288,390 @@ export default function PaymentOutstandingReport() {
   if (!data) return null;
   const d = data;
 
+  const filtersSection = (
+    <div className="flex items-end gap-3">
+      <div>
+        <Label className="text-xs">Inactive threshold (days)</Label>
+        <Input 
+          type="number" 
+          value={inactiveDays} 
+          onChange={e => setInactiveDays(Number(e.target.value) || 7)} 
+          className="w-28 h-9" 
+          min={1} 
+        />
+      </div>
+    </div>
+  );
+
+  const summaryCardsSection = (
+    <>
+      <ReportKPICard
+        label="Total Outstanding"
+        value={fmt(d.totalOutstanding)}
+        icon={TrendingDown}
+        trend="down"
+        highlight
+      />
+      <ReportKPICard
+        label="Collections (90d)"
+        value={fmt(d.totalCollections)}
+        icon={Banknote}
+        trend="up"
+        highlight
+      />
+      <ReportKPICard
+        label="Collection Rate"
+        value={d.collectionRate + "%"}
+        icon={Percent}
+      />
+      <ReportKPICard
+        label="Stores w/ Dues"
+        value={String(d.storesWithOutstanding)}
+        icon={DollarSign}
+      />
+      <ReportKPICard
+        label="Danger"
+        value={String(d.dangerCustomers.length)}
+        icon={AlertTriangle}
+      />
+      <ReportKPICard
+        label="Inactive"
+        value={String(d.inactiveCustomers.length)}
+        icon={UserX}
+      />
+    </>
+  );
+
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-end gap-3">
-        <div><Label className="text-xs">Inactive threshold (days)</Label><Input type="number" value={inactiveDays} onChange={e => setInactiveDays(Number(e.target.value) || 7)} className="w-28" min={1} /></div>
-        <Button variant="outline" size="sm" onClick={exportPDF}><FileText className="h-4 w-4 mr-1" />PDF</Button>
-        <Button variant="outline" size="sm" onClick={exportExcel}><FileSpreadsheet className="h-4 w-4 mr-1" />Excel</Button>
+    <ReportContainer
+      title="Payment Outstanding"
+      subtitle="Customer payment status and collection analysis"
+      icon={DollarSign}
+      dateRange="Current Snapshot"
+      onPrint={generateHTML}
+      onExportExcel={exportExcel}
+      isLoading={false}
+      filters={filtersSection}
+      summaryCards={summaryCardsSection}
+    >
+      {/* Quick Stats Row */}
+      <div className="grid grid-cols-2 gap-3">
+        <Card className="border-0 shadow-sm">
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-2">
+              <Shield className="h-4 w-4 text-red-600" />
+              <span className="text-xs text-muted-foreground">Credit Exceeded</span>
+              <span className="ml-auto font-bold text-red-600">{d.creditExceededStores.length}</span>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-0 shadow-sm">
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-amber-600" />
+              <span className="text-xs text-muted-foreground">No Orders (15d)</span>
+              <span className="ml-auto font-bold text-amber-600">{d.noRecentOrdersStores.length}</span>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <StatCard title="Total Outstanding" value={fmt(d.totalOutstanding)} icon={TrendingDown} iconColor="destructive" />
-        <StatCard title="Collections (90d)" value={fmt(d.totalCollections)} icon={Banknote} iconColor="success" />
-        <StatCard title="Collection Rate" value={d.collectionRate + "%"} icon={Percent} iconColor="primary" />
-        <StatCard title="Stores w/ Dues" value={String(d.storesWithOutstanding)} icon={DollarSign} iconColor="warning" />
-        <StatCard title="Danger" value={String(d.dangerCustomers.length)} icon={AlertTriangle} iconColor="destructive" />
-        <StatCard title="Inactive" value={String(d.inactiveCustomers.length)} icon={UserX} iconColor="warning" />
-        <StatCard title="Credit Exceeded" value={String(d.creditExceededStores.length)} icon={Shield} iconColor="destructive" />
-        <StatCard title="No Orders (15d)" value={String(d.noRecentOrdersStores.length)} icon={Clock} iconColor="warning" />
-      </div>
-
-      <Tabs defaultValue="danger">
-        <TabsList className="flex-wrap h-auto">
-          <TabsTrigger value="danger">⚠️ Danger</TabsTrigger>
-          <TabsTrigger value="credit">💳 Credit Exceeded</TabsTrigger>
-          <TabsTrigger value="noorders">📭 No Orders</TabsTrigger>
-          <TabsTrigger value="inactive">Inactive</TabsTrigger>
-          <TabsTrigger value="all">All Outstanding</TabsTrigger>
-          <TabsTrigger value="aging">Aging</TabsTrigger>
-          <TabsTrigger value="trend">Collection Trend</TabsTrigger>
-          <TabsTrigger value="bytype">By Store Type</TabsTrigger>
+      <Tabs defaultValue="danger" className="mt-4">
+        <TabsList className="flex-wrap h-auto bg-muted/50 p-1">
+          <TabsTrigger value="danger" className="text-xs">⚠️ Danger</TabsTrigger>
+          <TabsTrigger value="credit" className="text-xs">💳 Credit Exceeded</TabsTrigger>
+          <TabsTrigger value="noorders" className="text-xs">📭 No Orders</TabsTrigger>
+          <TabsTrigger value="inactive" className="text-xs">Inactive</TabsTrigger>
+          <TabsTrigger value="all" className="text-xs">All Outstanding</TabsTrigger>
+          <TabsTrigger value="aging" className="text-xs">Aging</TabsTrigger>
+          <TabsTrigger value="trend" className="text-xs">Collection Trend</TabsTrigger>
+          <TabsTrigger value="bytype" className="text-xs">By Store Type</TabsTrigger>
         </TabsList>
 
         <TabsContent value="danger">
-          <Card><CardHeader><CardTitle className="text-sm text-destructive flex items-center gap-2"><AlertTriangle className="h-4 w-4" />Danger Customers — Urgent Collection Needed</CardTitle></CardHeader><CardContent>
-            {d.dangerCustomers.length === 0 ? <p className="text-sm text-muted-foreground text-center py-8">No danger customers 🎉</p> : (
-              <Table><TableHeader><TableRow>
-                <TableHead>#</TableHead><TableHead>Store</TableHead><TableHead>Customer</TableHead><TableHead>Phone</TableHead>
-                <TableHead className="text-right">Outstanding</TableHead><TableHead className="text-right">Credit Limit</TableHead>
-                <TableHead className="text-right">Last Sale</TableHead><TableHead className="text-right">Last Payment</TableHead>
-              </TableRow></TableHeader><TableBody>
-                {d.dangerCustomers.map((s, i) => (
-                  <TableRow key={s.id} className="bg-destructive/5">
-                    <TableCell>{i + 1}</TableCell>
-                    <TableCell className="font-medium">{s.name}</TableCell>
-                    <TableCell>{s.customerName}</TableCell>
-                    <TableCell>{s.customerPhone}</TableCell>
-                    <TableCell className="text-right font-bold text-destructive">{fmt(s.outstanding)}</TableCell>
-                    <TableCell className="text-right">{fmt(s.openingBalance)}</TableCell>
-                    <TableCell className="text-right">{s.daysSinceLastSale < 999 ? s.daysSinceLastSale + "d ago" : "Never"}</TableCell>
-                    <TableCell className="text-right">{s.daysSinceLastPayment < 999 ? s.daysSinceLastPayment + "d ago" : "Never"}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody></Table>
-            )}
-          </CardContent></Card>
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-destructive flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4" />Danger Customers — Urgent Collection Needed
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {d.dangerCustomers.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">No danger customers 🎉</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50">
+                      <TableHead className="font-semibold text-xs">#</TableHead>
+                      <TableHead className="font-semibold text-xs">Store</TableHead>
+                      <TableHead className="font-semibold text-xs">Customer</TableHead>
+                      <TableHead className="font-semibold text-xs">Phone</TableHead>
+                      <TableHead className="font-semibold text-xs text-right">Outstanding</TableHead>
+                      <TableHead className="font-semibold text-xs text-right">Credit Limit</TableHead>
+                      <TableHead className="font-semibold text-xs text-right">Last Sale</TableHead>
+                      <TableHead className="font-semibold text-xs text-right">Last Payment</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {d.dangerCustomers.map((s, i) => (
+                      <TableRow key={s.id} className="bg-destructive/5 hover:bg-destructive/10">
+                        <TableCell>{i + 1}</TableCell>
+                        <TableCell className="font-medium">{s.name}</TableCell>
+                        <TableCell>{s.customerName}</TableCell>
+                        <TableCell>{s.customerPhone}</TableCell>
+                        <TableCell className="text-right font-bold text-destructive">{fmt(s.outstanding)}</TableCell>
+                        <TableCell className="text-right">{fmt(s.openingBalance)}</TableCell>
+                        <TableCell className="text-right">{s.daysSinceLastSale < 999 ? s.daysSinceLastSale + "d ago" : "Never"}</TableCell>
+                        <TableCell className="text-right">{s.daysSinceLastPayment < 999 ? s.daysSinceLastPayment + "d ago" : "Never"}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="credit">
-          <Card><CardHeader><CardTitle className="text-sm flex items-center gap-2 text-destructive"><Shield className="h-4 w-4" />Credit Limit Exceeded — Outstanding greater than allowed credit</CardTitle></CardHeader><CardContent>
-            {d.creditExceededStores.length === 0 ? <p className="text-sm text-muted-foreground text-center py-8">No stores exceeding credit limit 🎉</p> : (
-              <Table><TableHeader><TableRow>
-                <TableHead>#</TableHead><TableHead>Store</TableHead><TableHead>Type</TableHead><TableHead>Customer</TableHead><TableHead>Phone</TableHead>
-                <TableHead className="text-right">Outstanding</TableHead><TableHead className="text-right">Credit Limit</TableHead><TableHead className="text-right">Excess</TableHead>
-              </TableRow></TableHeader><TableBody>
-                {d.creditExceededStores.map((s, i) => (
-                  <TableRow key={s.id} className="bg-destructive/5">
-                    <TableCell>{i + 1}</TableCell>
-                    <TableCell className="font-medium">{s.name}</TableCell>
-                    <TableCell><Badge variant="outline">{s.type}</Badge></TableCell>
-                    <TableCell>{s.customerName}</TableCell>
-                    <TableCell>{s.customerPhone}</TableCell>
-                    <TableCell className="text-right font-bold text-destructive">{fmt(s.outstanding)}</TableCell>
-                    <TableCell className="text-right">{s.creditLimit > 0 ? fmt(s.creditLimit) : "—"}</TableCell>
-                    <TableCell className="text-right font-bold text-destructive">{s.creditLimit > 0 ? fmt(s.outstanding - s.creditLimit) : "—"}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody></Table>
-            )}
-          </CardContent></Card>
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2 text-destructive">
+                <Shield className="h-4 w-4" />Credit Limit Exceeded
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {d.creditExceededStores.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">No stores exceeding credit limit 🎉</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50">
+                      <TableHead className="font-semibold text-xs">#</TableHead>
+                      <TableHead className="font-semibold text-xs">Store</TableHead>
+                      <TableHead className="font-semibold text-xs">Type</TableHead>
+                      <TableHead className="font-semibold text-xs">Customer</TableHead>
+                      <TableHead className="font-semibold text-xs">Phone</TableHead>
+                      <TableHead className="font-semibold text-xs text-right">Outstanding</TableHead>
+                      <TableHead className="font-semibold text-xs text-right">Credit Limit</TableHead>
+                      <TableHead className="font-semibold text-xs text-right">Excess</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {d.creditExceededStores.map((s, i) => (
+                      <TableRow key={s.id} className="bg-destructive/5 hover:bg-destructive/10">
+                        <TableCell>{i + 1}</TableCell>
+                        <TableCell className="font-medium">{s.name}</TableCell>
+                        <TableCell><Badge variant="outline">{s.type}</Badge></TableCell>
+                        <TableCell>{s.customerName}</TableCell>
+                        <TableCell>{s.customerPhone}</TableCell>
+                        <TableCell className="text-right font-bold text-destructive">{fmt(s.outstanding)}</TableCell>
+                        <TableCell className="text-right">{s.creditLimit > 0 ? fmt(s.creditLimit) : "—"}</TableCell>
+                        <TableCell className="text-right font-bold text-destructive">{s.creditLimit > 0 ? fmt(s.outstanding - s.creditLimit) : "—"}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="noorders">
-          <Card><CardHeader><CardTitle className="text-sm flex items-center gap-2 text-warning"><Clock className="h-4 w-4" />No Orders in Last 15 Days — Outstanding with no recent activity</CardTitle></CardHeader><CardContent>
-            {d.noRecentOrdersStores.length === 0 ? <p className="text-sm text-muted-foreground text-center py-8">All active stores have recent orders</p> : (
-              <Table><TableHeader><TableRow>
-                <TableHead>#</TableHead><TableHead>Store</TableHead><TableHead>Type</TableHead><TableHead>Customer</TableHead>
-                <TableHead className="text-right">Outstanding</TableHead><TableHead className="text-right">Last Order</TableHead><TableHead className="text-right">Last Sale</TableHead>
-              </TableRow></TableHeader><TableBody>
-                {d.noRecentOrdersStores.map((s, i) => (
-                  <TableRow key={s.id}>
-                    <TableCell>{i + 1}</TableCell>
-                    <TableCell className="font-medium">{s.name}</TableCell>
-                    <TableCell><Badge variant="outline">{s.type}</Badge></TableCell>
-                    <TableCell>{s.customerName}</TableCell>
-                    <TableCell className="text-right font-bold">{fmt(s.outstanding)}</TableCell>
-                    <TableCell className="text-right">{s.daysSinceLastOrder < 999 ? s.daysSinceLastOrder + "d ago" : "Never"}</TableCell>
-                    <TableCell className="text-right">{s.daysSinceLastSale < 999 ? s.daysSinceLastSale + "d ago" : "Never"}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody></Table>
-            )}
-          </CardContent></Card>
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2 text-warning">
+                <Clock className="h-4 w-4" />No Orders in Last 15 Days
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {d.noRecentOrdersStores.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">All active stores have recent orders</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50">
+                      <TableHead className="font-semibold text-xs">#</TableHead>
+                      <TableHead className="font-semibold text-xs">Store</TableHead>
+                      <TableHead className="font-semibold text-xs">Type</TableHead>
+                      <TableHead className="font-semibold text-xs">Customer</TableHead>
+                      <TableHead className="font-semibold text-xs text-right">Outstanding</TableHead>
+                      <TableHead className="font-semibold text-xs text-right">Last Order</TableHead>
+                      <TableHead className="font-semibold text-xs text-right">Last Sale</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {d.noRecentOrdersStores.map((s, i) => (
+                      <TableRow key={s.id} className="hover:bg-muted/30">
+                        <TableCell>{i + 1}</TableCell>
+                        <TableCell className="font-medium">{s.name}</TableCell>
+                        <TableCell><Badge variant="outline">{s.type}</Badge></TableCell>
+                        <TableCell>{s.customerName}</TableCell>
+                        <TableCell className="text-right font-bold">{fmt(s.outstanding)}</TableCell>
+                        <TableCell className="text-right">{s.daysSinceLastOrder < 999 ? s.daysSinceLastOrder + "d ago" : "Never"}</TableCell>
+                        <TableCell className="text-right">{s.daysSinceLastSale < 999 ? s.daysSinceLastSale + "d ago" : "Never"}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="inactive">
-          <Card><CardHeader><CardTitle className="text-sm flex items-center gap-2"><UserX className="h-4 w-4" />Inactive — Outstanding but no orders in {inactiveDays}+ days</CardTitle></CardHeader><CardContent>
-            {d.inactiveCustomers.length === 0 ? <p className="text-sm text-muted-foreground text-center py-8">No inactive customers</p> : (
-              <Table><TableHeader><TableRow>
-                <TableHead>#</TableHead><TableHead>Store</TableHead><TableHead>Type</TableHead>
-                <TableHead className="text-right">Outstanding</TableHead><TableHead className="text-right">Last Sale</TableHead>
-                <TableHead className="text-right">Last Payment</TableHead>
-              </TableRow></TableHeader><TableBody>
-                {d.inactiveCustomers.map((s, i) => (
-                  <TableRow key={s.id}>
-                    <TableCell>{i + 1}</TableCell>
-                    <TableCell className="font-medium">{s.name}</TableCell>
-                    <TableCell><Badge variant="outline">{s.type}</Badge></TableCell>
-                    <TableCell className="text-right font-bold">{fmt(s.outstanding)}</TableCell>
-                    <TableCell className="text-right">{s.daysSinceLastSale < 999 ? s.daysSinceLastSale + "d ago" : "Never"}</TableCell>
-                    <TableCell className="text-right">{s.daysSinceLastPayment < 999 ? s.daysSinceLastPayment + "d ago" : "Never"}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody></Table>
-            )}
-          </CardContent></Card>
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <UserX className="h-4 w-4" />Inactive — Outstanding but no orders in {inactiveDays}+ days
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {d.inactiveCustomers.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">No inactive customers</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50">
+                      <TableHead className="font-semibold text-xs">#</TableHead>
+                      <TableHead className="font-semibold text-xs">Store</TableHead>
+                      <TableHead className="font-semibold text-xs">Type</TableHead>
+                      <TableHead className="font-semibold text-xs text-right">Outstanding</TableHead>
+                      <TableHead className="font-semibold text-xs text-right">Last Sale</TableHead>
+                      <TableHead className="font-semibold text-xs text-right">Last Payment</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {d.inactiveCustomers.map((s, i) => (
+                      <TableRow key={s.id} className="hover:bg-muted/30">
+                        <TableCell>{i + 1}</TableCell>
+                        <TableCell className="font-medium">{s.name}</TableCell>
+                        <TableCell><Badge variant="outline">{s.type}</Badge></TableCell>
+                        <TableCell className="text-right font-bold">{fmt(s.outstanding)}</TableCell>
+                        <TableCell className="text-right">{s.daysSinceLastSale < 999 ? s.daysSinceLastSale + "d ago" : "Never"}</TableCell>
+                        <TableCell className="text-right">{s.daysSinceLastPayment < 999 ? s.daysSinceLastPayment + "d ago" : "Never"}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="all">
-          <Card><CardContent className="pt-4">
-            <Table><TableHeader><TableRow>
-              <TableHead>#</TableHead><TableHead>Store</TableHead><TableHead>Type</TableHead><TableHead>Customer</TableHead>
-              <TableHead className="text-right">Outstanding</TableHead><TableHead className="text-right">Credit Limit</TableHead>
-              <TableHead className="text-right">Last Payment</TableHead><TableHead>Status</TableHead>
-            </TableRow></TableHeader><TableBody>
-              {d.storeAnalysis.slice(0, 50).map((s, i) => (
-                <TableRow key={s.id}>
-                  <TableCell>{i + 1}</TableCell>
-                  <TableCell className="font-medium">{s.name}</TableCell>
-                  <TableCell><Badge variant="outline">{s.type}</Badge></TableCell>
-                  <TableCell>{s.customerName}</TableCell>
-                  <TableCell className="text-right font-bold">{fmt(s.outstanding)}</TableCell>
-                  <TableCell className="text-right">{fmt(s.openingBalance)}</TableCell>
-                  <TableCell className="text-right">{s.daysSinceLastPayment < 999 ? s.daysSinceLastPayment + "d" : "-"}</TableCell>
-                  <TableCell>
-                    {s.isDanger && <Badge variant="destructive" className="text-[10px]">Danger</Badge>}
-                    {s.isInactive && !s.isDanger && <Badge variant="secondary" className="text-[10px]">Inactive</Badge>}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody></Table>
-          </CardContent></Card>
+          <Card className="border-0 shadow-sm">
+            <CardContent className="p-0 pt-2">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead className="font-semibold text-xs">#</TableHead>
+                    <TableHead className="font-semibold text-xs">Store</TableHead>
+                    <TableHead className="font-semibold text-xs">Type</TableHead>
+                    <TableHead className="font-semibold text-xs">Customer</TableHead>
+                    <TableHead className="font-semibold text-xs text-right">Outstanding</TableHead>
+                    <TableHead className="font-semibold text-xs text-right">Credit Limit</TableHead>
+                    <TableHead className="font-semibold text-xs text-right">Last Payment</TableHead>
+                    <TableHead className="font-semibold text-xs">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {d.storeAnalysis.slice(0, 50).map((s, i) => (
+                    <TableRow key={s.id} className="hover:bg-muted/30">
+                      <TableCell>{i + 1}</TableCell>
+                      <TableCell className="font-medium">{s.name}</TableCell>
+                      <TableCell><Badge variant="outline">{s.type}</Badge></TableCell>
+                      <TableCell>{s.customerName}</TableCell>
+                      <TableCell className="text-right font-bold">{fmt(s.outstanding)}</TableCell>
+                      <TableCell className="text-right">{fmt(s.openingBalance)}</TableCell>
+                      <TableCell className="text-right">{s.daysSinceLastPayment < 999 ? s.daysSinceLastPayment + "d" : "-"}</TableCell>
+                      <TableCell>
+                        {s.isDanger && <Badge variant="destructive" className="text-[10px]">Danger</Badge>}
+                        {s.isInactive && !s.isDanger && <Badge variant="secondary" className="text-[10px]">Inactive</Badge>}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="aging">
-          <Card><CardHeader><CardTitle className="text-sm">Outstanding Aging Analysis</CardTitle></CardHeader><CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={d.agingData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="name" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-                  <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-                  <Tooltip formatter={(v: number) => fmt(v)} />
-                  <Bar dataKey="value" radius={[4, 4, 0, 0]} name="Outstanding">
-                    {d.agingData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-              <div className="space-y-3 py-4">
-                {d.agingData.map((a, i) => (
-                  <div key={a.name} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="h-3 w-3 rounded-full" style={{ backgroundColor: COLORS[i] }} />
-                      <span className="text-sm font-medium">{a.name} days</span>
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">Outstanding Aging Analysis</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={d.agingData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="name" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
+                    <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
+                    <Tooltip formatter={(v: number) => fmt(v)} />
+                    <Bar dataKey="value" radius={[4, 4, 0, 0]} name="Outstanding">
+                      {d.agingData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+                <div className="space-y-3 py-4">
+                  {d.agingData.map((a, i) => (
+                    <div key={a.name} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="h-3 w-3 rounded-full" style={{ backgroundColor: COLORS[i] }} />
+                        <span className="text-sm font-medium">{a.name} days</span>
+                      </div>
+                      <span className="font-bold">{fmt(a.value)}</span>
                     </div>
-                    <span className="font-bold">{fmt(a.value)}</span>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
-          </CardContent></Card>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="trend">
-          <Card><CardHeader><CardTitle className="text-sm">Collection Trend (Last 30 Days)</CardTitle></CardHeader><CardContent>
-            <ResponsiveContainer width="100%" height={280}>
-              <LineChart data={d.collectionTrend}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="date" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-                <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-                <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }} formatter={(v: number) => fmt(v)} />
-                <Line type="monotone" dataKey="amount" stroke="hsl(var(--chart-2))" strokeWidth={2} dot={false} name="Collections" />
-              </LineChart>
-            </ResponsiveContainer>
-          </CardContent></Card>
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">Collection Trend (Last 30 Days)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={250}>
+                <LineChart data={d.collectionTrend}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="date" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
+                  <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
+                  <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }} formatter={(v: number) => fmt(v)} />
+                  <Line type="monotone" dataKey="amount" stroke="hsl(var(--chart-2))" strokeWidth={2} dot={false} name="Collections" />
+                </LineChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="bytype">
-          <Card><CardHeader><CardTitle className="text-sm">Outstanding by Store Type</CardTitle></CardHeader><CardContent>
-            {d.outstandingByType.length === 0 ? <p className="text-sm text-muted-foreground text-center py-8">No data</p> : (
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={d.outstandingByType}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="name" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-                  <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-                  <Tooltip formatter={(v: number) => fmt(v)} />
-                  <Bar dataKey="value" fill="hsl(0, 72%, 51%)" radius={[4, 4, 0, 0]} name="Outstanding" />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent></Card>
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">Outstanding by Store Type</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {d.outstandingByType.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">No data</p>
+              ) : (
+                <ResponsiveContainer width="100%" height={250}>
+                  <BarChart data={d.outstandingByType}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="name" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
+                    <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
+                    <Tooltip formatter={(v: number) => fmt(v)} />
+                    <Bar dataKey="value" fill="hsl(0, 72%, 51%)" radius={[4, 4, 0, 0]} name="Outstanding" />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
-    </div>
+    </ReportContainer>
   );
 }

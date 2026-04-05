@@ -4,15 +4,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Loader2, Package, TrendingUp, TrendingDown, DollarSign, Search, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { Package, TrendingUp, TrendingDown, DollarSign, Search, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { format, subMonths, startOfMonth } from "date-fns";
 import { ReportFilters, DateRange } from "./ReportFilters";
-import { ReportExportBar } from "./ReportExportBar";
-import { ReportSummaryCards } from "./ReportSummaryCards";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { generatePrintHTML } from "@/utils/printUtils";
 import * as XLSX from "xlsx";
+import { ReportContainer, ReportKPICard } from "@/components/reports/ReportContainer";
 
 const COLORS = ["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#84cc16"];
 
@@ -41,6 +40,7 @@ export default function ItemWisePLReport() {
   });
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<"revenue" | "profit" | "margin">("profit");
+  const { data: companySettings } = useCompanySettings();
 
   // Fetch products
   const { data: products = [], isLoading: prodLoading } = useQuery({
@@ -111,14 +111,14 @@ export default function ItemWisePLReport() {
   // Calculate item-wise P&L
   const productPL = useMemo(() => {
     // Calculate average cost price per product
-    const avgCostByProduct: Record<string, number> = {};
+    const costTracker: Record<string, { total: number; qty: number }> = {};
     purchaseItems.forEach((pi: any) => {
       if (pi.item_id) {
-        if (!avgCostByProduct[pi.item_id]) {
-          avgCostByProduct[pi.item_id] = { total: 0, qty: 0 };
+        if (!costTracker[pi.item_id]) {
+          costTracker[pi.item_id] = { total: 0, qty: 0 };
         }
-        avgCostByProduct[pi.item_id].total += Number(pi.total);
-        avgCostByProduct[pi.item_id].qty += Number(pi.quantity);
+        costTracker[pi.item_id].total += Number(pi.total);
+        costTracker[pi.item_id].qty += Number(pi.quantity);
       }
     });
 
@@ -129,7 +129,7 @@ export default function ItemWisePLReport() {
       const revenue = productSales.reduce((sum: number, si: any) => sum + Number(si.total), 0);
 
       // Cost data - use purchase avg or estimate from MRP
-      const avgCostData = avgCostByProduct[p.id];
+      const avgCostData = costTracker[p.id];
       const costPrice = avgCostData 
         ? avgCostData.total / avgCostData.qty 
         : Number(p.mrp) * 0.7; // Estimate 30% margin if no purchase data
@@ -231,42 +231,53 @@ export default function ItemWisePLReport() {
     { label: "Avg Margin", value: `${summary.avgMargin.toFixed(1)}%`, icon: summary.avgMargin > 20 ? ArrowUpRight : ArrowDownRight, iconColor: summary.avgMargin > 20 ? "green" : "red" },
   ];
 
-  const exportPDF = () => {
-    const doc = new jsPDF({ orientation: "landscape" });
-    doc.setFontSize(16);
-    doc.text("Item-wise Profit & Loss Report", 14, 15);
-    doc.setFontSize(10);
-    doc.text(`Period: ${format(dateRange.from, "MMM d, yyyy")} - ${format(dateRange.to, "MMM d, yyyy")}`, 14, 23);
+  const handlePrintHTML = () => {
+    if (!companySettings) return "";
+    const fmt = (n: number) => `₹${n.toLocaleString("en-IN")}`;
+    const htmlContent = `
+      <div class="kpi-row">
+        <div class="kpi-card"><div class="kpi-label">Revenue</div><div class="kpi-value">${fmt(summary.totalRevenue)}</div></div>
+        <div class="kpi-card"><div class="kpi-label">COGS</div><div class="kpi-value">${fmt(summary.totalCOGS)}</div></div>
+        <div class="kpi-card highlight"><div class="kpi-label">Net Profit</div><div class="kpi-value text-pos">${fmt(summary.totalNetProfit)}</div></div>
+        <div class="kpi-card"><div class="kpi-label">Avg Margin</div><div class="kpi-value">${summary.avgMargin.toFixed(1)}%</div></div>
+      </div>
 
-    autoTable(doc, {
-      startY: 30,
-      head: [["Product", "Category", "Qty Sold", "Revenue", "COGS", "Gross Profit", "Margin %", "Returns", "Net Profit"]],
-      body: filteredProducts.map(p => [
-        p.name,
-        p.category,
-        p.quantitySold.toString(),
-        `₹${p.revenue.toLocaleString()}`,
-        `₹${p.cogs.toLocaleString()}`,
-        `₹${p.grossProfit.toLocaleString()}`,
-        `${p.grossMargin.toFixed(1)}%`,
-        `₹${p.returnValue.toLocaleString()}`,
-        `₹${p.netProfit.toLocaleString()}`,
-      ]),
-      foot: [[
-        "TOTAL", "", "",
-        `₹${summary.totalRevenue.toLocaleString()}`,
-        `₹${summary.totalCOGS.toLocaleString()}`,
-        `₹${summary.totalGrossProfit.toLocaleString()}`,
-        `${summary.avgMargin.toFixed(1)}%`,
-        `₹${summary.totalReturns.toLocaleString()}`,
-        `₹${summary.totalNetProfit.toLocaleString()}`,
-      ]],
-      styles: { fontSize: 8 },
-      headStyles: { fillColor: [59, 130, 246] },
-      footStyles: { fillColor: [229, 231, 235], textColor: [0, 0, 0], fontStyle: "bold" },
+      <h2>Item-wise Profit & Loss (${filteredProducts.length} items)</h2>
+      <table>
+        <thead><tr><th>#</th><th>Product</th><th>Category</th><th class="text-right">Qty</th><th class="text-right">Revenue</th><th class="text-right">COGS</th><th class="text-right">Profit</th><th class="text-right">Margin</th></tr></thead>
+        <tbody>
+          ${filteredProducts.map((p, i) => `
+            <tr>
+              <td>${i + 1}</td>
+              <td class="font-semibold">${p.name}</td>
+              <td>${p.category}</td>
+              <td class="text-right">${p.quantitySold}</td>
+              <td class="text-right">${fmt(p.revenue)}</td>
+              <td class="text-right">${fmt(p.cogs)}</td>
+              <td class="text-right font-semibold ${p.netProfit >= 0 ? 'text-pos' : 'text-neg'}">${fmt(p.netProfit)}</td>
+              <td class="text-right">${p.grossMargin.toFixed(1)}%</td>
+            </tr>
+          `).join("")}
+        </tbody>
+        <tfoot>
+          <tr style="background:var(--accent);color:white;font-weight:700;">
+            <td colspan="3">TOTAL</td>
+            <td class="text-right">${filteredProducts.reduce((s, p) => s + p.quantitySold, 0)}</td>
+            <td class="text-right">${fmt(summary.totalRevenue)}</td>
+            <td class="text-right">${fmt(summary.totalCOGS)}</td>
+            <td class="text-right">${fmt(summary.totalNetProfit)}</td>
+            <td class="text-right">${summary.avgMargin.toFixed(1)}%</td>
+          </tr>
+        </tfoot>
+      </table>
+    `;
+    return generatePrintHTML({
+      title: "Item-wise Profit & Loss Report",
+      dateRange: `${format(dateRange.from, "MMM d, yyyy")} — ${format(dateRange.to, "MMM d, yyyy")}`,
+      metadata: { "Revenue": fmt(summary.totalRevenue), "Profit": fmt(summary.totalNetProfit), "Margin": `${summary.avgMargin.toFixed(1)}%` },
+      companyInfo: companySettings,
+      htmlContent,
     });
-
-    doc.save(`item-pl-report-${format(dateRange.from, "yyyyMMdd")}-${format(dateRange.to, "yyyyMMdd")}.pdf`);
   };
 
   const exportExcel = () => {
@@ -291,178 +302,204 @@ export default function ItemWisePLReport() {
     XLSX.writeFile(wb, `item-pl-report-${format(dateRange.from, "yyyyMMdd")}-${format(dateRange.to, "yyyyMMdd")}.xlsx`);
   };
 
+  const filtersSection = (
+    <div className="flex flex-col lg:flex-row lg:items-end gap-4">
+      <ReportFilters dateRange={dateRange} onDateRangeChange={setDateRange} />
+      <div className="relative flex-1 max-w-xs">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search products..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-9"
+        />
+      </div>
+      <div className="flex gap-2">
+        <Badge 
+          variant={sortBy === "profit" ? "default" : "outline"} 
+          className="cursor-pointer"
+          onClick={() => setSortBy("profit")}
+        >
+          By Profit
+        </Badge>
+        <Badge 
+          variant={sortBy === "revenue" ? "default" : "outline"} 
+          className="cursor-pointer"
+          onClick={() => setSortBy("revenue")}
+        >
+          By Revenue
+        </Badge>
+        <Badge 
+          variant={sortBy === "margin" ? "default" : "outline"} 
+          className="cursor-pointer"
+          onClick={() => setSortBy("margin")}
+        >
+          By Margin
+        </Badge>
+      </div>
+    </div>
+  );
+
+  const summaryCardsSection = (
+    <>
+      <ReportKPICard
+        label="Total Revenue"
+        value={`₹${summary.totalRevenue.toLocaleString()}`}
+        icon={DollarSign}
+      />
+      <ReportKPICard
+        label="Cost of Goods"
+        value={`₹${summary.totalCOGS.toLocaleString()}`}
+        icon={Package}
+      />
+      <ReportKPICard
+        label="Net Profit"
+        value={`₹${summary.totalNetProfit.toLocaleString()}`}
+        icon={TrendingUp}
+        trend={summary.totalNetProfit >= 0 ? "up" : "down"}
+        highlight
+      />
+      <ReportKPICard
+        label="Avg Margin"
+        value={`${summary.avgMargin.toFixed(1)}%`}
+        icon={summary.avgMargin > 20 ? ArrowUpRight : ArrowDownRight}
+        trend={summary.avgMargin > 20 ? "up" : "down"}
+      />
+    </>
+  );
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col lg:flex-row lg:items-end gap-4">
-        <ReportFilters dateRange={dateRange} onDateRangeChange={setDateRange} />
-        <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search products..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-        <div className="flex gap-2">
-          <Badge 
-            variant={sortBy === "profit" ? "default" : "outline"} 
-            className="cursor-pointer"
-            onClick={() => setSortBy("profit")}
-          >
-            By Profit
-          </Badge>
-          <Badge 
-            variant={sortBy === "revenue" ? "default" : "outline"} 
-            className="cursor-pointer"
-            onClick={() => setSortBy("revenue")}
-          >
-            By Revenue
-          </Badge>
-          <Badge 
-            variant={sortBy === "margin" ? "default" : "outline"} 
-            className="cursor-pointer"
-            onClick={() => setSortBy("margin")}
-          >
-            By Margin
-          </Badge>
-        </div>
+    <ReportContainer
+      title="Item-wise P&L"
+      subtitle="Product-level profit and loss analysis"
+      icon={Package}
+      dateRange={`${format(dateRange.from, "MMM d, yyyy")} — ${format(dateRange.to, "MMM d, yyyy")}`}
+      onPrint={handlePrintHTML}
+      onExportExcel={exportExcel}
+      isLoading={isLoading}
+      filters={filtersSection}
+      summaryCards={summaryCardsSection}
+    >
+      {/* Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Top Products by Profit</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {topProfitChart.length > 0 ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={topProfitChart} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis type="number" tickFormatter={(v) => `₹${(v/1000).toFixed(0)}k`} />
+                  <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 11 }} />
+                  <Tooltip formatter={(v: number) => `₹${v.toLocaleString()}`} />
+                  <Legend />
+                  <Bar dataKey="profit" name="Net Profit" fill="#10b981" />
+                  <Bar dataKey="revenue" name="Revenue" fill="#3b82f6" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-center text-muted-foreground py-12">No data available</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Profit by Category</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {categoryProfitChart.length > 0 ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <PieChart>
+                  <Pie
+                    data={categoryProfitChart}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                    outerRadius={100}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {categoryProfitChart.map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(v: number) => `₹${v.toLocaleString()}`} />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-center text-muted-foreground py-12">No category data</p>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
-      <ReportExportBar onExportPDF={exportPDF} onExportExcel={exportExcel} />
-
-      {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      ) : (
-        <>
-          <ReportSummaryCards cards={summaryCards} />
-
-          {/* Charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Top Products by Profit */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Top Products by Profit</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {topProfitChart.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={topProfitChart} layout="vertical">
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis type="number" tickFormatter={(v) => `₹${(v/1000).toFixed(0)}k`} />
-                      <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 11 }} />
-                      <Tooltip formatter={(v: number) => `₹${v.toLocaleString()}`} />
-                      <Legend />
-                      <Bar dataKey="profit" name="Net Profit" fill="#10b981" />
-                      <Bar dataKey="revenue" name="Revenue" fill="#3b82f6" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <p className="text-center text-muted-foreground py-12">No data available</p>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Category Profit Distribution */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Profit by Category</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {categoryProfitChart.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <PieChart>
-                      <Pie
-                        data={categoryProfitChart}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
-                        outerRadius={100}
-                        fill="#8884d8"
-                        dataKey="value"
-                      >
-                        {categoryProfitChart.map((_, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(v: number) => `₹${v.toLocaleString()}`} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <p className="text-center text-muted-foreground py-12">No category data</p>
-                )}
-              </CardContent>
-            </Card>
+      {/* Product Table */}
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium">Product Details ({filteredProducts.length} items)</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50">
+                <tr>
+                  <th className="text-left p-3 font-semibold text-xs">Product</th>
+                  <th className="text-left p-3 font-semibold text-xs hidden md:table-cell">Category</th>
+                  <th className="text-right p-3 font-semibold text-xs">Qty</th>
+                  <th className="text-right p-3 font-semibold text-xs">Revenue</th>
+                  <th className="text-right p-3 font-semibold text-xs hidden lg:table-cell">COGS</th>
+                  <th className="text-right p-3 font-semibold text-xs">Profit</th>
+                  <th className="text-right p-3 font-semibold text-xs">Margin</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredProducts.slice(0, 50).map((p) => (
+                  <tr key={p.id} className="border-b hover:bg-muted/30">
+                    <td className="p-3">
+                      <p className="font-medium text-sm">{p.name}</p>
+                      <p className="text-xs text-muted-foreground">{p.display_id}</p>
+                    </td>
+                    <td className="p-3 hidden md:table-cell text-muted-foreground">{p.category}</td>
+                    <td className="p-3 text-right">{p.quantitySold}</td>
+                    <td className="p-3 text-right font-medium">₹{p.revenue.toLocaleString()}</td>
+                    <td className="p-3 text-right hidden lg:table-cell text-muted-foreground">₹{p.cogs.toLocaleString()}</td>
+                    <td className="p-3 text-right">
+                      <span className={p.netProfit >= 0 ? "text-green-600 font-semibold" : "text-red-600 font-semibold"}>
+                        ₹{p.netProfit.toLocaleString()}
+                      </span>
+                    </td>
+                    <td className="p-3 text-right">
+                      <Badge variant={p.grossMargin >= 25 ? "default" : p.grossMargin >= 15 ? "secondary" : "destructive"}>
+                        {p.grossMargin.toFixed(1)}%
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="bg-muted/50 font-semibold">
+                <tr>
+                  <td className="p-3">TOTAL</td>
+                  <td className="p-3 hidden md:table-cell"></td>
+                  <td className="p-3 text-right">{filteredProducts.reduce((s, p) => s + p.quantitySold, 0)}</td>
+                  <td className="p-3 text-right">₹{summary.totalRevenue.toLocaleString()}</td>
+                  <td className="p-3 text-right hidden lg:table-cell">₹{summary.totalCOGS.toLocaleString()}</td>
+                  <td className="p-3 text-right text-green-600">₹{summary.totalNetProfit.toLocaleString()}</td>
+                  <td className="p-3 text-right">{summary.avgMargin.toFixed(1)}%</td>
+                </tr>
+              </tfoot>
+            </table>
           </div>
-
-          {/* Product Table */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Product Details ({filteredProducts.length} items)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b bg-muted/50">
-                      <th className="text-left p-3 font-medium">Product</th>
-                      <th className="text-left p-3 font-medium hidden md:table-cell">Category</th>
-                      <th className="text-right p-3 font-medium">Qty</th>
-                      <th className="text-right p-3 font-medium">Revenue</th>
-                      <th className="text-right p-3 font-medium hidden lg:table-cell">COGS</th>
-                      <th className="text-right p-3 font-medium">Profit</th>
-                      <th className="text-right p-3 font-medium">Margin</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredProducts.slice(0, 50).map((p) => (
-                      <tr key={p.id} className="border-b hover:bg-muted/30">
-                        <td className="p-3">
-                          <p className="font-medium">{p.name}</p>
-                          <p className="text-xs text-muted-foreground">{p.display_id}</p>
-                        </td>
-                        <td className="p-3 hidden md:table-cell text-muted-foreground">{p.category}</td>
-                        <td className="p-3 text-right">{p.quantitySold}</td>
-                        <td className="p-3 text-right font-medium">₹{p.revenue.toLocaleString()}</td>
-                        <td className="p-3 text-right hidden lg:table-cell text-muted-foreground">₹{p.cogs.toLocaleString()}</td>
-                        <td className="p-3 text-right">
-                          <span className={p.netProfit >= 0 ? "text-green-600 font-semibold" : "text-red-600 font-semibold"}>
-                            ₹{p.netProfit.toLocaleString()}
-                          </span>
-                        </td>
-                        <td className="p-3 text-right">
-                          <Badge variant={p.grossMargin >= 25 ? "default" : p.grossMargin >= 15 ? "secondary" : "destructive"}>
-                            {p.grossMargin.toFixed(1)}%
-                          </Badge>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="bg-muted/50 font-semibold">
-                      <td className="p-3">TOTAL</td>
-                      <td className="p-3 hidden md:table-cell"></td>
-                      <td className="p-3 text-right">{filteredProducts.reduce((s, p) => s + p.quantitySold, 0)}</td>
-                      <td className="p-3 text-right">₹{summary.totalRevenue.toLocaleString()}</td>
-                      <td className="p-3 text-right hidden lg:table-cell">₹{summary.totalCOGS.toLocaleString()}</td>
-                      <td className="p-3 text-right text-green-600">₹{summary.totalNetProfit.toLocaleString()}</td>
-                      <td className="p-3 text-right">{summary.avgMargin.toFixed(1)}%</td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-              {filteredProducts.length > 50 && (
-                <p className="text-center text-muted-foreground mt-4 text-sm">
-                  Showing 50 of {filteredProducts.length} products. Export to see all.
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        </>
-      )}
-    </div>
+          {filteredProducts.length > 50 && (
+            <p className="text-center text-muted-foreground py-4 text-sm">
+              Showing 50 of {filteredProducts.length} products. Export to see all.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+    </ReportContainer>
   );
 }

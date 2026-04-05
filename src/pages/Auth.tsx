@@ -6,12 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Loader2, ArrowLeft, Smartphone, MapPin, Navigation } from "lucide-react";
+import { Loader2, MapPin, Navigation } from "lucide-react";
 import { generateDisplayId } from "@/lib/displayId";
 import { useQuery } from "@tanstack/react-query";
 import { getCurrentPosition, getOAuthRedirectUrl } from "@/lib/capacitorUtils";
 
-type Step = "phone" | "otp" | "register" | "add-store" | "link-google";
+type Step = "phone" | "register" | "add-store" | "link-google";
 type IdentityResolution =
   | { type: "staff"; role: string; staffId?: string | null }
   | { type: "existing_customer"; customerId: string; googleLinked: boolean }
@@ -25,16 +25,32 @@ const Logo = () => (
 );
 
 async function resolveUserIdentity(): Promise<IdentityResolution> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  const accessToken = session?.access_token;
-  const { data, error } = await supabase.functions.invoke("resolve-user-identity", {
-    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
-  });
-  if (error) throw error;
-  if (!data?.type) throw new Error("Invalid identity resolution response");
-  return data as IdentityResolution;
+  // Temporary local fallback while edge-function auth flow is disabled.
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("No authenticated user");
+
+  const [{ data: roleData }, { data: customerData }] = await Promise.all([
+    supabase.from("user_roles").select("role").eq("user_id", user.id).maybeSingle(),
+    supabase.from("customers").select("id, email").eq("user_id", user.id).maybeSingle(),
+  ]);
+
+  if (roleData?.role && roleData.role !== "customer") {
+    return { type: "staff", role: roleData.role };
+  }
+
+  if (customerData?.id) {
+    return {
+      type: "existing_customer",
+      customerId: customerData.id,
+      googleLinked: true,
+    };
+  }
+
+  return {
+    type: "onboarding_required",
+    authUserId: user.id,
+    loginMethod: "google",
+  };
 }
 
 async function hasStaffOrCustomerAccess(userId: string): Promise<boolean> {
@@ -57,11 +73,16 @@ const Auth = () => {
   const [step, setStep] = useState<Step>("phone");
 
   // Phone / OTP
-  const [phoneNumber, setPhoneNumber] = useState("");
-  const [phoneCode, setPhoneCode] = useState("");
   const [verifiedPhone, setVerifiedPhone] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [sessionToken, setSessionToken] = useState("");
+  // Email/Password login (dev mode)
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginMode, setLoginMode] = useState<"google" | "email">("google");
   const [pendingCustomerEmail, setPendingCustomerEmail] = useState<string | null>(null);
-  const [otpSessionToken, setOtpSessionToken] = useState<string | null>(null);
 
   // New-customer registration
   const [regName, setRegName] = useState("");
@@ -149,130 +170,6 @@ const Auth = () => {
   }, [navigate]);
 
   // ── Handlers ──
-
-  const handleSendOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (phoneNumber.length !== 10) {
-      toast.error("Please enter a valid 10-digit phone number");
-      return;
-    }
-    setLoading(true);
-    try {
-      const fullPhone = `+91${phoneNumber}`;
-
-      // Use OpenSMS instead of Firebase
-      const { data, error } = await supabase.functions.invoke("send-otp-opensms", {
-        body: { phone: fullPhone }
-      });
-
-      if (error) {
-        throw new Error(error.message || "Failed to send OTP");
-      }
-
-      if (!data?.success || !data?.session_token) {
-        throw new Error(data?.error || "Failed to send OTP");
-      }
-
-      setOtpSessionToken(data.session_token);
-      setVerifiedPhone(data.phone || fullPhone.replace(/(\d{2})(\d+)(\d{4})/, '$1***$3'));
-      setStep("otp");
-      toast.success(`OTP sent to ${data.phone || fullPhone.replace(/(\d{2})(\d+)(\d{4})/, '$1***$3')}`);
-
-      // Show OTP in development mode
-      if (data.otp_for_dev) {
-        toast.info(`Development OTP: ${data.otp_for_dev}`, { duration: 10000 });
-      }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to send OTP");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!otpSessionToken) {
-      toast.error("OTP session expired. Please request a new OTP.");
-      setStep("phone");
-      return;
-    }
-    setLoading(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("verify-otp-opensms", {
-        body: {
-          session_token: otpSessionToken,
-          otp_code: phoneCode,
-        },
-      });
-
-      if (error || !data?.access_token) {
-        throw error || new Error(data?.error || "OTP verification failed");
-      }
-
-      // Set the session
-      const { error: sessionError } = await supabase.auth.setSession({
-        access_token: data.access_token,
-        refresh_token: data.refresh_token,
-      });
-      if (sessionError) throw sessionError;
-
-      // Resolve user identity
-      const identity = await resolveUserIdentity();
-      if (identity.type === "staff") {
-        toast.success("Logged in successfully");
-        navigate("/");
-        return;
-      }
-
-      if (identity.type === "existing_customer") {
-        if (!identity.googleLinked) {
-          const { data: linkedCustomer } = await supabase
-            .from("customers")
-            .select("email")
-            .eq("id", identity.customerId)
-            .maybeSingle();
-          setPendingCustomerEmail(linkedCustomer?.email || "");
-          setStep("link-google");
-          setLoading(false);
-          return;
-        }
-        toast.success("Logged in successfully");
-        navigate("/");
-        return;
-      }
-
-      if (identity.type === "new_customer_known_phone") {
-        toast.error(`Phone already exists. Please login with phone ending in ${identity.maskedPhone}.`);
-        await supabase.auth.signOut();
-        navigate("/auth", { replace: true });
-        return;
-      }
-
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user && await hasStaffOrCustomerAccess(user.id)) {
-        toast.success("Logged in successfully");
-        navigate("/");
-        return;
-      }
-
-      // Brand-new customer — check if signup is enabled
-      if (!customerSignupEnabled) {
-        toast.error("New customer registration is currently disabled. Please contact support.");
-        await supabase.auth.signOut();
-        navigate("/auth", { replace: true });
-        return;
-      }
-
-      // Continue in detailed Auth onboarding (profile + location-rich store setup).
-      setStep("register");
-      toast.success("Phone verified! Complete your profile to continue.");
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : "OTP verification failed";
-      toast.error(errorMsg);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -368,6 +265,83 @@ const Auth = () => {
       toast.error("Location access denied");
     } finally {
       setFetchingLocation(false);
+    }
+  };
+
+  const handleSendOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const phone = phoneNumber.trim();
+    if (!phone) {
+      toast.error("Phone number is required");
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      // Normalize phone number (add +91 for Indian numbers if missing +)
+      const normalizedPhone = phone.startsWith("+") ? phone : `+91${phone.replace(/^0+/, "")}`;
+      
+      const { data, error } = await supabase.functions.invoke('send-otp-opensms', {
+        body: { phone: normalizedPhone }
+      });
+      
+      if (error) throw error;
+      if (data.error) throw new Error(data.error);
+      
+      setSessionToken(data.session_token);
+      setOtpSent(true);
+      toast.success("OTP sent to your phone!");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to send OTP");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const code = otpCode.trim();
+    if (!code) {
+      toast.error("OTP code is required");
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('verify-otp-opensms', {
+        body: { 
+          session_token: sessionToken,
+          otp_code: code 
+        }
+      });
+      
+      if (error) throw error;
+      if (data.error) throw new Error(data.error);
+      
+      // Set the Supabase session
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+      });
+      
+      if (sessionError) throw sessionError;
+      
+      setVerifiedPhone(data.user.phone);
+      
+      // Check if user already has access
+      if (await hasStaffOrCustomerAccess(data.user.id)) {
+        toast.success("Login successful!");
+        navigate("/", { replace: true });
+        return;
+      }
+      
+      // New customer needs to register
+      setStep("register");
+      toast.success("Phone verified! Please complete registration.");
+    } catch (error: any) {
+      toast.error(error.message || "Invalid OTP code");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -580,7 +554,7 @@ const Auth = () => {
           <Logo />
           <h1 className="text-2xl font-bold tracking-tight">Aqua Prime</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {step === "otp" ? `Code sent to ${verifiedPhone}` : "Login or sign up with your phone"}
+            Login with your Google account
           </p>
         </div>
 
@@ -614,71 +588,65 @@ const Auth = () => {
           <div className="relative">
             <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-card px-2 text-muted-foreground">or use phone OTP</span>
+              <span className="bg-card px-2 text-muted-foreground">or</span>
             </div>
           </div>
 
-          {/* Phone number entry */}
-          {step === "phone" && (
-            <form onSubmit={handleSendOtp} className="space-y-4">
+          {/* Phone OTP Login */}
+          {!otpSent ? (
+            <form onSubmit={handleSendOtp} className="space-y-3">
               <div>
-                <Label htmlFor="phone-number">Phone Number</Label>
-                <div className="relative mt-1">
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 border-r pr-2 py-1 border-input/40 z-10">
-                    <Smartphone className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm font-medium text-foreground">+91</span>
-                  </div>
-                  <Input
-                    id="phone-number"
-                    type="tel"
-                    inputMode="numeric"
-                    placeholder="9876543210"
-                    value={phoneNumber}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/\D/g, "");
-                      if (val.length <= 10) setPhoneNumber(val);
-                    }}
-                    className="pl-20"
-                    required
-                    maxLength={10}
-                  />
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">Enter your 10-digit mobile number</p>
+                <Label htmlFor="phone">Phone Number</Label>
+                <Input
+                  id="phone"
+                  type="tel"
+                  placeholder="+91XXXXXXXXXX or 10-digit number"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  className="mt-1"
+                  required
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Enter with country code (e.g., +91 for India) or 10-digit number
+                </p>
               </div>
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Send OTP
               </Button>
             </form>
-          )}
-
-          {/* OTP entry */}
-          {step === "otp" && (
-            <form onSubmit={handleVerifyOtp} className="space-y-4">
+          ) : (
+            <form onSubmit={handleVerifyOtp} className="space-y-3">
               <div>
-                <Label htmlFor="phone-otp">Verification Code</Label>
+                <Label htmlFor="otp">Enter OTP</Label>
                 <Input
-                  id="phone-otp"
-                  inputMode="numeric"
-                  placeholder="• • • • • •"
-                  value={phoneCode}
-                  onChange={(e) => setPhoneCode(e.target.value)}
-                  className="mt-1 text-center text-xl tracking-widest"
+                  id="otp"
+                  type="text"
+                  placeholder="6-digit code"
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value)}
+                  className="mt-1"
                   maxLength={6}
                   required
                 />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Sent to {phoneNumber}
+                </p>
               </div>
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Verify & Login
+                Verify OTP
               </Button>
               <Button
                 type="button"
                 variant="ghost"
                 className="w-full"
-                onClick={() => { setStep("phone"); setPhoneCode(""); setVerifiedPhone(""); }}
+                onClick={() => {
+                  setOtpSent(false);
+                  setOtpCode("");
+                }}
               >
-                <ArrowLeft className="mr-2 h-4 w-4" /> Use different number
+                Change Phone Number
               </Button>
             </form>
           )}

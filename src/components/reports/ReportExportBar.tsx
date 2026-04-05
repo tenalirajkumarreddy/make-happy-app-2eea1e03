@@ -20,6 +20,7 @@ export interface ReportExportBarProps {
   showExcel?: boolean;
   showCSV?: boolean;
   showPrint?: boolean;
+  onPrintHTML?: () => string | Promise<string>;
 }
 
 export function ReportExportBar({
@@ -33,14 +34,35 @@ export function ReportExportBar({
   showExcel = true,
   showCSV = true,
   showPrint = true,
+  onPrintHTML,
 }: ReportExportBarProps) {
-  const hasAnyExport = (showPDF && onExportPDF) || (showExcel && onExportExcel) || (showCSV && onExportCSV);
+  const hasAnyExport = (showPDF && (onExportPDF || onPrintHTML)) || (showExcel && onExportExcel) || (showCSV && onExportCSV);
   
   // Count available options
   const exportOptions = [
-    showPDF && onExportPDF && { label: "PDF", icon: FileText, onClick: onExportPDF },
-    showExcel && onExportExcel && { label: "Excel", icon: FileSpreadsheet, onClick: onExportExcel },
-    showCSV && onExportCSV && { label: "CSV", icon: FileText, onClick: onExportCSV },
+    (showPDF && onExportPDF) && { label: "PDF", icon: FileText, onClick: onExportPDF },
+    (showPDF && onPrintHTML) && { 
+      label: "Print / PDF", 
+      icon: Printer, 
+      onClick: async () => {
+        try {
+          const html = await onPrintHTML();
+          const printWindow = window.open("", "_blank");
+          if (printWindow) {
+            printWindow.document.write(html);
+            printWindow.document.close();
+            // wait for fonts to load before printing
+            setTimeout(() => {
+              printWindow.focus();
+            }, 500);
+          }
+        } catch (error) {
+          console.error("Failed to generate print layout:", error);
+        }
+      }
+    },
+    (showExcel && onExportExcel) && { label: "Excel", icon: FileSpreadsheet, onClick: onExportExcel },
+    (showCSV && onExportCSV) && { label: "CSV", icon: FileText, onClick: onExportCSV },
   ].filter(Boolean) as Array<{ label: string; icon: typeof FileText; onClick: () => void }>;
 
   // If only one export option, show direct button
@@ -57,7 +79,10 @@ export function ReportExportBar({
             disabled={isExporting}
             className="gap-2"
           >
-            <exportOptions[0].icon className="h-4 w-4" />
+            {(() => {
+              const Icon = exportOptions[0].icon;
+              return <Icon className="h-4 w-4" />;
+            })()}
             Export {exportOptions[0].label}
           </Button>
         ) : (

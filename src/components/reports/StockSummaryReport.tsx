@@ -1,15 +1,14 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Package, AlertTriangle, TrendingDown, Archive, Search, Download } from "lucide-react";
-import { ReportExportBar } from "./ReportExportBar";
-import { ReportSummaryCards } from "./ReportSummaryCards";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import { Package, AlertTriangle, TrendingDown, Archive, Search } from "lucide-react";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { generatePrintHTML } from "@/utils/printUtils";
+import { ReportContainer, ReportKPICard } from "@/components/reports/ReportContainer";
 import * as XLSX from "xlsx";
 
 interface StockItem {
@@ -29,6 +28,7 @@ interface StockItem {
 export default function StockSummaryReport() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "in_stock" | "low_stock" | "out_of_stock">("all");
+  const { data: companyInfo } = useCompanySettings();
 
   // Fetch products with stock
   const { data: products = [], isLoading: productsLoading } = useQuery({
@@ -138,46 +138,100 @@ export default function StockSummaryReport() {
     }
   };
 
-  const exportPDF = () => {
-    const doc = new jsPDF({ orientation: "landscape" });
-    doc.setFontSize(16);
-    doc.text("Stock Summary Report", 14, 20);
-    doc.setFontSize(10);
-    doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 28);
-    doc.text(`Total Stock Value: ₹${totals.totalValue.toLocaleString()}`, 14, 35);
-
-    const headers = ["Product", "ID", "HSN", "Category", "MRP", "Stock", "Value", "Status"];
+  const generateHTML = () => {
+    let warehouseHeaders = "";
     if (warehouses.length > 1) {
-      warehouses.forEach((wh: any) => headers.push(wh.name));
+      warehouseHeaders = warehouses.map((wh: any) => `<th class="text-right">${wh.name}</th>`).join("");
     }
 
-    autoTable(doc, {
-      startY: 42,
-      head: [headers],
-      body: filteredItems.map((item) => {
-        const row = [
-          item.name,
-          item.display_id,
-          item.hsn_code || "—",
-          item.category || "—",
-          `₹${item.mrp.toLocaleString()}`,
-          item.total_stock.toString(),
-          `₹${item.stock_value.toLocaleString()}`,
-          item.status.replace("_", " ").toUpperCase(),
-        ];
-        if (warehouses.length > 1) {
-          warehouses.forEach((wh: any) => {
-            const whStock = item.warehouses.find(w => w.id === wh.id);
-            row.push(whStock?.quantity?.toString() || "0");
-          });
-        }
-        return row;
-      }),
-      styles: { fontSize: 8 },
-      headStyles: { fillColor: [41, 128, 185] },
-    });
+    const itemRows = filteredItems.map((item) => {
+      let warehouseCols = "";
+      if (warehouses.length > 1) {
+        warehouseCols = warehouses.map((wh: any) => {
+          const whStock = item.warehouses.find(w => w.id === wh.id);
+          return `<td class="text-right">${whStock?.quantity || 0}</td>`;
+        }).join("");
+      }
 
-    doc.save(`stock-summary-${new Date().toISOString().split("T")[0]}.pdf`);
+      return `
+      <tr>
+        <td class="font-medium">${item.name}</td>
+        <td class="font-mono text-xs">${item.display_id}</td>
+        <td>${item.category || "—"}</td>
+        <td class="text-right">₹${item.mrp.toLocaleString()}</td>
+        <td class="text-right font-bold ${item.status === 'out_of_stock' ? 'text-neg' : item.status === 'low_stock' ? 'text-warn' : ''}">${item.total_stock}</td>
+        ${warehouseCols}
+        <td class="text-right font-medium">₹${item.stock_value.toLocaleString()}</td>
+        <td>${item.status.replace("_", " ").toUpperCase()}</td>
+      </tr>
+      `;
+    }).join("");
+    
+    let warehouseFooters = "";
+    if (warehouses.length > 1) {
+      warehouseFooters = warehouses.map((wh: any) => {
+        const whTotal = stockItems.reduce((sum, item) => {
+          const whStock = item.warehouses.find(w => w.id === wh.id);
+          return sum + (whStock?.quantity || 0);
+        }, 0);
+        return `<td class="text-right font-bold">${whTotal.toLocaleString()}</td>`;
+      }).join("");
+    }
+
+    const htmlContent = `
+      <div class="kpi-row">
+        <div class="kpi-card highlight">
+          <div class="kpi-label">Total Products</div>
+          <div class="kpi-value text-blue-600">${totals.totalProducts}</div>
+        </div>
+        <div class="kpi-card highlight">
+          <div class="kpi-label">Total Stock Units</div>
+          <div class="kpi-value">${totals.totalUnits.toLocaleString()}</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Total Value</div>
+          <div class="kpi-value text-pos">₹${totals.totalValue.toLocaleString()}</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Low / Out of Stock</div>
+          <div class="kpi-value text-neg">${totals.lowStock} / ${totals.outOfStock}</div>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th>ID</th>
+            <th>Category</th>
+            <th class="text-right">MRP</th>
+            <th class="text-right">Total Stock</th>
+            ${warehouseHeaders}
+            <th class="text-right">Value</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${itemRows}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="4" class="font-bold text-right">TOTAL</td>
+            <td class="text-right font-bold">${totals.totalUnits.toLocaleString()}</td>
+            ${warehouseFooters}
+            <td class="text-right font-bold">₹${totals.totalValue.toLocaleString()}</td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+    `;
+
+    return generatePrintHTML({
+      title: "Stock Summary Report",
+      dateRange: `Generated: ${new Date().toLocaleDateString()}`,
+      companyInfo: companyInfo || { companyName: "System", address: "", phone: "", email: "", gstin: "" },
+      htmlContent,
+    });
   };
 
   const exportExcel = () => {
@@ -215,145 +269,155 @@ export default function StockSummaryReport() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-semibold">Stock Summary</h2>
-          <p className="text-sm text-muted-foreground">Current inventory levels across all warehouses</p>
-        </div>
-        <ReportExportBar onExportPDF={exportPDF} onExportExcel={exportExcel} showCSV={false} showPrint={false} />
-      </div>
-
-      <ReportSummaryCards cards={summaryCards} columns={6} />
-
-      {/* Filters */}
-      <Card className="p-4">
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search products..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant={statusFilter === "all" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setStatusFilter("all")}
-            >
-              All
-            </Button>
-            <Button
-              variant={statusFilter === "in_stock" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setStatusFilter("in_stock")}
-              className={statusFilter === "in_stock" ? "bg-green-600" : ""}
-            >
-              In Stock ({totals.inStock})
-            </Button>
-            <Button
-              variant={statusFilter === "low_stock" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setStatusFilter("low_stock")}
-              className={statusFilter === "low_stock" ? "bg-yellow-600" : ""}
-            >
-              Low Stock ({totals.lowStock})
-            </Button>
-            <Button
-              variant={statusFilter === "out_of_stock" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setStatusFilter("out_of_stock")}
-              className={statusFilter === "out_of_stock" ? "bg-red-600" : ""}
-            >
-              Out of Stock ({totals.outOfStock})
-            </Button>
-          </div>
-        </div>
-      </Card>
-
-      {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      ) : filteredItems.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Package className="h-12 w-12 text-muted-foreground/30 mb-4" />
-            <p className="text-muted-foreground">No products found</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-muted/50">
-                  <tr className="text-left text-sm">
-                    <th className="px-4 py-3 font-medium">Product</th>
-                    <th className="px-4 py-3 font-medium">HSN</th>
-                    <th className="px-4 py-3 font-medium">Category</th>
-                    <th className="px-4 py-3 font-medium text-right">MRP</th>
-                    <th className="px-4 py-3 font-medium text-right">Stock</th>
-                    {warehouses.length > 1 && warehouses.map((wh: any) => (
-                      <th key={wh.id} className="px-4 py-3 font-medium text-right">{wh.name}</th>
-                    ))}
-                    <th className="px-4 py-3 font-medium text-right">Value</th>
-                    <th className="px-4 py-3 font-medium">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {filteredItems.map((item) => (
-                    <tr key={item.id} className="hover:bg-muted/30 transition-colors">
-                      <td className="px-4 py-3">
-                        <div>
-                          <p className="font-medium">{item.name}</p>
-                          <p className="text-xs text-muted-foreground font-mono">{item.display_id}</p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-muted-foreground">{item.hsn_code || "—"}</td>
-                      <td className="px-4 py-3 text-sm">{item.category || "—"}</td>
-                      <td className="px-4 py-3 text-sm text-right">₹{item.mrp.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-right">
-                        <span className={`font-semibold ${item.status === "out_of_stock" ? "text-red-600" : item.status === "low_stock" ? "text-yellow-600" : ""}`}>
-                          {item.total_stock}
-                        </span>
-                      </td>
-                      {warehouses.length > 1 && warehouses.map((wh: any) => {
-                        const whStock = item.warehouses.find(w => w.id === wh.id);
-                        return (
-                          <td key={wh.id} className="px-4 py-3 text-sm text-right text-muted-foreground">
-                            {whStock?.quantity || 0}
-                          </td>
-                        );
-                      })}
-                      <td className="px-4 py-3 text-right font-medium">₹{item.stock_value.toLocaleString()}</td>
-                      <td className="px-4 py-3">{getStatusBadge(item.status)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot className="bg-muted/70 font-semibold">
-                  <tr>
-                    <td colSpan={4} className="px-4 py-3 text-right">TOTAL</td>
-                    <td className="px-4 py-3 text-right">{totals.totalUnits.toLocaleString()}</td>
-                    {warehouses.length > 1 && warehouses.map((wh: any) => {
-                      const whTotal = stockItems.reduce((sum, item) => {
-                        const whStock = item.warehouses.find(w => w.id === wh.id);
-                        return sum + (whStock?.quantity || 0);
-                      }, 0);
-                      return <td key={wh.id} className="px-4 py-3 text-right">{whTotal.toLocaleString()}</td>;
-                    })}
-                    <td className="px-4 py-3 text-right">₹{totals.totalValue.toLocaleString()}</td>
-                    <td></td>
-                  </tr>
-                </tfoot>
-              </table>
+    <ReportContainer
+      title="Stock Summary"
+      subtitle="Current inventory levels across all warehouses"
+      icon={<Package className="h-5 w-5" />}
+      dateRange={`Generated: ${new Date().toLocaleDateString("en-IN")}`}
+      onPrint={() => {
+        const html = generateHTML();
+        const w = window.open("", "_blank");
+        if (w) { w.document.write(html); w.document.close(); }
+      }}
+      onExportExcel={exportExcel}
+      isLoading={isLoading}
+      summaryCards={
+        <>
+          <ReportKPICard label="Total Products" value={totals.totalProducts.toString()} icon={<Package className="h-4 w-4" />} />
+          <ReportKPICard label="In Stock" value={totals.inStock.toString()} trend="up" icon={<Package className="h-4 w-4" />} />
+          <ReportKPICard label="Low Stock" value={totals.lowStock.toString()} trend={totals.lowStock > 0 ? "down" : undefined} icon={<AlertTriangle className="h-4 w-4" />} />
+          <ReportKPICard label="Out of Stock" value={totals.outOfStock.toString()} trend={totals.outOfStock > 0 ? "down" : undefined} icon={<TrendingDown className="h-4 w-4" />} />
+          <ReportKPICard label="Total Units" value={totals.totalUnits.toLocaleString()} icon={<Archive className="h-4 w-4" />} />
+          <ReportKPICard label="Stock Value" value={`₹${(totals.totalValue / 1000).toFixed(0)}K`} highlight icon={<Package className="h-4 w-4" />} />
+        </>
+      }
+    >
+      <div className="space-y-4">
+        {/* Filters */}
+        <Card className="p-4 border-0 shadow-sm bg-muted/30">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search products..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9 h-9"
+              />
             </div>
-          </CardContent>
+            <div className="flex gap-2">
+              <Button
+                variant={statusFilter === "all" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setStatusFilter("all")}
+              >
+                All
+              </Button>
+              <Button
+                variant={statusFilter === "in_stock" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setStatusFilter("in_stock")}
+                className={statusFilter === "in_stock" ? "bg-green-600 hover:bg-green-700" : ""}
+              >
+                In Stock ({totals.inStock})
+              </Button>
+              <Button
+                variant={statusFilter === "low_stock" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setStatusFilter("low_stock")}
+                className={statusFilter === "low_stock" ? "bg-amber-600 hover:bg-amber-700" : ""}
+              >
+                Low Stock ({totals.lowStock})
+              </Button>
+              <Button
+                variant={statusFilter === "out_of_stock" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setStatusFilter("out_of_stock")}
+                className={statusFilter === "out_of_stock" ? "bg-red-600 hover:bg-red-700" : ""}
+              >
+                Out of Stock ({totals.outOfStock})
+              </Button>
+            </div>
+          </div>
         </Card>
-      )}
-    </div>
+
+        {filteredItems.length === 0 ? (
+          <Card className="border-dashed">
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <Package className="h-12 w-12 text-muted-foreground/30 mb-4" />
+              <p className="text-muted-foreground">No products found</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="border-0 shadow-sm overflow-hidden">
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50">
+                    <tr className="text-left">
+                      <th className="px-4 py-3 font-semibold">Product</th>
+                      <th className="px-4 py-3 font-semibold">HSN</th>
+                      <th className="px-4 py-3 font-semibold">Category</th>
+                      <th className="px-4 py-3 font-semibold text-right">MRP</th>
+                      <th className="px-4 py-3 font-semibold text-right">Stock</th>
+                      {warehouses.length > 1 && warehouses.map((wh: any) => (
+                        <th key={wh.id} className="px-4 py-3 font-semibold text-right">{wh.name}</th>
+                      ))}
+                      <th className="px-4 py-3 font-semibold text-right">Value</th>
+                      <th className="px-4 py-3 font-semibold">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {filteredItems.map((item) => (
+                      <tr key={item.id} className="hover:bg-muted/30 transition-colors">
+                        <td className="px-4 py-3">
+                          <div>
+                            <p className="font-medium">{item.name}</p>
+                            <p className="text-xs text-muted-foreground font-mono">{item.display_id}</p>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">{item.hsn_code || "—"}</td>
+                        <td className="px-4 py-3">{item.category || "—"}</td>
+                        <td className="px-4 py-3 text-right">₹{item.mrp.toLocaleString()}</td>
+                        <td className="px-4 py-3 text-right">
+                          <span className={`font-semibold ${item.status === "out_of_stock" ? "text-red-600" : item.status === "low_stock" ? "text-amber-600" : ""}`}>
+                            {item.total_stock}
+                          </span>
+                        </td>
+                        {warehouses.length > 1 && warehouses.map((wh: any) => {
+                          const whStock = item.warehouses.find(w => w.id === wh.id);
+                          return (
+                            <td key={wh.id} className="px-4 py-3 text-right text-muted-foreground">
+                              {whStock?.quantity || 0}
+                            </td>
+                          );
+                        })}
+                        <td className="px-4 py-3 text-right font-medium">₹{item.stock_value.toLocaleString()}</td>
+                        <td className="px-4 py-3">{getStatusBadge(item.status)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="bg-muted/70 font-semibold">
+                    <tr>
+                      <td colSpan={4} className="px-4 py-3 text-right">TOTAL</td>
+                      <td className="px-4 py-3 text-right">{totals.totalUnits.toLocaleString()}</td>
+                      {warehouses.length > 1 && warehouses.map((wh: any) => {
+                        const whTotal = stockItems.reduce((sum, item) => {
+                          const whStock = item.warehouses.find(w => w.id === wh.id);
+                          return sum + (whStock?.quantity || 0);
+                        }, 0);
+                        return <td key={wh.id} className="px-4 py-3 text-right">{whTotal.toLocaleString()}</td>;
+                      })}
+                      <td className="px-4 py-3 text-right">₹{totals.totalValue.toLocaleString()}</td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </ReportContainer>
   );
 }

@@ -6,9 +6,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { logActivity } from "@/lib/activityLogger";
-import { Loader2, Package, Plus, Minus, History, BoxSelect, ArrowUpRight, ArrowDownRight, FlaskConical, ImageIcon } from "lucide-react";
+import { Loader2, Package, Plus, Minus, BoxSelect, ArrowUpRight, FlaskConical } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useNavigate } from "react-router-dom";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
@@ -44,8 +45,10 @@ const RAW_MATERIAL_ADJUST_TYPES: Record<RawMaterialAdjustType, string> = {
 const Inventory = () => {
   const { user, role } = useAuth();
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const isMobile = useIsMobile();
   const canEdit = ["super_admin", "manager", "pos"].includes(role || "");
+  const [activeView, setActiveView] = useState<"products" | "raw-materials">("products");
   
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>("");
   const [showAdjust, setShowAdjust] = useState(false);
@@ -92,7 +95,7 @@ const Inventory = () => {
       // Strategy: Fetch all products, then fetch stock for this warehouse
       const { data: products } = await supabase
         .from("products")
-        .select("id, name, sku, unit, category, image_url")
+        .select("id, name, sku, unit, category, image_url, base_price")
         .eq("is_active", true)
         .order("name");
         
@@ -169,17 +172,32 @@ const Inventory = () => {
   }, [inventory, searchTerm]);
 
   // Fetch Recent Movements
-  const { data: movements } = useQuery({
+  const { data: productMovements } = useQuery({
     queryKey: ["stock-movements", selectedWarehouseId],
     queryFn: async () => {
         if (!selectedWarehouseId) return [];
         const { data } = await supabase
             .from("stock_movements")
-            .select("*, products(name, sku)")
+            .select("id, product_id, warehouse_id, quantity, type, reason, reference_id, created_at, products(name, sku)")
             .eq("warehouse_id", selectedWarehouseId)
             .order("created_at", { ascending: false })
             .limit(50);
         return data || [];
+    },
+    enabled: !!selectedWarehouseId,
+  });
+
+  const { data: rawMaterialMovements } = useQuery({
+    queryKey: ["raw-material-adjustments", selectedWarehouseId],
+    queryFn: async () => {
+      if (!selectedWarehouseId) return [];
+      const { data } = await supabase
+        .from("raw_material_adjustments")
+        .select("id, display_id, raw_material_id, warehouse_id, adjustment_type, quantity_before, quantity_change, quantity_after, reason, reference_id, created_at, raw_materials(name, display_id, unit)")
+        .eq("warehouse_id", selectedWarehouseId)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      return data || [];
     },
     enabled: !!selectedWarehouseId,
   });
@@ -342,7 +360,7 @@ const Inventory = () => {
     }
   ];
 
-  const movementColumns = [
+  const productMovementColumns = [
       { header: "Date", accessor: (row: any) => format(new Date(row.created_at), "dd MMM HH:mm"), className: "text-xs text-slate-500" },
       { header: "Product", accessor: (row: any) => row.products?.name },
       { header: "Type", accessor: (row: any) => <Badge variant="outline">{row.type}</Badge> },
@@ -357,14 +375,30 @@ const Inventory = () => {
       { header: "Reason", accessor: "reason", className: "text-xs block max-w-[200px] truncate" },
   ];
 
+      const rawMaterialMovementColumns = [
+        { header: "Date", accessor: (row: any) => format(new Date(row.created_at), "dd MMM HH:mm"), className: "text-xs text-slate-500" },
+        { header: "Material", accessor: (row: any) => row.raw_materials?.name },
+        { header: "Type", accessor: (row: any) => <Badge variant="outline">{row.adjustment_type}</Badge> },
+        {
+          header: "Change",
+          accessor: (row: any) => (
+           <span className={row.quantity_change > 0 ? "text-green-600 font-bold" : "text-red-600 font-bold"}>
+             {row.quantity_change > 0 ? "+" : ""}{row.quantity_change}
+           </span>
+          )
+        },
+        { header: "After", accessor: (row: any) => `${row.quantity_after} ${row.raw_materials?.unit || ""}`, className: "text-sm" },
+        { header: "Reason", accessor: "reason", className: "text-xs block max-w-[200px] truncate" },
+      ];
+
   return (
     <div className="space-y-6 animate-fade-in">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <PageHeader title="Inventory Management" subtitle="Manage stock levels across warehouses" />
-            <div className="flex items-center gap-2">
+        <PageHeader title="Inventory Management" subtitle="Manage products and raw materials stock by warehouse" />
+          <div className="flex w-full sm:w-auto flex-col sm:flex-row sm:items-center gap-2">
                 <BoxSelect className="h-4 w-4 text-muted-foreground" />
                 <Select value={selectedWarehouseId} onValueChange={setSelectedWarehouseId}>
-                    <SelectTrigger className="w-[200px]">
+              <SelectTrigger className="w-full sm:w-[220px]">
                         <SelectValue placeholder="Select Warehouse" />
                     </SelectTrigger>
                     <SelectContent>
@@ -373,17 +407,20 @@ const Inventory = () => {
                         ))}
                     </SelectContent>
                 </Select>
+          <Button variant="outline" className="w-full sm:w-auto shrink-0" onClick={() => navigate(activeView === "products" ? "/products" : "/raw-materials")}>
+            {activeView === "products" ? "Products" : "Raw Materials"}
+            <ArrowUpRight className="ml-2 h-4 w-4" />
+          </Button>
             </div>
         </div>
 
-        <Tabs defaultValue="stock">
+      <Tabs value={activeView} onValueChange={(value) => setActiveView(value as "products" | "raw-materials") }>
             <TabsList>
-                <TabsTrigger value="stock">Products</TabsTrigger>
+          <TabsTrigger value="products">Products</TabsTrigger>
                 <TabsTrigger value="raw-materials">Raw Materials</TabsTrigger>
-                <TabsTrigger value="movements">Recent Movements</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="stock" className="space-y-4">
+        <TabsContent value="products" className="space-y-6">
                 {loadInv ? (
                     <div className="flex items-center justify-center py-10"><Loader2 className="animate-spin" /></div>
                 ) : !isMobile ? (
@@ -442,6 +479,17 @@ const Inventory = () => {
                                   <Badge variant="outline" className="text-xs font-normal">{row.category}</Badge>
                                 )}
 
+                                <div className="grid grid-cols-2 gap-2 rounded-xl bg-muted/50 p-3 text-sm">
+                                  <div>
+                                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Price</p>
+                                    <p className="font-semibold">₹{Number(row.base_price || 0).toLocaleString()}</p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Stock Value</p>
+                                    <p className="font-semibold">₹{Number((row.quantity || 0) * Number(row.base_price || 0)).toLocaleString()}</p>
+                                  </div>
+                                </div>
+
                                 {/* Stock display */}
                                 <div className="bg-muted/50 rounded-xl p-3">
                                   <div className="flex items-center justify-between">
@@ -455,22 +503,24 @@ const Inventory = () => {
                                   </div>
                                 </div>
 
-                                {/* Actions */}
-                                {canEdit && (
-                                  <Button 
-                                    variant="default" 
-                                    size="sm" 
-                                    className="w-full h-9 font-medium"
-                                    onClick={() => {
-                                      setAdjustProduct(row);
-                                      setAdjustType("adjustment");
-                                      setShowAdjust(true);
-                                    }}
-                                  >
-                                    <Plus className="h-4 w-4 mr-1.5" />
-                                    Adjust Stock
-                                  </Button>
-                                )}
+                                <div className="flex gap-2">
+                                  <Button variant="outline" size="sm" className="flex-1 h-9 font-medium" onClick={() => navigate("/products")}>View Product <ArrowUpRight className="ml-1.5 h-4 w-4" /></Button>
+                                  {canEdit && (
+                                    <Button 
+                                      variant="default" 
+                                      size="sm" 
+                                      className="flex-1 h-9 font-medium"
+                                      onClick={() => {
+                                        setAdjustProduct(row);
+                                        setAdjustType("adjustment");
+                                        setShowAdjust(true);
+                                      }}
+                                    >
+                                      <Plus className="h-4 w-4 mr-1.5" />
+                                      Adjust Stock
+                                    </Button>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           );
@@ -481,66 +531,108 @@ const Inventory = () => {
                           No products found.
                         </div>
                       )}
+
+                      <div className="rounded-xl border bg-card p-4">
+                        <div className="mb-3 flex items-center justify-between gap-3">
+                          <div>
+                            <h3 className="font-semibold">Products Stock Flow</h3>
+                            <p className="text-sm text-muted-foreground">Recent product stock movements in the selected warehouse.</p>
+                          </div>
+                        </div>
+                        <DataTable data={productMovements || []} columns={productMovementColumns} />
+                      </div>
                     </div>
                 ) : (
                     /* Mobile: DataTable with compact cards */
-                    <DataTable 
-                        data={filteredInventory || []} 
-                        columns={columns} 
-                        searchKey="name"
-                        searchPlaceholder="Search products..."
-                        renderMobileCard={(row: any) => {
+                    <div className="space-y-4">
+                      <DataTable 
+                          data={filteredInventory || []} 
+                          columns={columns} 
+                          searchKey="name"
+                          searchPlaceholder="Search products..."
+                          renderMobileCard={(row: any) => {
                           const stockStatus = row.quantity < 0 ? "critical" : row.quantity === 0 ? "empty" : row.quantity < 10 ? "low" : "good";
                           const statusColors = {
-                            critical: "text-red-600",
-                            empty: "text-slate-400",
-                            low: "text-amber-600",
-                            good: "text-emerald-600",
+                            critical: { text: "text-red-600", pill: "bg-red-100 text-red-700" },
+                            empty: { text: "text-slate-500", pill: "bg-slate-100 text-slate-700" },
+                            low: { text: "text-amber-600", pill: "bg-amber-100 text-amber-700" },
+                            good: { text: "text-emerald-600", pill: "bg-emerald-100 text-emerald-700" },
                           };
+                          const colors = statusColors[stockStatus];
                           return (
-                            <div className="rounded-lg border bg-card p-3">
-                              {/* SKU + Stock in one row */}
-                              <div className="flex items-center justify-between mb-1">
-                                <span className="font-mono text-xs text-muted-foreground">{row.sku}</span>
-                                <span className={`font-bold text-sm ${statusColors[stockStatus]}`}>
-                                  {row.quantity} <span className="text-xs font-normal text-muted-foreground">{row.unit}</span>
+                            <div className="rounded-2xl border bg-gradient-to-b from-card to-muted/20 p-3.5 shadow-sm">
+                              <div className="mb-2 flex items-center justify-between">
+                                <span className="font-mono text-[11px] text-muted-foreground">{row.sku}</span>
+                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${colors.pill}`}>
+                                  {stockStatus === "critical" ? "Critical" : stockStatus === "empty" ? "Out" : stockStatus === "low" ? "Low" : "In Stock"}
                                 </span>
                               </div>
-                              {/* Product name */}
-                              <p className="font-medium text-sm truncate">{row.name}</p>
-                              {/* Category + Action */}
+                              <p className="font-semibold text-sm truncate">{row.name}</p>
+                              <div className="mt-2 flex items-baseline gap-1.5">
+                                <span className={`font-bold text-base ${colors.text}`}>
+                                  {row.quantity} <span className="text-xs font-normal text-muted-foreground">{row.unit}</span>
+                                </span>
+                                <span className="text-xs text-muted-foreground">current</span>
+                              </div>
+                              <div className="mt-2 grid grid-cols-2 gap-2 rounded-lg bg-muted/50 p-2 text-xs">
+                                <div>
+                                  <p className="text-muted-foreground">Price</p>
+                                  <p className="font-semibold">₹{Number(row.base_price || 0).toLocaleString()}</p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-muted-foreground">Value</p>
+                                  <p className="font-semibold">₹{Number((row.quantity || 0) * Number(row.base_price || 0)).toLocaleString()}</p>
+                                </div>
+                              </div>
                               <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
                                 <span className="text-xs text-muted-foreground">{row.category || "—"}</span>
-                                {canEdit && (
-                                  <Button 
-                                    variant="ghost" 
-                                    size="sm" 
-                                    className="h-7 text-xs"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setAdjustProduct(row);
-                                      setAdjustType("adjustment");
-                                      setShowAdjust(true);
-                                    }}
-                                  >
-                                    Adjust
+                                <div className="flex items-center gap-2">
+                                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); navigate("/products"); }}>
+                                    View
                                   </Button>
-                                )}
+                                  {canEdit && (
+                                    <Button 
+                                      variant="ghost" 
+                                      size="sm" 
+                                      className="h-7 text-xs"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setAdjustProduct(row);
+                                        setAdjustType("adjustment");
+                                        setShowAdjust(true);
+                                      }}
+                                    >
+                                      Adjust
+                                    </Button>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           );
                         }}
-                    />
-                )}
-            </TabsContent>
+                      />
 
-            <TabsContent value="movements">
-                 <div className="rounded-md border">
-                    <DataTable 
-                        data={movements || []} 
-                        columns={movementColumns} 
-                    />
-                 </div>
+                      <div className="rounded-xl border bg-card p-3">
+                        <p className="text-sm font-semibold">Products Stock Flow</p>
+                        <p className="text-xs text-muted-foreground mb-2">Latest product movements for selected warehouse.</p>
+                        <div className="space-y-2">
+                          {(productMovements || []).slice(0, 8).map((m: any) => (
+                            <div key={m.id} className="rounded-lg border bg-muted/30 px-3 py-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="text-xs font-medium truncate">{m.products?.name || "Product"}</p>
+                                <p className={`text-xs font-bold ${Number(m.quantity) > 0 ? "text-emerald-600" : "text-red-600"}`}>{Number(m.quantity) > 0 ? "+" : ""}{m.quantity}</p>
+                              </div>
+                              <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
+                                <span className="capitalize">{m.type}</span>
+                                <span>{format(new Date(m.created_at), "dd MMM, hh:mm a")}</span>
+                              </div>
+                            </div>
+                          ))}
+                          {(productMovements || []).length === 0 && <p className="text-xs text-muted-foreground">No movements yet.</p>}
+                        </div>
+                      </div>
+                    </div>
+                )}
             </TabsContent>
 
             {/* Raw Materials Tab */}
@@ -628,37 +720,50 @@ const Inventory = () => {
                                   )}
                                 </div>
 
-                                {/* Actions - Used/Remaining */}
-                                {canEdit && (
-                                  <div className="flex gap-2">
-                                    <Button 
-                                      variant="outline" 
-                                      size="sm" 
-                                      className="flex-1 h-9 font-medium"
-                                      onClick={() => {
-                                        setAdjustRawMaterial(row);
-                                        setRawMaterialAdjustType("used");
-                                        setShowRawMaterialAdjust(true);
-                                      }}
-                                    >
-                                      <Minus className="h-4 w-4 mr-1.5" />
-                                      Used
-                                    </Button>
-                                    <Button 
-                                      variant="default" 
-                                      size="sm" 
-                                      className="flex-1 h-9 font-medium"
-                                      onClick={() => {
-                                        setAdjustRawMaterial(row);
-                                        setRawMaterialAdjustType("remaining");
-                                        setShowRawMaterialAdjust(true);
-                                      }}
-                                    >
-                                      <Plus className="h-4 w-4 mr-1.5" />
-                                      Remaining
-                                    </Button>
+                                <div className="grid grid-cols-2 gap-2 rounded-xl bg-muted/50 p-3 text-sm">
+                                  <div>
+                                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Unit Cost</p>
+                                    <p className="font-semibold">₹{Number(row.unit_cost || 0).toLocaleString()}</p>
                                   </div>
-                                )}
+                                  <div className="text-right">
+                                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Stock Value</p>
+                                    <p className="font-semibold">₹{Number((row.warehouse_quantity || 0) * Number(row.unit_cost || 0)).toLocaleString()}</p>
+                                  </div>
+                                </div>
+
+                                <div className="flex gap-2">
+                                  <Button variant="outline" size="sm" className="flex-1 h-9 font-medium" onClick={() => navigate("/raw-materials")}>Raw Materials <ArrowUpRight className="ml-1.5 h-4 w-4" /></Button>
+                                  {canEdit && (
+                                    <>
+                                      <Button 
+                                        variant="outline" 
+                                        size="sm" 
+                                        className="flex-1 h-9 font-medium"
+                                        onClick={() => {
+                                          setAdjustRawMaterial(row);
+                                          setRawMaterialAdjustType("used");
+                                          setShowRawMaterialAdjust(true);
+                                        }}
+                                      >
+                                        <Minus className="h-4 w-4 mr-1.5" />
+                                        Used
+                                      </Button>
+                                      <Button 
+                                        variant="default" 
+                                        size="sm" 
+                                        className="flex-1 h-9 font-medium"
+                                        onClick={() => {
+                                          setAdjustRawMaterial(row);
+                                          setRawMaterialAdjustType("remaining");
+                                          setShowRawMaterialAdjust(true);
+                                        }}
+                                      >
+                                        <Plus className="h-4 w-4 mr-1.5" />
+                                        Remaining
+                                      </Button>
+                                    </>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           );
@@ -669,15 +774,27 @@ const Inventory = () => {
                           No raw materials found. Add raw materials in the Purchases section.
                         </div>
                       )}
+
+                      <div className="rounded-xl border bg-card p-4">
+                        <div className="mb-3 flex items-center justify-between gap-3">
+                          <div>
+                            <h3 className="font-semibold">Raw Materials Stock Flow</h3>
+                            <p className="text-sm text-muted-foreground">Recent raw material usage and count adjustments in the selected warehouse.</p>
+                          </div>
+                        </div>
+                        <DataTable data={rawMaterialMovements || []} columns={rawMaterialMovementColumns} />
+                      </div>
                     </div>
                 ) : (
                     /* Mobile: DataTable for Raw Materials */
-                    <DataTable 
+                    <div className="space-y-4">
+                      <DataTable 
                         data={filteredRawMaterials || []} 
                         columns={[
                           { header: "ID", accessor: "display_id", className: "w-[80px] font-mono text-xs" },
                           { header: "Material", accessor: "name", className: "font-medium" },
                           { header: "Category", accessor: "category" },
+                            { header: "Unit Cost", accessor: (row: any) => `₹${Number(row.unit_cost || 0).toLocaleString()}` },
                           { 
                               header: "Stock", 
                               accessor: (row: any) => (
@@ -690,6 +807,7 @@ const Inventory = () => {
                               header: "Action",
                               accessor: (row: any) => canEdit && (
                                 <div className="flex gap-1">
+                                <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => navigate("/raw-materials")}>View</Button>
                                   <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => {
                                       setAdjustRawMaterial(row);
                                       setRawMaterialAdjustType("used");
@@ -710,7 +828,80 @@ const Inventory = () => {
                         ]} 
                         searchKey="name"
                         searchPlaceholder="Search raw materials..."
-                    />
+                        renderMobileCard={(row: any) => {
+                          const minStock = Number(row.min_stock_level || 0);
+                          const stockStatus = row.warehouse_quantity <= 0 ? "empty" : row.warehouse_quantity <= minStock ? "low" : "good";
+                          const statusPill = stockStatus === "empty"
+                            ? "bg-slate-100 text-slate-700"
+                            : stockStatus === "low"
+                              ? "bg-amber-100 text-amber-700"
+                              : "bg-emerald-100 text-emerald-700";
+                          return (
+                            <div className="rounded-2xl border bg-gradient-to-b from-card to-muted/20 p-3.5 shadow-sm">
+                              <div className="mb-2 flex items-center justify-between">
+                                <span className="font-mono text-[11px] text-muted-foreground">{row.display_id}</span>
+                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${statusPill}`}>
+                                  {stockStatus === "empty" ? "Out" : stockStatus === "low" ? "Low" : "In Stock"}
+                                </span>
+                              </div>
+                              <p className="font-semibold text-sm truncate">{row.name}</p>
+                              <div className="mt-2 flex items-baseline gap-1.5">
+                                <span className="font-bold text-base text-foreground">{row.warehouse_quantity} {row.unit}</span>
+                                <span className="text-xs text-muted-foreground">stock</span>
+                              </div>
+                              <div className="mt-2 grid grid-cols-2 gap-2 rounded-lg bg-muted/50 p-2 text-xs">
+                                <div>
+                                  <p className="text-muted-foreground">Unit Cost</p>
+                                  <p className="font-semibold">₹{Number(row.unit_cost || 0).toLocaleString()}</p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-muted-foreground">Value</p>
+                                  <p className="font-semibold">₹{Number((row.warehouse_quantity || 0) * Number(row.unit_cost || 0)).toLocaleString()}</p>
+                                </div>
+                              </div>
+                              <div className="mt-2 flex items-center justify-between border-t border-border/50 pt-2">
+                                <span className="text-xs text-muted-foreground">{row.category || "—"}</span>
+                                <div className="flex items-center gap-2">
+                                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); navigate("/raw-materials"); }}>
+                                    View
+                                  </Button>
+                                  {canEdit && (
+                                    <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={(e) => {
+                                      e.stopPropagation();
+                                      setAdjustRawMaterial(row);
+                                      setRawMaterialAdjustType("remaining");
+                                      setShowRawMaterialAdjust(true);
+                                    }}>
+                                      Adjust
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        }}
+                      />
+
+                      <div className="rounded-xl border bg-card p-3">
+                        <p className="text-sm font-semibold">Raw Materials Stock Flow</p>
+                        <p className="text-xs text-muted-foreground mb-2">Latest usage/count adjustments for selected warehouse.</p>
+                        <div className="space-y-2">
+                          {(rawMaterialMovements || []).slice(0, 8).map((m: any) => (
+                            <div key={m.id} className="rounded-lg border bg-muted/30 px-3 py-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="text-xs font-medium truncate">{m.raw_materials?.name || "Material"}</p>
+                                <p className={`text-xs font-bold ${Number(m.quantity_change) > 0 ? "text-emerald-600" : "text-red-600"}`}>{Number(m.quantity_change) > 0 ? "+" : ""}{m.quantity_change}</p>
+                              </div>
+                              <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
+                                <span className="capitalize">{m.adjustment_type}</span>
+                                <span>{format(new Date(m.created_at), "dd MMM, hh:mm a")}</span>
+                              </div>
+                            </div>
+                          ))}
+                          {(rawMaterialMovements || []).length === 0 && <p className="text-xs text-muted-foreground">No movements yet.</p>}
+                        </div>
+                      </div>
+                    </div>
                 )}
             </TabsContent>
         </Tabs>

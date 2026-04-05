@@ -1,27 +1,20 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { StatCard } from "@/components/shared/StatCard";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import {
-  ClipboardList, CheckCircle, XCircle, Clock, TrendingUp,
-  FileText, FileSpreadsheet, Truck, BarChart3,
-} from "lucide-react";
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell,
-} from "recharts";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import { ClipboardList, CheckCircle, XCircle, Clock, TrendingUp, Truck } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import * as XLSX from "xlsx";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { generatePrintHTML } from "@/utils/printUtils";
+import { ReportContainer, ReportKPICard } from "@/components/reports/ReportContainer";
 
 const COLORS = ["hsl(38, 92%, 50%)", "hsl(142, 72%, 42%)", "hsl(0, 72%, 51%)", "hsl(217, 91%, 50%)"];
 
@@ -30,6 +23,7 @@ export default function OrderReport() {
   const thirtyAgo = new Date(today); thirtyAgo.setDate(thirtyAgo.getDate() - 30);
   const [from, setFrom] = useState(thirtyAgo.toISOString().split("T")[0]);
   const [to, setTo] = useState(today.toISOString().split("T")[0]);
+  const { data: companySettings } = useCompanySettings();
 
   const { data, isLoading } = useQuery({
     queryKey: ["order-report", from, to],
@@ -51,25 +45,21 @@ export default function OrderReport() {
       const fulfillmentRate = total > 0 ? ((delivered / total) * 100).toFixed(1) : "0";
       const cancellationRate = total > 0 ? ((cancelled / total) * 100).toFixed(1) : "0";
 
-      // Avg delivery time (hours)
       const deliveredOrders = orders.filter(o => o.status === "delivered" && o.delivered_at);
       const avgDeliveryHours = deliveredOrders.length > 0
         ? deliveredOrders.reduce((s, o) => s + (new Date(o.delivered_at!).getTime() - new Date(o.created_at).getTime()) / 3600000, 0) / deliveredOrders.length
         : 0;
 
-      // Status pie
       const statusData = [
         { name: "Pending", value: pending },
         { name: "Delivered", value: delivered },
         { name: "Cancelled", value: cancelled },
       ].filter(s => s.value > 0);
 
-      // Source breakdown
       const sourceMap: Record<string, number> = {};
       orders.forEach(o => { sourceMap[o.source] = (sourceMap[o.source] || 0) + 1; });
       const sourceData = Object.entries(sourceMap).map(([name, value]) => ({ name, value }));
 
-      // Cancellation reasons
       const reasonMap: Record<string, number> = {};
       orders.filter(o => o.cancellation_reason).forEach(o => {
         const r = o.cancellation_reason!;
@@ -77,7 +67,6 @@ export default function OrderReport() {
       });
       const cancellationReasons = Object.entries(reasonMap).sort((a, b) => b[1] - a[1]).map(([reason, count]) => ({ reason, count }));
 
-      // Store frequency
       const storeFreq: Record<string, { name: string; type: string; total: number; delivered: number; cancelled: number }> = {};
       orders.forEach(o => {
         const sid = o.store_id;
@@ -90,7 +79,6 @@ export default function OrderReport() {
       });
       const storeFreqData = Object.values(storeFreq).sort((a, b) => b.total - a.total);
 
-      // Daily orders
       const dailyMap: Record<string, number> = {};
       orders.forEach(o => {
         const day = o.created_at.split("T")[0];
@@ -98,7 +86,6 @@ export default function OrderReport() {
       });
       const dailyTrend = Object.entries(dailyMap).sort().map(([d, c]) => ({ date: d.slice(5), count: c }));
 
-      // Peak days
       const dayOfWeekMap: Record<string, number> = { Sun: 0, Mon: 0, Tue: 0, Wed: 0, Thu: 0, Fri: 0, Sat: 0 };
       const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
       orders.forEach(o => {
@@ -107,7 +94,6 @@ export default function OrderReport() {
       });
       const peakDays = Object.entries(dayOfWeekMap).map(([day, count]) => ({ day, count }));
 
-      // Store type breakdown
       const typeOrders: Record<string, number> = {};
       orders.forEach(o => {
         const st = storeMap[o.store_id];
@@ -124,26 +110,63 @@ export default function OrderReport() {
     },
   });
 
-  const exportPDF = () => {
-    if (!data) return;
-    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-    const pw = doc.internal.pageSize.getWidth();
-    doc.setFillColor(30, 41, 59); doc.rect(0, 0, pw, 18, "F");
-    doc.setTextColor(255, 255, 255); doc.setFontSize(14);
-    doc.text("Order Report", 10, 12); doc.setFontSize(9);
-    doc.text(`${from} to ${to}`, pw - 10, 12, { align: "right" });
+  const handlePrintHTML = () => {
+    if (!data || !companySettings) return "";
 
-    doc.setTextColor(0, 0, 0);
-    autoTable(doc, { startY: 24, head: [["Metric", "Value"]], body: [
-      ["Total Orders", data.total], ["Delivered", data.delivered], ["Pending", data.pending],
-      ["Cancelled", data.cancelled], ["Fulfillment Rate", data.fulfillmentRate + "%"],
-      ["Cancellation Rate", data.cancellationRate + "%"], ["Avg Delivery Time", data.avgDeliveryHours.toFixed(1) + " hrs"],
-    ], theme: "grid", styles: { fontSize: 7, cellPadding: 1.5 }, headStyles: { fillColor: [30, 41, 59] }, margin: { left: 10 }, tableWidth: 80 });
+    const htmlContent = `
+      <div class="kpi-row">
+        <div class="kpi-card"><div class="kpi-label">Total Orders</div><div class="kpi-value">${data.total}</div></div>
+        <div class="kpi-card"><div class="kpi-label">Delivered</div><div class="kpi-value text-pos">${data.delivered}</div></div>
+        <div class="kpi-card"><div class="kpi-label">Pending</div><div class="kpi-value">${data.pending}</div></div>
+        <div class="kpi-card"><div class="kpi-label">Cancelled</div><div class="kpi-value text-neg">${data.cancelled}</div></div>
+      </div>
+      <div class="kpi-row">
+        <div class="kpi-card highlight"><div class="kpi-label">Fulfillment Rate</div><div class="kpi-value">${data.fulfillmentRate}%</div></div>
+        <div class="kpi-card"><div class="kpi-label">Cancellation Rate</div><div class="kpi-value">${data.cancellationRate}%</div></div>
+        <div class="kpi-card"><div class="kpi-label">Avg Delivery Time</div><div class="kpi-value">${data.avgDeliveryHours.toFixed(1)}h</div></div>
+      </div>
 
-    autoTable(doc, { startY: 24, head: [["Store", "Type", "Total", "Delivered", "Cancelled"]], body: data.storeFreqData.slice(0, 25).map(s => [s.name, s.type, s.total, s.delivered, s.cancelled]), theme: "grid", styles: { fontSize: 6, cellPadding: 1.2 }, headStyles: { fillColor: [30, 41, 59] }, margin: { left: 100 }, tableWidth: 187 });
+      <h2>Store-wise Order Frequency</h2>
+      <table>
+        <thead><tr><th>#</th><th>Store</th><th>Type</th><th class="text-right">Total</th><th class="text-right">Delivered</th><th class="text-right">Cancelled</th></tr></thead>
+        <tbody>
+          ${data.storeFreqData.slice(0, 30).map((s, i) => `
+            <tr>
+              <td>${i + 1}</td>
+              <td class="font-semibold">${s.name}</td>
+              <td>${s.type}</td>
+              <td class="text-right font-semibold">${s.total}</td>
+              <td class="text-right text-pos">${s.delivered}</td>
+              <td class="text-right text-neg">${s.cancelled}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
 
-    doc.save(`order-report-${from}-to-${to}.pdf`);
-    toast.success("PDF downloaded");
+      ${data.cancellationReasons.length > 0 ? `
+        <h2>Cancellation Reasons</h2>
+        <table>
+          <thead><tr><th>Reason</th><th class="text-right">Count</th></tr></thead>
+          <tbody>
+            ${data.cancellationReasons.map(r => `
+              <tr><td>${r.reason}</td><td class="text-right font-semibold">${r.count}</td></tr>
+            `).join("")}
+          </tbody>
+        </table>
+      ` : ""}
+    `;
+
+    return generatePrintHTML({
+      title: "Order Report",
+      dateRange: `${from} — ${to}`,
+      metadata: {
+        "Total": `${data.total}`,
+        "Delivered": `${data.delivered}`,
+        "Fulfillment": `${data.fulfillmentRate}%`,
+      },
+      companyInfo: companySettings,
+      htmlContent,
+    });
   };
 
   const exportExcel = () => {
@@ -165,35 +188,47 @@ export default function OrderReport() {
   const d = data;
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-end gap-3">
-        <div><Label className="text-xs">From</Label><Input type="date" value={from} onChange={e => setFrom(e.target.value)} className="w-40" /></div>
-        <div><Label className="text-xs">To</Label><Input type="date" value={to} onChange={e => setTo(e.target.value)} className="w-40" /></div>
-        <Button variant="outline" size="sm" onClick={exportPDF}><FileText className="h-4 w-4 mr-1" />PDF</Button>
-        <Button variant="outline" size="sm" onClick={exportExcel}><FileSpreadsheet className="h-4 w-4 mr-1" />Excel</Button>
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-        <StatCard title="Total Orders" value={String(d.total)} icon={ClipboardList} iconColor="primary" />
-        <StatCard title="Delivered" value={String(d.delivered)} icon={CheckCircle} iconColor="success" />
-        <StatCard title="Pending" value={String(d.pending)} icon={Clock} iconColor="warning" />
-        <StatCard title="Cancelled" value={String(d.cancelled)} icon={XCircle} iconColor="destructive" />
-        <StatCard title="Fulfillment" value={d.fulfillmentRate + "%"} icon={TrendingUp} iconColor="success" />
-        <StatCard title="Avg Delivery" value={d.avgDeliveryHours.toFixed(1) + "h"} icon={Truck} iconColor="purple" />
-      </div>
-
-      <Tabs defaultValue="status">
-        <TabsList className="flex-wrap h-auto">
-          <TabsTrigger value="status">Status</TabsTrigger>
-          <TabsTrigger value="trend">Daily Trend</TabsTrigger>
-          <TabsTrigger value="stores">Store Frequency</TabsTrigger>
-          <TabsTrigger value="peak">Peak Days</TabsTrigger>
-          <TabsTrigger value="reasons">Cancellations</TabsTrigger>
+    <ReportContainer
+      title="Order Report"
+      subtitle="Order fulfillment and delivery analytics"
+      icon={<ClipboardList className="h-5 w-5" />}
+      dateRange={`${from} — ${to}`}
+      onPrint={() => {
+        const html = handlePrintHTML();
+        const w = window.open("", "_blank");
+        if (w) { w.document.write(html); w.document.close(); }
+      }}
+      onExportExcel={exportExcel}
+      isLoading={false}
+      filters={
+        <div className="flex items-end gap-3">
+          <div><Label className="text-xs text-muted-foreground">From</Label><Input type="date" value={from} onChange={e => setFrom(e.target.value)} className="w-40 h-9" /></div>
+          <div><Label className="text-xs text-muted-foreground">To</Label><Input type="date" value={to} onChange={e => setTo(e.target.value)} className="w-40 h-9" /></div>
+        </div>
+      }
+      summaryCards={
+        <>
+          <ReportKPICard label="Total Orders" value={String(d.total)} icon={<ClipboardList className="h-4 w-4" />} />
+          <ReportKPICard label="Delivered" value={String(d.delivered)} trend="up" icon={<CheckCircle className="h-4 w-4" />} />
+          <ReportKPICard label="Pending" value={String(d.pending)} icon={<Clock className="h-4 w-4" />} />
+          <ReportKPICard label="Cancelled" value={String(d.cancelled)} trend={d.cancelled > 0 ? "down" : undefined} icon={<XCircle className="h-4 w-4" />} />
+          <ReportKPICard label="Fulfillment" value={d.fulfillmentRate + "%"} highlight icon={<TrendingUp className="h-4 w-4" />} />
+          <ReportKPICard label="Avg Delivery" value={d.avgDeliveryHours.toFixed(1) + "h"} icon={<Truck className="h-4 w-4" />} />
+        </>
+      }
+    >
+      <Tabs defaultValue="status" className="space-y-4">
+        <TabsList className="bg-muted/50 p-1 flex-wrap h-auto">
+          <TabsTrigger value="status" className="text-xs">Status</TabsTrigger>
+          <TabsTrigger value="trend" className="text-xs">Daily Trend</TabsTrigger>
+          <TabsTrigger value="stores" className="text-xs">Store Frequency</TabsTrigger>
+          <TabsTrigger value="peak" className="text-xs">Peak Days</TabsTrigger>
+          <TabsTrigger value="reasons" className="text-xs">Cancellations</TabsTrigger>
         </TabsList>
 
         <TabsContent value="status">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card><CardHeader><CardTitle className="text-sm">Order Status</CardTitle></CardHeader><CardContent>
+            <Card className="border-0 shadow-sm"><CardHeader className="pb-2"><CardTitle className="text-base font-semibold">Order Status</CardTitle></CardHeader><CardContent>
               {d.statusData.length === 0 ? <p className="text-sm text-muted-foreground text-center py-8">No data</p> : (
                 <ResponsiveContainer width="100%" height={250}>
                   <PieChart><Pie data={d.statusData} cx="50%" cy="50%" innerRadius={40} outerRadius={80} dataKey="value" label={({ name, value }) => `${name}: ${value}`}>
@@ -202,7 +237,7 @@ export default function OrderReport() {
                 </ResponsiveContainer>
               )}
             </CardContent></Card>
-            <Card><CardHeader><CardTitle className="text-sm">By Source</CardTitle></CardHeader><CardContent>
+            <Card className="border-0 shadow-sm"><CardHeader className="pb-2"><CardTitle className="text-base font-semibold">By Source</CardTitle></CardHeader><CardContent>
               {d.sourceData.length === 0 ? <p className="text-sm text-muted-foreground text-center py-8">No data</p> : (
                 <ResponsiveContainer width="100%" height={250}>
                   <BarChart data={d.sourceData}>
@@ -218,7 +253,7 @@ export default function OrderReport() {
         </TabsContent>
 
         <TabsContent value="trend">
-          <Card><CardContent className="pt-4">
+          <Card className="border-0 shadow-sm"><CardContent className="pt-4">
             {d.dailyTrend.length === 0 ? <p className="text-sm text-muted-foreground text-center py-8">No data</p> : (
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={d.dailyTrend}>
@@ -233,20 +268,20 @@ export default function OrderReport() {
         </TabsContent>
 
         <TabsContent value="stores">
-          <Card><CardContent className="pt-4">
-            <Table><TableHeader><TableRow>
-              <TableHead>#</TableHead><TableHead>Store</TableHead><TableHead>Type</TableHead>
-              <TableHead className="text-right">Total</TableHead><TableHead className="text-right">Delivered</TableHead>
-              <TableHead className="text-right">Cancelled</TableHead>
+          <Card className="border-0 shadow-sm"><CardContent className="pt-4 p-0">
+            <Table><TableHeader><TableRow className="bg-muted/50">
+              <TableHead className="font-semibold">#</TableHead><TableHead className="font-semibold">Store</TableHead><TableHead className="font-semibold">Type</TableHead>
+              <TableHead className="text-right font-semibold">Total</TableHead><TableHead className="text-right font-semibold">Delivered</TableHead>
+              <TableHead className="text-right font-semibold">Cancelled</TableHead>
             </TableRow></TableHeader><TableBody>
               {d.storeFreqData.slice(0, 30).map((s, i) => (
-                <TableRow key={i}>
+                <TableRow key={i} className="hover:bg-muted/30">
                   <TableCell>{i + 1}</TableCell>
                   <TableCell className="font-medium">{s.name}</TableCell>
                   <TableCell><Badge variant="outline">{s.type}</Badge></TableCell>
                   <TableCell className="text-right">{s.total}</TableCell>
-                  <TableCell className="text-right text-success">{s.delivered}</TableCell>
-                  <TableCell className="text-right text-destructive">{s.cancelled}</TableCell>
+                  <TableCell className="text-right text-green-600">{s.delivered}</TableCell>
+                  <TableCell className="text-right text-red-600">{s.cancelled}</TableCell>
                 </TableRow>
               ))}
             </TableBody></Table>
@@ -254,7 +289,7 @@ export default function OrderReport() {
         </TabsContent>
 
         <TabsContent value="peak">
-          <Card><CardContent className="pt-4">
+          <Card className="border-0 shadow-sm"><CardContent className="pt-4">
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={d.peakDays}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
@@ -267,19 +302,19 @@ export default function OrderReport() {
         </TabsContent>
 
         <TabsContent value="reasons">
-          <Card><CardContent className="pt-4">
+          <Card className="border-0 shadow-sm"><CardContent className="pt-4 p-0">
             {d.cancellationReasons.length === 0 ? <p className="text-sm text-muted-foreground text-center py-8">No cancellations with reasons</p> : (
-              <Table><TableHeader><TableRow>
-                <TableHead>Reason</TableHead><TableHead className="text-right">Count</TableHead>
+              <Table><TableHeader><TableRow className="bg-muted/50">
+                <TableHead className="font-semibold">Reason</TableHead><TableHead className="text-right font-semibold">Count</TableHead>
               </TableRow></TableHeader><TableBody>
                 {d.cancellationReasons.map((r, i) => (
-                  <TableRow key={i}><TableCell>{r.reason}</TableCell><TableCell className="text-right">{r.count}</TableCell></TableRow>
+                  <TableRow key={i} className="hover:bg-muted/30"><TableCell>{r.reason}</TableCell><TableCell className="text-right font-semibold">{r.count}</TableCell></TableRow>
                 ))}
               </TableBody></Table>
             )}
           </CardContent></Card>
         </TabsContent>
       </Tabs>
-    </div>
+    </ReportContainer>
   );
 }

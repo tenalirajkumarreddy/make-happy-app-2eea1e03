@@ -3,17 +3,15 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Building2, TrendingUp, TrendingDown, Package, DollarSign, Search, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { Building2, TrendingUp, TrendingDown, Package, DollarSign, Search } from "lucide-react";
 import { format, subMonths, startOfMonth } from "date-fns";
 import { ReportFilters, DateRange } from "./ReportFilters";
-import { ReportExportBar } from "./ReportExportBar";
-import { ReportSummaryCards } from "./ReportSummaryCards";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { generatePrintHTML } from "@/utils/printUtils";
+import { ReportContainer, ReportKPICard } from "@/components/reports/ReportContainer";
 
 const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#84cc16"];
 
@@ -23,6 +21,7 @@ export default function VendorReport() {
     to: new Date(),
   });
   const [search, setSearch] = useState("");
+  const { data: companyInfo } = useCompanySettings();
 
   // Fetch vendors
   const { data: vendors = [], isLoading: vendorsLoading } = useQuery({
@@ -146,43 +145,68 @@ export default function VendorReport() {
       }));
   }, [filteredVendors]);
 
-  const summaryCards = [
-    { label: "Total Purchases", value: `₹${summary.totalPurchases.toLocaleString()}`, icon: Package, iconColor: "blue" },
-    { label: "Total Payments", value: `₹${summary.totalPayments.toLocaleString()}`, icon: DollarSign, iconColor: "green" },
-    { label: "Total Returns", value: `₹${summary.totalReturns.toLocaleString()}`, icon: TrendingDown, iconColor: "yellow" },
-    { label: "Total Outstanding", value: `₹${summary.totalOutstanding.toLocaleString()}`, icon: TrendingUp, iconColor: "red" },
-  ];
+  const generateHTML = () => {
+    const vendorRows = filteredVendors.map((v: any) => `
+      <tr>
+        <td class="font-medium">${v.name}</td>
+        <td class="text-right font-mono">₹${v.totalPurchases.toLocaleString()}</td>
+        <td class="text-right font-mono text-pos">₹${v.totalPayments.toLocaleString()}</td>
+        <td class="text-right font-mono" style="color: #ca8a04;">₹${v.totalReturns.toLocaleString()}</td>
+        <td class="text-right font-mono ${v.outstanding > 0 ? 'text-neg font-bold' : ''}">₹${Number(v.outstanding).toLocaleString()}</td>
+      </tr>
+    `).join("");
 
-  const exportPDF = () => {
-    const doc = new jsPDF();
-    doc.setFontSize(16);
-    doc.text("Vendor Report", 14, 15);
-    doc.setFontSize(10);
-    doc.text(`Period: ${format(dateRange.from, "MMM d, yyyy")} - ${format(dateRange.to, "MMM d, yyyy")}`, 14, 23);
+    const htmlContent = `
+      <div class="kpi-row">
+        <div class="kpi-card highlight">
+          <div class="kpi-label">Total Purchases</div>
+          <div class="kpi-value" style="color: #2563eb;">₹${summary.totalPurchases.toLocaleString()}</div>
+        </div>
+        <div class="kpi-card highlight">
+          <div class="kpi-label">Total Payments</div>
+          <div class="kpi-value text-pos">₹${summary.totalPayments.toLocaleString()}</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Total Returns</div>
+          <div class="kpi-value" style="color: #ca8a04;">₹${summary.totalReturns.toLocaleString()}</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Outstanding</div>
+          <div class="kpi-value text-neg">₹${summary.totalOutstanding.toLocaleString()}</div>
+        </div>
+      </div>
 
-    autoTable(doc, {
-      startY: 30,
-      head: [["Vendor", "Purchases", "Payments", "Returns", "Outstanding"]],
-      body: filteredVendors.map((v: any) => [
-        v.name,
-        `₹${v.totalPurchases.toLocaleString()}`,
-        `₹${v.totalPayments.toLocaleString()}`,
-        `₹${v.totalReturns.toLocaleString()}`,
-        `₹${Number(v.outstanding).toLocaleString()}`,
-      ]),
-      foot: [[
-        "TOTAL",
-        `₹${summary.totalPurchases.toLocaleString()}`,
-        `₹${summary.totalPayments.toLocaleString()}`,
-        `₹${summary.totalReturns.toLocaleString()}`,
-        `₹${summary.totalOutstanding.toLocaleString()}`,
-      ]],
-      styles: { fontSize: 9 },
-      headStyles: { fillColor: [59, 130, 246] },
-      footStyles: { fillColor: [229, 231, 235], textColor: [0, 0, 0], fontStyle: "bold" },
+      <table>
+        <thead>
+          <tr>
+            <th>Vendor</th>
+            <th class="text-right">Purchases</th>
+            <th class="text-right">Payments</th>
+            <th class="text-right">Returns</th>
+            <th class="text-right">Outstanding</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${vendorRows}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td class="font-bold">TOTAL (${filteredVendors.length} vendors)</td>
+            <td class="text-right font-mono font-bold">₹${summary.totalPurchases.toLocaleString()}</td>
+            <td class="text-right font-mono font-bold text-pos">₹${summary.totalPayments.toLocaleString()}</td>
+            <td class="text-right font-mono font-bold" style="color: #ca8a04;">₹${summary.totalReturns.toLocaleString()}</td>
+            <td class="text-right font-mono font-bold text-neg">₹${summary.totalOutstanding.toLocaleString()}</td>
+          </tr>
+        </tfoot>
+      </table>
+    `;
+
+    return generatePrintHTML({
+      title: "Vendor Report",
+      dateRange: `${format(dateRange.from, "MMM d, yyyy")} - ${format(dateRange.to, "MMM d, yyyy")}`,
+      companyInfo: companyInfo || { companyName: "System", address: "", phone: "", email: "", gstin: "" },
+      htmlContent,
     });
-
-    doc.save(`vendor-report-${format(dateRange.from, "yyyyMMdd")}-${format(dateRange.to, "yyyyMMdd")}.pdf`);
   };
 
   const exportExcel = () => {
@@ -201,149 +225,180 @@ export default function VendorReport() {
     XLSX.writeFile(wb, `vendor-report-${format(dateRange.from, "yyyyMMdd")}-${format(dateRange.to, "yyyyMMdd")}.xlsx`);
   };
 
+  const filtersSection = (
+    <div className="flex flex-wrap items-end gap-3">
+      <ReportFilters dateRange={dateRange} onDateRangeChange={setDateRange} />
+      <div className="relative flex-1 max-w-xs">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search vendors..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-9"
+        />
+      </div>
+    </div>
+  );
+
+  const summaryCardsSection = (
+    <>
+      <ReportKPICard
+        label="Total Purchases"
+        value={`₹${summary.totalPurchases.toLocaleString()}`}
+        icon={Package}
+        highlight
+      />
+      <ReportKPICard
+        label="Total Payments"
+        value={`₹${summary.totalPayments.toLocaleString()}`}
+        subValue={`${summary.totalVendors} vendors`}
+        icon={DollarSign}
+        trend="up"
+        highlight
+      />
+      <ReportKPICard
+        label="Total Returns"
+        value={`₹${summary.totalReturns.toLocaleString()}`}
+        icon={TrendingDown}
+      />
+      <ReportKPICard
+        label="Outstanding"
+        value={`₹${summary.totalOutstanding.toLocaleString()}`}
+        subValue={`${summary.activeVendors} active`}
+        icon={TrendingUp}
+        trend="down"
+      />
+    </>
+  );
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col lg:flex-row lg:items-end gap-4">
-        <ReportFilters dateRange={dateRange} onDateRangeChange={setDateRange} />
-        <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search vendors..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
-        </div>
+    <ReportContainer
+      title="Vendor Report"
+      subtitle="Supplier analysis, payments & outstanding balances"
+      icon={Building2}
+      dateRange={`${format(dateRange.from, "MMM d, yyyy")} - ${format(dateRange.to, "MMM d, yyyy")}`}
+      onPrint={generateHTML}
+      onExportExcel={exportExcel}
+      isLoading={isLoading}
+      filters={filtersSection}
+      summaryCards={summaryCardsSection}
+    >
+      {/* Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Top Vendors */}
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Top Vendors by Purchase</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {topVendorsChart.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={topVendorsChart} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis type="number" tickFormatter={(v) => `₹${(v/1000).toFixed(0)}k`} />
+                  <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 11 }} />
+                  <Tooltip formatter={(v: number) => `₹${v.toLocaleString()}`} />
+                  <Legend />
+                  <Bar dataKey="purchases" name="Purchases" fill="#3b82f6" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="payments" name="Payments" fill="#10b981" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-center text-muted-foreground py-12">No data available</p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Outstanding Distribution */}
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Outstanding Distribution</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {outstandingChart.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={outstandingChart}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                    outerRadius={100}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {outstandingChart.map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(v: number) => `₹${v.toLocaleString()}`} />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-center text-muted-foreground py-12">No outstanding balances</p>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
-      <ReportExportBar onExportPDF={exportPDF} onExportExcel={exportExcel} />
-
-      {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      ) : (
-        <>
-          <ReportSummaryCards cards={summaryCards} />
-
-          {/* Charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Top Vendors */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Top Vendors by Purchase</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {topVendorsChart.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={topVendorsChart} layout="vertical">
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis type="number" tickFormatter={(v) => `₹${(v/1000).toFixed(0)}k`} />
-                      <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 11 }} />
-                      <Tooltip formatter={(v: number) => `₹${v.toLocaleString()}`} />
-                      <Legend />
-                      <Bar dataKey="purchases" name="Purchases" fill="#3b82f6" />
-                      <Bar dataKey="payments" name="Payments" fill="#10b981" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <p className="text-center text-muted-foreground py-12">No data available</p>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Outstanding Distribution */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Outstanding Distribution</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {outstandingChart.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <PieChart>
-                      <Pie
-                        data={outstandingChart}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
-                        outerRadius={100}
-                        fill="#8884d8"
-                        dataKey="value"
-                      >
-                        {outstandingChart.map((_, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(v: number) => `₹${v.toLocaleString()}`} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <p className="text-center text-muted-foreground py-12">No outstanding balances</p>
-                )}
-              </CardContent>
-            </Card>
+      {/* Vendor List */}
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium">Vendor Details</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50">
+                  <th className="text-left p-3 font-semibold text-xs">Vendor</th>
+                  <th className="text-right p-3 font-semibold text-xs">Purchases</th>
+                  <th className="text-right p-3 font-semibold text-xs">Payments</th>
+                  <th className="text-right p-3 font-semibold text-xs">Returns</th>
+                  <th className="text-right p-3 font-semibold text-xs">Outstanding</th>
+                  <th className="text-center p-3 font-semibold text-xs">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredVendors.map((v: any) => (
+                  <tr key={v.id} className="border-b hover:bg-muted/30">
+                    <td className="p-3">
+                      <div>
+                        <p className="font-medium text-sm">{v.name}</p>
+                        <p className="text-xs text-muted-foreground">{v.display_id}</p>
+                      </div>
+                    </td>
+                    <td className="p-3 text-right font-medium">₹{v.totalPurchases.toLocaleString()}</td>
+                    <td className="p-3 text-right text-green-600">₹{v.totalPayments.toLocaleString()}</td>
+                    <td className="p-3 text-right text-amber-600">₹{v.totalReturns.toLocaleString()}</td>
+                    <td className="p-3 text-right">
+                      <span className={Number(v.outstanding) > 0 ? "text-red-600 font-semibold" : "text-muted-foreground"}>
+                        ₹{Number(v.outstanding).toLocaleString()}
+                      </span>
+                    </td>
+                    <td className="p-3 text-center">
+                      <Badge variant={v.is_active ? "default" : "secondary"}>
+                        {v.is_active ? "Active" : "Inactive"}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="bg-muted/50 font-semibold">
+                  <td className="p-3 text-sm">TOTAL ({filteredVendors.length} vendors)</td>
+                  <td className="p-3 text-right">₹{summary.totalPurchases.toLocaleString()}</td>
+                  <td className="p-3 text-right text-green-600">₹{summary.totalPayments.toLocaleString()}</td>
+                  <td className="p-3 text-right text-amber-600">₹{summary.totalReturns.toLocaleString()}</td>
+                  <td className="p-3 text-right text-red-600">₹{summary.totalOutstanding.toLocaleString()}</td>
+                  <td className="p-3"></td>
+                </tr>
+              </tfoot>
+            </table>
           </div>
-
-          {/* Vendor List */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Vendor Details</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b bg-muted/50">
-                      <th className="text-left p-3 font-medium">Vendor</th>
-                      <th className="text-right p-3 font-medium">Purchases</th>
-                      <th className="text-right p-3 font-medium">Payments</th>
-                      <th className="text-right p-3 font-medium">Returns</th>
-                      <th className="text-right p-3 font-medium">Outstanding</th>
-                      <th className="text-center p-3 font-medium">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredVendors.map((v: any) => (
-                      <tr key={v.id} className="border-b hover:bg-muted/30">
-                        <td className="p-3">
-                          <div>
-                            <p className="font-medium">{v.name}</p>
-                            <p className="text-xs text-muted-foreground">{v.display_id}</p>
-                          </div>
-                        </td>
-                        <td className="p-3 text-right font-medium">₹{v.totalPurchases.toLocaleString()}</td>
-                        <td className="p-3 text-right text-green-600">₹{v.totalPayments.toLocaleString()}</td>
-                        <td className="p-3 text-right text-yellow-600">₹{v.totalReturns.toLocaleString()}</td>
-                        <td className="p-3 text-right">
-                          <span className={Number(v.outstanding) > 0 ? "text-red-600 font-semibold" : "text-muted-foreground"}>
-                            ₹{Number(v.outstanding).toLocaleString()}
-                          </span>
-                        </td>
-                        <td className="p-3 text-center">
-                          <Badge variant={v.is_active ? "default" : "secondary"}>
-                            {v.is_active ? "Active" : "Inactive"}
-                          </Badge>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="bg-muted/50 font-semibold">
-                      <td className="p-3">TOTAL ({filteredVendors.length} vendors)</td>
-                      <td className="p-3 text-right">₹{summary.totalPurchases.toLocaleString()}</td>
-                      <td className="p-3 text-right text-green-600">₹{summary.totalPayments.toLocaleString()}</td>
-                      <td className="p-3 text-right text-yellow-600">₹{summary.totalReturns.toLocaleString()}</td>
-                      <td className="p-3 text-right text-red-600">₹{summary.totalOutstanding.toLocaleString()}</td>
-                      <td className="p-3"></td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-        </>
-      )}
-    </div>
+        </CardContent>
+      </Card>
+    </ReportContainer>
   );
 }

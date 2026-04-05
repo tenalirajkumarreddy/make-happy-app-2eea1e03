@@ -52,7 +52,7 @@ const PurchaseReturns = () => {
   const { data: returns = [], isLoading } = useQuery({
     queryKey: ["purchase-returns"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase
         .from("purchase_returns")
         .select(`
           *,
@@ -61,7 +61,7 @@ const PurchaseReturns = () => {
           profiles:created_by(full_name),
           approver:approved_by(full_name)
         `)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false }) as any);
       if (error) throw error;
       return data || [];
     },
@@ -99,7 +99,7 @@ const PurchaseReturns = () => {
     queryKey: ["purchase-return-detail", showDetail],
     queryFn: async () => {
       if (!showDetail) return null;
-      const { data: ret } = await supabase
+      const { data: ret } = await (supabase
         .from("purchase_returns")
         .select(`
           *,
@@ -109,7 +109,7 @@ const PurchaseReturns = () => {
           approver:approved_by(full_name)
         `)
         .eq("id", showDetail)
-        .single();
+        .single() as any);
       
       const { data: items } = await supabase
         .from("purchase_return_items")

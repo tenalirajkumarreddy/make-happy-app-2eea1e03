@@ -4,15 +4,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Loader2, Package, ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Search, History, RotateCcw } from "lucide-react";
+import { Package, ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Search, History, RotateCcw } from "lucide-react";
 import { format, subMonths, startOfMonth, eachDayOfInterval, eachWeekOfInterval, isSameDay, isSameWeek } from "date-fns";
 import { ReportFilters, DateRange } from "./ReportFilters";
-import { ReportExportBar } from "./ReportExportBar";
-import { ReportSummaryCards } from "./ReportSummaryCards";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, BarChart, Bar } from "recharts";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { generatePrintHTML } from "@/utils/printUtils";
 import * as XLSX from "xlsx";
+import { ReportContainer, ReportKPICard } from "@/components/reports/ReportContainer";
 
 interface StockMovement {
   id: string;
@@ -36,6 +35,7 @@ export default function InventoryTimelineReport() {
   });
   const [search, setSearch] = useState("");
   const [groupBy, setGroupBy] = useState<GroupBy>("day");
+  const { data: companySettings } = useCompanySettings();
   const [typeFilter, setTypeFilter] = useState<"all" | "in" | "out">("all");
 
   // Fetch sale items (stock out)
@@ -261,29 +261,49 @@ export default function InventoryTimelineReport() {
     { label: "Products Moved", value: summary.uniqueProducts.toString(), icon: Package, iconColor: "purple" as const },
   ];
 
-  const exportPDF = () => {
-    const doc = new jsPDF();
-    doc.setFontSize(16);
-    doc.text("Inventory Timeline Report", 14, 15);
-    doc.setFontSize(10);
-    doc.text(`Period: ${format(dateRange.from, "MMM d, yyyy")} - ${format(dateRange.to, "MMM d, yyyy")}`, 14, 23);
+  const handlePrintHTML = () => {
+    if (!companySettings) return "";
+    const htmlContent = `
+      <div class="kpi-row">
+        <div class="kpi-card"><div class="kpi-label">Stock In</div><div class="kpi-value text-pos">${summary.totalIn.toLocaleString()}</div></div>
+        <div class="kpi-card"><div class="kpi-label">Stock Out</div><div class="kpi-value text-neg">${summary.totalOut.toLocaleString()}</div></div>
+        <div class="kpi-card highlight"><div class="kpi-label">Net Change</div><div class="kpi-value">${summary.netChange >= 0 ? "+" : ""}${summary.netChange.toLocaleString()}</div></div>
+        <div class="kpi-card"><div class="kpi-label">Products Moved</div><div class="kpi-value">${summary.uniqueProducts}</div></div>
+      </div>
 
-    autoTable(doc, {
-      startY: 30,
-      head: [["Date", "Type", "Direction", "Product", "Quantity", "Reference"]],
-      body: filteredMovements.slice(0, 200).map(m => [
-        format(new Date(m.date), "dd/MM/yy"),
-        m.type,
-        m.direction.toUpperCase(),
-        m.product_name,
-        m.quantity.toString(),
-        m.reference_id,
-      ]),
-      styles: { fontSize: 8 },
-      headStyles: { fillColor: [59, 130, 246] },
+      <h2>Movement by Type</h2>
+      <table>
+        <thead><tr><th>Type</th><th class="text-right">In</th><th class="text-right">Out</th></tr></thead>
+        <tbody>
+          ${typeBreakdown.map(t => `
+            <tr><td class="font-semibold">${t.type}</td><td class="text-right text-pos">${t.in}</td><td class="text-right text-neg">${t.out}</td></tr>
+          `).join("")}
+        </tbody>
+      </table>
+
+      <h2>Stock Movement Log (${filteredMovements.length} entries)</h2>
+      <table>
+        <thead><tr><th>Date</th><th>Product</th><th>Type</th><th class="text-right">Qty</th><th>Reference</th></tr></thead>
+        <tbody>
+          ${filteredMovements.slice(0, 200).map(m => `
+            <tr>
+              <td>${format(new Date(m.date), "dd/MM/yy")}</td>
+              <td class="font-semibold">${m.product_name}</td>
+              <td>${m.direction === "in" ? "↑ " : "↓ "}${m.type}</td>
+              <td class="text-right font-semibold ${m.direction === 'in' ? 'text-pos' : 'text-neg'}">${m.direction === "in" ? "+" : "-"}${m.quantity}</td>
+              <td class="font-mono">${m.reference_id}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `;
+    return generatePrintHTML({
+      title: "Inventory Timeline Report",
+      dateRange: `${format(dateRange.from, "MMM d, yyyy")} — ${format(dateRange.to, "MMM d, yyyy")}`,
+      metadata: { "In": `+${summary.totalIn}`, "Out": `-${summary.totalOut}`, "Net": `${summary.netChange >= 0 ? "+" : ""}${summary.netChange}` },
+      companyInfo: companySettings,
+      htmlContent,
     });
-
-    doc.save(`inventory-timeline-${format(dateRange.from, "yyyyMMdd")}-${format(dateRange.to, "yyyyMMdd")}.pdf`);
   };
 
   const exportExcel = () => {
@@ -301,174 +321,203 @@ export default function InventoryTimelineReport() {
     XLSX.writeFile(wb, `inventory-timeline-${format(dateRange.from, "yyyyMMdd")}-${format(dateRange.to, "yyyyMMdd")}.xlsx`);
   };
 
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col lg:flex-row lg:items-end gap-4">
-        <ReportFilters dateRange={dateRange} onDateRangeChange={setDateRange} />
-        <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search products..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-        <div className="flex gap-2">
-          <Badge 
-            variant={groupBy === "day" ? "default" : "outline"} 
-            className="cursor-pointer"
-            onClick={() => setGroupBy("day")}
-          >
-            Daily
-          </Badge>
-          <Badge 
-            variant={groupBy === "week" ? "default" : "outline"} 
-            className="cursor-pointer"
-            onClick={() => setGroupBy("week")}
-          >
-            Weekly
-          </Badge>
-        </div>
-        <div className="flex gap-2">
-          <Badge 
-            variant={typeFilter === "all" ? "default" : "outline"} 
-            className="cursor-pointer"
-            onClick={() => setTypeFilter("all")}
-          >
-            All
-          </Badge>
-          <Badge 
-            variant={typeFilter === "in" ? "default" : "outline"} 
-            className="cursor-pointer"
-            onClick={() => setTypeFilter("in")}
-          >
-            <ArrowUpRight className="h-3 w-3 mr-1" />In
-          </Badge>
-          <Badge 
-            variant={typeFilter === "out" ? "default" : "outline"} 
-            className="cursor-pointer"
-            onClick={() => setTypeFilter("out")}
-          >
-            <ArrowDownRight className="h-3 w-3 mr-1" />Out
-          </Badge>
-        </div>
+  const filtersSection = (
+    <div className="flex flex-col lg:flex-row lg:items-end gap-4">
+      <ReportFilters dateRange={dateRange} onDateRangeChange={setDateRange} />
+      <div className="relative flex-1 max-w-xs">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search products..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-9"
+        />
       </div>
-
-      <ReportExportBar onExportPDF={exportPDF} onExportExcel={exportExcel} />
-
-      {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      ) : (
-        <>
-          <ReportSummaryCards cards={summaryCards} />
-
-          {/* Timeline Chart */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Stock Movement Timeline</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <AreaChart data={timeSeriesData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" tick={{ fontSize: 11 }} interval={Math.floor(timeSeriesData.length / 10)} />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Area type="monotone" dataKey="stockIn" name="Stock In" stroke="#10b981" fill="#10b98133" stackId="1" />
-                  <Area type="monotone" dataKey="stockOut" name="Stock Out" stroke="#ef4444" fill="#ef444433" stackId="2" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          {/* Type Breakdown */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Movement by Type</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {typeBreakdown.length > 0 ? (
-                <ResponsiveContainer width="100%" height={200}>
-                  <BarChart data={typeBreakdown} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" />
-                    <YAxis type="category" dataKey="type" width={80} />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="in" name="Stock In" fill="#10b981" />
-                    <Bar dataKey="out" name="Stock Out" fill="#ef4444" />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <p className="text-center text-muted-foreground py-8">No movement data</p>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Movement List */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Recent Movements ({filteredMovements.length})</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {filteredMovements.length === 0 ? (
-                <p className="text-center text-muted-foreground py-12">No stock movements found</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b bg-muted/50">
-                        <th className="text-left p-3 font-medium">Date</th>
-                        <th className="text-left p-3 font-medium">Product</th>
-                        <th className="text-center p-3 font-medium">Type</th>
-                        <th className="text-right p-3 font-medium">Quantity</th>
-                        <th className="text-left p-3 font-medium hidden md:table-cell">Reference</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredMovements.slice(0, 100).map((m) => (
-                        <tr key={m.id + m.type} className="border-b hover:bg-muted/30">
-                          <td className="p-3 text-muted-foreground text-xs">
-                            {format(new Date(m.date), "dd/MM/yy")}
-                          </td>
-                          <td className="p-3 font-medium">{m.product_name}</td>
-                          <td className="p-3 text-center">
-                            <Badge variant={m.direction === "in" ? "default" : "secondary"} className="text-xs">
-                              {m.direction === "in" ? (
-                                <ArrowUpRight className="h-3 w-3 mr-1" />
-                              ) : (
-                                <ArrowDownRight className="h-3 w-3 mr-1" />
-                              )}
-                              {m.type}
-                            </Badge>
-                          </td>
-                          <td className="p-3 text-right">
-                            <span className={m.direction === "in" ? "text-green-600 font-semibold" : "text-red-600 font-semibold"}>
-                              {m.direction === "in" ? "+" : "-"}{m.quantity}
-                            </span>
-                          </td>
-                          <td className="p-3 hidden md:table-cell text-muted-foreground font-mono text-xs">
-                            {m.reference_id}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-              {filteredMovements.length > 100 && (
-                <p className="text-center text-muted-foreground mt-4 text-sm">
-                  Showing 100 of {filteredMovements.length} movements. Export to see all.
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        </>
-      )}
+      <div className="flex gap-2">
+        <Badge 
+          variant={groupBy === "day" ? "default" : "outline"} 
+          className="cursor-pointer"
+          onClick={() => setGroupBy("day")}
+        >
+          Daily
+        </Badge>
+        <Badge 
+          variant={groupBy === "week" ? "default" : "outline"} 
+          className="cursor-pointer"
+          onClick={() => setGroupBy("week")}
+        >
+          Weekly
+        </Badge>
+      </div>
+      <div className="flex gap-2">
+        <Badge 
+          variant={typeFilter === "all" ? "default" : "outline"} 
+          className="cursor-pointer"
+          onClick={() => setTypeFilter("all")}
+        >
+          All
+        </Badge>
+        <Badge 
+          variant={typeFilter === "in" ? "default" : "outline"} 
+          className="cursor-pointer"
+          onClick={() => setTypeFilter("in")}
+        >
+          <ArrowUpRight className="h-3 w-3 mr-1" />In
+        </Badge>
+        <Badge 
+          variant={typeFilter === "out" ? "default" : "outline"} 
+          className="cursor-pointer"
+          onClick={() => setTypeFilter("out")}
+        >
+          <ArrowDownRight className="h-3 w-3 mr-1" />Out
+        </Badge>
+      </div>
     </div>
+  );
+
+  const summaryCardsSection = (
+    <>
+      <ReportKPICard
+        label="Stock In"
+        value={summary.totalIn.toLocaleString()}
+        icon={ArrowUpRight}
+        trend="up"
+      />
+      <ReportKPICard
+        label="Stock Out"
+        value={summary.totalOut.toLocaleString()}
+        icon={ArrowDownRight}
+        trend="down"
+      />
+      <ReportKPICard
+        label="Net Change"
+        value={(summary.netChange >= 0 ? "+" : "") + summary.netChange.toLocaleString()}
+        icon={summary.netChange >= 0 ? TrendingUp : TrendingDown}
+        trend={summary.netChange >= 0 ? "up" : "down"}
+        highlight
+      />
+      <ReportKPICard
+        label="Products Moved"
+        value={summary.uniqueProducts.toString()}
+        icon={Package}
+      />
+    </>
+  );
+
+  return (
+    <ReportContainer
+      title="Inventory Timeline"
+      subtitle="Stock movements and flow analysis"
+      icon={Package}
+      dateRange={`${format(dateRange.from, "MMM d, yyyy")} — ${format(dateRange.to, "MMM d, yyyy")}`}
+      onPrint={handlePrintHTML}
+      onExportExcel={exportExcel}
+      isLoading={isLoading}
+      filters={filtersSection}
+      summaryCards={summaryCardsSection}
+    >
+      {/* Timeline Chart */}
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium">Stock Movement Timeline</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={280}>
+            <AreaChart data={timeSeriesData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="date" tick={{ fontSize: 11 }} interval={Math.floor(timeSeriesData.length / 10)} />
+              <YAxis />
+              <Tooltip />
+              <Legend />
+              <Area type="monotone" dataKey="stockIn" name="Stock In" stroke="#10b981" fill="#10b98133" stackId="1" />
+              <Area type="monotone" dataKey="stockOut" name="Stock Out" stroke="#ef4444" fill="#ef444433" stackId="2" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+
+      {/* Type Breakdown */}
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium">Movement by Type</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {typeBreakdown.length > 0 ? (
+            <ResponsiveContainer width="100%" height={180}>
+              <BarChart data={typeBreakdown} layout="vertical">
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis type="number" />
+                <YAxis type="category" dataKey="type" width={80} />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="in" name="Stock In" fill="#10b981" />
+                <Bar dataKey="out" name="Stock Out" fill="#ef4444" />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <p className="text-center text-muted-foreground py-8">No movement data</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Movement List */}
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium">Recent Movements ({filteredMovements.length})</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {filteredMovements.length === 0 ? (
+            <p className="text-center text-muted-foreground py-12">No stock movements found</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="text-left p-3 font-semibold text-xs">Date</th>
+                    <th className="text-left p-3 font-semibold text-xs">Product</th>
+                    <th className="text-center p-3 font-semibold text-xs">Type</th>
+                    <th className="text-right p-3 font-semibold text-xs">Quantity</th>
+                    <th className="text-left p-3 font-semibold text-xs hidden md:table-cell">Reference</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredMovements.slice(0, 100).map((m) => (
+                    <tr key={m.id + m.type} className="border-b hover:bg-muted/30">
+                      <td className="p-3 text-muted-foreground text-xs">
+                        {format(new Date(m.date), "dd/MM/yy")}
+                      </td>
+                      <td className="p-3 font-medium">{m.product_name}</td>
+                      <td className="p-3 text-center">
+                        <Badge variant={m.direction === "in" ? "default" : "secondary"} className="text-xs">
+                          {m.direction === "in" ? (
+                            <ArrowUpRight className="h-3 w-3 mr-1" />
+                          ) : (
+                            <ArrowDownRight className="h-3 w-3 mr-1" />
+                          )}
+                          {m.type}
+                        </Badge>
+                      </td>
+                      <td className="p-3 text-right">
+                        <span className={m.direction === "in" ? "text-green-600 font-semibold" : "text-red-600 font-semibold"}>
+                          {m.direction === "in" ? "+" : "-"}{m.quantity}
+                        </span>
+                      </td>
+                      <td className="p-3 hidden md:table-cell text-muted-foreground font-mono text-xs">
+                        {m.reference_id}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {filteredMovements.length > 100 && (
+            <p className="text-center text-muted-foreground py-4 text-sm">
+              Showing 100 of {filteredMovements.length} movements. Export to see all.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+    </ReportContainer>
   );
 }

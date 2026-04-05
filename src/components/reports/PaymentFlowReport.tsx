@@ -3,15 +3,14 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Wallet, ArrowUpRight, ArrowDownRight, DollarSign, CreditCard, Banknote, PiggyBank } from "lucide-react";
+import { Wallet, ArrowUpRight, ArrowDownRight, CreditCard, PiggyBank } from "lucide-react";
 import { format, subMonths, startOfMonth, eachDayOfInterval, eachWeekOfInterval, eachMonthOfInterval, isSameDay, isSameWeek, isSameMonth } from "date-fns";
 import { ReportFilters, DateRange } from "./ReportFilters";
-import { ReportExportBar } from "./ReportExportBar";
-import { ReportSummaryCards } from "./ReportSummaryCards";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend, PieChart, Pie, Cell } from "recharts";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { generatePrintHTML } from "@/utils/printUtils";
 import * as XLSX from "xlsx";
+import { ReportContainer, ReportKPICard } from "@/components/reports/ReportContainer";
 
 const COLORS = ["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899"];
 
@@ -23,6 +22,7 @@ export default function PaymentFlowReport() {
     to: new Date(),
   });
   const [groupBy, setGroupBy] = useState<GroupBy>("day");
+  const { data: companySettings } = useCompanySettings();
 
   // Fetch customer payments (transactions)
   const { data: customerPayments = [], isLoading: cpLoading } = useQuery({
@@ -183,36 +183,126 @@ export default function PaymentFlowReport() {
     { label: "Transactions", value: (customerPayments.length + vendorPayments.length + expenses.length + workerPayments.length).toString(), icon: CreditCard, iconColor: "purple" },
   ];
 
-  const exportPDF = () => {
-    const doc = new jsPDF();
-    doc.setFontSize(16);
-    doc.text("Payment Flow Report", 14, 15);
-    doc.setFontSize(10);
-    doc.text(`Period: ${format(dateRange.from, "MMM d, yyyy")} - ${format(dateRange.to, "MMM d, yyyy")}`, 14, 23);
+  const filtersSection = (
+    <div className="flex flex-wrap items-end gap-3">
+      <ReportFilters dateRange={dateRange} onDateRangeChange={setDateRange} />
+      <div className="flex gap-2">
+        <Badge 
+          variant={groupBy === "day" ? "default" : "outline"} 
+          className="cursor-pointer"
+          onClick={() => setGroupBy("day")}
+        >
+          Daily
+        </Badge>
+        <Badge 
+          variant={groupBy === "week" ? "default" : "outline"} 
+          className="cursor-pointer"
+          onClick={() => setGroupBy("week")}
+        >
+          Weekly
+        </Badge>
+        <Badge 
+          variant={groupBy === "month" ? "default" : "outline"} 
+          className="cursor-pointer"
+          onClick={() => setGroupBy("month")}
+        >
+          Monthly
+        </Badge>
+      </div>
+    </div>
+  );
 
-    // Summary
-    doc.setFontSize(12);
-    doc.text("Summary", 14, 35);
-    doc.setFontSize(10);
-    doc.text(`Total Inflow: ₹${summary.totalInflow.toLocaleString()}`, 14, 43);
-    doc.text(`Total Outflow: ₹${summary.totalOutflow.toLocaleString()}`, 14, 50);
-    doc.text(`Net Cash Flow: ₹${summary.netCashFlow.toLocaleString()}`, 14, 57);
+  const summaryCardsSection = (
+    <>
+      <ReportKPICard
+        label="Total Inflow"
+        value={`₹${summary.totalInflow.toLocaleString()}`}
+        subValue={`${customerPayments.length} payments`}
+        icon={ArrowUpRight}
+        trend="up"
+        highlight
+      />
+      <ReportKPICard
+        label="Total Outflow"
+        value={`₹${summary.totalOutflow.toLocaleString()}`}
+        subValue={`${vendorPayments.length + expenses.length + workerPayments.length} payments`}
+        icon={ArrowDownRight}
+        trend="down"
+      />
+      <ReportKPICard
+        label="Net Cash Flow"
+        value={`₹${summary.netCashFlow.toLocaleString()}`}
+        icon={summary.netCashFlow >= 0 ? PiggyBank : Wallet}
+        trend={summary.netCashFlow >= 0 ? "up" : "down"}
+        highlight
+      />
+      <ReportKPICard
+        label="Total Transactions"
+        value={(customerPayments.length + vendorPayments.length + expenses.length + workerPayments.length).toString()}
+        icon={CreditCard}
+      />
+    </>
+  );
 
-    // Timeline table
-    autoTable(doc, {
-      startY: 65,
-      head: [["Period", "Inflow", "Outflow", "Net"]],
-      body: timeSeriesData.map(d => [
-        d.date,
-        `₹${d.inflow.toLocaleString()}`,
-        `₹${d.outflow.toLocaleString()}`,
-        `₹${d.net.toLocaleString()}`,
-      ]),
-      styles: { fontSize: 9 },
-      headStyles: { fillColor: [59, 130, 246] },
+  const handlePrintHTML = () => {
+    if (!companySettings) return "";
+    const fmt = (n: number) => `₹${n.toLocaleString("en-IN")}`;
+    const htmlContent = `
+      <div class="kpi-row">
+        <div class="kpi-card"><div class="kpi-label">Total Inflow</div><div class="kpi-value text-pos">${fmt(summary.totalInflow)}</div></div>
+        <div class="kpi-card"><div class="kpi-label">Total Outflow</div><div class="kpi-value text-neg">${fmt(summary.totalOutflow)}</div></div>
+        <div class="kpi-card highlight"><div class="kpi-label">Net Cash Flow</div><div class="kpi-value">${fmt(summary.netCashFlow)}</div></div>
+      </div>
+
+      <h2>Outflow Breakdown</h2>
+      <table>
+        <thead><tr><th>Category</th><th class="text-right">Amount</th><th class="text-right">% of Total</th></tr></thead>
+        <tbody>
+          <tr><td>Vendor Payments</td><td class="text-right font-semibold">${fmt(summary.vendorOutflow)}</td><td class="text-right">${summary.totalOutflow > 0 ? ((summary.vendorOutflow / summary.totalOutflow) * 100).toFixed(1) : 0}%</td></tr>
+          <tr><td>Expenses</td><td class="text-right font-semibold">${fmt(summary.expenseOutflow)}</td><td class="text-right">${summary.totalOutflow > 0 ? ((summary.expenseOutflow / summary.totalOutflow) * 100).toFixed(1) : 0}%</td></tr>
+          <tr><td>Worker Payments</td><td class="text-right font-semibold">${fmt(summary.workerOutflow)}</td><td class="text-right">${summary.totalOutflow > 0 ? ((summary.workerOutflow / summary.totalOutflow) * 100).toFixed(1) : 0}%</td></tr>
+        </tbody>
+        <tfoot><tr style="background:var(--accent);color:white;font-weight:700;"><td>TOTAL OUTFLOW</td><td class="text-right">${fmt(summary.totalOutflow)}</td><td></td></tr></tfoot>
+      </table>
+
+      <h2>Cash Flow Timeline (${groupBy})</h2>
+      <table>
+        <thead><tr><th>Period</th><th class="text-right">Inflow</th><th class="text-right">Outflow</th><th class="text-right">Net</th></tr></thead>
+        <tbody>
+          ${timeSeriesData.filter(d => d.inflow > 0 || d.outflow > 0).map(d => `
+            <tr>
+              <td>${d.date}</td>
+              <td class="text-right text-pos">${fmt(d.inflow)}</td>
+              <td class="text-right text-neg">${fmt(d.outflow)}</td>
+              <td class="text-right font-semibold ${d.net >= 0 ? 'text-pos' : 'text-neg'}">${fmt(d.net)}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+
+      <h2>By Payment Method</h2>
+      <table>
+        <thead><tr><th>Method</th><th class="text-right">Inflow</th><th class="text-right">Outflow</th><th class="text-right">Net</th></tr></thead>
+        <tbody>
+          ${methodBreakdown.map(m => `
+            <tr>
+              <td class="font-semibold">${m.method}</td>
+              <td class="text-right text-pos">${fmt(m.inflow)}</td>
+              <td class="text-right text-neg">${fmt(m.outflow)}</td>
+              <td class="text-right font-semibold">${fmt(m.inflow - m.outflow)}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+        <tfoot><tr style="background:var(--accent);color:white;font-weight:700;"><td>TOTAL</td><td class="text-right">${fmt(summary.totalInflow)}</td><td class="text-right">${fmt(summary.totalOutflow)}</td><td class="text-right">${fmt(summary.netCashFlow)}</td></tr></tfoot>
+      </table>
+    `;
+    return generatePrintHTML({
+      title: "Payment Flow Report",
+      dateRange: `${format(dateRange.from, "MMM d, yyyy")} — ${format(dateRange.to, "MMM d, yyyy")}`,
+      metadata: { "Inflow": fmt(summary.totalInflow), "Outflow": fmt(summary.totalOutflow), "Net": fmt(summary.netCashFlow) },
+      companyInfo: companySettings,
+      htmlContent,
     });
-
-    doc.save(`payment-flow-${format(dateRange.from, "yyyyMMdd")}-${format(dateRange.to, "yyyyMMdd")}.pdf`);
   };
 
   const exportExcel = () => {
@@ -241,160 +331,131 @@ export default function PaymentFlowReport() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col lg:flex-row lg:items-end gap-4">
-        <ReportFilters dateRange={dateRange} onDateRangeChange={setDateRange} />
-        <div className="flex gap-2">
-          <Badge 
-            variant={groupBy === "day" ? "default" : "outline"} 
-            className="cursor-pointer"
-            onClick={() => setGroupBy("day")}
-          >
-            Daily
-          </Badge>
-          <Badge 
-            variant={groupBy === "week" ? "default" : "outline"} 
-            className="cursor-pointer"
-            onClick={() => setGroupBy("week")}
-          >
-            Weekly
-          </Badge>
-          <Badge 
-            variant={groupBy === "month" ? "default" : "outline"} 
-            className="cursor-pointer"
-            onClick={() => setGroupBy("month")}
-          >
-            Monthly
-          </Badge>
-        </div>
+    <ReportContainer
+      title="Payment Flow Report"
+      subtitle="Cash inflows, outflows & net position analysis"
+      icon={Wallet}
+      dateRange={`${format(dateRange.from, "MMM d, yyyy")} — ${format(dateRange.to, "MMM d, yyyy")}`}
+      onPrint={handlePrintHTML}
+      onExportExcel={exportExcel}
+      isLoading={isLoading}
+      filters={filtersSection}
+      summaryCards={summaryCardsSection}
+    >
+      {/* Cash Flow Chart */}
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium">Cash Flow Timeline</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={350}>
+            <BarChart data={timeSeriesData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis dataKey="date" tick={{ fontSize: 11 }} interval={groupBy === "day" ? Math.floor(timeSeriesData.length / 10) : 0} />
+              <YAxis tickFormatter={(v) => `₹${(v/1000).toFixed(0)}k`} />
+              <Tooltip formatter={(v: number) => `₹${v.toLocaleString()}`} />
+              <Legend />
+              <Bar dataKey="inflow" name="Inflow" fill="#10b981" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="outflow" name="Outflow" fill="#ef4444" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Net Cash Flow Trend */}
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Net Cash Flow Trend</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={250}>
+              <LineChart data={timeSeriesData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="date" tick={{ fontSize: 10 }} interval={Math.floor(timeSeriesData.length / 6)} />
+                <YAxis tickFormatter={(v) => `₹${(v/1000).toFixed(0)}k`} />
+                <Tooltip formatter={(v: number) => `₹${v.toLocaleString()}`} />
+                <Line type="monotone" dataKey="net" name="Net Cash Flow" stroke="#3b82f6" strokeWidth={2} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        {/* Outflow Breakdown */}
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Outflow Breakdown</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {outflowBreakdown.length > 0 ? (
+              <ResponsiveContainer width="100%" height={250}>
+                <PieChart>
+                  <Pie
+                    data={outflowBreakdown}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {outflowBreakdown.map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(v: number) => `₹${v.toLocaleString()}`} />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-center text-muted-foreground py-12">No outflow data</p>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
-      <ReportExportBar onExportPDF={exportPDF} onExportExcel={exportExcel} />
-
-      {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      ) : (
-        <>
-          <ReportSummaryCards cards={summaryCards} />
-
-          {/* Cash Flow Chart */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Cash Flow Timeline</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={350}>
-                <BarChart data={timeSeriesData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" tick={{ fontSize: 11 }} interval={groupBy === "day" ? Math.floor(timeSeriesData.length / 10) : 0} />
-                  <YAxis tickFormatter={(v) => `₹${(v/1000).toFixed(0)}k`} />
-                  <Tooltip formatter={(v: number) => `₹${v.toLocaleString()}`} />
-                  <Legend />
-                  <Bar dataKey="inflow" name="Inflow" fill="#10b981" />
-                  <Bar dataKey="outflow" name="Outflow" fill="#ef4444" />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Net Cash Flow Trend */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Net Cash Flow Trend</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={250}>
-                  <LineChart data={timeSeriesData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" tick={{ fontSize: 10 }} interval={Math.floor(timeSeriesData.length / 6)} />
-                    <YAxis tickFormatter={(v) => `₹${(v/1000).toFixed(0)}k`} />
-                    <Tooltip formatter={(v: number) => `₹${v.toLocaleString()}`} />
-                    <Line type="monotone" dataKey="net" name="Net Cash Flow" stroke="#3b82f6" strokeWidth={2} dot={false} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-
-            {/* Outflow Breakdown */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Outflow Breakdown</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {outflowBreakdown.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={250}>
-                    <PieChart>
-                      <Pie
-                        data={outflowBreakdown}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
-                        outerRadius={80}
-                        fill="#8884d8"
-                        dataKey="value"
-                      >
-                        {outflowBreakdown.map((_, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(v: number) => `₹${v.toLocaleString()}`} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <p className="text-center text-muted-foreground py-12">No outflow data</p>
-                )}
-              </CardContent>
-            </Card>
+      {/* Payment Method Breakdown */}
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium">By Payment Method</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50">
+                  <th className="text-left p-3 font-semibold text-xs">Payment Method</th>
+                  <th className="text-right p-3 font-semibold text-xs">Inflow</th>
+                  <th className="text-right p-3 font-semibold text-xs">Outflow</th>
+                  <th className="text-right p-3 font-semibold text-xs">Net</th>
+                </tr>
+              </thead>
+              <tbody>
+                {methodBreakdown.map((m) => (
+                  <tr key={m.method} className="border-b hover:bg-muted/30">
+                    <td className="p-3 font-medium">{m.method}</td>
+                    <td className="p-3 text-right text-green-600">₹{m.inflow.toLocaleString()}</td>
+                    <td className="p-3 text-right text-red-600">₹{m.outflow.toLocaleString()}</td>
+                    <td className="p-3 text-right">
+                      <span className={m.inflow - m.outflow >= 0 ? "text-blue-600 font-semibold" : "text-amber-600 font-semibold"}>
+                        ₹{(m.inflow - m.outflow).toLocaleString()}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="bg-muted/50 font-semibold">
+                  <td className="p-3">TOTAL</td>
+                  <td className="p-3 text-right text-green-600">₹{summary.totalInflow.toLocaleString()}</td>
+                  <td className="p-3 text-right text-red-600">₹{summary.totalOutflow.toLocaleString()}</td>
+                  <td className="p-3 text-right text-blue-600">₹{summary.netCashFlow.toLocaleString()}</td>
+                </tr>
+              </tfoot>
+            </table>
           </div>
-
-          {/* Payment Method Breakdown */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">By Payment Method</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b bg-muted/50">
-                      <th className="text-left p-3 font-medium">Payment Method</th>
-                      <th className="text-right p-3 font-medium">Inflow</th>
-                      <th className="text-right p-3 font-medium">Outflow</th>
-                      <th className="text-right p-3 font-medium">Net</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {methodBreakdown.map((m) => (
-                      <tr key={m.method} className="border-b hover:bg-muted/30">
-                        <td className="p-3 font-medium">{m.method}</td>
-                        <td className="p-3 text-right text-green-600">₹{m.inflow.toLocaleString()}</td>
-                        <td className="p-3 text-right text-red-600">₹{m.outflow.toLocaleString()}</td>
-                        <td className="p-3 text-right">
-                          <span className={m.inflow - m.outflow >= 0 ? "text-blue-600 font-semibold" : "text-yellow-600 font-semibold"}>
-                            ₹{(m.inflow - m.outflow).toLocaleString()}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="bg-muted/50 font-semibold">
-                      <td className="p-3">TOTAL</td>
-                      <td className="p-3 text-right text-green-600">₹{summary.totalInflow.toLocaleString()}</td>
-                      <td className="p-3 text-right text-red-600">₹{summary.totalOutflow.toLocaleString()}</td>
-                      <td className="p-3 text-right text-blue-600">₹{summary.netCashFlow.toLocaleString()}</td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-        </>
-      )}
-    </div>
+        </CardContent>
+      </Card>
+    </ReportContainer>
   );
 }

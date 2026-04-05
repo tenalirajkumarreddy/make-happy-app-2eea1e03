@@ -132,7 +132,7 @@ const InvoiceForm = () => {
       if (selectedStoreTypeId) {
         const { data: storeTypeProducts } = await supabase
           .from("store_type_products")
-          .select("product_id, products(id, name, hsn_code, mrp, gst_rate)")
+          .select("product_id, products(id, name, hsn_code, base_price, gst_rate)")
           .eq("store_type_id", selectedStoreTypeId);
         
         if (storeTypeProducts && storeTypeProducts.length > 0) {
@@ -143,7 +143,7 @@ const InvoiceForm = () => {
       // Fallback: all active products (when no store selected or no store_type_products configured)
       const { data } = await supabase
         .from("products")
-        .select("id, name, hsn_code, mrp, gst_rate")
+        .select("id, name, hsn_code, base_price, gst_rate")
         .eq("is_active", true);
       return data || [];
     },
@@ -158,7 +158,7 @@ const InvoiceForm = () => {
         .from("sales")
         .select(`
           id, display_id, created_at, total_amount,
-          sale_items(id, product_id, quantity, unit_price, total_amount, products(name, hsn_code, gst_rate))
+          sale_items(id, product_id, quantity, unit_price, total_price, products(name, hsn_code, gst_rate))
         `)
         .eq("customer_id", customerId)
         .eq("has_invoice", false);
@@ -213,16 +213,21 @@ const InvoiceForm = () => {
         const sale = availableSales.find((s: any) => s.id === saleId);
         if (sale?.sale_items) {
           sale.sale_items.forEach((item: any) => {
+            const lineTotal = Number(item.total_price ?? (item.quantity * item.unit_price) ?? 0);
+            const taxRate = Number(item.products?.gst_rate || 0);
+            const taxableAmount = taxRate > 0 ? lineTotal / (1 + taxRate / 100) : lineTotal;
+            const lineTax = lineTotal - taxableAmount;
+
             newItems.push({
               product_id: item.product_id,
               product_name: item.products?.name || "Unknown",
               hsn_code: item.products?.hsn_code || "",
               quantity: item.quantity,
               unit_price: item.unit_price,
-              tax_rate: item.products?.gst_rate || 0,
-              tax_amount: (item.total_amount * (item.products?.gst_rate || 0)) / 100,
+              tax_rate: taxRate,
+              tax_amount: Math.round(lineTax * 100) / 100,
               discount_amount: 0,
-              total_amount: item.total_amount,
+              total_amount: Math.round(lineTotal * 100) / 100,
               sale_item_id: item.id,
             });
           });
@@ -299,15 +304,18 @@ const InvoiceForm = () => {
       if (product) {
         item.product_name = product.name;
         item.hsn_code = product.hsn_code || "";
-        item.unit_price = product.mrp || 0;
+        item.unit_price = product.base_price || 0;
         item.tax_rate = product.gst_rate || 0;
       }
     }
     
-    // Recalculate amounts
-    const lineTotal = item.quantity * item.unit_price;
-    item.tax_amount = (lineTotal * item.tax_rate) / 100;
-    item.total_amount = lineTotal + item.tax_amount - item.discount_amount;
+    // Recalculate amounts with GST-inclusive pricing.
+    const grossLine = item.quantity * item.unit_price;
+    const effectiveLine = Math.max(0, grossLine - (item.discount_amount || 0));
+    const taxRate = item.tax_rate || 0;
+    const taxableAmount = taxRate > 0 ? effectiveLine / (1 + taxRate / 100) : effectiveLine;
+    item.tax_amount = effectiveLine - taxableAmount;
+    item.total_amount = effectiveLine;
     
     newItems[index] = item;
     setItems(newItems);
@@ -379,7 +387,7 @@ const InvoiceForm = () => {
 
       // Create invoice items
       const itemsData = items.map((item) => {
-        const lineTotal = item.quantity * item.unit_price;
+        const lineTotal = Math.max(0, item.quantity * item.unit_price - (item.discount_amount || 0));
         const taxRate = item.tax_rate || 0;
         const taxableAmount = taxRate > 0 ? lineTotal / (1 + taxRate / 100) : lineTotal;
         const lineTax = lineTotal - taxableAmount;

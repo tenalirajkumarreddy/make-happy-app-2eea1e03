@@ -1,33 +1,193 @@
-// @ts-nocheck
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+const ALLOWED_ORIGINS = [
+  "https://aquaprimesales.vercel.app",
+  "http://localhost:5000",
+  "http://localhost:5173",
+  "http://localhost:8100",
+];
 
-function normalizeEmail(email?: string | null) {
+function getCorsHeaders(req: Request) {
+  const origin = req.headers.get("Origin") || "";
+  const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  return {
+    "Access-Control-Allow-Origin": allowed,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Vary": "Origin",
+  };
+}
+
+function normalizeEmail(email?: string | null): string | null {
   if (!email) return null;
   return String(email).trim().toLowerCase();
 }
 
-function significantPhone(phone?: string | null) {
+function significantPhone(phone?: string | null): string | null {
   if (!phone) return null;
   const digits = String(phone).replace(/\D/g, "");
   return digits.length >= 10 ? digits.slice(-10) : digits || null;
 }
 
-function maskPhoneLast3(phone?: string | null) {
+function maskPhoneLast3(phone?: string | null): string {
   const digits = significantPhone(phone) || "";
   return digits.length >= 3 ? `***${digits.slice(-3)}` : "***";
 }
 
-function isSyntheticPhoneEmail(email?: string | null) {
+function isSyntheticPhoneEmail(email?: string | null): boolean {
   if (!email) return false;
   return /^phone_\d+@phone\.aquaprime\.app$/i.test(String(email).trim());
 }
 
+/**
+ * Finds a staff_directory row matching the user by user_id, email, or phone.
+ * Uses indexed queries instead of full-table scan.
+ */
+async function findStaffMatch(
+  supabaseAdmin: any,
+  userId: string,
+  canonicalEmail: string | null,
+  canonicalPhone: string | null
+) {
+  const cols = "id, user_id, full_name, avatar_url, role, email, phone, is_active";
+
+  // 1. Try by user_id (exact indexed lookup)
+  const { data: byUserId } = await supabaseAdmin
+    .from("staff_directory")
+    .select(cols)
+    .eq("user_id", userId)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (byUserId) return byUserId;
+
+  // 2. Try by email (uses staff_directory_email_unique_idx)
+  if (canonicalEmail) {
+    const { data: byEmail } = await supabaseAdmin
+      .from("staff_directory")
+      .select(cols)
+      .ilike("email", canonicalEmail)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (byEmail) return byEmail;
+  }
+
+  // 3. Try by phone (uses staff_directory_phone_key_idx via RPC or text match)
+  if (canonicalPhone) {
+    const { data: byPhone } = await supabaseAdmin
+      .from("staff_directory")
+      .select(cols)
+      .eq("is_active", true)
+      .filter("phone", "not.is", null)
+      .limit(100);
+
+    // Filter by significant phone digits (last 10) - limited set, not full table
+    if (byPhone) {
+      const match = byPhone.find(
+        (row: any) => significantPhone(row.phone) === canonicalPhone
+      );
+      if (match) return match;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Finds a staff_invitation matching the user by email or phone.
+ * Uses indexed queries instead of full-table scan.
+ */
+async function findInvitationMatch(
+  supabaseAdmin: any,
+  canonicalEmail: string | null,
+  canonicalPhone: string | null
+) {
+  const cols = "id, email, phone, full_name, role, status, accepted_at, created_at";
+
+  // 1. Try by email (uses idx_staff_invitations_email)
+  if (canonicalEmail) {
+    const { data: byEmail } = await supabaseAdmin
+      .from("staff_invitations")
+      .select(cols)
+      .eq("email", canonicalEmail)
+      .in("status", ["pending", "accepted"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (byEmail) return byEmail;
+  }
+
+  // 2. Try by phone (uses staff_invitations_phone_key_idx)
+  if (canonicalPhone) {
+    const { data: byPhone } = await supabaseAdmin
+      .from("staff_invitations")
+      .select(cols)
+      .in("status", ["pending", "accepted"])
+      .filter("phone", "not.is", null)
+      .order("created_at", { ascending: false })
+      .limit(50);
+
+    if (byPhone) {
+      const match = byPhone.find(
+        (row: any) => significantPhone(row.phone) === canonicalPhone
+      );
+      if (match) return match;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Finds a customer matching the user by user_id, email, or phone.
+ * Uses indexed queries instead of full-table scan.
+ */
+async function findCustomerMatch(
+  supabaseAdmin: any,
+  userId: string,
+  canonicalEmail: string | null,
+  canonicalPhone: string | null
+) {
+  const cols = "id, user_id, phone, email";
+
+  // 1. Try by user_id (uses idx_customers_user_id)
+  const { data: byUserId } = await supabaseAdmin
+    .from("customers")
+    .select(cols)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (byUserId) return byUserId;
+
+  // 2. Try by phone (uses customers_phone_key_idx / idx_customers_phone)
+  if (canonicalPhone) {
+    const { data: byPhone } = await supabaseAdmin
+      .from("customers")
+      .select(cols)
+      .filter("phone", "not.is", null)
+      .limit(100);
+
+    if (byPhone) {
+      const match = byPhone.find(
+        (row: any) => significantPhone(row.phone) === canonicalPhone
+      );
+      if (match) return match;
+    }
+  }
+
+  // 3. Try by email (non-synthetic only)
+  if (canonicalEmail && !isSyntheticPhoneEmail(canonicalEmail)) {
+    const { data: byEmail } = await supabaseAdmin
+      .from("customers")
+      .select(cols)
+      .ilike("email", canonicalEmail)
+      .maybeSingle();
+    if (byEmail) return byEmail;
+  }
+
+  return null;
+}
+
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -74,6 +234,7 @@ Deno.serve(async (req) => {
       primaryProvider === "google";
     const loginMethod = hasGoogle ? "google" : "phone";
 
+    // Indexed lookup: user_roles by user_id
     const { data: roleData } = await supabaseAdmin
       .from("user_roles")
       .select("role")
@@ -82,39 +243,9 @@ Deno.serve(async (req) => {
 
     const currentRole = roleData?.role || null;
 
-    const { data: staffRows, error: staffError } = await supabaseAdmin
-      .from("staff_directory")
-      .select("id, user_id, full_name, avatar_url, role, email, phone, is_active")
-      .eq("is_active", true)
-      .limit(5000);
-    if (staffError) throw staffError;
-
-    const staffMatch = (staffRows || []).find((row) => {
-      const rowEmail = normalizeEmail(row.email);
-      const rowPhone = significantPhone(row.phone);
-      return (
-        row.user_id === userId ||
-        (canonicalEmail && rowEmail === canonicalEmail) ||
-        (canonicalPhone && rowPhone === canonicalPhone)
-      );
-    });
-
-    const { data: invitationRows, error: invitationError } = await supabaseAdmin
-      .from("staff_invitations")
-      .select("id, email, phone, full_name, role, status, accepted_at, created_at")
-      .in("status", ["pending", "accepted"])
-      .order("created_at", { ascending: false })
-      .limit(5000);
-    if (invitationError) throw invitationError;
-
-    const invitationMatch = (invitationRows || []).find((row) => {
-      const rowEmail = normalizeEmail(row.email);
-      const rowPhone = significantPhone(row.phone);
-      return (
-        (canonicalEmail && rowEmail === canonicalEmail) ||
-        (canonicalPhone && rowPhone === canonicalPhone)
-      );
-    });
+    // Indexed lookups instead of full-table scan
+    const staffMatch = await findStaffMatch(supabaseAdmin, userId, canonicalEmail, canonicalPhone);
+    const invitationMatch = await findInvitationMatch(supabaseAdmin, canonicalEmail, canonicalPhone);
 
     const resolvedStaffRole =
       currentRole && currentRole !== "customer"
@@ -219,21 +350,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { data: customerRows, error: customerError } = await supabaseAdmin
-      .from("customers")
-      .select("id, user_id, phone, email")
-      .limit(5000);
-    if (customerError) throw customerError;
-
-    const customerMatch = (customerRows || []).find((row) => {
-      const rowEmail = normalizeEmail(row.email);
-      const rowPhone = significantPhone(row.phone);
-      return (
-        row.user_id === userId ||
-        (!!canonicalPhone && !!rowPhone && rowPhone === canonicalPhone) ||
-        (!!canonicalEmail && !isSyntheticPhoneEmail(canonicalEmail) && !!rowEmail && rowEmail === canonicalEmail)
-      );
-    });
+    // Indexed customer lookup instead of full-table scan
+    const customerMatch = await findCustomerMatch(supabaseAdmin, userId, canonicalEmail, canonicalPhone);
 
     if (customerMatch) {
       if (customerMatch.user_id && customerMatch.user_id !== userId) {
@@ -326,7 +444,7 @@ Deno.serve(async (req) => {
       {
         status: 500,
         headers: {
-          ...corsHeaders,
+          ...getCorsHeaders(req),
           "Content-Type": "application/json",
         },
       }

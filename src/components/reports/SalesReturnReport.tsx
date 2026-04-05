@@ -4,15 +4,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Loader2, ShoppingCart, DollarSign, TrendingUp, Package, Search, RotateCcw, AlertCircle } from "lucide-react";
+import { ShoppingCart, DollarSign, Search, RotateCcw, AlertCircle } from "lucide-react";
 import { format, subMonths, startOfMonth } from "date-fns";
 import { ReportFilters, DateRange } from "./ReportFilters";
-import { ReportExportBar } from "./ReportExportBar";
-import { ReportSummaryCards } from "./ReportSummaryCards";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LineChart, Line } from "recharts";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from "recharts";
 import * as XLSX from "xlsx";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
+import { generatePrintHTML } from "@/utils/printUtils";
+import { ReportContainer, ReportKPICard } from "@/components/reports/ReportContainer";
 
 interface SaleReturnData {
   id: string;
@@ -42,6 +41,7 @@ export default function SalesReturnReport() {
   });
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "approved" | "completed" | "rejected">("all");
+  const { data: companyInfo } = useCompanySettings();
 
   // Fetch sale returns
   const { data: saleReturns = [], isLoading: srLoading } = useQuery({
@@ -170,13 +170,6 @@ export default function SalesReturnReport() {
     );
   }, [filteredReturns]);
 
-  const summaryCards = [
-    { label: "Total Sales", value: `₹${(summary.total_sales / 1000).toFixed(0)}K`, icon: ShoppingCart, iconColor: "blue" },
-    { label: "Total Returns", value: `₹${(summary.total_returns / 1000).toFixed(0)}K`, icon: RotateCcw, iconColor: "red" },
-    { label: "Net Sales", value: `₹${(summary.net_sales / 1000).toFixed(0)}K`, icon: DollarSign, iconColor: "green" },
-    { label: "Return Rate", value: `${summary.return_rate.toFixed(1)}%`, icon: AlertCircle, iconColor: "yellow" },
-  ];
-
   const statusColors: Record<string, string> = {
     pending: "bg-yellow-100 text-yellow-800",
     approved: "bg-blue-100 text-blue-800",
@@ -184,30 +177,132 @@ export default function SalesReturnReport() {
     rejected: "bg-red-100 text-red-800",
   };
 
-  const exportPDF = () => {
-    const doc = new jsPDF();
-    doc.setFontSize(16);
-    doc.text("Sales Returns Report", 14, 15);
-    doc.setFontSize(10);
-    doc.text(`Period: ${format(dateRange.from, "MMM d, yyyy")} - ${format(dateRange.to, "MMM d, yyyy")}`, 14, 23);
+  const filtersSection = (
+    <div className="flex flex-wrap items-end gap-3">
+      <ReportFilters dateRange={dateRange} onDateRangeChange={setDateRange} />
+      <div className="relative flex-1 max-w-xs">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search returns..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-9"
+        />
+      </div>
+      <div className="flex gap-2 flex-wrap">
+        {["all", "pending", "approved", "completed", "rejected"].map((status) => (
+          <Badge
+            key={status}
+            variant={statusFilter === status ? "default" : "outline"}
+            className="cursor-pointer capitalize"
+            onClick={() => setStatusFilter(status as any)}
+          >
+            {status}
+          </Badge>
+        ))}
+      </div>
+    </div>
+  );
 
-    autoTable(doc, {
-      startY: 30,
-      head: [["Date", "Return ID", "Customer", "Store", "Amount", "Status", "Reason"]],
-      body: filteredReturns.map((r: SaleReturnData) => [
-        format(new Date(r.return_date), "dd/MM/yy"),
-        r.display_id,
-        r.customer_name,
-        r.store_name,
-        `₹${r.total_amount.toLocaleString()}`,
-        r.status,
-        r.reason || "—",
-      ]),
-      styles: { fontSize: 8 },
-      headStyles: { fillColor: [239, 68, 68] },
+  const summaryCardsSection = (
+    <>
+      <ReportKPICard
+        label="Total Sales"
+        value={`₹${summary.total_sales.toLocaleString()}`}
+        subValue={`${summary.total_transactions} orders`}
+        icon={ShoppingCart}
+        highlight
+      />
+      <ReportKPICard
+        label="Total Returns"
+        value={`₹${summary.total_returns.toLocaleString()}`}
+        subValue={`${summary.total_return_transactions} returns`}
+        icon={RotateCcw}
+        trend="down"
+      />
+      <ReportKPICard
+        label="Net Sales"
+        value={`₹${summary.net_sales.toLocaleString()}`}
+        icon={DollarSign}
+        trend="up"
+        highlight
+      />
+      <ReportKPICard
+        label="Return Rate"
+        value={`${summary.return_rate.toFixed(1)}%`}
+        icon={AlertCircle}
+      />
+    </>
+  );
+
+  const generateHTML = () => {
+    const returnRows = filteredReturns.map((r: SaleReturnData) => `
+      <tr>
+        <td class="font-medium">${format(new Date(r.return_date), "dd MMM yyyy")}</td>
+        <td class="font-mono text-xs">${r.display_id}</td>
+        <td class="font-medium">${r.customer_name}</td>
+        <td>${r.store_name}</td>
+        <td class="text-right font-mono font-bold text-neg">₹${r.total_amount.toLocaleString()}</td>
+        <td class="text-center">
+          <span style="font-size: 0.75rem; padding: 2px 8px; border-radius: 12px; font-weight: 500; border: 1px solid #e5e7eb;">
+            ${r.status.toUpperCase()}
+          </span>
+        </td>
+        <td class="text-xs">${r.reason || "—"}</td>
+      </tr>
+    `).join("");
+
+    const htmlContent = `
+      <div class="kpi-row">
+        <div class="kpi-card highlight">
+          <div class="kpi-label">Total Sales</div>
+          <div class="kpi-value text-blue-600">₹${summary.total_sales.toLocaleString()}</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Total Returns</div>
+          <div class="kpi-value text-neg">₹${summary.total_returns.toLocaleString()}</div>
+        </div>
+        <div class="kpi-card highlight">
+          <div class="kpi-label">Net Sales</div>
+          <div class="kpi-value text-pos">₹${summary.net_sales.toLocaleString()}</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Return Rate</div>
+          <div class="kpi-value text-warn">${summary.return_rate.toFixed(1)}%</div>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Return ID</th>
+            <th>Customer</th>
+            <th>Store</th>
+            <th class="text-right">Amount</th>
+            <th class="text-center">Status</th>
+            <th>Reason</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${returnRows}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="4" class="font-bold text-right">TOTAL COMPLETED RETURNS</td>
+            <td class="text-right font-mono font-bold text-neg">₹${summary.total_returns.toLocaleString()}</td>
+            <td colspan="2"></td>
+          </tr>
+        </tfoot>
+      </table>
+    `;
+
+    return generatePrintHTML({
+      title: "Sales Returns Report",
+      dateRange: `${format(dateRange.from, "MMM d, yyyy")} - ${format(dateRange.to, "MMM d, yyyy")}`,
+      companyInfo: companyInfo || { companyName: "System", address: "", phone: "", email: "", gstin: "" },
+      htmlContent,
     });
-
-    doc.save(`sales-return-report-${format(dateRange.from, "yyyyMMdd")}-${format(dateRange.to, "yyyyMMdd")}.pdf`);
   };
 
   const exportExcel = () => {
@@ -227,165 +322,138 @@ export default function SalesReturnReport() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col lg:flex-row lg:items-end gap-4">
-        <ReportFilters dateRange={dateRange} onDateRangeChange={setDateRange} />
-        <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search returns..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          {["all", "pending", "approved", "completed", "rejected"].map((status) => (
-            <Badge
-              key={status}
-              variant={statusFilter === status ? "default" : "outline"}
-              className="cursor-pointer capitalize"
-              onClick={() => setStatusFilter(status as any)}
-            >
-              {status}
-            </Badge>
-          ))}
-        </div>
+    <ReportContainer
+      title="Sales Returns Report"
+      subtitle="Return analysis, trends & reason breakdown"
+      icon={RotateCcw}
+      dateRange={`${format(dateRange.from, "MMM d, yyyy")} - ${format(dateRange.to, "MMM d, yyyy")}`}
+      onPrint={generateHTML}
+      onExportExcel={exportExcel}
+      isLoading={isLoading}
+      filters={filtersSection}
+      summaryCards={summaryCardsSection}
+    >
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Returns Trend */}
+        {trendData.length > 1 && (
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">Returns Trend</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={250}>
+                <LineChart data={trendData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                  <YAxis yAxisId="left" orientation="left" />
+                  <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}K`} />
+                  <Tooltip formatter={(v: number, name: string) => 
+                    name === "amount" ? `₹${v.toLocaleString()}` : v
+                  } />
+                  <Legend />
+                  <Line yAxisId="left" type="monotone" dataKey="returns" name="Count" stroke="#3b82f6" strokeWidth={2} />
+                  <Line yAxisId="right" type="monotone" dataKey="amount" name="Amount" stroke="#ef4444" strokeWidth={2} />
+                </LineChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Returns by Reason */}
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Returns by Reason</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {reasonBreakdown.length > 0 ? (
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={reasonBreakdown} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis type="number" tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}K`} />
+                  <YAxis type="category" dataKey="reason" width={120} tick={{ fontSize: 10 }} />
+                  <Tooltip formatter={(v: number) => `₹${v.toLocaleString()}`} />
+                  <Bar dataKey="amount" name="Amount" fill="#ef4444" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-center text-muted-foreground py-12">No data</p>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
-      <ReportExportBar onExportPDF={exportPDF} onExportExcel={exportExcel} />
-
-      {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      ) : (
-        <>
-          <ReportSummaryCards cards={summaryCards} />
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Returns Trend */}
-            {trendData.length > 1 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Returns Trend</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={250}>
-                    <LineChart data={trendData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                      <YAxis yAxisId="left" orientation="left" />
-                      <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}K`} />
-                      <Tooltip formatter={(v: number, name: string) => 
-                        name === "amount" ? `₹${v.toLocaleString()}` : v
-                      } />
-                      <Legend />
-                      <Line yAxisId="left" type="monotone" dataKey="returns" name="Count" stroke="#3b82f6" />
-                      <Line yAxisId="right" type="monotone" dataKey="amount" name="Amount" stroke="#ef4444" />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Returns by Reason */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Returns by Reason</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {reasonBreakdown.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={250}>
-                    <BarChart data={reasonBreakdown} layout="vertical">
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis type="number" tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}K`} />
-                      <YAxis type="category" dataKey="reason" width={120} tick={{ fontSize: 10 }} />
-                      <Tooltip formatter={(v: number) => `₹${v.toLocaleString()}`} />
-                      <Bar dataKey="amount" name="Amount" fill="#ef4444" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <p className="text-center text-muted-foreground py-12">No data</p>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Status Breakdown */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Returns by Status</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-4">
-                {statusBreakdown.map((s) => (
-                  <div key={s.status} className="flex items-center gap-2">
-                    <Badge className={statusColors[s.status]}>{s.status}</Badge>
-                    <span className="font-semibold">{s.count}</span>
-                  </div>
-                ))}
+      {/* Status Breakdown */}
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium">Returns by Status</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-4">
+            {statusBreakdown.map((s) => (
+              <div key={s.status} className="flex items-center gap-2">
+                <Badge className={statusColors[s.status]}>{s.status}</Badge>
+                <span className="font-semibold">{s.count}</span>
               </div>
-            </CardContent>
-          </Card>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
-          {/* Returns Table */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Return Details ({filteredReturns.length})</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {filteredReturns.length === 0 ? (
-                <p className="text-center text-muted-foreground py-12">No returns found</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b bg-muted/50">
-                        <th className="text-left p-3 font-medium">Date</th>
-                        <th className="text-left p-3 font-medium">Return ID</th>
-                        <th className="text-left p-3 font-medium">Customer</th>
-                        <th className="text-left p-3 font-medium hidden md:table-cell">Store</th>
-                        <th className="text-right p-3 font-medium">Amount</th>
-                        <th className="text-center p-3 font-medium">Status</th>
-                        <th className="text-left p-3 font-medium hidden lg:table-cell">Reason</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredReturns.slice(0, 50).map((r: SaleReturnData) => (
-                        <tr key={r.id} className="border-b hover:bg-muted/30">
-                          <td className="p-3 text-muted-foreground text-xs">
-                            {format(new Date(r.return_date), "dd/MM/yy")}
-                          </td>
-                          <td className="p-3 font-mono text-xs">{r.display_id}</td>
-                          <td className="p-3 font-medium">{r.customer_name}</td>
-                          <td className="p-3 hidden md:table-cell text-muted-foreground">{r.store_name}</td>
-                          <td className="p-3 text-right font-semibold text-red-600">
-                            ₹{r.total_amount.toLocaleString()}
-                          </td>
-                          <td className="p-3 text-center">
-                            <Badge className={statusColors[r.status]} variant="secondary">
-                              {r.status}
-                            </Badge>
-                          </td>
-                          <td className="p-3 hidden lg:table-cell text-muted-foreground truncate max-w-[200px]">
-                            {r.reason || "—"}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-              {filteredReturns.length > 50 && (
-                <p className="text-center text-muted-foreground mt-4 text-sm">
-                  Showing 50 of {filteredReturns.length} returns. Export to see all.
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        </>
-      )}
-    </div>
+      {/* Returns Table */}
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium">Return Details ({filteredReturns.length})</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {filteredReturns.length === 0 ? (
+            <p className="text-center text-muted-foreground py-12">No returns found</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/50">
+                    <th className="text-left p-3 font-semibold text-xs">Date</th>
+                    <th className="text-left p-3 font-semibold text-xs">Return ID</th>
+                    <th className="text-left p-3 font-semibold text-xs">Customer</th>
+                    <th className="text-left p-3 font-semibold text-xs hidden md:table-cell">Store</th>
+                    <th className="text-right p-3 font-semibold text-xs">Amount</th>
+                    <th className="text-center p-3 font-semibold text-xs">Status</th>
+                    <th className="text-left p-3 font-semibold text-xs hidden lg:table-cell">Reason</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredReturns.slice(0, 50).map((r: SaleReturnData) => (
+                    <tr key={r.id} className="border-b hover:bg-muted/30">
+                      <td className="p-3 text-muted-foreground text-xs">
+                        {format(new Date(r.return_date), "dd/MM/yy")}
+                      </td>
+                      <td className="p-3 font-mono text-xs">{r.display_id}</td>
+                      <td className="p-3 font-medium text-sm">{r.customer_name}</td>
+                      <td className="p-3 hidden md:table-cell text-muted-foreground text-xs">{r.store_name}</td>
+                      <td className="p-3 text-right font-semibold text-red-600">
+                        ₹{r.total_amount.toLocaleString()}
+                      </td>
+                      <td className="p-3 text-center">
+                        <Badge className={statusColors[r.status]} variant="secondary">
+                          {r.status}
+                        </Badge>
+                      </td>
+                      <td className="p-3 hidden lg:table-cell text-muted-foreground truncate max-w-[200px] text-xs">
+                        {r.reason || "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {filteredReturns.length > 50 && (
+            <p className="text-center text-muted-foreground mt-4 text-sm">
+              Showing 50 of {filteredReturns.length} returns. Export to see all.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+    </ReportContainer>
   );
 }
