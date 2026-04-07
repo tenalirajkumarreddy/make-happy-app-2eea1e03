@@ -1,11 +1,14 @@
-// @ts-nocheck
+// Firebase phone OTP authentication exchange
+// 
+// PERFORMANCE OPTIMIZATIONS (Applied 2026-04-07):
+// - Replaced full table scans (limit 5000) with indexed RPC function calls
+// - Uses find_staff_by_phone(), find_staff_invitation_by_phone(), find_customer_by_phone()
+// - Reduces data transfer from ~15,000 rows to ~2 rows per auth request (99.9% reduction)
+// - Server-side phone number matching using expression indexes on last-10-digits
+// 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createRemoteJWKSet, jwtVerify } from "npm:jose@5";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { getCorsHeaders, handleCorsPreflightOrError } from "../_shared/cors.ts";
 
 type FirebasePayload = {
   sub: string;
@@ -47,9 +50,10 @@ function syntheticEmailFromPhone(phone: string) {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+  const corsResponse = handleCorsPreflightOrError(req);
+  if (corsResponse) return corsResponse;
+
+  const corsHeaders = getCorsHeaders(req);
 
   try {
     const { idToken } = await req.json();
@@ -125,27 +129,19 @@ Deno.serve(async (req) => {
 
     const appUserId = tokenData?.user?.id as string | undefined;
     if (appUserId) {
-      const customerPhoneKey = significantPhone(phoneNumber);
-
-      const { data: staffRows, error: staffReadError } = await supabaseAdmin
-        .from("staff_directory")
-        .select("id, phone, user_id, role, full_name, avatar_url, is_active")
-        .eq("is_active", true)
-        .limit(5000);
+      // OPTIMIZATION: Use indexed RPC function instead of full table scan + client-side filtering
+      const { data: matchingStaff, error: staffReadError } = await supabaseAdmin
+        .rpc("find_staff_by_phone", { phone_input: phoneNumber });
 
       if (staffReadError) {
         throw staffReadError;
       }
 
-      const matchingStaff = (staffRows || []).filter(
-        (row) => row.phone && significantPhone(row.phone) === customerPhoneKey
-      );
-
-      if (matchingStaff.length > 1) {
+      if (matchingStaff && matchingStaff.length > 1) {
         throw new Error("Multiple active staff profiles found for this phone number. Please contact admin.");
       }
 
-      if (matchingStaff.length === 1) {
+      if (matchingStaff && matchingStaff.length === 1) {
         const staff = matchingStaff[0];
 
         // Validate staff role before assignment
@@ -202,43 +198,30 @@ Deno.serve(async (req) => {
         );
       }
 
-      const { data: invitationRows, error: invitationReadError } = await supabaseAdmin
-        .from("staff_invitations")
-        .select("id, phone, full_name, role, status, accepted_at")
-        .not("phone", "is", null)
-        .limit(5000);
+      // OPTIMIZATION: Use indexed RPC function instead of full table scan + client-side filtering
+      const { data: matchingInvitations, error: invitationReadError } = await supabaseAdmin
+        .rpc("find_staff_invitation_by_phone", { phone_input: phoneNumber });
 
       if (invitationReadError) {
         throw invitationReadError;
       }
 
-      const matchingInvitations = (invitationRows || []).filter(
-        (row) =>
-          row.phone &&
-          significantPhone(row.phone) === customerPhoneKey &&
-          (row.status === "accepted" || row.status === "pending")
-      );
-
-      if (matchingInvitations.length > 1) {
+      if (matchingInvitations && matchingInvitations.length > 1) {
         throw new Error("Multiple staff invitations found for this phone number. Please contact admin.");
       }
 
-      if (matchingInvitations.length === 1) {
+      if (matchingInvitations && matchingInvitations.length === 1) {
         const invitation = matchingInvitations[0];
 
+        // OPTIMIZATION: Use indexed RPC function instead of full table scan + client-side filtering
         const { data: existingDirRows, error: existingDirReadError } = await supabaseAdmin
-          .from("staff_directory")
-          .select("id, phone")
-          .not("phone", "is", null)
-          .limit(5000);
+          .rpc("find_staff_by_phone", { phone_input: phoneNumber });
 
         if (existingDirReadError) {
           throw existingDirReadError;
         }
 
-        const existingDir = (existingDirRows || []).find(
-          (row) => row.phone && significantPhone(row.phone) === customerPhoneKey
-        );
+        const existingDir = existingDirRows && existingDirRows.length > 0 ? existingDirRows[0] : null;
 
         if (existingDir) {
           const { error: linkDirError } = await supabaseAdmin
@@ -316,25 +299,19 @@ Deno.serve(async (req) => {
         );
       }
 
-      const { data: customerRows, error: customerReadError } = await supabaseAdmin
-        .from("customers")
-        .select("id, phone, user_id")
-        .not("phone", "is", null)
-        .limit(5000);
+      // OPTIMIZATION: Use indexed RPC function instead of full table scan + client-side filtering
+      const { data: matchingCustomers, error: customerReadError } = await supabaseAdmin
+        .rpc("find_customer_by_phone", { phone_input: phoneNumber });
 
       if (customerReadError) {
         throw customerReadError;
       }
 
-      const matchingCustomers = (customerRows || []).filter(
-        (row) => row.phone && significantPhone(row.phone) === customerPhoneKey
-      );
-
-      if (matchingCustomers.length > 1) {
+      if (matchingCustomers && matchingCustomers.length > 1) {
         throw new Error("Multiple customer profiles found for this phone number. Please contact admin.");
       }
 
-      if (matchingCustomers.length === 1) {
+      if (matchingCustomers && matchingCustomers.length === 1) {
         const matched = matchingCustomers[0];
         if (matched.user_id !== appUserId) {
           const { error: linkError } = await supabaseAdmin

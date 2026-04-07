@@ -72,75 +72,36 @@ Deno.serve(async (req) => {
 
     const today = new Date().toISOString().split("T")[0];
 
-    // Get all staff users
-    const { data: roles } = await supabase.from("user_roles").select("user_id, role").neq("role", "customer");
-    const userIds = [...new Set((roles || []).map((r) => r.user_id))];
+    // OPTIMIZATION: Use SQL aggregation instead of N+1 queries
+    // Single query to get all sales totals grouped by user
+    const { data: salesAggregates } = await supabase.rpc("get_daily_handover_aggregates", {
+      p_snapshot_date: today
+    });
 
-    // Get finalizer permission holders
-    const { data: finalizerPerms } = await supabase
-      .from("user_permissions")
-      .select("user_id")
-      .eq("permission", "finalizer")
-      .eq("enabled", true);
-    const finalizerIds = new Set((finalizerPerms || []).map((p) => p.user_id));
-
-    for (const userId of userIds) {
-      // Sales totals
-      const { data: sales } = await supabase
-        .from("sales")
-        .select("cash_amount, upi_amount")
-        .eq("recorded_by", userId);
-      const salesTotal = (sales || []).reduce(
-        (s, r) => s + Number(r.cash_amount) + Number(r.upi_amount), 0
-      );
-
-      // Handovers sent confirmed
-      const { data: sentConf } = await supabase
-        .from("handovers")
-        .select("cash_amount, upi_amount")
-        .eq("user_id", userId)
-        .eq("status", "confirmed");
-      const sentConfTotal = (sentConf || []).reduce(
-        (s, h) => s + Number(h.cash_amount) + Number(h.upi_amount), 0
-      );
-
-      // Handovers sent pending
-      const { data: sentPend } = await supabase
-        .from("handovers")
-        .select("cash_amount, upi_amount")
-        .eq("user_id", userId)
-        .eq("status", "awaiting_confirmation");
-      const sentPendTotal = (sentPend || []).reduce(
-        (s, h) => s + Number(h.cash_amount) + Number(h.upi_amount), 0
-      );
-
-      // Handovers received confirmed
-      const { data: recvConf } = await supabase
-        .from("handovers")
-        .select("cash_amount, upi_amount")
-        .eq("handed_to", userId)
-        .eq("status", "confirmed");
-      const recvConfTotal = (recvConf || []).reduce(
-        (s, h) => s + Number(h.cash_amount) + Number(h.upi_amount), 0
-      );
-
-      const balance = salesTotal + recvConfTotal - sentConfTotal - sentPendTotal;
-
-      // For finalizers, this balance is the "Total Income" for the day
-      await supabase.from("handover_snapshots").upsert(
-        {
-          user_id: userId,
-          snapshot_date: today,
-          balance_amount: Math.max(0, balance),
-        },
-        { onConflict: "user_id,snapshot_date" }
-      );
+    if (!salesAggregates || salesAggregates.length === 0) {
+      return new Response(JSON.stringify({ success: true, users: 0, message: "No staff users found" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    return new Response(JSON.stringify({ success: true, users: userIds.length }), {
+    // Bulk upsert all snapshots in a single operation
+    const snapshots = salesAggregates.map((agg: any) => ({
+      user_id: agg.user_id,
+      snapshot_date: today,
+      balance_amount: Math.max(0, agg.balance),
+    }));
+
+    const { error: upsertError } = await supabase
+      .from("handover_snapshots")
+      .upsert(snapshots, { onConflict: "user_id,snapshot_date" });
+
+    if (upsertError) throw upsertError;
+
+    return new Response(JSON.stringify({ success: true, users: salesAggregates.length }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (error) {
+  } catch (error: any) {
+    console.error("daily-handover-snapshot error:", error);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
