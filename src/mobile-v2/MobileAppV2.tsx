@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 
 // Layout Components
 import { MobileHeader } from "./components/MobileHeader";
@@ -148,9 +149,10 @@ export function MobileAppV2() {
       {/* Header */}
       <MobileHeader />
 
-      {/* Main Content */}
-      <main className="pt-16 pb-20">
-        <Routes>
+      {/* Main Content - Wrapped in ErrorBoundary for isolated error handling */}
+      <ErrorBoundary>
+        <main className="pt-16 pb-20">
+          <Routes>
           {/* Default Redirect */}
           <Route path="/" element={<Navigate to={defaultRoute} replace />} />
 
@@ -198,7 +200,8 @@ export function MobileAppV2() {
           {/* Fallback */}
           <Route path="*" element={<Navigate to={defaultRoute} replace />} />
         </Routes>
-      </main>
+        </main>
+      </ErrorBoundary>
 
       {/* Bottom Navigation */}
       {!hideBottomNav && <BottomNav tabs={tabs} />}

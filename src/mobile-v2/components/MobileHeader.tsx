@@ -47,16 +47,26 @@ export function MobileHeader({ title, onMenuClick }: Props) {
   const [companyLogo, setCompanyLogo] = useState<string>("");
 
   useEffect(() => {
-    supabase
-      .from("company_settings")
-      .select("key, value")
-      .then(({ data }) => {
+    const loadCompanySettings = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("company_settings")
+          .select("key, value");
+        
+        if (error) throw error;
         if (!data) return;
+        
         const map: Record<string, string> = {};
         data.forEach((s) => { map[s.key] = s.value || ""; });
         if (map.company_name) setCompanyName(map.company_name);
         if (map.company_logo) setCompanyLogo(map.company_logo);
-      });
+      } catch (error) {
+        console.error("Failed to load company settings:", error);
+        // Use default values on error
+      }
+    };
+    
+    loadCompanySettings();
   }, []);
 
   const initials = (profile?.full_name ?? "U")

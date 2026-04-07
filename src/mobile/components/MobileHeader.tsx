@@ -54,6 +54,10 @@ export function MobileHeader({ title, onMenuClick }: Props) {
         data.forEach((s) => { map[s.key] = s.value || ""; });
         if (map.company_name) setCompanyName(map.company_name);
         if (map.company_logo) setCompanyLogo(map.company_logo);
+      })
+      .catch((error) => {
+        console.error("Failed to load company settings:", error);
+        // Non-critical: use defaults if settings fail to load
       });
   }, []);
 

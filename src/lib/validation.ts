@@ -143,7 +143,7 @@ export function validatePAN(pan: string, required = false): ValidationResult {
  * Validate Aadhar number
  */
 export function validateAadhar(aadhar: string, required = false): ValidationResult {
-  const trimmed = aadhar.trim().replace(/[\s\-]/g, "");
+  const trimmed = aadhar.trim().replace(/[\s-]/g, "");
   
   if (!trimmed) {
     return required 

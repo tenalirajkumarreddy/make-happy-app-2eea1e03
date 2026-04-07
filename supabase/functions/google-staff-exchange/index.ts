@@ -1,19 +1,15 @@
-// @ts-nocheck
 // Google OAuth staff login handler
 // Takes Google auth data and verifies/links staff directory entry by email
 // SECURITY: user_id is extracted from validated JWT, not request body
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { getCorsHeaders, handleCorsPreflightOrError } from "../_shared/cors.ts";
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+  const corsResponse = handleCorsPreflightOrError(req);
+  if (corsResponse) return corsResponse;
+
+  const corsHeaders = getCorsHeaders(req);
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;

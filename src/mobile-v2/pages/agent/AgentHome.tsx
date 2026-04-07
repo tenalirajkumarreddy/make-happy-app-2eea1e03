@@ -127,6 +127,9 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
     getCurrentPosition().then(pos => {
       if (pos) setCurrentPosition({ lat: pos.lat, lng: pos.lng });
       else setCurrentPosition(null);
+    }).catch((error) => {
+      console.error("Failed to get current position:", error);
+      setCurrentPosition(null);
     });
   }, []);
 

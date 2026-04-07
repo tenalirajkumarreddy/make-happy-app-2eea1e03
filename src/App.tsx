@@ -53,7 +53,7 @@ const Attendance = lazy(() => import("./pages/Attendance"));
 const Banners = lazy(() => import("./pages/Banners"));
 const Activity = lazy(() => import("./pages/Activity"));
 const AccessControl = lazy(() => import("./pages/AccessControl"));
-const AdminStaffDirectory = lazy(() => import("./pages/AdminStaffDirectory").then(m => ({ default: m.AdminStaffDirectory })));
+const AdminStaffDirectory = lazy(() => import("./pages/AdminStaffDirectory").then(m => ({ default: m.AdminStaffDirectory })).catch(() => ({ default: () => <div>Error loading page</div> })));
 const Settings = lazy(() => import("./pages/Settings"));
 const StoreTypes = lazy(() => import("./pages/StoreTypes"));
 const StoreTypeAccess = lazy(() => import("./pages/StoreTypeAccess"));

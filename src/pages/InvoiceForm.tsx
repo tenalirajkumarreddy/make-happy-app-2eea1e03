@@ -71,10 +71,16 @@ const InvoiceForm = () => {
   // Fetch next invoice number
   useEffect(() => {
     if (!isEdit) {
-      supabase.rpc("get_next_invoice_number").then(({ data }) => {
-        if (data) setInvoiceNumber(data);
-        setLoadingNext(false);
-      });
+      supabase.rpc("get_next_invoice_number")
+        .then(({ data }) => {
+          if (data) setInvoiceNumber(data);
+          setLoadingNext(false);
+        })
+        .catch((error) => {
+          console.error("Failed to fetch next invoice number:", error);
+          setLoadingNext(false);
+          toast.error("Failed to generate invoice number");
+        });
     } else {
       setLoadingNext(false);
     }
@@ -213,7 +219,7 @@ const InvoiceForm = () => {
         const sale = availableSales.find((s: any) => s.id === saleId);
         if (sale?.sale_items) {
           sale.sale_items.forEach((item: any) => {
-            const lineTotal = Number(item.total_price ?? (item.quantity * item.unit_price) ?? 0);
+            const lineTotal = Number(item.total_price ?? (item.quantity * item.unit_price || 0));
             const taxRate = Number(item.products?.gst_rate || 0);
             const taxableAmount = taxRate > 0 ? lineTotal / (1 + taxRate / 100) : lineTotal;
             const lineTax = lineTotal - taxableAmount;

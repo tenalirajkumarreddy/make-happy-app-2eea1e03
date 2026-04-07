@@ -1,0 +1,2 @@
+C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\src\integrations\supabase\types.ts: Parsing error: File appears to be binary.
+C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\update_app_sidebar.js: Parsing error: The keyword 'interface' is reserved

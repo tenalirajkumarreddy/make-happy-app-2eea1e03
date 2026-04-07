@@ -15,7 +15,7 @@ export function BannerCarousel({ storeTypeIds }: BannerCarouselProps) {
     queryKey: ["banners-carousel", storeTypeIds],
     queryFn: async () => {
       const now = new Date().toISOString();
-      let q = supabase
+      const q = supabase
         .from("promotional_banners")
         .select("*")
         .eq("is_active", true)

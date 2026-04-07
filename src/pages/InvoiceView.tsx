@@ -485,8 +485,8 @@ const InvoiceView = () => {
         @media print {
           @page { margin: 12mm; }
           body { background: white !important; }
-          .print\:hidden { display: none !important; }
-          .print\:block { display: block !important; }
+          .print\\:hidden { display: none !important; }
+          .print\\:block { display: block !important; }
         }
       `}</style>
     </div>

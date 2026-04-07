@@ -24,34 +24,7 @@ const Logo = () => (
   </div>
 );
 
-async function resolveUserIdentity(): Promise<IdentityResolution> {
-  // Temporary local fallback while edge-function auth flow is disabled.
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("No authenticated user");
 
-  const [{ data: roleData }, { data: customerData }] = await Promise.all([
-    supabase.from("user_roles").select("role").eq("user_id", user.id).maybeSingle(),
-    supabase.from("customers").select("id, email").eq("user_id", user.id).maybeSingle(),
-  ]);
-
-  if (roleData?.role && roleData.role !== "customer") {
-    return { type: "staff", role: roleData.role };
-  }
-
-  if (customerData?.id) {
-    return {
-      type: "existing_customer",
-      customerId: customerData.id,
-      googleLinked: true,
-    };
-  }
-
-  return {
-    type: "onboarding_required",
-    authUserId: user.id,
-    loginMethod: "google",
-  };
-}
 
 async function hasStaffOrCustomerAccess(userId: string): Promise<boolean> {
   const [{ data: roleData }, { data: customerData }] = await Promise.all([
@@ -123,7 +96,16 @@ const Auth = () => {
       setLoading(true); // Ensure it stays loading
       
       try {
-        const identity = await resolveUserIdentity();
+        const { data: identity, error: resolveError } = await supabase.functions.invoke<IdentityResolution>("resolve-user-identity");
+        
+        if (resolveError) {
+          throw resolveError;
+        }
+
+        if (!identity) {
+          throw new Error("Identity resolution returned empty data");
+        }
+
         if (identity.type === "staff") {
           toast.success("Logged in as staff");
           navigate("/", { replace: true });

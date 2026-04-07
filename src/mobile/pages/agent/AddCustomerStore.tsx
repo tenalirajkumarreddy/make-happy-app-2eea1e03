@@ -122,9 +122,9 @@ export default function AddCustomerStore({ onClose }: { onClose: () => void }) {
   const { data: storeTypes } = useQuery({
     queryKey: ["store-types", user?.id, hasMatrixRestrictions],
     queryFn: async () => {
-      let q = supabase.from("store_types").select("*").eq("is_active", true);
+      const q = supabase.from("store_types").select("*").eq("is_active", true);
       const { data } = await q;
-      let types = data || [];
+      const types = data || [];
 
       if (hasMatrixRestrictions && enabledRouteIds.size > 0) {
         // If restricted, only show types that exist on allowed routes?

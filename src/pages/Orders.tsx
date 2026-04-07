@@ -223,18 +223,23 @@ const Orders = () => {
 
     // Notify admins/managers
     const storeName = stores?.find((s) => s.id === storeId)?.name || "store";
-    getAdminUserIds().then((ids) => {
-      const others = ids.filter((id) => id !== user!.id);
-      if (others.length > 0) {
-        sendNotificationToMany(others, {
-          title: "New Order Created",
-          message: `Order ${displayId} (${orderType}) placed for ${storeName}`,
-          type: "order",
-          entityType: "order",
-          entityId: order.id,
-        });
-      }
-    });
+    getAdminUserIds()
+      .then((ids) => {
+        const others = ids.filter((id) => id !== user!.id);
+        if (others.length > 0) {
+          sendNotificationToMany(others, {
+            title: "New Order Created",
+            message: `Order ${displayId} (${orderType}) placed for ${storeName}`,
+            type: "order",
+            entityType: "order",
+            entityId: order.id,
+          });
+        }
+      })
+      .catch((error) => {
+        console.error("Failed to notify admins about new order:", error);
+        // Non-critical: notification failure shouldn't block order creation
+      });
 
     setSaving(false);
     setShowAdd(false);

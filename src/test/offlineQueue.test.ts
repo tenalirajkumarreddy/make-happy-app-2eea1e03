@@ -19,7 +19,10 @@ describe('Offline Queue', () => {
     await addToQueue(testAction);
     const actions = await getQueuedActions();
     
-    expect(actions).toContainEqual(testAction);
+    expect(actions).toContainEqual({
+      ...testAction,
+      retryCount: 0
+    });
   });
 
   it('should remove action from queue', async () => {

@@ -1,0 +1,512 @@
+﻿{
+  "auditReportVersion": 2,
+  "vulnerabilities": {
+    "@rollup/plugin-terser": {
+      "name": "@rollup/plugin-terser",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "serialize-javascript"
+      ],
+      "effects": [
+        "workbox-build"
+      ],
+      "range": "0.2.0 - 0.4.4",
+      "nodes": [
+        "node_modules/@rollup/plugin-terser"
+      ],
+      "fixAvailable": true
+    },
+    "@xmldom/xmldom": {
+      "name": "@xmldom/xmldom",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1115765,
+          "name": "@xmldom/xmldom",
+          "dependency": "@xmldom/xmldom",
+          "title": "xmldom: XML injection via unsafe CDATA serialization allows attacker-controlled markup insertion",
+          "url": "https://github.com/advisories/GHSA-wh4c-j3r5-mjhp",
+          "severity": "high",
+          "cwe": [
+            "CWE-91"
+          ],
+          "cvss": {
+            "score": 7.5,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N"
+          },
+          "range": "<0.8.12"
+        }
+      ],
+      "effects": [],
+      "range": "<0.8.12",
+      "nodes": [
+        "node_modules/@xmldom/xmldom"
+      ],
+      "fixAvailable": true
+    },
+    "brace-expansion": {
+      "name": "brace-expansion",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1115540,
+          "name": "brace-expansion",
+          "dependency": "brace-expansion",
+          "title": "brace-expansion: Zero-step sequence causes process hang and memory exhaustion",
+          "url": "https://github.com/advisories/GHSA-f886-m6hf-6m8v",
+          "severity": "moderate",
+          "cwe": [
+            "CWE-400"
+          ],
+          "cvss": {
+            "score": 6.5,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:N/I:N/A:H"
+          },
+          "range": "<1.1.13"
+        },
+        {
+          "source": 1115541,
+          "name": "brace-expansion",
+          "dependency": "brace-expansion",
+          "title": "brace-expansion: Zero-step sequence causes process hang and memory exhaustion",
+          "url": "https://github.com/advisories/GHSA-f886-m6hf-6m8v",
+          "severity": "moderate",
+          "cwe": [
+            "CWE-400"
+          ],
+          "cvss": {
+            "score": 6.5,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:N/I:N/A:H"
+          },
+          "range": ">=2.0.0 <2.0.3"
+        },
+        {
+          "source": 1115543,
+          "name": "brace-expansion",
+          "dependency": "brace-expansion",
+          "title": "brace-expansion: Zero-step sequence causes process hang and memory exhaustion",
+          "url": "https://github.com/advisories/GHSA-f886-m6hf-6m8v",
+          "severity": "moderate",
+          "cwe": [
+            "CWE-400"
+          ],
+          "cvss": {
+            "score": 6.5,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:N/I:N/A:H"
+          },
+          "range": ">=4.0.0 <5.0.5"
+        }
+      ],
+      "effects": [],
+      "range": "<=1.1.12 || 2.0.0 - 2.0.2 || 4.0.0 - 5.0.4",
+      "nodes": [
+        "node_modules/@typescript-eslint/typescript-estree/node_modules/brace-expansion",
+        "node_modules/brace-expansion",
+        "node_modules/filelist/node_modules/brace-expansion",
+        "node_modules/glob/node_modules/brace-expansion",
+        "node_modules/workbox-build/node_modules/brace-expansion"
+      ],
+      "fixAvailable": true
+    },
+    "esbuild": {
+      "name": "esbuild",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1102341,
+          "name": "esbuild",
+          "dependency": "esbuild",
+          "title": "esbuild enables any website to send any requests to the development server and read the response",
+          "url": "https://github.com/advisories/GHSA-67mh-4wv8-2f99",
+          "severity": "moderate",
+          "cwe": [
+            "CWE-346"
+          ],
+          "cvss": {
+            "score": 5.3,
+            "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:H/I:N/A:N"
+          },
+          "range": "<=0.24.2"
+        }
+      ],
+      "effects": [
+        "vite"
+      ],
+      "range": "<=0.24.2",
+      "nodes": [
+        "node_modules/esbuild"
+      ],
+      "fixAvailable": {
+        "name": "vite",
+        "version": "8.0.5",
+        "isSemVerMajor": true
+      }
+    },
+    "flatted": {
+      "name": "flatted",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1115357,
+          "name": "flatted",
+          "dependency": "flatted",
+          "title": "Prototype Pollution via parse() in NodeJS flatted",
+          "url": "https://github.com/advisories/GHSA-rf6f-7fwh-wjgh",
+          "severity": "high",
+          "cwe": [
+            "CWE-1321"
+          ],
+          "cvss": {
+            "score": 0,
+            "vectorString": null
+          },
+          "range": "<=3.4.1"
+        }
+      ],
+      "effects": [],
+      "range": "<=3.4.1",
+      "nodes": [
+        "node_modules/flatted"
+      ],
+      "fixAvailable": true
+    },
+    "jspdf": {
+      "name": "jspdf",
+      "severity": "critical",
+      "isDirect": true,
+      "via": [
+        {
+          "source": 1114950,
+          "name": "jspdf",
+          "dependency": "jspdf",
+          "title": "jsPDF has a PDF Object Injection via FreeText color",
+          "url": "https://github.com/advisories/GHSA-7x6v-j9x4-qf24",
+          "severity": "high",
+          "cwe": [
+            "CWE-116"
+          ],
+          "cvss": {
+            "score": 8.1,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:N"
+          },
+          "range": "<=4.2.0"
+        },
+        {
+          "source": 1114974,
+          "name": "jspdf",
+          "dependency": "jspdf",
+          "title": "jsPDF has HTML Injection in New Window paths",
+          "url": "https://github.com/advisories/GHSA-wfv2-pwc8-crg5",
+          "severity": "critical",
+          "cwe": [
+            "CWE-79"
+          ],
+          "cvss": {
+            "score": 9.6,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:H/I:H/A:L"
+          },
+          "range": "<=4.2.0"
+        }
+      ],
+      "effects": [],
+      "range": "<=4.2.0",
+      "nodes": [
+        "node_modules/jspdf"
+      ],
+      "fixAvailable": true
+    },
+    "lodash": {
+      "name": "lodash",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1115806,
+          "name": "lodash",
+          "dependency": "lodash",
+          "title": "lodash vulnerable to Code Injection via `_.template` imports key names",
+          "url": "https://github.com/advisories/GHSA-r5fr-rjxr-66jc",
+          "severity": "high",
+          "cwe": [
+            "CWE-94"
+          ],
+          "cvss": {
+            "score": 8.1,
+            "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H"
+          },
+          "range": ">=4.0.0 <=4.17.23"
+        },
+        {
+          "source": 1115810,
+          "name": "lodash",
+          "dependency": "lodash",
+          "title": "lodash vulnerable to Prototype Pollution via array path bypass in `_.unset` and `_.omit`",
+          "url": "https://github.com/advisories/GHSA-f23m-r3pf-42rh",
+          "severity": "moderate",
+          "cwe": [
+            "CWE-1321"
+          ],
+          "cvss": {
+            "score": 6.5,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:L"
+          },
+          "range": "<=4.17.23"
+        }
+      ],
+      "effects": [],
+      "range": "<=4.17.23",
+      "nodes": [
+        "node_modules/lodash"
+      ],
+      "fixAvailable": true
+    },
+    "picomatch": {
+      "name": "picomatch",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1115549,
+          "name": "picomatch",
+          "dependency": "picomatch",
+          "title": "Picomatch: Method Injection in POSIX Character Classes causes incorrect Glob Matching",
+          "url": "https://github.com/advisories/GHSA-3v7f-55p6-f55p",
+          "severity": "moderate",
+          "cwe": [
+            "CWE-1321"
+          ],
+          "cvss": {
+            "score": 5.3,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N"
+          },
+          "range": "<2.3.2"
+        },
+        {
+          "source": 1115551,
+          "name": "picomatch",
+          "dependency": "picomatch",
+          "title": "Picomatch: Method Injection in POSIX Character Classes causes incorrect Glob Matching",
+          "url": "https://github.com/advisories/GHSA-3v7f-55p6-f55p",
+          "severity": "moderate",
+          "cwe": [
+            "CWE-1321"
+          ],
+          "cvss": {
+            "score": 5.3,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N"
+          },
+          "range": ">=4.0.0 <4.0.4"
+        },
+        {
+          "source": 1115552,
+          "name": "picomatch",
+          "dependency": "picomatch",
+          "title": "Picomatch has a ReDoS vulnerability via extglob quantifiers",
+          "url": "https://github.com/advisories/GHSA-c2c7-rcm5-vvqj",
+          "severity": "high",
+          "cwe": [
+            "CWE-1333"
+          ],
+          "cvss": {
+            "score": 7.5,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+          },
+          "range": "<2.3.2"
+        },
+        {
+          "source": 1115554,
+          "name": "picomatch",
+          "dependency": "picomatch",
+          "title": "Picomatch has a ReDoS vulnerability via extglob quantifiers",
+          "url": "https://github.com/advisories/GHSA-c2c7-rcm5-vvqj",
+          "severity": "high",
+          "cwe": [
+            "CWE-1333"
+          ],
+          "cvss": {
+            "score": 7.5,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+          },
+          "range": ">=4.0.0 <4.0.4"
+        }
+      ],
+      "effects": [],
+      "range": "<=2.3.1 || 4.0.0 - 4.0.3",
+      "nodes": [
+        "node_modules/@rollup/pluginutils/node_modules/picomatch",
+        "node_modules/picomatch",
+        "node_modules/tinyglobby/node_modules/picomatch",
+        "node_modules/vitest/node_modules/picomatch"
+      ],
+      "fixAvailable": true
+    },
+    "serialize-javascript": {
+      "name": "serialize-javascript",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1113686,
+          "name": "serialize-javascript",
+          "dependency": "serialize-javascript",
+          "title": "Serialize JavaScript is Vulnerable to RCE via RegExp.flags and Date.prototype.toISOString()",
+          "url": "https://github.com/advisories/GHSA-5c6j-r48x-rmvq",
+          "severity": "high",
+          "cwe": [
+            "CWE-96"
+          ],
+          "cvss": {
+            "score": 8.1,
+            "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H"
+          },
+          "range": "<=7.0.2"
+        },
+        {
+          "source": 1115723,
+          "name": "serialize-javascript",
+          "dependency": "serialize-javascript",
+          "title": "Serialize JavaScript has CPU Exhaustion Denial of Service via crafted array-like objects",
+          "url": "https://github.com/advisories/GHSA-qj8w-gfj5-8c6v",
+          "severity": "moderate",
+          "cwe": [
+            "CWE-400",
+            "CWE-834"
+          ],
+          "cvss": {
+            "score": 5.9,
+            "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:H"
+          },
+          "range": "<7.0.5"
+        }
+      ],
+      "effects": [
+        "@rollup/plugin-terser"
+      ],
+      "range": "<=7.0.4",
+      "nodes": [
+        "node_modules/serialize-javascript"
+      ],
+      "fixAvailable": true
+    },
+    "vite": {
+      "name": "vite",
+      "severity": "moderate",
+      "isDirect": true,
+      "via": [
+        "esbuild"
+      ],
+      "effects": [
+        "vite-plugin-pwa"
+      ],
+      "range": "0.11.0 - 6.1.6",
+      "nodes": [
+        "node_modules/vite"
+      ],
+      "fixAvailable": {
+        "name": "vite",
+        "version": "8.0.5",
+        "isSemVerMajor": true
+      }
+    },
+    "vite-plugin-pwa": {
+      "name": "vite-plugin-pwa",
+      "severity": "moderate",
+      "isDirect": true,
+      "via": [
+        "vite"
+      ],
+      "effects": [],
+      "range": "0.3.0 - 0.3.5 || 0.7.0 - 0.21.0",
+      "nodes": [
+        "node_modules/vite-plugin-pwa"
+      ],
+      "fixAvailable": {
+        "name": "vite-plugin-pwa",
+        "version": "1.2.0",
+        "isSemVerMajor": true
+      }
+    },
+    "workbox-build": {
+      "name": "workbox-build",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@rollup/plugin-terser"
+      ],
+      "effects": [],
+      "range": ">=7.1.0",
+      "nodes": [
+        "node_modules/workbox-build"
+      ],
+      "fixAvailable": true
+    },
+    "xlsx": {
+      "name": "xlsx",
+      "severity": "high",
+      "isDirect": true,
+      "via": [
+        {
+          "source": 1108110,
+          "name": "xlsx",
+          "dependency": "xlsx",
+          "title": "Prototype Pollution in sheetJS",
+          "url": "https://github.com/advisories/GHSA-4r6h-8v6p-xvw6",
+          "severity": "high",
+          "cwe": [
+            "CWE-1321"
+          ],
+          "cvss": {
+            "score": 7.8,
+            "vectorString": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H"
+          },
+          "range": "<0.19.3"
+        },
+        {
+          "source": 1108111,
+          "name": "xlsx",
+          "dependency": "xlsx",
+          "title": "SheetJS Regular Expression Denial of Service (ReDoS)",
+          "url": "https://github.com/advisories/GHSA-5pgg-2g8v-p4x9",
+          "severity": "high",
+          "cwe": [
+            "CWE-1333"
+          ],
+          "cvss": {
+            "score": 7.5,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+          },
+          "range": "<0.20.2"
+        }
+      ],
+      "effects": [],
+      "range": "*",
+      "nodes": [
+        "node_modules/xlsx"
+      ],
+      "fixAvailable": false
+    }
+  },
+  "metadata": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 4,
+      "high": 8,
+      "critical": 1,
+      "total": 13
+    },
+    "dependencies": {
+      "prod": 690,
+      "dev": 260,
+      "optional": 74,
+      "peer": 7,
+      "peerOptional": 0,
+      "total": 1013
+    }
+  }
+}

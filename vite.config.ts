@@ -13,6 +13,18 @@ export default defineConfig(({ mode }) => ({
       overlay: false,
     },
   },
+  build: {
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ["react", "react-dom", "react-router-dom"],
+          supabase: ["@supabase/supabase-js"],
+          ui: ["lucide-react", "sonner", "date-fns", "@radix-ui/react-dialog", "@radix-ui/react-slot"],
+        },
+      },
+    },
+  },
   plugins: [
     react(),
     VitePWA({

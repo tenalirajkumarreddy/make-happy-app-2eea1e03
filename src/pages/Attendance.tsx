@@ -260,7 +260,7 @@ export default function Attendance() {
       
       // Get profiles for users with user_id
       const userIds = data.filter(d => d.user_id).map(d => d.user_id!);
-      let profilesMap: Record<string, { full_name: string }> = {};
+      const profilesMap: Record<string, { full_name: string }> = {};
       
       if (userIds.length > 0) {
         const { data: profiles } = await supabase
@@ -542,7 +542,7 @@ export default function Attendance() {
     
     // Get profiles for users
     const userIds = data.filter(d => d.user_id).map(d => d.user_id!);
-    let profilesMap: Record<string, { full_name: string }> = {};
+    const profilesMap: Record<string, { full_name: string }> = {};
     
     if (userIds.length > 0) {
       const { data: profiles } = await supabase

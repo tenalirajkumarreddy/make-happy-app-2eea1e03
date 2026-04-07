@@ -89,6 +89,8 @@ const CustomerOrders = () => {
             type: "order" as any,
           });
         }
+      }).catch((error) => {
+        console.error("Failed to notify admins of new order:", error);
       });
       toast.success("Order placed!");
       setShowOrder(false);

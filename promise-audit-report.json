@@ -1,0 +1,270 @@
+{
+  "thenWithoutCatch": [
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\mobile\\components\\MobileHeader.tsx",
+      "line": 51,
+      "code": ".then(({ data }) => {",
+      "severity": "high"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\mobile\\pages\\agent\\AgentRecord.tsx",
+      "line": 244,
+      "code": "getAdminUserIds().then((ids) => {",
+      "severity": "high"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\mobile\\pages\\agent\\AgentRecord.tsx",
+      "line": 748,
+      "code": "getAdminUserIds().then((ids) => {",
+      "severity": "high"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\mobile\\pages\\customer\\CustomerOrders.tsx",
+      "line": 139,
+      "code": "getAdminUserIds().then(admins => {",
+      "severity": "high"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\pages\\CustomerOrders.tsx",
+      "line": 84,
+      "code": "getAdminUserIds().then(admins => {",
+      "severity": "high"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\pages\\Orders.tsx",
+      "line": 227,
+      "code": ".then((ids) => {",
+      "severity": "high"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\pages\\Sales.tsx",
+      "line": 509,
+      "code": ".then((ids) => {",
+      "severity": "high"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\pages\\Transactions.tsx",
+      "line": 254,
+      "code": ".then((ids) => {",
+      "severity": "high"
+    }
+  ],
+  "floatingPromises": [
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\components\\shared\\ErrorBoundary.tsx",
+      "line": 44,
+      "code": "import(\"@/lib/logger\").then(({ logError }) => {",
+      "severity": "low"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\mobile\\pages\\agent\\AgentRecord.tsx",
+      "line": 244,
+      "code": "getAdminUserIds().then((ids) => {",
+      "severity": "low"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\mobile\\pages\\agent\\AgentRecord.tsx",
+      "line": 748,
+      "code": "getAdminUserIds().then((ids) => {",
+      "severity": "low"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\mobile\\pages\\customer\\CustomerOrders.tsx",
+      "line": 139,
+      "code": "getAdminUserIds().then(admins => {",
+      "severity": "low"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\mobile-v2\\pages\\agent\\AgentHome.tsx",
+      "line": 127,
+      "code": "getCurrentPosition().then(pos => {",
+      "severity": "low"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\pages\\CustomerOrders.tsx",
+      "line": 84,
+      "code": "getAdminUserIds().then(admins => {",
+      "severity": "low"
+    }
+  ],
+  "promiseAllWithoutCatch": [
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\components\\layout\\GlobalSearch.tsx",
+      "line": 63,
+      "code": "const [customers, stores, sales, orders, transactions] = await Promise.all([",
+      "severity": "medium"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\components\\reports\\AgentPerformanceReport.tsx",
+      "line": 32,
+      "code": "const [salesRes, txnRes, profilesRes, rolesRes, handoversRes, visitsRes] = await Promise.all([",
+      "severity": "medium"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\components\\reports\\DailyReport.tsx",
+      "line": 34,
+      "code": "const [salesRes, txnRes, ordersRes, saleItemsRes, storesRes, handoversRes, profilesRes, rolesRes, routesRes, visitsRes] = await Promise.all([",
+      "severity": "medium"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\components\\reports\\OrderReport.tsx",
+      "line": 32,
+      "code": "const [ordersRes, storesRes, storeTypesRes] = await Promise.all([",
+      "severity": "medium"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\components\\reports\\PaymentOutstandingReport.tsx",
+      "line": 30,
+      "code": "const [storesRes, txnRes, salesRes, storeTypesRes, customersRes, ordersRes] = await Promise.all([",
+      "severity": "medium"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\components\\reports\\ProductReport.tsx",
+      "line": 33,
+      "code": "const [saleItemsRes, salesRes, productsRes, storesRes, storeTypesRes] = await Promise.all([",
+      "severity": "medium"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\components\\reports\\SalesReport.tsx",
+      "line": 43,
+      "code": "const [salesRes, saleItemsRes, profilesRes, storesRes, storeTypesRes] = await Promise.all([",
+      "severity": "medium"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\components\\shared\\GlobalSearch.tsx",
+      "line": 58,
+      "code": "const [custRes, storeRes, prodRes, orderRes] = await Promise.all([",
+      "severity": "medium"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\components\\shared\\OfflineQueueStatus.tsx",
+      "line": 31,
+      "code": "const [actionsData, filesData] = await Promise.all([",
+      "severity": "medium"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\contexts\\AuthContext.tsx",
+      "line": 38,
+      "code": "const [{ data: roleData }, { data: profileData }, { data: customerData }] = await Promise.all([",
+      "severity": "medium"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\hooks\\useOnlineStatus.ts",
+      "line": 27,
+      "code": "const [actionCount, fileCount] = await Promise.all([",
+      "severity": "medium"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\hooks\\useOnlineStatus.ts",
+      "line": 49,
+      "code": "const [actionCount, fileCount] = await Promise.all([",
+      "severity": "medium"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\mobile\\pages\\agent\\AgentRecord.tsx",
+      "line": 727,
+      "code": "const [{ data: allSales }, { data: allTxns }] = await Promise.all([",
+      "severity": "medium"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\mobile\\pages\\marketer\\MarketerHome.tsx",
+      "line": 22,
+      "code": "const [ordersRes, txnRes, customersRes] = await Promise.all([",
+      "severity": "medium"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\mobile\\pages\\pos\\PosHome.tsx",
+      "line": 22,
+      "code": "const [salesRes, handoversRes] = await Promise.all([",
+      "severity": "medium"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\mobile-v2\\pages\\admin\\AdminHome.tsx",
+      "line": 46,
+      "code": "] = await Promise.all([",
+      "severity": "medium"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\mobile-v2\\pages\\customer\\CustomerHome.tsx",
+      "line": 35,
+      "code": "const [salesRes, ordersRes, transactionsRes] = await Promise.all([",
+      "severity": "medium"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\mobile-v2\\pages\\marketer\\MarketerHome.tsx",
+      "line": 39,
+      "code": "const [ordersRes, storesRes, todayOrdersRes] = await Promise.all([",
+      "severity": "medium"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\mobile-v2\\pages\\marketer\\MarketerStoreProfile.tsx",
+      "line": 48,
+      "code": "const [ordersRes, salesRes, transactionsRes] = await Promise.all([",
+      "severity": "medium"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\pages\\AgentDashboard.tsx",
+      "line": 22,
+      "code": "const [salesRes, txnRes, visitsRes, ordersRes, allSalesRes, allTxnsRes, confirmedHandoversRes, todayHandoverRes] = await Promise.all([",
+      "severity": "medium"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\pages\\Analytics.tsx",
+      "line": 33,
+      "code": "const [salesRes, txnRes, storesRes, ordersRes, profilesRes, rolesRes, customersRes, routesRes, visitsRes] = await Promise.all([",
+      "severity": "medium"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\pages\\Auth.tsx",
+      "line": 30,
+      "code": "const [{ data: roleData }, { data: customerData }] = await Promise.all([",
+      "severity": "medium"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\pages\\Customers.tsx",
+      "line": 302,
+      "code": "const results = await Promise.all(",
+      "severity": "medium"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\pages\\Dashboard.tsx",
+      "line": 45,
+      "code": "] = await Promise.all([",
+      "severity": "medium"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\pages\\MarketerDashboard.tsx",
+      "line": 17,
+      "code": "const [ordersRes, txnRes, customersRes] = await Promise.all([",
+      "severity": "medium"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\pages\\PosDashboard.tsx",
+      "line": 17,
+      "code": "const [salesRes, handoversRes] = await Promise.all([",
+      "severity": "medium"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\pages\\RouteDetail.tsx",
+      "line": 217,
+      "code": "const results = await Promise.all(updates);",
+      "severity": "medium"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\pages\\Stores.tsx",
+      "line": 128,
+      "code": "const results = await Promise.all(",
+      "severity": "medium"
+    },
+    {
+      "file": "C:\\Users\\rajku\\Documents\\PUBLIC PROJECTS\\make-happy-app-2eea1e03\\src\\pages\\Transactions.tsx",
+      "line": 224,
+      "code": "const [{ data: allSales }, { data: allTxns }] = await Promise.all([",
+      "severity": "medium"
+    }
+  ],
+  "stats": {
+    "filesScanned": 311,
+    "issuesFound": 37
+  }
+}

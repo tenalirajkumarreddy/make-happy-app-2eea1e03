@@ -1,37 +1,71 @@
 import { Component, ErrorInfo, ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, RefreshCw, Home } from "lucide-react";
+import * as Sentry from "@sentry/react";
 
 interface Props {
   children: ReactNode;
   fallback?: ReactNode;
+  onError?: (error: Error, errorInfo: ErrorInfo) => void;
 }
 
 interface State {
   hasError: boolean;
   error: Error | null;
+  errorInfo: ErrorInfo | null;
 }
 
+/**
+ * React Error Boundary Component
+ * Catches JavaScript errors anywhere in the child component tree
+ * Prevents white-screen crashes by displaying a fallback UI
+ */
 export class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { hasError: false, error: null, errorInfo: null };
   }
 
-  static getDerivedStateFromError(error: Error): State {
+  static getDerivedStateFromError(error: Error): Partial<State> {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, info: ErrorInfo) {
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    // Log error details
+    console.error("[ErrorBoundary] Caught unhandled error:", error, errorInfo);
+    
+    // Update state with error details
+    this.setState({ errorInfo });
+    
+    // Call optional error handler
+    this.props.onError?.(error, errorInfo);
+    
+    // Log to custom logger
     import("@/lib/logger").then(({ logError }) => {
       logError("[ErrorBoundary] Caught unhandled error", error, {
-        componentStack: info.componentStack,
+        componentStack: errorInfo.componentStack,
       });
+    }).catch((err) => {
+      console.error("Failed to load logger module:", err);
+    });
+    
+    // Send to Sentry
+    Sentry.captureException(error, {
+      contexts: {
+        react: {
+          componentStack: errorInfo.componentStack,
+        },
+      },
     });
   }
 
   handleReset = () => {
-    this.setState({ hasError: false, error: null });
+    this.setState({ hasError: false, error: null, errorInfo: null });
+  };
+
+  handleGoHome = () => {
+    this.handleReset();
+    window.location.href = "/";
   };
 
   render() {
@@ -46,19 +80,33 @@ export class ErrorBoundary extends Component<Props, State> {
           <div>
             <h2 className="text-lg font-semibold">Something went wrong</h2>
             <p className="mt-1 text-sm text-muted-foreground max-w-sm">
-              An unexpected error occurred. You can try refreshing the page or returning to the dashboard.
+              An unexpected error occurred. Don't worry, your data is safe. You can try again or return to the dashboard.
             </p>
             {this.state.error && (
-              <p className="mt-2 rounded bg-muted px-3 py-1.5 font-mono text-xs text-muted-foreground">
-                {this.state.error.message}
-              </p>
+              <div className="mt-4">
+                <p className="rounded bg-muted px-3 py-2 font-mono text-xs text-destructive">
+                  {this.state.error.message}
+                </p>
+                {process.env.NODE_ENV === 'development' && this.state.errorInfo && (
+                  <details className="mt-2 text-left">
+                    <summary className="text-sm cursor-pointer text-muted-foreground hover:text-foreground">
+                      View component stack (dev only)
+                    </summary>
+                    <pre className="text-xs mt-2 overflow-auto max-h-48 rounded bg-muted p-2 text-muted-foreground">
+                      {this.state.errorInfo.componentStack}
+                    </pre>
+                  </details>
+                )}
+              </div>
             )}
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={this.handleReset}>
+            <Button variant="outline" onClick={this.handleReset} className="gap-2">
+              <RefreshCw className="h-4 w-4" />
               Try again
             </Button>
-            <Button onClick={() => (window.location.href = "/")}>
+            <Button onClick={this.handleGoHome} className="gap-2">
+              <Home className="h-4 w-4" />
               Go to dashboard
             </Button>
           </div>

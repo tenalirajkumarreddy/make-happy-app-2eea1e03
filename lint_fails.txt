@@ -1,0 +1,12 @@
+C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\src\components\ui\command.tsx
+C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\src\components\ui\textarea.tsx
+C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\src\integrations\supabase\types.ts
+C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\src\lib\validation.ts
+C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\src\mobile\pages\agent\AddCustomerStore.tsx
+C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\src\pages\Attendance.tsx
+C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\src\pages\InvoiceForm.tsx
+C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\src\pages\InvoiceView.tsx
+C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\src\pages\Products.tsx
+C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\supabase\functions\firebase-phone-exchange\index.ts
+C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\supabase\functions\google-staff-exchange\index.ts
+C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\tailwind.config.ts
