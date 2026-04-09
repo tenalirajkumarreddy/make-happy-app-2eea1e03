@@ -3,7 +3,7 @@
  * and syncs them when the app comes back online.
  */
 
-const DB_NAME = "bizmanager_offline";
+const DB_NAME = "aquaprime_offline";
 const DB_VERSION = 1;
 const STORE_NAME = "pending_actions";
 

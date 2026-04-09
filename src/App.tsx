@@ -41,12 +41,18 @@ import CustomerProfile from "./pages/CustomerProfile";
 import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
+import UserProfile from "./pages/UserProfile";
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
       staleTime: 30_000,
+      refetchOnWindowFocus: false,
+      networkMode: "offlineFirst",
+    },
+    mutations: {
+      networkMode: "offlineFirst",
     },
   },
 });
@@ -110,6 +116,8 @@ const App = () => (
               <Route path="/orders" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer"]}><Orders /></RoleGuard>} />
               {/* Handovers: All staff */}
               <Route path="/handovers" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer", "pos"]}><Handovers /></RoleGuard>} />
+              {/* User profile (all staff roles) */}
+              <Route path="/profile" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer", "pos"]}><UserProfile /></RoleGuard>} />
               {/* Customer portal pages */}
               <Route path="/portal/sales" element={<RoleGuard allowed={["customer"]}><CustomerSales /></RoleGuard>} />
               <Route path="/portal/orders" element={<RoleGuard allowed={["customer"]}><CustomerOrders /></RoleGuard>} />

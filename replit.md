@@ -28,17 +28,41 @@ A full-featured business management web app built with React, Vite, TypeScript, 
 - Offline support (PWA service worker + offline queue)
 - Android APK via Capacitor (`npm run build:apk:debug` / `npm run build:apk:release`)
 
-## New Pages & Components (integrated from intelj branch)
+## New Pages & Components (integrated from intelj / clean-old-login branches)
 | File | Description |
 |------|-------------|
 | `src/pages/Inventory.tsx` | Inventory management page with stock levels and virtual scrolling |
 | `src/pages/Banners.tsx` | Promotional banner management with image uploads |
+| `src/pages/UserProfile.tsx` | User profile page (name, role, phone, email, Google account link) |
 | `src/components/reports/SmartInsightsReport.tsx` | AI-driven sales forecasts and trend insights |
 | `src/lib/forecastEngine.ts` | Forecast computation utilities (trend, anomaly detection) |
 | `src/components/shared/VirtualDataTable.tsx` | Virtualised table using `@tanstack/react-virtual` |
+| `src/components/shared/MobileListSkeleton.tsx` | Skeleton loader for mobile list/dashboard views |
+| `src/components/shared/GoogleAccountLink.tsx` | Card for linking/unlinking Google OAuth to the user account |
+| `src/components/orders/OrderFulfillmentDialog.tsx` | Dialog to fulfill orders (convert to sales) with item editing |
 | `src/mobile/pages/agent/AgentProducts.tsx` | Mobile agent product catalog view |
 | `src/mobile/pages/agent/AddCustomerStore.tsx` | Overlay form to add new customers/stores from agent home |
+| `src/mobile/pages/admin/AdminHome.tsx` | Mobile admin dashboard with KPI cards and quick shortcuts |
+| `src/mobile/pages/admin/AdminSales.tsx` | Mobile admin sales list with today's stats |
+| `src/mobile/pages/admin/AdminOrders.tsx` | Mobile admin orders with fulfillment dialog |
+| `src/mobile/pages/admin/AdminCustomers.tsx` | Mobile admin customer directory |
+| `src/mobile/pages/admin/AdminStores.tsx` | Mobile admin store list with outstanding balances |
+| `src/mobile/pages/admin/AdminProducts.tsx` | Mobile admin product catalog with detail sheet |
+| `src/mobile/pages/admin/AdminTransactions.tsx` | Mobile admin transaction list with payment breakdown |
+| `src/mobile/pages/admin/AdminHandovers.tsx` | Mobile admin handover management with confirm/reject |
+| `src/mobile/pages/admin/AdminRoutes.tsx` | Mobile admin route directory |
+| `src/mobile/pages/admin/AdminProfile.tsx` | Mobile admin personal profile view |
+| `src/mobile/pages/admin/AdminSettings.tsx` | Mobile admin business settings editor |
 | `src/lib/errorUtils.ts` | Shared error formatting and retry helpers |
+
+## Recent Bug Fixes & Improvements
+- **RoleGuard**: Fixed redirect loop — when role is null (unauthenticated), redirects to `/auth` instead of `/` to prevent infinite loops
+- **BottomNav**: Exported `AGENT_TABS`; updated `POS_TABS` to include Handover tab; fixed Customer Order tab to use `Plus` icon
+- **MobileHeader**: Added optional `onMenuClick` prop for hamburger menu in admin/manager StaffApp
+- **MobileApp**: Integrated all 11 admin mobile pages into StaffApp's `renderCurrentScreen`; added `ErrorBoundary` wrappers per role; removed `kyc` tab from CustomerApp (no longer needed)
+- **offlineQueue**: Fixed IndexedDB name from `"bizmanager_offline"` to `"aquaprime_offline"`
+- **QueryClient**: Added `refetchOnWindowFocus: false` and `networkMode: "offlineFirst"` to default config
+- **Routes**: Added `/profile` route accessible by all staff roles (super_admin, manager, agent, marketer, pos)
 
 ## Environment Variables
 Set in `.env` and Replit `[userenv.shared]`:

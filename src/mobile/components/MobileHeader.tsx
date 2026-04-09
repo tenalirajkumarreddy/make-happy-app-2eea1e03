@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Bell, Wifi, WifiOff, LogOut, Moon, Sun, ChevronDown } from "lucide-react";
+import { Bell, Wifi, WifiOff, LogOut, Moon, Sun, ChevronDown, Menu } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
@@ -30,9 +30,10 @@ function useTheme() {
 
 interface Props {
   title?: string;
+  onMenuClick?: () => void;
 }
 
-export function MobileHeader({ title }: Props) {
+export function MobileHeader({ title, onMenuClick }: Props) {
   const { profile, role, signOut } = useAuth();
   const { unreadCount } = useNotifications();
   const { isOnline, pendingCount } = useOnlineStatus();
@@ -78,6 +79,15 @@ export function MobileHeader({ title }: Props) {
       >
         <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 dark:from-slate-900 dark:via-blue-950 dark:to-indigo-950 shadow-lg">
           <div className="h-14 flex items-center px-4 gap-3">
+            {/* Hamburger menu button (shown for admin/manager) */}
+            {onMenuClick && (
+              <button
+                onClick={onMenuClick}
+                className="h-8 w-8 flex items-center justify-center rounded-lg bg-white/15 hover:bg-white/25 transition-colors shrink-0"
+              >
+                <Menu className="h-5 w-5 text-white" />
+              </button>
+            )}
             {/* Brand + page title */}
             <div className="flex items-center gap-2.5 min-w-0 flex-1">
               {companyLogo ? (

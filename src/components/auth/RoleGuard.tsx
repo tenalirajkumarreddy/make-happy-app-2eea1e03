@@ -18,7 +18,11 @@ export function RoleGuard({ allowed, children }: RoleGuardProps) {
     );
   }
 
-  if (!role || !allowed.includes(role)) {
+  if (!role) {
+    return <Navigate to="/auth" replace />;
+  }
+
+  if (!allowed.includes(role)) {
     return <Navigate to="/" replace />;
   }
 
