@@ -1,4 +1,5 @@
 import { useParams, useNavigate } from "react-router-dom";
+import { formatDate } from "@/lib/utils";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ArrowLeft, Building2, Phone, Mail, MapPin, CreditCard, FileText, IndianRupee, Boxes, Plus, Pencil, Trash2, Loader2 } from "lucide-react";
@@ -276,7 +277,7 @@ const VendorDetail = () => {
 
   const purchaseColumns = [
     { header: "ID", accessor: "display_id" as const, className: "font-mono text-xs" },
-    { header: "Date", accessor: (row: any) => new Date(row.purchase_date).toLocaleDateString("en-IN"), className: "text-sm" },
+    { header: "Date", accessor: (row: any) => formatDate(row.purchase_date), className: "text-sm" },
     { header: "Bill #", accessor: (row: any) => row.bill_number || "—", className: "text-sm" },
     { 
       header: "Items", 
@@ -292,7 +293,7 @@ const VendorDetail = () => {
 
   const paymentColumns = [
     { header: "ID", accessor: "display_id" as const, className: "font-mono text-xs" },
-    { header: "Date", accessor: (row: any) => new Date(row.payment_date).toLocaleDateString("en-IN"), className: "text-sm" },
+    { header: "Date", accessor: (row: any) => formatDate(row.payment_date), className: "text-sm" },
     { header: "Method", accessor: (row: any) => <Badge variant="outline">{row.payment_method}</Badge> },
     { header: "Reference", accessor: (row: any) => row.payment_reference || "—", className: "text-xs text-muted-foreground" },
     { header: "Amount", accessor: (row: any) => `₹${Number(row.amount).toLocaleString()}`, className: "font-semibold text-green-600" },
@@ -300,7 +301,7 @@ const VendorDetail = () => {
   ];
 
   const ledgerColumns = [
-    { header: "Date", accessor: (row: any) => new Date(row.date).toLocaleDateString("en-IN"), className: "text-sm" },
+    { header: "Date", accessor: (row: any) => formatDate(row.date), className: "text-sm" },
     { header: "Type", accessor: (row: any) => <Badge variant={row.type === "Purchase" ? "secondary" : "outline"}>{row.type}</Badge> },
     { header: "Reference", accessor: "reference" as const, className: "font-mono text-xs" },
     { 

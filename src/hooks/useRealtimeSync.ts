@@ -31,6 +31,8 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
   activity_logs: ["activity-logs"],
   user_roles: ["user-roles"],
   profiles: ["profiles", "staff-profiles"],
+  agent_routes: ["route-access-matrix", "routes"],
+  agent_store_types: ["store-type-access-matrix", "route-access-matrix"],
 };
 
 const STAFF_ROLES = ["super_admin", "manager", "agent", "marketer", "pos"];

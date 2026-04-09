@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { formatDate } from "@/lib/utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   Shield, 
@@ -344,7 +345,7 @@ export function CustomerKyc() {
                         </Badge>
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">
-                        Uploaded {new Date(doc.created_at).toLocaleDateString()}
+                        Uploaded {formatDate(doc.created_at)}
                       </p>
                       {doc.rejection_reason && (
                         <p className="text-xs text-red-600 mt-1">

@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { formatDate } from "@/lib/utils";
 import { useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -140,7 +141,7 @@ const InvoiceView = () => {
         <div className="text-right">
           <h2 className="text-3xl font-bold text-primary">TAX INVOICE</h2>
           <p className="font-mono text-lg font-semibold mt-2">{invoice.invoice_number}</p>
-          <p className="text-sm">Date: {new Date(invoice.invoice_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</p>
+          <p className="text-sm">Date: {formatDate(invoice.invoice_date)}</p>
           <Badge variant="outline" className="mt-2">{copyTitle}</Badge>
         </div>
       </div>
@@ -303,9 +304,7 @@ const InvoiceView = () => {
               <h2 className="text-3xl font-bold text-primary">TAX INVOICE</h2>
               <p className="font-mono text-lg font-semibold mt-2">{invoice.invoice_number}</p>
               <p className="text-sm text-muted-foreground">
-                Date: {new Date(invoice.invoice_date).toLocaleDateString("en-IN", { 
-                  day: "2-digit", month: "short", year: "numeric" 
-                })}
+                Date: {formatDate(invoice.invoice_date)}
               </p>
               {invoice.is_inter_state !== undefined && (
                 <Badge variant={invoice.is_inter_state ? "secondary" : "outline"} className="mt-2">

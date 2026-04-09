@@ -11,19 +11,13 @@ import { generateDisplayId } from "@/lib/displayId";
 import { useQuery } from "@tanstack/react-query";
 import { getCurrentPosition, getOAuthRedirectUrl } from "@/lib/capacitorUtils";
 
-type Step = "phone" | "register" | "add-store" | "link-google";
-type IdentityResolution =
-  | { type: "staff"; role: string; staffId?: string | null }
-  | { type: "existing_customer"; customerId: string; googleLinked: boolean }
-  | { type: "new_customer_known_phone"; maskedPhone: string }
-  | { type: "onboarding_required"; authUserId: string; loginMethod: "google" | "phone" };
+type Step = "phone" | "register" | "add-store";
 
 const Logo = () => (
   <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground font-bold text-xl mb-4">
     AP
   </div>
 );
-
 
 
 async function hasStaffOrCustomerAccess(userId: string): Promise<boolean> {
@@ -51,11 +45,6 @@ const Auth = () => {
   const [otpCode, setOtpCode] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [sessionToken, setSessionToken] = useState("");
-  // Email/Password login (dev mode)
-  const [loginEmail, setLoginEmail] = useState("");
-  const [loginPassword, setLoginPassword] = useState("");
-  const [loginMode, setLoginMode] = useState<"google" | "email">("google");
-  const [pendingCustomerEmail, setPendingCustomerEmail] = useState<string | null>(null);
 
   // New-customer registration
   const [regName, setRegName] = useState("");
@@ -80,8 +69,7 @@ const Auth = () => {
     },
   });
 
-  const customerSignupEnabled = appSettings?.customer_signup_enabled !== "false";
-  const googleLinkingEnabled = appSettings?.google_linking_enabled !== "false";
+
 
   useEffect(() => {
     const resolveExistingSession = async () => {
@@ -93,54 +81,21 @@ const Auth = () => {
         return;
       }
       
-      setLoading(true); // Ensure it stays loading
+      setLoading(true);
       
       try {
-        const { data: identity, error: resolveError } = await supabase.functions.invoke<IdentityResolution>("resolve-user-identity");
-        
-        if (resolveError) {
-          throw resolveError;
-        }
-
-        if (!identity) {
-          throw new Error("Identity resolution returned empty data");
-        }
-
-        if (identity.type === "staff") {
-          toast.success("Logged in as staff");
-          navigate("/", { replace: true });
-          return;
-        }
-        if (identity.type === "existing_customer") {
-          navigate("/", { replace: true });
-          return;
-        }
-        if (identity.type === "new_customer_known_phone") {
-          toast.error(`This phone already exists. Please login with phone ending in ${identity.maskedPhone}.`);
-          await supabase.auth.signOut();
-          navigate("/auth", { replace: true });
-          return;
-        }
-
+        // Check if user already has staff or customer access
         if (await hasStaffOrCustomerAccess(session.user.id)) {
           navigate("/", { replace: true });
           return;
         }
-
+        
+        // No access found — send to registration
         setVerifiedPhone(session.user.phone || "");
         setStep("register");
       } catch (error) {
-        console.error("Identity resolution failed", error);
-
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user && await hasStaffOrCustomerAccess(user.id)) {
-          navigate("/", { replace: true });
-          return;
-        }
-
-        if (session.user?.phone) {
-          setVerifiedPhone(session.user.phone);
-        }
+        console.error("Session resolution failed", error);
+        setVerifiedPhone(session.user.phone || "");
         setStep("register");
       } finally {
         setLoading(false);
@@ -309,15 +264,31 @@ const Auth = () => {
       if (sessionError) throw sessionError;
       
       setVerifiedPhone(data.user.phone);
-      
-      // Check if user already has access
+
+      // The backend now performs full identity resolution:
+      // staff_invitations → staff_directory → customers → onboarding
+      const resolution = data.resolution;
+
+      if (resolution?.type === "staff") {
+        toast.success(`Logged in as ${resolution.role}`);
+        navigate("/", { replace: true });
+        return;
+      }
+
+      if (resolution?.type === "existing_customer") {
+        toast.success("Login successful!");
+        navigate("/", { replace: true });
+        return;
+      }
+
+      // Fallback: check client-side in case resolution didn't run
       if (await hasStaffOrCustomerAccess(data.user.id)) {
         toast.success("Login successful!");
         navigate("/", { replace: true });
         return;
       }
       
-      // New customer needs to register
+      // New user — needs to register as customer
       setStep("register");
       toast.success("Phone verified! Please complete registration.");
     } catch (error: any) {
@@ -356,14 +327,7 @@ const Auth = () => {
       });
       if (error) throw error;
       toast.success("Account set up successfully! Welcome.");
-      
-      const { data: { user } } = await supabase.auth.getUser();
-      const providers = (user?.app_metadata?.providers || []) as string[];
-      if (googleLinkingEnabled && !providers.includes("google")) {
-        setStep("link-google");
-      } else {
-        window.location.assign("/");
-      }
+      window.location.assign("/");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not create store");
     } finally {
@@ -413,48 +377,7 @@ const Auth = () => {
     );
   }
 
-  if (step === "link-google") {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background p-4">
-        <div className="w-full max-w-md space-y-6">
-          <div className="text-center">
-            <Logo />
-            <h1 className="text-2xl font-bold tracking-tight">Link Google Account</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Connect your Google account for easier login next time
-            </p>
-          </div>
-          <div className="rounded-xl border bg-card p-6 shadow-sm space-y-3">
-            <Button
-              className="w-full flex items-center justify-center gap-2"
-              onClick={async () => {
-                const { error } = await supabase.auth.linkIdentity({
-                  provider: "google",
-                  options: { redirectTo: getOAuthRedirectUrl("/auth") },
-                });
-                if (error) {
-                  if (error.message?.toLowerCase().includes("manual linking")) {
-                    toast.error("Google linking is not configured. Please contact support or skip for now.");
-                  } else {
-                    toast.error(error.message || "Could not link Google account");
-                  }
-                }
-              }}
-            >
-              <svg className="h-5 w-5" viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-              </svg>
-              Link Google Account
-            </Button>
-            <Button variant="ghost" className="w-full" onClick={() => window.location.assign("/")}>Skip for now</Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+
 
   // ── ADD STORE STEP ──
   if (step === "add-store") {
@@ -527,8 +450,6 @@ const Auth = () => {
     );
   }
 
-  // Removed duplicate loading block
-
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <div className="w-full max-w-md space-y-4">
@@ -536,45 +457,12 @@ const Auth = () => {
           <Logo />
           <h1 className="text-2xl font-bold tracking-tight">Aqua Prime</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Login with your Google account
+            Login with your phone number
           </p>
         </div>
 
         <div className="rounded-xl border bg-card p-6 shadow-sm space-y-4">
-          {/* Google OAuth — for returning users who have linked Google */}
-          <Button
-            variant="outline"
-            className="w-full"
-            disabled={loading}
-            onClick={async () => {
-              setLoading(true);
-              const { error} = await supabase.auth.signInWithOAuth({
-                provider: "google",
-                options: { redirectTo: getOAuthRedirectUrl("/auth") },
-              });
-              if (error) {
-                toast.error(error.message || "Google sign-in failed");
-                setLoading(false);
-              }
-            }}
-          >
-            <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
-              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z" fill="#4285F4"/>
-              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-            </svg>
-            Continue with Google
-          </Button>
-
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-card px-2 text-muted-foreground">or</span>
-            </div>
-          </div>
-
-          {/* Phone OTP Login */}
+          {/* Phone OTP Login — Primary */}
           {!otpSent ? (
             <form onSubmit={handleSendOtp} className="space-y-3">
               <div>
@@ -586,6 +474,7 @@ const Auth = () => {
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(e.target.value)}
                   className="mt-1"
+                  autoFocus
                   required
                 />
                 <p className="text-xs text-muted-foreground mt-1">
@@ -609,6 +498,7 @@ const Auth = () => {
                   onChange={(e) => setOtpCode(e.target.value)}
                   className="mt-1"
                   maxLength={6}
+                  autoFocus
                   required
                 />
                 <p className="text-xs text-muted-foreground mt-1">
@@ -632,6 +522,39 @@ const Auth = () => {
               </Button>
             </form>
           )}
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-card px-2 text-muted-foreground">or</span>
+            </div>
+          </div>
+
+          {/* Google OAuth — Secondary, for returning users */}
+          <Button
+            variant="outline"
+            className="w-full"
+            disabled={loading}
+            onClick={async () => {
+              setLoading(true);
+              const { error } = await supabase.auth.signInWithOAuth({
+                provider: "google",
+                options: { redirectTo: getOAuthRedirectUrl("/auth") },
+              });
+              if (error) {
+                toast.error(error.message || "Google sign-in failed");
+                setLoading(false);
+              }
+            }}
+          >
+            <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
+              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z" fill="#4285F4"/>
+              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+            </svg>
+            Continue with Google
+          </Button>
         </div>
       </div>
     </div>

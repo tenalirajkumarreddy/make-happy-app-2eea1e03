@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { formatDate } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -228,7 +229,7 @@ export default function StockSummaryReport() {
 
     return generatePrintHTML({
       title: "Stock Summary Report",
-      dateRange: `Generated: ${new Date().toLocaleDateString()}`,
+      dateRange: `Generated: ${formatDate(new Date())}`,
       companyInfo: companyInfo || { companyName: "System", address: "", phone: "", email: "", gstin: "" },
       htmlContent,
     });
@@ -273,7 +274,7 @@ export default function StockSummaryReport() {
       title="Stock Summary"
       subtitle="Current inventory levels across all warehouses"
       icon={<Package className="h-5 w-5" />}
-      dateRange={`Generated: ${new Date().toLocaleDateString("en-IN")}`}
+      dateRange={`Generated: ${formatDate(new Date())}`}
       onPrint={() => {
         const html = generateHTML();
         const w = window.open("", "_blank");

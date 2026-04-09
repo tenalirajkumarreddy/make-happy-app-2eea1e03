@@ -41,11 +41,11 @@ export function resolveCreditLimit(
     return {
       limit: Number(customer.credit_limit_override),
       source: "customer override",
-      isKyc: customer.kyc_status === "approved",
+      isKyc: customer.kyc_status === "approved" || customer.kyc_status === "verified",
     };
   }
 
-  const isKyc = customer.kyc_status === "approved";
+  const isKyc = customer.kyc_status === "approved" || customer.kyc_status === "verified";
   const limit = isKyc
     ? Number(storeType.credit_limit_kyc || 0)
     : Number(storeType.credit_limit_no_kyc || 0);

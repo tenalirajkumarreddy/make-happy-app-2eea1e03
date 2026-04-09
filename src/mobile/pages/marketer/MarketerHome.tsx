@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { ClipboardList, Smartphone, Users, Wallet } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { formatDateLong } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -52,7 +53,7 @@ export function MarketerHome({ onOpenOrders, onOpenRecord, onOpenStores }: Props
         <p className="text-blue-200 text-sm font-medium">Welcome,</p>
         <h2 className="text-white text-2xl font-bold mt-0.5">{firstName} 👋</h2>
         <p className="text-blue-200/80 text-xs mt-1">
-          {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}
+          {formatDateLong(new Date())}
         </p>
       </div>
 

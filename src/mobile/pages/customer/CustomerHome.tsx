@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { formatDate } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, ShoppingCart, Wallet } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -195,7 +196,7 @@ export function CustomerHome({
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">{sale.stores?.name || "Store"}</p>
                   <p className="text-[11px] text-slate-400 mt-1">
-                    Paid ₹{(Number(sale.cash_amount || 0) + Number(sale.upi_amount || 0)).toLocaleString("en-IN")} • {new Date(sale.created_at).toLocaleDateString("en-IN")}
+                    Paid ₹{(Number(sale.cash_amount || 0) + Number(sale.upi_amount || 0)).toLocaleString("en-IN")} • {formatDate(sale.created_at)}
                   </p>
                 </div>
               ))}

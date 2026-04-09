@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { formatDate } from "@/lib/utils";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -599,7 +600,7 @@ const InvoiceForm = () => {
                       <div className="flex-1">
                         <p className="font-mono text-sm font-medium">{sale.display_id}</p>
                         <p className="text-xs text-muted-foreground">
-                          {new Date(sale.created_at).toLocaleDateString("en-IN")} • {sale.sale_items?.length || 0} items
+                          {formatDate(sale.created_at)} • {sale.sale_items?.length || 0} items
                         </p>
                       </div>
                       <span className="font-semibold">₹{Number(sale.total_amount).toLocaleString()}</span>

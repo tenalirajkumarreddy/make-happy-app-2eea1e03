@@ -52,7 +52,7 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
 
 export function AgentScan({ onGoRecord, onGoVisit, onOpenStore }: Props) {
   const { user, role } = useAuth();
-  const { canAccessRoute } = useRouteAccess(user?.id, role);
+  const { canAccessStore } = useRouteAccess(user?.id, role);
 
   const [mode, setMode] = useState<"qr" | "nearby">("qr");
   const [scannerStarted, setScannerStarted] = useState(false);
@@ -167,9 +167,9 @@ export function AgentScan({ onGoRecord, onGoVisit, onOpenStore }: Props) {
         store_types: s.store_types,
         routes: s.routes,
       };
-      if (!canAccessRoute(storeOption.route_id)) {
+      if (!canAccessStore(storeOption.route_id, storeOption.store_type_id)) {
         setSelectedStore(null);
-        toast.error("You do not have access to this store's route");
+        toast.error("You do not have access to this store");
       } else {
         setSelectedStore(storeOption);
         toast.success(`Store found: ${s.name}`);
@@ -180,7 +180,7 @@ export function AgentScan({ onGoRecord, onGoVisit, onOpenStore }: Props) {
     }
 
     setProcessing(false);
-  }, [processing, stopScanner, startScanner, canAccessRoute]);
+  }, [processing, stopScanner, startScanner, canAccessStore]);
 
   onScanRef.current = handleQrScan;
 
@@ -209,7 +209,7 @@ export function AgentScan({ onGoRecord, onGoVisit, onOpenStore }: Props) {
 
       const baseStores = (data || []) as unknown as NearbyStoreRow[];
       const scopedStores = baseStores
-        .filter((s) => canAccessRoute(s.route_id))
+        .filter((s) => canAccessStore(s.route_id, s.store_type_id))
         .map((s) => ({
           ...(s as StoreOption),
           _distKm: haversineKm(pos.lat, pos.lng, Number(s.lat), Number(s.lng)),

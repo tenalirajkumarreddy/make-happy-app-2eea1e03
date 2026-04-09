@@ -91,8 +91,10 @@ export function RouteSessionPanel() {
         .eq("user_id", user.id);
       if (accessError) throw accessError;
 
+      // No matrix configured for this user → unrestricted, show all routes
       if (!accessRows || accessRows.length === 0) return allRoutes;
 
+      // Deny-by-default: only show routes explicitly enabled in the matrix
       const enabledRouteIds = new Set(
         accessRows.filter((row: any) => row.enabled).map((row: any) => row.route_id)
       );
@@ -199,13 +201,16 @@ export function RouteSessionPanel() {
   const handleVisit = async (storeId: string) => {
     if (!activeSession) return;
     const store = routeStores.find((s: any) => s.id === storeId);
-    // Proximity check
+    // Proximity check — only when geofencing is enabled in settings
     if (store?.lat && store?.lng) {
-      const { checkProximity } = await import("@/lib/proximity");
-      const result = await checkProximity(store.lat, store.lng);
-      if (!result.withinRange) {
-        toast.error(result.message);
-        return;
+      const { data: locSetting } = await supabase.from("company_settings").select("value").eq("key", "location_validation").maybeSingle() as any;
+      if (locSetting && locSetting.value === "true") {
+        const { checkProximity } = await import("@/lib/proximity");
+        const result = await checkProximity(store.lat, store.lng);
+        if (!result.withinRange) {
+          toast.error(result.message);
+          return;
+        }
       }
     }
     const loc = await getCurrentPosition();

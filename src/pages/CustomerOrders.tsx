@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/shared/PageHeader";
+import { formatDate } from "@/lib/utils";
 import { DataTable } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -107,7 +108,7 @@ const CustomerOrders = () => {
     { header: "Type", accessor: (row: any) => row.order_type === "simple" ? "Simple" : "Detailed" },
     { header: "Note", accessor: (row: any) => row.requirement_note || "—", className: "max-w-[200px] truncate text-muted-foreground text-xs" },
     { header: "Status", accessor: (row: any) => <StatusBadge status={row.status === "delivered" ? "active" : row.status as any} label={row.status} /> },
-    { header: "Date", accessor: (row: any) => new Date(row.created_at).toLocaleDateString("en-IN"), className: "text-muted-foreground text-xs" },
+    { header: "Date", accessor: (row: any) => formatDate(row.created_at), className: "text-muted-foreground text-xs" },
   ];
 
   if (isLoading) {

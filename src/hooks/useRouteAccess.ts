@@ -8,15 +8,21 @@ export function isScopedRole(role?: string | null) {
   return !!role && SCOPED_ROLES.has(role);
 }
 
+// ─── Route access (unchanged logic) ───────────────────────────────
 export function computeRouteAccess(routeRows: Array<{ route_id: string; enabled: boolean }> | undefined, role?: string | null) {
   const scoped = isScopedRole(role);
   const rows = routeRows || [];
   const enabledRouteIds = new Set(rows.filter((row) => row.enabled).map((row) => row.route_id));
+  // When ANY agent_routes rows exist, we have a configured matrix → deny-by-default
   const hasMatrixRestrictions = scoped && rows.length > 0;
 
   const canAccessRoute = (routeId: string | null | undefined) => {
+    // Unrestricted roles or users with no matrix rows → allow all
     if (!hasMatrixRestrictions) return true;
-    return !!routeId && enabledRouteIds.has(routeId);
+    // No route assigned → deny (they need a route to access stores)
+    if (!routeId) return false;
+    // Whitelist: only allow routes explicitly enabled
+    return enabledRouteIds.has(routeId);
   };
 
   return {
@@ -27,10 +33,31 @@ export function computeRouteAccess(routeRows: Array<{ route_id: string; enabled:
   };
 }
 
+// ─── Store-type access ────────────────────────────────────────────
+export function computeStoreTypeAccess(storeTypeRows: Array<{ store_type_id: string; enabled: boolean }> | undefined, role?: string | null) {
+  const scoped = isScopedRole(role);
+  const rows = storeTypeRows || [];
+  const enabledStoreTypeIds = new Set(rows.filter((row) => row.enabled).map((row) => row.store_type_id));
+  // Same pattern: no rows = unrestricted → allow all store types
+  const hasStoreTypeRestrictions = scoped && rows.length > 0;
+
+  const canAccessStoreType = (storeTypeId: string | null | undefined) => {
+    if (!hasStoreTypeRestrictions) return true;
+    return !!storeTypeId && enabledStoreTypeIds.has(storeTypeId);
+  };
+
+  return {
+    hasStoreTypeRestrictions,
+    enabledStoreTypeIds,
+    canAccessStoreType,
+  };
+}
+
+// ─── Combined hook ────────────────────────────────────────────────
 export function useRouteAccess(userId?: string | null, role?: string | null) {
   const scoped = isScopedRole(role);
 
-  const { data: routeRows, isLoading } = useQuery({
+  const { data: routeRows, isLoading: loadingRoutes } = useQuery({
     queryKey: ["route-access-matrix", userId, role],
     queryFn: async () => {
       if (!userId || !scoped) return [] as Array<{ route_id: string; enabled: boolean }>;
@@ -44,12 +71,36 @@ export function useRouteAccess(userId?: string | null, role?: string | null) {
     enabled: !!userId && scoped,
   });
 
+  const { data: storeTypeRows, isLoading: loadingStoreTypes } = useQuery({
+    queryKey: ["store-type-access-matrix", userId, role],
+    queryFn: async () => {
+      if (!userId || !scoped) return [] as Array<{ store_type_id: string; enabled: boolean }>;
+      const { data, error } = await (supabase as any)
+        .from("agent_store_types")
+        .select("store_type_id, enabled")
+        .eq("user_id", userId);
+      if (error) throw error;
+      return (data || []) as Array<{ store_type_id: string; enabled: boolean }>;
+    },
+    enabled: !!userId && scoped,
+  });
+
   return useMemo(() => {
-    const computed = computeRouteAccess(routeRows, role);
-    return {
-      ...computed,
-      routeRows: routeRows || [],
-      loading: !!userId && scoped ? isLoading : false,
+    const routeAccess = computeRouteAccess(routeRows, role);
+    const storeTypeAccess = computeStoreTypeAccess(storeTypeRows, role);
+
+    // Combined check: store must satisfy BOTH route AND store-type access
+    const canAccessStore = (routeId: string | null | undefined, storeTypeId: string | null | undefined) => {
+      return routeAccess.canAccessRoute(routeId) && storeTypeAccess.canAccessStoreType(storeTypeId);
     };
-  }, [isLoading, role, routeRows, scoped, userId]);
+
+    return {
+      ...routeAccess,
+      ...storeTypeAccess,
+      canAccessStore,
+      routeRows: routeRows || [],
+      storeTypeRows: storeTypeRows || [],
+      loading: !!userId && scoped ? (loadingRoutes || loadingStoreTypes) : false,
+    };
+  }, [loadingRoutes, loadingStoreTypes, role, routeRows, storeTypeRows, scoped, userId]);
 }

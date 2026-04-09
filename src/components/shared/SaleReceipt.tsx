@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import { formatDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useQuery } from "@tanstack/react-query";
@@ -118,9 +119,7 @@ export const SaleReceipt = ({ saleId, open, onClose }: SaleReceiptProps) => {
             </div>
             <div class="row">
               <span>Date:</span>
-              <span>${new Date(sale.created_at).toLocaleDateString("en-IN", {
-                day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit"
-              })}</span>
+              <span>${formatDate(sale.created_at)}</span>
             </div>
             ${sale.customers ? `<div class="row"><span>Customer:</span><span>${escapeHtml(sale.customers.name || "")}</span></div>` : ""}
             ${sale.stores?.name ? `<div class="row"><span>Store:</span><span>${escapeHtml(sale.stores.name)}</span></div>` : ""}
@@ -176,7 +175,7 @@ export const SaleReceipt = ({ saleId, open, onClose }: SaleReceiptProps) => {
 
     const receiptText = `
 Receipt: ${sale.display_id}
-Date: ${new Date(sale.created_at).toLocaleDateString("en-IN")}
+Date: ${formatDate(sale.created_at)}
 Customer: ${sale.customers?.name || "Walk-in"}
 ${sale.stores?.name ? `Store: ${sale.stores.name}` : ""}
 
@@ -255,9 +254,7 @@ ${settings.business_name || ""}
               </div>
               <div className="flex justify-between">
                 <span>Date:</span>
-                <span>{new Date(sale.created_at).toLocaleDateString("en-IN", {
-                  day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit"
-                })}</span>
+                <span>{formatDate(sale.created_at)}</span>
               </div>
               {sale.customers && (
                 <div className="flex justify-between">

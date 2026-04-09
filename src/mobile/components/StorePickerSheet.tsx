@@ -49,7 +49,7 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
 
 export function StorePickerSheet({ open, onOpenChange, onSelect, filterRouteId }: Props) {
   const { user, role } = useAuth();
-  const { canAccessRoute, loading: loadingRouteAccess } = useRouteAccess(user?.id, role);
+  const { canAccessStore, loading: loadingRouteAccess } = useRouteAccess(user?.id, role);
   const [stores, setStores] = useState<StoreOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
@@ -85,7 +85,7 @@ export function StorePickerSheet({ open, onOpenChange, onSelect, filterRouteId }
   };
 
   const filtered = stores
-    .filter((s) => canAccessRoute(s.route_id))
+    .filter((s) => canAccessStore(s.route_id, s.store_type_id))
     .filter((s) => {
       if (!query) return true;
       const q = query.toLowerCase();

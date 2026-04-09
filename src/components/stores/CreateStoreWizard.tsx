@@ -33,7 +33,7 @@ type Step = "customer" | "details" | "pricing";
 export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStoreWizardProps) {
   const { role, user } = useAuth();
   const { allowed: canSetOpeningBalance } = usePermission("opening_balance");
-  const { canAccessRoute, hasMatrixRestrictions, enabledRouteIds } = useRouteAccess(user?.id, role);
+  const { canAccessRoute, canAccessStoreType, hasMatrixRestrictions, hasStoreTypeRestrictions, enabledRouteIds } = useRouteAccess(user?.id, role);
   const qc = useQueryClient();
   const [step, setStep] = useState<Step>("customer");
   const [saving, setSaving] = useState(false);
@@ -147,19 +147,13 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
   });
 
   const { data: storeTypes } = useQuery({
-    queryKey: ["store-types", hasMatrixRestrictions, enabledRouteIds.size],
+    queryKey: ["store-types", hasMatrixRestrictions, hasStoreTypeRestrictions, enabledRouteIds.size],
     queryFn: async () => {
       const { data } = await supabase.from("store_types").select("*").eq("is_active", true);
       let types = data || [];
-      if (hasMatrixRestrictions && enabledRouteIds.size > 0) {
-        const { data: accessibleRoutes } = await supabase
-          .from("routes")
-          .select("store_type_id")
-          .in("id", Array.from(enabledRouteIds));
-        const allowedTypeIds = new Set(accessibleRoutes?.map((r) => r.store_type_id));
-        types = types.filter((t) => allowedTypeIds.has(t.id));
-      } else if (hasMatrixRestrictions && enabledRouteIds.size === 0) {
-        types = [];
+      // Filter by store type access matrix
+      if (hasStoreTypeRestrictions) {
+        types = types.filter((t) => canAccessStoreType(t.id));
       }
       return types;
     },

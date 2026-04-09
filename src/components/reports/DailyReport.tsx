@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { formatDate } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { DataTable } from "@/components/shared/DataTable";
@@ -427,7 +428,7 @@ export default function DailyReport() {
     // Summary sheet
     const summaryRows = [
       ["Daily Business Report", ""],
-      ["Date", new Date(date).toLocaleDateString("en-IN")],
+      ["Date", formatDate(date)],
       ["", ""],
       ["Metric", "Value"],
       ["Total Sale Amount", d.totalSaleAmount],
@@ -497,7 +498,7 @@ export default function DailyReport() {
       title="Daily Operations Report"
       subtitle="Complete daily summary of sales, collections, and operations"
       icon={<Calendar className="h-5 w-5" />}
-      dateRange={new Date(date).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+      dateRange={formatDate(date)}
       onPrint={() => {
         const html = generateHTML();
         const w = window.open("", "_blank");

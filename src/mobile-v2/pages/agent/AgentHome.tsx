@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { cn } from "@/lib/utils";
+import { cn, formatDateLong } from "@/lib/utils";
 import { toast } from "sonner";
 import { getCurrentPosition } from "@/lib/capacitorUtils";
 import { addToQueue } from "@/lib/offlineQueue";
@@ -262,7 +262,7 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
           <p className="mv2-hero-label">{greeting},</p>
           <h1 className="mv2-hero-title">{firstName} 👋</h1>
           <p className="mv2-hero-subtitle mt-1">
-            {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}
+            {formatDateLong(new Date())}
           </p>
         </div>
 

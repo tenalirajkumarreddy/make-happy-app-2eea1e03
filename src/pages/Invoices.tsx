@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { formatDate } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable } from "@/components/shared/DataTable";
@@ -96,7 +97,7 @@ const Invoices = () => {
     },
     { 
       header: "Date", 
-      accessor: (row: any) => new Date(row.invoice_date).toLocaleDateString("en-IN"),
+      accessor: (row: any) => formatDate(row.invoice_date),
       className: "text-sm"
     },
     { 
@@ -206,7 +207,7 @@ const Invoices = () => {
             </div>
             <div className="flex items-center justify-between mt-2 pt-2 border-t">
               <span className="text-xs text-muted-foreground">
-                {new Date(row.invoice_date).toLocaleDateString("en-IN")}
+                {formatDate(row.invoice_date)}
               </span>
               <span className="font-semibold text-primary">₹{Number(row.total_amount).toLocaleString()}</span>
             </div>

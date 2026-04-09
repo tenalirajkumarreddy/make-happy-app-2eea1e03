@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { formatDate } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
@@ -218,7 +219,7 @@ export default function SalesReport() {
 
     return generatePrintHTML({
       title: "Sales Report",
-      dateRange: `${new Date(from).toLocaleDateString("en-IN")} to ${new Date(to).toLocaleDateString("en-IN")}`,
+      dateRange: `${formatDate(from)} to ${formatDate(to)}`,
       companyInfo: companyInfo || { companyName: "System", address: "", phone: "", email: "", gstin: "" },
       htmlContent,
       metadata: {
@@ -254,7 +255,7 @@ export default function SalesReport() {
   if (!data) return null;
   const d = data;
 
-  const dateRangeLabel = `${new Date(from).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} - ${new Date(to).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`;
+  const dateRangeLabel = `${formatDate(from)} - ${formatDate(to)}`;
 
   return (
     <ReportContainer

@@ -54,6 +54,7 @@ const Banners = lazy(() => import("./pages/Banners"));
 const Activity = lazy(() => import("./pages/Activity"));
 const AccessControl = lazy(() => import("./pages/AccessControl"));
 const AdminStaffDirectory = lazy(() => import("./pages/AdminStaffDirectory").then(m => ({ default: m.AdminStaffDirectory })).catch(() => ({ default: () => <div>Error loading page</div> })));
+const StaffProfile = lazy(() => import("./pages/StaffProfile"));
 const Settings = lazy(() => import("./pages/Settings"));
 const StoreTypes = lazy(() => import("./pages/StoreTypes"));
 const StoreTypeAccess = lazy(() => import("./pages/StoreTypeAccess"));
@@ -172,6 +173,7 @@ const App = () => {
               <Route path="/activity" element={<RoleGuard allowed={["super_admin", "manager"]}><Activity /></RoleGuard>} />
               <Route path="/access-control" element={<RoleGuard allowed={["super_admin"]}><AccessControl /></RoleGuard>} />
               <Route path="/admin/staff" element={<RoleGuard allowed={["super_admin"]}><AdminStaffDirectory /></RoleGuard>} />
+              <Route path="/admin/staff/:userId" element={<RoleGuard allowed={["super_admin"]}><StaffProfile /></RoleGuard>} />
               <Route path="/settings" element={<RoleGuard allowed={["super_admin", "manager"]}><Settings /></RoleGuard>} />
               <Route path="/map" element={<RoleGuard allowed={["super_admin", "manager"]}><MapPage /></RoleGuard>} />
               {/* Admin, Manager, Agent, Marketer */}

@@ -69,7 +69,7 @@ export function AgentRoutes() {
   const [agentPos, setAgentPos] = useState<{ lat: number; lng: number } | null>(null);
   const [fetchingPos, setFetchingPos] = useState(false);
   const todayStart = startOfDay(new Date()).toISOString();
-  const { canAccessRoute, loading: loadingRouteAccess } = useRouteAccess(user?.id, role);
+  const { canAccessRoute, canAccessStore, loading: loadingRouteAccess } = useRouteAccess(user?.id, role);
 
   const { data: routes, isLoading } = useQuery({
     queryKey: ["mobile-agent-routes", user?.id, role],
@@ -92,7 +92,7 @@ export function AgentRoutes() {
     .map((route) => ({
       ...route,
       stores: Array.isArray(route.stores)
-        ? route.stores.filter((store) => canAccessRoute(store.route_id ?? route.id))
+        ? route.stores.filter((store) => canAccessStore(store.route_id ?? route.id, (store as any).store_type_id ?? null))
         : [],
     })));
 

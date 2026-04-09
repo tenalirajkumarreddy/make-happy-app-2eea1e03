@@ -19,10 +19,6 @@ function validateEnvConfig(env: Record<string, string | undefined>): { missing: 
     'VITE_SUPABASE_URL',
     'VITE_SUPABASE_PUBLISHABLE_KEY',
     'VITE_SUPABASE_PROJECT_ID',
-    'VITE_FIREBASE_API_KEY',
-    'VITE_FIREBASE_AUTH_DOMAIN',
-    'VITE_FIREBASE_PROJECT_ID',
-    'VITE_FIREBASE_APP_ID',
   ];
 
   const missing: string[] = [];
@@ -54,10 +50,6 @@ describe('Environment Validation', () => {
     VITE_SUPABASE_URL: 'https://test-project.supabase.co',
     VITE_SUPABASE_PUBLISHABLE_KEY: 'test-anon-key',
     VITE_SUPABASE_PROJECT_ID: 'test-project',
-    VITE_FIREBASE_API_KEY: 'test-firebase-key',
-    VITE_FIREBASE_AUTH_DOMAIN: 'test.firebaseapp.com',
-    VITE_FIREBASE_PROJECT_ID: 'test-firebase',
-    VITE_FIREBASE_APP_ID: 'test-app-id',
   };
 
   it('should detect missing VITE_SUPABASE_URL', () => {

@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/shared/PageHeader";
+import { formatDate } from "@/lib/utils";
 import { DataTable } from "@/components/shared/DataTable";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
@@ -46,7 +47,7 @@ const CustomerSales = () => {
     { header: "Total", accessor: (row: any) => `₹${Number(row.total_amount).toLocaleString()}`, className: "font-semibold" },
     { header: "Paid", accessor: (row: any) => `₹${(Number(row.cash_amount) + Number(row.upi_amount)).toLocaleString()}` },
     { header: "Outstanding", accessor: (row: any) => `₹${Number(row.outstanding_amount).toLocaleString()}`, className: "text-warning font-medium" },
-    { header: "Date", accessor: (row: any) => new Date(row.created_at).toLocaleDateString("en-IN"), className: "text-muted-foreground text-xs" },
+    { header: "Date", accessor: (row: any) => formatDate(row.created_at), className: "text-muted-foreground text-xs" },
   ];
 
   if (isLoading) {

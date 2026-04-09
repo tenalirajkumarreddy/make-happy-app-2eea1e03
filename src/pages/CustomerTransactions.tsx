@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/shared/PageHeader";
+import { formatDate } from "@/lib/utils";
 import { DataTable } from "@/components/shared/DataTable";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
@@ -88,7 +89,7 @@ const CustomerTransactions = () => {
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   const columns = [
-    { header: "Date", accessor: (row: LedgerEntry) => new Date(row.date).toLocaleDateString("en-IN"), className: "text-xs" },
+    { header: "Date", accessor: (row: LedgerEntry) => formatDate(row.date), className: "text-xs" },
     { header: "ID", accessor: "display_id" as const, className: "font-mono text-xs" },
     {
       header: "Type",

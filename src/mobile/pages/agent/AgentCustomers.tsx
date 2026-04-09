@@ -69,7 +69,7 @@ interface StoreListItem {
 export function AgentCustomers({ onOpenStore, onGoRecord, onGoVisit }: Props) {
   const { user, role } = useAuth();
   const qc = useQueryClient();
-  const { canAccessRoute, loading: loadingRouteAccess } = useRouteAccess(user?.id, role);
+  const { canAccessRoute, canAccessStore, loading: loadingRouteAccess } = useRouteAccess(user?.id, role);
   const [query, setQuery] = useState("");
   const [filterRoute, setFilterRoute] = useState("all");
   const [filterType, setFilterType] = useState("all");
@@ -109,7 +109,7 @@ export function AgentCustomers({ onOpenStore, onGoRecord, onGoVisit }: Props) {
   });
 
   const filtered = (stores || []).filter((s) => {
-    const matchAccess = canAccessRoute(s.route_id);
+    const matchAccess = canAccessStore(s.route_id, s.store_type_id);
     const q = query.toLowerCase();
     const matchSearch =
       !q ||

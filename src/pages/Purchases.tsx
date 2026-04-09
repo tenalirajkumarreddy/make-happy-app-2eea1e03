@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/shared/PageHeader";
+import { formatDate } from "@/lib/utils";
 import { DataTable } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
@@ -213,7 +214,7 @@ const Purchases = () => {
 
   const columns = [
     { header: "ID", accessor: "display_id" as const, className: "font-mono text-xs" },
-    { header: "Date", accessor: (row: any) => new Date(row.purchase_date).toLocaleDateString("en-IN"), className: "text-sm" },
+    { header: "Date", accessor: (row: any) => formatDate(row.purchase_date), className: "text-sm" },
     { header: "Vendor", accessor: (row: any) => row.vendors?.name || "—", className: "text-sm" },
     { header: "Bill #", accessor: (row: any) => row.bill_number || "—", className: "text-xs text-muted-foreground" },
     { 
@@ -276,7 +277,7 @@ const Purchases = () => {
               </div>
               <div className="flex items-center justify-between mt-1">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span>{new Date(row.purchase_date).toLocaleDateString("en-IN")}</span>
+                  <span>{formatDate(row.purchase_date)}</span>
                   <span>•</span>
                   <span>{row.purchase_items?.length || 0} items</span>
                 </div>

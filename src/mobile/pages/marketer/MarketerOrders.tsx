@@ -54,6 +54,7 @@ interface StoreItem {
   id: string;
   name: string;
   route_id: string | null;
+  store_type_id: string | null;
 }
 
 interface ProductItem {
@@ -103,7 +104,7 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
   const { user } = useAuth();
   const qc = useQueryClient();
   const { role } = useAuth();
-  const { canAccessRoute } = useRouteAccess(user?.id, role);
+  const { canAccessStore } = useRouteAccess(user?.id, role);
 
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "delivered" | "cancelled">("all");
   const [showCreate, setShowCreate] = useState(false);
@@ -168,7 +169,7 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
     queryFn: async () => {
       let query = supabase
         .from("stores")
-        .select("id, name, route_id")
+        .select("id, name, route_id, store_type_id")
         .eq("is_active", true)
         .order("name");
 
@@ -176,7 +177,7 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
 
       const { data, error } = await query;
       if (error) throw error;
-      return ((data as StoreItem[]) || []).filter((store) => canAccessRoute(store.route_id));
+      return ((data as StoreItem[]) || []).filter((store) => canAccessStore(store.route_id, store.store_type_id));
     },
     enabled: !!customerId,
   });

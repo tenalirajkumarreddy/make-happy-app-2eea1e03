@@ -57,10 +57,12 @@ const Routes = () => {
         .eq("user_id", user.id);
       if (accessError) throw accessError;
 
+      // No matrix configured for this user → unrestricted, show all routes
       if (!accessRows || accessRows.length === 0) {
         return allRoutes;
       }
 
+      // Deny-by-default: only show routes explicitly enabled in the matrix
       const enabledRouteIds = new Set(
         accessRows.filter((row: any) => row.enabled).map((row: any) => row.route_id)
       );

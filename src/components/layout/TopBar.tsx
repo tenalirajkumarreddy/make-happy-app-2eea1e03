@@ -1,4 +1,5 @@
 import { Bell, ChevronDown, LogOut, Moon, Sun, CheckCheck, User } from "lucide-react";
+import { formatDate } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   DropdownMenu,
@@ -64,7 +65,7 @@ function timeAgo(dateStr: string): string {
   if (hrs < 24) return `${hrs}h ago`;
   const days = Math.floor(hrs / 24);
   if (days < 7) return `${days}d ago`;
-  return new Date(dateStr).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+  return formatDate(dateStr);
 }
 
 export function TopBar() {

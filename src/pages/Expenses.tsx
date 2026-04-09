@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { formatDate } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable } from "@/components/shared/DataTable";
 import { Badge } from "@/components/ui/badge";
@@ -64,6 +65,11 @@ const Expenses = () => {
   const [paymentReference, setPaymentReference] = useState("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
+  
+  // Bill upload state for expense claims
+  const [billFiles, setBillFiles] = useState<File[]>([]);
+  const [billPreviews, setBillPreviews] = useState<string[]>([]);
+  const [isAdhoc, setIsAdhoc] = useState(false);
 
   // Category form state
   const [catName, setCatName] = useState("");
@@ -192,6 +198,20 @@ const Expenses = () => {
     setPaymentMethod("cash");
     setPaymentReference("");
     setNotes("");
+    setBillFiles([]);
+    setBillPreviews([]);
+    setIsAdhoc(false);
+  };
+
+  const handleBillFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length > 3) {
+      toast.error("Maximum 3 bill images allowed");
+      return;
+    }
+    setBillFiles(files);
+    const previews = files.map(file => URL.createObjectURL(file));
+    setBillPreviews(previews);
   };
 
   const handleAddExpense = async (e: React.FormEvent) => {
@@ -203,29 +223,36 @@ const Expenses = () => {
     setSaving(true);
 
     try {
-      const { data: idData } = await supabase.rpc("generate_display_id", {
-        prefix: "EXP",
-        seq_name: "expenses_display_id_seq"
-      });
+      // Convert bill files to base64
+      const billBase64: string[] = [];
+      for (const file of billFiles) {
+        const base64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        });
+        billBase64.push(base64);
+      }
 
-      const { error } = await supabase.from("expenses").insert({
-        display_id: idData,
-        category_id: categoryId,
-        amount: parseFloat(amount),
-        expense_date: expenseDate,
-        description: description.trim() || null,
-        payment_method: paymentMethod,
-        payment_reference: paymentReference.trim() || null,
-        source_type: "manual",
-        notes: notes.trim() || null,
-        created_by: user!.id,
+      // Use edge function for expense claim with bill uploads and holding tracking
+      const { data, error } = await supabase.functions.invoke("expense-manager", {
+        body: {
+          action: "create_expense",
+          amount: parseFloat(amount),
+          description: description.trim(),
+          category_id: categoryId,
+          expense_date: expenseDate,
+          bill_base64: billBase64,
+          is_adhoc: isAdhoc, // If true, immediately reduces holding amount
+        }
       });
 
       if (error) throw error;
 
-      toast.success("Expense recorded");
-      logActivity(user!.id, `Recorded expense ${idData}`, "expense");
+      toast.success(isAdhoc ? "Adhoc expense recorded - holding amount locked" : "Expense submitted for approval");
+      logActivity(user!.id, `Recorded expense`, "expense");
       qc.invalidateQueries({ queryKey: ["expenses"] });
+      qc.invalidateQueries({ queryKey: ["expense-claims"] });
       setShowAddExpense(false);
       resetExpenseForm();
     } catch (error: any) {
@@ -410,7 +437,7 @@ const Expenses = () => {
   // Table columns
   const expenseColumns = [
     { header: "ID", accessor: "display_id" as const, className: "font-mono text-xs" },
-    { header: "Date", accessor: (row: any) => new Date(row.expense_date).toLocaleDateString("en-IN"), className: "text-sm" },
+    { header: "Date", accessor: (row: any) => formatDate(row.expense_date), className: "text-sm" },
     { 
       header: "Category", 
       accessor: (row: any) => {
@@ -567,7 +594,7 @@ const Expenses = () => {
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Next Due</span>
                       <span className={fc.status === 'overdue' ? 'text-red-600 font-medium' : fc.status === 'due_soon' ? 'text-amber-600 font-medium' : ''}>
-                        {new Date(fc.next_due_date).toLocaleDateString("en-IN")}
+                        {formatDate(fc.next_due_date)}
                       </span>
                     </div>
                   </div>
@@ -917,9 +944,61 @@ const Expenses = () => {
                 rows={2}
               />
             </div>
+            
+            {/* Bill Upload Section */}
+            <div>
+              <Label>Upload Bills (optional, max 3)</Label>
+              <div className="mt-1">
+                <Input
+                  type="file"
+                  accept="image/*,.pdf"
+                  multiple
+                  onChange={handleBillFileChange}
+                  className="mb-2"
+                />
+                {billPreviews.length > 0 && (
+                  <div className="flex gap-2 flex-wrap">
+                    {billPreviews.map((preview, idx) => (
+                      <div key={idx} className="relative w-16 h-16 border rounded overflow-hidden">
+                        <img src={preview} alt={`Bill ${idx + 1}`} className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newFiles = billFiles.filter((_, i) => i !== idx);
+                            const newPreviews = billPreviews.filter((_, i) => i !== idx);
+                            setBillFiles(newFiles);
+                            setBillPreviews(newPreviews);
+                          }}
+                          className="absolute top-0 right-0 bg-red-500 text-white text-xs p-1 rounded-bl"
+                        >
+                          X
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Adhoc Checkbox - reduces holding immediately */}
+            {isAdmin && (
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="isAdhoc"
+                  checked={isAdhoc}
+                  onChange={(e) => setIsAdhoc(e.target.checked)}
+                  className="w-4 h-4"
+                />
+                <Label htmlFor="isAdhoc" className="text-sm">
+                  Adhoc expense (immediately reduces holding amount)
+                </Label>
+              </div>
+            )}
+
             <Button type="submit" className="w-full" disabled={saving}>
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Receipt className="mr-2 h-4 w-4" />}
-              Record Expense
+              {isAdhoc ? "Record Adhoc Expense" : "Submit for Approval"}
             </Button>
           </form>
         </DialogContent>
@@ -1095,7 +1174,7 @@ const Expenses = () => {
                   </div>
                   <div className="flex justify-between text-sm mt-1">
                     <span>Due Date</span>
-                    <span>{new Date(selectedFixedCost.next_due_date).toLocaleDateString("en-IN")}</span>
+                    <span>{formatDate(selectedFixedCost.next_due_date)}</span>
                   </div>
                 </CardContent>
               </Card>

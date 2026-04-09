@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 const corsHeaders = {
@@ -22,15 +21,18 @@ interface OTPSession {
   max_attempts: number
 }
 
+type Resolution =
+  | { type: "staff"; role: string }
+  | { type: "existing_customer"; customerId: string }
+  | { type: "onboarding_required" };
+
 function getSyntheticEmail(phoneNumber: string): string {
   return `phone_${phoneNumber.replace(/[^0-9]/g, '')}@phone.aquaprime.app`
 }
 
 async function ensureSupabaseAuthUser(supabase: any, phoneNumber: string): Promise<void> {
-  // Create a synthetic email for phone-based users
   const syntheticEmail = getSyntheticEmail(phoneNumber)
 
-  // Create user in Supabase Auth
   const { error: authError } = await supabase.auth.admin.createUser({
     email: syntheticEmail,
     phone: phoneNumber,
@@ -55,7 +57,171 @@ async function ensureSupabaseAuthUser(supabase: any, phoneNumber: string): Promi
   }
 }
 
-serve(async (req) => {
+/**
+ * After OTP verification, resolve the user's identity:
+ * 1. Check staff_invitations by phone → create staff_directory, assign role
+ * 2. Check staff_directory by phone → link user_id, assign role
+ * 3. Check customers by phone → link user_id
+ * 4. None found → onboarding_required
+ */
+async function resolveIdentity(
+  adminClient: any,
+  userId: string,
+  phoneNumber: string,
+  userEmail: string | null
+): Promise<Resolution> {
+  // STEP 1: Check staff_invitations
+  const { data: matchingInvitations, error: invErr } = await adminClient
+    .rpc("find_staff_invitation_by_phone", { p_phone_digits: phoneNumber });
+
+  if (invErr) {
+    console.error("find_staff_invitation_by_phone error:", invErr);
+  }
+
+  if (matchingInvitations && matchingInvitations.length >= 1) {
+    const invitation = matchingInvitations[0];
+
+    // Check if staff_directory entry already exists for this phone
+    const { data: existingStaff } = await adminClient
+      .rpc("find_staff_by_phone", { p_phone_digits: phoneNumber });
+
+    const existingDir = existingStaff && existingStaff.length > 0 ? existingStaff[0] : null;
+
+    if (existingDir) {
+      // Update existing directory entry
+      await adminClient
+        .from("staff_directory")
+        .update({
+          user_id: userId,
+          phone: phoneNumber,
+          full_name: invitation.full_name || "Staff",
+          role: invitation.role,
+          is_active: true,
+        })
+        .eq("id", existingDir.id);
+    } else {
+      // Create new staff_directory entry
+      await adminClient
+        .from("staff_directory")
+        .insert({
+          user_id: userId,
+          phone: phoneNumber,
+          email: userEmail || null,
+          full_name: invitation.full_name || "Staff",
+          role: invitation.role,
+          avatar_url: null,
+          is_active: true,
+        });
+    }
+
+    // Mark invitation as accepted
+    await adminClient
+      .from("staff_invitations")
+      .update({
+        status: "accepted",
+        accepted_at: invitation.accepted_at || new Date().toISOString(),
+      })
+      .eq("id", invitation.id);
+
+    // Set user role
+    await adminClient.from("user_roles").delete().eq("user_id", userId);
+    await adminClient.from("user_roles").insert({ user_id: userId, role: invitation.role });
+
+    // Upsert profile
+    await adminClient.from("profiles").upsert({
+      user_id: userId,
+      full_name: invitation.full_name || "Staff",
+      email: userEmail || null,
+      phone: phoneNumber,
+      avatar_url: null,
+      is_active: true,
+      phone_verified: true,
+      onboarding_complete: true,
+    }, { onConflict: "user_id" });
+
+    return { type: "staff", role: invitation.role };
+  }
+
+  // STEP 2: Check staff_directory (staff already created with phone, no user_id yet)
+  const { data: matchingStaff, error: staffErr } = await adminClient
+    .rpc("find_staff_by_phone", { p_phone_digits: phoneNumber });
+
+  if (staffErr) {
+    console.error("find_staff_by_phone error:", staffErr);
+  }
+
+  if (matchingStaff && matchingStaff.length >= 1) {
+    const staff = matchingStaff[0];
+
+    // Link user_id to staff directory
+    await adminClient
+      .from("staff_directory")
+      .update({ user_id: userId })
+      .eq("id", staff.id);
+
+    // Set user role
+    await adminClient.from("user_roles").delete().eq("user_id", userId);
+    await adminClient.from("user_roles").insert({ user_id: userId, role: staff.role });
+
+    // Upsert profile
+    await adminClient.from("profiles").upsert({
+      user_id: userId,
+      full_name: staff.full_name || "Staff",
+      email: userEmail || null,
+      phone: phoneNumber,
+      avatar_url: staff.avatar_url || null,
+      is_active: true,
+      phone_verified: true,
+      onboarding_complete: true,
+    }, { onConflict: "user_id" });
+
+    return { type: "staff", role: staff.role };
+  }
+
+  // STEP 3: Check customers
+  const { data: matchingCustomers, error: custErr } = await adminClient
+    .rpc("find_customer_by_phone", { p_phone_digits: phoneNumber });
+
+  if (custErr) {
+    console.error("find_customer_by_phone error:", custErr);
+  }
+
+  if (matchingCustomers && matchingCustomers.length >= 1) {
+    const customer = matchingCustomers[0];
+
+    // Link user_id to customer if not already linked
+    if (!customer.user_id || customer.user_id !== userId) {
+      await adminClient
+        .from("customers")
+        .update({ user_id: userId })
+        .eq("id", customer.id);
+    }
+
+    // Set customer role
+    await adminClient.from("user_roles").upsert(
+      { user_id: userId, role: "customer" },
+      { onConflict: "user_id" }
+    );
+
+    // Upsert profile
+    await adminClient.from("profiles").upsert({
+      user_id: userId,
+      full_name: "Customer",
+      email: userEmail || null,
+      phone: phoneNumber,
+      is_active: true,
+      phone_verified: true,
+      onboarding_complete: true,
+    }, { onConflict: "user_id" });
+
+    return { type: "existing_customer", customerId: customer.id };
+  }
+
+  // STEP 4: No match - onboarding required
+  return { type: "onboarding_required" };
+}
+
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -80,7 +246,7 @@ serve(async (req) => {
       )
     }
 
-    // Relaxed internal mode: validate against session token only.
+    // Validate OTP session
     const { data: otpSession, error: fetchError } = await adminClient
       .from('otp_sessions')
       .select('*')
@@ -106,9 +272,7 @@ serve(async (req) => {
     // Verify OTP code
     if (session.otp_code !== otp_code.trim()) {
       return new Response(
-        JSON.stringify({
-          error: 'Invalid OTP code'
-        }),
+        JSON.stringify({ error: 'Invalid OTP code' }),
         {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -117,11 +281,11 @@ serve(async (req) => {
     }
 
     try {
-      // Ensure phone-based auth user exists. Existing users are expected.
+      // Ensure phone-based auth user exists
       await ensureSupabaseAuthUser(adminClient, session.phone_number)
       const syntheticEmail = getSyntheticEmail(session.phone_number)
 
-      // Generate a magic link token hash and exchange it for a session.
+      // Generate a magic link token hash and exchange it for a session
       const { data: authTokens, error: tokenError } = await adminClient.auth.admin.generateLink({
         type: 'magiclink',
         email: syntheticEmail,
@@ -145,7 +309,7 @@ serve(async (req) => {
         throw new Error(`Session creation failed: ${verifyError?.message || 'No session returned'}`)
       }
 
-      // OTP is correct and auth session is ready - now mark session verified.
+      // Mark OTP session as verified
       await adminClient
         .from('otp_sessions')
         .update({
@@ -154,10 +318,25 @@ serve(async (req) => {
         })
         .eq('id', session.id)
 
+      const appUserId = otpVerified.user?.id;
+
+      // --- IDENTITY RESOLUTION ---
+      // Check staff_invitations → staff_directory → customers → onboarding
+      let resolution: Resolution = { type: "onboarding_required" };
+
+      if (appUserId) {
+        resolution = await resolveIdentity(
+          adminClient,
+          appUserId,
+          session.phone_number,
+          otpVerified.user?.email || null
+        );
+      }
+
       console.log('OTP verified successfully:', {
         phone: session.phone_number.replace(/(\d{2})(\d+)(\d{4})/, '$1***$3'),
-        userId: otpVerified.user?.id,
-        sessionToken: session_token
+        userId: appUserId,
+        resolution: resolution.type,
       })
 
       return new Response(
@@ -167,9 +346,10 @@ serve(async (req) => {
           refresh_token: otpVerified.session.refresh_token,
           expires_at: otpVerified.session.expires_at,
           user: {
-            id: otpVerified.user?.id,
+            id: appUserId,
             phone: session.phone_number,
-          }
+          },
+          resolution,
         }),
         {
           status: 200,

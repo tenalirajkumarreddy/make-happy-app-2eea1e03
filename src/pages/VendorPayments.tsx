@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/shared/PageHeader";
+import { formatDate } from "@/lib/utils";
 import { DataTable } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
@@ -122,7 +123,7 @@ const VendorPayments = () => {
 
   const columns = [
     { header: "ID", accessor: "display_id" as const, className: "font-mono text-xs" },
-    { header: "Date", accessor: (row: any) => new Date(row.payment_date).toLocaleDateString("en-IN"), className: "text-sm" },
+    { header: "Date", accessor: (row: any) => formatDate(row.payment_date), className: "text-sm" },
     { header: "Vendor", accessor: (row: any) => row.vendors?.name || "—", className: "text-sm font-medium" },
     { 
       header: "Method", 
@@ -170,7 +171,7 @@ const VendorPayments = () => {
               </div>
               <div className="flex items-center justify-between mt-1">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">{new Date(row.payment_date).toLocaleDateString("en-IN")}</span>
+                  <span className="text-xs text-muted-foreground">{formatDate(row.payment_date)}</span>
                   <Badge variant="outline" className="capitalize text-[10px] h-5">{row.payment_method}</Badge>
                 </div>
                 <span className="font-bold text-green-600">₹{Number(row.amount).toLocaleString()}</span>

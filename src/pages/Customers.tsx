@@ -65,7 +65,7 @@ const Customers = () => {
   const canBulk = role === "super_admin" || role === "manager";
   const canEdit = role === "super_admin" || role === "manager";
 
-  const { canAccessRoute, loading: routeLoading, hasMatrixRestrictions } = useRouteAccess(user?.id, role);
+  const { canAccessRoute, canAccessStore, loading: routeLoading, hasMatrixRestrictions, hasStoreTypeRestrictions } = useRouteAccess(user?.id, role);
 
   const {
     data,
@@ -80,7 +80,7 @@ const Customers = () => {
     queryFn: async ({ pageParam = 0 }) => {
       const { data, error } = await supabase
         .from("customers")
-        .select("*, stores(id, outstanding, route_id)")
+        .select("*, stores(id, outstanding, route_id, store_type_id)")
         .order("created_at", { ascending: false })
         .range(pageParam * PAGE_SIZE, (pageParam + 1) * PAGE_SIZE - 1);
       if (error) throw error;
@@ -391,9 +391,9 @@ const Customers = () => {
 
   const filteredCustomers = useMemo(() => {
     let data = customers || [];
-    if (hasMatrixRestrictions) {
+    if (hasMatrixRestrictions || hasStoreTypeRestrictions) {
       data = data.filter((c: any) => 
-        c.stores?.some((s: any) => canAccessRoute(s.route_id))
+        c.stores?.some((s: any) => canAccessStore(s.route_id, s.store_type_id))
       );
     }
     return applyFilters(data, filters, {
@@ -401,7 +401,7 @@ const Customers = () => {
       kycField: "kyc_status",
       statusField: "is_active",
     });
-  }, [customers, filters, hasMatrixRestrictions, canAccessRoute]);
+  }, [customers, filters, hasMatrixRestrictions, hasStoreTypeRestrictions, canAccessStore]);
 
   if (isLoading || routeLoading) {
     return <TableSkeleton columns={7} />;

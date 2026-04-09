@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { formatDate } from "@/lib/utils";
 import { DataTable } from "@/components/shared/DataTable";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -135,7 +136,7 @@ export function StoreLedger({ sales, transactions, balanceAdjustments = [], open
   const columns = [
     {
       header: "Date",
-      accessor: (row: LedgerEntry) => row.date ? new Date(row.date).toLocaleDateString("en-IN") : "—",
+      accessor: (row: LedgerEntry) => row.date ? formatDate(row.date) : "—",
       className: "text-muted-foreground text-xs",
     },
     {
@@ -222,7 +223,7 @@ export function StoreLedger({ sales, transactions, balanceAdjustments = [], open
               {isCredit ? "CREDIT" : "DEBIT"}
             </Badge>
             <span className="text-[11px] text-muted-foreground">
-              {new Date(row.date).toLocaleDateString("en-IN")}
+              {formatDate(row.date)}
             </span>
           </div>
           <div className="flex items-center justify-between mt-1.5">
@@ -251,7 +252,7 @@ export function StoreLedger({ sales, transactions, balanceAdjustments = [], open
             {row.type === "sale" ? "SALE" : row.type === "correction" ? "ADJUSTMENT" : "PAYMENT"}
           </Badge>
           <span className="text-[11px] text-muted-foreground">
-            {new Date(row.date).toLocaleDateString("en-IN")}
+            {formatDate(row.date)}
           </span>
         </div>
         <div className="flex items-center justify-between mt-1.5">

@@ -1,7 +1,8 @@
-import { 
+import {
   Store, MapPin, Phone, Wallet, ShoppingCart, Navigation, 
   ExternalLink, Clock, TrendingUp, ArrowRight, ArrowLeft
 } from "lucide-react";
+import { formatDate } from "@/lib/utils";
 import { Card } from "../../components/ui/Card";
 import { Section } from "../../components/ui/Section";
 import { Badge } from "../../components/ui/Badge";
@@ -218,12 +219,7 @@ export function AgentStoreProfile({ store: storeProp, onRecordSale, onRecordPaym
                 <ListItem
                   key={sale.id}
                   title={sale.display_id || "Sale"}
-                  subtitle={new Date(sale.created_at).toLocaleDateString("en-IN", {
-                    day: "numeric",
-                    month: "short",
-                    hour: "numeric",
-                    minute: "2-digit",
-                  })}
+                  subtitle={formatDate(sale.created_at)}
                   icon={ShoppingCart}
                   badge={
                     <span className="text-sm font-semibold">
@@ -251,12 +247,7 @@ export function AgentStoreProfile({ store: storeProp, onRecordSale, onRecordPaym
                 <ListItem
                   key={tx.id}
                   title={tx.display_id || "Payment"}
-                  subtitle={new Date(tx.created_at).toLocaleDateString("en-IN", {
-                    day: "numeric",
-                    month: "short",
-                    hour: "numeric",
-                    minute: "2-digit",
-                  })}
+                  subtitle={formatDate(tx.created_at)}
                   icon={Wallet}
                   badge={
                     <span className="text-sm font-semibold mv2-text-success">

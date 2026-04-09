@@ -1,6 +1,7 @@
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
+import { formatDate } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 import { GoogleAccountLink } from "@/components/shared/GoogleAccountLink";
 
@@ -64,14 +65,14 @@ const UserProfile = () => {
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Account Created</span>
               <span className="font-medium">
-                {new Date(user.created_at).toLocaleDateString()}
+                {formatDate(user.created_at)}
               </span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Last Sign In</span>
               <span className="font-medium">
                 {user.last_sign_in_at
-                  ? new Date(user.last_sign_in_at).toLocaleDateString()
+                  ? formatDate(user.last_sign_in_at)
                   : "—"}
               </span>
             </div>

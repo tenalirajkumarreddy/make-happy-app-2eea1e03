@@ -69,7 +69,7 @@ interface Props {
 export function MarketerStores({ onOpenStore, onGoRecord, onGoOrders }: Props) {
   const { user, role } = useAuth();
   const qc = useQueryClient();
-  const { canAccessRoute, loading: loadingRouteAccess } = useRouteAccess(user?.id, role);
+  const { canAccessRoute, canAccessStore, loading: loadingRouteAccess } = useRouteAccess(user?.id, role);
   const [query, setQuery] = useState("");
   const [filterRoute, setFilterRoute] = useState("all");
   const [filterType, setFilterType] = useState("all");
@@ -109,7 +109,7 @@ export function MarketerStores({ onOpenStore, onGoRecord, onGoOrders }: Props) {
   });
 
   const filtered = (stores || []).filter((store) => {
-    const matchAccess = canAccessRoute(store.route_id);
+    const matchAccess = canAccessStore(store.route_id, store.store_type_id);
     const q = query.toLowerCase();
     const matchSearch =
       !q ||
