@@ -1,5 +1,4 @@
 import { StatCard } from "@/components/shared/StatCard";
-import { formatDate } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
@@ -203,7 +202,7 @@ const Dashboard = () => {
                 </div>
                 <div className="text-right">
                   <p className="text-xs font-medium text-warning">Pending</p>
-                  <p className="text-xs text-muted-foreground">{formatDate(order.created_at)}</p>
+                  <p className="text-xs text-muted-foreground">{new Date(order.created_at).toLocaleDateString("en-IN")}</p>
                 </div>
               </div>
             ))}

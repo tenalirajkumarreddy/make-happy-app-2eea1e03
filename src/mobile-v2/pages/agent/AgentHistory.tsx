@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { History, Calendar, Filter, TrendingUp, Wallet, ArrowUpRight, ArrowDownLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { formatDate } from "@/lib/utils";
 import { Section } from "../../components/ui/Section";
 import { ListItem } from "../../components/ui/ListItem";
 import { Badge } from "../../components/ui/Badge";
@@ -87,7 +86,7 @@ export function AgentHistory() {
     if (isToday) {
       return date.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
     }
-    return formatDate(date);
+    return date.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
   };
 
   if (isLoading) {

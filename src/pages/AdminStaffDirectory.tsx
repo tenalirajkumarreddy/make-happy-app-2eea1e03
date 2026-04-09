@@ -1,11 +1,9 @@
-import { useNavigate } from "react-router-dom";
 import { PageHeader } from "@/components/shared/PageHeader";
-import { formatDate } from "@/lib/utils";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2, UserPlus, Trash2, Edit2, Phone, Mail, UserCheck, Clock, Eye } from "lucide-react";
+import { Loader2, UserPlus, Trash2, Edit2, Phone, Mail, UserCheck, Clock } from "lucide-react";
 import { useState } from "react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -38,7 +36,6 @@ const STAFF_ROLES = [
 
 interface StaffMember {
   id: string;
-  user_id: string | null;
   phone: string | null;
   email: string | null;
   full_name: string | null;
@@ -50,7 +47,6 @@ interface StaffMember {
 
 export function AdminStaffDirectory() {
   const { role, user } = useAuth();
-  const navigate = useNavigate();
   const qc = useQueryClient();
   const isAdmin = role === "super_admin";
 
@@ -117,10 +113,10 @@ export function AdminStaffDirectory() {
     setFormSaving(true);
     try {
       // Update existing staff directory entry (role and active status only)
-      const { error } = await (supabase as any)
-        .from("staff_directory")
+      const { error } = await supabase
+        .from("staff_directory" as any)
         .update({
-          role: formRole,
+          role: formRole as any,
           is_active: formActive,
         })
         .eq("id", editingStaff.id);
@@ -254,11 +250,7 @@ export function AdminStaffDirectory() {
                   </TableRow>
                 ) : (
                   staff?.map((s) => (
-                    <TableRow
-                      key={s.id}
-                      className={s.user_id ? "cursor-pointer hover:bg-accent/50 transition-colors" : ""}
-                      onClick={() => s.user_id && navigate(`/admin/staff/${s.user_id}`)}
-                    >
+                    <TableRow key={s.id}>
                       <TableCell className="font-mono text-sm">{s.phone || "—"}</TableCell>
                       <TableCell className="text-sm">{s.email || "—"}</TableCell>
                       <TableCell className="font-medium">{s.full_name || "—"}</TableCell>
@@ -282,19 +274,10 @@ export function AdminStaffDirectory() {
                       {isAdmin && (
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-2">
-                         <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={(e) => { e.stopPropagation(); s.user_id && navigate(`/admin/staff/${s.user_id}`); }}
-                              className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700"
-                              title="View Profile"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={(e) => { e.stopPropagation(); handleEditClick(s); }}
+                              onClick={() => handleEditClick(s)}
                               className="h-8 w-8 p-0"
                             >
                               <Edit2 className="h-4 w-4" />
@@ -302,7 +285,7 @@ export function AdminStaffDirectory() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={(e) => { e.stopPropagation(); setDeleteConfirm({ id: s.id, name: s.full_name || s.email || s.phone || "Staff" }); }}
+                              onClick={() => setDeleteConfirm({ id: s.id, name: s.full_name || s.email || s.phone || "Staff" })}
                           className="h-8 w-8 p-0 text-destructive hover:text-destructive"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -371,7 +354,7 @@ export function AdminStaffDirectory() {
                       <TableCell className="text-sm text-muted-foreground">
                         <div className="flex items-center gap-1.5">
                           <Clock className="h-3.5 w-3.5" />
-                          {formatDate(inv.created_at)}
+                          {new Date(inv.created_at).toLocaleDateString()}
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
@@ -382,7 +365,7 @@ export function AdminStaffDirectory() {
                             className="h-8 px-2 text-destructive hover:text-destructive"
                             onClick={async () => {
                               if (!confirm('Cancel this invitation?')) return;
-                              const { error } = await (supabase as any)
+                              const { error } = await supabase
                                 .from('staff_invitations')
                                 .update({ status: 'cancelled' })
                                 .eq('id', inv.id);

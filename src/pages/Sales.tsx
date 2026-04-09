@@ -18,7 +18,6 @@ import { OrderFulfillmentDialog } from "@/components/orders/OrderFulfillmentDial
 import { useState, useMemo, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { usePermission } from "@/hooks/usePermission";
-import { useRouteAccess } from "@/hooks/useRouteAccess";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -196,16 +195,10 @@ const Sales = () => {
   const { data: stores } = useQuery({
     queryKey: ["stores-for-sale"],
     queryFn: async () => {
-      const { data } = await supabase.from("stores").select("id, name, outstanding, display_id, store_type_id, customer_id, route_id, lat, lng, is_active").order("is_active", { ascending: false }).order("name");
+      const { data } = await supabase.from("stores").select("id, name, outstanding, display_id, store_type_id, customer_id, lat, lng, is_active").order("is_active", { ascending: false }).order("name");
       return data || [];
     },
   });
-
-  // Dual-dimension access control — filter stores by route + store type access
-  const { canAccessStore } = useRouteAccess(user?.id, role);
-  const accessFilteredStores = useMemo(() => {
-    return (stores || []).filter((s: any) => canAccessStore(s.route_id, s.store_type_id));
-  }, [stores, canAccessStore]);
 
   // Fetch store types for credit limits
   const { data: storeTypes } = useQuery({
@@ -399,20 +392,17 @@ const Sales = () => {
     }
     setSaving(true);
 
-    // Proximity check for agents — only when geofencing is enabled in settings
+    // Proximity check for agents
     if (role === "agent" && selectedStore) {
-      const { data: locSetting } = await supabase.from("company_settings").select("value").eq("key", "location_validation").maybeSingle();
-      if (locSetting?.value === "true") {
-        const { checkProximity } = await import("@/lib/proximity");
-        const result = await checkProximity(selectedStore.lat ?? null, selectedStore.lng ?? null);
-        if (!result.withinRange) {
-          toast.error(result.message);
-          setSaving(false);
-          return;
-        }
-        if (result.skippedNoGps) {
-          toast.warning("Store has no GPS coordinates — location check skipped");
-        }
+      const { checkProximity } = await import("@/lib/proximity");
+      const result = await checkProximity(selectedStore.lat ?? null, selectedStore.lng ?? null);
+      if (!result.withinRange) {
+        toast.error(result.message);
+        setSaving(false);
+        return;
+      }
+      if (result.skippedNoGps) {
+        toast.warning("Store has no GPS coordinates — location check skipped");
       }
     }
 
@@ -681,7 +671,7 @@ const Sales = () => {
           <SelectTrigger className="h-8 text-xs flex-1 min-w-[120px] sm:flex-none sm:w-40"><SelectValue placeholder="All stores" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All stores</SelectItem>
-            {accessFilteredStores?.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+            {stores?.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={filterUser} onValueChange={setFilterUser}>
@@ -869,7 +859,7 @@ const Sales = () => {
                 <div className="flex gap-2 mt-1">
                   <Select value={storeId} onValueChange={handleStoreChange}>
                     <SelectTrigger className="flex-1"><SelectValue placeholder="Select store" /></SelectTrigger>
-                    <SelectContent>{accessFilteredStores?.map((s) => (
+                    <SelectContent>{stores?.map((s) => (
                       <SelectItem key={s.id} value={s.id} disabled={!s.is_active}>
                         {s.name} ({s.display_id}){!s.is_active ? " — Inactive" : ""}
                       </SelectItem>

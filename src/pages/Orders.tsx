@@ -7,9 +7,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { logActivity } from "@/lib/activityLogger";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { useAuth } from "@/contexts/AuthContext";
+import { useRouteAccess } from "@/hooks/useRouteAccess";
 import { Loader2, Plus, Trash2, XCircle, Package, Download, X, CalendarIcon } from "lucide-react";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { OrderFulfillmentDialog } from "@/components/orders/OrderFulfillmentDialog";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -63,7 +64,7 @@ interface FulfillOrder {
 }
 
 const Orders = () => {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const qc = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -101,7 +102,7 @@ const Orders = () => {
     queryFn: async () => {
       let query = supabase
         .from("orders")
-        .select("*, stores(name), customers(name)")
+        .select("*, stores(name, route_id, store_type_id), customers(name)")
         .order("created_at", { ascending: false });
       // Server-side filters
       if (statusFilter !== "all") query = query.eq("status", statusFilter);
@@ -115,6 +116,8 @@ const Orders = () => {
       return data;
     },
   });
+
+  const { canAccessStore, hasMatrixRestrictions, hasStoreTypeRestrictions } = useRouteAccess(user?.id, role);
 
   const hasMoreOrders = (orders?.length || 0) >= loadedPages * PAGE_SIZE;
 
@@ -340,7 +343,16 @@ const Orders = () => {
   };
 
   // Filtering is now done server-side; local array mirrors the fetched page(s)
-  const filteredOrders = orders || [];
+  // PLUS Matrix restrictions need to be enforced so unassigned orders don't leak
+  const filteredOrders = useMemo(() => {
+    let data = orders || [];
+    if (hasMatrixRestrictions || hasStoreTypeRestrictions) {
+      data = data.filter((o: any) => 
+        o.stores && canAccessStore(o.stores.route_id, o.stores.store_type_id)
+      );
+    }
+    return data;
+  }, [orders, hasMatrixRestrictions, hasStoreTypeRestrictions, canAccessStore]);
 
   const activeOrderFilterCount = [filterCustomer !== "all", filterFrom !== thirtyDaysAgo, filterTo !== today].filter(Boolean).length;
 

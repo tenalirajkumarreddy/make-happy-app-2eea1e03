@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo } from "react";
-import { formatDate } from "@/lib/utils";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -72,16 +71,10 @@ const InvoiceForm = () => {
   // Fetch next invoice number
   useEffect(() => {
     if (!isEdit) {
-      supabase.rpc("get_next_invoice_number")
-        .then(({ data }) => {
-          if (data) setInvoiceNumber(data);
-          setLoadingNext(false);
-        })
-        .catch((error) => {
-          console.error("Failed to fetch next invoice number:", error);
-          setLoadingNext(false);
-          toast.error("Failed to generate invoice number");
-        });
+      supabase.rpc("get_next_invoice_number").then(({ data }) => {
+        if (data) setInvoiceNumber(data);
+        setLoadingNext(false);
+      });
     } else {
       setLoadingNext(false);
     }
@@ -220,7 +213,7 @@ const InvoiceForm = () => {
         const sale = availableSales.find((s: any) => s.id === saleId);
         if (sale?.sale_items) {
           sale.sale_items.forEach((item: any) => {
-            const lineTotal = Number(item.total_price ?? (item.quantity * item.unit_price || 0));
+            const lineTotal = Number(item.total_price ?? (item.quantity * item.unit_price) ?? 0);
             const taxRate = Number(item.products?.gst_rate || 0);
             const taxableAmount = taxRate > 0 ? lineTotal / (1 + taxRate / 100) : lineTotal;
             const lineTax = lineTotal - taxableAmount;
@@ -600,7 +593,7 @@ const InvoiceForm = () => {
                       <div className="flex-1">
                         <p className="font-mono text-sm font-medium">{sale.display_id}</p>
                         <p className="text-xs text-muted-foreground">
-                          {formatDate(sale.created_at)} • {sale.sale_items?.length || 0} items
+                          {new Date(sale.created_at).toLocaleDateString("en-IN")} • {sale.sale_items?.length || 0} items
                         </p>
                       </div>
                       <span className="font-semibold">₹{Number(sale.total_amount).toLocaleString()}</span>

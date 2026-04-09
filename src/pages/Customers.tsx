@@ -392,9 +392,12 @@ const Customers = () => {
   const filteredCustomers = useMemo(() => {
     let data = customers || [];
     if (hasMatrixRestrictions || hasStoreTypeRestrictions) {
-      data = data.filter((c: any) => 
-        c.stores?.some((s: any) => canAccessStore(s.route_id, s.store_type_id))
-      );
+      data = data.filter((c: any) => {
+        // If customer has no stores, let agents see them (e.g. for newly onboarded customers)
+        if (!c.stores || c.stores.length === 0) return true;
+        // Otherwise, they must have at least one store the agent can access
+        return c.stores.some((s: any) => canAccessStore(s.route_id, s.store_type_id));
+      });
     }
     return applyFilters(data, filters, {
       dateField: "created_at",

@@ -1,5 +1,4 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { formatDate } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { DataTable } from "@/components/shared/DataTable";
@@ -398,7 +397,7 @@ const StoreDetail = () => {
     { header: "Type", accessor: "order_type" as const, className: "hidden sm:table-cell" },
     { header: "Source", accessor: "source" as const, className: "hidden sm:table-cell" },
     { header: "Status", accessor: (row: any) => <StatusBadge status={row.status === "delivered" ? "active" : row.status === "cancelled" ? "rejected" : "pending"} label={row.status} /> },
-    { header: "Date", accessor: (row: any) => formatDate(row.created_at), className: "text-muted-foreground text-xs" },
+    { header: "Date", accessor: (row: any) => new Date(row.created_at).toLocaleDateString("en-IN"), className: "text-muted-foreground text-xs" },
   ];
 
   const visitColumns = [
@@ -418,7 +417,7 @@ const StoreDetail = () => {
             {type === "visit" ? ((row.route_sessions as any)?.routes?.name || "Visit") : row.display_id}
           </span>
           <span className="text-[11px] text-muted-foreground">
-            {formatDate(type === "visit" ? row.visited_at : row.created_at)}
+            {new Date(type === "visit" ? row.visited_at : row.created_at).toLocaleDateString("en-IN")}
           </span>
         </div>
 
@@ -638,7 +637,7 @@ const StoreDetail = () => {
                 <InfoItem label="Phone" value={store.phone || "Not provided"} />
                 <InfoItem label="Address" value={fullAddress} />
                 <InfoItem label="Opening Bal." value={`₹${Number(store.opening_balance).toLocaleString()}`} />
-                <InfoItem label="Created" value={formatDate(store.created_at)} />
+                <InfoItem label="Created" value={new Date(store.created_at).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" })} />
               </div>
               {/* Credit Limits — visible to all staff (from store_types) */}
               <div className="flex flex-wrap gap-4 pt-1 border-t border-border/50">
@@ -766,7 +765,7 @@ const StoreDetail = () => {
                     <div>
                       <p className="font-mono text-sm">{qr.upi_id}</p>
                       {qr.payee_name && <p className="text-xs text-muted-foreground mt-0.5">{qr.payee_name}</p>}
-                      <p className="text-[11px] text-muted-foreground mt-0.5">Added {formatDate(qr.created_at)}</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">Added {new Date(qr.created_at).toLocaleDateString("en-IN")}</p>
                     </div>
                     {canEdit && (
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDeleteQr(qr.id)}>

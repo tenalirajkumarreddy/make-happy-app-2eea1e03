@@ -1,5 +1,4 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { formatDate } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { DataTable } from "@/components/shared/DataTable";
@@ -332,7 +331,7 @@ const CustomerDetail = () => {
               <InfoItem label="Email" value={customer.email || "Not provided"} />
               <InfoItem label="Address" value={customer.address || "Not provided"} />
               <InfoItem label="GST" value={customer.gst_number || "—"} />
-              <InfoItem label="Joined" value={formatDate(customer.created_at)} />
+              <InfoItem label="Joined" value={new Date(customer.created_at).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" })} />
             </div>
           )}
         </CardContent>
@@ -406,7 +405,7 @@ const CustomerDetail = () => {
 
           {kycStatus === "verified" && customer.kyc_verified_at && (
             <p className="text-xs text-muted-foreground">
-              Verified on {formatDate(customer.kyc_verified_at)}
+              Verified on {new Date(customer.kyc_verified_at).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" })}
             </p>
           )}
         </CardContent>

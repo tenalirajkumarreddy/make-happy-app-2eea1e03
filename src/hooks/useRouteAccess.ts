@@ -13,11 +13,12 @@ export function computeRouteAccess(routeRows: Array<{ route_id: string; enabled:
   const scoped = isScopedRole(role);
   const rows = routeRows || [];
   const enabledRouteIds = new Set(rows.filter((row) => row.enabled).map((row) => row.route_id));
-  // When ANY agent_routes rows exist, we have a configured matrix → deny-by-default
-  const hasMatrixRestrictions = scoped && rows.length > 0;
+  // Scoped roles are ALWAYS restricted by the matrix (deny-by-default).
+  // If they have no rows, it means no routes have been enabled for them.
+  const hasMatrixRestrictions = scoped;
 
   const canAccessRoute = (routeId: string | null | undefined) => {
-    // Unrestricted roles or users with no matrix rows → allow all
+    // Unrestricted roles (super_admin) → allow all
     if (!hasMatrixRestrictions) return true;
     // No route assigned → deny (they need a route to access stores)
     if (!routeId) return false;

@@ -12,7 +12,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { DollarSign, Store, Settings2, Upload, Loader2, Phone, MapPin } from "lucide-react";
 import { usePermission } from "@/hooks/usePermission";
-import { useRouteAccess } from "@/hooks/useRouteAccess";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useState, useMemo } from "react";
@@ -51,9 +50,6 @@ const Stores = () => {
   const canManagePricing = role === "super_admin" || role === "manager";
   const canBulk = role === "super_admin" || role === "manager";
   const canEdit = role === "super_admin" || role === "manager";
-
-  // Dual-dimension access control
-  const { canAccessStore, loading: routeAccessLoading } = useRouteAccess(user?.id, role);
 
   const {
     data,
@@ -304,21 +300,16 @@ const Stores = () => {
   ];
 
   const filteredStores = useMemo(() => {
-    // First apply route + store type access filtering
-    const accessFiltered = (stores || []).filter((s: any) =>
-      canAccessStore(s.route_id, s.store_type_id)
-    );
-    // Then apply user UI filters
-    return applyFilters(accessFiltered, filters, {
+    return applyFilters(stores || [], filters, {
       dateField: "created_at",
       routeField: "route_id",
       storeTypeField: "store_type_id",
       statusField: "is_active",
       outstandingField: "outstanding",
     });
-  }, [stores, filters, canAccessStore]);
+  }, [stores, filters]);
 
-  if (isLoading || routeAccessLoading) {
+  if (isLoading) {
     return <TableSkeleton columns={7} />;
   }
 

@@ -252,8 +252,6 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
           entityId: String(displayId),
         });
       }
-    }).catch((error) => {
-      console.error("Failed to send sale notification to admins:", error);
     });
 
     toast.success("Sale recorded successfully");
@@ -756,8 +754,6 @@ function RecordPayment({ preselectStore }: { preselectStore?: StoreOption | null
           entityId: String(displayId),
         });
       }
-    }).catch((error) => {
-      console.error("Failed to send payment notification to admins:", error);
     });
 
     toast.success("Payment recorded");

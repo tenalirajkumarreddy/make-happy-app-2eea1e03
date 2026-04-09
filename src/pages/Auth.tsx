@@ -21,16 +21,21 @@ const Logo = () => (
 
 
 async function hasStaffOrCustomerAccess(userId: string): Promise<boolean> {
-  const [{ data: roleData }, { data: customerData }] = await Promise.all([
+  const [{ data: roleData }, { data: customerData }, { data: pendingInvitation }] = await Promise.all([
     supabase.from("user_roles").select("role").eq("user_id", userId).maybeSingle(),
     supabase.from("customers").select("id").eq("user_id", userId).maybeSingle(),
+    supabase.from("staff_invitations").select("id").eq("user_id", userId).maybeSingle(),
   ]);
 
   if (roleData?.role && roleData.role !== "customer") {
     return true;
   }
 
-  return !!customerData;
+  if (!!customerData || !!pendingInvitation) {
+    return true;
+  }
+
+  return false;
 }
 
 const Auth = () => {
@@ -84,13 +89,29 @@ const Auth = () => {
       setLoading(true);
       
       try {
-        // Check if user already has staff or customer access
+        // Check if user already has staff or customer access (including pending staff invitations)
         if (await hasStaffOrCustomerAccess(session.user.id)) {
           navigate("/", { replace: true });
           return;
         }
         
-        // No access found — send to registration
+        // No access found — check if phone exists in staff_invitations (pending staff)
+        const { data: pendingStaff } = await supabase
+          .from("staff_invitations")
+          .select("id, role, full_name")
+          .eq("phone", session.user.phone)
+          .eq("status", "pending")
+          .maybeSingle();
+        
+        if (pendingStaff) {
+          // Pending staff — don't allow to onboard as customer, redirect to login with message
+          // They need to be accepted by admin first
+          setVerifiedPhone(session.user.phone || "");
+          setStep("register");
+          return;
+        }
+        
+        // Send to registration
         setVerifiedPhone(session.user.phone || "");
         setStep("register");
       } catch (error) {

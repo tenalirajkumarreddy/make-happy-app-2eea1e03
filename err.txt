@@ -1,0 +1,25 @@
+[31mx[39m Build failed in 20.57s
+[31merror during build:
+[31m[vite-plugin-pwa:build] [plugin vite-plugin-pwa:build] src/pages/Sales.tsx (215:8): There was an error during the build:
+  Transform failed with 1 error:
+C:/Users/rajku/Documents/PUBLIC PROJECTS/make-happy-app-2eea1e03/src/pages/Sales.tsx:215:8: ERROR: The symbol "canAccessStore" has already been declared
+Additionally, handling the error in the 'buildEnd' hook caused the following error:
+  Transform failed with 1 error:
+C:/Users/rajku/Documents/PUBLIC PROJECTS/make-happy-app-2eea1e03/src/pages/Sales.tsx:215:8: ERROR: The symbol "canAccessStore" has already been declared[31m
+file: [36mC:/Users/rajku/Documents/PUBLIC PROJECTS/make-happy-app-2eea1e03/src/pages/Sales.tsx:215:8[31m
+[33m
+[33mThe symbol "canAccessStore" has already been declared[33m
+213|  
+214|    // Dual-dimension access control — filter stores by route + store type access
+215|    const { canAccessStore } = useRouteAccess(user?.id, role);
+   |          ^
+216|    const accessFilteredStores = useMemo(() => {
+217|      return (stores || []).filter((s: any) => canAccessStore(s.route_id, s.store_type_id));
+[31m
+    at getRollupError (file:///C:/Users/rajku/Documents/PUBLIC%20PROJECTS/make-happy-app-2eea1e03/node_modules/rollup/dist/es/shared/parseAst.js:402:41)
+    at file:///C:/Users/rajku/Documents/PUBLIC%20PROJECTS/make-happy-app-2eea1e03/node_modules/rollup/dist/es/shared/node-entry.js:23467:39
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async catchUnfinishedHookActions (file:///C:/Users/rajku/Documents/PUBLIC%20PROJECTS/make-happy-app-2eea1e03/node_modules/rollup/dist/es/shared/node-entry.js:22925:16)
+    at async rollupInternal (file:///C:/Users/rajku/Documents/PUBLIC%20PROJECTS/make-happy-app-2eea1e03/node_modules/rollup/dist/es/shared/node-entry.js:23450:5)
+    at async build (file:///C:/Users/rajku/Documents/PUBLIC%20PROJECTS/make-happy-app-2eea1e03/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:65709:14)
+    at async CAC.<anonymous> (file:///C:/Users/rajku/Documents/PUBLIC%20PROJECTS/make-happy-app-2eea1e03/node_modules/vite/dist/node/cli.js:829:5)[39m
