@@ -10,6 +10,7 @@ import { AdvancedFilters, applyFilters, type FilterValues } from "@/components/s
 import { useInfiniteQuery, useQueryClient, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useWarehouse } from "@/contexts/WarehouseContext";
 import { DollarSign, Store, Settings2, Upload, Loader2, Phone, MapPin } from "lucide-react";
 import { usePermission } from "@/hooks/usePermission";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
@@ -31,6 +32,7 @@ import {
 const Stores = () => {
   const navigate = useNavigate();
   const { user, role } = useAuth();
+  const { currentWarehouse } = useWarehouse();
   const isMobile = useIsMobile();
   const { allowed: canCreateStores } = usePermission("create_stores");
   const [showAdd, setShowAdd] = useState(false);
@@ -58,11 +60,35 @@ const Stores = () => {
     isFetchingNextPage,
     isLoading
   } = useInfiniteQuery({
-    queryKey: ["stores"],
+    queryKey: ["stores", filters, currentWarehouse?.id],
     queryFn: async ({ pageParam = 0 }) => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("stores")
-        .select("*, customers(name), store_types(name), routes(name)")
+        .select("*, customers(name), store_types(name), routes(name)");
+
+      // Scope to active warehouse
+      if (currentWarehouse?.id) {
+        query = query.eq("warehouse_id", currentWarehouse.id);
+      }
+
+      // Apply search and advanced filters
+      if (filters.search) {
+        query = query.or(`name.ilike.%${filters.search}%,display_id.ilike.%${filters.search}%`);
+      }
+      if (filters.route && filters.route !== "all") {
+        query = query.eq("route_id", filters.route);
+      }
+      if (filters.type && filters.type !== "all") {
+        query = query.eq("store_type_id", filters.type);
+      }
+      if (filters.customer && filters.customer !== "all") {
+        query = query.eq("customer_id", filters.customer);
+      }
+      if (filters.status === "active") query = query.eq("is_active", true);
+      if (filters.status === "inactive") query = query.eq("is_active", false);
+      if (filters.status === "with_outstanding") query = query.gt("outstanding", 0);
+
+      const { data, error } = await query
         .order("created_at", { ascending: false })
         .range(pageParam * PAGE_SIZE, (pageParam + 1) * PAGE_SIZE - 1);
       if (error) throw error;
@@ -190,6 +216,7 @@ const Stores = () => {
         route_id: routeId,
         phone: row.phone || null,
         address: row.address || null,
+        warehouse_id: currentWarehouse?.id || null,
       });
       if (error) {
         errors.push(`Row ${i + 2}: ${error.message}`);

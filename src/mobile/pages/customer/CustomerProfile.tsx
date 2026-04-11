@@ -36,12 +36,18 @@ export function CustomerProfile() {
     enabled: !!user,
   });
 
-  const googleIdentity = liveAuthUser?.identities?.find((identity) => identity.provider === "google");
+  const googleIdentity = liveAuthUser?.identities?.find(
+    (identity) => identity.provider === "google",
+  );
   const isGoogleLinked = !!googleIdentity;
 
   const { data: customer, isLoading } = useQuery({
     queryKey: ["mobile-customer-profile", user?.id],
-    queryFn: async () => (await resolveCustomer(user!.id, "id, name, display_id, phone, email, address")) as CustomerRow | null,
+    queryFn: async () =>
+      (await resolveCustomer(
+        user!.id,
+        "id, name, display_id, phone, email, address",
+      )) as CustomerRow | null,
     enabled: !!user,
   });
 
@@ -89,7 +95,9 @@ export function CustomerProfile() {
 
   const handleLinkGoogle = async () => {
     if (!googleLinkingEnabled) {
-      toast.error("Google account linking is currently disabled by the administrator.");
+      toast.error(
+        "Google account linking is currently disabled by the administrator.",
+      );
       return;
     }
 
@@ -104,7 +112,10 @@ export function CustomerProfile() {
 
       if (error) {
         if (error.message.includes("Manual linking")) {
-          toast.error("Manual account linking is disabled. Please contact support.", { duration: 5000 });
+          toast.error(
+            "Manual account linking is disabled. Please contact support.",
+            { duration: 5000 },
+          );
         } else {
           toast.error(error.message);
         }
@@ -120,7 +131,9 @@ export function CustomerProfile() {
 
   const handleUnlinkGoogle = async () => {
     const { data: latestAuthData } = await supabase.auth.getUser();
-    const latestGoogleIdentity = latestAuthData.user?.identities?.find((identity) => identity.provider === "google");
+    const latestGoogleIdentity = latestAuthData.user?.identities?.find(
+      (identity) => identity.provider === "google",
+    );
 
     if (!latestGoogleIdentity) {
       toast.success("Google account is already unlinked");
@@ -130,7 +143,8 @@ export function CustomerProfile() {
 
     setLinking(true);
     try {
-      const { error } = await supabase.auth.unlinkIdentity(latestGoogleIdentity);
+      const { error } =
+        await supabase.auth.unlinkIdentity(latestGoogleIdentity);
       if (error) {
         if (error.message?.toLowerCase().includes("identity doesn't exist")) {
           toast.success("Google account is already unlinked");
@@ -158,16 +172,25 @@ export function CustomerProfile() {
   }
 
   if (!customer) {
-    return <div className="px-4 py-10 text-center text-sm text-muted-foreground">No profile data found.</div>;
+    return (
+      <div className="px-4 py-10 text-center text-sm text-muted-foreground">
+        No profile data found.
+      </div>
+    );
   }
 
-  const totalOutstanding = (stores || []).reduce((sum, store) => sum + Number(store.outstanding || 0), 0);
+  const totalOutstanding = (stores || []).reduce(
+    (sum, store) => sum + Number(store.outstanding || 0),
+    0,
+  );
 
   return (
     <div className="px-4 pt-4 pb-6 space-y-3">
-      <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-4 shadow-sm">
-        <p className="text-base font-bold text-slate-900 dark:text-white">{customer.name}</p>
-        <p className="text-xs text-slate-500 mt-0.5">{customer.display_id}</p>
+      <div className="rounded-2xl bg-card text-card-foreground border border-border p-4 shadow-sm">
+        <p className="text-base font-bold text-foreground">{customer.name}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          {customer.display_id}
+        </p>
 
         <div className="mt-3 space-y-2 text-sm">
           <InfoRow label="Phone" value={customer.phone || "—"} />
@@ -176,29 +199,47 @@ export function CustomerProfile() {
         </div>
       </div>
 
-      <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-4 shadow-sm">
-        <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Stores Summary</p>
+      <div className="rounded-2xl bg-card text-card-foreground border border-border p-4 shadow-sm">
+        <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+          Stores Summary
+        </p>
         <div className="mt-2 space-y-1.5 text-sm">
           <InfoRow label="Total Stores" value={String((stores || []).length)} />
-          <InfoRow label="Outstanding" value={`₹${totalOutstanding.toLocaleString("en-IN")}`} />
+          <InfoRow
+            label="Outstanding"
+            value={`₹${totalOutstanding.toLocaleString("en-IN")}`}
+          />
         </div>
-        <div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-700 space-y-1.5">
+        <div className="mt-3 pt-2 border-t border-border space-y-1.5">
           {(stores || []).map((store) => (
-            <div key={store.id} className="flex items-center justify-between text-xs">
-              <span className="text-slate-600 dark:text-slate-300 truncate">{store.name}</span>
-              <span className="font-semibold">₹{Number(store.outstanding || 0).toLocaleString("en-IN")}</span>
+            <div
+              key={store.id}
+              className="flex items-center justify-between text-xs"
+            >
+              <span className="text-muted-foreground truncate">
+                {store.name}
+              </span>
+              <span className="font-semibold">
+                ₹{Number(store.outstanding || 0).toLocaleString("en-IN")}
+              </span>
             </div>
           ))}
-          {(stores || []).length === 0 && <p className="text-xs text-muted-foreground text-center">No active stores</p>}
+          {(stores || []).length === 0 && (
+            <p className="text-xs text-muted-foreground text-center">
+              No active stores
+            </p>
+          )}
         </div>
       </div>
 
       {/* Google Account Link */}
-      <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-4 shadow-sm">
-        <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Google Account</p>
+      <div className="rounded-2xl bg-card text-card-foreground border border-border p-4 shadow-sm">
+        <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">
+          Google Account
+        </p>
         {isGoogleLinked ? (
           <div className="space-y-3">
-            <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <svg className="h-5 w-5" viewBox="0 0 24 24">
                 <path
                   fill="currentColor"
@@ -223,14 +264,16 @@ export function CustomerProfile() {
               type="button"
               onClick={handleUnlinkGoogle}
               disabled={linking || !googleLinkingEnabled}
-              className="w-full h-10 rounded-xl border border-slate-300 dark:border-slate-600 text-sm font-medium disabled:opacity-50"
+              className="w-full h-10 rounded-xl border border-border text-sm font-medium disabled:opacity-50"
             >
               {linking ? "Unlinking..." : "Unlink Google"}
             </button>
           </div>
         ) : (
           <>
-            <p className="text-xs text-slate-500 mb-3">Link your Google account for easy sign-in</p>
+            <p className="text-xs text-muted-foreground mb-3">
+              Link your Google account for easy sign-in
+            </p>
             <button
               type="button"
               onClick={handleLinkGoogle}
@@ -264,7 +307,9 @@ export function CustomerProfile() {
               )}
             </button>
             {!googleLinkingEnabled && (
-              <p className="text-xs text-slate-500 mt-2">Google linking is currently disabled.</p>
+              <p className="text-xs text-muted-foreground mt-2">
+                Google linking is currently disabled.
+              </p>
             )}
           </>
         )}
@@ -287,8 +332,8 @@ export function CustomerProfile() {
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <span className="text-slate-500">{label}</span>
-      <span className="text-slate-900 dark:text-slate-100 text-right">{value}</span>
+      <span className="text-muted-foreground">{label}</span>
+      <span className="text-foreground  text-right">{value}</span>
     </div>
   );
 }

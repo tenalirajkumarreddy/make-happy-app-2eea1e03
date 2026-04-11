@@ -6,7 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { logActivity } from "@/lib/activityLogger";
-import { Loader2, Package, Plus, Minus, BoxSelect, ArrowUpRight, FlaskConical } from "lucide-react";
+import { Loader2, Package, Plus, Minus, BoxSelect, ArrowUpRight, FlaskConical, Users, AlertTriangle } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useNavigate } from "react-router-dom";
@@ -48,7 +48,7 @@ const Inventory = () => {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const canEdit = ["super_admin", "manager", "pos"].includes(role || "");
-  const [activeView, setActiveView] = useState<"products" | "raw-materials">("products");
+  const [activeView, setActiveView] = useState<"products" | "raw-materials" | "staff-holding">("products");
   
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>("");
   const [showAdjust, setShowAdjust] = useState(false);
@@ -201,6 +201,49 @@ const Inventory = () => {
     },
     enabled: !!selectedWarehouseId,
   });
+
+  // Fetch Staff Holding (staff_stock joined with profiles and products)
+  const { data: staffStockRaw, isLoading: loadStaffStock } = useQuery({
+    queryKey: ["staff-stock", selectedWarehouseId],
+    queryFn: async () => {
+      if (!selectedWarehouseId) return [];
+      const { data, error } = await supabase
+        .from("staff_stock")
+        .select(`
+          id,
+          user_id,
+          product_id,
+          quantity,
+          is_negative,
+          updated_at,
+          products(id, name, sku, unit, base_price, image_url),
+          profiles(id, full_name, email, avatar_url)
+        `)
+        .eq("warehouse_id", selectedWarehouseId)
+        .order("updated_at", { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!selectedWarehouseId,
+  });
+
+  // Group staff stock by user
+  const staffStockByUser = useMemo(() => {
+    if (!staffStockRaw) return [];
+    const map = new Map<string, { profile: any; items: any[]; totalValue: number }>();
+    staffStockRaw.forEach((row: any) => {
+      const uid = row.user_id;
+      if (!map.has(uid)) {
+        map.set(uid, { profile: row.profiles, items: [], totalValue: 0 });
+      }
+      const entry = map.get(uid)!;
+      entry.items.push(row);
+      entry.totalValue += (row.quantity || 0) * Number(row.products?.base_price || 0);
+    });
+    return Array.from(map.values()).sort((a, b) =>
+      (a.profile?.full_name || "").localeCompare(b.profile?.full_name || "")
+    );
+  }, [staffStockRaw]);
 
   const handleAdjust = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -414,10 +457,14 @@ const Inventory = () => {
             </div>
         </div>
 
-      <Tabs value={activeView} onValueChange={(value) => setActiveView(value as "products" | "raw-materials") }>
+      <Tabs value={activeView} onValueChange={(value) => setActiveView(value as "products" | "raw-materials" | "staff-holding")}>
             <TabsList>
           <TabsTrigger value="products">Products</TabsTrigger>
                 <TabsTrigger value="raw-materials">Raw Materials</TabsTrigger>
+                <TabsTrigger value="staff-holding" className="flex items-center gap-1.5">
+                  <Users className="h-3.5 w-3.5" />
+                  Staff Holding
+                </TabsTrigger>
             </TabsList>
 
         <TabsContent value="products" className="space-y-6">
@@ -903,6 +950,112 @@ const Inventory = () => {
                       </div>
                     </div>
                 )}
+            </TabsContent>
+
+            {/* Staff Holding Tab */}
+            <TabsContent value="staff-holding" className="space-y-4">
+              {loadStaffStock ? (
+                <div className="flex items-center justify-center py-10"><Loader2 className="animate-spin" /></div>
+              ) : staffStockByUser.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
+                  <Users className="h-12 w-12 opacity-30" />
+                  <div className="text-center">
+                    <p className="font-medium">No staff holdings yet</p>
+                    <p className="text-sm mt-1">Stock appears here once transferred to a staff member.</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Summary Banner */}
+                  <div className="rounded-xl border bg-gradient-to-r from-blue-500/10 to-indigo-500/10 p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-full bg-blue-500/20 flex items-center justify-center shrink-0">
+                        <Users className="h-5 w-5 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className="font-semibold">{staffStockByUser.length} Staff Member{staffStockByUser.length !== 1 ? "s" : ""} Holding Stock</p>
+                        <p className="text-sm text-muted-foreground">
+                          Total field value: ₹{staffStockByUser.reduce((sum, s) => sum + s.totalValue, 0).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Per-Staff Cards */}
+                  {staffStockByUser.map(({ profile, items, totalValue }) => {
+                    const hasNegative = items.some((i: any) => i.is_negative);
+                    return (
+                      <div key={profile?.id || items[0]?.user_id} className="rounded-xl border bg-card shadow-sm overflow-hidden">
+                        {/* Staff Header */}
+                        <div className={`flex items-center justify-between px-4 py-3 border-b ${
+                          hasNegative ? "bg-red-50/60 dark:bg-red-900/20" : "bg-muted/30"
+                        }`}>
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-9 w-9">
+                              <AvatarImage src={profile?.avatar_url} alt={profile?.full_name} />
+                              <AvatarFallback className="bg-primary/10 text-primary text-sm font-semibold">
+                                {(profile?.full_name || profile?.email || "?").charAt(0).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <p className="font-semibold text-sm leading-tight">{profile?.full_name || "Unknown"}</p>
+                              <p className="text-[11px] text-muted-foreground">{profile?.email}</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            {hasNegative && (
+                              <div className="flex items-center gap-1 text-red-600 text-xs font-medium mb-0.5">
+                                <AlertTriangle className="h-3.5 w-3.5" />
+                                Negative Stock
+                              </div>
+                            )}
+                            <p className="text-sm font-bold">₹{totalValue.toLocaleString()}</p>
+                            <p className="text-[11px] text-muted-foreground">{items.length} product{items.length !== 1 ? "s" : ""}</p>
+                          </div>
+                        </div>
+
+                        {/* Product Rows */}
+                        <div className="divide-y">
+                          {items.map((item: any) => {
+                            const qty = Number(item.quantity || 0);
+                            const isNeg = qty < 0 || item.is_negative;
+                            return (
+                              <div key={item.id} className={`flex items-center gap-3 px-4 py-2.5 ${
+                                isNeg ? "bg-red-50/40 dark:bg-red-900/10" : ""
+                              }`}>
+                                <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                                  {item.products?.image_url ? (
+                                    <Avatar className="h-8 w-8 rounded-lg">
+                                      <AvatarImage src={item.products.image_url} className="object-cover" />
+                                      <AvatarFallback className="rounded-lg"><Package className="h-4 w-4 text-muted-foreground" /></AvatarFallback>
+                                    </Avatar>
+                                  ) : (
+                                    <Package className="h-4 w-4 text-muted-foreground" />
+                                  )}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium truncate">{item.products?.name || "Unknown Product"}</p>
+                                  <p className="text-[11px] text-muted-foreground">{item.products?.sku}</p>
+                                </div>
+                                <div className="text-right shrink-0">
+                                  <p className={`text-sm font-bold ${
+                                    isNeg ? "text-red-600" : qty === 0 ? "text-muted-foreground" : "text-emerald-600"
+                                  }`}>
+                                    {qty} <span className="text-xs font-normal">{item.products?.unit}</span>
+                                  </p>
+                                  <p className="text-[11px] text-muted-foreground">
+                                    ₹{(qty * Number(item.products?.base_price || 0)).toLocaleString()}
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </TabsContent>
         </Tabs>
 

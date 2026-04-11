@@ -14,7 +14,7 @@ const RETRY_DELAYS = [1000, 5000, 15000]; // Exponential backoff
 
 export interface PendingAction {
   id: string;
-  type: "sale" | "transaction" | "visit" | "customer" | "file_upload";
+  type: "sale" | "transaction" | "visit" | "customer" | "store" | "file_upload";
   payload: unknown;
   createdAt: string;
   retryCount?: number;

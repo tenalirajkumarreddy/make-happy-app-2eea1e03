@@ -12,6 +12,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { logActivity } from "@/lib/activityLogger";
 import { generateDisplayId } from "@/lib/displayId";
 import { validatePhone, validateEmail, normalizePhone } from "@/lib/validation";
+import { useWarehouse } from "@/contexts/WarehouseContext";
 import { Loader2, User, Upload, AlertCircle, Phone, Mail, Store as StoreIcon } from "lucide-react";
 import { usePermission } from "@/hooks/usePermission";
 import { useRouteAccess } from "@/hooks/useRouteAccess";
@@ -38,6 +39,7 @@ import { toast } from "sonner";
 const Customers = () => {
   const navigate = useNavigate();
   const { user, role } = useAuth();
+  const { currentWarehouse } = useWarehouse();
   const { isOnline } = useOnlineStatus();
   const isMobile = useIsMobile();
   const { allowed: canCreateCustomers } = usePermission("create_customers");
@@ -76,11 +78,17 @@ const Customers = () => {
     isError,
     error: queryError
   } = useInfiniteQuery({
-    queryKey: ["customers"],
+    queryKey: ["customers", currentWarehouse?.id],
     queryFn: async ({ pageParam = 0 }) => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("customers")
-        .select("*, stores(id, outstanding, route_id, store_type_id)")
+        .select("*, stores(id, outstanding, route_id, store_type_id)");
+      
+      if (currentWarehouse?.id) {
+        query = query.eq("warehouse_id", currentWarehouse.id);
+      }
+
+      const { data, error } = await query
         .order("created_at", { ascending: false })
         .range(pageParam * PAGE_SIZE, (pageParam + 1) * PAGE_SIZE - 1);
       if (error) throw error;
@@ -170,6 +178,7 @@ const Customers = () => {
       email: email?.trim().toLowerCase() || null,
       address: address || null,
       photo_url: photoUrl || null,
+      warehouse_id: currentWarehouse?.id || null,
     });
     setSaving(false);
     if (error) {

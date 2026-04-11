@@ -213,7 +213,9 @@ const InvoiceForm = () => {
         const sale = availableSales.find((s: any) => s.id === saleId);
         if (sale?.sale_items) {
           sale.sale_items.forEach((item: any) => {
-            const lineTotal = Number(item.total_price ?? (item.quantity * item.unit_price) ?? 0);
+            const quantity = Number(item.quantity);
+            const unitPrice = Number(item.unit_price);
+            const lineTotal = Number(item.total_price ?? quantity * unitPrice);
             const taxRate = Number(item.products?.gst_rate || 0);
             const taxableAmount = taxRate > 0 ? lineTotal / (1 + taxRate / 100) : lineTotal;
             const lineTax = lineTotal - taxableAmount;
@@ -457,7 +459,14 @@ const InvoiceForm = () => {
       <PageHeader
         title={isEdit ? "Edit Invoice" : "Create Invoice"}
         subtitle="Generate a tax invoice"
-        backButton={{ label: "Back to Invoices", onClick: () => navigate("/invoices") }}
+        actions={[
+          {
+            label: "Back to Invoices",
+            onClick: () => navigate("/invoices"),
+            variant: "outline",
+            priority: 1,
+          },
+        ]}
       />
 
       <div className="grid gap-6 lg:grid-cols-3">

@@ -3,6 +3,15 @@ import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 
+// Declare Sentry on window for TypeScript
+declare global {
+  interface Window extends Window {
+    Sentry?: {
+      captureException: (error: Error, context?: unknown) => void;
+    };
+  }
+}
+
 interface Props {
   children: ReactNode;
   fallback?: ReactNode;
@@ -94,14 +103,14 @@ class ErrorBoundary extends Component<Props, State> {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {process.env.NODE_ENV === 'development' && this.state.error && (
-                <div className="mt-4 p-4 bg-muted rounded-md">
+              {this.state.error && (
+                <div className="mt-4 p-4 bg-muted rounded-md border border-destructive/20 shadow-sm overflow-x-auto">
                   <p className="text-sm font-mono text-destructive font-semibold mb-2">
                     {this.state.error.toString()}
                   </p>
                   {this.state.errorInfo && (
                     <details className="mt-2">
-                      <summary className="text-sm cursor-pointer text-muted-foreground">
+                      <summary className="text-sm cursor-pointer text-muted-foreground select-none">
                         View component stack
                       </summary>
                       <pre className="text-xs mt-2 overflow-auto max-h-48 text-muted-foreground">
@@ -132,12 +141,4 @@ class ErrorBoundary extends Component<Props, State> {
 }
 
 export default ErrorBoundary;
-
-// Declare Sentry on window for TypeScript
-declare global {
-  interface Window {
-    Sentry?: {
-      captureException: (error: Error, context?: unknown) => void;
-    };
-  }
-}
+export { ErrorBoundary };

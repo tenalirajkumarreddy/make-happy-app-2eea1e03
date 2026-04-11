@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { WarehouseProvider } from "@/contexts/WarehouseContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { RoleRoute } from "@/components/auth/RoleRoute";
 import { RoleGuard } from "@/components/auth/RoleGuard";
@@ -68,6 +69,7 @@ const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const Expenses = lazy(() => import("./pages/Expenses"));
 const SaleReturns = lazy(() => import("./pages/SaleReturns"));
 const PurchaseReturns = lazy(() => import("./pages/PurchaseReturns"));
+const StockTransfers = lazy(() => import("./pages/StockTransfers"));
 
 // Loading fallback component
 const PageLoader = () => (
@@ -106,7 +108,9 @@ const App = () => {
   const isMobile = isNativeApp();
 
   return (
-    <Sentry.ErrorBoundary fallback={({ error, resetError }: { error: any, resetError: () => void }) => (
+    <Sentry.ErrorBoundary fallback={({ error, resetError }: { error: any, resetError: () => void }) => {
+      console.error("APP CRASH ERROR:", error);
+      return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4 text-center">
         <h1 className="mb-2 text-2xl font-bold text-foreground">Something went wrong</h1>
         <p className="mb-4 text-muted-foreground">{error?.message || "An unexpected error occurred."}</p>
@@ -117,9 +121,10 @@ const App = () => {
           Try again
         </button>
       </div>
-    )}>
+    )}}>
       <QueryClientProvider client={queryClient}>
       <AuthProvider>
+        <WarehouseProvider>
         <TooltipProvider>
           <Sonner />
           <ErrorBoundary>
@@ -196,6 +201,9 @@ const App = () => {
               <Route path="/orders" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer"]}><Orders /></RoleGuard>} />
               {/* Handovers: All staff */}
               <Route path="/handovers" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer", "pos"]}><Handovers /></RoleGuard>} />
+
+              {/* Stock Transfers: Admin, Manager, Agent, Marketer */}
+              <Route path="/stock-transfers" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer"]}><StockTransfers /></RoleGuard>} />
               
               {/* User Profile: All authenticated users */}
               <Route path="/profile" element={<UserProfile />} />
@@ -213,6 +221,7 @@ const App = () => {
         </BrowserRouter>
         </ErrorBoundary>
       </TooltipProvider>
+      </WarehouseProvider>
     </AuthProvider>
   </QueryClientProvider>
   </Sentry.ErrorBoundary>

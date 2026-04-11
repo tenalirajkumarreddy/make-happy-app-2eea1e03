@@ -1,5 +1,5 @@
 import { PageHeader } from "@/components/shared/PageHeader";
-import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
+import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import { useParams, useNavigate } from "react-router-dom";
 import { useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";

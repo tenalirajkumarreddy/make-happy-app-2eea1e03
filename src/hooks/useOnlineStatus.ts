@@ -216,6 +216,33 @@ export function useOnlineStatus() {
             photo_url: customerData.photo_url ?? null,
           });
           if (error) throw error;
+        } else if (action.type === "store") {
+          const { storeData } = action.payload as {
+            storeData: {
+              id?: string;
+              name: string;
+              customer_id?: string | null;
+              store_type_id?: string | null;
+              route_id?: string | null;
+              phone?: string | null;
+              address?: string | null;
+              lat?: number | null;
+              lng?: number | null;
+              created_at?: string;
+              is_active?: boolean;
+            };
+          };
+
+          const { data: displayId } = await supabase.rpc("generate_display_id", {
+            prefix: "STR",
+            seq_name: "str_display_seq",
+          });
+
+          const { error } = await supabase.from("stores").insert({
+            ...storeData,
+            display_id: String(displayId),
+          });
+          if (error) throw error;
         }
         await removeFromQueue(action.id);
         totalSynced++;

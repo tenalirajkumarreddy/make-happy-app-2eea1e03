@@ -1,0 +1,11 @@
+-- ============================================================================
+-- MIGRATION: Updated record_sale with warehouse scoping and stock deduction
+-- Applied via Supabase MCP on 2026-04-11
+-- See the full function body in the MCP apply_migration call above.
+-- This file documents what was applied.
+-- ============================================================================
+-- record_sale now:
+--   - Accepts p_warehouse_id parameter
+--   - Deducts from product_stock for POS users (their linked warehouse)
+--   - Deducts from staff_stock for all other roles (the recorded_by user)
+--   - Allows negative stock but sets is_negative=true as a flag

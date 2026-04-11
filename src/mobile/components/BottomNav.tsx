@@ -1,7 +1,7 @@
-import { Home, Map, ScanLine, History, Users, ClipboardList, ReceiptIndianRupee, Plus, HandCoins } from "lucide-react";
+import { Home, Map, ScanLine, History, Users, ClipboardList, ReceiptIndianRupee, Plus, HandCoins, CheckSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type MobileTab = "home" | "routes" | "scan" | "history" | "customers" | "orders" | "record" | "sales" | "transactions" | "profile" | "products" | "handovers";
+export type MobileTab = "home" | "routes" | "scan" | "history" | "customers" | "orders" | "record" | "sales" | "transactions" | "profile" | "products" | "handovers" | "approvals";
 
 interface MobileTabItem {
   id: MobileTab;
@@ -21,7 +21,7 @@ export const AGENT_TABS: MobileTabItem[] = [
   { id: "routes" as MobileTab, label: "Routes", icon: Map },
   { id: "scan" as MobileTab, label: "Scan", icon: ScanLine, centerAction: true },
   { id: "customers" as MobileTab, label: "Stores", icon: Users },
-  { id: "history" as MobileTab, label: "History", icon: History },
+  { id: "approvals" as MobileTab, label: "Approvals", icon: CheckSquare },
 ];
 
 export const MARKETER_TABS: MobileTabItem[] = [

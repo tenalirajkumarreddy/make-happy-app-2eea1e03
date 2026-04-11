@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/shared/PageHeader";
 import { useQuery } from "@tanstack/react-query";
+import { useWarehouse } from "@/contexts/WarehouseContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, CalendarIcon } from "lucide-react";
 import { useState } from "react";
@@ -22,24 +23,26 @@ const Analytics = () => {
   const [to, setTo] = useState(today.toISOString().split("T")[0]);
   const [pending, setPending] = useState({ from: thirtyAgo.toISOString().split("T")[0], to: today.toISOString().split("T")[0] });
 
+  const { currentWarehouse } = useWarehouse();
   const applyFilter = () => setPending({ from, to });
 
   const { data, isLoading } = useQuery({
-    queryKey: ["analytics-enhanced", pending.from, pending.to],
+    queryKey: ["analytics-enhanced", pending.from, pending.to, currentWarehouse?.id],
+    enabled: !!currentWarehouse?.id,
     queryFn: async () => {
       const startOfDay = pending.from + "T00:00:00";
       const endOfDay = pending.to + "T23:59:59";
 
       const [salesRes, txnRes, storesRes, ordersRes, profilesRes, rolesRes, customersRes, routesRes, visitsRes] = await Promise.all([
-        supabase.from("sales").select("total_amount, cash_amount, upi_amount, created_at, recorded_by, stores(name, store_type_id, route_id, store_types(name))").gte("created_at", startOfDay).lte("created_at", endOfDay).order("created_at").limit(2000),
-        supabase.from("transactions").select("total_amount, cash_amount, upi_amount, created_at").gte("created_at", startOfDay).lte("created_at", endOfDay).limit(2000),
-        supabase.from("stores").select("id, outstanding, store_type_id, route_id, is_active, created_at, store_types(name)").eq("is_active", true).limit(1000),
-        supabase.from("orders").select("status").limit(1000),
+        supabase.from("sales").select("total_amount, cash_amount, upi_amount, created_at, recorded_by, stores(name, store_type_id, route_id, store_types(name))").eq("warehouse_id", currentWarehouse.id).gte("created_at", startOfDay).lte("created_at", endOfDay).order("created_at").limit(2000),
+        supabase.from("transactions").select("total_amount, cash_amount, upi_amount, created_at").eq("warehouse_id", currentWarehouse.id).gte("created_at", startOfDay).lte("created_at", endOfDay).limit(2000),
+        supabase.from("stores").select("id, outstanding, store_type_id, route_id, is_active, created_at, store_types(name)").eq("warehouse_id", currentWarehouse.id).eq("is_active", true).limit(1000),
+        supabase.from("orders").select("status").eq("warehouse_id", currentWarehouse.id).limit(1000),
         supabase.from("profiles").select("user_id, full_name").limit(500),
         supabase.from("user_roles").select("user_id, role").in("role", ["agent", "marketer"]).limit(100),
-        supabase.from("customers").select("id, created_at, kyc_status").limit(2000),
-        supabase.from("routes").select("id, name").eq("is_active", true).order("name").limit(100),
-        supabase.from("store_visits").select("store_id, stores(route_id)").gte("visited_at", startOfDay).lte("visited_at", endOfDay).limit(2000),
+        supabase.from("customers").select("id, created_at, kyc_status").eq("warehouse_id", currentWarehouse.id).limit(2000),
+        supabase.from("routes").select("id, name").eq("warehouse_id", currentWarehouse.id).eq("is_active", true).order("name").limit(100),
+        supabase.from("store_visits").select("store_id, stores!inner(route_id, warehouse_id)").eq("stores.warehouse_id", currentWarehouse.id).gte("visited_at", startOfDay).lte("visited_at", endOfDay).limit(2000),
       ]);
 
       const sales = salesRes.data || [];

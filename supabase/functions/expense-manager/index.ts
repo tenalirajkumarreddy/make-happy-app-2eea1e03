@@ -89,7 +89,7 @@ Deno.serve(async (req) => {
       const displayId = `EXP-${dateStr}-${randomPart}`;
 
       // Handle bill uploads
-      let billUrls: string[] = [];
+      const billUrls: string[] = [];
       if (bill_base64 && Array.isArray(bill_base64) && bill_base64.length > 0) {
         const userFolder = user.id;
         

@@ -33,6 +33,12 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
   profiles: ["profiles", "staff-profiles"],
   agent_routes: ["route-access-matrix", "routes", "mobile-agent-routes"],
   agent_store_types: ["store-type-access-matrix", "route-access-matrix", "mobile-marketer-store-types", "mobile-store-types-credit"],
+  // Inventory tables
+  product_stock: ["inventory", "stock-movements"],
+  stock_movements: ["stock-movements", "inventory"],
+  staff_stock: ["staff-stock"],
+  stock_transfers: ["stock-transfers", "staff-stock", "inventory"],
+  warehouses: ["warehouses"],
 };
 
 const STAFF_ROLES = ["super_admin", "manager", "agent", "marketer", "pos"];
@@ -49,7 +55,8 @@ export function useRealtimeSync() {
 
     const tables = Object.keys(TABLE_QUERY_MAP);
 
-    let channel = supabase.channel("global-realtime-sync");
+    const channelName = `global-realtime-sync-${Math.random().toString(36).substring(2, 9)}`;
+    let channel = supabase.channel(channelName);
 
     tables.forEach((table) => {
       channel = channel.on(

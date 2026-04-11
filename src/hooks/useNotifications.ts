@@ -39,8 +39,12 @@ export function useNotifications() {
   // Realtime subscription for new notifications
   useEffect(() => {
     if (!user) return;
+    
+    // Create a unique channel name using a random suffix to avoid 
+    // "cannot add callbacks after subscribe" errors during React Strict Mode rapid re-mounts
+    const channelName = `user-notifications-${user.id}-${Math.random().toString(36).substring(2, 9)}`;
     const channel = supabase
-      .channel(`user-notifications-${user.id}`)
+      .channel(channelName)
       .on(
         "postgres_changes",
         {

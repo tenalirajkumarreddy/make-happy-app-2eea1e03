@@ -54,6 +54,7 @@ const Auth = () => {
   // New-customer registration
   const [regName, setRegName] = useState("");
   const [newCustomerId, setNewCustomerId] = useState<string | null>(null);
+  const [customerWarehouseId, setCustomerWarehouseId] = useState<string | null>(null);
 
   // Store creation (step: add-store)
   const [storeName, setStoreName] = useState("");
@@ -142,6 +143,15 @@ const Auth = () => {
 
       const displayId = generateDisplayId("CUST");
 
+      const { data: defaultWh } = await supabase
+        .from("warehouses")
+        .select("id")
+        .eq("is_default", true)
+        .eq("is_active", true)
+        .maybeSingle();
+
+      const defaultWarehouseId = defaultWh?.id || null;
+
       const { data: cust, error } = await supabase
         .from("customers")
         .insert({
@@ -149,6 +159,7 @@ const Auth = () => {
           display_id: displayId,
           name: regName.trim(),
           phone: verifiedPhone || null,
+          warehouse_id: defaultWarehouseId,
         })
         .select("id")
         .single();
@@ -164,13 +175,15 @@ const Auth = () => {
         phone_verified: true,
       }, { onConflict: "user_id" });
 
-      // Ensure user_roles has customer role
+      // Ensure user_roles has customer role and warehouse_id
       await supabase.from("user_roles").upsert({
         user_id: user.id,
         role: "customer",
+        warehouse_id: defaultWarehouseId,
       }, { onConflict: "user_id" });
 
       setNewCustomerId(cust.id);
+      setCustomerWarehouseId(defaultWarehouseId);
       setStep("add-store");
     } catch (error: any) {
       // Handle stale session (FK constraint violation)
@@ -345,6 +358,7 @@ const Auth = () => {
         lat: storeLat,
         lng: storeLng,
         phone: verifiedPhone || null,
+        warehouse_id: customerWarehouseId,
       });
       if (error) throw error;
       toast.success("Account set up successfully! Welcome.");

@@ -66,6 +66,15 @@
                     android:pathPrefix="/callback"
                     android:scheme="com.aquaprime.app" />
             </intent-filter>
+
+            <!-- Share target intent filter (for @capgo/capacitor-share-target) -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+
+                <data android:mimeType="image/*" />
+            </intent-filter>
         </activity>
 
         <provider

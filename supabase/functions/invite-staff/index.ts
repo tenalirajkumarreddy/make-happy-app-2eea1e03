@@ -100,7 +100,7 @@ Deno.serve(async (req) => {
       throw new Error("Invalid JSON request body");
     }
 
-    const { email, phone, full_name, role, avatar_url } = body;
+    const { email, phone, full_name, role, avatar_url, warehouse_id } = body;
 
     if (!full_name || typeof full_name !== "string" || full_name.trim().length === 0) {
       throw new Error("Missing required field: full_name");
@@ -108,6 +108,10 @@ Deno.serve(async (req) => {
 
     if (!role || typeof role !== "string") {
       throw new Error("Missing required field: role");
+    }
+
+    if (!warehouse_id || typeof warehouse_id !== "string") {
+      throw new Error("Missing required field: warehouse_id");
     }
 
     const validRoles = ["super_admin", "manager", "agent", "marketer", "pos"];
@@ -143,6 +147,7 @@ Deno.serve(async (req) => {
             phone,
             is_active: true,
             email: normalizedEmail,
+            warehouse_id,
             updated_at: new Date().toISOString(),
           })
           .eq("id", matchedStaff.id);
@@ -157,6 +162,7 @@ Deno.serve(async (req) => {
             avatar_url: avatar_url || null,
             is_active: true,
             email: normalizedEmail,
+            warehouse_id,
           });
         if (insertStaffError) throw insertStaffError;
       }
@@ -186,10 +192,10 @@ Deno.serve(async (req) => {
     });
     if (createError) throw createError;
 
-    // Assign role
+    // Assign role and warehouse_id
     await supabaseAdmin
       .from("user_roles")
-      .update({ role })
+      .update({ role, warehouse_id })
       .eq("user_id", newUser.user.id);
 
     // Link staff directory (indexed lookups instead of full-table scan)
@@ -214,6 +220,7 @@ Deno.serve(async (req) => {
             role,
             avatar_url: avatar_url || null,
             is_active: true,
+            warehouse_id,
             updated_at: new Date().toISOString(),
           })
           .eq("id", staffByEmail.id);
@@ -228,6 +235,7 @@ Deno.serve(async (req) => {
             role,
             avatar_url: avatar_url || null,
             is_active: true,
+            warehouse_id,
           });
         if (insertEmailStaffError) throw insertEmailStaffError;
       }
@@ -242,6 +250,7 @@ Deno.serve(async (req) => {
       invited_by: caller.id,
       status: "accepted",
       accepted_at: new Date().toISOString(),
+      warehouse_id,
     });
 
     // Send password reset
