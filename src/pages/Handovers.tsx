@@ -295,28 +295,45 @@ const Handovers = () => {
       toast.error("Amount exceeds your available balance");
       return;
     }
-    setSubmitting(true);
-    const { error } = await supabase.from("handovers").insert({
-      user_id: user!.id,
-      handed_to: toUserId,
-      cash_amount: Number(amount),
-      upi_amount: 0,
-      status: "awaiting_confirmation",
-      notes: notes || null,
+  setSubmitting(true);
+  
+  // NEW: Use server-side calculation for race condition prevention
+  const { data: handoverResult, error: handoverError } = await supabase
+    .rpc("create_handover", {
+      p_user_id: user!.id,
+      p_handed_to: toUserId,
+      p_notes: notes || null,
     });
-    setSubmitting(false);
-    if (error) toast.error(error.message);
-    else {
-      toast.success("Handover sent for confirmation");
+  
+  setSubmitting(false);
+  
+  if (handoverError) {
+    if (handoverError.message.includes("duplicate_handover")) {
+      toast.error("You already have a pending handover for today. Complete or cancel it first.");
+    } else {
+      toast.error(handoverError.message);
+    }
+    return;
+  }
+  
+  const createdHandover = handoverResult?.[0];
+  if (createdHandover) {
+    toast.success(
+      `Handover of ₹${Number(createdHandover.total_amount).toLocaleString()} ` +
+      `(Cash: ₹${Number(createdHandover.cash_amount).toLocaleString()}, ` +
+      `UPI: ₹${Number(createdHandover.upi_amount).toLocaleString()}) ` +
+      `sent for confirmation`
+    );
 
-      // Notify the recipient
-      sendNotification({
-        userId: toUserId,
-        title: "Handover Received",
-        message: `₹${Number(amount).toLocaleString()} handover awaiting your confirmation`,
-        type: "handover",
-        entityType: "handover",
-      });
+  // Notify the recipient
+    sendNotification({
+      userId: toUserId,
+      title: "Handover Received",
+      message: `₹${Number(createdHandover.total_amount).toLocaleString()} handover (Cash: ₹${Number(createdHandover.cash_amount).toLocaleString()}, UPI: ₹${Number(createdHandover.upi_amount).toLocaleString()}) awaiting your confirmation`,
+      type: "handover",
+      entityType: "handover",
+      entityId: createdHandover.handover_id,
+    });
 
       setCreateOpen(false);
       setAmount("");
