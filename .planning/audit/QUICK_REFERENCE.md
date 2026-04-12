@@ -101,8 +101,12 @@ src/
 | **stores** | Store data | id, name, outstanding, credit_limit, warehouse_id, lat, lng |
 | **customers** | Customer profiles | id, phone, email, gst_number, outstanding |
 | **products** | Product catalog | id, name, sku, price, category, is_active |
-| **staff_stock** | Agent inventory | staff_id, product_id, quantity, warehouse_id |
-| **stock_movements** | Stock history | product_id, quantity, movement_type, reference_id |
+| **staff_stock** | Agent inventory | staff_id, product_id, quantity, warehouse_id, amount_value, last_received_at, last_sale_at |
+| **product_stock** | Warehouse stock | warehouse_id, product_id, quantity, updated_at |
+| **stock_movements** | Stock history | product_id, quantity, movement_type, from_location_type, to_location_type, unit_price, total_value |
+| **pos_stores** | POS locations | id, warehouse_id, name, code, is_active |
+| **vendor_transactions** | Vendor payments | vendor_id, transaction_type, amount, balance_before, balance_after |
+| **raw_material_purchases** | Raw material buys | raw_material_id, vendor_id, quantity, total_amount |
 | **handovers** | Cash transfers | user_id, cash_amount, upi_amount, handed_to, status |
 | **transactions** | Payments | store_id, customer_id, total_amount, payment_method |
 | **routes** | Route definitions | id, name, agent_id, warehouse_id, is_active |
@@ -130,6 +134,14 @@ src/
 | `bulk_update_prices()` | Bulk price update | BulkActionToolbar.tsx |
 | `convert_currency()` | Currency conversion | CurrencyDisplay.tsx |
 | `get_user_warehouses()` | Warehouse scoping | All warehouse-scoped queries |
+| `transfer_stock_to_staff()` | Transfer from warehouse to staff | Inventory.tsx |
+| `adjust_stock()` | Adjust stock with reason | Inventory.tsx |
+| `get_stock_history()` | Retrieve movement history | StockHistoryView.tsx |
+| `get_staff_inventory_summary()` | Staff inventory stats | StaffStockView.tsx |
+| `record_vendor_purchase()` | Record raw material purchase | RawMaterials.tsx |
+| `record_vendor_payment()` | Record vendor payment | VendorPayments.tsx |
+| `get_vendor_balance()` | Get vendor balance | VendorDetail.tsx |
+| `get_sale_stock_source()` | Determine stock source for sale | Sales.tsx |
 
 ---
 

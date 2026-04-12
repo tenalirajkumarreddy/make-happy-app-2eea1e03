@@ -277,51 +277,151 @@ Product catalog management
 ---
 
 ### 2. Inventory (`/inventory`)
-**Component:** `Inventory.tsx` (65KB)
+**Component:** `Inventory.tsx` (Enhanced - 85KB)
 
 #### Purpose
-Stock management and tracking
+Comprehensive stock management system with staff inventory, warehouse control, POS integration, products, and raw materials
 
-#### UI Elements
+#### UI Structure (Tab-Based)
+| Tab | Visible To | Description |
+|-----|------------|-------------|
+| **My Stock** | Agent, Marketer, Manager | Personal inventory with value tracking |
+| **Warehouse** | Manager, Super Admin | Central warehouse stock management |
+| **Products** | Manager, Super Admin | Product catalog with inventory |
+| **Raw Materials** | Manager, Super Admin | Raw materials with vendor integration |
+
+#### My Stock Tab Elements (Staff Inventory)
 | Element | Type | Description |
 |---------|------|-------------|
-| Stock Table | Data Grid | Current stock levels |
-| Low Stock Alert | Banner | Warning for low items |
-| Transfer Button | Button | Initiate transfer |
-| Adjust Button | Button | Stock adjustment |
-| History Tab | Tab | Movement history |
-| Warehouse Filter | Dropdown | Filter by location |
+| Summary Cards | Cards | Total products, quantity, value |
+| Product List | Cards | Staff inventory items with images |
+| Value Display | Text | Amount value per product |
+| Last Sale | Badge | Last sale timestamp |
+| Last Received | Badge | Last received timestamp |
+| Adjust Button | Button | Adjust own stock |
+
+#### Warehouse Tab Elements
+| Element | Type | Description |
+|---------|------|-------------|
+| Warehouse Selector | Dropdown | Select warehouse |
+| Summary Cards | Cards | Total products, stock, allocated, available |
+| Stock Table | Data Grid | Products with stock levels |
+| Allocation Columns | Text | Allocated to staff vs available |
+| Transfer Button | Icon | Transfer to staff |
+| Adjust Button | Icon | Adjust warehouse stock |
+| History Button | Icon | View movement history |
 
 #### Actions Available
-1. **View Stock**
-   - Load: Table with pagination
-   - Columns: Product, Quantity, Warehouse, Last Updated
-   - Sort: By quantity (default)
 
-2. **Transfer Stock**
-   - Button: "Transfer"
-   - Dialog: Transfer form
-   - Fields: From, To, Product, Quantity
-   - API: `create_stock_transfer()` RPC
-   - Validation: Source has sufficient stock
+**1. View My Stock (Staff)**
+- Load: Staff inventory summary cards
+- Display: Product cards with images, quantity, value
+- Summary: Total products, total quantity, total value
+- API: `get_staff_inventory_summary()` RPC
+- Auto-calculated: amount_value based on product prices
 
-3. **Adjust Stock**
-   - Button: "Adjust"
-   - Dialog: Adjustment form
-   - Fields: Product, Quantity, Reason
-   - API: Insert `stock_adjustments`
-   - Audit: Logged in `stock_movements`
+**2. Transfer Stock to Staff**
+- Button: "Transfer" (Warehouse view)
+- Dialog: Staff selection, quantity input
+- Fields: Staff, Quantity, Notes
+- Validation: Check warehouse availability
+- API: `transfer_stock_to_staff()` RPC
+- Side Effects:
+  - Deduct from warehouse
+  - Add to staff stock
+  - Update amount_value
+  - Log movement
 
-4. **View History**
-   - Tab: "History"
-   - Table: All movements
-   - Filter: By type, date, product
+**3. Adjust Stock**
+- Button: "Adjust"
+- Dialog: Adjustment type, quantity, reason
+- Types: Addition (+) or Deduction (-)
+- Reasons: Damaged, Expired, Lost, Found, Correction, etc.
+- API: `adjust_stock()` RPC
+- Side Effects: Log movement with reason
+
+**4. View Stock History**
+- Button: "History"
+- Dialog: Timeline of movements
+- Filters: By type, date range
+- Export: CSV export option
+- API: `get_stock_history()` RPC
+
+**5. POS Sale (from Warehouse)**
+- Context: POS sales automatically deduct from warehouse
+- Validation: Mandatory payment (Cash/UPI)
+- Flow: Sale → Deduct warehouse → No outstanding
+- API: `deduct_sale_stock()` trigger
+
+**6. Raw Material Purchase**
+- Context: Raw material purchase increases vendor balance
+- API: `record_vendor_purchase()` RPC
+- Side Effects:
+  - Increase vendor balance
+  - Add raw material stock
+  - Create purchase record
+
+**7. Vendor Payment**
+- Context: Record payment to vendor
+- API: `record_vendor_payment()` RPC
+- Validation: Payment <= vendor balance
+- Side Effects: Decrease vendor balance
 
 #### Data Dependencies
 ```typescript
-- Tables: staff_stock, stock_movements, stock_transfers, products
-- Hooks: useStock(), useStockMovements()
-- Realtime: stock_movements inserts
+// Staff Inventory
+- Tables: staff_stock (with amount_value), products
+- Hooks: useStaffStock(), useStaffInventorySummary()
+- RPCs: get_staff_inventory_summary(), calculate_staff_inventory_value()
+
+// Warehouse Management
+- Tables: product_stock, staff_stock, warehouses
+- Hooks: useWarehouseStock(), useStockTransfer()
+- RPCs: transfer_stock_to_staff(), adjust_stock()
+
+// Stock Movements
+- Tables: stock_movements (enhanced with location tracking)
+- Hooks: useStockHistory()
+- RPCs: get_stock_history(), record_stock_movement()
+
+// Vendor Integration
+- Tables: vendors (with balance), vendor_transactions
+- Hooks: useVendorBalance(), useVendorTransactions()
+- RPCs: record_vendor_purchase(), record_vendor_payment(), get_vendor_balance()
+
+// POS Integration
+- Tables: pos_stores, sales (with pos_store_id)
+- Triggers: deduct_sale_stock(), validate_pos_sale()
+- Functions: get_sale_stock_source()
+```
+
+#### Business Rules
+```typescript
+const inventoryRules = {
+  // Staff Inventory
+  staffStockDeduct: "Auto-deduct on sale via trigger",
+  valueCalculation: "quantity × product.base_price",
+  valueUpdate: "Auto on stock change via trigger",
+  
+  // Warehouse Transfers
+  transferValidation: "Must have sufficient warehouse stock",
+  transferUpdate: "Deduct warehouse, add staff, log movement",
+  
+  // POS Sales
+  posSource: "Warehouse stock (not staff)",
+  posPayment: "Mandatory - Cash or UPI only",
+  posOutstanding: "0 - No credit allowed",
+  
+  // Adjustments
+  adjustmentReason: "Required",
+  adjustmentTypes: ["addition", "deduction"],
+  auditTrail: "Logged in stock_movements",
+  
+  // Vendor
+  purchaseIncreasesBalance: true,
+  paymentDecreasesBalance: true,
+  validation: "Payment <= current_balance"
+};
 ```
 
 ---
