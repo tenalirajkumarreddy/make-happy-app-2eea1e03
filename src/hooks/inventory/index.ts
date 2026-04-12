@@ -1,39 +1,34 @@
-// Inventory hooks
-export { useStaffStock, useMyStaffStock } from "./useStaffStock";
-export { useWarehouseStock, useProductWarehouseStock } from "./useWarehouseStock";
+// Inventory hooks - Phase 4 Redesign
+export { useStaffStock, useAllStaffStock } from "./useStaffStock";
+export { useWarehouseStock } from "./useWarehouseStock";
+export { 
+  useMyReturns, 
+  usePendingReturns, 
+  useReturnDetails,
+  useSubmitReturn,
+  useReviewReturn,
+  useCancelReturn,
+  useReturnStats
+} from "./useStockReturns";
+
+// Legacy hooks (for backwards compatibility)
 export { useStockTransfer } from "./useStockTransfer";
 export { useStockAdjustment, useStockMovementSummary } from "./useStockAdjustment";
 export { useStockHistory, useRecentStockHistory, useProductStockHistory } from "./useStockHistory";
 export { useVendorBalance, useVendorsWithBalance } from "./useVendorBalance";
 
 // Export types
-export type { 
-  StaffStockItem, 
-  StaffInventorySummary 
+export type {
+  StaffStockItem,
+  StaffInventorySummary
 } from "./useStaffStock";
 
-export type { 
-  Warehouse, 
-  WarehouseStock, 
-  WarehouseStats 
+export type {
+  WarehouseStockItem,
+  StockAllocation
 } from "./useWarehouseStock";
 
-export type { 
-  StockTransfer, 
-  TransferData 
-} from "./useStockTransfer";
-
-export type { 
-  StockAdjustment, 
-  AdjustmentData 
-} from "./useStockAdjustment";
-
-export type { 
-  StockMovement, 
-  RawMaterialAdjustment 
-} from "./useStockHistory";
-
-export type { 
-  Vendor, 
-  VendorTransaction 
-} from "./useVendorBalance";
+export type {
+  ReturnRequest,
+  ReturnItem
+} from "./useStockReturns";

@@ -393,6 +393,12 @@ Comprehensive stock management system with staff inventory, warehouse control, P
 - Tables: pos_stores, sales (with pos_store_id)
 - Triggers: deduct_sale_stock(), validate_pos_sale()
 - Functions: get_sale_stock_source()
+
+// Stock Return Workflow
+- Tables: stock_return_requests, stock_return_items, stock_return_approvals
+- Hooks: useStockReturns(), useMyReturns(), usePendingReturns()
+- RPCs: submit_stock_return(), review_stock_return(), get_pending_returns()
+- States: draft → pending → review → approved/partial/damaged/rejected → completed
 ```
 
 #### Business Rules

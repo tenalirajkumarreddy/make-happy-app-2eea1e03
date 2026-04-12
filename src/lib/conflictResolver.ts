@@ -561,4 +561,4 @@ export async function getConflictsSummary(
 
 // Export types
 export type { Conflict, ConflictResolution, ResolutionOption, OperationContext };
-export { ConflictType, ResolutionStrategy };
+export { ConflictType };
