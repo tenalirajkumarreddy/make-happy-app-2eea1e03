@@ -13,8 +13,10 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { logError } from "@/lib/logger";
+import { useQueryClient } from "@tanstack/react-query";
 
 export function useOnlineStatus() {
+  const qc = useQueryClient();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [pendingCount, setPendingCount] = useState(0);
   const [syncing, setSyncing] = useState(false);
@@ -130,11 +132,20 @@ export function useOnlineStatus() {
     
     let totalSynced = 0;
     let totalFailed = 0;
+
+    const keysToInvalidate = new Set<string>();
     
     // Sync file uploads first
     const fileResult = await syncFileUploads();
     totalSynced += fileResult.synced;
     totalFailed += fileResult.failed;
+
+    if (fileResult.synced > 0) {
+      // KYC docs update customer rows
+      keysToInvalidate.add("customers");
+      keysToInvalidate.add("customer");
+      keysToInvalidate.add("customers-kyc-for-sale");
+    }
     
     // Then sync regular actions
     const actions = await getQueuedActions();
@@ -158,6 +169,15 @@ export function useOnlineStatus() {
             p_created_at: saleData.created_at ?? null,
           });
           if (error) throw error;
+
+          keysToInvalidate.add("sales");
+          keysToInvalidate.add("stores");
+          keysToInvalidate.add("store");
+          keysToInvalidate.add("stores-for-sale");
+          keysToInvalidate.add("dashboard-stats");
+          keysToInvalidate.add("agent-dashboard-stats");
+          keysToInvalidate.add("orders");
+          keysToInvalidate.add("pending-orders-for-store");
         } else if (action.type === "transaction") {
           const { txData } = action.payload as any;
           const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "PAY", seq_name: "pay_display_seq" });
@@ -174,6 +194,12 @@ export function useOnlineStatus() {
             p_created_at: txData.created_at ?? null,
           });
           if (error) throw error;
+
+          keysToInvalidate.add("transactions");
+          keysToInvalidate.add("stores");
+          keysToInvalidate.add("store");
+          keysToInvalidate.add("dashboard-stats");
+          keysToInvalidate.add("agent-dashboard-stats");
         } else if (action.type === "visit") {
           const { userId, storeId, lat, lng } = action.payload as any;
           const { data: session, error: sessionError } = await supabase
@@ -192,6 +218,11 @@ export function useOnlineStatus() {
             lng: lng ?? null,
           });
           if (error) throw error;
+
+          keysToInvalidate.add("store-visits");
+          keysToInvalidate.add("session-visits");
+          keysToInvalidate.add("active-route-session");
+          keysToInvalidate.add("route-sessions");
         } else if (action.type === "customer") {
           const { customerData } = action.payload as {
             customerData: {
@@ -216,6 +247,13 @@ export function useOnlineStatus() {
             photo_url: customerData.photo_url ?? null,
           });
           if (error) throw error;
+
+          keysToInvalidate.add("customers");
+          keysToInvalidate.add("customer");
+          keysToInvalidate.add("customers-list");
+          keysToInvalidate.add("customers-for-orders");
+          keysToInvalidate.add("customers-for-invoice");
+          keysToInvalidate.add("customers-kyc-for-sale");
         }
         await removeFromQueue(action.id);
         totalSynced++;
@@ -228,9 +266,15 @@ export function useOnlineStatus() {
     setSyncing(false);
     await refreshCount();
 
+    if (keysToInvalidate.size > 0) {
+      keysToInvalidate.forEach((key) => {
+        qc.invalidateQueries({ queryKey: [key] });
+      });
+    }
+
     if (totalSynced > 0) toast.success(`Synced ${totalSynced} offline item(s)`);
     if (totalFailed > 0) toast.error(`${totalFailed} item(s) failed to sync`);
-  }, [syncing, refreshCount, syncFileUploads]);
+  }, [qc, syncing, refreshCount, syncFileUploads]);
 
   // Auto-sync when coming back online
   useEffect(() => {

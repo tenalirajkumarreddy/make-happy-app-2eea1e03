@@ -12,8 +12,6 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { logError } from "@/lib/logger";
 import { Loader2 } from "lucide-react";
-import { isNativeApp } from "@/lib/capacitorUtils";
-import { MobileAppV2 } from "@/mobile-v2";
 
 // Critical pages loaded eagerly for fast initial load
 import Dashboard from "./pages/Dashboard";
@@ -103,8 +101,6 @@ function DashboardRouter() {
 }
 
 const App = () => {
-  const isMobile = isNativeApp();
-
   return (
     <Sentry.ErrorBoundary fallback={({ error, resetError }: { error: any, resetError: () => void }) => (
       <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4 text-center">
@@ -125,20 +121,6 @@ const App = () => {
           <ErrorBoundary>
           <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <Suspense fallback={<PageLoader />}>
-            {isMobile ? (
-              // Mobile APK: Use dedicated mobile routing
-              <Routes>
-                <Route path="/auth" element={<Auth />} />
-                <Route path="/onboarding" element={<Onboarding />} />
-                <Route path="/reset-password" element={<ResetPassword />} />
-                <Route path="/*" element={
-                  <ProtectedRoute>
-                    <MobileAppV2 />
-                  </ProtectedRoute>
-                } />
-              </Routes>
-            ) : (
-              // Web: Standard routing
             <Routes>
               <Route path="/auth" element={<Auth />} />
               <Route path="/onboarding" element={<Onboarding />} />
@@ -208,7 +190,6 @@ const App = () => {
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
-            )}
           </Suspense>
         </BrowserRouter>
         </ErrorBoundary>

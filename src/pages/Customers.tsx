@@ -10,7 +10,6 @@ import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { logActivity } from "@/lib/activityLogger";
-import { generateDisplayId } from "@/lib/displayId";
 import { validatePhone, validateEmail, normalizePhone } from "@/lib/validation";
 import { Loader2, User, Upload, AlertCircle, Phone, Mail, Store as StoreIcon } from "lucide-react";
 import { usePermission } from "@/hooks/usePermission";
@@ -161,10 +160,20 @@ const Customers = () => {
       return;
     }
 
-    const displayId = generateDisplayId("CUST");
+    const { data: displayId, error: displayIdError } = await supabase.rpc("generate_display_id", { prefix: "CUST" });
+    if (displayIdError) {
+      setSaving(false);
+      toast.error(displayIdError.message);
+      return;
+    }
+    if (!displayId) {
+      setSaving(false);
+      toast.error("Failed to generate customer ID");
+      return;
+    }
 
     const { error } = await supabase.from("customers").insert({
-      display_id: displayId,
+      display_id: String(displayId),
       name,
       phone: normalizedPhone || null,
       email: email?.trim().toLowerCase() || null,
@@ -215,9 +224,17 @@ const Customers = () => {
         }
       }
       
-      const displayId = generateDisplayId("CUST");
+      const { data: displayId, error: displayIdError } = await supabase.rpc("generate_display_id", { prefix: "CUST" });
+      if (displayIdError) {
+        errors.push(`Row ${i + 2}: ${displayIdError.message}`);
+        continue;
+      }
+      if (!displayId) {
+        errors.push(`Row ${i + 2}: Failed to generate customer ID`);
+        continue;
+      }
       const { error } = await supabase.from("customers").insert({
-        display_id: displayId,
+        display_id: String(displayId),
         name: row.name.trim(),
         phone: row.phone ? normalizePhone(row.phone) : null,
         email: row.email?.trim().toLowerCase() || null,
@@ -383,7 +400,18 @@ const Customers = () => {
     }},
     { header: "KYC", accessor: (row: any) => (
       <button onClick={() => canReviewKyc && row.kyc_status !== "not_requested" ? setKycCustomer(row) : null} className={canReviewKyc && row.kyc_status !== "not_requested" ? "cursor-pointer hover:opacity-80" : ""}>
-        <StatusBadge status={row.kyc_status === "verified" ? "verified" : row.kyc_status === "pending" ? "pending" : row.kyc_status === "rejected" ? "rejected" : "inactive"} label={row.kyc_status.replace("_", " ")} />
+        <StatusBadge
+          status={
+            row.kyc_status === "verified" || row.kyc_status === "approved"
+              ? "verified"
+              : row.kyc_status === "pending"
+                ? "pending"
+                : row.kyc_status === "rejected"
+                  ? "rejected"
+                  : "inactive"
+          }
+          label={(row.kyc_status === "approved" ? "verified" : row.kyc_status).replace("_", " ")}
+        />
       </button>
     )},
     { header: "Status", accessor: (row: any) => <StatusBadge status={row.is_active ? "active" : "inactive"} /> },
@@ -540,8 +568,8 @@ const Customers = () => {
                     {/* KYC Status */}
                     <div className="pt-2 border-t">
                       <StatusBadge 
-                        status={row.kyc_status === "verified" ? "verified" : row.kyc_status === "pending" ? "pending" : "inactive"} 
-                        label={`KYC: ${row.kyc_status.replace("_", " ")}`} 
+                        status={(row.kyc_status === "verified" || row.kyc_status === "approved") ? "verified" : row.kyc_status === "pending" ? "pending" : "inactive"}
+                        label={`KYC: ${(row.kyc_status === "approved" ? "verified" : row.kyc_status).replace("_", " ")}`}
                       />
                     </div>
 

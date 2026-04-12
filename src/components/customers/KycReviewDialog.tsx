@@ -81,8 +81,8 @@ export function KycReviewDialog({ customer, open, onOpenChange, onDone }: KycRev
         <div className="space-y-4">
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Current Status:</span>
-            <Badge variant={customer.kyc_status === "verified" ? "default" : customer.kyc_status === "pending" ? "secondary" : "destructive"}>
-              {customer.kyc_status.replace("_", " ")}
+            <Badge variant={(customer.kyc_status === "verified" || customer.kyc_status === "approved") ? "default" : customer.kyc_status === "pending" ? "secondary" : "destructive"}>
+              {(customer.kyc_status === "approved" ? "verified" : customer.kyc_status).replace("_", " ")}
             </Badge>
           </div>
 

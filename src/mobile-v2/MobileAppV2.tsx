@@ -95,7 +95,7 @@ function getTabsForRole(role: UserRole) {
 }
 
 export function MobileAppV2() {
-  const { user, profile, role, isLoading } = useAuth();
+  const { user, role, loading } = useAuth();
   const location = useLocation();
   const [isInitialized, setIsInitialized] = useState(false);
 
@@ -119,7 +119,7 @@ export function MobileAppV2() {
   }, []);
 
   // Loading state
-  if (isLoading || !isInitialized) {
+  if (loading || !isInitialized) {
     return (
       <div className="mobile-v2 min-h-screen bg-background flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
@@ -135,7 +135,7 @@ export function MobileAppV2() {
     return <Navigate to="/auth" replace />;
   }
 
-  const userRole = (role || profile?.role || "customer") as UserRole;
+  const userRole = (role || "customer") as UserRole;
   const tabs = getTabsForRole(userRole);
   const defaultRoute = getDefaultRoute(userRole);
 

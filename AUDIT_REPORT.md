@@ -1,9 +1,10 @@
 # BizManager Application Audit Report
 
 **Audit Date:** April 7, 2026  
+**Last Updated:** April 11, 2026  
 **Auditor:** Senior Software Architect (AI-Assisted)  
 **Scope:** Full application audit - React frontend, Supabase backend, mobile (Capacitor)  
-**Status:** REPORT ONLY - No fixes applied
+**Status:** UPDATED - Fixes applied (see “Fixes Applied”)
 
 ---
 
@@ -23,67 +24,59 @@ BizManager is a multi-role sales/route/collections application with 69 database 
 
 ---
 
-## Critical Issues (Must Fix)
+## Fixes Applied
 
-### 1. KYC Status Enum Mismatch [CRITICAL]
-**Location:** `src/lib/creditLimit.ts` lines 44 & 48  
-**Impact:** Customers with verified KYC NEVER get credit limit boost
+This report originally described issues as “report only”. The repository has since been updated with targeted fixes for several high-impact parity/reliability mismatches.
 
-**What code thinks it does:**
-```typescript
-if (profile.kyc_status === "approved") {
-  baseLimit += 5000; // KYC bonus
-}
-```
+**Implemented fixes (high impact):**
+- KYC semantics aligned across backend + UI (treats legacy `approved` as KYC and normalizes to `verified` in UI).
+- Offline sync now invalidates relevant React Query caches so the UI refreshes immediately after reconnect.
+- Display ID generation moved to a concurrency-safe DB RPC with prefix + date + sequence.
+- OTP Edge Functions hardened (preflight/CORS consistency, attempt limits/expiry handling) and OTP session table access tightened.
+- Transactions page now uses the atomic DB RPC `record_transaction(...)` (removes client-side O(n) backdated balance loops).
+- Access Control staff invites now write to `staff_invitations` (unified with mobile/web staff identity resolution), and Google staff exchange marks invitations accepted.
+- Realtime sync now uses a shared singleton channel with ref-counted subscribers to avoid duplicate subscriptions.
+- Removed unused duplicate ErrorBoundary component to keep a single canonical implementation.
 
-**What actually happens:**
-- Database enum in `profiles.kyc_status` is: `pending`, `submitted`, `verified`, `rejected`
-- Code checks for `"approved"` which does NOT exist in the enum
-- Condition is ALWAYS false - no customer ever gets the KYC credit bonus
-
-**Fix Required:**
-```typescript
-if (profile.kyc_status === "verified") {
-  baseLimit += 5000;
-}
-```
+**Validation note:** this environment can run TypeScript diagnostics, but terminal-based `npm run build` execution is blocked here; rely on CI/local build for final runtime verification.
 
 ---
 
-### 2. Offline Sale Sync - Store Balance Not Updated [CRITICAL]
-**Location:** `src/hooks/useOnlineStatus.ts` lines 89-127  
-**Impact:** Store balances become permanently out of sync after offline sales
+## Critical Issues (Must Fix)
 
-**What code thinks it does:**
-- Queue sales offline in IndexedDB
-- Sync when back online via `record_sale` RPC
-- Update all related balances
+### 1. KYC Status Semantics Mismatch [CRITICAL → RESOLVED]
+**Impact:** Credit-limit buckets could be computed incorrectly when backend expected legacy `approved` while UI/business rules used `verified`.
 
-**What actually happens:**
-- `record_sale` RPC updates `customer.outstanding_balance` (OK)
-- `record_sale` RPC updates `sale_items` and `products` stock (OK)
-- Store balance update relies on DB trigger `update_store_balance_on_sale`
-- BUT: the trigger only fires on direct `sales` table INSERT
-- RPC uses `INSERT INTO sales` which SHOULD trigger it...
-- **ACTUAL BUG:** The offline sync doesn't invalidate the `stores` query cache, so UI shows stale balance until page refresh
+**Resolution (implemented):**
+- Backend `record_sale` credit-limit check now treats both `verified` and legacy `approved` as KYC.
+- Frontend surfaces that display or check KYC status now normalize `approved` → `verified`.
 
-**Fix Required:**
-Add to sync success handler:
-```typescript
-queryClient.invalidateQueries({ queryKey: ['stores'] });
-queryClient.invalidateQueries({ queryKey: ['store', sale.store_id] });
-```
+**Where:**
+- `record_sale` fix: `supabase/migrations/20260411000004_record_sale_kyc_verified_fix.sql`
+- UI normalization: `src/pages/Customers.tsx`, `src/components/customers/KycReviewDialog.tsx`, `src/components/reports/PaymentOutstandingReport.tsx`, and relevant mobile-v2 pages.
+
+---
+
+### 2. Offline Sync UI Staleness After Reconnect [CRITICAL → RESOLVED]
+**Impact:** Offline sync could succeed, but the UI would continue showing stale balances/lists until a manual refresh/navigation.
+
+**Resolution (implemented):**
+- After successful file/action sync, the app invalidates the affected React Query domains (stores, sales, transactions, visits, dashboards, customers) to force refetch.
+
+**Where:**
+- `src/hooks/useOnlineStatus.ts`
 
 ---
 
 ## Major Issues
 
-### 3. Dual Staff Invitation Systems [MAJOR]
+### 3. Dual Staff Invitation Systems [MAJOR → RESOLVED]
 **Locations:**
-- `src/pages/AdminStaffDirectory.tsx` - Uses `staff_invitations` table + `invite-staff` edge function
-- `src/pages/AccessControl.tsx` - Uses `staff_directory` table with direct inserts
+- `src/pages/AdminStaffDirectory.tsx` - Uses `staff_invitations` + `staff_directory`
+- `src/pages/AccessControl.tsx` - Staff invitations
+- Edge Functions: `supabase/functions/google-staff-exchange/index.ts`, `supabase/functions/verify-otp-opensms/index.ts`
 
-**Problem:** Two completely separate flows for managing staff, with different data models:
+**Problem (original):** Two separate flows for managing staff, with mismatched behavior.
 
 | Feature | AdminStaffDirectory | AccessControl |
 |---------|---------------------|---------------|
@@ -94,14 +87,21 @@ queryClient.invalidateQueries({ queryKey: ['store', sale.store_id] });
 
 **Impact:** Confusion about which is source of truth. Staff can exist in one but not the other.
 
-**Recommendation:** Consolidate to single flow. `AdminStaffDirectory` + edge function is the more complete solution.
+**Resolution (implemented):**
+- `AccessControl` now creates staff invitations via `staff_invitations` (instead of provisioning staff via the legacy invite edge function).
+- `google-staff-exchange` marks email-based invitations as `accepted` after successful staff login.
+
+**Where:**
+- `src/pages/AccessControl.tsx`
+- `supabase/functions/google-staff-exchange/index.ts`
+- `supabase/migrations/20260411000005_staff_invitations_metadata.sql`
 
 ---
 
-### 4. Duplicate ErrorBoundary Components [MAJOR]
+### 4. Duplicate ErrorBoundary Components [MAJOR → RESOLVED]
 **Locations:**
 - `src/components/shared/ErrorBoundary.tsx` - Imports `@sentry/react` directly
-- `src/components/error/ErrorBoundary.tsx` - Uses `window.Sentry` with runtime check
+- (Removed) `src/components/error/ErrorBoundary.tsx`
 
 **Problem:** 
 - Two different implementations with different Sentry integration approaches
@@ -110,13 +110,15 @@ queryClient.invalidateQueries({ queryKey: ['store', sale.store_id] });
 
 **Impact:** Potential runtime errors if Sentry not configured; inconsistent error reporting.
 
-**Recommendation:** Keep only `src/components/error/ErrorBoundary.tsx` (safer runtime check), delete the shared version, update all imports.
+**Resolution (implemented):**
+- Removed the unused duplicate implementation to avoid inconsistent behavior.
+- Canonical boundary remains `src/components/shared/ErrorBoundary.tsx`.
 
 ---
 
-### 5. Backdated Transaction Performance Issue [MAJOR]
-**Location:** `src/pages/Transactions.tsx` lines 180-220  
-**Impact:** O(n) recalculation on every backdated transaction
+### 5. Backdated Transaction Performance Issue [MAJOR → RESOLVED]
+**Location:** `src/pages/Transactions.tsx`
+**Impact (original):** O(n) recalculation on every backdated transaction
 
 **What happens:**
 ```typescript
@@ -128,10 +130,12 @@ queryClient.invalidateQueries({ queryKey: ['store', sale.store_id] });
 
 **Problem:** If store has 1000 transactions and you backdate to day 1, it recalculates 999 records.
 
-**Recommendation:** 
-- Move to database trigger for automatic recalculation
-- Or use batch UPDATE with window function
-- Or store only deltas, calculate running balance at query time
+**Resolution (implemented):**
+- Switched to DB RPC `public.record_transaction(...)` which locks the store row, computes old/new outstanding server-side, and calls `recalc_running_balances(...)` for backdated inserts.
+
+**Where:**
+- RPC: `supabase/migrations/20260404000001_atomic_record_transaction.sql`
+- UI callsite: `src/pages/Transactions.tsx`
 
 ---
 
@@ -141,19 +145,19 @@ queryClient.invalidateQueries({ queryKey: ['store', sale.store_id] });
 - `src/pages/Transactions.tsx` - Uses RPC `generate_display_id('transaction')`
 - `src/lib/displayId.ts` - Fallback `generateDisplayId()` uses random 8 digits
 
-**Problem:**
-- RPC format: `SAL-20260407-0001` (sequential, date-based)
-- Fallback format: `SAL-12345678` (random, no date)
-- When RPC fails, fallback creates inconsistent IDs
-- No collision detection in fallback
+**Status:** RESOLVED
 
-**Impact:** Duplicate IDs possible; inconsistent ID formats in database.
+**Resolution (implemented):**
+- Added a concurrency-safe DB-side generator using `display_id_counters` and RPC `public.generate_display_id(...)`.
+- Updated call sites to use RPC instead of a random fallback.
 
-**Recommendation:** Always use RPC; if it fails, throw error rather than fallback.
+**Where:**
+- Migration: `supabase/migrations/20260411000003_display_id_generator.sql`
+- Updated call sites: `src/pages/Auth.tsx`, `src/pages/Customers.tsx`, and offline transaction sync in `src/hooks/useOnlineStatus.ts`.
 
 ---
 
-### 7. Price Hierarchy Not Consistently Applied [MAJOR]
+### 7. Price Hierarchy Not Consistently Applied [MAJOR → RESOLVED]
 **Locations:**
 - `src/components/stores/StorePricingDialog.tsx` - Sets `store_pricing`
 - `src/pages/Sales.tsx` - Fetches prices
@@ -161,25 +165,15 @@ queryClient.invalidateQueries({ queryKey: ['store', sale.store_id] });
 
 **Expected Hierarchy:** `store_pricing` > `store_type_pricing` > `products.base_price`
 
-**Problem in AgentRecord.tsx:**
-```typescript
-// Only checks store_pricing, skips store_type_pricing fallback
-const priceData = await supabase
-  .from('store_pricing')
-  .select('price')
-  .eq('store_id', storeId)
-  .eq('product_id', productId)
-  .single();
+**Resolution (implemented):**
+- Mobile agent sale flow now applies the expected hierarchy: `store_pricing` > `store_type_pricing` > `products.base_price`.
 
-// If not found, goes directly to base_price
-// MISSING: store_type_pricing check
-```
-
-**Impact:** Mobile sales may use wrong prices for stores with store-type-level pricing.
+**Where:**
+- `src/mobile/pages/agent/AgentRecord.tsx`
 
 ---
 
-### 8. Realtime Subscription Memory Leaks [MAJOR]
+### 8. Realtime Subscription Memory Leaks [MAJOR → RESOLVED]
 **Location:** `src/hooks/useRealtimeSync.ts`
 
 **Problem:** Subscription cleanup depends on component unmount, but:
@@ -200,7 +194,9 @@ useEffect(() => {
 
 **Impact:** Potential duplicate event handlers; memory growth over long sessions.
 
-**Recommendation:** Use singleton pattern or ref-counted subscriptions.
+**Resolution (implemented):**
+- Implemented a shared singleton realtime channel and ref-counted per-hook subscribers.
+- Prevents duplicate subscriptions/handlers across remounts.
 
 ---
 
@@ -510,4 +506,4 @@ The codebase follows modern React patterns and makes good use of TypeScript, Rea
 
 ---
 
-*Report generated as part of comprehensive application audit. No code changes have been made.*
+*Report generated as part of comprehensive application audit. Code changes have been applied and this report has been updated to reflect the current repository state.*

@@ -60,7 +60,7 @@ export function AdminStores() {
 
   // Stats
   const totalOutstanding = stores?.reduce((sum, s) => sum + (s.outstanding_balance || 0), 0) || 0;
-  const verifiedStores = stores?.filter(s => s.kyc_status === "verified").length || 0;
+  const verifiedStores = stores?.filter(s => s.kyc_status === "verified" || s.kyc_status === "approved").length || 0;
   const activeStores = stores?.filter(s => s.is_active !== false).length || 0;
 
   if (isLoading) {
@@ -134,7 +134,7 @@ export function AdminStores() {
           <div className="space-y-3">
             {filteredStores.map((store) => {
               const hasBalance = (store.outstanding_balance || 0) > 0;
-              const isVerified = store.kyc_status === "verified";
+              const isVerified = store.kyc_status === "verified" || store.kyc_status === "approved";
 
               return (
                 <Card 

@@ -112,7 +112,7 @@ export function MarketerStoreProfile() {
   }
 
   const hasBalance = (store.outstanding_balance || 0) > 0;
-  const isVerified = store.kyc_status === "verified";
+  const isVerified = store.kyc_status === "verified" || store.kyc_status === "approved";
 
   return (
     <div className="mv2-page">

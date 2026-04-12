@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -37,6 +37,76 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
 
 const STAFF_ROLES = ["super_admin", "manager", "agent", "marketer", "pos"];
 
+type RealtimeSubscriber = {
+  qc: QueryClient;
+  isAdmin: boolean;
+  userId?: string | null;
+};
+
+let sharedChannel: any | null = null;
+const subscribers = new Map<symbol, RealtimeSubscriber>();
+
+function shouldSkipForSubscriber(sub: RealtimeSubscriber, table: string, payload: any) {
+  if (sub.isAdmin) return false;
+
+  const userId = sub.userId;
+  if (!userId) return true;
+
+  if (table === "sales" || table === "transactions") {
+    const recordedBy = payload.new?.recorded_by ?? payload.old?.recorded_by;
+    if (recordedBy && recordedBy !== userId) return true;
+  }
+
+  if (table === "handovers") {
+    const sender = payload.new?.user_id ?? payload.old?.user_id;
+    const receiver = payload.new?.handed_to ?? payload.old?.handed_to;
+    if (sender !== userId && receiver !== userId) return true;
+  }
+
+  if (table === "expense_claims") {
+    const claimOwner = payload.new?.user_id ?? payload.old?.user_id;
+    if (claimOwner && claimOwner !== userId) return true;
+  }
+
+  return false;
+}
+
+function handleRealtimePayload(table: string, payload: any) {
+  const keys = TABLE_QUERY_MAP[table] || [];
+  if (keys.length === 0) return;
+
+  subscribers.forEach((sub) => {
+    if (shouldSkipForSubscriber(sub, table, payload)) return;
+    keys.forEach((key) => {
+      sub.qc.invalidateQueries({ queryKey: [key] });
+    });
+  });
+}
+
+function ensureSharedChannel() {
+  if (sharedChannel) return;
+
+  const tables = Object.keys(TABLE_QUERY_MAP);
+  sharedChannel = supabase.channel("global-realtime-sync");
+
+  tables.forEach((table) => {
+    sharedChannel = sharedChannel.on(
+      "postgres_changes",
+      { event: "*", schema: "public", table },
+      (payload: any) => handleRealtimePayload(table, payload)
+    );
+  });
+
+  sharedChannel.subscribe();
+}
+
+function maybeTearDownSharedChannel() {
+  if (subscribers.size > 0) return;
+  if (!sharedChannel) return;
+  supabase.removeChannel(sharedChannel);
+  sharedChannel = null;
+}
+
 export function useRealtimeSync() {
   const qc = useQueryClient();
   const { role, user } = useAuth();
@@ -47,43 +117,13 @@ export function useRealtimeSync() {
   useEffect(() => {
     if (!isStaff) return;
 
-    const tables = Object.keys(TABLE_QUERY_MAP);
-
-    let channel = supabase.channel("global-realtime-sync");
-
-    tables.forEach((table) => {
-      channel = channel.on(
-        "postgres_changes",
-        { event: "*", schema: "public", table },
-        (payload: any) => {
-          // For non-admins, skip invalidation if the record belongs to another user
-          if (!isAdmin) {
-            if (table === "sales" || table === "transactions") {
-              const recordedBy = payload.new?.recorded_by ?? payload.old?.recorded_by;
-              if (recordedBy && recordedBy !== user?.id) return;
-            }
-            if (table === "handovers") {
-              const sender = payload.new?.user_id ?? payload.old?.user_id;
-              const receiver = payload.new?.handed_to ?? payload.old?.handed_to;
-              if (sender !== user?.id && receiver !== user?.id) return;
-            }
-            if (table === "expense_claims") {
-              const claimOwner = payload.new?.user_id ?? payload.old?.user_id;
-              if (claimOwner && claimOwner !== user?.id) return;
-            }
-          }
-          const keys = TABLE_QUERY_MAP[table] || [];
-          keys.forEach((key) => {
-            qc.invalidateQueries({ queryKey: [key] });
-          });
-        }
-      );
-    });
-
-    channel.subscribe();
+    const subscriberId = Symbol("realtime-subscriber");
+    subscribers.set(subscriberId, { qc, isAdmin, userId: user?.id });
+    ensureSharedChannel();
 
     return () => {
-      supabase.removeChannel(channel);
+      subscribers.delete(subscriberId);
+      maybeTearDownSharedChannel();
     };
   }, [qc, isStaff, isAdmin, user?.id]);
 }

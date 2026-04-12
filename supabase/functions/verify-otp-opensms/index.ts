@@ -1,9 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { getCorsHeaders, handleCorsPreflightOrError } from "../_shared/cors.ts";
 
 interface VerifyOTPRequest {
   session_token: string
@@ -115,13 +111,32 @@ async function resolveIdentity(
     }
 
     // Mark invitation as accepted
-    await adminClient
+    const acceptedAt = invitation.accepted_at || new Date().toISOString();
+    const { error: invitationUpdateError } = await adminClient
       .from("staff_invitations")
       .update({
         status: "accepted",
-        accepted_at: invitation.accepted_at || new Date().toISOString(),
+        accepted_at: acceptedAt,
+        user_id: userId,
       })
       .eq("id", invitation.id);
+
+    if (invitationUpdateError) {
+      console.error("Failed to mark staff invitation accepted (with user_id):", invitationUpdateError);
+
+      // Backwards compatibility: older schemas may not have user_id
+      const { error: retryInvitationUpdateError } = await adminClient
+        .from("staff_invitations")
+        .update({
+          status: "accepted",
+          accepted_at: acceptedAt,
+        })
+        .eq("id", invitation.id);
+
+      if (retryInvitationUpdateError) {
+        console.error("Failed to mark staff invitation accepted (retry):", retryInvitationUpdateError);
+      }
+    }
 
     // Set user role
     await adminClient.from("user_roles").delete().eq("user_id", userId);
@@ -222,9 +237,10 @@ async function resolveIdentity(
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
+  const preflight = handleCorsPreflightOrError(req);
+  if (preflight) return preflight;
+
+  const corsHeaders = getCorsHeaders(req);
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
@@ -269,12 +285,66 @@ Deno.serve(async (req) => {
 
     const session = otpSession as OTPSession
 
-    // Verify OTP code
-    if (session.otp_code !== otp_code.trim()) {
+    // Reject already-verified sessions
+    if (session.verified) {
       return new Response(
-        JSON.stringify({ error: 'Invalid OTP code' }),
+        JSON.stringify({ error: 'OTP already used. Please request a new OTP.' }),
         {
           status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      )
+    }
+
+    // Reject expired sessions
+    const expiresAtMs = Date.parse(session.expires_at);
+    if (!Number.isNaN(expiresAtMs) && expiresAtMs < Date.now()) {
+      // Best-effort cleanup
+      await adminClient
+        .from('otp_sessions')
+        .delete()
+        .eq('id', session.id)
+
+      return new Response(
+        JSON.stringify({ error: 'OTP expired. Please request a new OTP.' }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      )
+    }
+
+    // Enforce max attempts
+    if (session.attempts >= session.max_attempts) {
+      return new Response(
+        JSON.stringify({ error: 'Too many attempts. Please request a new OTP.' }),
+        {
+          status: 429,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      )
+    }
+
+    // Verify OTP code
+    const trimmedCode = otp_code.trim();
+    if (session.otp_code !== trimmedCode) {
+      const nextAttempts = (session.attempts || 0) + 1;
+
+      await adminClient
+        .from('otp_sessions')
+        .update({ attempts: nextAttempts })
+        .eq('id', session.id)
+
+      const attemptsRemaining = Math.max(0, (session.max_attempts || 3) - nextAttempts);
+      const lockedOut = attemptsRemaining === 0;
+
+      return new Response(
+        JSON.stringify({
+          error: lockedOut ? 'Too many attempts. Please request a new OTP.' : 'Invalid OTP code',
+          attempts_remaining: attemptsRemaining,
+        }),
+        {
+          status: lockedOut ? 429 : 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       )
