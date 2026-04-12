@@ -7,9 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Loader2, MapPin, Navigation } from "lucide-react";
+import { generateDisplayId } from "@/lib/displayId";
 import { useQuery } from "@tanstack/react-query";
 import { getCurrentPosition, getOAuthRedirectUrl } from "@/lib/capacitorUtils";
-import { logError } from "@/lib/logger";
 
 type Step = "phone" | "register" | "add-store";
 
@@ -18,18 +18,6 @@ const Logo = () => (
     AP
   </div>
 );
-
-function getUserFriendlyOtpError(error: unknown): string {
-  const raw = error instanceof Error ? error.message : String(error || "");
-  const msg = raw.trim();
-
-  // Common browser/WebView failure modes
-  if (/failed to fetch|networkerror|load failed|cors/i.test(msg)) {
-    return "Could not reach the OTP server. Please check your internet connection and try again.";
-  }
-
-  return msg || "Something went wrong. Please try again.";
-}
 
 
 async function hasStaffOrCustomerAccess(userId: string): Promise<boolean> {
@@ -66,7 +54,6 @@ const Auth = () => {
   // New-customer registration
   const [regName, setRegName] = useState("");
   const [newCustomerId, setNewCustomerId] = useState<string | null>(null);
-  const [customerWarehouseId, setCustomerWarehouseId] = useState<string | null>(null);
 
   // Store creation (step: add-store)
   const [storeName, setStoreName] = useState("");
@@ -153,27 +140,15 @@ const Auth = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      const { data: displayId, error: displayIdError } = await supabase.rpc("generate_display_id", { prefix: "CUST" });
-      if (displayIdError) throw displayIdError;
-      if (!displayId) throw new Error("Failed to generate customer ID");
-
-      const { data: defaultWh } = await supabase
-        .from("warehouses")
-        .select("id")
-        .eq("is_default", true)
-        .eq("is_active", true)
-        .maybeSingle();
-
-      const defaultWarehouseId = defaultWh?.id || null;
+      const displayId = generateDisplayId("CUST");
 
       const { data: cust, error } = await supabase
         .from("customers")
         .insert({
           user_id: user.id,
-          display_id: String(displayId),
+          display_id: displayId,
           name: regName.trim(),
           phone: verifiedPhone || null,
-          warehouse_id: defaultWarehouseId,
         })
         .select("id")
         .single();
@@ -189,15 +164,13 @@ const Auth = () => {
         phone_verified: true,
       }, { onConflict: "user_id" });
 
-      // Ensure user_roles has customer role and warehouse_id
+      // Ensure user_roles has customer role
       await supabase.from("user_roles").upsert({
         user_id: user.id,
         role: "customer",
-        warehouse_id: defaultWarehouseId,
       }, { onConflict: "user_id" });
 
       setNewCustomerId(cust.id);
-      setCustomerWarehouseId(defaultWarehouseId);
       setStep("add-store");
     } catch (error: any) {
       // Handle stale session (FK constraint violation)
@@ -275,14 +248,9 @@ const Auth = () => {
       
       setSessionToken(data.session_token);
       setOtpSent(true);
-      toast.success("OTP requested. If you don’t receive it, check the SMS Gateway device is connected.");
+      toast.success("OTP sent to your phone!");
     } catch (error: any) {
-      logError("Send OTP failed", error, {
-        flow: "opensms",
-        hasPhone: Boolean(phoneNumber?.trim()),
-        online: typeof navigator !== "undefined" ? navigator.onLine : undefined,
-      });
-      toast.error(getUserFriendlyOtpError(error));
+      toast.error(error.message || "Failed to send OTP");
     } finally {
       setLoading(false);
     }
@@ -345,12 +313,7 @@ const Auth = () => {
       setStep("register");
       toast.success("Phone verified! Please complete registration.");
     } catch (error: any) {
-      logError("Verify OTP failed", error, {
-        flow: "opensms",
-        hasSessionToken: Boolean(sessionToken),
-        online: typeof navigator !== "undefined" ? navigator.onLine : undefined,
-      });
-      toast.error(getUserFriendlyOtpError(error));
+      toast.error(error.message || "Invalid OTP code");
     } finally {
       setLoading(false);
     }
@@ -371,20 +334,17 @@ const Auth = () => {
       // Get default store type from settings
       const defaultStoreTypeId = appSettings?.default_store_type_id || '76efecec-3e6b-4142-beaa-885c06f41ba2'; // Fallback to Retail
       
-      const { data: displayId, error: displayIdError } = await supabase.rpc("generate_display_id", { prefix: "STR" });
-      if (displayIdError) throw displayIdError;
-      if (!displayId) throw new Error("Failed to generate store ID");
+      const displayId = generateDisplayId("STR");
       const { error } = await supabase.from("stores").insert({
         customer_id: newCustomerId,
         store_type_id: defaultStoreTypeId,
-        display_id: String(displayId),
+        display_id: displayId,
         name: storeName.trim(),
         address: storeAddress.trim(),
         city: storeCity.trim() || null,
         lat: storeLat,
         lng: storeLng,
         phone: verifiedPhone || null,
-        warehouse_id: customerWarehouseId,
       });
       if (error) throw error;
       toast.success("Account set up successfully! Welcome.");

@@ -54,7 +54,9 @@ const Handovers = () => {
   const { allowed: isFinalizer } = usePermission("finalizer");
   const { allowed: canSeeBalances } = usePermission("see_handover_balance");
   const { allowed: canSubmitExpenses, loading: expensePermLoading } = usePermission("submit_expenses");
-
+  
+  // DEBUG: Remove after testing
+  console.log("[Handovers] role:", role, "| isAdminOrManager:", isAdminOrManager, "| canSubmitExpenses:", canSubmitExpenses);
 
   const { data: staffProfiles } = useQuery({
     queryKey: ["staff-profiles", user?.id],

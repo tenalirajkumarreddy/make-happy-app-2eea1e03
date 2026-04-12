@@ -29,7 +29,6 @@ import {
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { useWarehouse } from "@/contexts/WarehouseContext";
 import { usePermission } from "@/hooks/usePermission";
 import { addToQueue } from "@/lib/offlineQueue";
 import { logActivity } from "@/lib/activityLogger";
@@ -49,13 +48,11 @@ interface SaleItem {
 
 // ─── Record Sale ─────────────────────────────────────────────────────────────
 function RecordSale({
-  store,
-  setStore,
-  storePickerOpen,
-  setStorePickerOpen,
-}: TabProps) {
+  preselectStore,
+}: {
+  preselectStore?: StoreOption | null;
+}) {
   const { user, role } = useAuth();
-  const { currentWarehouse } = useWarehouse();
   const { allowed: canOverridePrice } = usePermission("price_override");
   const { allowed: canRecordBehalf } = usePermission("record_behalf");
   const qc = useQueryClient();
@@ -351,7 +348,6 @@ function RecordSale({
       p_outstanding_amount: outstandingFromSale,
       p_sale_items: saleItems,
       p_created_at: saleDate ? new Date(saleDate).toISOString() : null,
-      p_warehouse_id: currentWarehouse?.id || null,
     });
 
     if (error) {
@@ -865,7 +861,6 @@ function RecordPayment({
   preselectStore?: StoreOption | null;
 }) {
   const { user } = useAuth();
-  const { currentWarehouse } = useWarehouse();
   const { allowed: canRecordBehalf } = usePermission("record_behalf");
   const qc = useQueryClient();
   const [saving, setSaving] = useState(false);
@@ -963,19 +958,8 @@ function RecordPayment({
       { prefix: "PAY", seq_name: "pay_display_seq" },
     );
     const { error } = await supabase.from("transactions").insert({
-      display_id: displayId,
-      store_id: store.id,
-      customer_id: store.customer_id,
-      recorded_by: effectiveRecordedBy,
-      logged_by: loggedBy,
-      cash_amount: cash,
-      upi_amount: upi,
-      total_amount: totalPayment,
-      old_outstanding: oldOutstanding,
-      new_outstanding: newOutstanding,
-      notes: notes || null,
-      warehouse_id: currentWarehouse?.id || null,
-      ...(txnDate ? { created_at: new Date(txnDate).toISOString() } : {}),
+      display_id: String(displayId),
+      ...txData,
     });
 
     if (error) {
@@ -1350,7 +1334,6 @@ export function AgentRecord({
   allowSale = true,
   allowPayment = true,
 }: AgentRecordProps) {
-  const { currentWarehouse } = useWarehouse();
   const initialTab = !allowSale ? "payment" : (preselectTab ?? "sale");
   const [activeTab, setActiveTab] = useState<string>(initialTab);
 

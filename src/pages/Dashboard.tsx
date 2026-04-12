@@ -1,7 +1,6 @@
 import { StatCard } from "@/components/shared/StatCard";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { useAuth } from "@/contexts/AuthContext";
-import { useWarehouse } from "@/contexts/WarehouseContext";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -23,14 +22,12 @@ const MAX_SALES_FOR_CHART = 500;
 
 const Dashboard = () => {
   const { profile } = useAuth();
-  const { currentWarehouse } = useWarehouse();
   
   // Check and send fixed cost reminders when dashboard loads
   useFixedCostReminders();
 
   const { data: stats, isLoading } = useQuery({
-    queryKey: ["dashboard-stats", currentWarehouse?.id],
-    enabled: !!currentWarehouse?.id,
+    queryKey: ["dashboard-stats"],
     queryFn: async () => {
       const today = new Date().toISOString().split("T")[0];
       const sevenDaysAgo = new Date(Date.now() - CHART_DAYS * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
@@ -49,31 +46,26 @@ const Dashboard = () => {
         // Today's sales - usually small, get full data for precise totals
         supabase.from("sales")
           .select("total_amount, cash_amount, upi_amount")
-          .eq("warehouse_id", currentWarehouse.id)
           .gte("created_at", today + "T00:00:00")
           .limit(500),
         // Recent sales for charts - bounded to 7 days and limited rows
         supabase.from("sales")
           .select("total_amount, created_at, stores(store_type_id, store_types(name))")
-          .eq("warehouse_id", currentWarehouse.id)
           .gte("created_at", sevenDaysAgo + "T00:00:00")
           .order("created_at", { ascending: false })
           .limit(MAX_SALES_FOR_CHART),
         // Customer count only
         supabase.from("customers")
           .select("*", { count: "exact", head: true })
-          .eq("warehouse_id", currentWarehouse.id)
           .eq("is_active", true),
         // Stores with outstanding - bounded and selected columns
         supabase.from("stores")
           .select("id, outstanding")
-          .eq("warehouse_id", currentWarehouse.id)
           .eq("is_active", true)
           .limit(500),
         // Pending orders - just a few for display
         supabase.from("orders")
           .select("id, status, display_id, stores(name), created_at")
-          .eq("warehouse_id", currentWarehouse.id)
           .eq("status", "pending")
           .order("created_at", { ascending: false })
           .limit(5),

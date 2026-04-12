@@ -5,35 +5,11 @@ const ALLOWED_ORIGINS = [
   "http://localhost:5000",
   "http://localhost:5173",
   "http://localhost:8100",
-  "http://localhost",
-  "capacitor://localhost",
-  "ionic://localhost",
 ];
-
-function isAllowedOrigin(origin: string): boolean {
-  if (!origin) return false;
-  if (origin === "null") return true;
-  if (origin === "capacitor://localhost" || origin === "ionic://localhost") return true;
-
-  try {
-    const url = new URL(origin);
-    if (
-      (url.protocol === "http:" || url.protocol === "https:") &&
-      (url.hostname === "localhost" || url.hostname === "127.0.0.1")
-    ) {
-      return true;
-    }
-    if (url.protocol === "https:") return true;
-  } catch {
-    // ignore malformed Origin
-  }
-
-  return false;
-}
 
 function getCorsHeaders(req: Request) {
   const origin = req.headers.get("Origin") || "";
-  const allowed = isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS[0];
+  const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
     "Access-Control-Allow-Origin": allowed,
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -124,7 +100,7 @@ Deno.serve(async (req) => {
       throw new Error("Invalid JSON request body");
     }
 
-    const { email, phone, full_name, role, avatar_url, warehouse_id } = body;
+    const { email, phone, full_name, role, avatar_url } = body;
 
     if (!full_name || typeof full_name !== "string" || full_name.trim().length === 0) {
       throw new Error("Missing required field: full_name");
@@ -132,10 +108,6 @@ Deno.serve(async (req) => {
 
     if (!role || typeof role !== "string") {
       throw new Error("Missing required field: role");
-    }
-
-    if (!warehouse_id || typeof warehouse_id !== "string") {
-      throw new Error("Missing required field: warehouse_id");
     }
 
     const validRoles = ["super_admin", "manager", "agent", "marketer", "pos"];
@@ -171,7 +143,6 @@ Deno.serve(async (req) => {
             phone,
             is_active: true,
             email: normalizedEmail,
-            warehouse_id,
             updated_at: new Date().toISOString(),
           })
           .eq("id", matchedStaff.id);
@@ -186,7 +157,6 @@ Deno.serve(async (req) => {
             avatar_url: avatar_url || null,
             is_active: true,
             email: normalizedEmail,
-            warehouse_id,
           });
         if (insertStaffError) throw insertStaffError;
       }
@@ -216,10 +186,10 @@ Deno.serve(async (req) => {
     });
     if (createError) throw createError;
 
-    // Assign role and warehouse_id
+    // Assign role
     await supabaseAdmin
       .from("user_roles")
-      .update({ role, warehouse_id })
+      .update({ role })
       .eq("user_id", newUser.user.id);
 
     // Link staff directory (indexed lookups instead of full-table scan)
@@ -244,7 +214,6 @@ Deno.serve(async (req) => {
             role,
             avatar_url: avatar_url || null,
             is_active: true,
-            warehouse_id,
             updated_at: new Date().toISOString(),
           })
           .eq("id", staffByEmail.id);
@@ -259,7 +228,6 @@ Deno.serve(async (req) => {
             role,
             avatar_url: avatar_url || null,
             is_active: true,
-            warehouse_id,
           });
         if (insertEmailStaffError) throw insertEmailStaffError;
       }
@@ -274,7 +242,6 @@ Deno.serve(async (req) => {
       invited_by: caller.id,
       status: "accepted",
       accepted_at: new Date().toISOString(),
-      warehouse_id,
     });
 
     // Send password reset

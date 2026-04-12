@@ -70,9 +70,8 @@ Deno.serve(async (req) => {
     // SECONDARY lookup: Check staff_invitations (email-based staff records)
     const { data: invitationRows, error: invitationError } = await supabaseAdmin
       .from("staff_invitations")
-      .select("id, email, full_name, role, status, accepted_at, created_at")
+      .select("id, email, full_name, role, created_at")
       .ilike("email", normalizedEmail)
-      .in("status", ["pending", "accepted"])
       .order("created_at", { ascending: false })
       .limit(1);
 
@@ -199,35 +198,6 @@ Deno.serve(async (req) => {
             is_active: true,
           });
         if (insertDirError) throw insertDirError;
-      }
-    }
-
-    // Mark invitation accepted so it doesn't linger as pending
-    if (staffInvitation && staffInvitation.status === "pending") {
-      const { error: acceptInvitationError } = await supabaseAdmin
-        .from("staff_invitations")
-        .update({
-          status: "accepted",
-          accepted_at: staffInvitation.accepted_at || new Date().toISOString(),
-          user_id,
-        })
-        .eq("id", staffInvitation.id);
-
-      if (acceptInvitationError) {
-        console.error("Failed to mark staff invitation accepted:", acceptInvitationError);
-
-        // Backwards compatibility: older schemas may not have user_id
-        const { error: retryAcceptInvitationError } = await supabaseAdmin
-          .from("staff_invitations")
-          .update({
-            status: "accepted",
-            accepted_at: staffInvitation.accepted_at || new Date().toISOString(),
-          })
-          .eq("id", staffInvitation.id);
-
-        if (retryAcceptInvitationError) {
-          console.error("Failed to mark staff invitation accepted (retry):", retryAcceptInvitationError);
-        }
       }
     }
 

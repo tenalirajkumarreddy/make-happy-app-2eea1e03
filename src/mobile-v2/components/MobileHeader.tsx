@@ -195,7 +195,7 @@ export function MobileHeader({ title, onMenuClick }: Props) {
                 </div>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  onClick={() => navigate(role === "customer" ? "/portal/profile" : (role === "super_admin" || role === "manager" ? "/admin/profile" : `/${role}`))}
+                  onClick={() => navigate(role === "customer" ? "/portal/profile" : "/profile")}
                   className="gap-2 mx-1 rounded-lg"
                 >
                   <User className="h-4 w-4" />

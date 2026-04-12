@@ -3,7 +3,6 @@ import { StatusBadge } from "@/components/shared/StatusBadge";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { useWarehouse } from "@/contexts/WarehouseContext";
 import { Loader2, UserPlus, Trash2, Edit2, Phone, Mail, UserCheck, Clock } from "lucide-react";
 import { useState } from "react";
 import {
@@ -48,7 +47,6 @@ interface StaffMember {
 
 export function AdminStaffDirectory() {
   const { role, user } = useAuth();
-  const { currentWarehouse } = useWarehouse();
   const qc = useQueryClient();
   const isAdmin = role === "super_admin";
 
@@ -70,36 +68,26 @@ export function AdminStaffDirectory() {
   const [formSaving, setFormSaving] = useState(false);
 
   const { data: staff, isLoading } = useQuery({
-    queryKey: ["staff-directory", currentWarehouse?.id],
+    queryKey: ["staff-directory"],
     queryFn: async () => {
-      let query = supabase
+      const { data, error } = await supabase
         .from("staff_directory" as any)
         .select("*")
-        .not("user_id", "is", null); // Only show staff who have joined (have user_id)
-      
-      if (currentWarehouse?.id) {
-        query = query.eq("warehouse_id", currentWarehouse.id);
-      }
-      
-      const { data, error } = await query.order("full_name");
+        .not("user_id", "is", null) // Only show staff who have joined (have user_id)
+        .order("full_name");
       if (error) throw error;
       return (data || []) as unknown as StaffMember[];
     },
   });
   
   const { data: invitations, isLoading: invitationsLoading } = useQuery({
-    queryKey: ["staff-invitations", currentWarehouse?.id],
+    queryKey: ["staff-invitations"],
     queryFn: async () => {
-      let query = supabase
+      const { data, error } = await supabase
         .from("staff_invitations")
         .select("*")
-        .eq("status", "pending"); // Only show pending invitations
-      
-      if (currentWarehouse?.id) {
-        query = query.eq("warehouse_id", currentWarehouse.id);
-      }
-      
-      const { data, error } = await query.order("created_at", { ascending: false });
+        .eq("status", "pending") // Only show pending invitations
+        .order("created_at", { ascending: false });
       if (error) throw error;
       return data || [];
     },
@@ -186,7 +174,6 @@ export function AdminStaffDirectory() {
         role: inviteRole as any,
         notes: inviteNotes.trim() || null,
         invited_by: user!.id,
-        warehouse_id: currentWarehouse?.id || null,
       } as any);
 
       if (error) throw error;

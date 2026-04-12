@@ -1,13 +1,10 @@
-import { Bell, Building2, ChevronDown, LogOut, Moon, Sun, CheckCheck, User } from "lucide-react";
+import { Bell, ChevronDown, LogOut, Moon, Sun, CheckCheck, User } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
-import { useWarehouse } from "@/contexts/WarehouseContext";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -73,13 +70,10 @@ function timeAgo(dateStr: string): string {
 
 export function TopBar() {
   const { profile, role, signOut } = useAuth();
-  const { currentWarehouse, allWarehouses, setActiveWarehouse } = useWarehouse();
   const navigate = useNavigate();
   const { dark, toggle } = useTheme();
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
   const [open, setOpen] = useState(false);
-
-  const isAdmin = role === "super_admin";
 
   // Request browser notification permission on first render
   useEffect(() => {
@@ -117,43 +111,6 @@ export function TopBar() {
       <div className="ml-auto flex items-center gap-2">
         {/* Offline queue status indicator */}
         <OfflineQueueStatus />
-
-        {/* Warehouse Selector — admin can switch, others see read-only badge */}
-        {isAdmin ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-1.5 rounded-lg border border-border bg-secondary/50 px-2.5 py-1.5 text-sm hover:bg-secondary transition-colors">
-                <Building2 className="h-4 w-4 text-muted-foreground" />
-                <span className="hidden sm:inline max-w-[120px] truncate font-medium">
-                  {currentWarehouse?.name ?? "All Warehouses"}
-                </span>
-                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuLabel className="text-xs text-muted-foreground">Select Warehouse</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {allWarehouses.map((wh) => (
-                <DropdownMenuItem
-                  key={wh.id}
-                  onClick={() => setActiveWarehouse(wh.id)}
-                  className={currentWarehouse?.id === wh.id ? "bg-primary/10 text-primary font-medium" : ""}
-                >
-                  <Building2 className="mr-2 h-4 w-4" />
-                  <span className="truncate">{wh.name}</span>
-                  {wh.is_default && (
-                    <span className="ml-auto text-[10px] text-muted-foreground">Default</span>
-                  )}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : currentWarehouse ? (
-          <div className="hidden sm:flex items-center gap-1.5 rounded-lg border border-border bg-secondary/30 px-2.5 py-1.5 text-xs text-muted-foreground">
-            <Building2 className="h-3.5 w-3.5" />
-            <span className="max-w-[100px] truncate font-medium text-foreground">{currentWarehouse.name}</span>
-          </div>
-        ) : null}
 
         {/* Dark mode toggle */}
         <button
