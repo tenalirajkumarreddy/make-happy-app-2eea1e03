@@ -1,5 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { Banknote, HandCoins, History, ShoppingCart, Smartphone } from "lucide-react";
+import {
+  Banknote,
+  HandCoins,
+  History,
+  ShoppingCart,
+  Smartphone,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
@@ -37,13 +43,32 @@ export function PosHome({ onOpenRecord, onOpenHistory }: Props) {
       const todaySales = salesRes.data || [];
       const handovers = handoversRes.data || [];
       const pendingHandover = handovers
-        .filter((handover) => handover.status === "pending" || handover.status === "awaiting_confirmation")
-        .reduce((sum, handover) => sum + Number(handover.cash_amount || 0) + Number(handover.upi_amount || 0), 0);
+        .filter(
+          (handover) =>
+            handover.status === "pending" ||
+            handover.status === "awaiting_confirmation",
+        )
+        .reduce(
+          (sum, handover) =>
+            sum +
+            Number(handover.cash_amount || 0) +
+            Number(handover.upi_amount || 0),
+          0,
+        );
 
       return {
-        totalSales: todaySales.reduce((sum, row) => sum + Number(row.total_amount || 0), 0),
-        totalCash: todaySales.reduce((sum, row) => sum + Number(row.cash_amount || 0), 0),
-        totalUpi: todaySales.reduce((sum, row) => sum + Number(row.upi_amount || 0), 0),
+        totalSales: todaySales.reduce(
+          (sum, row) => sum + Number(row.total_amount || 0),
+          0,
+        ),
+        totalCash: todaySales.reduce(
+          (sum, row) => sum + Number(row.cash_amount || 0),
+          0,
+        ),
+        totalUpi: todaySales.reduce(
+          (sum, row) => sum + Number(row.upi_amount || 0),
+          0,
+        ),
         pendingHandover,
       };
     },
@@ -89,7 +114,11 @@ export function PosHome({ onOpenRecord, onOpenHistory }: Props) {
     { label: "Sales Today", value: values.totalSales, icon: ShoppingCart },
     { label: "Cash", value: values.totalCash, icon: Banknote },
     { label: "UPI", value: values.totalUpi, icon: Smartphone },
-    { label: "Pending Handover", value: values.pendingHandover, icon: HandCoins },
+    {
+      label: "Pending Handover",
+      value: values.pendingHandover,
+      icon: HandCoins,
+    },
   ];
 
   return (
@@ -107,14 +136,18 @@ export function PosHome({ onOpenRecord, onOpenHistory }: Props) {
                 <p className="text-xs text-muted-foreground">{item.label}</p>
                 <item.icon className="h-4 w-4 text-muted-foreground" />
               </div>
-              <p className="text-lg font-semibold">₹{item.value.toLocaleString("en-IN")}</p>
+              <p className="text-lg font-semibold">
+                ₹{item.value.toLocaleString("en-IN")}
+              </p>
             </CardContent>
           </Card>
         ))}
       </div>
 
       <div className="grid grid-cols-2 gap-3 pt-1">
-        <Button onClick={onOpenRecord} className="w-full">Record Sale</Button>
+        <Button onClick={onOpenRecord} className="w-full">
+          Record Sale
+        </Button>
         <Button onClick={onOpenHistory} variant="outline" className="w-full">
           <History className="h-4 w-4 mr-2" />
           History

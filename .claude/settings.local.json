@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run:*)",
+      "Bash(npm install:*)",
+      "Bash(chmod:*)",
+      "Bash(./node_modules/.bin/vite build:*)",
+      "Bash(npx vite:*)",
+      "Bash(npm cache:*)",
+      "Bash(node node_modules/vite/bin/vite.js build)"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "code-review-graph"
+  ]
+}

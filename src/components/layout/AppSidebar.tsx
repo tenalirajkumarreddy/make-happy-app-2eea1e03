@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
+  ArrowRightLeft,
   LayoutDashboard,
   Users,
   Store,
@@ -101,6 +102,7 @@ const NAV_BY_ROLE: Record<string, { main: NavItem[]; secondary: NavItem[] }> = {
       { label: "Expenses", path: "/expenses", icon: Wallet },
       { label: "Attendance", path: "/attendance", icon: Calendar },
       { label: "Handovers", path: "/handovers", icon: HandCoins },
+      { label: "Stock Transfers", path: "/stock-transfers", icon: ArrowRightLeft },
       { label: "Map", path: "/map", icon: Map },
       { label: "Banners", path: "/banners", icon: Image },
     ],
@@ -130,6 +132,7 @@ const NAV_BY_ROLE: Record<string, { main: NavItem[]; secondary: NavItem[] }> = {
       { label: "Expenses", path: "/expenses", icon: Wallet },
       { label: "Attendance", path: "/attendance", icon: Calendar },
       { label: "Handovers", path: "/handovers", icon: HandCoins },
+      { label: "Stock Transfers", path: "/stock-transfers", icon: ArrowRightLeft },
       { label: "Map", path: "/map", icon: Map },
       { label: "Banners", path: "/banners", icon: Image },
     ],
@@ -150,6 +153,7 @@ const NAV_BY_ROLE: Record<string, { main: NavItem[]; secondary: NavItem[] }> = {
       { label: "Transactions", path: "/transactions", icon: Receipt },
       { label: "Orders", path: "/orders", icon: ClipboardList },
       { label: "Handovers", path: "/handovers", icon: HandCoins },
+      { label: "Stock Transfers", path: "/stock-transfers", icon: ArrowRightLeft },
     ],
     secondary: [],
   },
@@ -161,6 +165,7 @@ const NAV_BY_ROLE: Record<string, { main: NavItem[]; secondary: NavItem[] }> = {
       { label: "Orders", path: "/orders", icon: ClipboardList },
       { label: "Transactions", path: "/transactions", icon: Receipt },
       { label: "Handovers", path: "/handovers", icon: HandCoins },
+      { label: "Stock Transfers", path: "/stock-transfers", icon: ArrowRightLeft },
     ],
     secondary: [],
   },

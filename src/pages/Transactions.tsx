@@ -192,47 +192,60 @@ const Transactions = () => {
       return;
     }
 
-    const { data: displayId, error: displayIdError } = await supabase.rpc("generate_display_id", {
-      prefix: "PAY",
-      seq_name: "pay_display_seq",
-    });
-    if (displayIdError) {
-      toast.error(displayIdError.message);
-      setSaving(false);
-      return;
-    }
-    if (!displayId) {
-      toast.error("Failed to generate payment ID");
-      setSaving(false);
-      return;
-    }
+    const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "PAY", seq_name: "pay_display_seq" });
 
     const effectiveRecordedBy = recordedFor || user!.id;
     const loggedBy = recordedFor ? user!.id : null;
 
-    const { data: txnRows, error } = await supabase.rpc("record_transaction", {
-      p_display_id: String(displayId),
-      p_store_id: storeId,
-      p_customer_id: customerId,
-      p_recorded_by: effectiveRecordedBy,
-      p_logged_by: loggedBy,
-      p_cash_amount: cash,
-      p_upi_amount: upi,
-      p_notes: notes || null,
-      p_created_at: txnDate ? new Date(txnDate).toISOString() : null,
+    const { error } = await supabase.from("transactions").insert({
+      display_id: displayId,
+      store_id: storeId,
+      customer_id: customerId,
+      recorded_by: effectiveRecordedBy,
+      logged_by: loggedBy,
+      cash_amount: cash,
+      upi_amount: upi,
+      total_amount: totalPayment,
+      old_outstanding: oldOutstanding,
+      new_outstanding: newOutstanding,
+      notes: notes || null,
+      ...(txnDate ? { created_at: new Date(txnDate).toISOString() } : {}),
     });
 
-    if (error) {
-      toast.error(error.message);
-      setSaving(false);
-      return;
+    if (error) { toast.error(error.message); setSaving(false); return; }
+
+    await supabase.from("stores").update({ outstanding: newOutstanding }).eq("id", storeId);
+
+    // If backdated, recalculate all running balances in chronological order
+    if (txnDate) {
+      try {
+        const { data: storeRow } = await supabase.from("stores").select("opening_balance").eq("id", storeId).maybeSingle();
+        let runBal = Number(storeRow?.opening_balance || 0);
+        const [{ data: allSales }, { data: allTxns }] = await Promise.all([
+          supabase.from("sales").select("id, created_at, total_amount, cash_amount, upi_amount").eq("store_id", storeId).order("created_at", { ascending: true }),
+          supabase.from("transactions").select("id, created_at, total_amount").eq("store_id", storeId).order("created_at", { ascending: true }),
+        ]);
+        const timeline = [
+          ...(allSales || []).map((s: any) => ({ type: "sale", id: s.id, date: s.created_at, delta: Number(s.total_amount) - Number(s.cash_amount) - Number(s.upi_amount) })),
+          ...(allTxns || []).map((t: any) => ({ type: "txn", id: t.id, date: t.created_at, delta: -Number(t.total_amount) })),
+        ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        for (const entry of timeline) {
+          const oldBal = runBal;
+          runBal += entry.delta;
+          if (entry.type === "sale") {
+            await supabase.from("sales").update({ old_outstanding: oldBal, new_outstanding: runBal }).eq("id", entry.id);
+          } else {
+            await supabase.from("transactions").update({ old_outstanding: oldBal, new_outstanding: runBal }).eq("id", entry.id);
+          }
+        }
+        await supabase.from("stores").update({ outstanding: runBal }).eq("id", storeId);
+      } catch (recalcError) {
+        console.error("Balance recalculation failed:", recalcError);
+        toast.error("Transaction saved but balance recalculation failed. Please contact admin.");
+      }
     }
 
-    const txnDisplayId = Array.isArray(txnRows) && txnRows.length > 0 && txnRows[0]?.txn_display_id
-      ? String(txnRows[0].txn_display_id)
-      : String(displayId);
-
-    logActivity(user!.id, "Recorded transaction", "transaction", txnDisplayId, undefined, { total: totalPayment, store: storeId });
+    logActivity(user!.id, "Recorded transaction", "transaction", displayId, undefined, { total: totalPayment, store: storeId });
     toast.success("Transaction recorded");
 
     // Notify admins/managers
@@ -243,10 +256,10 @@ const Transactions = () => {
         if (others.length > 0) {
           sendNotificationToMany(others, {
             title: "Payment Collected",
-            message: `₹${totalPayment.toLocaleString()} collected from ${storeName} (${txnDisplayId})`,
+            message: `₹${totalPayment.toLocaleString()} collected from ${storeName} (${displayId})`,
             type: "payment",
             entityType: "transaction",
-            entityId: txnDisplayId,
+            entityId: displayId,
           });
         }
       })
@@ -259,11 +272,6 @@ const Transactions = () => {
     setShowAdd(false);
     resetForm();
     qc.invalidateQueries({ queryKey: ["transactions"] });
-    qc.invalidateQueries({ queryKey: ["stores"] });
-    qc.invalidateQueries({ queryKey: ["store"] });
-    qc.invalidateQueries({ queryKey: ["stores-for-txn"] });
-    qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
-    qc.invalidateQueries({ queryKey: ["agent-dashboard-stats"] });
   };
 
   // Filtering is now done server-side; local array mirrors the fetched page(s)

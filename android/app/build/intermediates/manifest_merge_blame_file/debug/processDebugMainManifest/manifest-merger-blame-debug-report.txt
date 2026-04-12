@@ -11,23 +11,23 @@
 11    <!-- Permissions -->
 12
 13    <uses-permission android:name="android.permission.INTERNET" />
-13-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:51:5-67
-13-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:51:22-64
+13-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:58:5-67
+13-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:58:22-64
 14    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-14-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:52:5-79
-14-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:52:22-76
+14-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:59:5-79
+14-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:59:22-76
 15    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-15-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:53:5-81
-15-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:53:22-78
+15-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:60:5-81
+15-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:60:22-78
 16    <uses-permission android:name="android.permission.CAMERA" />
-16-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:54:5-65
-16-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:54:22-62
+16-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:61:5-65
+16-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:61:22-62
 17    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-17-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:55:5-77
-17-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:55:22-74
+17-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:62:5-77
+17-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:62:22-74
 18    <uses-permission android:name="android.permission.VIBRATE" />
-18-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:56:5-66
-18-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:56:22-63
+18-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:63:5-66
+18-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:63:22-63
 19
 20    <queries>
 20-->[:capacitor-camera] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\camera\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:7:5-11:15
@@ -40,8 +40,8 @@
 24    </queries>
 25
 26    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-26-->[io.ionic.libs:iongeolocation-android:2.1.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\bb5d3a7ffa8e07dc2d8b2ea47227825a\transformed\iongeolocation-android-2.1.0\AndroidManifest.xml:7:5-79
-26-->[io.ionic.libs:iongeolocation-android:2.1.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\bb5d3a7ffa8e07dc2d8b2ea47227825a\transformed\iongeolocation-android-2.1.0\AndroidManifest.xml:7:22-76
+26-->[io.ionic.libs:iongeolocation-android:2.2.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f9f36ed1f901e20a235c9439f9d4c093\transformed\iongeolocation-android-2.2.0\AndroidManifest.xml:7:5-79
+26-->[io.ionic.libs:iongeolocation-android:2.2.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f9f36ed1f901e20a235c9439f9d4c093\transformed\iongeolocation-android-2.2.0\AndroidManifest.xml:7:22-76
 27
 28    <permission
 28-->[androidx.core:core:1.17.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\11094a199bb7945826b161d8a9c17beb\transformed\core-1.17.0\AndroidManifest.xml:22:5-24:47
@@ -55,7 +55,7 @@
 32-->[androidx.core:core:1.17.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\11094a199bb7945826b161d8a9c17beb\transformed\core-1.17.0\AndroidManifest.xml:26:22-94
 33
 34    <application
-34-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:4:5-47:19
+34-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:4:5-54:19
 35        android:allowBackup="true"
 35-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:5:9-35
 36        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
@@ -73,7 +73,7 @@
 43        android:theme="@style/AppTheme" >
 43-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:10:9-40
 44        <activity
-44-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:12:9-36:20
+44-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:12:9-43:20
 45            android:name="com.aquaprime.app.MainActivity"
 45-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:14:13-41
 46            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
@@ -121,106 +121,122 @@
 67                    android:scheme="com.aquaprime.app" />
 67-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:31:21-55
 68            </intent-filter>
-69        </activity>
-70
-71        <provider
-72            android:name="androidx.core.content.FileProvider"
-72-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:39:13-62
-73            android:authorities="com.aquaprime.app.fileprovider"
-73-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:40:13-64
-74            android:exported="false"
-74-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:41:13-37
-75            android:grantUriPermissions="true" >
-75-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:42:13-47
-76            <meta-data
-76-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:43:13-45:64
-77                android:name="android.support.FILE_PROVIDER_PATHS"
-77-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:44:17-67
-78                android:resource="@xml/file_paths" />
-78-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:45:17-51
-79        </provider>
-80
-81        <activity
-81-->[com.google.android.gms:play-services-base:18.5.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\c1b0052ae712299163f2612d6db27779\transformed\play-services-base-18.5.0\AndroidManifest.xml:5:9-173
-82            android:name="com.google.android.gms.common.api.GoogleApiActivity"
-82-->[com.google.android.gms:play-services-base:18.5.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\c1b0052ae712299163f2612d6db27779\transformed\play-services-base-18.5.0\AndroidManifest.xml:5:19-85
+69
+70            <!-- Share target intent filter (for @capgo/capacitor-share-target) -->
+71            <intent-filter>
+71-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:37:13-41:29
+72                <action android:name="android.intent.action.SEND" />
+72-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:38:17-69
+72-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:38:25-66
+73
+74                <category android:name="android.intent.category.DEFAULT" />
+74-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:28:17-76
+74-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:28:27-73
+75
+76                <data android:mimeType="image/*" />
+76-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:30:17-33:54
+76-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:40:23-49
+77            </intent-filter>
+78        </activity>
+79
+80        <provider
+81            android:name="androidx.core.content.FileProvider"
+81-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:46:13-62
+82            android:authorities="com.aquaprime.app.fileprovider"
+82-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:47:13-64
 83            android:exported="false"
-83-->[com.google.android.gms:play-services-base:18.5.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\c1b0052ae712299163f2612d6db27779\transformed\play-services-base-18.5.0\AndroidManifest.xml:5:146-170
-84            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
-84-->[com.google.android.gms:play-services-base:18.5.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\c1b0052ae712299163f2612d6db27779\transformed\play-services-base-18.5.0\AndroidManifest.xml:5:86-145
-85
-86        <provider
-86-->[androidx.emoji2:emoji2:1.3.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\353d69426d62513a7e19e841051a3a44\transformed\emoji2-1.3.0\AndroidManifest.xml:24:9-32:20
-87            android:name="androidx.startup.InitializationProvider"
-87-->[androidx.emoji2:emoji2:1.3.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\353d69426d62513a7e19e841051a3a44\transformed\emoji2-1.3.0\AndroidManifest.xml:25:13-67
-88            android:authorities="com.aquaprime.app.androidx-startup"
-88-->[androidx.emoji2:emoji2:1.3.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\353d69426d62513a7e19e841051a3a44\transformed\emoji2-1.3.0\AndroidManifest.xml:26:13-68
-89            android:exported="false" >
-89-->[androidx.emoji2:emoji2:1.3.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\353d69426d62513a7e19e841051a3a44\transformed\emoji2-1.3.0\AndroidManifest.xml:27:13-37
-90            <meta-data
-90-->[androidx.emoji2:emoji2:1.3.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\353d69426d62513a7e19e841051a3a44\transformed\emoji2-1.3.0\AndroidManifest.xml:29:13-31:52
-91                android:name="androidx.emoji2.text.EmojiCompatInitializer"
-91-->[androidx.emoji2:emoji2:1.3.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\353d69426d62513a7e19e841051a3a44\transformed\emoji2-1.3.0\AndroidManifest.xml:30:17-75
-92                android:value="androidx.startup" />
-92-->[androidx.emoji2:emoji2:1.3.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\353d69426d62513a7e19e841051a3a44\transformed\emoji2-1.3.0\AndroidManifest.xml:31:17-49
-93            <meta-data
-93-->[androidx.lifecycle:lifecycle-process:2.6.2] C:\Users\rajku\.gradle\caches\8.14.3\transforms\14a3b51da1167f75215e7e32d2231e74\transformed\lifecycle-process-2.6.2\AndroidManifest.xml:29:13-31:52
-94                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
-94-->[androidx.lifecycle:lifecycle-process:2.6.2] C:\Users\rajku\.gradle\caches\8.14.3\transforms\14a3b51da1167f75215e7e32d2231e74\transformed\lifecycle-process-2.6.2\AndroidManifest.xml:30:17-78
-95                android:value="androidx.startup" />
-95-->[androidx.lifecycle:lifecycle-process:2.6.2] C:\Users\rajku\.gradle\caches\8.14.3\transforms\14a3b51da1167f75215e7e32d2231e74\transformed\lifecycle-process-2.6.2\AndroidManifest.xml:31:17-49
-96            <meta-data
-96-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:29:13-31:52
-97                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
-97-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:30:17-85
-98                android:value="androidx.startup" />
-98-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:31:17-49
-99        </provider>
-100
-101        <meta-data
-101-->[com.google.android.gms:play-services-basement:18.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\535e9dd0a65eaa85bd344836d560144e\transformed\play-services-basement-18.4.0\AndroidManifest.xml:6:9-122
-102            android:name="com.google.android.gms.version"
-102-->[com.google.android.gms:play-services-basement:18.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\535e9dd0a65eaa85bd344836d560144e\transformed\play-services-basement-18.4.0\AndroidManifest.xml:6:20-65
-103            android:value="@integer/google_play_services_version" />
-103-->[com.google.android.gms:play-services-basement:18.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\535e9dd0a65eaa85bd344836d560144e\transformed\play-services-basement-18.4.0\AndroidManifest.xml:6:66-119
-104
-105        <receiver
-105-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:34:9-52:20
-106            android:name="androidx.profileinstaller.ProfileInstallReceiver"
-106-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:35:13-76
-107            android:directBootAware="false"
-107-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:36:13-44
-108            android:enabled="true"
-108-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:37:13-35
-109            android:exported="true"
-109-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:38:13-36
-110            android:permission="android.permission.DUMP" >
-110-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:39:13-57
-111            <intent-filter>
-111-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:40:13-42:29
-112                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
-112-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:41:17-91
-112-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:41:25-88
-113            </intent-filter>
-114            <intent-filter>
-114-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:43:13-45:29
-115                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
-115-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:44:17-85
-115-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:44:25-82
-116            </intent-filter>
-117            <intent-filter>
-117-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:46:13-48:29
-118                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
-118-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:47:17-88
-118-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:47:25-85
-119            </intent-filter>
+83-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:48:13-37
+84            android:grantUriPermissions="true" >
+84-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:49:13-47
+85            <meta-data
+85-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:50:13-52:64
+86                android:name="android.support.FILE_PROVIDER_PATHS"
+86-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:51:17-67
+87                android:resource="@xml/file_paths" />
+87-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:52:17-51
+88        </provider>
+89
+90        <activity
+90-->[com.google.android.gms:play-services-base:18.5.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\c1b0052ae712299163f2612d6db27779\transformed\play-services-base-18.5.0\AndroidManifest.xml:5:9-173
+91            android:name="com.google.android.gms.common.api.GoogleApiActivity"
+91-->[com.google.android.gms:play-services-base:18.5.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\c1b0052ae712299163f2612d6db27779\transformed\play-services-base-18.5.0\AndroidManifest.xml:5:19-85
+92            android:exported="false"
+92-->[com.google.android.gms:play-services-base:18.5.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\c1b0052ae712299163f2612d6db27779\transformed\play-services-base-18.5.0\AndroidManifest.xml:5:146-170
+93            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+93-->[com.google.android.gms:play-services-base:18.5.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\c1b0052ae712299163f2612d6db27779\transformed\play-services-base-18.5.0\AndroidManifest.xml:5:86-145
+94
+95        <provider
+95-->[androidx.emoji2:emoji2:1.3.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\353d69426d62513a7e19e841051a3a44\transformed\emoji2-1.3.0\AndroidManifest.xml:24:9-32:20
+96            android:name="androidx.startup.InitializationProvider"
+96-->[androidx.emoji2:emoji2:1.3.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\353d69426d62513a7e19e841051a3a44\transformed\emoji2-1.3.0\AndroidManifest.xml:25:13-67
+97            android:authorities="com.aquaprime.app.androidx-startup"
+97-->[androidx.emoji2:emoji2:1.3.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\353d69426d62513a7e19e841051a3a44\transformed\emoji2-1.3.0\AndroidManifest.xml:26:13-68
+98            android:exported="false" >
+98-->[androidx.emoji2:emoji2:1.3.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\353d69426d62513a7e19e841051a3a44\transformed\emoji2-1.3.0\AndroidManifest.xml:27:13-37
+99            <meta-data
+99-->[androidx.emoji2:emoji2:1.3.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\353d69426d62513a7e19e841051a3a44\transformed\emoji2-1.3.0\AndroidManifest.xml:29:13-31:52
+100                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+100-->[androidx.emoji2:emoji2:1.3.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\353d69426d62513a7e19e841051a3a44\transformed\emoji2-1.3.0\AndroidManifest.xml:30:17-75
+101                android:value="androidx.startup" />
+101-->[androidx.emoji2:emoji2:1.3.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\353d69426d62513a7e19e841051a3a44\transformed\emoji2-1.3.0\AndroidManifest.xml:31:17-49
+102            <meta-data
+102-->[androidx.lifecycle:lifecycle-process:2.6.2] C:\Users\rajku\.gradle\caches\8.14.3\transforms\14a3b51da1167f75215e7e32d2231e74\transformed\lifecycle-process-2.6.2\AndroidManifest.xml:29:13-31:52
+103                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+103-->[androidx.lifecycle:lifecycle-process:2.6.2] C:\Users\rajku\.gradle\caches\8.14.3\transforms\14a3b51da1167f75215e7e32d2231e74\transformed\lifecycle-process-2.6.2\AndroidManifest.xml:30:17-78
+104                android:value="androidx.startup" />
+104-->[androidx.lifecycle:lifecycle-process:2.6.2] C:\Users\rajku\.gradle\caches\8.14.3\transforms\14a3b51da1167f75215e7e32d2231e74\transformed\lifecycle-process-2.6.2\AndroidManifest.xml:31:17-49
+105            <meta-data
+105-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:29:13-31:52
+106                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+106-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:30:17-85
+107                android:value="androidx.startup" />
+107-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:31:17-49
+108        </provider>
+109
+110        <meta-data
+110-->[com.google.android.gms:play-services-basement:18.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\535e9dd0a65eaa85bd344836d560144e\transformed\play-services-basement-18.4.0\AndroidManifest.xml:6:9-122
+111            android:name="com.google.android.gms.version"
+111-->[com.google.android.gms:play-services-basement:18.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\535e9dd0a65eaa85bd344836d560144e\transformed\play-services-basement-18.4.0\AndroidManifest.xml:6:20-65
+112            android:value="@integer/google_play_services_version" />
+112-->[com.google.android.gms:play-services-basement:18.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\535e9dd0a65eaa85bd344836d560144e\transformed\play-services-basement-18.4.0\AndroidManifest.xml:6:66-119
+113
+114        <receiver
+114-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:34:9-52:20
+115            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+115-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:35:13-76
+116            android:directBootAware="false"
+116-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:36:13-44
+117            android:enabled="true"
+117-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:37:13-35
+118            android:exported="true"
+118-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:38:13-36
+119            android:permission="android.permission.DUMP" >
+119-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:39:13-57
 120            <intent-filter>
-120-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:49:13-51:29
-121                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
-121-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:50:17-95
-121-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:50:25-92
+120-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:40:13-42:29
+121                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+121-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:41:17-91
+121-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:41:25-88
 122            </intent-filter>
-123        </receiver>
-124    </application>
-125
-126</manifest>
+123            <intent-filter>
+123-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:43:13-45:29
+124                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+124-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:44:17-85
+124-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:44:25-82
+125            </intent-filter>
+126            <intent-filter>
+126-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:46:13-48:29
+127                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+127-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:47:17-88
+127-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:47:25-85
+128            </intent-filter>
+129            <intent-filter>
+129-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:49:13-51:29
+130                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+130-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:50:17-95
+130-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:50:25-92
+131            </intent-filter>
+132        </receiver>
+133    </application>
+134
+135</manifest>

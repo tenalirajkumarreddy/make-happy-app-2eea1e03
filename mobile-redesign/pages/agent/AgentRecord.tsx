@@ -144,7 +144,9 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
       return;
     }
 
-    const { data: displayId } = await (supabase as any).rpc("generate_display_id", { prefix: "SALE", seq_name: "sale_display_seq" });
+    const { data: displayId, error: displayIdError } = await (supabase as any).rpc("generate_display_id", { prefix: "SALE", seq_name: "sale_display_seq" });
+    if (displayIdError) throw displayIdError;
+    if (!displayId) throw new Error("Failed to generate display ID");
     const { error } = await (supabase as any).rpc("record_sale", {
       p_display_id: displayId,
       p_store_id: store.id,
@@ -497,7 +499,9 @@ function RecordPayment({ preselectStore }: { preselectStore?: StoreOption | null
       return;
     }
 
-    const { data: displayId } = await (supabase as any).rpc("generate_display_id", { prefix: "PAY", seq_name: "pay_display_seq" });
+    const { data: displayId, error: displayIdError } = await (supabase as any).rpc("generate_display_id", { prefix: "PAY", seq_name: "pay_display_seq" });
+    if (displayIdError) throw displayIdError;
+    if (!displayId) throw new Error("Failed to generate display ID");
     const { error } = await supabase.from("transactions").insert({
       display_id: String(displayId),
       ...txData,

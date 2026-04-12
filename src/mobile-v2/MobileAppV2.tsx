@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
+import ErrorBoundary from "@/components/error/ErrorBoundary";
 
 // Layout Components
 import { MobileHeader } from "./components/MobileHeader";
@@ -95,7 +95,7 @@ function getTabsForRole(role: UserRole) {
 }
 
 export function MobileAppV2() {
-  const { user, role, loading } = useAuth();
+  const { user, profile, role, loading } = useAuth();
   const location = useLocation();
   const [isInitialized, setIsInitialized] = useState(false);
 

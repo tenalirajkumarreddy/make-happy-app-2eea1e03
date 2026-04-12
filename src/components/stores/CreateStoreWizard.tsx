@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermission } from "@/hooks/usePermission";
+import { useWarehouse } from "@/contexts/WarehouseContext";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -32,6 +33,7 @@ type Step = "customer" | "details" | "pricing";
 
 export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStoreWizardProps) {
   const { role, user } = useAuth();
+  const { currentWarehouse } = useWarehouse();
   const { allowed: canSetOpeningBalance } = usePermission("opening_balance");
   const { canAccessRoute, canAccessStoreType, hasMatrixRestrictions, hasStoreTypeRestrictions, enabledRouteIds } = useRouteAccess(user?.id, role);
   const qc = useQueryClient();
@@ -272,6 +274,7 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
           phone: newCustPhone || null,
           email: newCustEmail || null,
           photo_url: newCustPhotoUrl || null,
+          warehouse_id: currentWarehouse?.id || null,
         }).select("id").single();
         if (custErr) { toast.error(custErr.message); setSaving(false); return; }
         finalCustomerId = newCust.id;
@@ -318,6 +321,7 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
         pincode: pincode || null,
         opening_balance: ob,
         outstanding: ob,
+        warehouse_id: currentWarehouse?.id || null,
       }).select("id").single();
 
       if (storeErr) { toast.error(storeErr.message); setSaving(false); return; }

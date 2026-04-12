@@ -1,133 +1,35 @@
 import { createRoot } from "react-dom/client";
+import { Capacitor } from "@capacitor/core";
+import { App as CapacitorApp } from "@capacitor/app";
+import { SplashScreen } from "@capacitor/splash-screen";
+import { StatusBar, Style } from "@capacitor/status-bar";
+import * as Sentry from "@sentry/react";
+import App from "./App.tsx";
 import "./index.css";
-import { env, envError, envIssues } from "@/lib/env";
+import { env } from "@/lib/env";
 import { logDebug, logError } from "@/lib/logger";
+import { supabase } from "@/integrations/supabase/client";
 
-function ConfigErrorScreen({ message }: { message: string }) {
-  return (
-    <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-4">
-      <div className="w-full max-w-2xl rounded-xl border bg-card p-6 shadow-sm space-y-4">
-        <div className="space-y-1">
-          <h1 className="text-xl font-semibold tracking-tight">App setup needed</h1>
-          <p className="text-sm text-muted-foreground">
-            The app can’t start because required configuration is missing or invalid.
-          </p>
-        </div>
-
-        {(envIssues.missing.length > 0 || envIssues.invalid.length > 0) && (
-          <div className="grid gap-3 sm:grid-cols-2">
-            {envIssues.missing.length > 0 && (
-              <div className="rounded-lg border p-3">
-                <p className="text-sm font-medium">Missing</p>
-                <ul className="mt-2 list-disc pl-5 text-xs text-muted-foreground">
-                  {envIssues.missing.map((k) => (
-                    <li key={k}>{k}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {envIssues.invalid.length > 0 && (
-              <div className="rounded-lg border p-3">
-                <p className="text-sm font-medium">Invalid</p>
-                <ul className="mt-2 list-disc pl-5 text-xs text-muted-foreground">
-                  {envIssues.invalid.map((k) => (
-                    <li key={k}>{k}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="rounded-lg bg-muted p-3">
-          <p className="text-xs font-mono whitespace-pre-wrap text-muted-foreground">{message}</p>
-        </div>
-
-        <p className="text-xs text-muted-foreground">
-          Helpful docs: <span className="font-medium">ENVIRONMENT_CONFIG.md</span>, <span className="font-medium">SECURITY_SETUP.md</span>
-        </p>
-      </div>
-    </div>
-  );
-}
-
-const rootElement = document.getElementById("root");
-if (!rootElement) {
-  throw new Error("Root element '#root' not found");
-}
-
-const root = createRoot(rootElement);
-
-if (envError) {
-  root.render(<ConfigErrorScreen message={envError} />);
-} else {
-  bootstrap();
-}
-
-function attachGlobalErrorHandlers() {
-  window.addEventListener("error", (event) => {
-    logError("[Global] Unhandled error", event.error || event.message, {
-      filename: event.filename,
-      lineno: event.lineno,
-      colno: event.colno,
-    });
-  });
-
-  window.addEventListener("unhandledrejection", (event) => {
-    logError("[Global] Unhandled promise rejection", event.reason);
+if (env.VITE_SENTRY_DSN && import.meta.env.PROD) {
+  Sentry.init({
+    dsn: env.VITE_SENTRY_DSN,
+    environment: env.VITE_SENTRY_ENVIRONMENT || 'production',
+    integrations: [
+      Sentry.browserTracingIntegration(),
+      Sentry.replayIntegration({
+        maskAllText: true,
+        blockAllMedia: true,
+      }),
+    ],
+    tracesSampleRate: 0.1,
+    replaysSessionSampleRate: 0.1,
+    replaysOnErrorSampleRate: 1.0,
   });
 }
 
-async function bootstrap() {
-  attachGlobalErrorHandlers();
-
-  // Initialize Sentry only when configured (keeps dev + web startup fast)
-  if (env.VITE_SENTRY_DSN && import.meta.env.PROD) {
-    try {
-      const Sentry = await import("@sentry/react");
-      Sentry.init({
-        dsn: env.VITE_SENTRY_DSN,
-        environment: env.VITE_SENTRY_ENVIRONMENT || "production",
-        integrations: [
-          Sentry.browserTracingIntegration(),
-          Sentry.replayIntegration({
-            maskAllText: true,
-            blockAllMedia: true,
-          }),
-        ],
-        tracesSampleRate: 0.1,
-        replaysSessionSampleRate: 0.1,
-        replaysOnErrorSampleRate: 1.0,
-      });
-    } catch (err) {
-      logError("[Sentry] init failed", err);
-    }
-  }
-
-  const { default: App } = await import("./App.tsx");
-  root.render(<App />);
-
-  // Initialize native features + PWA after render
-  initCapacitor();
-  registerServiceWorker();
-}
-
-// Initialize Capacitor plugins only when running as native app
+// Initialize Capacitor plugins when running as native app
 async function initCapacitor() {
-  try {
-    const { Capacitor } = await import("@capacitor/core");
-    if (!Capacitor.isNativePlatform()) return;
-
-    const [{ App: CapacitorApp }, { SplashScreen }, statusBarModule, supaModule] = await Promise.all([
-      import("@capacitor/app"),
-      import("@capacitor/splash-screen"),
-      import("@capacitor/status-bar"),
-      import("@/integrations/supabase/client"),
-    ]);
-
-    const { StatusBar, Style } = statusBarModule;
-    const { supabase } = supaModule;
-
+  if (Capacitor.isNativePlatform()) {
     const handleAuthCallback = async (url?: string) => {
       if (!url) return;
 
@@ -173,19 +75,19 @@ async function initCapacitor() {
     });
 
     try {
+      // Set status bar style
       await StatusBar.setStyle({ style: Style.Dark });
       await StatusBar.setBackgroundColor({ color: "#1a1a2e" });
-    } catch {
+    } catch (e) {
       logDebug("StatusBar plugin not available");
     }
 
     try {
+      // Hide splash screen after app is ready
       await SplashScreen.hide();
-    } catch {
+    } catch (e) {
       logDebug("SplashScreen plugin not available");
     }
-  } catch (error) {
-    logError("[Capacitor] init failed", error);
   }
 }
 
@@ -200,3 +102,10 @@ async function registerServiceWorker() {
     }
   }
 }
+
+// Render app first, then initialize native features
+createRoot(document.getElementById("root")!).render(<App />);
+
+// Initialize Capacitor and service worker after render
+initCapacitor();
+registerServiceWorker();

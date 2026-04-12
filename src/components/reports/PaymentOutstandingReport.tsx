@@ -93,7 +93,7 @@ export default function PaymentOutstandingReport() {
         const typeInfo = storeTypeMap[s.store_type_id] || { name: "Other", creditKyc: 0, creditNoKyc: 0 };
         const typeName = typeInfo.name;
         const cust = customerMap[s.customer_id];
-        const isKyc = cust?.kyc_status === "verified" || cust?.kyc_status === "approved";
+        const isKyc = cust?.kyc_status === "verified";
         const creditLimit = cust?.credit_limit_override
           ? Number(cust.credit_limit_override)
           : isKyc ? typeInfo.creditKyc : typeInfo.creditNoKyc;

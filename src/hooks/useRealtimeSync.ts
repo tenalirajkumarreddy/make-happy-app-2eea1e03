@@ -33,6 +33,12 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
   profiles: ["profiles", "staff-profiles"],
   agent_routes: ["route-access-matrix", "routes", "mobile-agent-routes"],
   agent_store_types: ["store-type-access-matrix", "route-access-matrix", "mobile-marketer-store-types", "mobile-store-types-credit"],
+  // Inventory tables
+  product_stock: ["inventory", "stock-movements"],
+  stock_movements: ["stock-movements", "inventory"],
+  staff_stock: ["staff-stock"],
+  stock_transfers: ["stock-transfers", "staff-stock", "inventory"],
+  warehouses: ["warehouses"],
 };
 
 const STAFF_ROLES = ["super_admin", "manager", "agent", "marketer", "pos"];

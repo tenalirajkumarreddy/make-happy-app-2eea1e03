@@ -42,8 +42,9 @@ interface StoreOption {
 interface ProductRow {
   id: string;
   name: string;
-  price: number;
+  price: number; // base price
   unit: string | null;
+  effectivePrice?: number; // calculated price with overrides
 }
 
 interface CartItem {
@@ -95,18 +96,63 @@ export function AgentRecord({ store: storeProp, mode: modeProp, onClose, onSucce
     }
   };
 
-  // Fetch products for sale mode
+  // Fetch products for sale mode with pricing hierarchy
   const { data: products, isLoading: loadingProducts } = useQuery({
-    queryKey: ["mobile-v2-products-for-sale"],
+    queryKey: ["mobile-v2-products-for-sale", store?.id],
     queryFn: async () => {
-      const { data } = await supabase
+      if (!store?.id) return [];
+
+      // Get base products
+      const { data: baseProducts } = await supabase
         .from("products")
         .select("id, name, price, unit")
         .eq("is_active", true)
         .order("name");
-      return (data as ProductRow[]) || [];
+
+      let productList: ProductRow[] = (baseProducts as ProductRow[]) || [];
+
+      // If we have a store, apply pricing hierarchy
+      if (store?.id) {
+        // Get store-type pricing (applies to all products of this store type)
+        const { data: typePricing } = await supabase
+          .from("store_type_pricing")
+          .select("product_id, price")
+          .eq("store_type_id", store.store_type_id);
+        const typePriceMap: Record<string, number> = {};
+        typePricing?.forEach((p: any) => { typePriceMap[p.product_id] = Number(p.price); });
+
+        // Get store-specific pricing (highest priority)
+        const { data: storePricing } = await supabase
+          .from("store_pricing")
+          .select("product_id, price")
+          .eq("store_id", store.id);
+        const storePriceMap: Record<string, number> = {};
+        storePricing?.forEach((p: any) => { storePriceMap[p.product_id] = Number(p.price); });
+
+        // Apply hierarchy: base -> type -> store (store overrides type, type overrides base)
+        productList = productList.map((p) => {
+          let effectivePrice = p.price; // Start with base price
+          let priceSource = "base";
+
+          // Check store-type pricing
+          if (typePriceMap[p.id]) {
+            effectivePrice = typePriceMap[p.id];
+            priceSource = "type";
+          }
+
+          // Check store-specific pricing (highest priority)
+          if (storePriceMap[p.id]) {
+            effectivePrice = storePriceMap[p.id];
+            priceSource = "store";
+          }
+
+          return { ...p, effectivePrice };
+        });
+      }
+
+      return productList;
     },
-    enabled: mode === "sale",
+    enabled: mode === "sale" && !!store?.id,
   });
 
   // Cart calculations
@@ -153,7 +199,7 @@ export function AgentRecord({ store: storeProp, mode: modeProp, onClose, onSucce
       return [...prev, {
         product_id: product.id,
         name: product.name,
-        price: product.price,
+        price: product.effectivePrice || product.price, // Use effective price with fallback to base price
         quantity: 1,
         unit: product.unit,
       }];
@@ -191,8 +237,10 @@ export function AgentRecord({ store: storeProp, mode: modeProp, onClose, onSucce
 
       if (mode === "sale") {
         // Generate display ID
-        const { data: displayIdData } = await supabase.rpc("generate_display_id", { prefix: "SAL" });
-        const displayId = displayIdData || `SAL-${Date.now()}`;
+        const { data: displayIdData, error: displayIdError } = await supabase.rpc("generate_display_id", { prefix: "SAL" });
+        if (displayIdError) throw displayIdError;
+        if (!displayIdData) throw new Error("Failed to generate display ID");
+        const displayId = displayIdData;
 
         // Create sale
         const salePayload = {
@@ -221,8 +269,10 @@ export function AgentRecord({ store: storeProp, mode: modeProp, onClose, onSucce
         toast.success("Sale recorded successfully!");
       } else {
         // Generate display ID for transaction
-        const { data: displayIdData } = await supabase.rpc("generate_display_id", { prefix: "TXN" });
-        const displayId = displayIdData || `TXN-${Date.now()}`;
+        const { data: displayIdData, error: displayIdError } = await supabase.rpc("generate_display_id", { prefix: "TXN" });
+        if (displayIdError) throw displayIdError;
+        if (!displayIdData) throw new Error("Failed to generate display ID");
+        const displayId = displayIdData;
 
         // Create transaction/payment
         const { error } = await supabase.from("transactions").insert({
@@ -301,7 +351,7 @@ export function AgentRecord({ store: storeProp, mode: modeProp, onClose, onSucce
                       >
                         <p className="text-sm font-medium truncate">{product.name}</p>
                         <p className="text-xs mv2-text-muted">
-                          ₹{product.price}/{product.unit || "unit"}
+                          ₹{(product.effectivePrice || product.price)}/{product.unit || "unit"}
                         </p>
                         {inCart && (
                           <div className="flex items-center justify-between mt-2 pt-2 border-t">

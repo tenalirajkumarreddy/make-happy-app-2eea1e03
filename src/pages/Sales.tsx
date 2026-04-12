@@ -18,7 +18,6 @@ import { OrderFulfillmentDialog } from "@/components/orders/OrderFulfillmentDial
 import { useState, useMemo, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { usePermission } from "@/hooks/usePermission";
-import { useRouteAccess } from "@/hooks/useRouteAccess";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -99,7 +98,6 @@ const Sales = () => {
   const isPosUser = role === "pos";
   const { allowed: canOverridePrice } = usePermission("price_override");
   const { allowed: canRecordBehalf } = usePermission("record_behalf");
-  const { canAccessStore, hasMatrixRestrictions, hasStoreTypeRestrictions, loading: routeLoading } = useRouteAccess(user?.id, role);
   const qc = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -197,22 +195,10 @@ const Sales = () => {
   const { data: stores } = useQuery({
     queryKey: ["stores-for-sale"],
     queryFn: async () => {
-      const { data } = await supabase.from("stores").select("id, name, outstanding, display_id, store_type_id, customer_id, route_id, lat, lng, is_active").order("is_active", { ascending: false }).order("name");
+      const { data } = await supabase.from("stores").select("id, name, outstanding, display_id, store_type_id, customer_id, lat, lng, is_active").order("is_active", { ascending: false }).order("name");
       return data || [];
     },
   });
-
-  // Enforce matrix restrictions client-side for scoped roles.
-  // Note: RLS currently allows staff to view all stores; UI must not allow actions on unassigned stores.
-  const accessFilteredStores = useMemo(() => {
-    let data = stores || [];
-    // POS flow is locked to the POS store; route/store-type matrices don't apply here.
-    if (isPosUser) return data;
-    if (hasMatrixRestrictions || hasStoreTypeRestrictions) {
-      data = data.filter((s: any) => canAccessStore(s.route_id, s.store_type_id));
-    }
-    return data;
-  }, [stores, isPosUser, hasMatrixRestrictions, hasStoreTypeRestrictions, canAccessStore]);
 
   // Fetch store types for credit limits
   const { data: storeTypes } = useQuery({
@@ -232,7 +218,7 @@ const Sales = () => {
     },
   });
 
-  const selectedStore = accessFilteredStores?.find((s) => s.id === storeId);
+  const selectedStore = stores?.find((s) => s.id === storeId);
   const selectedStoreTypeId = selectedStore?.store_type_id;
 
   const { data: availableProducts } = useQuery({
@@ -391,17 +377,6 @@ const Sales = () => {
       toast.error("Please fill all required fields");
       return;
     }
-
-    if (!isPosUser && (hasMatrixRestrictions || hasStoreTypeRestrictions) && routeLoading) {
-      toast.error("Loading access rules. Please try again in a moment.");
-      return;
-    }
-
-    if (!selectedStore) {
-      toast.error("Store not found or not accessible");
-      return;
-    }
-
     if (items.some((i) => i.quantity <= 0)) {
       toast.error("All item quantities must be greater than zero");
       return;
@@ -431,7 +406,7 @@ const Sales = () => {
       }
     }
 
-    const customerId = selectedStore.customer_id;
+    const customerId = selectedStore?.customer_id;
     if (!customerId) {
       toast.error("Store has no linked customer");
       setSaving(false);
@@ -696,7 +671,7 @@ const Sales = () => {
           <SelectTrigger className="h-8 text-xs flex-1 min-w-[120px] sm:flex-none sm:w-40"><SelectValue placeholder="All stores" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All stores</SelectItem>
-            {accessFilteredStores?.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+            {stores?.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={filterUser} onValueChange={setFilterUser}>
@@ -884,7 +859,7 @@ const Sales = () => {
                 <div className="flex gap-2 mt-1">
                   <Select value={storeId} onValueChange={handleStoreChange}>
                     <SelectTrigger className="flex-1"><SelectValue placeholder="Select store" /></SelectTrigger>
-                    <SelectContent>{accessFilteredStores?.map((s) => (
+                    <SelectContent>{stores?.map((s) => (
                       <SelectItem key={s.id} value={s.id} disabled={!s.is_active}>
                         {s.name} ({s.display_id}){!s.is_active ? " — Inactive" : ""}
                       </SelectItem>

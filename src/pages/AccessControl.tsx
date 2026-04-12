@@ -62,7 +62,7 @@ const PERM_HEADERS: { key: PermissionKey; label: string }[] = [
 ];
 
 const AccessControl = () => {
-  const { role: currentRole, user } = useAuth();
+  const { role: currentRole } = useAuth();
   const qc = useQueryClient();
   const isAdmin = currentRole === "super_admin";
   const [showInvite, setShowInvite] = useState(false);
@@ -137,48 +137,15 @@ const AccessControl = () => {
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     setSavingInvite(true);
-
-    try {
-      if (!user?.id) throw new Error("Not authenticated");
-
-      const normalizedEmail = inviteEmail.trim().toLowerCase();
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
-        throw new Error("Please enter a valid email address");
-      }
-
-      // Prevent duplicate pending invitations
-      const { data: existing, error: existingError } = await supabase
-        .from("staff_invitations")
-        .select("id")
-        .ilike("email", normalizedEmail)
-        .eq("status", "pending")
-        .limit(1);
-
-      if (existingError) throw existingError;
-      if (existing && existing.length > 0) {
-        toast.error("An invitation is already pending for this email");
-        setSavingInvite(false);
-        return;
-      }
-
-      const { error } = await supabase.from("staff_invitations").insert({
-        email: normalizedEmail,
-        full_name: inviteName.trim(),
-        role: inviteRole as any,
-        invited_by: user.id,
-        status: "pending",
-      } as any);
-
-      if (error) throw error;
-
-      toast.success("Staff invitation created. They will get this role when they sign in with this email.");
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to invite staff");
-      setSavingInvite(false);
+    const { data, error } = await supabase.functions.invoke("invite-staff", {
+      body: { email: inviteEmail, full_name: inviteName, role: inviteRole },
+    });
+    setSavingInvite(false);
+    if (error || data?.error) {
+      toast.error(data?.error || error?.message || "Failed to invite staff");
       return;
     }
-
-    setSavingInvite(false);
+    toast.success(`Staff account created for ${inviteName}. A password reset email will be sent.`);
     setShowInvite(false);
     setInviteEmail(""); setInviteName(""); setInviteRole("agent");
     qc.invalidateQueries({ queryKey: ["all-users"] });
@@ -517,10 +484,10 @@ const AccessControl = () => {
                 <SelectContent>{STAFF_ROLES.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <p className="text-xs text-muted-foreground">When the staff member signs in with this email, they'll automatically get the assigned role and skip customer onboarding.</p>
+            <p className="text-xs text-muted-foreground">The staff member will receive a password reset email to set their own password.</p>
             <Button type="submit" className="w-full" disabled={savingInvite}>
               {savingInvite && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Send Invitation
+              Create Staff Account
             </Button>
           </form>
         </DialogContent>
