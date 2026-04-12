@@ -1,5 +1,5 @@
 // Inventory hooks - Phase 4 Redesign
-export { useStaffStock, useAllStaffStock } from "./useStaffStock";
+export { useStaffStock, useMyStaffStock } from "./useStaffStock";
 export { useWarehouseStock } from "./useWarehouseStock";
 export { 
   useMyReturns, 

@@ -212,7 +212,7 @@ export function useMyStaffStock(userId?: string) {
           last_sale_at,
           product:products(id, name, sku, unit, base_price, image_url)
         `)
-        .eq("user_id", userId)
+.eq("staff_id", userId)
         .order("updated_at", { ascending: false });
 
       if (error) throw error;
