@@ -1,0 +1,101 @@
+%% BizManager Application Flow Summary
+%% Mermaid diagram for visual overview
+
+graph TB
+    subgraph UserLayer["👤 User Layer"]
+        Staff["Staff Users<br/>(super_admin, manager,<br/>agent, marketer, pos)"]
+        Customer["Customer Users<br/>(customer role)"]
+    end
+
+    subgraph AuthLayer["🔐 Authentication Layer"]
+        Auth["Auth.tsx"]
+        AuthContext["AuthContext.tsx"]
+        ResolveIdentity["resolve-user-identity<br/>Edge Function"]
+        OTP["OTP Flow<br/>(send/verify-otp)"]
+    end
+
+    subgraph AppLayer["📱 Application Layer"]
+        WebApp["Web App<br/>(React + Vite)"]
+        MobileApp["Mobile App<br/>(Capacitor)"]
+        Dashboard["Role Dashboards"]
+    end
+
+    subgraph FeatureLayer["✨ Feature Layer"]
+        Sales["Sales Recording"]
+        Txns["Transactions"]
+        Orders["Order Management"]
+        Routes["Route/Agent"]
+        Handovers["Handovers"]
+        Customers["Customers/Stores"]
+    end
+
+    subgraph DataLayer["💾 Data Layer"]
+        Offline["Offline Queue<br/>(IndexedDB)"]
+        Online["Online Sync"]
+        Realtime["Realtime Sync<br/>(Supabase)"]
+    end
+
+    subgraph DatabaseLayer["🗄️ Database Layer (PostgreSQL)"]
+        Tables[("Core Tables:<br/>sales, transactions,<br/>orders, stores,<br/>customers, etc.")]
+        RPC[("RPC Functions:<br/>record_sale,<br/>record_transaction")]
+        Triggers[("Triggers:<br/>outstanding recalc,<br/>audit logging")]
+    end
+
+    subgraph EdgeLayer["⚡ Edge Layer"]
+        EdgeFns["Edge Functions:<br/>data-quality-check,<br/>invite-staff,<br/>daily-handover-snapshot"]
+    end
+
+    %% Flow connections
+    Staff --> Auth
+    Customer --> Auth
+    
+    Auth --> AuthContext
+    Auth --> OTP
+    OTP --> ResolveIdentity
+    
+    AuthContext --> WebApp
+    AuthContext --> MobileApp
+    
+    WebApp --> Dashboard
+    MobileApp --> Dashboard
+    
+    Dashboard --> Sales
+    Dashboard --> Txns
+    Dashboard --> Orders
+    Dashboard --> Routes
+    Dashboard --> Handovers
+    Dashboard --> Customers
+    
+    Sales --> DataLayer
+    Txns --> DataLayer
+    Orders --> DataLayer
+    Routes --> DataLayer
+    Handovers --> DataLayer
+    Customers --> DataLayer
+    
+    DataLayer --> Offline
+    DataLayer --> Online
+    DataLayer --> Realtime
+    
+    Offline --> Online
+    Online --> DatabaseLayer
+    Realtime --> DatabaseLayer
+    
+    DatabaseLayer --> EdgeLayer
+    
+    %% Styles
+    classDef userClass fill:#e1f5fe
+    classDef authClass fill:#fff3e0
+    classDef appClass fill:#e8f5e9
+    classDef featureClass fill:#f3e5f5
+    classDef dataClass fill:#fce4ec
+    classDef dbClass fill:#e0f2f1
+    classDef edgeClass fill:#fff9c4
+    
+    class Staff,Customer userClass
+    class Auth,AuthContext,ResolveIdentity,OTP authClass
+    class WebApp,MobileApp,Dashboard appClass
+    class Sales,Txns,Orders,Routes,Handovers,Customers featureClass
+    class Offline,Online,Realtime dataClass
+    class Tables,RPC,Triggers dbClass
+    class EdgeFns edgeClass
