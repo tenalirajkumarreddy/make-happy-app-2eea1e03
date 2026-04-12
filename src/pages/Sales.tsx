@@ -7,7 +7,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { logActivity } from "@/lib/activityLogger";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
-import { addToQueue } from "@/lib/offlineQueue";
+import { addToQueue, generateBusinessKey } from "@/lib/offlineQueue";
 import { resolveCreditLimit } from "@/lib/creditLimit";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2, Plus, Trash2, Download, IndianRupee, CreditCard, Banknote, Clock, UserCircle, Store as StoreIcon, Package, X, CalendarIcon, Receipt, FileText, RotateCcw, ShoppingCart, ChevronRight } from "lucide-react";
@@ -417,6 +417,22 @@ const Sales = () => {
     if (!navigator.onLine) {
       const effectiveRecordedByOffline = recordedFor || user!.id;
       const loggedByOffline = recordedFor ? user!.id : null;
+      const saleItems = items.filter((i) => i.product_id).map((i) => ({
+        product_id: i.product_id,
+        quantity: i.quantity,
+        unit_price: i.unit_price,
+        total_price: i.quantity * i.unit_price,
+      }));
+      
+      // Generate business key for deduplication
+      const businessKey = generateBusinessKey('sale', {
+        storeId,
+        customerId,
+        amount: totalAmount,
+        products: saleItems.map(i => ({ product_id: i.product_id, quantity: i.quantity })),
+        timestamp: saleDate || new Date().toISOString(),
+      });
+      
       await addToQueue({
         id: crypto.randomUUID(),
         type: "sale",
@@ -434,15 +450,11 @@ const Sales = () => {
             new_outstanding: newOutstanding,
             ...(saleDate ? { created_at: new Date(saleDate).toISOString() } : {}),
           },
-          saleItems: items.filter((i) => i.product_id).map((i) => ({
-            product_id: i.product_id,
-            quantity: i.quantity,
-            unit_price: i.unit_price,
-            total_price: i.quantity * i.unit_price,
-          })),
+          saleItems: saleItems,
           storeUpdate: { outstanding: newOutstanding },
         },
         createdAt: new Date().toISOString(),
+        businessKey,
       });
       toast.warning("You're offline — sale queued and will sync automatically when back online");
       setSaving(false);

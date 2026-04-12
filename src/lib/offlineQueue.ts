@@ -20,6 +20,7 @@ export interface PendingAction {
   retryCount?: number;
   lastError?: string;
   lastAttempt?: string;
+  businessKey?: string; // Unique business key for deduplication (e.g., "sale:store123:timestamp:amount")
 }
 
 export interface PendingFileUpload {
@@ -69,7 +70,7 @@ function openDB(): Promise<IDBDatabase> {
 }
 
 /**
- * Check if action already exists in queue (deduplication)
+ * Check if action already exists in queue (deduplication by ID)
  */
 export async function isActionQueued(id: string): Promise<boolean> {
   const db = await openDB();
@@ -82,7 +83,69 @@ export async function isActionQueued(id: string): Promise<boolean> {
 }
 
 /**
+ * Check if action with same business key already exists (business deduplication)
+ * This prevents duplicate sales/transactions from being queued
+ */
+export async function isBusinessKeyQueued(businessKey: string): Promise<boolean> {
+  if (!businessKey) return false;
+  
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readonly");
+    const store = tx.objectStore(STORE_NAME);
+    const req = store.getAll();
+    
+    req.onsuccess = () => {
+      const actions = req.result as PendingAction[];
+      const exists = actions.some(a => a.businessKey === businessKey);
+      resolve(exists);
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/**
+ * Generate business key for deduplication
+ */
+export function generateBusinessKey(
+  type: PendingAction['type'],
+  params: {
+    storeId?: string;
+    customerId?: string;
+    amount?: number;
+    timestamp?: string | number;
+    products?: Array<{ product_id: string; quantity: number }>;
+  }
+): string {
+  const parts: string[] = [type];
+  
+  if (params.storeId) parts.push(params.storeId);
+  if (params.customerId) parts.push(params.customerId);
+  if (params.amount !== undefined) parts.push(String(Math.round(params.amount * 100) / 100));
+  
+  // For sales, include product signature
+  if (type === 'sale' && params.products?.length) {
+    const productSig = params.products
+      .map(p => `${p.product_id}:${p.quantity}`)
+      .sort()
+      .join(',');
+    parts.push(productSig);
+  }
+  
+  // Include timestamp rounded to minute for grouping similar actions
+  const ts = params.timestamp || Date.now();
+  const roundedTs = typeof ts === 'string' 
+    ? new Date(ts).getTime() 
+    : ts;
+  const minuteRounded = Math.floor(roundedTs / 60000) * 60000;
+  parts.push(String(minuteRounded));
+  
+  return parts.join(':');
+}
+
+/**
  * Add action to queue with deduplication
+ * Checks both action ID and business key for duplicates
  */
 export async function addToQueue(action: PendingAction): Promise<void> {
   // Validate required fields
@@ -90,11 +153,21 @@ export async function addToQueue(action: PendingAction): Promise<void> {
     throw new Error("Invalid action: missing required fields (id, type, payload)");
   }
 
-  // Check for duplicate
-  const exists = await isActionQueued(action.id);
-  if (exists) {
+  // Check for duplicate by ID
+  const existsById = await isActionQueued(action.id);
+  if (existsById) {
     console.warn(`Action ${action.id} already queued, skipping duplicate`);
     return;
+  }
+
+  // Check for duplicate by business key (if provided)
+  if (action.businessKey) {
+    const existsByBusinessKey = await isBusinessKeyQueued(action.businessKey);
+    if (existsByBusinessKey) {
+      console.warn(`Action with business key ${action.businessKey} already queued, skipping duplicate`);
+      toast.warning("This action is already pending sync. Please wait for it to complete.");
+      return;
+    }
   }
 
   const db = await openDB();
@@ -112,6 +185,9 @@ export async function addToQueue(action: PendingAction): Promise<void> {
     tx.onerror = () => reject(tx.error);
   });
 }
+
+// Import toast for warnings in addToQueue
+import { toast } from "sonner";
 
 export async function getQueuedActions(): Promise<PendingAction[]> {
   const db = await openDB();
