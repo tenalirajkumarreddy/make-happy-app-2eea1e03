@@ -1,26 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
-
-const ALLOWED_ORIGINS = [
-  "https://aquaprimesales.vercel.app",
-  "http://localhost:5000",
-  "http://localhost:5173",
-  "http://localhost:8100",
-];
-
-function getCorsHeaders(req: Request) {
-  const origin = req.headers.get("Origin") || "";
-  let allowed = ALLOWED_ORIGINS[0];
-  if (ALLOWED_ORIGINS.includes(origin) || origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:") || origin === "http://localhost") {
-    allowed = origin;
-  }
-  return {
-    "Access-Control-Allow-Origin": allowed,
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Vary": "Origin",
-  };
-}
+import { getCorsHeaders, handleCorsPreflightOrError } from "../_shared/cors.ts";
 
 interface OTPRequest {
   phone: string
@@ -104,10 +84,10 @@ function generateSessionToken(): string {
 }
 
 serve(async (req) => {
+  const preflight = handleCorsPreflightOrError(req);
+  if (preflight) return preflight;
+
   const corsHeaders = getCorsHeaders(req);
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
@@ -209,8 +189,6 @@ serve(async (req) => {
           phone: maskPhoneNumber(normalizedPhone),
           message_id: jobData.id,
           session_token: sessionToken,
-          // Only show OTP in local dev for testing
-          otp_for_dev: Deno.env.get('DENO_DEPLOYMENT_ID') ? undefined : otp,
         }),
         {
           status: 200,

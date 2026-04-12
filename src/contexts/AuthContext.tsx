@@ -3,6 +3,17 @@ import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
 import { logError } from "@/lib/logger";
 
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<T>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeoutId) clearTimeout(timeoutId);
+  }) as Promise<T>;
+}
+
 type AppRole = "super_admin" | "manager" | "agent" | "marketer" | "pos" | "customer";
 
 interface AuthContextType {
@@ -35,11 +46,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchUserData = async (userId: string) => {
     try {
-      const [{ data: roleData }, { data: profileData }, { data: customerData }] = await Promise.all([
+      const [roleRes, profileRes, customerRes] = await withTimeout(Promise.all([
         supabase.from("user_roles").select("role").eq("user_id", userId).maybeSingle(),
         supabase.from("profiles").select("full_name, email, avatar_url, is_active").eq("user_id", userId).maybeSingle(),
         supabase.from("customers").select("id, user_id, name, phone, email").eq("user_id", userId).maybeSingle(),
-      ]);
+      ]), 10_000, "Fetching user data");
+
+      if (roleRes.error) logError("Error fetching user role", roleRes.error);
+      if (profileRes.error) logError("Error fetching user profile", profileRes.error);
+      if (customerRes.error) logError("Error fetching customer record", customerRes.error);
+
+      const roleData = roleRes.data;
+      const profileData = profileRes.data;
+      const customerData = customerRes.data;
 
       // If user is disabled, sign them out immediately
       if (profileData && !profileData.is_active) {
@@ -85,6 +104,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (!mounted) return;
             try {
               await fetchUserData(session.user.id);
+            } catch (error) {
+              logError("Auth state change user data fetch failed", error);
             } finally {
               if (mounted) setLoading(false);
             }
@@ -100,7 +121,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const initAuth = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session } } = await withTimeout(
+          supabase.auth.getSession(),
+          10_000,
+          "Auth session initialization"
+        );
         if (!mounted) return;
         
         setSession(session);

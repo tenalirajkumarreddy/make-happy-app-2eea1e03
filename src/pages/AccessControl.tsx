@@ -5,7 +5,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { useWarehouse } from "@/contexts/WarehouseContext";
 import { Loader2, UserPlus, MapPin } from "lucide-react";
 import { useState } from "react";
 import {
@@ -64,7 +63,6 @@ const PERM_HEADERS: { key: PermissionKey; label: string }[] = [
 
 const AccessControl = () => {
   const { role: currentRole } = useAuth();
-  const { currentWarehouse } = useWarehouse();
   const qc = useQueryClient();
   const isAdmin = currentRole === "super_admin";
   const [showInvite, setShowInvite] = useState(false);
@@ -77,24 +75,17 @@ const AccessControl = () => {
   const { allPermissions, isLoading: permsLoading, saving: permSaving, getPermissionsForUser, handleToggle } = useUserPermissions();
 
   const { data: agentRoutes, refetch: refetchAgentRoutes } = useQuery({
-    queryKey: ["agent-routes", currentWarehouse?.id],
-    enabled: !!currentWarehouse?.id,
+    queryKey: ["agent-routes"],
     queryFn: async () => {
-      // Get routes for this warehouse first
-      const { data: whRoutes } = await supabase.from("routes").select("id").eq("warehouse_id", currentWarehouse!.id);
-      const whRouteIds = whRoutes?.map((r) => r.id) || [];
-      if (whRouteIds.length === 0) return [];
-      
-      const { data } = await supabase.from("agent_routes").select("user_id, route_id, enabled").in("route_id", whRouteIds);
+      const { data } = await supabase.from("agent_routes").select("user_id, route_id, enabled");
       return data || [];
     },
   });
 
   const { data: routesWithTypes } = useQuery({
-    queryKey: ["routes-for-access", currentWarehouse?.id],
-    enabled: !!currentWarehouse?.id,
+    queryKey: ["routes-for-access"],
     queryFn: async () => {
-      const { data } = await supabase.from("routes").select("id, name, store_type_id, store_types(name)").eq("warehouse_id", currentWarehouse!.id).eq("is_active", true).order("name");
+      const { data } = await supabase.from("routes").select("id, name, store_type_id, store_types(name)").eq("is_active", true).order("name");
       return data || [];
     },
   });
@@ -113,25 +104,18 @@ const AccessControl = () => {
   };
 
   const { data: users, isLoading } = useQuery({
-    queryKey: ["all-users", currentWarehouse?.id],
-    enabled: !!currentWarehouse?.id,
+    queryKey: ["all-users"],
     queryFn: async () => {
-      // First, get user roles scoped to this warehouse
-      const { data: roles, error: rErr } = await supabase
-        .from("user_roles")
-        .select("user_id, role")
-        .eq("warehouse_id", currentWarehouse!.id);
-      if (rErr) throw rErr;
-      
-      const userIds = roles?.map(r => r.user_id) || [];
-      if (userIds.length === 0) return [];
-
       const { data: profiles, error: pErr } = await supabase
         .from("profiles")
         .select("*")
-        .in("user_id", userIds)
         .order("created_at", { ascending: false });
       if (pErr) throw pErr;
+
+      const { data: roles, error: rErr } = await supabase
+        .from("user_roles")
+        .select("user_id, role");
+      if (rErr) throw rErr;
 
       const roleMap = new Map(roles?.map((r) => [r.user_id, r.role]) || []);
       return (profiles || []).map((p) => ({
@@ -154,7 +138,7 @@ const AccessControl = () => {
     e.preventDefault();
     setSavingInvite(true);
     const { data, error } = await supabase.functions.invoke("invite-staff", {
-      body: { email: inviteEmail, full_name: inviteName, role: inviteRole, warehouse_id: currentWarehouse?.id },
+      body: { email: inviteEmail, full_name: inviteName, role: inviteRole },
     });
     setSavingInvite(false);
     if (error || data?.error) {

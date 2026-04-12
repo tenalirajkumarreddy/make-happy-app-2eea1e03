@@ -62,7 +62,7 @@ export function MarketerStores() {
   // Calculate stats
   const totalOutstanding = stores?.reduce((sum, s) => sum + (s.outstanding_balance || 0), 0) || 0;
   const storesWithBalance = stores?.filter(s => (s.outstanding_balance || 0) > 0).length || 0;
-  const verifiedStores = stores?.filter(s => s.kyc_status === "verified").length || 0;
+  const verifiedStores = stores?.filter(s => s.kyc_status === "verified" || s.kyc_status === "approved").length || 0;
 
   if (isLoading) {
     return (
@@ -146,7 +146,7 @@ export function MarketerStores() {
           <div className="space-y-3">
             {filteredStores.map((store) => {
               const hasBalance = (store.outstanding_balance || 0) > 0;
-              const isVerified = store.kyc_status === "verified";
+              const isVerified = store.kyc_status === "verified" || store.kyc_status === "approved";
 
               return (
                 <Card 

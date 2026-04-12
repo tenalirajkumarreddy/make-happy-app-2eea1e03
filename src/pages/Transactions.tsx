@@ -6,7 +6,6 @@ import { logActivity } from "@/lib/activityLogger";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { addToQueue } from "@/lib/offlineQueue";
 import { useAuth } from "@/contexts/AuthContext";
-import { useWarehouse } from "@/contexts/WarehouseContext";
 import { Loader2, X, CalendarIcon, Store as StoreIcon, Banknote, CreditCard } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { QrStoreSelector } from "@/components/shared/QrStoreSelector";
@@ -30,7 +29,6 @@ import { format } from "date-fns";
 
 const Transactions = () => {
   const { user, role } = useAuth();
-  const { currentWarehouse } = useWarehouse();
   const isAdmin = role === "super_admin" || role === "manager";
   const { allowed: canRecordBehalf } = usePermission("record_behalf");
   const qc = useQueryClient();
@@ -72,17 +70,12 @@ const Transactions = () => {
   }, [filterFrom, filterTo, filterStore, filterPayment]);
 
   const { data: transactions, isLoading, isError, error: txnError, isFetching } = useQuery({
-    queryKey: ["transactions", currentWarehouse?.id, isAdmin ? "all" : user?.id, filterFrom, filterTo, filterStore, filterPayment, loadedPages],
+    queryKey: ["transactions", isAdmin ? "all" : user?.id, filterFrom, filterTo, filterStore, filterPayment, loadedPages],
     queryFn: async () => {
       let query = supabase
         .from("transactions")
         .select("*, stores(name)")
         .order("created_at", { ascending: false });
-      
-      // Filter by warehouse
-      if (currentWarehouse?.id) {
-        query = query.eq("warehouse_id", currentWarehouse.id);
-      }
       // Non-admin roles only see their own records
       if (!isAdmin) query = query.eq("recorded_by", user!.id);
       // Server-side filters
@@ -102,13 +95,9 @@ const Transactions = () => {
   const hasMoreTransactions = (transactions?.length || 0) >= loadedPages * PAGE_SIZE;
 
   const { data: stores } = useQuery({
-    queryKey: ["stores-for-txn", currentWarehouse?.id],
+    queryKey: ["stores-for-txn"],
     queryFn: async () => {
-      let query = supabase.from("stores").select("id, name, outstanding, display_id, customer_id, is_active");
-      if (currentWarehouse?.id) {
-        query = query.eq("warehouse_id", currentWarehouse.id);
-      }
-      const { data } = await query.order("is_active", { ascending: false }).order("name");
+      const { data } = await supabase.from("stores").select("id, name, outstanding, display_id, customer_id, is_active").order("is_active", { ascending: false }).order("name");
       return data || [];
     },
   });
@@ -220,7 +209,6 @@ const Transactions = () => {
       old_outstanding: oldOutstanding,
       new_outstanding: newOutstanding,
       notes: notes || null,
-      warehouse_id: currentWarehouse?.id || null,
       ...(txnDate ? { created_at: new Date(txnDate).toISOString() } : {}),
     });
 

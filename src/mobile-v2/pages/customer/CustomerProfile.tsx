@@ -253,12 +253,12 @@ export function CustomerProfile() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                profile?.kyc_status === "verified" 
+                (profile?.kyc_status === "verified" || profile?.kyc_status === "approved")
                   ? "bg-green-100 dark:bg-green-900/30" 
                   : "bg-amber-100 dark:bg-amber-900/30"
               }`}>
                 <Shield className={`w-5 h-5 ${
-                  profile?.kyc_status === "verified" 
+                  (profile?.kyc_status === "verified" || profile?.kyc_status === "approved")
                     ? "text-green-600" 
                     : "text-amber-600"
                 }`} />
@@ -266,7 +266,7 @@ export function CustomerProfile() {
               <div>
                 <p className="font-medium text-foreground">KYC Verification</p>
                 <p className="text-sm text-muted-foreground capitalize">
-                  Status: {profile?.kyc_status || "Not submitted"}
+                  Status: {(profile?.kyc_status === "approved" ? "verified" : profile?.kyc_status) || "Not submitted"}
                 </p>
               </div>
             </div>

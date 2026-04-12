@@ -2,7 +2,9 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
-const SCOPED_ROLES = new Set(["agent", "marketer", "pos", "manager"]);
+// Roles restricted by the agent route/store-type access matrices.
+// Managers are intentionally NOT scoped: they should retain broad visibility by default.
+const SCOPED_ROLES = new Set(["agent", "marketer", "pos"]);
 
 export function isScopedRole(role?: string | null) {
   return !!role && SCOPED_ROLES.has(role);

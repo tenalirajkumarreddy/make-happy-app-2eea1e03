@@ -4,16 +4,18 @@ import { computeRouteAccess, isScopedRole } from "@/hooks/useRouteAccess";
 describe("route access helpers", () => {
   it("treats scoped roles correctly", () => {
     expect(isScopedRole("agent")).toBe(true);
-    expect(isScopedRole("manager")).toBe(true);
+    expect(isScopedRole("marketer")).toBe(true);
+    expect(isScopedRole("pos")).toBe(true);
+    expect(isScopedRole("manager")).toBe(false);
     expect(isScopedRole("super_admin")).toBe(false);
     expect(isScopedRole("customer")).toBe(false);
   });
 
-  it("allows all routes for scoped users without matrix rows", () => {
+  it("denies all routes for scoped users without matrix rows", () => {
     const access = computeRouteAccess([], "agent");
-    expect(access.hasMatrixRestrictions).toBe(false);
-    expect(access.canAccessRoute("route-1")).toBe(true);
-    expect(access.canAccessRoute(null)).toBe(true);
+    expect(access.hasMatrixRestrictions).toBe(true);
+    expect(access.canAccessRoute("route-1")).toBe(false);
+    expect(access.canAccessRoute(null)).toBe(false);
   });
 
   it("restricts routes when enabled matrix rows exist", () => {

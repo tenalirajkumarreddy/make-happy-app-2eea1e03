@@ -8,11 +8,35 @@ const ALLOWED_ORIGINS = [
   "http://localhost:5000",
   "http://localhost:5173",
   "http://localhost:8100",
+  "http://localhost",
+  "capacitor://localhost",
+  "ionic://localhost",
 ];
+
+function isAllowedOrigin(origin: string): boolean {
+  if (!origin) return false;
+  if (origin === "null") return true;
+  if (origin === "capacitor://localhost" || origin === "ionic://localhost") return true;
+
+  try {
+    const url = new URL(origin);
+    if (
+      (url.protocol === "http:" || url.protocol === "https:") &&
+      (url.hostname === "localhost" || url.hostname === "127.0.0.1")
+    ) {
+      return true;
+    }
+    if (url.protocol === "https:") return true;
+  } catch {
+    // ignore malformed Origin
+  }
+
+  return false;
+}
 
 function getCorsHeaders(req: Request) {
   const origin = req.headers.get("Origin") || "";
-  const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  const allowed = isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
     "Access-Control-Allow-Origin": allowed,
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
