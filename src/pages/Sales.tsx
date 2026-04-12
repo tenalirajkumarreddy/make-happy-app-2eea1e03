@@ -15,6 +15,7 @@ import { QrStoreSelector } from "@/components/shared/QrStoreSelector";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { SaleReceipt } from "@/components/shared/SaleReceipt";
 import { OrderFulfillmentDialog } from "@/components/orders/OrderFulfillmentDialog";
+import { SaleReturnDialog } from "@/components/sales/SaleReturnDialog";
 import { useState, useMemo, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { usePermission } from "@/hooks/usePermission";
@@ -103,6 +104,7 @@ const Sales = () => {
   const [saving, setSaving] = useState(false);
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
   const [receiptSaleId, setReceiptSaleId] = useState<string | null>(null);
+  const [returnSale, setReturnSale] = useState<any | null>(null);
   const [fulfillOrder, setFulfillOrder] = useState<FulfillOrder | null>(null);
   const [loadingOrderId, setLoadingOrderId] = useState<string | null>(null);
 
@@ -847,19 +849,44 @@ const Sales = () => {
                 </Avatar>
                <span className="text-xs text-muted-foreground">Recorded by {getRecorderName(selectedSale.recorded_by)}</span>
               </div>
-              {(selectedSale as any).logged_by && (
-                <div className="flex items-center gap-2">
-                  <Avatar className="h-5 w-5">
-                    <AvatarImage src={getRecorderAvatar((selectedSale as any).logged_by) || undefined} />
-                    <AvatarFallback className="text-[9px] bg-accent/20 text-accent-foreground">{getRecorderName((selectedSale as any).logged_by).charAt(0)}</AvatarFallback>
-                  </Avatar>
-                  <span className="text-xs text-muted-foreground">Logged by {getRecorderName((selectedSale as any).logged_by)}</span>
-                </div>
-              )}
+          {(selectedSale as any).logged_by && (
+            <div className="flex items-center gap-2">
+              <Avatar className="h-5 w-5">
+                <AvatarImage src={getRecorderAvatar((selectedSale as any).logged_by) || undefined} />
+                <AvatarFallback className="text-[9px] bg-accent/20 text-accent-foreground">{getRecorderName((selectedSale as any).logged_by).charAt(0)}</AvatarFallback>
+              </Avatar>
+              <span className="text-xs text-muted-foreground">Logged by {getRecorderName((selectedSale as any).logged_by)}</span>
             </div>
           )}
-        </DialogContent>
-      </Dialog>
+          
+          {/* Return Button - NEW */}
+          {selectedSale && (isAdmin || role === 'manager') && (
+            <div className="pt-4 border-t">
+              <Button 
+                variant="outline" 
+                className="w-full"
+                onClick={() => {
+                  setReturnSale(selectedSale);
+                  setSelectedSaleId(null);
+                }}
+              >
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Process Return
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+    </DialogContent>
+  </Dialog>
+  
+  {/* Sale Return Dialog - NEW */}
+  <SaleReturnDialog
+    open={!!returnSale}
+    onOpenChange={(v) => { if (!v) setReturnSale(null); }}
+    sale={returnSale}
+    onSuccess={() => qc.invalidateQueries({ queryKey: ['sales'] })}
+  />
 
       {/* Record Sale Dialog */}
       <Dialog open={showAdd} onOpenChange={(v) => { setShowAdd(v); if (!v) resetForm(); }}>
