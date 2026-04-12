@@ -406,14 +406,44 @@ const Sales = () => {
       }
     }
 
-    const customerId = selectedStore?.customer_id;
-    if (!customerId) {
-      toast.error("Store has no linked customer");
-      setSaving(false);
-      return;
-    }
+  const customerId = selectedStore?.customer_id;
+  if (!customerId) {
+    toast.error("Store has no linked customer");
+    setSaving(false);
+    return;
+  }
 
-    // Queue sale for offline sync if no network connection
+  // NEW: Check stock availability before sale
+  const hasProducts = items.some(i => i.product_id && i.quantity > 0);
+  if (hasProducts) {
+    const saleItemsForStockCheck = items.filter((i) => i.product_id).map((i) => ({
+      product_id: i.product_id,
+      quantity: i.quantity,
+    }));
+    
+    const { data: stockCheck, error: stockError } = await supabase
+      .rpc("check_stock_availability", {
+        p_user_id: user!.id,
+        p_items: saleItemsForStockCheck,
+      });
+    
+    if (stockError) {
+      console.error("Stock check failed:", stockError);
+      // Continue with sale but log warning - non-blocking
+    } else if (stockCheck && stockCheck.length > 0) {
+      const insufficient = stockCheck.filter((s: any) => !s.available);
+      if (insufficient.length > 0) {
+        const productNames = insufficient.map((i: any) => i.product_name).join(", ");
+        toast.error(
+          `Insufficient stock for: ${productNames}. Available: ${insufficient.map((i: any) => `${i.product_name} (${i.available_qty})`).join(", ")}`
+        );
+        setSaving(false);
+        return;
+      }
+    }
+  }
+
+  // Queue sale for offline sync if no network connection
     if (!navigator.onLine) {
       const effectiveRecordedByOffline = recordedFor || user!.id;
       const loggedByOffline = recordedFor ? user!.id : null;
@@ -495,15 +525,17 @@ const Sales = () => {
       p_created_at: saleDate ? new Date(saleDate).toISOString() : null,
     });
 
-    if (error) {
-      if (error.message.includes("credit_limit_exceeded")) {
-        toast.error("Credit limit exceeded. Increase payment or reduce items.");
-      } else {
-        toast.error(error.message);
-      }
-      setSaving(false);
-      return;
+  if (error) {
+    if (error.message.includes("credit_limit_exceeded")) {
+      toast.error("Credit limit exceeded. Increase payment or reduce items.");
+    } else if (error.message.includes("insufficient_stock")) {
+      toast.error("Insufficient stock for one or more products. Please check inventory.");
+    } else {
+      toast.error(error.message);
     }
+    setSaving(false);
+    return;
+  }
 
     const saleRow = (result as any)?.[0];
     logActivity(user!.id, "Recorded sale", "sale", displayId, saleRow?.sale_id, { total: totalAmount, store: storeId });
