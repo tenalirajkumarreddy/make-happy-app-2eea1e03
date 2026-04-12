@@ -134,8 +134,9 @@ export default function PaymentOutstandingReport() {
       // Outstanding by store type
       const outByType: Record<string, number> = {};
       stores.forEach(s => {
-        const typeName = storeTypeMap[s.store_type_id] || "Other";
-        outByType[typeName] = (outByType[typeName] || 0) + Number(s.outstanding);
+        const typeInfo = storeTypeMap[String(s.store_type_id)] as { name?: string } | undefined;
+        const typeName = typeInfo?.name || "Other";
+        outByType[String(typeName)] = (outByType[String(typeName)] || 0) + Number(s.outstanding);
       });
       const outstandingByType = Object.entries(outByType).sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value }));
 

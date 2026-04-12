@@ -60,6 +60,7 @@ export function useOnlineStatus() {
     const files = await getQueuedFileUploads();
     let synced = 0;
     let failed = 0;
+    const db: any = supabase;
 
     for (const file of files) {
       try {
@@ -73,17 +74,18 @@ export function useOnlineStatus() {
 
         // For KYC uploads, update the customer record
         if (file.type === "kyc" && file.metadata?.customerId && file.metadata?.field) {
+          const customerId = String(file.metadata.customerId ?? "");
           const { data: urlData } = supabase.storage.from(file.bucket).getPublicUrl(file.path);
           const field = file.metadata.field as string;
           
           // Get current KYC status to determine if we should mark as pending
-          const { data: customer } = await supabase
+          const { data: customer } = await db
             .from("customers")
             .select("kyc_selfie_url, kyc_aadhar_front_url, kyc_aadhar_back_url")
-            .eq("id", file.metadata.customerId)
+            .eq("id", customerId)
             .maybeSingle();
 
-          const updated: Record<string, string | null> = { [field]: urlData.publicUrl };
+          const updated: any = { [field]: urlData.publicUrl };
           
           if (customer) {
             const current = {
@@ -99,10 +101,10 @@ export function useOnlineStatus() {
             }
           }
 
-          const { error: dbErr } = await supabase
+          const { error: dbErr } = await (supabase as any)
             .from("customers")
             .update(updated)
-            .eq("id", file.metadata.customerId);
+            .eq("id", customerId);
             
           if (dbErr) throw dbErr;
         }
@@ -130,6 +132,7 @@ export function useOnlineStatus() {
     
     let totalSynced = 0;
     let totalFailed = 0;
+    const db: any = supabase;
     
     // Sync file uploads first
     const fileResult = await syncFileUploads();
@@ -162,7 +165,7 @@ export function useOnlineStatus() {
           const { txData } = action.payload as any;
           const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "PAY", seq_name: "pay_display_seq" });
           // Use atomic RPC — server computes outstanding, locks store row
-          const { error } = await supabase.rpc("record_transaction", {
+          const { error } = await (supabase as any).rpc("record_transaction", {
             p_display_id: displayId,
             p_store_id: txData.store_id,
             p_customer_id: txData.customer_id,
@@ -238,7 +241,7 @@ export function useOnlineStatus() {
             seq_name: "str_display_seq",
           });
 
-          const { error } = await supabase.from("stores").insert({
+          const { error } = await (supabase as any).from("stores").insert({
             ...storeData,
             display_id: String(displayId),
           });

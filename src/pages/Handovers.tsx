@@ -24,9 +24,17 @@ import { useState, useMemo } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format, startOfDay } from "date-fns";
 
+type ExpenseCategory = {
+  id: string;
+  name: string;
+  color: string;
+  icon: string | null;
+};
+
 const Handovers = () => {
   const { user, role } = useAuth();
   const qc = useQueryClient();
+  const db: any = supabase;
   const [createOpen, setCreateOpen] = useState(false);
   const [amount, setAmount] = useState("");
   const [notes, setNotes] = useState("");
@@ -221,24 +229,24 @@ const Handovers = () => {
   });
 
   // Fetch expense categories
-  const { data: expenseCategories = [] } = useQuery({
+  const { data: expenseCategories = [] } = useQuery<ExpenseCategory[]>({
     queryKey: ["expense-categories"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("expense_categories")
         .select("*")
         .eq("is_active", true)
         .order("name");
       if (error) throw error;
-      return data || [];
+      return (data || []) as ExpenseCategory[];
     },
   });
 
   // Fetch expense claims (own for staff, all for admin)
-  const { data: expenseClaims = [], isLoading: expenseClaimsLoading } = useQuery({
+  const { data: expenseClaims = [], isLoading: expenseClaimsLoading } = useQuery<any[]>({
     queryKey: ["expense-claims", user?.id, isAdminOrManager],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("expense_claims")
         .select("*, expense_categories(id, name, color, icon)")
         .order("created_at", { ascending: false })
@@ -427,7 +435,7 @@ const Handovers = () => {
         seq_name: "expense_claims_display_seq"
       });
 
-      const { error } = await supabase.from("expense_claims").insert({
+      const { error } = await (supabase as any).from("expense_claims").insert({
         display_id: displayId || `EXC-${Date.now()}`,
         user_id: user!.id,
         category_id: expenseCategory,
@@ -445,11 +453,10 @@ const Handovers = () => {
       
       // Notify admins
       const adminIds = await getAdminUserIds();
-      sendNotificationToMany({
-        userIds: adminIds,
+      sendNotificationToMany(adminIds, {
         title: "New Expense Claim",
         message: `₹${Number(expenseAmount).toLocaleString()} expense claim requires your review`,
-        type: "expense",
+        type: "system",
         entityType: "expense_claim",
       });
 
@@ -491,7 +498,7 @@ const Handovers = () => {
         }
       }
 
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from("expense_claims")
         .update(updates)
         .eq("id", reviewExpense.id);
@@ -507,7 +514,7 @@ const Handovers = () => {
         message: action === "approve" 
           ? `Your ₹${Number(updates.approved_amount).toLocaleString()} expense claim was approved`
           : `Your ₹${Number(reviewExpense.amount).toLocaleString()} expense claim was rejected`,
-        type: "expense",
+        type: "system",
         entityType: "expense_claim",
         entityId: reviewExpense.id,
       });
@@ -532,12 +539,12 @@ const Handovers = () => {
   };
 
   const getCategoryName = (categoryId: string | null) => {
-    const cat = expenseCategories.find((c: any) => c.id === categoryId);
+    const cat = expenseCategories.find((c) => c.id === categoryId);
     return cat?.name || "Unknown Category";
   };
 
   const getCategoryColor = (categoryId: string | null) => {
-    const cat = expenseCategories.find((c: any) => c.id === categoryId);
+    const cat = expenseCategories.find((c) => c.id === categoryId);
     return cat?.color || "#6b7280";
   };
 
