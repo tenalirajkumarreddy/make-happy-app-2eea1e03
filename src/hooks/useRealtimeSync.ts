@@ -94,6 +94,8 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
   staff_stock: ["staff-stock"],
   stock_transfers: ["stock-transfers", "staff-stock", "inventory"],
   warehouses: ["warehouses"],
+  // Receipts table
+  receipts: ["receipts", "receipt-history"],
 };
 
 const STAFF_ROLES = ["super_admin", "manager", "agent", "marketer", "pos"];
