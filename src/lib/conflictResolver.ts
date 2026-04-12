@@ -559,6 +559,5 @@ export async function getConflictsSummary(
   return summary;
 }
 
-// Export types
+// Export types (enums ConflictType and ResolutionStrategy already exported above)
 export type { Conflict, ConflictResolution, ResolutionOption, OperationContext };
-export { ConflictType };
