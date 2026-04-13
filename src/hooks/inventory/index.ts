@@ -1,9 +1,9 @@
-// Inventory hooks - Phase 4 Redesign
+// Inventory hooks
 export { useStaffStock, useMyStaffStock } from "./useStaffStock";
 export { useWarehouseStock } from "./useWarehouseStock";
-export { 
-  useMyReturns, 
-  usePendingReturns, 
+export {
+  useMyReturns,
+  usePendingReturns,
   useReturnDetails,
   useSubmitReturn,
   useReviewReturn,
@@ -11,7 +11,6 @@ export {
   useReturnStats
 } from "./useStockReturns";
 
-// Legacy hooks (for backwards compatibility)
 export { useStockTransfer } from "./useStockTransfer";
 export { useStockAdjustment, useStockMovementSummary } from "./useStockAdjustment";
 export { useStockHistory, useRecentStockHistory, useProductStockHistory } from "./useStockHistory";
