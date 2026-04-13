@@ -2,15 +2,11 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
-import {
-  Package, Pencil, X, Save, AlertTriangle, Grid3X3, Download, Tags, CheckSquare,
-  DollarSign, Box, ArrowRightLeft, Plus, Minus, RefreshCw, Users, Warehouse,
-  CheckCircle, XCircle, Loader2, Search, Filter
-} from "lucide-react";
+import { Package, Pencil, X, Save, AlertTriangle, Grid3X3, Download, Tags, CheckSquare, DollarSign, Box, ArrowUpDown, RotateCcw, Plus, Minus, ArrowRightLeft, Eye, Warehouse, Users, Loader2 } from "lucide-react";
 import { ImageUpload } from "@/components/shared/ImageUpload";
 import { ProductAccessMatrix } from "@/components/products/ProductAccessMatrix";
 import { ProductCategories } from "@/components/products/ProductCategories";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { logActivity } from "@/lib/activityLogger";
@@ -18,12 +14,21 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useState, useMemo } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import { NoticeBox } from "@/components/shared/NoticeBox";
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,59 +36,43 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { format } from "date-fns";
-import { Card, CardContent } from "@/components/ui/card";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { useQueryClient } from "@tanstack/react-query";
 
-type StockOperation = "purchase" | "sale" | "transfer" | "return" | "adjustment";
-type TransferDirection = "warehouse_to_staff" | "staff_to_warehouse" | "staff_to_staff";
-
-interface StockHolder {
-  user_id: string;
-  full_name: string;
-  quantity: number;
-  role: string;
+interface StockData {
+  product_id: string;
+  warehouse_qty: number;
+  staff_holdings: { staff_id: string; staff_name: string; qty: number }[];
 }
 
-interface ProductWithStock {
+interface PendingReturn {
   id: string;
-  name: string;
-  sku: string;
-  unit: string;
-  category?: string;
-  base_price: number;
-  image_url?: string;
-  is_active: boolean;
-  hsn_code?: string;
-  gst_rate?: number;
-  description?: string;
-  warehouse_quantity: number;
-  staff_holdings: StockHolder[];
-  total_quantity: number;
+  product_id: string;
+  product_name: string;
+  staff_id: string;
+  staff_name: string;
+  qty: number;
+  reason: string;
+  status: 'pending' | 'approved' | 'rejected';
+  created_at: string;
 }
 
 const Products = () => {
   const { user, role } = useAuth();
   const isMobile = useIsMobile();
-  const qc = useQueryClient();
   const canEdit = role === "super_admin" || role === "manager";
-  const canAdjustStock = canEdit || role === "pos" || role === "agent";
-  const isAdmin = role === "super_admin";
+  const qc = useQueryClient();
 
   const [showAdd, setShowAdd] = useState(false);
   const [showMatrix, setShowMatrix] = useState(false);
   const [showCategories, setShowCategories] = useState(false);
   const [editProduct, setEditProduct] = useState<any>(null);
-  const [showStockModal, setShowStockModal] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<ProductWithStock | null>(null);
-  const [showReturnReview, setShowReturnReview] = useState(false);
-  const [selectedReturn, setSelectedReturn] = useState<any>(null);
-
-  // Form states
   const [name, setName] = useState("");
   const [sku, setSku] = useState("");
   const [price, setPrice] = useState("");
@@ -98,35 +87,20 @@ const Products = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirmBulkDeactivate, setConfirmBulkDeactivate] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>("");
+  
+  // Stock management state
+  const [selectedWarehouse, setSelectedWarehouse] = useState<string>("all");
+  const [adjustStockProduct, setAdjustStockProduct] = useState<any>(null);
+  const [showAdjustStockModal, setShowAdjustStockModal] = useState(false);
+  const [showReturnReviewModal, setShowReturnReviewModal] = useState(false);
+  const [selectedReturn, setSelectedReturn] = useState<PendingReturn | null>(null);
+  const [stockAdjustmentType, setStockAdjustmentType] = useState<'purchase' | 'sale' | 'transfer'>('purchase');
+  const [stockAdjustmentQty, setStockAdjustmentQty] = useState("");
+  const [stockAdjustmentSource, setStockAdjustmentSource] = useState<string>("");
+  const [stockAdjustmentDestination, setStockAdjustmentDestination] = useState<string>("");
+  const [adjustmentNotes, setAdjustmentNotes] = useState("");
 
-  // Stock operation states
-  const [stockOperation, setStockOperation] = useState<StockOperation>("purchase");
-  const [transferDirection, setTransferDirection] = useState<TransferDirection>("warehouse_to_staff");
-  const [stockQty, setStockQty] = useState("");
-  const [stockReason, setStockReason] = useState("");
-  const [fromUserId, setFromUserId] = useState("");
-  const [toUserId, setToUserId] = useState("");
-  const [returnActualQty, setReturnActualQty] = useState("");
-  const [returnAction, setReturnAction] = useState<"keep" | "flag">("keep");
-  const [returnNotes, setReturnNotes] = useState("");
-
-  // Fetch Warehouses
-  const { data: warehouses } = useQuery({
-    queryKey: ["warehouses"],
-    queryFn: async () => {
-      const { data } = await supabase.from("warehouses").select("*").eq("is_active", true).order("name");
-      return data || [];
-    },
-  });
-
-  // Set default warehouse
-  if (warehouses?.length && !selectedWarehouseId) {
-    setSelectedWarehouseId(warehouses[0].id);
-  }
-
-  // Fetch Products
-  const { data: products, isLoading: loadProducts } = useQuery({
+  const { data: products, isLoading } = useQuery({
     queryKey: ["products"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -138,100 +112,6 @@ const Products = () => {
     },
   });
 
-  // Fetch Warehouse Stock
-  const { data: warehouseStock } = useQuery({
-    queryKey: ["warehouse-stock", selectedWarehouseId],
-    queryFn: async () => {
-      if (!selectedWarehouseId) return [];
-      const { data } = await supabase
-        .from("product_stock")
-        .select("product_id, quantity")
-        .eq("warehouse_id", selectedWarehouseId);
-      return data || [];
-    },
-    enabled: !!selectedWarehouseId,
-  });
-
-  // Fetch Staff Stock with Profiles
-  const { data: staffStock } = useQuery({
-    queryKey: ["staff-stock-all", selectedWarehouseId],
-    queryFn: async () => {
-      if (!selectedWarehouseId) return [];
-      const { data, error } = await supabase
-        .from("staff_stock")
-        .select(`
-          id,
-          user_id,
-          product_id,
-          quantity,
-          profile:profiles(id, full_name, user_roles(role))
-        `)
-        .eq("warehouse_id", selectedWarehouseId)
-        .gt("quantity", 0);
-
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!selectedWarehouseId,
-  });
-
-  // Fetch Staff Members
-  const { data: staffMembers } = useQuery({
-    queryKey: ["staff-members", selectedWarehouseId],
-    queryFn: async () => {
-      if (!selectedWarehouseId) return [];
-      const { data } = await supabase
-        .from("user_roles")
-        .select("user_id, role, profile:profiles(id, full_name, avatar_url)")
-        .eq("warehouse_id", selectedWarehouseId)
-        .in("role", ["agent", "marketer", "pos"]);
-      return data?.map((s: any) => ({
-        id: s.user_id,
-        full_name: s.profile?.full_name || "Unknown",
-        avatar_url: s.profile?.avatar_url,
-        role: s.role,
-      })) || [];
-    },
-    enabled: !!selectedWarehouseId,
-  });
-
-  // Fetch Stock Movements
-  const { data: stockMovements } = useQuery({
-    queryKey: ["stock-movements", selectedWarehouseId],
-    queryFn: async () => {
-      if (!selectedWarehouseId) return [];
-      const { data } = await supabase
-        .from("stock_movements")
-        .select("*, products(name, sku)")
-        .eq("warehouse_id", selectedWarehouseId)
-        .order("created_at", { ascending: false })
-        .limit(50);
-      return data || [];
-    },
-    enabled: !!selectedWarehouseId,
-  });
-
-  // Fetch Pending Returns
-  const { data: pendingReturns } = useQuery({
-    queryKey: ["pending-returns", selectedWarehouseId],
-    queryFn: async () => {
-      if (!selectedWarehouseId) return [];
-      const { data } = await supabase
-        .from("stock_transfers")
-        .select(`
-          *,
-          product:products(id, name, sku, unit),
-          from_user:profiles!stock_transfers_from_user_id_fkey(id, full_name, avatar_url)
-        `)
-        .eq("transfer_type", "staff_to_warehouse")
-        .eq("from_warehouse_id", selectedWarehouseId)
-        .eq("status", "pending");
-      return data || [];
-    },
-    enabled: !!selectedWarehouseId,
-  });
-
-  // Fetch Categories
   const { data: categoryList } = useQuery({
     queryKey: ["product-categories"],
     queryFn: async () => {
@@ -244,204 +124,165 @@ const Products = () => {
     },
   });
 
-  // Build products with stock
-  const productsWithStock = useMemo((): ProductWithStock[] => {
-    if (!products) return [];
+  // Fetch warehouses
+  const { data: warehouses } = useQuery({
+    queryKey: ["warehouses"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("warehouses")
+        .select("id, name")
+        .order("name");
+      if (error) throw error;
+      return data || [];
+    },
+  });
 
-    const warehouseStockMap = new Map(warehouseStock?.map((s: any) => [s.product_id, s.quantity]) || []);
-    const staffStockMap = new Map<string, StockHolder[]>();
+  // Fetch staff list
+  const { data: staffList } = useQuery({
+    queryKey: ["staff-list"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, full_name, role")
+        .in("role", ["agent", "manager", "pos"]);
+      if (error) throw error;
+      return data || [];
+    },
+  });
 
-    staffStock?.forEach((item: any) => {
-      const existing = staffStockMap.get(item.product_id) || [];
-      existing.push({
-        user_id: item.user_id,
-        full_name: item.profile?.full_name || "Unknown",
-        quantity: item.quantity,
-        role: item.profile?.user_roles?.[0]?.role || "staff",
+  // Fetch stock data
+  const { data: stockData } = useQuery({
+    queryKey: ["stock-data", selectedWarehouse],
+    queryFn: async () => {
+      const stockMap: Record<string, StockData> = {};
+      
+      // Get warehouse stock
+      let warehouseQuery = supabase
+        .from("warehouse_stock")
+        .select("product_id, warehouse_id, qty");
+      
+      if (selectedWarehouse !== "all") {
+        warehouseQuery = warehouseQuery.eq("warehouse_id", selectedWarehouse);
+      }
+      
+      const { data: warehouseStock, error: whError } = await warehouseQuery;
+      if (whError) throw whError;
+      
+      // Get staff stock
+      let staffQuery = supabase
+        .from("staff_stock")
+        .select("product_id, staff_id, qty");
+      
+      if (selectedWarehouse !== "all") {
+        // Filter by warehouse if needed - join with profiles to filter by warehouse
+        staffQuery = staffQuery.eq("warehouse_id", selectedWarehouse);
+      }
+      
+      const { data: staffStock, error: staffError } = await staffQuery;
+      if (staffError) throw staffError;
+      
+      // Build stock map
+      products?.forEach((product: any) => {
+        stockMap[product.id] = {
+          product_id: product.id,
+          warehouse_qty: 0,
+          staff_holdings: [],
+        };
       });
-      staffStockMap.set(item.product_id, existing);
-    });
+      
+      // Aggregate warehouse stock
+      warehouseStock?.forEach((item: any) => {
+        if (stockMap[item.product_id]) {
+          stockMap[item.product_id].warehouse_qty += item.qty || 0;
+        }
+      });
+      
+      // Aggregate staff stock
+      const staffMap: Record<string, { staff_id: string; staff_name: string; qty: number }> = {};
+      staffStock?.forEach((item: any) => {
+        const key = `${item.product_id}-${item.staff_id}`;
+        const staffName = staffList?.find(s => s.id === item.staff_id)?.full_name || 'Unknown';
+        staffMap[key] = {
+          staff_id: item.staff_id,
+          staff_name: staffName,
+          qty: item.qty || 0,
+        };
+      });
+      
+      Object.entries(staffMap).forEach(([key, holding]) => {
+        const productId = key.split('-')[0];
+        if (stockMap[productId] && holding.qty > 0) {
+          stockMap[productId].staff_holdings.push(holding);
+        }
+      });
+      
+      return stockMap;
+    },
+    enabled: !!products,
+  });
 
-    return products.map((product: any) => {
-      const warehouseQty = warehouseStockMap.get(product.id) || 0;
-      const staffHoldings = staffStockMap.get(product.id) || [];
-      const staffQty = staffHoldings.reduce((sum, h) => sum + h.quantity, 0);
+  // Fetch pending returns
+  const { data: pendingReturns } = useQuery({
+    queryKey: ["pending-returns"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("stock_returns")
+        .select(`
+          id,
+          product_id,
+          staff_id,
+          qty,
+          reason,
+          status,
+          created_at,
+          products:product_id(name),
+          profiles:staff_id(full_name)
+        `)
+        .eq("status", "pending")
+        .order("created_at", { ascending: false });
+      
+      if (error) throw error;
+      
+      return (data || []).map((r: any) => ({
+        id: r.id,
+        product_id: r.product_id,
+        product_name: r.products?.name || 'Unknown Product',
+        staff_id: r.staff_id,
+        staff_name: r.profiles?.full_name || 'Unknown Staff',
+        qty: r.qty,
+        reason: r.reason,
+        status: r.status,
+        created_at: r.created_at,
+      })) as PendingReturn[];
+    },
+  });
 
-      return {
-        ...product,
-        warehouse_quantity: warehouseQty,
-        staff_holdings: staffHoldings,
-        total_quantity: warehouseQty + staffQty,
-      };
-    });
-  }, [products, warehouseStock, staffStock]);
-
-  // Filter products
+  // Filter products based on search term
   const filteredProducts = useMemo(() => {
-    if (!productsWithStock) return [];
-    if (!searchTerm.trim()) return productsWithStock;
+    if (!products) return [];
+    if (!searchTerm.trim()) return products;
     const term = searchTerm.toLowerCase();
-    return productsWithStock.filter((p) =>
+    return products.filter((p: any) =>
       p.name?.toLowerCase().includes(term) ||
       p.sku?.toLowerCase().includes(term) ||
       p.category?.toLowerCase().includes(term)
     );
-  }, [productsWithStock, searchTerm]);
+  }, [products, searchTerm]);
 
-  const handleStockOperation = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedProduct || !stockQty) return;
-
-    const qty = parseFloat(stockQty);
-    if (isNaN(qty) || qty <= 0) {
-      toast.error("Invalid quantity");
-      return;
-    }
-
-    setSaving(true);
-    try {
-      switch (stockOperation) {
-        case "purchase":
-          await supabase.rpc("record_stock_movement", {
-            p_product_id: selectedProduct.id,
-            p_warehouse_id: selectedWarehouseId,
-            p_quantity: qty,
-            p_type: "purchase",
-            p_reason: stockReason,
-            p_user_id: user?.id,
-          });
-          toast.success("Stock purchased successfully");
-          break;
-
-        case "sale":
-          await supabase.rpc("record_stock_movement", {
-            p_product_id: selectedProduct.id,
-            p_warehouse_id: selectedWarehouseId,
-            p_quantity: -qty,
-            p_type: "sale",
-            p_reason: stockReason,
-            p_user_id: user?.id,
-          });
-          toast.success("Sale recorded successfully");
-          break;
-
-        case "adjustment":
-          await supabase.rpc("record_stock_movement", {
-            p_product_id: selectedProduct.id,
-            p_warehouse_id: selectedWarehouseId,
-            p_quantity: qty,
-            p_type: "adjustment",
-            p_reason: stockReason,
-            p_user_id: user?.id,
-          });
-          toast.success("Stock adjusted successfully");
-          break;
-
-        case "transfer":
-          // Validate permissions
-          if (transferDirection === "staff_to_warehouse" && !isAdmin) {
-            toast.error("Only admin can transfer from staff to warehouse");
-            return;
-          }
-
-          await supabase.rpc("record_stock_transfer", {
-            p_transfer_type: transferDirection,
-            p_from_warehouse_id: selectedWarehouseId,
-            p_from_user_id: transferDirection === "warehouse_to_staff" ? null : fromUserId,
-            p_to_warehouse_id: selectedWarehouseId,
-            p_to_user_id: transferDirection === "staff_to_warehouse" ? null : toUserId,
-            p_product_id: selectedProduct.id,
-            p_quantity: qty,
-            p_reason: stockReason,
-            p_created_by: user?.id,
-          });
-          toast.success("Stock transfer initiated");
-          break;
-      }
-
-      setShowStockModal(false);
-      resetStockForm();
-      qc.invalidateQueries({ queryKey: ["warehouse-stock"] });
-      qc.invalidateQueries({ queryKey: ["staff-stock-all"] });
-      qc.invalidateQueries({ queryKey: ["stock-movements"] });
-      qc.invalidateQueries({ queryKey: ["pending-returns"] });
-    } catch (err: any) {
-      toast.error(err.message || "Operation failed");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleReturnReview = async (approved: boolean) => {
-    if (!selectedReturn) return;
-
-    const actualQty = parseFloat(returnActualQty) || selectedReturn.quantity;
-    const difference = selectedReturn.quantity - actualQty;
-
-    setSaving(true);
-    try {
-      await supabase.rpc("process_stock_return", {
-        p_transfer_id: selectedReturn.id,
-        p_actual_quantity: actualQty,
-        p_difference: difference,
-        p_action: returnAction,
-        p_notes: returnNotes,
-        p_reviewed_by: user?.id,
-        p_approved: approved,
-      });
-
-      toast.success(approved ? "Return approved" : "Return rejected");
-      setShowReturnReview(false);
-      resetReturnForm();
-      qc.invalidateQueries({ queryKey: ["pending-returns"] });
-      qc.invalidateQueries({ queryKey: ["warehouse-stock"] });
-      qc.invalidateQueries({ queryKey: ["staff-stock-all"] });
-      qc.invalidateQueries({ queryKey: ["stock-movements"] });
-    } catch (err: any) {
-      toast.error(err.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const resetStockForm = () => {
-    setStockOperation("purchase");
-    setTransferDirection("warehouse_to_staff");
-    setStockQty("");
-    setStockReason("");
-    setFromUserId("");
-    setToUserId("");
-  };
-
-  const resetReturnForm = () => {
-    setSelectedReturn(null);
-    setReturnActualQty("");
-    setReturnAction("keep");
-    setReturnNotes("");
-  };
-
-  const openStockModal = (product: ProductWithStock, operation: StockOperation = "purchase") => {
-    setSelectedProduct(product);
-    setStockOperation(operation);
-    resetStockForm();
-    setShowStockModal(true);
-  };
-
-  const openReturnReview = (returnReq: any) => {
-    setSelectedReturn(returnReq);
-    setReturnActualQty(returnReq.quantity.toString());
-    setShowReturnReview(true);
-  };
-
-  // Product CRUD handlers
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     const { error } = await supabase.from("products").insert({
-      name, sku, base_price: parseFloat(price) || 0, unit,
-      category: category || null, description: description || null,
-      image_url: imageUrl || null, hsn_code: hsnCode.trim() || null,
-      gst_rate: parseFloat(gstRate) || 18, is_gst_inclusive: true,
+      name,
+      sku,
+      base_price: parseFloat(price) || 0,
+      unit,
+      category: category || null,
+      description: description || null,
+      image_url: imageUrl || null,
+      hsn_code: hsnCode.trim() || null,
+      gst_rate: parseFloat(gstRate) || 18,
+      is_gst_inclusive: true,
     });
     setSaving(false);
     if (error) {
@@ -453,44 +294,6 @@ const Products = () => {
       resetForm();
       qc.invalidateQueries({ queryKey: ["products"] });
     }
-  };
-
-  const handleEdit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editProduct) return;
-    setSaving(true);
-    const { error } = await supabase.from("products").update({
-      name, sku, base_price: parseFloat(price) || 0, unit,
-      category: category || null, description: description || null,
-      image_url: imageUrl || null, hsn_code: hsnCode.trim() || null,
-      gst_rate: parseFloat(gstRate) || 18,
-    }).eq("id", editProduct.id);
-    setSaving(false);
-    if (error) {
-      toast.error(error.message);
-    } else {
-      toast.success("Product updated");
-      logActivity(user!.id, "Updated product", "product", name, editProduct.id);
-      setEditProduct(null);
-      resetForm();
-      qc.invalidateQueries({ queryKey: ["products"] });
-    }
-  };
-
-  const handleToggleActive = async (product: any) => {
-    const newVal = !product.is_active;
-    const { error } = await supabase.from("products").update({ is_active: newVal }).eq("id", product.id);
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    toast.success(`Product ${newVal ? "activated" : "deactivated"}`);
-    qc.invalidateQueries({ queryKey: ["products"] });
-  };
-
-  const resetForm = () => {
-    setName(""); setSku(""); setPrice(""); setUnit("PCS"); setCategory("");
-    setDescription(""); setImageUrl(""); setHsnCode(""); setGstRate("18");
   };
 
   const openEdit = (product: any) => {
@@ -506,11 +309,70 @@ const Products = () => {
     setGstRate(String(product.gst_rate || 18));
   };
 
+  const handleEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editProduct) return;
+    setSaving(true);
+    const { error } = await supabase
+      .from("products")
+      .update({
+        name,
+        sku,
+        base_price: parseFloat(price) || 0,
+        unit,
+        category: category || null,
+        description: description || null,
+        image_url: imageUrl || null,
+        hsn_code: hsnCode.trim() || null,
+        gst_rate: parseFloat(gstRate) || 18,
+      })
+      .eq("id", editProduct.id);
+    setSaving(false);
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success("Product updated");
+      logActivity(user!.id, "Updated product", "product", name, editProduct.id);
+      setEditProduct(null);
+      resetForm();
+      qc.invalidateQueries({ queryKey: ["products"] });
+    }
+  };
+
+  const handleToggleActive = async (product: any) => {
+    const newVal = !product.is_active;
+    const { error } = await supabase
+      .from("products")
+      .update({ is_active: newVal })
+      .eq("id", product.id);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success(`Product ${newVal ? "activated" : "deactivated"}`);
+    qc.invalidateQueries({ queryKey: ["products"] });
+  };
+
+  const resetForm = () => {
+    setName("");
+    setSku("");
+    setPrice("");
+    setUnit("PCS");
+    setCategory("");
+    setDescription("");
+    setImageUrl("");
+    setHsnCode("");
+    setGstRate("18");
+  };
+
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
       return next;
     });
   };
@@ -518,15 +380,239 @@ const Products = () => {
   const handleBulkStatus = async (activate: boolean) => {
     const ids = Array.from(selectedIds);
     if (!ids.length) return;
-    const { error } = await supabase.from("products").update({ is_active: activate }).in("id", ids);
-    if (error) { toast.error(error.message); return; }
+    const { error } = await supabase
+      .from("products")
+      .update({ is_active: activate })
+      .in("id", ids);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     toast.success(`${ids.length} product(s) ${activate ? "activated" : "deactivated"}`);
     setSelectedIds(new Set());
     setSelectMode(false);
     qc.invalidateQueries({ queryKey: ["products"] });
   };
 
-  const isLoading = loadProducts;
+  // Stock adjustment handlers
+  const openAdjustStock = (product: any) => {
+    setAdjustStockProduct(product);
+    setStockAdjustmentType('purchase');
+    setStockAdjustmentQty("");
+    setStockAdjustmentSource("");
+    setStockAdjustmentDestination("");
+    setAdjustmentNotes("");
+    setShowAdjustStockModal(true);
+  };
+
+  const handleStockAdjustment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adjustStockProduct) return;
+    
+    const qty = parseInt(stockAdjustmentQty) || 0;
+    if (qty <= 0) {
+      toast.error("Please enter a valid quantity");
+      return;
+    }
+
+    setSaving(true);
+    
+    try {
+      if (stockAdjustmentType === 'purchase') {
+        // Add to warehouse
+        const { error } = await supabase.rpc('add_warehouse_stock', {
+          p_product_id: adjustStockProduct.id,
+          p_warehouse_id: selectedWarehouse === 'all' ? warehouses?.[0]?.id : selectedWarehouse,
+          p_qty: qty,
+          p_notes: adjustmentNotes,
+        });
+        if (error) throw error;
+        toast.success(`Added ${qty} units to warehouse`);
+      } else if (stockAdjustmentType === 'sale') {
+        // Deduct from warehouse
+        const { error } = await supabase.rpc('deduct_warehouse_stock', {
+          p_product_id: adjustStockProduct.id,
+          p_warehouse_id: selectedWarehouse === 'all' ? warehouses?.[0]?.id : selectedWarehouse,
+          p_qty: qty,
+          p_notes: adjustmentNotes,
+        });
+        if (error) throw error;
+        toast.success(`Deducted ${qty} units from warehouse`);
+      } else if (stockAdjustmentType === 'transfer') {
+        // Transfer between locations
+        if (!stockAdjustmentSource || !stockAdjustmentDestination) {
+          toast.error("Please select source and destination");
+          setSaving(false);
+          return;
+        }
+        
+        const { error } = await supabase.rpc('transfer_stock', {
+          p_product_id: adjustStockProduct.id,
+          p_from_type: stockAdjustmentSource.startsWith('staff_') ? 'staff' : 'warehouse',
+          p_from_id: stockAdjustmentSource.replace('staff_', ''),
+          p_to_type: stockAdjustmentDestination.startsWith('staff_') ? 'staff' : 'warehouse',
+          p_to_id: stockAdjustmentDestination.replace('staff_', ''),
+          p_qty: qty,
+          p_notes: adjustmentNotes,
+        });
+        if (error) throw error;
+        toast.success(`Transferred ${qty} units`);
+      }
+      
+      // Refresh stock data
+      qc.invalidateQueries({ queryKey: ["stock-data"] });
+      setShowAdjustStockModal(false);
+      setAdjustStockProduct(null);
+    } catch (error: any) {
+      toast.error(error.message || "Stock adjustment failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Return review handlers
+  const openReturnReview = (returnItem: PendingReturn) => {
+    setSelectedReturn(returnItem);
+    setShowReturnReviewModal(true);
+  };
+
+  const handleReturnDecision = async (approved: boolean) => {
+    if (!selectedReturn) return;
+    
+    setSaving(true);
+    const { error } = await supabase
+      .from("stock_returns")
+      .update({ 
+        status: approved ? 'approved' : 'rejected',
+        reviewed_at: new Date().toISOString(),
+        reviewed_by: user?.id,
+      })
+      .eq("id", selectedReturn.id);
+    
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success(`Return ${approved ? 'approved' : 'rejected'}`);
+      qc.invalidateQueries({ queryKey: ["pending-returns"] });
+      qc.invalidateQueries({ queryKey: ["stock-data"] });
+      setShowReturnReviewModal(false);
+      setSelectedReturn(null);
+    }
+    setSaving(false);
+  };
+
+  // Get total stock for a product
+  const getTotalStock = (productId: string) => {
+    const data = stockData?.[productId];
+    if (!data) return 0;
+    const staffTotal = data.staff_holdings.reduce((sum, h) => sum + h.qty, 0);
+    return data.warehouse_qty + staffTotal;
+  };
+
+  // Get warehouse stock for a product
+  const getWarehouseStock = (productId: string) => {
+    return stockData?.[productId]?.warehouse_qty || 0;
+  };
+
+  // Get staff holdings for a product
+  const getStaffHoldings = (productId: string) => {
+    return stockData?.[productId]?.staff_holdings || [];
+  };
+
+  const columns = [
+    ...(selectMode
+      ? [
+          {
+            header: "",
+            accessor: (row: any) => (
+              <Checkbox
+                checked={selectedIds.has(row.id)}
+                onCheckedChange={() => toggleSelect(row.id)}
+                onClick={(e: React.MouseEvent) => e.stopPropagation()}
+              />
+            ),
+            className: "w-10",
+          },
+        ]
+      : []),
+    {
+      header: "Product",
+      accessor: (row: any) => (
+        <div className="flex items-center gap-2">
+          {row.image_url && (
+            <img
+              src={row.image_url}
+              alt=""
+              loading="lazy"
+              className="h-8 w-8 rounded-md object-cover"
+            />
+          )}
+          <span className="font-medium">{row.name}</span>
+        </div>
+      ),
+    },
+    {
+      header: "SKU",
+      accessor: "sku" as const,
+      className: "font-mono text-xs text-muted-foreground hidden sm:table-cell",
+    },
+    {
+      header: "Category",
+      accessor: (row: any) =>
+        row.category ? (
+          <Badge variant="secondary">{row.category}</Badge>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+      className: "hidden md:table-cell",
+    },
+    {
+      header: "Base Price",
+      accessor: (row: any) => `₹${Number(row.base_price).toLocaleString()}`,
+    },
+    {
+      header: "Unit",
+      accessor: "unit" as const,
+      className: "hidden sm:table-cell",
+    },
+    {
+      header: "Status",
+      accessor: (row: any) => (
+        <div className="flex items-center gap-2">
+          <StatusBadge status={row.is_active ? "active" : "inactive"} />
+          {canEdit && (
+            <Switch
+              checked={row.is_active}
+              onCheckedChange={() => handleToggleActive(row)}
+              className="scale-75"
+            />
+          )}
+        </div>
+      ),
+    },
+    ...(canEdit
+      ? [
+          {
+            header: "Actions",
+            accessor: (row: any) => (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs gap-1"
+                onClick={(e: React.MouseEvent) => {
+                  e.stopPropagation();
+                  openEdit(row);
+                }}
+              >
+                <Pencil className="h-3 w-3" />
+                Edit
+              </Button>
+            ),
+            hideOnMobile: true,
+          },
+        ]
+      : []),
+  ];
 
   if (isLoading) {
     return (
@@ -548,37 +634,43 @@ const Products = () => {
     <div className="space-y-6 animate-fade-in">
       <PageHeader
         title="Products"
-        subtitle="Manage your product catalog and stock"
-        primaryAction={{ label: "Add Product", onClick: () => { resetForm(); setShowAdd(true); } }}
+        subtitle="Manage your product catalog and pricing"
+        primaryAction={{
+          label: "Add Product",
+          onClick: () => {
+            resetForm();
+            setShowAdd(true);
+          },
+        }}
         actions={[
-          { label: "Categories", icon: Tags, onClick: () => setShowCategories(true), priority: 1 },
-          { label: "Product Access", icon: Grid3X3, onClick: () => setShowMatrix(true), priority: 2 },
-          ...(canEdit ? [{ label: selectMode ? "Done" : "Select", icon: CheckSquare, onClick: () => { setSelectMode((v) => !v); setSelectedIds(new Set()); }, priority: 3 }] : []),
+          {
+            label: "Categories",
+            icon: Tags,
+            onClick: () => setShowCategories(true),
+            priority: 1,
+          },
+          {
+            label: "Product Access",
+            icon: Grid3X3,
+            onClick: () => setShowMatrix(true),
+            priority: 2,
+          },
+          ...(canEdit
+            ? [
+                {
+                  label: selectMode ? "Done" : "Select",
+                  icon: CheckSquare,
+                  onClick: () => {
+                    setSelectMode((v) => !v);
+                    setSelectedIds(new Set());
+                  },
+                  priority: 3,
+                },
+              ]
+            : []),
         ]}
       />
 
-      {/* Warehouse Selector */}
-      <div className="flex items-center gap-3">
-        <Warehouse className="h-4 w-4 text-muted-foreground" />
-        <Select value={selectedWarehouseId} onValueChange={setSelectedWarehouseId}>
-          <SelectTrigger className="w-[220px]">
-            <SelectValue placeholder="Select Warehouse" />
-          </SelectTrigger>
-          <SelectContent>
-            {warehouses?.map((w: any) => (
-              <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {canEdit && pendingReturns && pendingReturns.length > 0 && (
-          <Badge variant="destructive" className="gap-1">
-            <RefreshCw className="h-3 w-3" />
-            {pendingReturns.length} Pending Returns
-          </Badge>
-        )}
-      </div>
-
-      {/* Bulk Actions */}
       {selectMode && selectedIds.size > 0 && (
         <NoticeBox
           variant="premium"
@@ -586,130 +678,217 @@ const Products = () => {
             <div className="flex flex-wrap items-center gap-2 w-full">
               <span className="font-semibold">{selectedIds.size} selected</span>
               <div className="flex gap-2 ml-3">
-                <Button size="sm" variant="outline" className="h-8 bg-background text-green-600 border-green-600/40" onClick={() => handleBulkStatus(true)}>Activate</Button>
-                <Button size="sm" variant="outline" className="h-8 bg-background text-destructive border-destructive/40" onClick={() => setConfirmBulkDeactivate(true)}>Deactivate</Button>
-                <Button size="sm" variant="ghost" className="h-8 ml-auto" onClick={() => setSelectedIds(new Set())}>Clear</Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 bg-background text-green-600 border-green-600/40"
+                  onClick={() => handleBulkStatus(true)}
+                >
+                  Activate
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 bg-background text-destructive border-destructive/40"
+                  onClick={() => setConfirmBulkDeactivate(true)}
+                >
+                  Deactivate
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 ml-auto"
+                  onClick={() => setSelectedIds(new Set())}
+                >
+                  Clear
+                </Button>
               </div>
             </div>
           }
         />
       )}
 
-      {/* Products Grid with Stock */}
+      {/* Warehouse Selector */}
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
+          <Warehouse className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-medium">Warehouse:</span>
+        </div>
+        <Select value={selectedWarehouse} onValueChange={setSelectedWarehouse}>
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="Select warehouse" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Warehouses</SelectItem>
+            {warehouses?.map((w) => (
+              <SelectItem key={w.id} value={w.id}>
+                {w.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Desktop: Card Grid, Mobile: DataTable */}
       {!isMobile ? (
         <div className="space-y-4">
-          {/* Search */}
-          <div className="flex items-center gap-3">
-            <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search products..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {filteredProducts.map((product) => (
-              <Card key={product.id} className={`overflow-hidden group ${!product.is_active ? "opacity-60" : ""}`}>
-                {/* Header with Image */}
-                <div className="relative h-32 bg-muted flex items-center justify-center">
-                  {product.image_url ? (
-                    <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <Package className="h-12 w-12 text-muted-foreground/30" />
-                  )}
-                  <div className="absolute top-2 right-2 flex items-center gap-2">
-                    {selectMode && (
-                      <Checkbox
-                        checked={selectedIds.has(product.id)}
-                        onCheckedChange={() => toggleSelect(product.id)}
+          {/* Search bar for desktop */}
+          <Input
+            placeholder="Search products..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="max-w-sm"
+          />
+          <div className="entity-grid">
+            {filteredProducts.map((row: any) => {
+              const totalStock = getTotalStock(row.id);
+              const warehouseStock = getWarehouseStock(row.id);
+              const staffHoldings = getStaffHoldings(row.id);
+              
+              return (
+                <div
+                  key={row.id}
+                  onClick={() => {
+                    if (selectMode) {
+                      toggleSelect(row.id);
+                    } else if (canEdit) {
+                      openEdit(row);
+                    }
+                  }}
+                  className={`group entity-card ${!row.is_active ? "entity-card-inactive" : ""} ${
+                    selectedIds.has(row.id) ? "entity-card-selected" : ""
+                  }`}
+                >
+                  {/* Header with image */}
+                  <div className="entity-card-header !h-36">
+                    {row.image_url ? (
+                      <img
+                        src={row.image_url}
+                        alt={row.name}
+                        loading="lazy"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
                       />
+                    ) : (
+                      <Package className="h-12 w-12 text-muted-foreground/30" />
                     )}
-                    <StatusBadge status={product.is_active ? "active" : "inactive"} />
-                  </div>
-                </div>
-
-                <CardContent className="p-4 space-y-3">
-                  {/* Product Info */}
-                  <div>
-                    <h3 className="font-semibold">{product.name}</h3>
-                    <p className="text-xs text-muted-foreground">{product.sku}</p>
-                  </div>
-
-                  {product.category && (
-                    <Badge variant="secondary" className="text-xs">{product.category}</Badge>
-                  )}
-
-                  {/* Stock Breakdown */}
-                  <div className="space-y-2 p-3 bg-muted/50 rounded-lg">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-muted-foreground">Total Stock</span>
-                      <span className="font-bold text-emerald-600">{product.total_quantity} {product.unit}</span>
+                    <div className="absolute top-2 right-2 flex items-center gap-2">
+                      {selectMode && (
+                        <Checkbox
+                          checked={selectedIds.has(row.id)}
+                          onClick={(e: React.MouseEvent) => {
+                            e.stopPropagation();
+                            toggleSelect(row.id);
+                          }}
+                          className="bg-background"
+                        />
+                      )}
+                      <StatusBadge status={row.is_active ? "active" : "inactive"} />
                     </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground flex items-center gap-1">
-                        <Warehouse className="h-3 w-3" /> Warehouse
-                      </span>
-                      <span className="font-medium">{product.warehouse_quantity}</span>
+                  </div>
+
+                  {/* Content */}
+                  <div className="entity-card-content">
+                    <div>
+                      <h3 className="entity-card-title">{row.name}</h3>
+                      <p className="entity-card-subtitle mt-0.5">{row.sku}</p>
                     </div>
-                    {product.staff_holdings.length > 0 && (
-                      <div className="space-y-1 border-t pt-1 mt-1">
-                        <span className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Users className="h-3 w-3" /> With Staff
-                        </span>
-                        {product.staff_holdings.map((holder) => (
-                          <div key={holder.user_id} className="flex items-center justify-between text-xs pl-2">
-                            <span className="truncate max-w-[100px]">{holder.full_name}</span>
-                            <span className="font-medium">{holder.quantity}</span>
-                          </div>
-                        ))}
+                    {row.category && (
+                      <Badge variant="secondary" className="text-xs">
+                        {row.category}
+                      </Badge>
+                    )}
+
+                    {/* HSN and GST info */}
+                    {(row.hsn_code || row.gst_rate) && (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        {row.hsn_code && <span>HSN: {row.hsn_code}</span>}
+                        {row.gst_rate && (
+                          <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">
+                            {row.gst_rate}% GST
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Stock Breakdown */}
+                    <div className="space-y-2 p-2 bg-muted/50 rounded-md">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-muted-foreground">Total Stock</span>
+                        <span className="text-sm font-bold">{totalStock}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">Warehouse</span>
+                        <span className="text-sm">{warehouseStock}</span>
+                      </div>
+                      {staffHoldings.length > 0 && (
+                        <div className="pt-1 border-t border-border/50">
+                          <span className="text-xs font-medium text-muted-foreground block mb-1">Staff Holdings:</span>
+                          {staffHoldings.map((holding) => (
+                            <div key={holding.staff_id} className="flex items-center justify-between text-xs">
+                              <span className="truncate max-w-[120px]">{holding.staff_name}</span>
+                              <span className="font-medium">{holding.qty}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Price and unit */}
+                    <div className="entity-card-stat">
+                      <div className="flex items-center gap-1.5 text-muted-foreground">
+                        <Box className="h-3.5 w-3.5" />
+                        <span className="text-xs">{row.unit}</span>
+                      </div>
+                      <div className="text-right">
+                        <p className="entity-card-label">Price (incl. GST)</p>
+                        <p className="font-bold text-foreground">
+                          ₹{Number(row.base_price).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    {canEdit && (
+                      <div className="pt-2 border-t flex items-center justify-between gap-2">
+                        <Switch
+                          checked={row.is_active}
+                          onCheckedChange={() => handleToggleActive(row)}
+                          onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                          className="scale-90"
+                        />
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 text-xs gap-1.5"
+                            onClick={(e: React.MouseEvent) => {
+                              e.stopPropagation();
+                              openEdit(row);
+                            }}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                            Edit
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 text-xs gap-1.5"
+                            onClick={(e: React.MouseEvent) => {
+                              e.stopPropagation();
+                              openAdjustStock(row);
+                            }}
+                          >
+                            <ArrowUpDown className="h-3.5 w-3.5" />
+                            Stock
+                          </Button>
+                        </div>
                       </div>
                     )}
                   </div>
-
-                  {/* Price & Value */}
-                  <div className="flex items-center justify-between text-sm">
-                    <div>
-                      <span className="text-xs text-muted-foreground">Price</span>
-                      <p className="font-bold">₹{Number(product.base_price).toLocaleString()}</p>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-xs text-muted-foreground">Stock Value</span>
-                      <p className="font-bold">₹{(product.total_quantity * product.base_price).toLocaleString()}</p>
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-2 pt-2 border-t">
-                    {canAdjustStock && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1"
-                        onClick={() => openStockModal(product)}
-                      >
-                        <ArrowRightLeft className="h-3.5 w-3.5 mr-1" />
-                        Adjust Stock
-                      </Button>
-                    )}
-                    {canEdit && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openEdit(product)}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                </div>
+              );
+            })}
           </div>
-
           {filteredProducts.length === 0 && (
             <div className="text-center py-12 text-muted-foreground">
               No products found.
@@ -717,367 +896,143 @@ const Products = () => {
           )}
         </div>
       ) : (
-        // Mobile View
-        <div className="space-y-3">
-          <Input
-            placeholder="Search products..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          {filteredProducts.map((product) => (
+        <DataTable
+          columns={columns}
+          data={products || []}
+          searchKey="name"
+          searchPlaceholder="Search products..."
+          onRowClick={(row) => {
+            if (canEdit && !selectMode) openEdit(row);
+          }}
+          renderMobileCard={(row: any) => (
             <div
-              key={product.id}
-              className={`p-4 border rounded-lg space-y-3 ${!product.is_active ? "opacity-60" : ""}`}
-              onClick={() => { if (canEdit && !selectMode) openEdit(product); }}
+              className={`entity-card-mobile ${!row.is_active ? "entity-card-inactive" : ""}`}
+              onClick={() => {
+                if (selectMode) {
+                  toggleSelect(row.id);
+                } else if (canEdit) {
+                  openEdit(row);
+                }
+              }}
             >
-              <div className="flex items-start gap-3">
-                <div className="w-14 h-14 rounded-lg bg-muted flex items-center justify-center">
-                  {product.image_url ? (
-                    <img src={product.image_url} alt={product.name} className="w-full h-full object-cover rounded-lg" />
-                  ) : (
-                    <Package className="h-6 w-6 text-muted-foreground" />
+              <div className="w-14 h-14 rounded-lg bg-muted flex items-center justify-center overflow-hidden shrink-0">
+                {row.image_url ? (
+                  <img
+                    src={row.image_url}
+                    alt={row.name}
+                    loading="lazy"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <Package className="h-6 w-6 text-muted-foreground/40" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="font-semibold text-sm text-foreground truncate">{row.name}</h3>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <StatusBadge status={row.is_active ? "active" : "inactive"} />
+                    {canEdit && (
+                      <Switch
+                        checked={row.is_active}
+                        onCheckedChange={(e) => {
+                          handleToggleActive(row);
+                        }}
+                        onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                        className="scale-90"
+                      />
+                    )}
+                  </div>
+                </div>
+                <p className="entity-card-subtitle mt-0.5">{row.sku}</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-sm font-bold text-foreground">
+                    ₹{Number(row.base_price).toLocaleString()}
+                  </span>
+                  <span className="text-xs text-muted-foreground">/ {row.unit}</span>
+                </div>
+                {row.category && (
+                  <Badge variant="secondary" className="mt-1 text-xs h-5">
+                    {row.category}
+                  </Badge>
+                )}
+                {/* Stock info on mobile */}
+                <div className="flex items-center gap-2 mt-2 text-xs">
+                  <Box className="h-3 w-3 text-muted-foreground" />
+                  <span>Stock: {getTotalStock(row.id)}</span>
+                  {canEdit && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 text-xs px-2"
+                      onClick={(e: React.MouseEvent) => {
+                        e.stopPropagation();
+                        openAdjustStock(row);
+                      }}
+                    >
+                      Adjust
+                    </Button>
                   )}
                 </div>
-                <div className="flex-1">
-                  <div className="flex items-start justify-between">
-                    <h3 className="font-semibold">{product.name}</h3>
-                    <StatusBadge status={product.is_active ? "active" : "inactive"} />
-                  </div>
-                  <p className="text-xs text-muted-foreground">{product.sku}</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-sm font-bold">₹{Number(product.base_price).toLocaleString()}</span>
-                    <span className="text-xs text-muted-foreground">/ {product.unit}</span>
-                  </div>
-                </div>
               </div>
-
-              {/* Mobile Stock Info */}
-              <div className="flex items-center justify-between text-sm p-2 bg-muted/50 rounded">
-                <span className="text-muted-foreground">Stock: {product.total_quantity} {product.unit}</span>
-                <span className="text-xs text-muted-foreground">W: {product.warehouse_quantity}</span>
-              </div>
-
-              {canAdjustStock && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full"
-                  onClick={(e) => { e.stopPropagation(); openStockModal(product); }}
-                >
-                  <ArrowRightLeft className="h-3.5 w-3.5 mr-1" />
-                  Adjust Stock
-                </Button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Stock Flow Section */}
-      {canEdit && (
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold flex items-center gap-2">
-            <RefreshCw className="h-5 w-5" />
-            Products Stock Flow
-          </h3>
-          <p className="text-sm text-muted-foreground">
-            Recent product stock movements in the selected warehouse.
-          </p>
-
-          {/* Pending Returns */}
-          {pendingReturns && pendingReturns.length > 0 && (
-            <div className="space-y-3">
-              <h4 className="text-sm font-medium text-amber-600 flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4" />
-                Pending Returns ({pendingReturns.length})
-              </h4>
-              {pendingReturns.map((returnReq: any) => (
-                <Card key={returnReq.id} className="border-amber-200 bg-amber-50/50">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-10 w-10">
-                          <AvatarImage src={returnReq.from_user?.avatar_url} />
-                          <AvatarFallback>{returnReq.from_user?.full_name?.charAt(0)}</AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="font-medium">{returnReq.from_user?.full_name}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {returnReq.product?.name} - {returnReq.quantity} {returnReq.product?.unit}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openReturnReview(returnReq)}
-                        >
-                          Review
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
             </div>
           )}
+        />
+      )}
 
-          {/* Stock Movements Table */}
-          <div className="rounded-md border">
-            <DataTable
-              data={stockMovements || []}
-              columns={[
-                { header: "Date", accessor: (row: any) => format(new Date(row.created_at), "dd MMM HH:mm"), className: "text-xs whitespace-nowrap" },
-                { header: "Product", accessor: (row: any) => row.products?.name },
-                { header: "Type", accessor: (row: any) => <Badge variant="outline">{row.type}</Badge> },
-                { header: "Qty", accessor: (row: any) => (
-                  <span className={row.quantity > 0 ? "text-green-600 font-bold" : "text-red-600 font-bold"}>
-                    {row.quantity > 0 ? "+" : ""}{row.quantity}
-                  </span>
-                ), className: "text-right" },
-                { header: "Reason", accessor: "reason", className: "text-xs max-w-[200px] truncate" },
-              ]}
-            />
+      {/* Pending Returns Section */}
+      {pendingReturns && pendingReturns.length > 0 && (
+        <div className="space-y-4 mt-8">
+          <h3 className="text-lg font-semibold flex items-center gap-2">
+            <RotateCcw className="h-5 w-5" />
+            Pending Returns ({pendingReturns.length})
+          </h3>
+          <div className="entity-grid">
+            {pendingReturns.map((returnItem) => (
+              <div
+                key={returnItem.id}
+                className="entity-card border-l-4 border-l-amber-500"
+              >
+                <div className="entity-card-content">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h4 className="font-semibold">{returnItem.product_name}</h4>
+                      <p className="text-sm text-muted-foreground">From: {returnItem.staff_name}</p>
+                    </div>
+                    <Badge variant="outline" className="text-amber-600 border-amber-600">
+                      Pending
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-4 text-sm">
+                    <span>Qty: <strong>{returnItem.qty}</strong></span>
+                    <span className="text-muted-foreground text-xs">
+                      {new Date(returnItem.created_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                  {returnItem.reason && (
+                    <p className="text-sm text-muted-foreground bg-muted p-2 rounded">
+                      "{returnItem.reason}"
+                    </p>
+                  )}
+                  {canEdit && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => openReturnReview(returnItem)}
+                    >
+                      <Eye className="h-4 w-4 mr-2" />
+                      Review Return
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
 
-      {/* Stock Adjustment Modal */}
-      <Dialog open={showStockModal} onOpenChange={setShowStockModal}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Adjust Stock - {selectedProduct?.name}</DialogTitle>
-            <DialogDescription>
-              Manage stock for {selectedProduct?.sku}
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleStockOperation} className="space-y-4">
-            {/* Operation Type */}
-            <div className="space-y-2">
-              <Label>Operation Type</Label>
-              <Tabs value={stockOperation} onValueChange={(v) => setStockOperation(v as StockOperation)}>
-                <TabsList className="grid grid-cols-3">
-                  <TabsTrigger value="purchase">
-                    <Plus className="h-4 w-4 mr-1" /> Purchase
-                  </TabsTrigger>
-                  <TabsTrigger value="sale">
-                    <Minus className="h-4 w-4 mr-1" /> Sale
-                  </TabsTrigger>
-                  <TabsTrigger value="transfer">
-                    <ArrowRightLeft className="h-4 w-4 mr-1" /> Transfer
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </div>
-
-            {/* Transfer Direction (only for transfer) */}
-            {stockOperation === "transfer" && (
-              <div className="space-y-2">
-                <Label>Transfer Direction</Label>
-                <Select value={transferDirection} onValueChange={(v) => setTransferDirection(v as TransferDirection)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="warehouse_to_staff">Warehouse → Staff</SelectItem>
-                    {isAdmin && (
-                      <SelectItem value="staff_to_warehouse">Staff → Warehouse</SelectItem>
-                    )}
-                    <SelectItem value="staff_to_staff">Staff → Staff</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                {/* From Staff (for staff-to-warehouse or staff-to-staff) */}
-                {(transferDirection === "staff_to_warehouse" || transferDirection === "staff_to_staff") && (
-                  <div className="space-y-2">
-                    <Label>From Staff</Label>
-                    <Select value={fromUserId} onValueChange={setFromUserId} required>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select source staff" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {staffMembers?.map((s: any) => (
-                          <SelectItem key={s.id} value={s.id}>{s.full_name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-
-                {/* To Staff (for warehouse-to-staff or staff-to-staff) */}
-                {(transferDirection === "warehouse_to_staff" || transferDirection === "staff_to_staff") && (
-                  <div className="space-y-2">
-                    <Label>To Staff</Label>
-                    <Select value={toUserId} onValueChange={setToUserId} required>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select destination staff" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {staffMembers
-                          ?.filter((s: any) => s.id !== fromUserId)
-                          ?.map((s: any) => (
-                            <SelectItem key={s.id} value={s.id}>{s.full_name}</SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Current Stock Info */}
-            <div className="p-3 bg-muted rounded-lg space-y-1">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Current Stock:</span>
-                <span className="font-medium">{selectedProduct?.total_quantity} {selectedProduct?.unit}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">In Warehouse:</span>
-                <span className="font-medium">{selectedProduct?.warehouse_quantity} {selectedProduct?.unit}</span>
-              </div>
-            </div>
-
-            {/* Quantity */}
-            <div className="space-y-2">
-              <Label>Quantity ({selectedProduct?.unit})</Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0.01"
-                placeholder="Enter quantity"
-                value={stockQty}
-                onChange={(e) => setStockQty(e.target.value)}
-                required
-              />
-            </div>
-
-            {/* Reason */}
-            <div className="space-y-2">
-              <Label>Reason / Notes</Label>
-              <Textarea
-                value={stockReason}
-                onChange={(e) => setStockReason(e.target.value)}
-                placeholder="e.g. Purchase order #123, Customer return, etc."
-              />
-            </div>
-
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setShowStockModal(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={saving}>
-                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {stockOperation === "purchase" ? "Record Purchase" :
-                 stockOperation === "sale" ? "Record Sale" : "Transfer Stock"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Return Review Modal */}
-      <Dialog open={showReturnReview} onOpenChange={setShowReturnReview}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Review Return Request</DialogTitle>
-            <DialogDescription>
-              Review stock return from {selectedReturn?.from_user?.full_name}
-            </DialogDescription>
-          </DialogHeader>
-          {selectedReturn && (
-            <div className="space-y-4">
-              <div className="p-4 bg-muted rounded-lg space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Product:</span>
-                  <span className="font-medium">{selectedReturn.product?.name}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Requested:</span>
-                  <span className="font-medium">{selectedReturn.quantity} {selectedReturn.product?.unit}</span>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Actual Quantity Received</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  max={selectedReturn.quantity}
-                  value={returnActualQty}
-                  onChange={(e) => setReturnActualQty(e.target.value)}
-                />
-                {parseFloat(returnActualQty || "0") < selectedReturn.quantity && (
-                  <p className="text-sm text-amber-600">
-                    Difference: {selectedReturn.quantity - parseFloat(returnActualQty || "0")} {selectedReturn.product?.unit}
-                  </p>
-                )}
-              </div>
-
-              {parseFloat(returnActualQty || "0") < selectedReturn.quantity && (
-                <div className="space-y-2">
-                  <Label>Handle Difference</Label>
-                  <div className="flex items-center gap-4">
-                    <Button
-                      type="button"
-                      variant={returnAction === "keep" ? "default" : "outline"}
-                      onClick={() => setReturnAction("keep")}
-                      className="flex-1"
-                    >
-                      Keep with User
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={returnAction === "flag" ? "default" : "outline"}
-                      onClick={() => setReturnAction("flag")}
-                      className="flex-1"
-                    >
-                      Flag Error
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <Label>Review Notes</Label>
-                <Textarea
-                  value={returnNotes}
-                  onChange={(e) => setReturnNotes(e.target.value)}
-                  placeholder="Add notes about this return..."
-                />
-              </div>
-
-              <DialogFooter className="gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setShowReturnReview(false)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="destructive"
-                  onClick={() => handleReturnReview(false)}
-                  disabled={saving}
-                >
-                  <XCircle className="h-4 w-4 mr-2" />
-                  Reject
-                </Button>
-                <Button
-                  onClick={() => handleReturnReview(true)}
-                  disabled={saving}
-                >
-                  {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  Approve
-                </Button>
-              </DialogFooter>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Add/Edit Product Dialogs */}
+      {/* Add Product Dialog */}
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
@@ -1085,22 +1040,63 @@ const Products = () => {
           </DialogHeader>
           <form onSubmit={handleAdd} className="space-y-4">
             <div className="flex items-start gap-4">
-              <ImageUpload folder="products" currentUrl={imageUrl || null} onUploaded={setImageUrl} onRemoved={() => setImageUrl("")} />
+              <ImageUpload
+                folder="products"
+                currentUrl={imageUrl || null}
+                onUploaded={setImageUrl}
+                onRemoved={() => setImageUrl("")}
+              />
               <div className="flex-1 space-y-3">
-                <div><Label>Name</Label><Input value={name} onChange={e => setName(e.target.value)} required className="mt-1" /></div>
-                <div><Label>SKU</Label><Input value={sku} onChange={e => setSku(e.target.value)} required className="mt-1" placeholder="WB-500" /></div>
+                <div>
+                  <Label>Name</Label>
+                  <Input value={name} onChange={(e) => setName(e.target.value)} required className="mt-1" />
+                </div>
+                <div>
+                  <Label>SKU</Label>
+                  <Input
+                    value={sku}
+                    onChange={(e) => setSku(e.target.value)}
+                    required
+                    className="mt-1"
+                    placeholder="WB-500"
+                  />
+                </div>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div><Label>Price (₹) <span className="text-xs text-muted-foreground">(incl. GST)</span></Label><Input type="number" value={price} onChange={e => setPrice(e.target.value)} required className="mt-1" /></div>
-              <div><Label>Unit</Label><Input value={unit} onChange={e => setUnit(e.target.value)} className="mt-1" /></div>
+              <div>
+                <Label>
+                  Price (₹) <span className="text-xs text-muted-foreground">(incl. GST)</span>
+                </Label>
+                <Input
+                  type="number"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  required
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label>Unit</Label>
+                <Input value={unit} onChange={(e) => setUnit(e.target.value)} className="mt-1" />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div><Label>HSN Code</Label><Input value={hsnCode} onChange={e => setHsnCode(e.target.value)} className="mt-1" placeholder="22011010" /></div>
+              <div>
+                <Label>HSN Code</Label>
+                <Input
+                  value={hsnCode}
+                  onChange={(e) => setHsnCode(e.target.value)}
+                  className="mt-1"
+                  placeholder="22011010"
+                />
+              </div>
               <div>
                 <Label>GST Rate (%)</Label>
                 <Select value={gstRate} onValueChange={setGstRate}>
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="0">0% (Exempt)</SelectItem>
                     <SelectItem value="5">5%</SelectItem>
@@ -1114,16 +1110,28 @@ const Products = () => {
             <div>
               <Label>Category</Label>
               <Select value={category || "__none__"} onValueChange={(v) => setCategory(v === "__none__" ? "" : v)}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Select category" /></SelectTrigger>
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">No category</SelectItem>
-                  {categoryList?.map((c) => (
-                    <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
+                  {categoryList?.map((c: any) => (
+                    <SelectItem key={c.id} value={c.name}>
+                      {c.name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            <div><Label>Description</Label><Textarea value={description} onChange={e => setDescription(e.target.value)} className="mt-1" rows={2} /></div>
+            <div>
+              <Label>Description</Label>
+              <Textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className="mt-1"
+                rows={2}
+              />
+            </div>
             <Button type="submit" className="w-full" disabled={saving}>
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Add Product
@@ -1132,7 +1140,16 @@ const Products = () => {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!editProduct} onOpenChange={(open) => { if (!open) { setEditProduct(null); resetForm(); } }}>
+      {/* Edit Product Dialog */}
+      <Dialog
+        open={!!editProduct}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditProduct(null);
+            resetForm();
+          }
+        }}
+      >
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Edit Product</DialogTitle>
@@ -1147,22 +1164,57 @@ const Products = () => {
           )}
           <form onSubmit={handleEdit} className="space-y-4">
             <div className="flex items-start gap-4">
-              <ImageUpload folder="products" currentUrl={imageUrl || null} onUploaded={setImageUrl} onRemoved={() => setImageUrl("")} />
+              <ImageUpload
+                folder="products"
+                currentUrl={imageUrl || null}
+                onUploaded={setImageUrl}
+                onRemoved={() => setImageUrl("")}
+              />
               <div className="flex-1 space-y-3">
-                <div><Label>Name</Label><Input value={name} onChange={e => setName(e.target.value)} required className="mt-1" /></div>
-                <div><Label>SKU</Label><Input value={sku} onChange={e => setSku(e.target.value)} required className="mt-1" /></div>
+                <div>
+                  <Label>Name</Label>
+                  <Input value={name} onChange={(e) => setName(e.target.value)} required className="mt-1" />
+                </div>
+                <div>
+                  <Label>SKU</Label>
+                  <Input value={sku} onChange={(e) => setSku(e.target.value)} required className="mt-1" />
+                </div>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div><Label>Price (₹) <span className="text-xs text-muted-foreground">(incl. GST)</span></Label><Input type="number" value={price} onChange={e => setPrice(e.target.value)} required className="mt-1" /></div>
-              <div><Label>Unit</Label><Input value={unit} onChange={e => setUnit(e.target.value)} className="mt-1" /></div>
+              <div>
+                <Label>
+                  Price (₹) <span className="text-xs text-muted-foreground">(incl. GST)</span>
+                </Label>
+                <Input
+                  type="number"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  required
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label>Unit</Label>
+                <Input value={unit} onChange={(e) => setUnit(e.target.value)} className="mt-1" />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div><Label>HSN Code</Label><Input value={hsnCode} onChange={e => setHsnCode(e.target.value)} className="mt-1" placeholder="22011010" /></div>
+              <div>
+                <Label>HSN Code</Label>
+                <Input
+                  value={hsnCode}
+                  onChange={(e) => setHsnCode(e.target.value)}
+                  className="mt-1"
+                  placeholder="22011010"
+                />
+              </div>
               <div>
                 <Label>GST Rate (%)</Label>
                 <Select value={gstRate} onValueChange={setGstRate}>
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="0">0% (Exempt)</SelectItem>
                     <SelectItem value="5">5%</SelectItem>
@@ -1176,16 +1228,28 @@ const Products = () => {
             <div>
               <Label>Category</Label>
               <Select value={category || "__none__"} onValueChange={(v) => setCategory(v === "__none__" ? "" : v)}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Select category" /></SelectTrigger>
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">No category</SelectItem>
-                  {categoryList?.map((c) => (
-                    <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
+                  {categoryList?.map((c: any) => (
+                    <SelectItem key={c.id} value={c.name}>
+                      {c.name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            <div><Label>Description</Label><Textarea value={description} onChange={e => setDescription(e.target.value)} className="mt-1" rows={2} /></div>
+            <div>
+              <Label>Description</Label>
+              <Textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className="mt-1"
+                rows={2}
+              />
+            </div>
             <Button type="submit" className="w-full" disabled={saving}>
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Save Changes
@@ -1194,17 +1258,216 @@ const Products = () => {
         </DialogContent>
       </Dialog>
 
+      {/* Adjust Stock Modal */}
+      <Dialog open={showAdjustStockModal} onOpenChange={setShowAdjustStockModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Adjust Stock: {adjustStockProduct?.name}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleStockAdjustment} className="space-y-4">
+            <div className="flex items-center gap-2 p-3 bg-muted rounded-md">
+              <Box className="h-4 w-4" />
+              <span className="text-sm">
+                Current Stock: <strong>{getTotalStock(adjustStockProduct?.id || '')}</strong>
+                {' '}(Warehouse: {getWarehouseStock(adjustStockProduct?.id || '')})
+              </span>
+            </div>
+
+            <div>
+              <Label>Adjustment Type</Label>
+              <div className="grid grid-cols-3 gap-2 mt-1">
+                <Button
+                  type="button"
+                  variant={stockAdjustmentType === 'purchase' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setStockAdjustmentType('purchase')}
+                  className="flex flex-col items-center gap-1 h-auto py-2"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span className="text-xs">Purchase</span>
+                </Button>
+                <Button
+                  type="button"
+                  variant={stockAdjustmentType === 'sale' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setStockAdjustmentType('sale')}
+                  className="flex flex-col items-center gap-1 h-auto py-2"
+                >
+                  <Minus className="h-4 w-4" />
+                  <span className="text-xs">Sale</span>
+                </Button>
+                <Button
+                  type="button"
+                  variant={stockAdjustmentType === 'transfer' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setStockAdjustmentType('transfer')}
+                  className="flex flex-col items-center gap-1 h-auto py-2"
+                >
+                  <ArrowRightLeft className="h-4 w-4" />
+                  <span className="text-xs">Transfer</span>
+                </Button>
+              </div>
+            </div>
+
+            {stockAdjustmentType === 'transfer' && (
+              <>
+                <div>
+                  <Label>From</Label>
+                  <Select value={stockAdjustmentSource} onValueChange={setStockAdjustmentSource}>
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Select source" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={`warehouse_${selectedWarehouse === 'all' ? warehouses?.[0]?.id : selectedWarehouse}`}>
+                        Warehouse
+                      </SelectItem>
+                      {staffList?.map((s: any) => (
+                        <SelectItem key={s.id} value={`staff_${s.id}`}>
+                          {s.full_name} (Staff)
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>To</Label>
+                  <Select value={stockAdjustmentDestination} onValueChange={setStockAdjustmentDestination}>
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Select destination" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={`warehouse_${selectedWarehouse === 'all' ? warehouses?.[0]?.id : selectedWarehouse}`}>
+                        Warehouse
+                      </SelectItem>
+                      {staffList?.map((s: any) => (
+                        <SelectItem key={s.id} value={`staff_${s.id}`}>
+                          {s.full_name} (Staff)
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
+
+            <div>
+              <Label>Quantity</Label>
+              <Input
+                type="number"
+                min="1"
+                value={stockAdjustmentQty}
+                onChange={(e) => setStockAdjustmentQty(e.target.value)}
+                className="mt-1"
+                placeholder="Enter quantity"
+              />
+            </div>
+
+            <div>
+              <Label>Notes (optional)</Label>
+              <Textarea
+                value={adjustmentNotes}
+                onChange={(e) => setAdjustmentNotes(e.target.value)}
+                className="mt-1"
+                rows={2}
+                placeholder="Reason for adjustment..."
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                onClick={() => setShowAdjustStockModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" className="flex-1" disabled={saving}>
+                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Confirm
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Return Review Modal */}
+      <Dialog open={showReturnReviewModal} onOpenChange={setShowReturnReviewModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Review Return Request</DialogTitle>
+          </DialogHeader>
+          {selectedReturn && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Product</span>
+                  <span className="font-medium">{selectedReturn.product_name}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">From</span>
+                  <span className="font-medium">{selectedReturn.staff_name}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Quantity</span>
+                  <span className="font-medium">{selectedReturn.qty}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Date</span>
+                  <span>{new Date(selectedReturn.created_at).toLocaleDateString()}</span>
+                </div>
+              </div>
+
+              {selectedReturn.reason && (
+                <div className="p-3 bg-muted rounded-md">
+                  <span className="text-sm text-muted-foreground block mb-1">Reason:</span>
+                  <p className="text-sm italic">"{selectedReturn.reason}"</p>
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => handleReturnDecision(false)}
+                  disabled={saving}
+                >
+                  Reject
+                </Button>
+                <Button
+                  className="flex-1"
+                  onClick={() => handleReturnDecision(true)}
+                  disabled={saving}
+                >
+                  {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Approve
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <AlertDialog open={confirmBulkDeactivate} onOpenChange={setConfirmBulkDeactivate}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Deactivate {selectedIds.size} product(s)?</AlertDialogTitle>
             <AlertDialogDescription>
-              The selected products will no longer appear in order forms. This can be reversed by reactivating them.
+              The selected products will no longer appear in order forms. This can be reversed by
+              reactivating them.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive hover:bg-destructive/90" onClick={() => { setConfirmBulkDeactivate(false); handleBulkStatus(false); }}>Deactivate</AlertDialogAction>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90"
+              onClick={() => {
+                setConfirmBulkDeactivate(false);
+                handleBulkStatus(false);
+              }}
+            >
+              Deactivate
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
