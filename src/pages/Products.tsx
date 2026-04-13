@@ -171,7 +171,7 @@ const Products = () => {
       // Get staff stock
       let staffQuery = supabase
         .from("staff_stock")
-        .select("product_id, staff_id, qty");
+        .select("product_id, user_id, quantity");
       
       if (selectedWarehouse !== "all") {
         // Filter by warehouse if needed - join with profiles to filter by warehouse
@@ -200,12 +200,12 @@ const Products = () => {
       // Aggregate staff stock
       const staffMap: Record<string, { staff_id: string; staff_name: string; qty: number }> = {};
       staffStock?.forEach((item: any) => {
-        const key = `${item.product_id}-${item.staff_id}`;
-        const staffName = staffList?.find(s => s.id === item.staff_id)?.full_name || 'Unknown';
+        const key = `${item.product_id}-${item.user_id}`;
+        const staffName = staffList?.find(s => s.id === item.user_id)?.full_name || 'Unknown';
         staffMap[key] = {
-          staff_id: item.staff_id,
+          staff_id: item.user_id,
           staff_name: staffName,
-          qty: item.qty || 0,
+          qty: item.quantity || 0,
         };
       });
       
