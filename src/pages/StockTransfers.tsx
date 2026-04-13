@@ -158,11 +158,11 @@ export default function StockTransfers() {
         .from("stock_transfers")
         .select(
           `id, created_at, product_id, quantity, description,
-           from_warehouse_id, from_staff_id, to_warehouse_id, to_staff_id,
+           from_warehouse_id, from_staff_id:from_user_id, to_warehouse_id, to_staff_id:to_user_id,
            from_warehouse:warehouses!stock_transfers_from_warehouse_id_fkey(name),
            to_warehouse:warehouses!stock_transfers_to_warehouse_id_fkey(name),
-           from_staff:profiles!stock_transfers_from_staff_id_fkey(full_name),
-           to_staff:profiles!stock_transfers_to_staff_id_fkey(full_name),
+           from_staff:profiles!stock_transfers_from_user_id_profiles_fkey(full_name),
+           to_staff:profiles!stock_transfers_to_user_id_profiles_fkey(full_name),
            product:products(name)`
         )
         .order("created_at", { ascending: false })

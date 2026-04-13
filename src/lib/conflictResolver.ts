@@ -437,10 +437,11 @@ export async function resolveConflict(
         // Keep in queue, will retry later
         return { success: true };
 
-      case ResolutionStrategy.MODIFY_AND_APPLY:
+      case ResolutionStrategy.MODIFY_AND_APPLY: {
         // Modify action based on conflict type
         const modifiedAction = await modifyActionForConflict(conflict, resolution);
         return { success: true, modifiedAction };
+      }
 
       default:
         return { success: false, error: "Unknown resolution strategy" };

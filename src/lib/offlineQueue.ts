@@ -5,7 +5,7 @@
  */
 
 const DB_NAME = "aquaprime_offline";
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const STORE_NAME = "pending_actions";
 const FILE_STORE_NAME = "pending_files";
 
@@ -87,6 +87,12 @@ function openDB(): Promise<IDBDatabase> {
         const fileStore = db.createObjectStore(FILE_STORE_NAME, { keyPath: "id" });
         fileStore.createIndex("type", "type", { unique: false });
         fileStore.createIndex("createdAt", "createdAt", { unique: false });
+      }
+
+      // Create conflict_info store for conflicts (v4+)
+      if (!db.objectStoreNames.contains(CONFLICT_STORE_NAME)) {
+        const conflictStore = db.createObjectStore(CONFLICT_STORE_NAME, { keyPath: "actionId" });
+        conflictStore.createIndex("resolved", "resolved", { unique: false });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -474,6 +480,10 @@ export async function addToQueueWithContext(
 export async function getConflictedActions(): Promise<PendingAction[]> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
+    if (!db.objectStoreNames.contains(CONFLICT_STORE_NAME)) {
+      resolve([]);
+      return;
+    }
     const tx = db.transaction(CONFLICT_STORE_NAME, "readonly");
     const req = tx.objectStore(CONFLICT_STORE_NAME).getAll();
     
@@ -538,10 +548,13 @@ export async function resolveConflict(
   modifiedPayload?: unknown
 ): Promise<void> {
   const db = await openDB();
-  
+
   return new Promise((resolve, reject) => {
-    const tx = db.transaction([CONFLICT_STORE_NAME, STORE_NAME], "readwrite");
-    
+    const stores = db.objectStoreNames.contains(CONFLICT_STORE_NAME) 
+      ? [CONFLICT_STORE_NAME, STORE_NAME] 
+      : [STORE_NAME];
+    const tx = db.transaction(stores, "readwrite");
+
     // Update conflict info
     if (db.objectStoreNames.contains(CONFLICT_STORE_NAME)) {
       const conflictStore = tx.objectStore(CONFLICT_STORE_NAME);

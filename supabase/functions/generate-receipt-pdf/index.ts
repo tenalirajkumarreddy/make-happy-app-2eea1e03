@@ -263,7 +263,7 @@ Deno.serve(async (req) => {
       : "";
 
     // Replace template variables
-    let html = RECEIPT_TEMPLATE
+    const html = RECEIPT_TEMPLATE
       .replace("{{RECEIPT_NUMBER}}", escapeHtml(receipt.receipt_number))
       .replace("{{SALE_DATE}}", formatDate(receipt.sale?.created_at))
       .replace("{{STORE_NAME}}", escapeHtml(receipt.sale?.store?.name || "Unknown Store"))
