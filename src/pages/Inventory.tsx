@@ -189,16 +189,16 @@ const Inventory = () => {
     queryFn: async () => {
       if (!selectedWarehouseId) return [];
       
-      const { data: materials } = await supabase
-        .from("raw_materials")
-        .select(`
-          id, display_id, name, unit, category, 
-          min_stock_level, current_stock, unit_cost, image_url, 
-          is_active, vendor_id,
-          vendor:vendors(id, name, current_balance, total_purchases, total_payments, last_purchase_at)
-        `)
-        .eq("is_active", true)
-        .order("name");
+    const { data: materials } = await supabase
+      .from("raw_materials")
+      .select(`
+        id, display_id, name, unit, category,
+        min_stock_level, current_stock, unit_cost, image_url,
+        is_active, vendor_id,
+        vendor:vendors!raw_materials_vendor_id_fkey(id, name)
+      `)
+      .eq("is_active", true)
+      .order("name");
 
       if (!materials) return [];
 
