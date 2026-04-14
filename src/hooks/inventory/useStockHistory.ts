@@ -152,8 +152,7 @@ export function useStockHistory(options: UseStockHistoryOptions = {}) {
         .from("raw_material_adjustments")
         .select(`
           *,
-          raw_material:raw_materials(id, name, display_id, unit, unit_cost),
-          performer:profiles!raw_material_adjustments_performed_by_fkey(id, full_name)
+          raw_material:raw_materials!raw_material_adjustments_raw_material_id_fkey(id, name, display_id, unit, unit_cost)
         `)
         .order("created_at", { ascending: false })
         .limit(limit);

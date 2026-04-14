@@ -94,10 +94,10 @@ export function useVendorBalance(options: UseVendorBalanceOptions = {}) {
   });
 
   // Query for vendor transactions
-  const { 
-    data: transactions, 
-    isLoading: isLoadingTransactions, 
-    error: transactionsError 
+  const {
+    data: transactions,
+    isLoading: isLoadingTransactions,
+    error: transactionsError
   } = useQuery({
     queryKey: ["vendor-transactions", vendorId, limit],
     queryFn: async () => {
@@ -105,8 +105,7 @@ export function useVendorBalance(options: UseVendorBalanceOptions = {}) {
         .from("vendor_transactions")
         .select(`
           *,
-          vendor:vendors(id, name),
-          creator:profiles(id, full_name)
+          vendor:vendors!vendor_transactions_vendor_id_fkey(id, name)
         `)
         .order("created_at", { ascending: false })
         .limit(limit);
