@@ -47,191 +47,107 @@ interface UseStaffStockOptions {
   enabled?: boolean;
 }
 
+export function useStaffStockByWarehouse(warehouseId: string) {
+  return useQuery({
+    queryKey: ['staff-stock-by-warehouse', warehouseId],
+    queryFn: async () => {
+      if (!warehouseId) return [];
+
+    // Step 1: get staff_stock rows
+    const { data: stockRows, error } = await supabase
+      .from('staff_stock')
+      .select(`
+        id, user_id, warehouse_id, product_id, quantity, is_negative, amount_value,
+        last_received_at, last_sale_at, transfer_count,
+        product:products!staff_stock_product_id_fkey(id, name, sku, unit, base_price, image_url)
+      `)
+      .eq('warehouse_id', warehouseId)
+      .gt('quantity', 0); // optional, adjust if zero is needed
+
+      if (error) throw error;
+      if (!stockRows?.length) return [];
+
+      // Step 2: get profiles for those user_ids
+      const userIds = [...new Set(stockRows.map(r => r.user_id))];
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('user_id, full_name, avatar_url, email')
+        .in('user_id', userIds);
+
+      const profileMap = Object.fromEntries((profiles ?? []).map(p => [p.user_id, p]));
+
+      // Step 3: group by user
+      const grouped: Record<string, any> = {};
+      for (const row of stockRows) {
+        if (!grouped[row.user_id]) {
+          const profile = profileMap[row.user_id];
+          grouped[row.user_id] = {
+            user_id: row.user_id,
+            full_name: profile?.full_name ?? 'Unknown',
+            email: profile?.email ?? '',
+            avatar_url: profile?.avatar_url ?? null,
+            items: [],
+            totalValue: 0,
+            totalQuantity: 0,
+            negativeItems: 0
+          };
+        }
+        grouped[row.user_id].items.push(row);
+        grouped[row.user_id].totalValue += row.amount_value ?? 0;
+        grouped[row.user_id].totalQuantity += row.quantity ?? 0;
+        if (row.is_negative) grouped[row.user_id].negativeItems++;
+      }
+
+      return Object.values(grouped);
+    },
+    enabled: !!warehouseId
+  });
+}
+
+// Deprecated or simplified proxy function if needed by other components
 export function useStaffStock(options: UseStaffStockOptions = {}) {
   const { userId, warehouseId, enabled = true } = options;
   const queryClient = useQueryClient();
 
-  // Query for staff stock items
-  const { data: staffStock, isLoading: isLoadingStock, error: stockError } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ["staff-stock", userId, warehouseId],
     queryFn: async () => {
-      let query = supabase
-        .from("staff_stock")
-        .select(`
-          id,
-          user_id,
-          product_id,
-          warehouse_id,
-          quantity,
-          is_negative,
-          amount_value,
-          last_received_at,
-          last_sale_at,
-          transfer_count,
-          product:products(id, name, sku, unit, base_price, image_url)
-        `)
-        .order("updated_at", { ascending: false });
+    let q = supabase
+      .from('staff_stock')
+      .select(`
+        id, user_id, warehouse_id, product_id, quantity, is_negative, amount_value,
+        last_received_at, last_sale_at, transfer_count,
+        product:products!staff_stock_product_id_fkey(id, name, sku, unit, base_price, image_url)
+      `);
 
-      if (userId) {
-        query = query.eq("user_id", userId);
-      }
-      if (warehouseId) {
-        query = query.eq("warehouse_id", warehouseId);
-      }
+      if (userId) q = q.eq('user_id', userId);
+      if (warehouseId) q = q.eq('warehouse_id', warehouseId);
 
-      const { data, error } = await query;
+      const { data: stockRows, error } = await q;
       if (error) throw error;
-      return (data || []) as StaffStockItem[];
-    },
-    enabled,
-  });
+      if (!stockRows?.length) return [];
 
-  // Query for staff inventory summary
-  const { data: summary, isLoading: isLoadingSummary, error: summaryError } = useQuery({
-    queryKey: ["staff-inventory-summary", warehouseId],
-    queryFn: async () => {
-      let query = supabase
-        .from("staff_inventory_summary")
-        .select("*");
+      const userIds = [...new Set(stockRows.map(r => r.user_id))];
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('user_id, full_name, avatar_url, email')
+        .in('user_id', userIds);
 
-      if (warehouseId) {
-        query = query.eq("warehouse_id", warehouseId);
-      }
+      const profileMap = Object.fromEntries((profiles ?? []).map(p => [p.user_id, p]));
 
-      const { data, error } = await query;
-      if (error) throw error;
-      return (data || []) as StaffInventorySummary[];
+      return stockRows.map(item => ({
+        ...item,
+        profile: profileMap[item.user_id] || { full_name: 'Unknown User' }
+      }));
     },
-    enabled,
-  });
-
-  // Mutation to update staff stock
-  const updateStock = useMutation({
-    mutationFn: async ({
-      staffStockId,
-      quantity,
-      reason,
-    }: {
-      staffStockId: string;
-      quantity: number;
-      reason?: string;
-    }) => {
-      const { data, error } = await supabase
-        .from("staff_stock")
-        .update({
-          quantity,
-          is_negative: quantity < 0,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", staffStockId)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["staff-stock"] });
-      queryClient.invalidateQueries({ queryKey: ["staff-inventory-summary"] });
-      toast.success("Stock updated successfully");
-    },
-    onError: (error: any) => {
-      toast.error(error.message || "Failed to update stock");
-    },
-  });
-
-  // Mutation to transfer stock between staff
-  const transferStock = useMutation({
-    mutationFn: async ({
-      fromUserId,
-      toUserId,
-      productId,
-      quantity,
-      warehouseId,
-      reason,
-    }: {
-      fromUserId: string;
-      toUserId: string;
-      productId: string;
-      quantity: number;
-      warehouseId: string;
-      reason?: string;
-    }) => {
-      const { data, error } = await supabase.rpc("transfer_staff_stock", {
-        p_from_user_id: fromUserId,
-        p_to_user_id: toUserId,
-        p_product_id: productId,
-        p_quantity: quantity,
-        p_warehouse_id: warehouseId,
-        p_reason: reason,
-      });
-
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["staff-stock"] });
-      queryClient.invalidateQueries({ queryKey: ["staff-inventory-summary"] });
-      queryClient.invalidateQueries({ queryKey: ["stock-movements"] });
-      toast.success("Stock transferred successfully");
-    },
-    onError: (error: any) => {
-      toast.error(error.message || "Failed to transfer stock");
-    },
+    enabled: enabled && (!!userId || !!warehouseId)
   });
 
   return {
-    staffStock,
-    summary,
-    isLoading: isLoadingStock || isLoadingSummary,
-    error: stockError || summaryError,
-    updateStock,
-    transferStock,
+    staffStock: data,
+    isLoadingStock: isLoading,
+    stockError: error
   };
 }
 
-// Hook for getting a single user's stock
-export function useMyStaffStock(userId?: string) {
-  const queryClient = useQueryClient();
-
-  const { data: myStock, isLoading, error } = useQuery({
-    queryKey: ["my-staff-stock", userId],
-    queryFn: async () => {
-      if (!userId) return [];
-      
-      const { data, error } = await supabase
-        .from("staff_stock")
-        .select(`
-          id,
-          product_id,
-          warehouse_id,
-          quantity,
-          is_negative,
-          amount_value,
-          last_received_at,
-          last_sale_at,
-          product:products(id, name, sku, unit, base_price, image_url)
-        `)
-        .eq("user_id", userId)
-        .order("updated_at", { ascending: false });
-
-      if (error) throw error;
-      return (data || []) as StaffStockItem[];
-    },
-    enabled: !!userId,
-  });
-
-  // Calculate total value
-  const totalValue = myStock?.reduce((sum, item) => sum + (item.amount_value || 0), 0) || 0;
-  const totalQuantity = myStock?.reduce((sum, item) => sum + item.quantity, 0) || 0;
-  const hasNegative = myStock?.some(item => item.is_negative) || false;
-
-  return {
-    myStock: myStock || [],
-    totalValue,
-    totalQuantity,
-    hasNegative,
-    isLoading,
-    error,
-  };
-}
+// ... Additional mutations can go here ...

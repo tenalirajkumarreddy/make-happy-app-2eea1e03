@@ -44,6 +44,7 @@ interface VendorLink {
 
 const UNITS = ["kg", "g", "L", "mL", "pcs", "box", "pack", "ton", "unit"];
 const CATEGORIES = ["Chemicals", "Packaging", "Labels", "Caps & Closures", "Raw Ingredients", "Consumables", "Other"];
+const NO_VENDOR_VALUE = "__no_vendor__";
 
 const RawMaterials = () => {
   const { user, role } = useAuth();
@@ -380,12 +381,15 @@ const RawMaterials = () => {
               </div>
               <div className="space-y-2">
                 <Label>Vendor</Label>
-                <Select value={vendorId} onValueChange={setVendorId}>
+                <Select
+                  value={vendorId || NO_VENDOR_VALUE}
+                  onValueChange={(value) => setVendorId(value === NO_VENDOR_VALUE ? "" : value)}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select vendor (optional)" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">No Vendor</SelectItem>
+                    <SelectItem value={NO_VENDOR_VALUE}>No Vendor</SelectItem>
                     {vendors.map((v: any) => (
                       <SelectItem key={v.id} value={v.id}>
                         {v.name} ({v.display_id})

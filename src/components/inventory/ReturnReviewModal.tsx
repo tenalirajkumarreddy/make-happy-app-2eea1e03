@@ -1,507 +1,195 @@
-import { useState, useMemo } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
-import { toast } from "sonner";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import React, { useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  ArrowLeftRight,
-  AlertCircle,
-  CheckCircle2,
-  XCircle,
-  Package,
-  DollarSign,
-  User,
-  Calendar,
-  AlertTriangle,
-  Loader2,
-  Clock,
-  ThumbsUp,
-  ThumbsDown,
-  ShieldAlert
-} from "lucide-react";
-import { formatCurrency } from "@/lib/currency";
-import { format } from "date-fns";
+import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { AlertCircle } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface ReturnReviewModalProps {
   isOpen: boolean;
   onClose: () => void;
-  returnRequest: {
-    id: string;
-    display_id: string;
-    staff_id: string;
-    staff_name: string;
-    warehouse_id: string;
-    warehouse_name: string;
-    status: string;
-    return_reason: string;
-    custom_reason?: string;
-    requested_items_count: number;
-    total_requested_value: number;
-    submitted_at: string;
-  };
+  transfer: any; // Simplified type for prompt constraints
 }
 
-interface ReturnItem {
-  id: string;
-  product_id: string;
-  product: {
-    id: string;
-    name: string;
-    sku: string;
-    base_price: number;
-  };
-  requested_quantity: number;
-  unit_price: number;
-  requested_value: number;
-  staff_notes?: string;
-}
-
-interface ItemDecision {
-  item_id: string;
-  decision: "approved" | "partial" | "damaged" | "rejected";
-  approved_quantity: number;
-  damaged_quantity: number;
-  notes: string;
-}
-
-export function ReturnReviewModal({
-  isOpen,
-  onClose,
-  returnRequest,
-}: ReturnReviewModalProps) {
-  const { user } = useAuth();
+export function ReturnReviewModal({ isOpen, onClose, transfer }: ReturnReviewModalProps) {
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState("items");
-  const [overallNotes, setOverallNotes] = useState("");
-  const [itemDecisions, setItemDecisions] = useState<Record<string, ItemDecision>>({});
-  const [error, setError] = useState("");
-  const [showConfirm, setShowConfirm] = useState<"approve" | "reject" | null>(null);
+  const [actualQty, setActualQty] = useState<string>(transfer?.quantity?.toString() || "");
+  const [diffOption, setDiffOption] = useState<"keep_with_staff" | "mark_as_error">("keep_with_staff");
+  const [notes, setNotes] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { data: items, isLoading } = useQuery({
-    queryKey: ["return-items", returnRequest.id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("stock_return_items")
-        .select("*, product:products(id, name, sku, base_price)")
-        .eq("return_request_id", returnRequest.id);
-      if (error) throw error;
-      return data as unknown as ReturnItem[];
-    },
-    enabled: isOpen,
-  });
+  const diff = transfer ? transfer.quantity - (parseFloat(actualQty) || 0) : 0;
 
-  // Initialize decisions when items load
-  useMemo(() => {
-    if (items) {
-      const initial: Record<string, ItemDecision> = {};
-      items.forEach((item) => {
-        initial[item.id] = {
-          item_id: item.id,
-          decision: "approved",
-          approved_quantity: item.requested_quantity,
-          damaged_quantity: 0,
-          notes: "",
-        };
-      });
-      setItemDecisions(initial);
-    }
-  }, [items]);
+  const handleAccept = async () => {
+    if (!transfer) return;
+    try {
+      setIsSubmitting(true);
+      const aq = parseFloat(actualQty);
+      if (isNaN(aq) || aq < 0) throw new Error("Invalid actual quantity");
 
-  const reviewMutation = useMutation({
-    mutationFn: async (action: "approve" | "reject") => {
-      if (!user?.id) throw new Error("Not authenticated");
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
 
-      const decisions = Object.values(itemDecisions).map((d) => ({
-        item_id: d.item_id,
-        decision: d.decision,
-        approved_quantity: d.approved_quantity,
-        damaged_quantity: d.damaged_quantity,
-        notes: d.notes,
-      }));
+      const difference = transfer.quantity - aq;
+      const productPrice = transfer.product?.base_price || 0;
 
-      const { data, error } = await supabase.rpc("review_stock_return", {
-        p_return_id: returnRequest.id,
-        p_reviewer_id: user.id,
-        p_action: action,
-        p_item_decisions: decisions,
-        p_overall_notes: overallNotes,
-      });
+      // 1. Update the transfer record
+      await supabase.from("stock_transfers").update({
+        status: "completed",
+        reviewed_by: user.id,
+        reviewed_at: new Date().toISOString(),
+        actual_quantity: aq,
+        difference: difference,
+        action_taken: difference > 0 ? diffOption : null
+      }).eq("id", transfer.id);
 
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: (data) => {
-      if (data.success) {
-        toast.success(`Return ${returnRequest.display_id} ${data.new_status}`);
-        queryClient.invalidateQueries({ queryKey: ["pending-returns"] });
-        queryClient.invalidateQueries({ queryKey: ["my-reviewed-returns"] });
-        onClose();
+      // 2. Get current warehouse stock
+      const { data: wStock } = await supabase.from("product_stock")
+        .select("id, quantity").eq("product_id", transfer.product_id).eq("warehouse_id", transfer.to_warehouse_id).maybeSingle();
+
+      // 3. Add actualQty to warehouse stock
+      const newWarehouseQty = (wStock?.quantity ?? 0) + aq;
+      if (wStock?.id) {
+        await supabase.from("product_stock").update({ quantity: newWarehouseQty, updated_at: new Date().toISOString() }).eq("id", wStock.id);
       } else {
-        setError(data.error || "Review failed");
+        await supabase.from("product_stock").insert({ product_id: transfer.product_id, warehouse_id: transfer.to_warehouse_id, quantity: aq });
       }
-    },
-    onError: (error: any) => {
-      setError(error.message || "Failed to process return");
-    },
-  });
 
-  const updateDecision = (
-    itemId: string,
-    updates: Partial<ItemDecision>
-  ) => {
-    setItemDecisions((prev) => ({
-      ...prev,
-      [itemId]: { ...prev[itemId], ...updates },
-    }));
-  };
+      // 4. Update staff_stock
+      const { data: sStock } = await supabase.from("staff_stock")
+        .select("id, quantity").eq("user_id", transfer.from_user_id).eq("product_id", transfer.product_id).maybeSingle(); // Assumes staff operates within one warehouse context per product mostly
 
-  const calculateTotals = () => {
-    const approved = Object.values(itemDecisions).filter(
-      (d) => d.decision === "approved"
-    ).length;
-    const rejected = Object.values(itemDecisions).filter(
-      (d) => d.decision === "rejected"
-    ).length;
-    const damaged = Object.values(itemDecisions).filter(
-      (d) => d.decision === "damaged" || d.damaged_quantity > 0
-    ).length;
+      if (sStock) {
+        let newStaffQty: number;
+        if (difference === 0 || diffOption === "mark_as_error") {
+          newStaffQty = Math.max(0, (sStock.quantity ?? 0) - transfer.quantity); // or just set to 0 if we assume full return
+        } else {
+          newStaffQty = difference; // if keeping difference with staff
+        }
+        await supabase.from("staff_stock").update({
+          quantity: newStaffQty,
+          is_negative: newStaffQty < 0,
+          amount_value: newStaffQty * productPrice,
+          updated_at: new Date().toISOString()
+        }).eq("id", sStock.id);
+      }
 
-    const approvedValue = Object.values(itemDecisions).reduce((sum, d) => {
-      const item = items?.find((i) => i.id === d.item_id);
-      return sum + (d.approved_quantity * (item?.unit_price || 0));
-    }, 0);
+      // 5. Log return movement
+      await supabase.from("stock_movements").insert({
+        product_id: transfer.product_id,
+        warehouse_id: transfer.to_warehouse_id,
+        quantity: aq,
+        type: "return",
+        reason: `Staff return (${transfer.display_id}) ${notes ? '- '+notes : ''}`,
+        reference_id: transfer.id,
+        created_by: user.id
+      });
 
-    return { approved, rejected, damaged, approvedValue };
-  };
+      // 6. Log error movement if marked as error
+      if (difference > 0 && diffOption === "mark_as_error") {
+        await supabase.from("stock_movements").insert({
+          product_id: transfer.product_id,
+          warehouse_id: transfer.to_warehouse_id,
+          quantity: -difference,
+          type: "adjustment",
+          reason: `Error/shortage on return (${transfer.display_id})`,
+          reference_id: transfer.id,
+          created_by: user.id
+        });
+      }
 
-  const totals = calculateTotals();
-  const allDecided = items?.every((item) => itemDecisions[item.id]);
-
-  const handleSubmit = (action: "approve" | "reject") => {
-    setError("");
-    if (action === "approve" && !allDecided) {
-      setError("Please make decisions for all items");
-      return;
+      queryClient.invalidateQueries({ queryKey: ["pending-returns"] });
+      queryClient.invalidateQueries({ queryKey: ["warehouse-stock"] });
+      queryClient.invalidateQueries({ queryKey: ["staff-stock-by-warehouse"] });
+      queryClient.invalidateQueries({ queryKey: ["staff-stock"] });
+      queryClient.invalidateQueries({ queryKey: ["stock-movements"] });
+      
+      toast.success("Return processed successfully");
+      onClose();
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setIsSubmitting(false);
     }
-    reviewMutation.mutate(action);
   };
 
-  const getDecisionColor = (decision: string) => {
-    switch (decision) {
-      case "approved":
-        return "text-green-600";
-      case "rejected":
-        return "text-red-600";
-      case "damaged":
-        return "text-amber-600";
-      default:
-        return "text-muted-foreground";
+  const handleReject = async () => {
+    if (!transfer) return;
+    setIsSubmitting(true);
+    try {
+      await supabase.from("stock_transfers").update({ status: "rejected" }).eq("id", transfer.id);
+      queryClient.invalidateQueries({ queryKey: ["pending-returns"] });
+      toast.success("Return request rejected");
+      onClose();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  if (isLoading) {
-    return (
-      <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="sm:max-w-[600px]">
-          <div className="space-y-4 py-4">
-            <div className="h-8 w-1/3 bg-muted animate-pulse rounded" />
-            <div className="h-32 bg-muted animate-pulse rounded" />
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  }
+  if (!transfer) return null;
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[650px] max-h-[90vh] overflow-y-auto">
+    <Dialog open={isOpen} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent>
         <DialogHeader>
-          <div className="flex items-center gap-2">
-            <ArrowLeftRight className="h-5 w-5 text-amber-600" />
-            <DialogTitle>Review Return Request</DialogTitle>
-          </div>
-          <DialogDescription>
-            {returnRequest.display_id} from {returnRequest.staff_name}
-          </DialogDescription>
+          <DialogTitle>Review Return: {transfer.product?.name}</DialogTitle>
         </DialogHeader>
-
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="items">Items to Review</TabsTrigger>
-            <TabsTrigger value="summary">Decision Summary</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="items" className="space-y-4">
-            {/* Request Info */}
-            <div className="bg-muted/50 p-3 rounded-lg">
-              <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
-                <span className="flex items-center gap-1">
-                  <User className="h-4 w-4 text-muted-foreground" />
-                  {returnRequest.staff_name}
-                </span>
-                <span className="flex items-center gap-1">
-                  <Package className="h-4 w-4 text-muted-foreground" />
-                  {returnRequest.requested_items_count} items
-                </span>
-                <span className="flex items-center gap-1">
-                  <DollarSign className="h-4 w-4 text-muted-foreground" />
-                  {formatCurrency(returnRequest.total_requested_value)}
-                </span>
-                <span className="flex items-center gap-1">
-                  <Calendar className="h-4 w-4 text-muted-foreground" />
-                  {format(new Date(returnRequest.submitted_at), "MMM d, h:mm a")}
-                </span>
-              </div>
-              <div className="mt-2">
-                <Badge variant="outline">
-                  Reason: {returnRequest.return_reason}
-                </Badge>
-                {returnRequest.custom_reason && (
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {returnRequest.custom_reason}
-                  </p>
-                )}
-              </div>
+        
+        <div className="space-y-4 py-2">
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <span className="text-muted-foreground mr-2">Requested:</span>
+              <span className="font-semibold">{transfer.quantity}</span>
             </div>
-
-            {/* Items */}
-            <ScrollArea className="h-[300px]">
-              <div className="space-y-3 pr-4">
-                {items?.map((item) => {
-                  const decision = itemDecisions[item.id];
-                  if (!decision) return null;
-
-                  return (
-                    <div
-                      key={item.id}
-                      className="border rounded-lg p-4 space-y-3"
-                    >
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <h4 className="font-medium">{item.product?.name}</h4>
-                          <p className="text-sm text-muted-foreground">
-                            SKU: {item.product?.sku} • {formatCurrency(item.unit_price)}/unit
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-medium">{item.requested_quantity} units</p>
-                          <p className="text-sm text-muted-foreground">
-                            {formatCurrency(item.requested_value)}
-                          </p>
-                        </div>
-                      </div>
-
-                      {item.staff_notes && (
-                        <div className="bg-muted/30 p-2 rounded text-sm">
-                          <span className="text-muted-foreground">Staff note:</span>{" "}
-                          {item.staff_notes}
-                        </div>
-                      )}
-
-                      <RadioGroup
-                        value={decision.decision}
-                        onValueChange={(v: any) =>
-                          updateDecision(item.id, { decision: v })
-                        }
-                        className="flex flex-wrap gap-2"
-                      >
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="approved" id={`approve-${item.id}`} />
-                          <Label
-                            htmlFor={`approve-${item.id}`}
-                            className="flex items-center gap-1 cursor-pointer"
-                          >
-                            <CheckCircle2 className="h-4 w-4 text-green-500" />
-                            Accept
-                          </Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="damaged" id={`damage-${item.id}`} />
-                          <Label
-                            htmlFor={`damage-${item.id}`}
-                            className="flex items-center gap-1 cursor-pointer"
-                          >
-                            <AlertTriangle className="h-4 w-4 text-amber-500" />
-                            Damaged
-                          </Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="rejected" id={`reject-${item.id}`} />
-                          <Label
-                            htmlFor={`reject-${item.id}`}
-                            className="flex items-center gap-1 cursor-pointer"
-                          >
-                            <XCircle className="h-4 w-4 text-red-500" />
-                            Reject
-                          </Label>
-                        </div>
-                      </RadioGroup>
-
-                      {(decision.decision === "approved" ||
-                        decision.decision === "damaged") && (
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            <Label className="text-sm shrink-0">Accept:</Label>
-                            <Input
-                              type="number"
-                              min="0"
-                              max={item.requested_quantity}
-                              value={decision.approved_quantity}
-                              onChange={(e) =>
-                                updateDecision(item.id, {
-                                  approved_quantity:
-                                    parseInt(e.target.value) || 0,
-                                })
-                              }
-                              className="w-20"
-                            />
-                            <span className="text-sm text-muted-foreground">
-                              of {item.requested_quantity}
-                            </span>
-                          </div>
-
-                          {decision.decision === "damaged" && (
-                            <div className="flex items-center gap-2">
-                              <Label className="text-sm shrink-0 text-amber-600">
-                                Damaged:
-                              </Label>
-                              <Input
-                                type="number"
-                                min="0"
-                                max={item.requested_quantity}
-                                value={decision.damaged_quantity}
-                                onChange={(e) =>
-                                  updateDecision(item.id, {
-                                    damaged_quantity:
-                                      parseInt(e.target.value) || 0,
-                                  })
-                                }
-                                className="w-20"
-                              />
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      <Textarea
-                        placeholder="Reviewer notes (optional)"
-                        value={decision.notes}
-                        onChange={(e) =>
-                          updateDecision(item.id, { notes: e.target.value })
-                        }
-                        className="text-sm"
-                        rows={2}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            </ScrollArea>
-          </TabsContent>
-
-          <TabsContent value="summary" className="space-y-4">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-5 w-5 text-green-600" />
-                  <span>Approved Items</span>
-                </div>
-                <span className="font-semibold text-green-600">{totals.approved}</span>
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5 text-amber-600" />
-                  <span>Damaged Items</span>
-                </div>
-                <span className="font-semibold text-amber-600">{totals.damaged}</span>
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <XCircle className="h-5 w-5 text-red-600" />
-                  <span>Rejected Items</span>
-                </div>
-                <span className="font-semibold text-red-600">{totals.rejected}</span>
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <DollarSign className="h-5 w-5 text-blue-600" />
-                  <span>Total Approved Value</span>
-                </div>
-                <span className="font-semibold text-blue-600">
-                  {formatCurrency(totals.approvedValue)}
-                </span>
-              </div>
+            <div>
+              <span className="text-muted-foreground mr-2">Expected in hand:</span>
+              <span className="font-semibold">{transfer.quantity}</span>
             </div>
+          </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="overallNotes">Overall Notes</Label>
-              <Textarea
-                id="overallNotes"
-                value={overallNotes}
-                onChange={(e) => setOverallNotes(e.target.value)}
-                placeholder="Add any overall comments about this return..."
-                rows={4}
-              />
+          <div className="space-y-2">
+            <Label>Actual Quantity Received</Label>
+            <Input type="number" value={actualQty} onChange={(e) => setActualQty(e.target.value)} min={0} max={transfer.quantity} />
+          </div>
+
+          {diff > 0 && (
+            <div className="space-y-3 p-4 border rounded-md bg-slate-50">
+              <div className="flex items-center gap-2 text-amber-600 font-medium">
+                <AlertCircle className="w-4 h-4" />
+                <span>Difference: {diff} unit{diff > 1 ? 's' : ''}</span>
+              </div>
+              <Label>Handle Difference:</Label>
+              <RadioGroup value={diffOption} onValueChange={(v: "keep_with_staff" | "mark_as_error") => setDiffOption(v)}>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="keep_with_staff" id="keep" />
+                  <Label htmlFor="keep" className="cursor-pointer">Keep with Staff ({diff} units stay with user)</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="mark_as_error" id="error" />
+                  <Label htmlFor="error" className="cursor-pointer">Flag as Error (Staff stock drops to zero, variance logged)</Label>
+                </div>
+              </RadioGroup>
             </div>
-          </TabsContent>
-        </Tabs>
+          )}
 
-        {error && (
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
+          <div className="space-y-2">
+            <Label>Notes (Optional)</Label>
+            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Reviewer notes..." />
+          </div>
+        </div>
 
-        <DialogFooter className="flex flex-col sm:flex-row gap-2">
-          <Button variant="outline" onClick={onClose} className="w-full sm:w-auto">
-            Cancel
-          </Button>
-          <Button
-            variant="destructive"
-            onClick={() => handleSubmit("reject")}
-            disabled={reviewMutation.isPending}
-            className="w-full sm:w-auto"
-          >
-            {reviewMutation.isPending && (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            )}
-            <XCircle className="mr-2 h-4 w-4" />
-            Reject All
-          </Button>
-          <Button
-            onClick={() => handleSubmit("approve")}
-            disabled={reviewMutation.isPending || !allDecided}
-            className="w-full sm:w-auto"
-          >
-            {reviewMutation.isPending && (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            )}
-            <CheckCircle2 className="mr-2 h-4 w-4" />
-            Process Decisions
-          </Button>
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button variant="outline" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
+          <Button variant="destructive" onClick={handleReject} disabled={isSubmitting}>Reject</Button>
+          <Button onClick={handleAccept} disabled={isSubmitting}>{isSubmitting ? "Processing..." : "Approve Return"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

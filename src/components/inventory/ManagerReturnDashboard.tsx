@@ -52,7 +52,7 @@ export function ManagerReturnDashboard() {
   const { data: pendingReturns, isLoading: loadingPending } = useQuery({
     queryKey: ["pending-returns"],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("get_pending_returns", {
+      const { data, error } = await supabase.rpc("stock_transfers", {
         p_warehouse_id: null,
         p_limit: 50,
       });
@@ -65,10 +65,10 @@ export function ManagerReturnDashboard() {
     queryKey: ["my-reviewed-returns", user?.id],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("stock_return_requests")
+        .from("stock_transfers")
         .select(`
           *,
-          staff:auth.users!stock_return_requests_staff_id_fkey(id, raw_user_meta_data->>'full_name'),
+          staff:auth.users!stock_transfers_staff_id_fkey(id, raw_user_meta_data->>'full_name'),
           warehouse:warehouses(id, name)
         `)
         .eq("reviewed_by", user?.id)
@@ -320,3 +320,4 @@ function PendingReturnsSkeleton() {
     </div>
   );
 }
+

@@ -1,5 +1,5 @@
 // Inventory hooks
-export { useStaffStock, useMyStaffStock } from "./useStaffStock";
+export { useStaffStock } from "./useStaffStock";
 export { useWarehouseStock } from "./useWarehouseStock";
 export {
   useMyReturns,

@@ -1,502 +1,204 @@
-import { useState, useMemo } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import React, { useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Loader2, Package, ArrowRightLeft, ArrowRight, Warehouse, User } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
-interface Product {
-  id: string;
-  name: string;
-  sku: string;
-  unit: string;
-  base_price: number;
-  image_url?: string;
-  quantity: number;
+export interface StockTransferModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  warehouseId?: string;
+  defaultProductId?: string;
 }
 
-interface Warehouse {
-  id: string;
-  name: string;
-}
+type TransferType = 'warehouse_to_staff' | 'staff_to_warehouse' | 'staff_to_staff';
 
-interface StaffMember {
-  id: string;
-  full_name: string;
-  email: string;
-  role: string;
-  avatar_url?: string;
-  warehouse_id?: string;
-}
-
-interface StockTransferModalProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  warehouses: Warehouse[];
-  staffMembers: StaffMember[];
-  products: Product[];
-  currentUserId: string;
-  currentWarehouseId: string;
-  onTransfer: (data: {
-    transferType: string;
-    fromWarehouseId?: string;
-    fromUserId?: string;
-    toWarehouseId?: string;
-    toUserId?: string;
-    productId: string;
-    quantity: number;
-    description?: string;
-  }) => Promise<void>;
-  preselectedProduct?: Product;
-  preselectedStaff?: StaffMember;
-}
-
-const TRANSFER_TYPES = [
-  { value: "warehouse_to_staff", label: "Warehouse → Staff", icon: ArrowRight },
-  { value: "staff_to_warehouse", label: "Staff → Warehouse", icon: ArrowRight },
-  { value: "warehouse_to_warehouse", label: "Warehouse → Warehouse", icon: ArrowRightLeft },
-  { value: "staff_to_staff", label: "Staff → Staff", icon: ArrowRightLeft },
-];
-
-export function StockTransferModal({
-  open,
-  onOpenChange,
-  warehouses,
-  staffMembers,
-  products,
-  currentUserId,
-  currentWarehouseId,
-  onTransfer,
-  preselectedProduct,
-  preselectedStaff,
-}: StockTransferModalProps) {
-  const [transferType, setTransferType] = useState("warehouse_to_staff");
-  const [fromWarehouseId, setFromWarehouseId] = useState(currentWarehouseId);
-  const [fromUserId, setFromUserId] = useState("");
-  const [toWarehouseId, setToWarehouseId] = useState("");
-  const [toUserId, setToUserId] = useState(preselectedStaff?.id || "");
-  const [productId, setProductId] = useState(preselectedProduct?.id || "");
-  const [quantity, setQuantity] = useState("");
-  const [description, setDescription] = useState("");
+export function StockTransferModal({ isOpen, onClose, warehouseId, defaultProductId }: StockTransferModalProps) {
+  const queryClient = useQueryClient();
+  const [transferType, setTransferType] = useState<TransferType>('warehouse_to_staff');
+  const [fromId, setFromId] = useState<string>(warehouseId || '');
+  const [toId, setToId] = useState<string>('');
+  const [productId, setProductId] = useState<string>(defaultProductId || '');
+  const [quantity, setQuantity] = useState<string>('');
+  const [notes, setNotes] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [step, setStep] = useState<1 | 2>(1);
 
-  const selectedProduct = useMemo(() =>
-    products.find(p => p.id === productId) || preselectedProduct,
-    [products, productId, preselectedProduct]
-  );
-
-  const availableFromUsers = useMemo(() =>
-    transferType === "staff_to_warehouse" || transferType === "staff_to_staff"
-      ? staffMembers
-      : [],
-    [staffMembers, transferType]
-  );
-
-  const availableToUsers = useMemo(() =>
-    transferType === "warehouse_to_staff" || transferType === "staff_to_staff"
-      ? staffMembers.filter(s => s.id !== fromUserId)
-      : [],
-    [staffMembers, transferType, fromUserId]
-  );
-
-  const handleTransferTypeChange = (value: string) => {
-    setTransferType(value);
-    setFromUserId("");
-    setToUserId("");
-    setToWarehouseId("");
-
-    // Set defaults based on transfer type
-    switch (value) {
-      case "warehouse_to_staff":
-        setFromWarehouseId(currentWarehouseId);
-        break;
-      case "staff_to_warehouse":
-        setToWarehouseId(currentWarehouseId);
-        break;
-      case "warehouse_to_warehouse":
-        setFromWarehouseId(currentWarehouseId);
-        break;
-      case "staff_to_staff":
-        setFromUserId(currentUserId);
-        break;
+  const { data: warehouses } = useQuery({
+    queryKey: ['warehouses'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('warehouses').select('id, name').eq('is_active', true);
+      if (error) throw error;
+      return data || [];
     }
-  };
+  });
+
+  const { data: staff } = useQuery({
+    queryKey: ['staff_directory'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('staff_directory').select('user_id, full_name, role').eq('is_active', true).in('role', ['agent', 'manager']);
+      if (error) throw error;
+      return data || [];
+    }
+  });
+
+  // Source Stock Logic
+  const { data: sourceStock } = useQuery({
+    queryKey: ['source_stock', transferType, fromId, productId],
+    queryFn: async () => {
+      if (!fromId) return [];
+      
+      let query;
+      if (transferType === 'warehouse_to_staff') {
+        query = supabase.from('product_stock').select('product_id, quantity, product:products(id, name, sku, unit, base_price)').eq('warehouse_id', fromId).gt('quantity', 0);
+      } else {
+        query = supabase.from('staff_stock').select('product_id, quantity, product:products(id, name, sku, unit, base_price)').eq('user_id', fromId).gt('quantity', 0);
+      }
+      
+      const { data, error } = await query;
+      if (error) throw error;
+      if (productId) return data?.filter(s => s.product_id === productId) || [];
+      return data || [];
+    },
+    enabled: !!fromId
+  });
+
+  const selectedStock = sourceStock?.find(s => s.product_id === productId);
+  const maxQuantity = selectedStock?.quantity || 0;
 
   const handleSubmit = async () => {
-    if (!productId || !quantity || parseFloat(quantity) <= 0) {
-      toast.error("Please select a product and enter a valid quantity");
-      return;
-    }
-
-    // Validate based on transfer type
-    if (transferType.includes("warehouse") && !fromWarehouseId && transferType !== "staff_to_warehouse") {
-      toast.error("Please select a source warehouse");
-      return;
-    }
-    if (transferType === "staff_to_warehouse" && !toWarehouseId) {
-      toast.error("Please select a destination warehouse");
-      return;
-    }
-    if (transferType.includes("warehouse") && transferType !== "staff_to_warehouse" && !toUserId && transferType !== "warehouse_to_warehouse") {
-      toast.error("Please select a destination staff member");
-      return;
-    }
-    if (transferType === "staff_to_staff" && !toUserId) {
-      toast.error("Please select a destination staff member");
-      return;
-    }
-    if (transferType === "warehouse_to_warehouse" && !toWarehouseId) {
-      toast.error("Please select a destination warehouse");
-      return;
-    }
-
-    setIsSubmitting(true);
     try {
-      await onTransfer({
-        transferType,
-        fromWarehouseId: transferType.includes("warehouse") && transferType !== "staff_to_warehouse" ? fromWarehouseId : undefined,
-        fromUserId: transferType.includes("staff") ? fromUserId : undefined,
-        toWarehouseId: transferType === "warehouse_to_warehouse" || transferType === "staff_to_warehouse" ? toWarehouseId : undefined,
-        toUserId: transferType.includes("staff") && transferType !== "staff_to_warehouse" ? toUserId : undefined,
-        productId,
-        quantity: parseFloat(quantity),
-        description,
-      });
-      toast.success("Stock transferred successfully");
-      resetForm();
-      onOpenChange(false);
-    } catch (error: any) {
-      toast.error(error.message || "Failed to transfer stock");
+      const qty = parseFloat(quantity);
+      if (!qty || qty <= 0) throw new Error("Quantity must be greater than 0");
+      if (qty > maxQuantity && transferType !== 'staff_to_warehouse') throw new Error(`Insufficient stock. Max available: ${maxQuantity}`);
+      if (!fromId) throw new Error("Source is required");
+      if (!toId) throw new Error("Destination is required");
+      if (!productId) throw new Error("Product is required");
+      if (fromId === toId) throw new Error("Source and destination cannot be the same");
+
+      setIsSubmitting(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      const productPrice = selectedStock?.product?.base_price || 0;
+
+      if (transferType === 'warehouse_to_staff') {
+        const { data: wStock } = await supabase.from('product_stock').select('quantity').eq('product_id', productId).eq('warehouse_id', fromId).single();
+        if ((wStock?.quantity || 0) < qty) throw new Error('Insufficient warehouse stock');
+        
+        await supabase.from('product_stock').update({ quantity: wStock.quantity - qty, updated_at: new Date().toISOString() }).eq('product_id', productId).eq('warehouse_id', fromId);
+
+        const { data: existing } = await supabase.from('staff_stock').select('id, quantity, transfer_count').eq('user_id', toId).eq('product_id', productId).eq('warehouse_id', fromId).maybeSingle();
+        if (existing) {
+          await supabase.from('staff_stock').update({ quantity: existing.quantity + qty, amount_value: (existing.quantity + qty) * productPrice, transfer_count: (existing.transfer_count || 0) + 1, last_received_at: new Date().toISOString(), is_negative: false, updated_at: new Date().toISOString() }).eq('id', existing.id);
+        } else {
+          await supabase.from('staff_stock').insert({ user_id: toId, warehouse_id: fromId, product_id: productId, quantity: qty, amount_value: qty * productPrice, transfer_count: 1, last_received_at: new Date().toISOString(), is_negative: false });
+        }
+
+        const display_id = `TRF-${Date.now().toString(36).toUpperCase()}`;
+        await supabase.from('stock_transfers').insert({ display_id, transfer_type: 'warehouse_to_staff', from_warehouse_id: fromId, to_user_id: toId, product_id: productId, quantity: qty, status: 'completed', created_by: user.id, description: notes || null });
+        await supabase.from('stock_movements').insert({ product_id: productId, warehouse_id: fromId, quantity: -qty, type: 'transfer_out', reason: `Transfer to staff`, reference_id: display_id, created_by: user.id });
+
+      } else if (transferType === 'staff_to_warehouse') {
+        const display_id = `TRF-${Date.now().toString(36).toUpperCase()}`;
+        await supabase.from('stock_transfers').insert({ display_id, transfer_type: 'staff_to_warehouse', from_user_id: fromId, to_warehouse_id: toId, product_id: productId, quantity: qty, status: 'pending', created_by: user.id, description: notes || null });
+
+      } else if (transferType === 'staff_to_staff') {
+        const homeWarehouse = warehouseId || warehouses?.[0]?.id;
+        const { data: sStock } = await supabase.from('staff_stock').select('id, quantity').eq('user_id', fromId).eq('product_id', productId).maybeSingle();
+        if (!sStock || sStock.quantity < qty) throw new Error('Insufficient staff stock');
+        
+        await supabase.from('staff_stock').update({ quantity: sStock.quantity - qty, amount_value: (sStock.quantity - qty) * productPrice, updated_at: new Date().toISOString() }).eq('id', sStock.id);
+
+        const { data: existing } = await supabase.from('staff_stock').select('id, quantity, transfer_count').eq('user_id', toId).eq('product_id', productId).maybeSingle();
+        if (existing) {
+          await supabase.from('staff_stock').update({ quantity: existing.quantity + qty, amount_value: (existing.quantity + qty) * productPrice, transfer_count: (existing.transfer_count || 0) + 1, last_received_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', existing.id);
+        } else {
+          await supabase.from('staff_stock').insert({ user_id: toId, warehouse_id: homeWarehouse, product_id: productId, quantity: qty, amount_value: qty * productPrice, transfer_count: 1, last_received_at: new Date().toISOString(), is_negative: false });
+        }
+
+        const display_id = `TRF-${Date.now().toString(36).toUpperCase()}`;
+        await supabase.from('stock_transfers').insert({ display_id, transfer_type: 'staff_to_staff', from_user_id: fromId, to_user_id: toId, product_id: productId, quantity: qty, status: 'completed', created_by: user.id, description: notes || null });
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["product-stock"] });
+      queryClient.invalidateQueries({ queryKey: ["staff-stock"] });
+      queryClient.invalidateQueries({ queryKey: ["stock-movements"] });
+      queryClient.invalidateQueries({ queryKey: ["pending-returns"] });
+      toast.success("Transfer successful");
+      onClose();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to process transfer");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const resetForm = () => {
-    setTransferType("warehouse_to_staff");
-    setFromWarehouseId(currentWarehouseId);
-    setFromUserId("");
-    setToWarehouseId("");
-    setToUserId("");
-    setProductId("");
-    setQuantity("");
-    setDescription("");
-    setStep(1);
-  };
-
-  const canProceed = () => {
-    if (!productId) return false;
-    if (!quantity || parseFloat(quantity) <= 0) return false;
-    return true;
-  };
-
   return (
-    <Dialog open={open} onOpenChange={(open) => {
-      if (!open) resetForm();
-      onOpenChange(open);
-    }}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <ArrowRightLeft className="h-5 w-5" />
-            Transfer Stock
-          </DialogTitle>
-          <DialogDescription>
-            Move stock between warehouses and staff members
-          </DialogDescription>
-        </DialogHeader>
-
-        {step === 1 ? (
-          <div className="space-y-6">
-            {/* Transfer Type Selection */}
-            <div className="space-y-2">
-              <Label>Transfer Type</Label>
-              <div className="grid grid-cols-2 gap-2">
-                {TRANSFER_TYPES.map((type) => (
-                  <Button
-                    key={type.value}
-                    variant={transferType === type.value ? "default" : "outline"}
-                    onClick={() => handleTransferTypeChange(type.value)}
-                    className="justify-start h-auto py-3"
-                  >
-                    <type.icon className="h-4 w-4 mr-2" />
-                    <span className="text-sm">{type.label}</span>
-                  </Button>
-                ))}
-              </div>
-            </div>
-
-            {/* Source Selection */}
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                {transferType.startsWith("warehouse") ? (
-                  <>
-                    <Warehouse className="h-4 w-4" /> From Warehouse
-                  </>
-                ) : (
-                  <>
-                    <User className="h-4 w-4" /> From Staff
-                  </>
-                )}
-              </Label>
-              
-              {transferType.startsWith("warehouse") ? (
-                <Select value={fromWarehouseId} onValueChange={setFromWarehouseId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select source warehouse" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {warehouses.map((w) => (
-                      <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <Select value={fromUserId} onValueChange={setFromUserId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select source staff" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableFromUsers.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        <div className="flex items-center gap-2">
-                          <Avatar className="h-6 w-6">
-                            <AvatarImage src={s.avatar_url} />
-                            <AvatarFallback>{s.full_name.charAt(0)}</AvatarFallback>
-                          </Avatar>
-                          {s.full_name}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
-
-            {/* Destination Selection */}
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                {transferType.endsWith("warehouse") ? (
-                  <>
-                    <Warehouse className="h-4 w-4" /> To Warehouse
-                  </>
-                ) : (
-                  <>
-                    <User className="h-4 w-4" /> To Staff
-                  </>
-                )}
-              </Label>
-              
-              {transferType.endsWith("warehouse") ? (
-                <Select value={toWarehouseId} onValueChange={setToWarehouseId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select destination warehouse" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {warehouses.filter(w => w.id !== fromWarehouseId).map((w) => (
-                      <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <Select value={toUserId} onValueChange={setToUserId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select destination staff" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableToUsers.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        <div className="flex items-center gap-2">
-                          <Avatar className="h-6 w-6">
-                            <AvatarImage src={s.avatar_url} />
-                            <AvatarFallback>{s.full_name.charAt(0)}</AvatarFallback>
-                          </Avatar>
-                          {s.full_name}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
-
-            {/* Product Selection */}
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <Package className="h-4 w-4" /> Select Product
-              </Label>
-              <Select value={productId} onValueChange={setProductId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a product" />
-                </SelectTrigger>
-                <SelectContent>
-                  {products.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      <div className="flex items-center justify-between w-full gap-4">
-                        <span>{p.name}</span>
-                        <Badge variant="outline">{p.quantity} {p.unit}</Badge>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              
-              {selectedProduct && (
-                <div className="mt-3 p-3 bg-muted rounded-lg flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-muted-foreground/10 flex items-center justify-center">
-                    {selectedProduct.image_url ? (
-                      <Avatar className="h-10 w-10">
-                        <AvatarImage src={selectedProduct.image_url} />
-                        <AvatarFallback><Package className="h-5 w-5" /></AvatarFallback>
-                      </Avatar>
-                    ) : (
-                      <Package className="h-5 w-5 text-muted-foreground" />
-                    )}
-                  </div>
-                  <div>
-                    <p className="font-medium text-sm">{selectedProduct.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Available: {selectedProduct.quantity} {selectedProduct.unit} | 
-                      ₹{selectedProduct.base_price.toLocaleString()} per {selectedProduct.unit}
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Quantity */}
-            <div className="space-y-2">
-              <Label>Quantity</Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0.01"
-                placeholder="Enter quantity"
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
-              />
-              {selectedProduct && quantity && (
-                <p className="text-xs text-muted-foreground">
-                  Total value: ₹{(parseFloat(quantity || "0") * selectedProduct.base_price).toLocaleString()}
-                </p>
-              )}
-            </div>
-
-            <DialogFooter>
-              <Button variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
-              <Button 
-                onClick={() => setStep(2)} 
-                disabled={!canProceed()}
-              >
-                Next
-              </Button>
-            </DialogFooter>
+    <Dialog open={isOpen} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-[500px]">
+        <DialogHeader><DialogTitle>Transfer Stock</DialogTitle></DialogHeader>
+        <div className="space-y-4">
+          <div className="flex gap-2">
+            <Button variant={transferType === 'warehouse_to_staff' ? 'default' : 'outline'} onClick={() => { setTransferType('warehouse_to_staff'); setFromId(warehouseId || ''); setToId(''); setProductId(''); }}>W → Staff</Button>
+            <Button variant={transferType === 'staff_to_warehouse' ? 'default' : 'outline'} onClick={() => { setTransferType('staff_to_warehouse'); setFromId(''); setToId(warehouseId || ''); setProductId(''); }}>Staff → W</Button>
+            <Button variant={transferType === 'staff_to_staff' ? 'default' : 'outline'} onClick={() => { setTransferType('staff_to_staff'); setFromId(''); setToId(''); setProductId(''); }}>Staff ↔ Staff</Button>
           </div>
-        ) : (
-          <div className="space-y-6">
-            {/* Summary */}
-            <div className="space-y-4 p-4 bg-muted rounded-lg">
-              <h4 className="font-medium">Transfer Summary</h4>
-              
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Type:</span>
-                  <span className="font-medium">
-                    {TRANSFER_TYPES.find(t => t.value === transferType)?.label}
-                  </span>
-                </div>
-                
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">From:</span>
-                  <span className="font-medium">
-                    {transferType.startsWith("warehouse")
-                      ? warehouses.find(w => w.id === fromWarehouseId)?.name
-                      : staffMembers.find(s => s.id === fromUserId)?.full_name}
-                  </span>
-                </div>
-                
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">To:</span>
-                  <span className="font-medium">
-                    {transferType.endsWith("warehouse")
-                      ? warehouses.find(w => w.id === toWarehouseId)?.name
-                      : staffMembers.find(s => s.id === toUserId)?.full_name}
-                  </span>
-                </div>
-                
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Product:</span>
-                  <span className="font-medium">{selectedProduct?.name}</span>
-                </div>
-                
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Quantity:</span>
-                  <span className="font-medium">
-                    {quantity} {selectedProduct?.unit}
-                  </span>
-                </div>
-                
-                <div className="flex justify-between border-t pt-2 mt-2">
-                  <span className="text-muted-foreground">Total Value:</span>
-                  <span className="font-bold text-emerald-600">
-                    ₹{(parseFloat(quantity || "0") * (selectedProduct?.base_price || 0)).toLocaleString()}
-                  </span>
-                </div>
-              </div>
-            </div>
 
-            {/* Description */}
-            <div className="space-y-2">
-              <Label>Description / Notes (Optional)</Label>
-              <Textarea
-                placeholder="Add any notes about this transfer..."
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={3}
-              />
-            </div>
-
-            <DialogFooter className="gap-2">
-              <Button variant="outline" onClick={() => setStep(1)}>
-                Back
-              </Button>
-              <Button 
-                variant="outline" 
-                onClick={() => onOpenChange(false)}
-              >
-                Cancel
-              </Button>
-              <Button 
-                onClick={handleSubmit}
-                disabled={isSubmitting}
-              >
-                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Confirm Transfer
-              </Button>
-            </DialogFooter>
+          <div className="space-y-2">
+            <Label>From</Label>
+            <Select value={fromId} onValueChange={setFromId}>
+              <SelectTrigger><SelectValue placeholder="Select Source" /></SelectTrigger>
+              <SelectContent>
+                {transferType === 'warehouse_to_staff' && warehouses?.map(w => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
+                {(transferType === 'staff_to_warehouse' || transferType === 'staff_to_staff') && staff?.map(s => <SelectItem key={s.user_id} value={s.user_id}>{s.full_name}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
-        )}
+
+          <div className="space-y-2">
+            <Label>To</Label>
+            <Select value={toId} onValueChange={setToId}>
+              <SelectTrigger><SelectValue placeholder="Select Destination" /></SelectTrigger>
+              <SelectContent>
+                {(transferType === 'warehouse_to_staff' || transferType === 'staff_to_staff') && staff?.map(s => <SelectItem key={s.user_id} value={s.user_id}>{s.full_name}</SelectItem>)}
+                {transferType === 'staff_to_warehouse' && warehouses?.map(w => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Product</Label>
+            <Select value={productId} onValueChange={setProductId}>
+              <SelectTrigger><SelectValue placeholder="Select Product" /></SelectTrigger>
+              <SelectContent>
+                {sourceStock?.map(s => <SelectItem key={s.product_id} value={s.product_id}>{s.product?.name} (Avail: {s.quantity})</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Quantity</Label>
+            <Input type="number" value={quantity} onChange={e => setQuantity(e.target.value)} min={1} placeholder={`Max available: ${maxQuantity}`} />
+            {productId && <p className="text-xs text-muted-foreground">Source currently has {maxQuantity} available.</p>}
+          </div>
+
+          <div className="space-y-2">
+            <Label>Notes (Optional)</Label>
+            <Textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Reason for transfer" />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-4">
+            <Button variant="outline" onClick={onClose}>Cancel</Button>
+            <Button disabled={isSubmitting || !fromId || !toId || !productId || !quantity} onClick={handleSubmit}>
+              {isSubmitting ? 'Transferring...' : 'Transfer'}
+            </Button>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );

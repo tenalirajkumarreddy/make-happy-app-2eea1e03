@@ -106,18 +106,15 @@ export function useStockHistory(options: UseStockHistoryOptions = {}) {
   } = useQuery({
     queryKey: ["stock-movements", warehouseId, productId, userId, dateFrom, dateTo, limit],
     queryFn: async () => {
-      let query = supabase
-        .from("stock_movements")
-        .select(`
-          *,
-          product:products(id, name, sku, unit, base_price, image_url),
-          warehouse:warehouses(id, name),
-          from_user:profiles!stock_movements_from_user_id_fkey(id, full_name, avatar_url),
-          to_user:profiles!stock_movements_to_user_id_fkey(id, full_name, avatar_url),
-          creator:profiles!stock_movements_created_by_fkey(id, full_name, avatar_url)
-        `)
-        .order("created_at", { ascending: false })
-        .limit(limit);
+    let query = supabase
+      .from("stock_movements")
+      .select(`
+        *,
+        product:products!stock_movements_product_id_fkey(id, name, sku, unit, base_price, image_url),
+        warehouse:warehouses!stock_movements_warehouse_id_fkey(id, name)
+      `)
+      .order("created_at", { ascending: false })
+      .limit(limit);
 
       if (warehouseId) {
         query = query.eq("warehouse_id", warehouseId);

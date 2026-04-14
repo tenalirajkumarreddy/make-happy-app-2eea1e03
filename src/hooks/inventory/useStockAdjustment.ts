@@ -63,7 +63,7 @@ export function useStockAdjustment(options: UseStockAdjustmentOptions = {}) {
         .from("stock_movements")
         .select(`
           *,
-          product:products(id, name, sku, unit, base_price, image_url)
+          product:products!stock_movements_product_id_fkey(id, name, sku, unit, base_price, image_url)
         `)
         .order("created_at", { ascending: false })
         .limit(limit);
