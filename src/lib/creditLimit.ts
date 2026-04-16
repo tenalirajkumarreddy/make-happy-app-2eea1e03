@@ -21,6 +21,10 @@ export interface CreditLimitInfo {
   isKyc: boolean;
 }
 
+function isKycApproved(status: string): boolean {
+  return status === "verified" || status === "approved";
+}
+
 /**
  * Resolves the effective credit limit for a store.
  * Priority: customer-level override > store-type KYC/non-KYC default.
@@ -41,11 +45,11 @@ export function resolveCreditLimit(
     return {
       limit: Number(customer.credit_limit_override),
       source: "customer override",
-      isKyc: customer.kyc_status === "verified",
+      isKyc: isKycApproved(customer.kyc_status),
     };
   }
 
-  const isKyc = customer.kyc_status === "verified";
+  const isKyc = isKycApproved(customer.kyc_status);
   const limit = isKyc
     ? Number(storeType.credit_limit_kyc || 0)
     : Number(storeType.credit_limit_no_kyc || 0);

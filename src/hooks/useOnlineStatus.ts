@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import { 
-  getQueuedActions, 
-  removeFromQueue, 
+import {
+  getQueuedActions,
+  removeFromQueue,
   getQueueCount,
   getQueuedFileUploads,
   removeFileUpload,
@@ -9,26 +9,33 @@ import {
   getFileUploadCount,
   arrayBufferToBlob,
   PendingFileUpload,
+  getConflictedActions,
+  getRetryableActionsExcludingConflicts,
+  storeConflict,
 } from "@/lib/offlineQueue";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { logError } from "@/lib/logger";
+import { detectConflicts, ConflictType } from "@/lib/conflictResolver";
 
 export function useOnlineStatus() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [pendingCount, setPendingCount] = useState(0);
   const [syncing, setSyncing] = useState(false);
+  const [conflictCount, setConflictCount] = useState(0);
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
     const handleQueueChanged = async () => {
       try {
-        const [actionCount, fileCount] = await Promise.all([
+        const [actionCount, fileCount, conflictedActions] = await Promise.all([
           getQueueCount(),
           getFileUploadCount(),
+          getConflictedActions(),
         ]);
         setPendingCount(actionCount + fileCount);
+        setConflictCount(conflictedActions.length);
       } catch (err) {
         logError(err, { context: "useOnlineStatus.handleQueueChanged" });
       }
@@ -60,6 +67,7 @@ export function useOnlineStatus() {
     const files = await getQueuedFileUploads();
     let synced = 0;
     let failed = 0;
+    const db: any = supabase;
 
     for (const file of files) {
       try {
@@ -73,17 +81,18 @@ export function useOnlineStatus() {
 
         // For KYC uploads, update the customer record
         if (file.type === "kyc" && file.metadata?.customerId && file.metadata?.field) {
+          const customerId = String(file.metadata.customerId ?? "");
           const { data: urlData } = supabase.storage.from(file.bucket).getPublicUrl(file.path);
           const field = file.metadata.field as string;
           
           // Get current KYC status to determine if we should mark as pending
-          const { data: customer } = await supabase
+          const { data: customer } = await db
             .from("customers")
             .select("kyc_selfie_url, kyc_aadhar_front_url, kyc_aadhar_back_url")
-            .eq("id", file.metadata.customerId)
+            .eq("id", customerId)
             .maybeSingle();
 
-          const updated: Record<string, string | null> = { [field]: urlData.publicUrl };
+          const updated: any = { [field]: urlData.publicUrl };
           
           if (customer) {
             const current = {
@@ -99,10 +108,10 @@ export function useOnlineStatus() {
             }
           }
 
-          const { error: dbErr } = await supabase
+          const { error: dbErr } = await (supabase as any)
             .from("customers")
             .update(updated)
-            .eq("id", file.metadata.customerId);
+            .eq("id", customerId);
             
           if (dbErr) throw dbErr;
         }
@@ -127,17 +136,19 @@ export function useOnlineStatus() {
   const syncQueue = useCallback(async () => {
     if (syncing || !navigator.onLine) return;
     setSyncing(true);
-    
+
     let totalSynced = 0;
     let totalFailed = 0;
-    
+    let totalConflicts = 0;
+    const db: any = supabase;
+
     // Sync file uploads first
     const fileResult = await syncFileUploads();
     totalSynced += fileResult.synced;
     totalFailed += fileResult.failed;
-    
-    // Then sync regular actions
-    const actions = await getQueuedActions();
+
+    // Get actions excluding those with conflicts
+    const actions = await getRetryableActionsExcludingConflicts();
 
     for (const action of actions) {
       try {
@@ -162,7 +173,7 @@ export function useOnlineStatus() {
           const { txData } = action.payload as any;
           const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "PAY", seq_name: "pay_display_seq" });
           // Use atomic RPC — server computes outstanding, locks store row
-          const { error } = await supabase.rpc("record_transaction", {
+          const { error } = await (supabase as any).rpc("record_transaction", {
             p_display_id: displayId,
             p_store_id: txData.store_id,
             p_customer_id: txData.customer_id,
@@ -238,26 +249,73 @@ export function useOnlineStatus() {
             seq_name: "str_display_seq",
           });
 
-          const { error } = await supabase.from("stores").insert({
+          const { error } = await (supabase as any).from("stores").insert({
             ...storeData,
             display_id: String(displayId),
           });
           if (error) throw error;
         }
-        await removeFromQueue(action.id);
-        totalSynced++;
-      } catch (err) {
-        logError(err, { context: "useOnlineStatus.syncQueue", actionType: action.type, actionId: action.id });
+      await removeFromQueue(action.id);
+      totalSynced++;
+    } catch (err: any) {
+      logError(err, { context: "useOnlineStatus.syncQueue", actionType: action.type, actionId: action.id });
+      
+      // Check if this is a conflict error
+      const errorMessage = err?.message || "";
+      const isConflict = 
+        errorMessage.includes("credit limit") ||
+        errorMessage.includes("price changed") ||
+        errorMessage.includes("inactive") ||
+        errorMessage.includes("unavailable") ||
+        errorMessage.includes("insufficient stock");
+      
+      if (isConflict && action.context) {
+        // Detect and store conflict
+        try {
+          const conflicts = await detectConflicts(action);
+          if (conflicts.length > 0) {
+            for (const conflict of conflicts) {
+              await storeConflict(action.id, {
+                conflictType: conflict.type as any,
+                severity: conflict.severity,
+                reason: conflict.reason,
+                currentValue: conflict.currentState.storeOutstanding,
+                queuedValue: conflict.queuedState.storeOutstandingAtQueueTime,
+                detectedAt: new Date().toISOString(),
+                resolved: false,
+              });
+            }
+            totalConflicts++;
+            toast.warning(`Conflict detected for ${action.type}: ${conflicts[0].reason}`);
+          } else {
+            totalFailed++;
+          }
+        } catch (conflictErr) {
+          totalFailed++;
+        }
+      } else {
         totalFailed++;
       }
     }
+  }
 
-    setSyncing(false);
-    await refreshCount();
+  setSyncing(false);
+  await refreshCount();
 
-    if (totalSynced > 0) toast.success(`Synced ${totalSynced} offline item(s)`);
-    if (totalFailed > 0) toast.error(`${totalFailed} item(s) failed to sync`);
-  }, [syncing, refreshCount, syncFileUploads]);
+  if (totalSynced > 0) toast.success(`Synced ${totalSynced} offline item(s)`);
+  if (totalFailed > 0) toast.error(`${totalFailed} item(s) failed to sync`);
+  if (totalConflicts > 0) {
+    toast.warning(`${totalConflicts} item(s) have conflicts - resolve in Conflicts panel`, {
+      action: {
+        label: "View",
+        onClick: () => {
+          // Navigate to conflicts or show conflict resolver
+          window.dispatchEvent(new CustomEvent("show-conflict-resolver"));
+        },
+      },
+    });
+  }
+}, [syncing, refreshCount, syncFileUploads]);
 
   // Auto-sync when coming back online
   useEffect(() => {
@@ -266,5 +324,5 @@ export function useOnlineStatus() {
     }
   }, [isOnline, pendingCount, syncQueue]);
 
-  return { isOnline, pendingCount, syncing, syncQueue, refreshCount };
+  return { isOnline, pendingCount, syncing, conflictCount, syncQueue, refreshCount };
 }

@@ -47,6 +47,9 @@ const VendorDetail = lazy(() => import("./pages/VendorDetail"));
 const Purchases = lazy(() => import("./pages/Purchases"));
 const VendorPayments = lazy(() => import("./pages/VendorPayments"));
 const RawMaterials = lazy(() => import("./pages/RawMaterials"));
+const RawMaterialsPage = lazy(() => import('./pages/RawMaterials'));
+const BillOfMaterialsPage = lazy(() => import('./pages/BillOfMaterials'));
+const BomDetailPage = lazy(() => import('./pages/BomDetail'));
 const Invoices = lazy(() => import("./pages/Invoices"));
 const InvoiceForm = lazy(() => import("./pages/InvoiceForm"));
 const InvoiceView = lazy(() => import("./pages/InvoiceView"));
@@ -70,6 +73,11 @@ const Expenses = lazy(() => import("./pages/Expenses"));
 const SaleReturns = lazy(() => import("./pages/SaleReturns"));
 const PurchaseReturns = lazy(() => import("./pages/PurchaseReturns"));
 const StockTransfers = lazy(() => import("./pages/StockTransfers"));
+const ProductionPage = lazy(() => import('./pages/Production'));
+const WorkerRolesPage = lazy(() => import('./pages/hr/WorkerRoles'));
+const WorkersPage = lazy(() => import('./pages/hr/Workers'));
+const PayrollPage = lazy(() => import('./pages/hr/Payroll'));
+const PayrollDetailPage = lazy(() => import('./pages/hr/PayrollDetail'));
 
 // Loading fallback component
 const PageLoader = () => (
@@ -157,62 +165,50 @@ const App = () => {
               >
                 <Route path="/" element={<DashboardRouter />} />
                 {/* Admin & Manager only */}
-              <Route path="/products" element={<RoleGuard allowed={["super_admin", "manager"]}><Products /></RoleGuard>} />
-              <Route path="/inventory" element={<RoleGuard allowed={["super_admin", "manager"]}><Inventory /></RoleGuard>} />
-              <Route path="/vendors" element={<RoleGuard allowed={["super_admin", "manager"]}><Vendors /></RoleGuard>} />
-              <Route path="/vendors/:id" element={<RoleGuard allowed={["super_admin", "manager"]}><VendorDetail /></RoleGuard>} />
-              <Route path="/purchases" element={<RoleGuard allowed={["super_admin", "manager"]}><Purchases /></RoleGuard>} />
-              <Route path="/vendor-payments" element={<RoleGuard allowed={["super_admin", "manager"]}><VendorPayments /></RoleGuard>} />
-              <Route path="/raw-materials" element={<RoleGuard allowed={["super_admin", "manager"]}><RawMaterials /></RoleGuard>} />
-              <Route path="/invoices" element={<RoleGuard allowed={["super_admin", "manager"]}><Invoices /></RoleGuard>} />
-              <Route path="/invoices/new" element={<RoleGuard allowed={["super_admin", "manager"]}><InvoiceForm /></RoleGuard>} />
-              <Route path="/invoices/:id" element={<RoleGuard allowed={["super_admin", "manager"]}><InvoiceView /></RoleGuard>} />
-              <Route path="/invoices/:id/print" element={<RoleGuard allowed={["super_admin", "manager"]}><InvoiceView /></RoleGuard>} />
-              <Route path="/attendance" element={<RoleGuard allowed={["super_admin", "manager"]}><Attendance /></RoleGuard>} />
-              <Route path="/expenses" element={<RoleGuard allowed={["super_admin", "manager"]}><Expenses /></RoleGuard>} />
-              <Route path="/banners" element={<RoleGuard allowed={["super_admin", "manager"]}><Banners /></RoleGuard>} />
-              <Route path="/analytics" element={<RoleGuard allowed={["super_admin", "manager"]}><Analytics /></RoleGuard>} />
-              <Route path="/reports" element={<RoleGuard allowed={["super_admin", "manager"]}><Reports /></RoleGuard>} />
-              <Route path="/reports/:type" element={<RoleGuard allowed={["super_admin", "manager"]}><Reports /></RoleGuard>} />
-              <Route path="/activity" element={<RoleGuard allowed={["super_admin", "manager"]}><Activity /></RoleGuard>} />
-              <Route path="/access-control" element={<RoleGuard allowed={["super_admin"]}><AccessControl /></RoleGuard>} />
-              <Route path="/admin/staff" element={<RoleGuard allowed={["super_admin"]}><AdminStaffDirectory /></RoleGuard>} />
-              <Route path="/settings" element={<RoleGuard allowed={["super_admin", "manager"]}><Settings /></RoleGuard>} />
-              <Route path="/map" element={<RoleGuard allowed={["super_admin", "manager"]}><MapPage /></RoleGuard>} />
-              {/* Admin, Manager, Agent, Marketer */}
-              <Route path="/customers" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer"]}><Customers /></RoleGuard>} />
-              <Route path="/customers/:id" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer"]}><CustomerDetail /></RoleGuard>} />
-              <Route path="/stores" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer"]}><Stores /></RoleGuard>} />
-              <Route path="/stores/:id" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer"]}><StoreDetail /></RoleGuard>} />
-              <Route path="/store-types" element={<RoleGuard allowed={["super_admin", "manager"]}><StoreTypes /></RoleGuard>} />
-              <Route path="/store-types/access" element={<RoleGuard allowed={["super_admin", "manager"]}><StoreTypeAccess /></RoleGuard>} />
-              {/* Routes: Admin, Manager, Agent */}
-              <Route path="/routes" element={<RoleGuard allowed={["super_admin", "manager", "agent"]}><RoutesPage /></RoleGuard>} />
-              <Route path="/routes/:id" element={<RoleGuard allowed={["super_admin", "manager", "agent"]}><RouteDetail /></RoleGuard>} />
-              {/* Sales: Admin, Manager, Agent, POS */}
-              <Route path="/sales" element={<RoleGuard allowed={["super_admin", "manager", "agent", "pos"]}><Sales /></RoleGuard>} />
-              {/* Sale Returns: Admin, Manager */}
-              <Route path="/sale-returns" element={<RoleGuard allowed={["super_admin", "manager"]}><SaleReturns /></RoleGuard>} />
-              {/* Transactions: Admin, Manager, Agent, Marketer */}
-              <Route path="/transactions" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer"]}><Transactions /></RoleGuard>} />
-              {/* Purchase Returns: Admin, Manager */}
-              <Route path="/purchase-returns" element={<RoleGuard allowed={["super_admin", "manager"]}><PurchaseReturns /></RoleGuard>} />
-              {/* Orders: Admin, Manager, Agent, Marketer */}
-              <Route path="/orders" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer"]}><Orders /></RoleGuard>} />
-              {/* Handovers: All staff */}
-              <Route path="/handovers" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer", "pos"]}><Handovers /></RoleGuard>} />
-
-              {/* Stock Transfers: Admin, Manager, Agent, Marketer */}
-              <Route path="/stock-transfers" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer"]}><StockTransfers /></RoleGuard>} />
-              
-              {/* User Profile: All authenticated users */}
+              <Route path="/products" element={<Products />} />
+              <Route path="/inventory" element={<Inventory />} />
+              <Route path="/inventory/vendors" element={<Vendors />} />
+              <Route path="/inventory/vendors/:vendorId" element={<VendorDetail />} />
+              <Route path="/inventory/purchases" element={<Purchases />} />
+              <Route path="/inventory/raw-materials" element={<RawMaterialsPage />} />
+              <Route path="/inventory/boms" element={<BillOfMaterialsPage />} />
+              <Route path="/inventory/boms/:bomId" element={<BomDetailPage />} />
+              <Route path="/production" element={<ProductionPage />} />
+              <Route path="/customers" element={<Customers />} />
+              <Route path="/customers/:id" element={<CustomerDetail />} />
+              <Route path="/stores" element={<Stores />} />
+              <Route path="/stores/:id" element={<StoreDetail />} />
+              <Route path="/store-types" element={<StoreTypes />} />
+              <Route path="/store-types/access" element={<StoreTypeAccess />} />
+              <Route path="/routes" element={<RoutesPage />} />
+              <Route path="/routes/:id" element={<RouteDetail />} />
+              <Route path="/sales" element={<Sales />} />
+              <Route path="/sale-returns" element={<SaleReturns />} />
+              <Route path="/transactions" element={<Transactions />} />
+              <Route path="/purchase-returns" element={<PurchaseReturns />} />
+              <Route path="/orders" element={<Orders />} />
+              <Route path="/handovers" element={<Handovers />} />
+              <Route path="/reports" element={<Reports />} />
+              <Route path="/reports/:type" element={<Reports />} />
+              <Route path="/activity" element={<Activity />} />
+              <Route path="/access-control" element={<AccessControl />} />
+              <Route path="/admin/staff" element={<AdminStaffDirectory />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/map" element={<MapPage />} />
               <Route path="/profile" element={<UserProfile />} />
-              
-              {/* Customer portal pages */}
-              <Route path="/portal/sales" element={<RoleGuard allowed={["customer"]}><CustomerSales /></RoleGuard>} />
-              <Route path="/portal/orders" element={<RoleGuard allowed={["customer"]}><CustomerOrders /></RoleGuard>} />
-              <Route path="/portal/transactions" element={<RoleGuard allowed={["customer"]}><CustomerTransactions /></RoleGuard>} />
-              <Route path="/portal/profile" element={<RoleGuard allowed={["customer"]}><CustomerProfile /></RoleGuard>} />
+              <Route path="/portal/sales" element={<CustomerSales />} />
+              <Route path="/portal/orders" element={<CustomerOrders />} />
+              <Route path="/portal/transactions" element={<CustomerTransactions />} />
+              <Route path="/portal/profile" element={<CustomerProfile />} />
+              <Route path="/admin" element={<RoleGuard roles={['super_admin']} />}>
+                <Route path="/admin/staff" element={<AdminStaffDirectory />} />
+                <Route path="/admin/settings" element={<Settings />} />
+                <Route path="/admin/map" element={<MapPage />} />
+              </Route>
+              <Route path="/hr/staff" element={<WorkersPage />} />
+              <Route path="/hr/roles" element={<WorkerRolesPage />} />
+              <Route path="/hr/payroll" element={<PayrollPage />} />
+              <Route path="/hr/payrolls/:payrollId" element={<PayrollDetailPage />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

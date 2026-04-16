@@ -1,1194 +1,876 @@
 import { PageHeader } from "@/components/shared/PageHeader";
-import { DataTable } from "@/components/shared/DataTable";
-import { StatusBadge } from "@/components/shared/StatusBadge";
-import { Badge } from "@/components/ui/badge";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { logActivity } from "@/lib/activityLogger";
-import { Loader2, Package, Plus, Minus, BoxSelect, ArrowUpRight, FlaskConical, Users, AlertTriangle } from "lucide-react";
-import { useState, useMemo, useEffect } from "react";
-import { useIsMobile } from "@/hooks/use-mobile";
-import { useNavigate } from "react-router-dom";
+import { useWarehouse } from "@/contexts/WarehouseContext";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+  Package,
+  Warehouse,
+  Users,
+  FlaskConical,
+  History,
+  Plus,
+  ArrowRightLeft,
+  AlertCircle,
+} from "lucide-react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Card, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { format } from "date-fns";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
-type MovementType = "purchase" | "sale" | "adjustment" | "return" | "transfer_in" | "transfer_out";
-type RawMaterialAdjustType = "used" | "remaining";
+// Import inventory hooks
+import {
+  useWarehouseStock,
+  useStaffStock,
+  useStockTransfer,
+  useStockHistory,
+  useVendorBalance,
+} from "@/hooks/inventory";
 
-const MOVEMENT_TYPES: Record<MovementType, string> = {
-  purchase: "Purchase (In)",
-  sale: "Sale (Out)",
-  adjustment: "Correction (+/-)",
-  return: "Return (In)",
-  transfer_in: "Transfer (In)",
-  transfer_out: "Transfer (Out)",
-};
+// Import inventory components
+import {
+  InventorySummaryCards,
+  WarehouseStockView,
+  StaffStockView,
+  StockTransferModal,
+  StockAdjustmentModal,
+  StockHistoryView,
+  RawMaterialInventoryView,
+} from "@/components/inventory";
 
-const RAW_MATERIAL_ADJUST_TYPES: Record<RawMaterialAdjustType, string> = {
-  used: "Used (Consumption)",
-  remaining: "Remaining (Physical Count)",
-};
+// Import existing hooks for raw materials
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+
+type InventoryTab = "my-stock" | "warehouse" | "products" | "raw-materials" | "history";
 
 const Inventory = () => {
   const { user, role } = useAuth();
-  const qc = useQueryClient();
-  const navigate = useNavigate();
-  const isMobile = useIsMobile();
-  const canEdit = ["super_admin", "manager", "pos"].includes(role || "");
-  const [activeView, setActiveView] = useState<"products" | "raw-materials" | "staff-holding">("products");
-  
-  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>("");
-  const [showAdjust, setShowAdjust] = useState(false);
-  const [adjustProduct, setAdjustProduct] = useState<any>(null);
-  const [adjustType, setAdjustType] = useState<MovementType>("adjustment");
-  const [adjustQty, setAdjustQty] = useState("");
-  const [adjustReason, setAdjustReason] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
-  
-  // Raw materials state
-  const [showRawMaterialAdjust, setShowRawMaterialAdjust] = useState(false);
-  const [adjustRawMaterial, setAdjustRawMaterial] = useState<any>(null);
-  const [rawMaterialAdjustType, setRawMaterialAdjustType] = useState<RawMaterialAdjustType>("used");
-  const [rawMaterialQty, setRawMaterialQty] = useState("");
-  const [rawMaterialReason, setRawMaterialReason] = useState("");
-  const [rawMaterialSearchTerm, setRawMaterialSearchTerm] = useState("");
+  const { currentWarehouse, allWarehouses, assignedWarehouseId } = useWarehouse();
+  const queryClient = useQueryClient();
+  const isSuperAdmin = role === "super_admin";
+  const isManager = role === "manager";
+  const isPos = role === "pos";
+  const isInventoryViewer = isSuperAdmin || isManager || isPos;
+  const canAdjustStock = isSuperAdmin || isManager;
+  const canReviewReturns = isSuperAdmin || isManager;
+  const allowedTransferTypes = useMemo(() => {
+    if (isSuperAdmin) {
+      return ["warehouse_to_staff", "staff_to_warehouse", "staff_to_staff"];
+    }
+    if (isManager) {
+      return ["warehouse_to_staff", "staff_to_staff"];
+    }
+    if (isPos) {
+      return ["warehouse_to_staff"];
+    }
+    return [] as string[];
+  }, [isSuperAdmin, isManager, isPos]);
+  const canTransferStock = allowedTransferTypes.length > 0;
 
-  // Fetch Warehouses
-  const { data: warehouses, isLoading: loadWh } = useQuery({
-    queryKey: ["warehouses"],
+  // Role-based tab visibility
+  const visibleTabs = useMemo(() => {
+    if (!isInventoryViewer) {
+      return [] as InventoryTab[];
+    }
+
+    const tabs: InventoryTab[] = ["warehouse", "products", "history"];
+    if (isSuperAdmin || isManager) {
+      tabs.push("raw-materials");
+    }
+    return tabs;
+  }, [isInventoryViewer, isManager, isSuperAdmin]);
+
+  const [activeTab, setActiveTab] = useState<InventoryTab>("warehouse");
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>("");
+
+  // Modals state
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [showAdjustmentModal, setShowAdjustmentModal] = useState(false);
+  const [preselectedProduct, setPreselectedProduct] = useState<any>(null);
+  const [preselectedStaff, setPreselectedStaff] = useState<any>(null);
+  const [selectedPendingReturn, setSelectedPendingReturn] = useState<any>(null);
+  const [actualQuantity, setActualQuantity] = useState("");
+  const [differenceAction, setDifferenceAction] = useState<"keep" | "flag">("keep");
+  const [reviewNotes, setReviewNotes] = useState("");
+
+  // Data fetching
+  const scopedWarehouseId = selectedWarehouseId || undefined;
+  const { 
+    warehouses, 
+    products, 
+    stats: warehouseStats, 
+    isLoading: isLoadingWarehouse,
+    updateStock,
+  } = useWarehouseStock({ 
+    warehouseId: scopedWarehouseId,
+    enabled: ["warehouse", "products", "history"].includes(activeTab),
+  });
+
+  const {
+    staffStock,
+    summary: staffSummary,
+    isLoading: isLoadingStaffStock,
+  } = useStaffStock({
+    warehouseId: scopedWarehouseId,
+    enabled: ["warehouse", "products"].includes(activeTab),
+  });
+
+  const {
+    createTransfer,
+  } = useStockTransfer({
+    warehouseId: scopedWarehouseId,
+    enabled: activeTab === "history" || canTransferStock,
+  });
+
+  const {
+    movements: stockMovements,
+    isLoading: isLoadingHistory,
+  } = useStockHistory({
+    warehouseId: scopedWarehouseId,
+    enabled: activeTab === "history",
+    limit: 100,
+  });
+
+  const {
+    vendors,
+    isLoading: isLoadingVendors,
+  } = useVendorBalance({
+    enabled: activeTab === "raw-materials",
+  });
+
+  const { data: pendingReturns, isLoading: isLoadingPendingReturns } = useQuery({
+    queryKey: ["inventory-pending-returns", selectedWarehouseId],
     queryFn: async () => {
-      const { data } = await supabase.from("warehouses").select("*").eq("is_active", true).order("name");
+      if (!selectedWarehouseId || !canReviewReturns) return [];
+
+    const selectClause = `
+      id,
+      display_id,
+      quantity,
+      description,
+      created_at,
+      from_user_id,
+      to_warehouse_id,
+      product:products!stock_transfers_product_id_fkey(id, name, sku, unit),
+      staff:profiles!stock_transfers_from_user_id_profiles_fkey(id, full_name, avatar_url)
+    `;
+
+      const { data, error } = await supabase
+        .from("stock_transfers")
+        .select(selectClause)
+        .eq("transfer_type", "staff_to_warehouse")
+        .eq("status", "pending")
+        .eq("to_warehouse_id", selectedWarehouseId)
+        .order("created_at", { ascending: true });
+
+      if (error) throw error;
       return data || [];
     },
+    enabled: !!selectedWarehouseId && canReviewReturns,
   });
 
-  // Set default warehouse - must be in useEffect to avoid state mutation during render
-  useEffect(() => {
-    if (warehouses?.length && !selectedWarehouseId) {
-      setSelectedWarehouseId(warehouses[0].id);
-    }
-  }, [warehouses, selectedWarehouseId]);
-
-  // Fetch Inventory for selected warehouse
-  const { data: inventory, isLoading: loadInv } = useQuery({
-    queryKey: ["inventory", selectedWarehouseId],
-    queryFn: async () => {
-      if (!selectedWarehouseId) return [];
-      
-      // We need products and their stock in this warehouse
-      // Supabase join syntax: product_stock(quantity, warehouse_id)
-      
-      // Strategy: Fetch all products, then fetch stock for this warehouse
-      const { data: products } = await supabase
-        .from("products")
-        .select("id, name, sku, unit, category, image_url, base_price")
-        .eq("is_active", true)
-        .order("name");
-        
-      if (!products) return [];
-
-      const { data: stocks } = await supabase
-        .from("product_stock")
-        .select("product_id, quantity")
-        .eq("warehouse_id", selectedWarehouseId);
-      
-      const stockMap = new Map(stocks?.map(s => [s.product_id, s.quantity]));
-
-      return products.map(p => ({
-        ...p,
-        quantity: stockMap.get(p.id) || 0,
-      }));
-    },
-    enabled: !!selectedWarehouseId,
-  });
-
-  // Fetch Raw Materials for selected warehouse
-  const { data: rawMaterials, isLoading: loadRawMaterials } = useQuery({
+  // Fetch raw materials
+  const { data: rawMaterials, isLoading: isLoadingRawMaterials } = useQuery({
     queryKey: ["raw-materials-inventory", selectedWarehouseId],
     queryFn: async () => {
       if (!selectedWarehouseId) return [];
       
-      // Get raw materials with their stock in this warehouse
-      const { data: materials, error: matError } = await supabase
-        .from("raw_materials")
-        .select("id, display_id, name, unit, category, min_stock_level, current_stock, unit_cost, image_url")
-        .eq("is_active", true)
-        .order("name");
-        
-      if (matError || !materials) return [];
+    const { data: materials } = await supabase
+      .from("raw_materials")
+      .select(`
+        id, display_id, name, unit, category,
+        min_stock_level, current_stock, unit_cost, image_url,
+        is_active, vendor_id,
+        vendor:vendors!raw_materials_vendor_id_fkey(id, name)
+      `)
+      .eq("is_active", true)
+      .order("name");
+
+      if (!materials) return [];
 
       // Get per-warehouse stock
       const { data: stocks } = await supabase
         .from("raw_material_stock")
         .select("raw_material_id, quantity")
         .eq("warehouse_id", selectedWarehouseId);
-      
-      const stockMap = new Map(stocks?.map(s => [s.raw_material_id, s.quantity]));
+
+      const stockMap = new Map(stocks?.map(s => [s.raw_material_id, s.quantity]) || []);
 
       return materials.map(m => ({
         ...m,
-        warehouse_quantity: stockMap.get(m.id) || 0,
+        current_stock: stockMap.get(m.id) || 0,
       }));
     },
-    enabled: !!selectedWarehouseId,
+    enabled: activeTab === "raw-materials" && !!selectedWarehouseId,
   });
 
-  // Filter raw materials based on search term
-  const filteredRawMaterials = useMemo(() => {
-    if (!rawMaterials) return [];
-    if (!rawMaterialSearchTerm.trim()) return rawMaterials;
-    const term = rawMaterialSearchTerm.toLowerCase();
-    return rawMaterials.filter((item: any) =>
-      item.name?.toLowerCase().includes(term) ||
-      item.display_id?.toLowerCase().includes(term) ||
-      item.category?.toLowerCase().includes(term)
-    );
-  }, [rawMaterials, rawMaterialSearchTerm]);
+  useEffect(() => {
+    if (!isInventoryViewer || selectedWarehouseId) return;
 
-  // Filter inventory based on search term
-  const filteredInventory = useMemo(() => {
-    if (!inventory) return [];
-    if (!searchTerm.trim()) return inventory;
-    const term = searchTerm.toLowerCase();
-    return inventory.filter((item: any) =>
-      item.name?.toLowerCase().includes(term) ||
-      item.sku?.toLowerCase().includes(term) ||
-      item.category?.toLowerCase().includes(term)
-    );
-  }, [inventory, searchTerm]);
+    const fallbackWarehouseId =
+      (isSuperAdmin
+        ? allWarehouses[0]?.id || warehouses?.[0]?.id
+        : assignedWarehouseId || currentWarehouse?.id || warehouses?.[0]?.id) || "";
 
-  // Fetch Recent Movements
-  const { data: productMovements } = useQuery({
-    queryKey: ["stock-movements", selectedWarehouseId],
-    queryFn: async () => {
-        if (!selectedWarehouseId) return [];
-        const { data } = await supabase
-            .from("stock_movements")
-            .select("id, product_id, warehouse_id, quantity, type, reason, reference_id, created_at, products(name, sku)")
-            .eq("warehouse_id", selectedWarehouseId)
-            .order("created_at", { ascending: false })
-            .limit(50);
-        return data || [];
-    },
-    enabled: !!selectedWarehouseId,
-  });
+    if (fallbackWarehouseId) {
+      setSelectedWarehouseId(fallbackWarehouseId);
+    }
+  }, [
+    isInventoryViewer,
+    selectedWarehouseId,
+    isSuperAdmin,
+    allWarehouses,
+    warehouses,
+    assignedWarehouseId,
+    currentWarehouse?.id,
+  ]);
 
-  const { data: rawMaterialMovements } = useQuery({
-    queryKey: ["raw-material-adjustments", selectedWarehouseId],
-    queryFn: async () => {
-      if (!selectedWarehouseId) return [];
-      const { data } = await supabase
-        .from("raw_material_adjustments")
-        .select("id, display_id, raw_material_id, warehouse_id, adjustment_type, quantity_before, quantity_change, quantity_after, reason, reference_id, created_at, raw_materials(name, display_id, unit)")
-        .eq("warehouse_id", selectedWarehouseId)
-        .order("created_at", { ascending: false })
-        .limit(50);
-      return data || [];
-    },
-    enabled: !!selectedWarehouseId,
-  });
-
-  // Fetch Staff Holding (staff_stock joined with profiles and products)
-  const { data: staffStockRaw, isLoading: loadStaffStock } = useQuery({
-    queryKey: ["staff-stock", selectedWarehouseId],
-    queryFn: async () => {
-      if (!selectedWarehouseId) return [];
-      const { data, error } = await supabase
-        .from("staff_stock")
-        .select(`
-          id,
-          user_id,
-          product_id,
-          quantity,
-          is_negative,
-          updated_at,
-          products(id, name, sku, unit, base_price, image_url),
-          profiles(id, full_name, email, avatar_url)
-        `)
-        .eq("warehouse_id", selectedWarehouseId)
-        .order("updated_at", { ascending: false });
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!selectedWarehouseId,
-  });
+  useEffect(() => {
+    if (visibleTabs.length === 0) return;
+    if (!visibleTabs.includes(activeTab)) {
+      setActiveTab(visibleTabs[0]);
+    }
+  }, [visibleTabs, activeTab]);
 
   // Group staff stock by user
   const staffStockByUser = useMemo(() => {
-    if (!staffStockRaw) return [];
-    const map = new Map<string, { profile: any; items: any[]; totalValue: number }>();
-    staffStockRaw.forEach((row: any) => {
+    if (!staffStock) return [];
+    const staffSummaryMap = new Map(
+      (staffSummary || []).map((s) => [
+        s.user_id,
+        {
+          full_name: s.full_name,
+          email: s.email,
+          avatar_url: s.avatar_url,
+          role: s.user_role,
+        },
+      ])
+    );
+    
+    const map = new Map<string, { 
+      user_id: string;
+      full_name?: string;
+      email?: string;
+      avatar_url?: string;
+      role?: string;
+      items: typeof staffStock; 
+      totalValue: number;
+      totalQuantity: number;
+      negativeItems: number;
+      lastActivity?: string;
+    }>();
+    
+    staffStock.forEach((row: any) => {
       const uid = row.user_id;
       if (!map.has(uid)) {
-        map.set(uid, { profile: row.profiles, items: [], totalValue: 0 });
+        const summaryProfile = staffSummaryMap.get(uid);
+        map.set(uid, { 
+          user_id: uid,
+          full_name: summaryProfile?.full_name,
+          email: summaryProfile?.email,
+          avatar_url: summaryProfile?.avatar_url,
+          role: summaryProfile?.role,
+          items: [], 
+          totalValue: 0,
+          totalQuantity: 0,
+          negativeItems: 0,
+          lastActivity: undefined,
+        });
       }
       const entry = map.get(uid)!;
       entry.items.push(row);
-      entry.totalValue += (row.quantity || 0) * Number(row.products?.base_price || 0);
+      entry.totalValue += (row.quantity || 0) * Number(row.product?.base_price || 0);
+      entry.totalQuantity += row.quantity || 0;
+      if (row.is_negative) entry.negativeItems++;
+      
+      // Track last activity
+      const activityDate = row.last_sale_at || row.last_received_at;
+      if (activityDate && (!entry.lastActivity || activityDate > entry.lastActivity)) {
+        entry.lastActivity = activityDate;
+      }
     });
-    return Array.from(map.values()).sort((a, b) =>
-      (a.profile?.full_name || "").localeCompare(b.profile?.full_name || "")
+    
+    return Array.from(map.values()).sort((a, b) => 
+      (a.full_name || "").localeCompare(b.full_name || "")
     );
-  }, [staffStockRaw]);
+  }, [staffStock, staffSummary]);
 
-  const handleAdjust = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedWarehouseId || !adjustProduct) return;
-    setSaving(true);
-    
-    try {
-        const qty = parseFloat(adjustQty);
-        if (isNaN(qty) || qty === 0) throw new Error("Invalid quantity");
-
-        // Calculate actual change based on type
-        // For 'adjustment', we accept +/-. For others, we enforce sign logic?
-        // Let's keep it simple: user inputs positive number, type determines sign
-        
-        let finalQty = qty;
-        if (["sale", "transfer_out"].includes(adjustType)) {
-            finalQty = -Math.abs(qty);
-        } else if (["purchase", "return", "transfer_in"].includes(adjustType)) {
-            finalQty = Math.abs(qty);
-        }
-        // 'adjustment' can be either, assume user entered correct sign or use UI toggle?
-        // Let's make UI simple: Input always positive, Type determines direction
-        
-        // Actually for adjustment, allow negative input
-        if (adjustType === "adjustment") {
-            finalQty = qty; // User can type -5
-        }
-
-        // Call single RPC for atomic transaction
-        const { error: stockError, data: result } = await supabase.rpc("record_stock_movement", {
-            p_product_id: adjustProduct.id,
-            p_warehouse_id: selectedWarehouseId,
-            p_quantity: finalQty,
-            p_type: adjustType,
-            p_reason: adjustReason,
-            p_user_id: user?.id
-        });
-
-        if (stockError) throw stockError;
-
-        toast.success("Stock updated successfully");
-        setShowAdjust(false);
-        setAdjustQty("");
-        setAdjustReason("");
-        qc.invalidateQueries({ queryKey: ["inventory"] });
-        qc.invalidateQueries({ queryKey: ["stock-movements"] });
-        logActivity(user!.id, `Adjusted stock for ${adjustProduct.name}`, "stock", adjustProduct.id);
-
-    } catch (err: any) {
-        toast.error(err.message);
-    } finally {
-        setSaving(false);
+  // Handle warehouse change
+  const handleWarehouseChange = useCallback((warehouseId: string) => {
+    if (!isSuperAdmin && warehouseId !== (assignedWarehouseId || currentWarehouse?.id)) {
+      return;
     }
-  };
+    setSelectedWarehouseId(warehouseId);
+  }, [isSuperAdmin, assignedWarehouseId, currentWarehouse?.id]);
 
-  // Handle raw material adjustment
-  const handleRawMaterialAdjust = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedWarehouseId || !adjustRawMaterial) return;
-    setSaving(true);
-    
-    try {
-        const qty = parseFloat(rawMaterialQty);
-        if (isNaN(qty) || qty < 0) throw new Error("Invalid quantity");
+  // Handle stock transfer
+  const handleTransfer = useCallback(async (transferData: any) => {
+    await createTransfer.mutateAsync(transferData);
+    setShowTransferModal(false);
+    setPreselectedProduct(null);
+    setPreselectedStaff(null);
+  }, [createTransfer]);
 
-        const currentStock = adjustRawMaterial.warehouse_quantity || 0;
-        let quantityChange: number;
-        let quantityAfter: number;
+  // Handle stock adjustment
+  const handleAdjust = useCallback(async (adjustData: any) => {
+    await updateStock.mutateAsync({
+      productId: adjustData.productId,
+      warehouseId: selectedWarehouseId,
+      quantity: adjustData.quantity,
+      type: adjustData.adjustmentType,
+      reason: adjustData.reason,
+    });
+    setShowAdjustmentModal(false);
+    setPreselectedProduct(null);
+  }, [updateStock, selectedWarehouseId]);
 
-        if (rawMaterialAdjustType === "used") {
-            // "Used" reduces stock by the entered amount
-            if (qty > currentStock) throw new Error(`Cannot use more than available stock (${currentStock})`);
-            quantityChange = -qty;
-            quantityAfter = currentStock - qty;
-        } else {
-            // "Remaining" sets stock to the entered value (physical count)
-            quantityChange = qty - currentStock;
-            quantityAfter = qty;
-        }
+  const processReturn = useMutation({
+    mutationFn: async ({
+      transferId,
+      approved,
+      requestedQuantity,
+      actualQty,
+      action,
+      notes,
+    }: {
+      transferId: string;
+      approved: boolean;
+      requestedQuantity: number;
+      actualQty: number;
+      action: "keep" | "flag";
+      notes: string;
+    }) => {
+      if (!user?.id) throw new Error("Not authenticated");
 
-        // Insert adjustment record
-        const { error: adjError } = await supabase
-            .from("raw_material_adjustments")
-            .insert({
-                raw_material_id: adjustRawMaterial.id,
-                warehouse_id: selectedWarehouseId,
-                adjustment_type: rawMaterialAdjustType,
-                quantity_before: currentStock,
-                quantity_change: quantityChange,
-                quantity_after: quantityAfter,
-                reason: rawMaterialReason || (rawMaterialAdjustType === "used" ? "Consumption" : "Physical count"),
-                performed_by: user?.id,
-            });
+      const difference = Math.max(requestedQuantity - actualQty, 0);
+      const { data, error } = await supabase.rpc("process_stock_return", {
+        p_transfer_id: transferId,
+        p_actual_quantity: actualQty,
+        p_difference: difference,
+        p_action: action,
+        p_notes: notes || "",
+        p_reviewed_by: user.id,
+        p_approved: approved,
+      });
 
-        if (adjError) throw adjError;
-
-        // Update or insert stock record
-        const { data: existingStock } = await supabase
-            .from("raw_material_stock")
-            .select("id")
-            .eq("raw_material_id", adjustRawMaterial.id)
-            .eq("warehouse_id", selectedWarehouseId)
-            .single();
-
-        if (existingStock) {
-            await supabase
-                .from("raw_material_stock")
-                .update({ quantity: quantityAfter, updated_at: new Date().toISOString() })
-                .eq("id", existingStock.id);
-        } else {
-            await supabase
-                .from("raw_material_stock")
-                .insert({
-                    raw_material_id: adjustRawMaterial.id,
-                    warehouse_id: selectedWarehouseId,
-                    quantity: quantityAfter,
-                });
-        }
-
-        toast.success(`Raw material ${rawMaterialAdjustType === "used" ? "consumption" : "count"} recorded`);
-        setShowRawMaterialAdjust(false);
-        setRawMaterialQty("");
-        setRawMaterialReason("");
-        qc.invalidateQueries({ queryKey: ["raw-materials-inventory"] });
-        logActivity(user!.id, `Adjusted raw material: ${adjustRawMaterial.name} (${rawMaterialAdjustType})`, "raw_material", adjustRawMaterial.id);
-
-    } catch (err: any) {
-        toast.error(err.message);
-    } finally {
-        setSaving(false);
-    }
-  };
-
-  const columns = [
-    { header: "SKU", accessor: "sku", className: "w-[100px] font-mono text-xs" },
-    { header: "Product", accessor: "name", className: "font-medium" },
-    { header: "Category", accessor: "category" },
-    { 
-        header: "Stock", 
-        accessor: (row: any) => (
-            <div className={`font-bold ${row.quantity < 0 ? "text-red-500" : row.quantity === 0 ? "text-slate-400" : "text-green-600"}`}>
-                {row.quantity} <span className="text-xs font-normal text-slate-500">{row.unit}</span>
-            </div>
-        ) 
+      if (error) throw error;
+      return data;
     },
-    {
-        header: "Action",
-        accessor: (row: any) => canEdit && (
-            <Button variant="ghost" size="sm" onClick={() => {
-                setAdjustProduct(row);
-                setAdjustType("adjustment");
-                setShowAdjust(true);
-            }}>
-                Adjust
-            </Button>
-        )
-    }
-  ];
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["inventory-pending-returns"] });
+      queryClient.invalidateQueries({ queryKey: ["stock-transfers"] });
+      queryClient.invalidateQueries({ queryKey: ["staff-stock"] });
+      queryClient.invalidateQueries({ queryKey: ["warehouse-products"] });
+      queryClient.invalidateQueries({ queryKey: ["stock-movements"] });
+      setSelectedPendingReturn(null);
+      setActualQuantity("");
+      setReviewNotes("");
+      setDifferenceAction("keep");
+      toast.success("Return processed successfully");
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Failed to process return");
+    },
+  });
 
-  const productMovementColumns = [
-      { header: "Date", accessor: (row: any) => format(new Date(row.created_at), "dd MMM HH:mm"), className: "text-xs text-slate-500" },
-      { header: "Product", accessor: (row: any) => row.products?.name },
-      { header: "Type", accessor: (row: any) => <Badge variant="outline">{row.type}</Badge> },
-      { 
-          header: "Qty", 
-          accessor: (row: any) => (
-             <span className={row.quantity > 0 ? "text-green-600 font-bold" : "text-red-600 font-bold"}>
-                 {row.quantity > 0 ? "+" : ""}{row.quantity}
-             </span>
-          ) 
-      },
-      { header: "Reason", accessor: "reason", className: "text-xs block max-w-[200px] truncate" },
-  ];
+  // Calculate summary stats
+  const summaryStats = useMemo(() => {
+    return {
+      totalProducts: products?.length || 0,
+      totalStockValue: warehouseStats?.totalStockValue || 0,
+      lowStockProducts: warehouseStats?.lowStockProducts || 0,
+      negativeStockItems: staffSummary?.reduce((sum, s) => sum + s.negative_products, 0) || 0,
+      totalStaffHolding: staffStock?.length || 0,
+      staffHoldingValue: staffSummary?.reduce((sum, s) => sum + s.total_value, 0) || 0,
+      warehouseStockValue: warehouseStats?.totalStockValue || 0,
+    };
+  }, [products, warehouseStats, staffSummary, staffStock]);
 
-      const rawMaterialMovementColumns = [
-        { header: "Date", accessor: (row: any) => format(new Date(row.created_at), "dd MMM HH:mm"), className: "text-xs text-slate-500" },
-        { header: "Material", accessor: (row: any) => row.raw_materials?.name },
-        { header: "Type", accessor: (row: any) => <Badge variant="outline">{row.adjustment_type}</Badge> },
-        {
-          header: "Change",
-          accessor: (row: any) => (
-           <span className={row.quantity_change > 0 ? "text-green-600 font-bold" : "text-red-600 font-bold"}>
-             {row.quantity_change > 0 ? "+" : ""}{row.quantity_change}
-           </span>
-          )
-        },
-        { header: "After", accessor: (row: any) => `${row.quantity_after} ${row.raw_materials?.unit || ""}`, className: "text-sm" },
-        { header: "Reason", accessor: "reason", className: "text-xs block max-w-[200px] truncate" },
-      ];
+  // Loading state
+  const isLoading = isLoadingWarehouse || isLoadingStaffStock || isLoadingHistory || isLoadingVendors || isLoadingRawMaterials;
+
+  const warehouseOptions = useMemo(() => {
+    if (isSuperAdmin) return warehouses || allWarehouses || [];
+    const allowedId = assignedWarehouseId || currentWarehouse?.id;
+    if (!allowedId) return [];
+    return (warehouses || allWarehouses || []).filter((w) => w.id === allowedId);
+  }, [isSuperAdmin, warehouses, allWarehouses, assignedWarehouseId, currentWarehouse?.id]);
+
+  if (!isInventoryViewer) {
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <PageHeader
+          title="Inventory Management"
+          subtitle="You don't have access to inventory management."
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <PageHeader title="Inventory Management" subtitle="Manage products and raw materials stock by warehouse" />
-          <div className="flex w-full sm:w-auto flex-col sm:flex-row sm:items-center gap-2">
-                <BoxSelect className="h-4 w-4 text-muted-foreground" />
-                <Select value={selectedWarehouseId} onValueChange={setSelectedWarehouseId}>
-              <SelectTrigger className="w-full sm:w-[220px]">
-                        <SelectValue placeholder="Select Warehouse" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {warehouses?.map((w: any) => (
-                            <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-          <Button variant="outline" className="w-full sm:w-auto shrink-0" onClick={() => navigate(activeView === "products" ? "/products" : "/raw-materials")}>
-            {activeView === "products" ? "Products" : "Raw Materials"}
-            <ArrowUpRight className="ml-2 h-4 w-4" />
-          </Button>
-            </div>
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <PageHeader 
+          title="Inventory Management" 
+          subtitle="Manage products, staff stock, and raw materials"
+        />
+        <div className="flex items-center gap-2">
+          {canTransferStock && (
+            <Button
+              variant="outline"
+              onClick={() => setShowTransferModal(true)}
+            >
+              <ArrowRightLeft className="h-4 w-4 mr-2" />
+              Transfer Stock
+            </Button>
+          )}
+          {canAdjustStock && (
+            <Button
+              onClick={() => setShowAdjustmentModal(true)}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Adjust Stock
+            </Button>
+          )}
         </div>
+      </div>
 
-      <Tabs value={activeView} onValueChange={(value) => setActiveView(value as "products" | "raw-materials" | "staff-holding")}>
-            <TabsList>
-          <TabsTrigger value="products">Products</TabsTrigger>
-                <TabsTrigger value="raw-materials">Raw Materials</TabsTrigger>
-                <TabsTrigger value="staff-holding" className="flex items-center gap-1.5">
-                  <Users className="h-3.5 w-3.5" />
-                  Staff Holding
-                </TabsTrigger>
-            </TabsList>
+      {/* Warehouse Selector */}
+      {warehouseOptions && warehouseOptions.length > 0 && (
+        <div className="flex items-center gap-3">
+          <Warehouse className="h-4 w-4 text-muted-foreground" />
+          <Select value={selectedWarehouseId} onValueChange={handleWarehouseChange}>
+            <SelectTrigger className="w-[220px]">
+              <SelectValue placeholder="Select Warehouse" />
+            </SelectTrigger>
+            <SelectContent>
+              {warehouseOptions.map((w) => (
+                <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
-        <TabsContent value="products" className="space-y-6">
-                {loadInv ? (
-                    <div className="flex items-center justify-center py-10"><Loader2 className="animate-spin" /></div>
-                ) : !isMobile ? (
-                    /* Desktop: Card Grid */
-                    <div className="space-y-4">
-                      <Input 
-                        placeholder="Search products..." 
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="max-w-sm"
-                      />
-                      <div className="entity-grid">
-                        {filteredInventory.map((row: any) => {
-                          const stockStatus = row.quantity < 0 ? "critical" : row.quantity === 0 ? "empty" : row.quantity < 10 ? "low" : "good";
-                          const statusColors = {
-                            critical: { badge: "bg-red-100 text-red-700", text: "text-red-600" },
-                            empty: { badge: "bg-slate-100 text-slate-600", text: "text-slate-500" },
-                            low: { badge: "bg-amber-100 text-amber-700", text: "text-amber-600" },
-                            good: { badge: "bg-emerald-100 text-emerald-700", text: "text-emerald-600" },
-                          };
-                          const colors = statusColors[stockStatus];
-                          
-                          return (
-                            <div
-                              key={row.id}
-                              className="group entity-card"
-                            >
-                              {/* Header */}
-                              <div className="entity-card-header">
-                                <div className="entity-card-icon-box">
-                                  {row.image_url ? (
-                                    <Avatar className="h-12 w-12 rounded-lg">
-                                      <AvatarImage src={row.image_url} alt={row.name} className="object-cover" />
-                                      <AvatarFallback className="rounded-lg bg-muted">
-                                        <Package className={`h-6 w-6 ${colors.text}`} />
-                                      </AvatarFallback>
-                                    </Avatar>
-                                  ) : (
-                                    <Package className={`h-8 w-8 ${colors.text}`} />
-                                  )}
-                                </div>
-                                {/* Status Badge */}
-                                <div className={`absolute top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${colors.badge}`}>
-                                  {stockStatus === "critical" ? "Critical" : stockStatus === "empty" ? "Out of Stock" : stockStatus === "low" ? "Low Stock" : "In Stock"}
-                                </div>
-                              </div>
-                              
-                              {/* Content */}
-                              <div className="entity-card-content">
-                                <div>
-                                  <h3 className="entity-card-title">{row.name}</h3>
-                                  <p className="entity-card-subtitle mt-0.5">{row.sku}</p>
-                                </div>
+      {!isSuperAdmin && !selectedWarehouseId && (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            No warehouse is assigned to this account. Contact your administrator to continue.
+          </AlertDescription>
+        </Alert>
+      )}
 
-                                {row.category && (
-                                  <Badge variant="outline" className="text-xs font-normal">{row.category}</Badge>
-                                )}
+      {/* Summary Cards - Only for managers/admins */}
+      {(isSuperAdmin || isManager) && (
+        <InventorySummaryCards 
+          summary={summaryStats}
+          isLoading={isLoading}
+          warehouseName={warehouses?.find(w => w.id === selectedWarehouseId)?.name}
+        />
+      )}
 
-                                <div className="grid grid-cols-2 gap-2 rounded-xl bg-muted/50 p-3 text-sm">
-                                  <div>
-                                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Price</p>
-                                    <p className="font-semibold">₹{Number(row.base_price || 0).toLocaleString()}</p>
-                                  </div>
-                                  <div className="text-right">
-                                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Stock Value</p>
-                                    <p className="font-semibold">₹{Number((row.quantity || 0) * Number(row.base_price || 0)).toLocaleString()}</p>
-                                  </div>
-                                </div>
+      {/* Main Content Tabs */}
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as InventoryTab)}>
+        <TabsList className="mb-6">
 
-                                {/* Stock display */}
-                                <div className="bg-muted/50 rounded-xl p-3">
-                                  <div className="flex items-center justify-between">
-                                    <span className="entity-card-label">Current Stock</span>
-                                  </div>
-                                  <div className="flex items-baseline gap-1.5 mt-1">
-                                    <span className={`text-2xl font-bold tracking-tight ${colors.text}`}>
-                                      {row.quantity}
-                                    </span>
-                                    <span className="text-sm text-muted-foreground">{row.unit}</span>
-                                  </div>
-                                </div>
+          {/* Warehouse Tab */}
+          {visibleTabs.includes("warehouse") && (
+            <TabsTrigger value="warehouse" className="flex items-center gap-2">
+              <Warehouse className="h-4 w-4" />
+              Warehouse
+            </TabsTrigger>
+          )}
 
-                                <div className="flex gap-2">
-                                  <Button variant="outline" size="sm" className="flex-1 h-9 font-medium" onClick={() => navigate("/products")}>View Product <ArrowUpRight className="ml-1.5 h-4 w-4" /></Button>
-                                  {canEdit && (
-                                    <Button 
-                                      variant="default" 
-                                      size="sm" 
-                                      className="flex-1 h-9 font-medium"
-                                      onClick={() => {
-                                        setAdjustProduct(row);
-                                        setAdjustType("adjustment");
-                                        setShowAdjust(true);
-                                      }}
-                                    >
-                                      <Plus className="h-4 w-4 mr-1.5" />
-                                      Adjust Stock
-                                    </Button>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      {filteredInventory.length === 0 && (
-                        <div className="text-center py-12 text-muted-foreground">
-                          No products found.
-                        </div>
+          {/* Products Tab */}
+          {visibleTabs.includes("products") && (
+            <TabsTrigger value="products" className="flex items-center gap-2">
+              <Package className="h-4 w-4" />
+              Products
+            </TabsTrigger>
+          )}
+
+          {/* Raw Materials Tab */}
+          {visibleTabs.includes("raw-materials") && (
+            <TabsTrigger value="raw-materials" className="flex items-center gap-2">
+              <FlaskConical className="h-4 w-4" />
+              Raw Materials
+            </TabsTrigger>
+          )}
+
+          {/* History Tab */}
+          {visibleTabs.includes("history") && (
+            <TabsTrigger value="history" className="flex items-center gap-2">
+              <History className="h-4 w-4" />
+              History
+            </TabsTrigger>
+          )}
+        </TabsList>
+
+        {/* Warehouse Tab Content */}
+        {visibleTabs.includes("warehouse") && (
+          <TabsContent value="warehouse" className="space-y-6">
+            <WarehouseStockView
+              warehouses={warehouseOptions}
+              products={products}
+              selectedWarehouseId={selectedWarehouseId}
+              onWarehouseChange={handleWarehouseChange}
+              isLoading={isLoadingWarehouse}
+              canEdit={canAdjustStock}
+              canAdjust={canAdjustStock}
+              canTransfer={canTransferStock}
+              onViewProduct={(product) => {
+                setPreselectedProduct(product);
+                if (canAdjustStock) {
+                  setShowAdjustmentModal(true);
+                } else if (canTransferStock) {
+                  setShowTransferModal(true);
+                }
+              }}
+              onAdjustStock={(product) => {
+                setPreselectedProduct(product);
+                setShowAdjustmentModal(true);
+              }}
+              onTransferStock={(product) => {
+                setPreselectedProduct(product);
+                setShowTransferModal(true);
+              }}
+            />
+          </TabsContent>
+        )}
+
+        {/* Products Tab Content */}
+        {visibleTabs.includes("products") && (
+          <TabsContent value="products" className="space-y-6">
+            <WarehouseStockView
+              warehouses={warehouseOptions}
+              products={products}
+              selectedWarehouseId={selectedWarehouseId}
+              onWarehouseChange={handleWarehouseChange}
+              isLoading={isLoadingWarehouse}
+              canEdit={canAdjustStock}
+              canAdjust={canAdjustStock}
+              canTransfer={canTransferStock}
+              onViewProduct={(product) => {
+                setPreselectedProduct(product);
+                if (canAdjustStock) {
+                  setShowAdjustmentModal(true);
+                } else if (canTransferStock) {
+                  setShowTransferModal(true);
+                }
+              }}
+              onAdjustStock={(product) => {
+                setPreselectedProduct(product);
+                setShowAdjustmentModal(true);
+              }}
+              onTransferStock={(product) => {
+                setPreselectedProduct(product);
+                setShowTransferModal(true);
+              }}
+            />
+          </TabsContent>
+        )}
+
+        {/* Raw Materials Tab Content */}
+        {visibleTabs.includes("raw-materials") && (
+          <TabsContent value="raw-materials" className="space-y-6">
+            <RawMaterialInventoryView
+              materials={rawMaterials}
+              vendors={vendors}
+              isLoading={isLoadingRawMaterials || isLoadingVendors}
+              canEdit={canAdjustStock}
+              onViewMaterial={(material) => {
+                toast.info(`Viewing ${material.name}`);
+              }}
+              onAdjustStock={(material, type) => {
+                toast.info(`${type === "used" ? "Recording usage" : "Physical count"} for ${material.name}`);
+              }}
+              onViewVendor={(vendor) => {
+                toast.info(`Viewing vendor: ${vendor.name}`);
+              }}
+            />
+          </TabsContent>
+        )}
+
+        {/* History Tab Content */}
+        {visibleTabs.includes("history") && (
+          <TabsContent value="history" className="space-y-6">
+            <StockHistoryView
+              movements={stockMovements}
+              isLoading={isLoadingHistory}
+              products={products?.map(p => ({ id: p.id, name: p.name }))}
+              warehouses={warehouseOptions}
+            />
+          </TabsContent>
+        )}
+      </Tabs>
+
+      {/* Staff Stock Section - For managers/super_admins */}
+      {(isSuperAdmin || isManager) && staffStockByUser.length > 0 && (
+        <div className="mt-12">
+          <h2 className="text-xl font-semibold mb-6 flex items-center gap-2">
+            <Users className="h-5 w-5" />
+            Staff Stock Holdings
+            <Badge variant="secondary">{staffStockByUser.length}</Badge>
+          </h2>
+          <StaffStockView
+            staffStock={staffStockByUser}
+            isLoading={isLoadingStaffStock}
+            onViewDetails={(staff) => {
+              toast.info(`Viewing details for ${staff.full_name || "staff member"}`);
+            }}
+              onTransfer={(staff) => {
+                if (!canTransferStock) return;
+                setPreselectedStaff(staff);
+                setShowTransferModal(true);
+              }}
+          />
+        </div>
+      )}
+
+      {canReviewReturns && (
+        <div className="mt-12 space-y-4">
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            <ArrowRightLeft className="h-5 w-5" />
+            Pending Returns
+            <Badge variant="secondary">{pendingReturns?.length || 0}</Badge>
+          </h2>
+
+          {isLoadingPendingReturns ? (
+            <Card>
+              <CardContent className="py-10 text-center text-sm text-muted-foreground">
+                Loading pending returns...
+              </CardContent>
+            </Card>
+          ) : !pendingReturns || pendingReturns.length === 0 ? (
+            <Card>
+              <CardContent className="py-10 text-center text-sm text-muted-foreground">
+                No pending returns.
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-3">
+              {pendingReturns.map((item: any) => (
+                <Card key={item.id}>
+                  <CardContent className="p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="space-y-1">
+                      <p className="font-medium">
+                        {item.display_id} - {item.product?.name}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        From {item.staff?.full_name || "Unknown staff"} • {item.quantity}{" "}
+                        {item.product?.unit || "units"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(item.created_at).toLocaleString()}
+                      </p>
+                      {item.description && (
+                        <p className="text-sm text-muted-foreground">{item.description}</p>
                       )}
-
-                      <div className="rounded-xl border bg-card p-4">
-                        <div className="mb-3 flex items-center justify-between gap-3">
-                          <div>
-                            <h3 className="font-semibold">Products Stock Flow</h3>
-                            <p className="text-sm text-muted-foreground">Recent product stock movements in the selected warehouse.</p>
-                          </div>
-                        </div>
-                        <DataTable data={productMovements || []} columns={productMovementColumns} />
-                      </div>
                     </div>
-                ) : (
-                    /* Mobile: DataTable with compact cards */
-                    <div className="space-y-4">
-                      <DataTable 
-                          data={filteredInventory || []} 
-                          columns={columns} 
-                          searchKey="name"
-                          searchPlaceholder="Search products..."
-                          renderMobileCard={(row: any) => {
-                          const stockStatus = row.quantity < 0 ? "critical" : row.quantity === 0 ? "empty" : row.quantity < 10 ? "low" : "good";
-                          const statusColors = {
-                            critical: { text: "text-red-600", pill: "bg-red-100 text-red-700" },
-                            empty: { text: "text-slate-500", pill: "bg-slate-100 text-slate-700" },
-                            low: { text: "text-amber-600", pill: "bg-amber-100 text-amber-700" },
-                            good: { text: "text-emerald-600", pill: "bg-emerald-100 text-emerald-700" },
-                          };
-                          const colors = statusColors[stockStatus];
-                          return (
-                            <div className="rounded-2xl border bg-gradient-to-b from-card to-muted/20 p-3.5 shadow-sm">
-                              <div className="mb-2 flex items-center justify-between">
-                                <span className="font-mono text-[11px] text-muted-foreground">{row.sku}</span>
-                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${colors.pill}`}>
-                                  {stockStatus === "critical" ? "Critical" : stockStatus === "empty" ? "Out" : stockStatus === "low" ? "Low" : "In Stock"}
-                                </span>
-                              </div>
-                              <p className="font-semibold text-sm truncate">{row.name}</p>
-                              <div className="mt-2 flex items-baseline gap-1.5">
-                                <span className={`font-bold text-base ${colors.text}`}>
-                                  {row.quantity} <span className="text-xs font-normal text-muted-foreground">{row.unit}</span>
-                                </span>
-                                <span className="text-xs text-muted-foreground">current</span>
-                              </div>
-                              <div className="mt-2 grid grid-cols-2 gap-2 rounded-lg bg-muted/50 p-2 text-xs">
-                                <div>
-                                  <p className="text-muted-foreground">Price</p>
-                                  <p className="font-semibold">₹{Number(row.base_price || 0).toLocaleString()}</p>
-                                </div>
-                                <div className="text-right">
-                                  <p className="text-muted-foreground">Value</p>
-                                  <p className="font-semibold">₹{Number((row.quantity || 0) * Number(row.base_price || 0)).toLocaleString()}</p>
-                                </div>
-                              </div>
-                              <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
-                                <span className="text-xs text-muted-foreground">{row.category || "—"}</span>
-                                <div className="flex items-center gap-2">
-                                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); navigate("/products"); }}>
-                                    View
-                                  </Button>
-                                  {canEdit && (
-                                    <Button 
-                                      variant="ghost" 
-                                      size="sm" 
-                                      className="h-7 text-xs"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setAdjustProduct(row);
-                                        setAdjustType("adjustment");
-                                        setShowAdjust(true);
-                                      }}
-                                    >
-                                      Adjust
-                                    </Button>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        }}
-                      />
+                    <Button
+                      onClick={() => {
+                        setSelectedPendingReturn(item);
+                        setActualQuantity(String(item.quantity));
+                        setDifferenceAction("keep");
+                        setReviewNotes("");
+                      }}
+                    >
+                      Review
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
-                      <div className="rounded-xl border bg-card p-3">
-                        <p className="text-sm font-semibold">Products Stock Flow</p>
-                        <p className="text-xs text-muted-foreground mb-2">Latest product movements for selected warehouse.</p>
-                        <div className="space-y-2">
-                          {(productMovements || []).slice(0, 8).map((m: any) => (
-                            <div key={m.id} className="rounded-lg border bg-muted/30 px-3 py-2">
-                              <div className="flex items-center justify-between gap-2">
-                                <p className="text-xs font-medium truncate">{m.products?.name || "Product"}</p>
-                                <p className={`text-xs font-bold ${Number(m.quantity) > 0 ? "text-emerald-600" : "text-red-600"}`}>{Number(m.quantity) > 0 ? "+" : ""}{m.quantity}</p>
-                              </div>
-                              <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
-                                <span className="capitalize">{m.type}</span>
-                                <span>{format(new Date(m.created_at), "dd MMM, hh:mm a")}</span>
-                              </div>
-                            </div>
-                          ))}
-                          {(productMovements || []).length === 0 && <p className="text-xs text-muted-foreground">No movements yet.</p>}
-                        </div>
-                      </div>
+      {/* Modals */}
+      {canTransferStock && (
+        <StockTransferModal
+          open={showTransferModal}
+          onOpenChange={setShowTransferModal}
+          warehouses={warehouses || []}
+          staffMembers={staffSummary?.map(s => ({
+            id: s.user_id,
+            full_name: s.full_name || "Unknown",
+            email: s.email || "",
+            role: s.user_role || "staff",
+            avatar_url: s.avatar_url,
+            warehouse_id: s.warehouse_id,
+          })) || []}
+          products={products || []}
+          currentUserId={user?.id || ""}
+          currentWarehouseId={selectedWarehouseId}
+          onTransfer={handleTransfer}
+          preselectedProduct={preselectedProduct}
+          preselectedStaff={preselectedStaff}
+          allowedTransferTypes={allowedTransferTypes}
+        />
+      )}
+
+      {canAdjustStock && (
+        <StockAdjustmentModal
+          open={showAdjustmentModal}
+          onOpenChange={setShowAdjustmentModal}
+          products={products || []}
+          warehouseName={warehouses?.find(w => w.id === selectedWarehouseId)?.name}
+          onAdjust={handleAdjust}
+          preselectedProduct={preselectedProduct}
+        />
+      )}
+
+      <Dialog
+        open={!!selectedPendingReturn}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedPendingReturn(null);
+            setActualQuantity("");
+            setReviewNotes("");
+            setDifferenceAction("keep");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Review Return</DialogTitle>
+            <DialogDescription>
+              {selectedPendingReturn?.display_id} • {selectedPendingReturn?.product?.name}
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedPendingReturn && (
+            <div className="space-y-4">
+              <div className="rounded-md bg-muted/50 p-3 text-sm">
+                <p>
+                  Requested: <span className="font-medium">{selectedPendingReturn.quantity}</span>{" "}
+                  {selectedPendingReturn.product?.unit || "units"}
+                </p>
+                <p>
+                  Staff: <span className="font-medium">{selectedPendingReturn.staff?.full_name || "Unknown"}</span>
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="actual-qty">Actual Quantity Received</Label>
+                <Input
+                  id="actual-qty"
+                  type="number"
+                  min={0}
+                  max={selectedPendingReturn.quantity}
+                  value={actualQuantity}
+                  onChange={(e) => setActualQuantity(e.target.value)}
+                />
+              </div>
+
+              {Math.max(
+                Number(selectedPendingReturn.quantity) - Number(actualQuantity || 0),
+                0
+              ) > 0 && (
+                <div className="space-y-2">
+                  <Label>Handle Difference</Label>
+                  <RadioGroup
+                    value={differenceAction}
+                    onValueChange={(value: "keep" | "flag") => setDifferenceAction(value)}
+                    className="flex gap-6"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="keep" id="diff-keep" />
+                      <Label htmlFor="diff-keep">Keep with User</Label>
                     </div>
-                )}
-            </TabsContent>
-
-            {/* Raw Materials Tab */}
-            <TabsContent value="raw-materials" className="space-y-4">
-                {loadRawMaterials ? (
-                    <div className="flex items-center justify-center py-10"><Loader2 className="animate-spin" /></div>
-                ) : !isMobile ? (
-                    /* Desktop: Card Grid for Raw Materials */
-                    <div className="space-y-4">
-                      <Input 
-                        placeholder="Search raw materials..." 
-                        value={rawMaterialSearchTerm}
-                        onChange={(e) => setRawMaterialSearchTerm(e.target.value)}
-                        className="max-w-sm"
-                      />
-                      <div className="entity-grid">
-                        {filteredRawMaterials.map((row: any) => {
-                          const minStock = row.min_stock_level || 0;
-                          const stockStatus = row.warehouse_quantity < 0 ? "critical" 
-                            : row.warehouse_quantity === 0 ? "empty" 
-                            : row.warehouse_quantity <= minStock ? "low" 
-                            : "good";
-                          const statusColors = {
-                            critical: { badge: "bg-red-100 text-red-700", text: "text-red-600" },
-                            empty: { badge: "bg-slate-100 text-slate-600", text: "text-slate-500" },
-                            low: { badge: "bg-amber-100 text-amber-700", text: "text-amber-600" },
-                            good: { badge: "bg-emerald-100 text-emerald-700", text: "text-emerald-600" },
-                          };
-                          const colors = statusColors[stockStatus];
-                          
-                          return (
-                            <div
-                              key={row.id}
-                              className="group entity-card"
-                            >
-                              {/* Header */}
-                              <div className="entity-card-header">
-                                <div className="entity-card-icon-box">
-                                  {row.image_url ? (
-                                    <Avatar className="h-12 w-12 rounded-lg">
-                                      <AvatarImage src={row.image_url} alt={row.name} className="object-cover" />
-                                      <AvatarFallback className="rounded-lg bg-muted">
-                                        <FlaskConical className={`h-6 w-6 ${colors.text}`} />
-                                      </AvatarFallback>
-                                    </Avatar>
-                                  ) : (
-                                    <FlaskConical className={`h-8 w-8 ${colors.text}`} />
-                                  )}
-                                </div>
-                                {/* Status Badge */}
-                                <div className={`absolute top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${colors.badge}`}>
-                                  {stockStatus === "critical" ? "Critical" : stockStatus === "empty" ? "Out of Stock" : stockStatus === "low" ? "Low Stock" : "In Stock"}
-                                </div>
-                              </div>
-                              
-                              {/* Content */}
-                              <div className="entity-card-content">
-                                <div>
-                                  <h3 className="entity-card-title">{row.name}</h3>
-                                  <p className="entity-card-subtitle mt-0.5">{row.display_id}</p>
-                                </div>
-
-                                {row.category && (
-                                  <Badge variant="outline" className="text-xs font-normal">{row.category}</Badge>
-                                )}
-
-                                {/* Stock display */}
-                                <div className="bg-muted/50 rounded-xl p-3">
-                                  <div className="flex items-center justify-between">
-                                    <span className="entity-card-label">Warehouse Stock</span>
-                                    {minStock > 0 && (
-                                      <span className="text-xs text-muted-foreground">Min: {minStock}</span>
-                                    )}
-                                  </div>
-                                  <div className="flex items-baseline gap-1.5 mt-1">
-                                    <span className={`text-2xl font-bold tracking-tight ${colors.text}`}>
-                                      {row.warehouse_quantity}
-                                    </span>
-                                    <span className="text-sm text-muted-foreground">{row.unit}</span>
-                                  </div>
-                                  {row.unit_cost > 0 && (
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                      Unit cost: ₹{row.unit_cost?.toFixed(2)}
-                                    </p>
-                                  )}
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-2 rounded-xl bg-muted/50 p-3 text-sm">
-                                  <div>
-                                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Unit Cost</p>
-                                    <p className="font-semibold">₹{Number(row.unit_cost || 0).toLocaleString()}</p>
-                                  </div>
-                                  <div className="text-right">
-                                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Stock Value</p>
-                                    <p className="font-semibold">₹{Number((row.warehouse_quantity || 0) * Number(row.unit_cost || 0)).toLocaleString()}</p>
-                                  </div>
-                                </div>
-
-                                <div className="flex gap-2">
-                                  <Button variant="outline" size="sm" className="flex-1 h-9 font-medium" onClick={() => navigate("/raw-materials")}>Raw Materials <ArrowUpRight className="ml-1.5 h-4 w-4" /></Button>
-                                  {canEdit && (
-                                    <>
-                                      <Button 
-                                        variant="outline" 
-                                        size="sm" 
-                                        className="flex-1 h-9 font-medium"
-                                        onClick={() => {
-                                          setAdjustRawMaterial(row);
-                                          setRawMaterialAdjustType("used");
-                                          setShowRawMaterialAdjust(true);
-                                        }}
-                                      >
-                                        <Minus className="h-4 w-4 mr-1.5" />
-                                        Used
-                                      </Button>
-                                      <Button 
-                                        variant="default" 
-                                        size="sm" 
-                                        className="flex-1 h-9 font-medium"
-                                        onClick={() => {
-                                          setAdjustRawMaterial(row);
-                                          setRawMaterialAdjustType("remaining");
-                                          setShowRawMaterialAdjust(true);
-                                        }}
-                                      >
-                                        <Plus className="h-4 w-4 mr-1.5" />
-                                        Remaining
-                                      </Button>
-                                    </>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      {filteredRawMaterials.length === 0 && (
-                        <div className="text-center py-12 text-muted-foreground">
-                          No raw materials found. Add raw materials in the Purchases section.
-                        </div>
-                      )}
-
-                      <div className="rounded-xl border bg-card p-4">
-                        <div className="mb-3 flex items-center justify-between gap-3">
-                          <div>
-                            <h3 className="font-semibold">Raw Materials Stock Flow</h3>
-                            <p className="text-sm text-muted-foreground">Recent raw material usage and count adjustments in the selected warehouse.</p>
-                          </div>
-                        </div>
-                        <DataTable data={rawMaterialMovements || []} columns={rawMaterialMovementColumns} />
-                      </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="flag" id="diff-flag" />
+                      <Label htmlFor="diff-flag">Flag as Error</Label>
                     </div>
-                ) : (
-                    /* Mobile: DataTable for Raw Materials */
-                    <div className="space-y-4">
-                      <DataTable 
-                        data={filteredRawMaterials || []} 
-                        columns={[
-                          { header: "ID", accessor: "display_id", className: "w-[80px] font-mono text-xs" },
-                          { header: "Material", accessor: "name", className: "font-medium" },
-                          { header: "Category", accessor: "category" },
-                            { header: "Unit Cost", accessor: (row: any) => `₹${Number(row.unit_cost || 0).toLocaleString()}` },
-                          { 
-                              header: "Stock", 
-                              accessor: (row: any) => (
-                                  <div className={`font-bold ${row.warehouse_quantity < 0 ? "text-red-500" : row.warehouse_quantity === 0 ? "text-slate-400" : "text-green-600"}`}>
-                                      {row.warehouse_quantity} <span className="text-xs font-normal text-slate-500">{row.unit}</span>
-                                  </div>
-                              ) 
-                          },
-                          {
-                              header: "Action",
-                              accessor: (row: any) => canEdit && (
-                                <div className="flex gap-1">
-                                <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => navigate("/raw-materials")}>View</Button>
-                                  <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => {
-                                      setAdjustRawMaterial(row);
-                                      setRawMaterialAdjustType("used");
-                                      setShowRawMaterialAdjust(true);
-                                  }}>
-                                      Used
-                                  </Button>
-                                  <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => {
-                                      setAdjustRawMaterial(row);
-                                      setRawMaterialAdjustType("remaining");
-                                      setShowRawMaterialAdjust(true);
-                                  }}>
-                                      Count
-                                  </Button>
-                                </div>
-                              )
-                          }
-                        ]} 
-                        searchKey="name"
-                        searchPlaceholder="Search raw materials..."
-                        renderMobileCard={(row: any) => {
-                          const minStock = Number(row.min_stock_level || 0);
-                          const stockStatus = row.warehouse_quantity <= 0 ? "empty" : row.warehouse_quantity <= minStock ? "low" : "good";
-                          const statusPill = stockStatus === "empty"
-                            ? "bg-slate-100 text-slate-700"
-                            : stockStatus === "low"
-                              ? "bg-amber-100 text-amber-700"
-                              : "bg-emerald-100 text-emerald-700";
-                          return (
-                            <div className="rounded-2xl border bg-gradient-to-b from-card to-muted/20 p-3.5 shadow-sm">
-                              <div className="mb-2 flex items-center justify-between">
-                                <span className="font-mono text-[11px] text-muted-foreground">{row.display_id}</span>
-                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${statusPill}`}>
-                                  {stockStatus === "empty" ? "Out" : stockStatus === "low" ? "Low" : "In Stock"}
-                                </span>
-                              </div>
-                              <p className="font-semibold text-sm truncate">{row.name}</p>
-                              <div className="mt-2 flex items-baseline gap-1.5">
-                                <span className="font-bold text-base text-foreground">{row.warehouse_quantity} {row.unit}</span>
-                                <span className="text-xs text-muted-foreground">stock</span>
-                              </div>
-                              <div className="mt-2 grid grid-cols-2 gap-2 rounded-lg bg-muted/50 p-2 text-xs">
-                                <div>
-                                  <p className="text-muted-foreground">Unit Cost</p>
-                                  <p className="font-semibold">₹{Number(row.unit_cost || 0).toLocaleString()}</p>
-                                </div>
-                                <div className="text-right">
-                                  <p className="text-muted-foreground">Value</p>
-                                  <p className="font-semibold">₹{Number((row.warehouse_quantity || 0) * Number(row.unit_cost || 0)).toLocaleString()}</p>
-                                </div>
-                              </div>
-                              <div className="mt-2 flex items-center justify-between border-t border-border/50 pt-2">
-                                <span className="text-xs text-muted-foreground">{row.category || "—"}</span>
-                                <div className="flex items-center gap-2">
-                                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); navigate("/raw-materials"); }}>
-                                    View
-                                  </Button>
-                                  {canEdit && (
-                                    <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={(e) => {
-                                      e.stopPropagation();
-                                      setAdjustRawMaterial(row);
-                                      setRawMaterialAdjustType("remaining");
-                                      setShowRawMaterialAdjust(true);
-                                    }}>
-                                      Adjust
-                                    </Button>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        }}
-                      />
-
-                      <div className="rounded-xl border bg-card p-3">
-                        <p className="text-sm font-semibold">Raw Materials Stock Flow</p>
-                        <p className="text-xs text-muted-foreground mb-2">Latest usage/count adjustments for selected warehouse.</p>
-                        <div className="space-y-2">
-                          {(rawMaterialMovements || []).slice(0, 8).map((m: any) => (
-                            <div key={m.id} className="rounded-lg border bg-muted/30 px-3 py-2">
-                              <div className="flex items-center justify-between gap-2">
-                                <p className="text-xs font-medium truncate">{m.raw_materials?.name || "Material"}</p>
-                                <p className={`text-xs font-bold ${Number(m.quantity_change) > 0 ? "text-emerald-600" : "text-red-600"}`}>{Number(m.quantity_change) > 0 ? "+" : ""}{m.quantity_change}</p>
-                              </div>
-                              <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
-                                <span className="capitalize">{m.adjustment_type}</span>
-                                <span>{format(new Date(m.created_at), "dd MMM, hh:mm a")}</span>
-                              </div>
-                            </div>
-                          ))}
-                          {(rawMaterialMovements || []).length === 0 && <p className="text-xs text-muted-foreground">No movements yet.</p>}
-                        </div>
-                      </div>
-                    </div>
-                )}
-            </TabsContent>
-
-            {/* Staff Holding Tab */}
-            <TabsContent value="staff-holding" className="space-y-4">
-              {loadStaffStock ? (
-                <div className="flex items-center justify-center py-10"><Loader2 className="animate-spin" /></div>
-              ) : staffStockByUser.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
-                  <Users className="h-12 w-12 opacity-30" />
-                  <div className="text-center">
-                    <p className="font-medium">No staff holdings yet</p>
-                    <p className="text-sm mt-1">Stock appears here once transferred to a staff member.</p>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {/* Summary Banner */}
-                  <div className="rounded-xl border bg-gradient-to-r from-blue-500/10 to-indigo-500/10 p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-full bg-blue-500/20 flex items-center justify-center shrink-0">
-                        <Users className="h-5 w-5 text-blue-600" />
-                      </div>
-                      <div>
-                        <p className="font-semibold">{staffStockByUser.length} Staff Member{staffStockByUser.length !== 1 ? "s" : ""} Holding Stock</p>
-                        <p className="text-sm text-muted-foreground">
-                          Total field value: ₹{staffStockByUser.reduce((sum, s) => sum + s.totalValue, 0).toLocaleString()}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Per-Staff Cards */}
-                  {staffStockByUser.map(({ profile, items, totalValue }) => {
-                    const hasNegative = items.some((i: any) => i.is_negative);
-                    return (
-                      <div key={profile?.id || items[0]?.user_id} className="rounded-xl border bg-card shadow-sm overflow-hidden">
-                        {/* Staff Header */}
-                        <div className={`flex items-center justify-between px-4 py-3 border-b ${
-                          hasNegative ? "bg-red-50/60 dark:bg-red-900/20" : "bg-muted/30"
-                        }`}>
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-9 w-9">
-                              <AvatarImage src={profile?.avatar_url} alt={profile?.full_name} />
-                              <AvatarFallback className="bg-primary/10 text-primary text-sm font-semibold">
-                                {(profile?.full_name || profile?.email || "?").charAt(0).toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <p className="font-semibold text-sm leading-tight">{profile?.full_name || "Unknown"}</p>
-                              <p className="text-[11px] text-muted-foreground">{profile?.email}</p>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            {hasNegative && (
-                              <div className="flex items-center gap-1 text-red-600 text-xs font-medium mb-0.5">
-                                <AlertTriangle className="h-3.5 w-3.5" />
-                                Negative Stock
-                              </div>
-                            )}
-                            <p className="text-sm font-bold">₹{totalValue.toLocaleString()}</p>
-                            <p className="text-[11px] text-muted-foreground">{items.length} product{items.length !== 1 ? "s" : ""}</p>
-                          </div>
-                        </div>
-
-                        {/* Product Rows */}
-                        <div className="divide-y">
-                          {items.map((item: any) => {
-                            const qty = Number(item.quantity || 0);
-                            const isNeg = qty < 0 || item.is_negative;
-                            return (
-                              <div key={item.id} className={`flex items-center gap-3 px-4 py-2.5 ${
-                                isNeg ? "bg-red-50/40 dark:bg-red-900/10" : ""
-                              }`}>
-                                <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                                  {item.products?.image_url ? (
-                                    <Avatar className="h-8 w-8 rounded-lg">
-                                      <AvatarImage src={item.products.image_url} className="object-cover" />
-                                      <AvatarFallback className="rounded-lg"><Package className="h-4 w-4 text-muted-foreground" /></AvatarFallback>
-                                    </Avatar>
-                                  ) : (
-                                    <Package className="h-4 w-4 text-muted-foreground" />
-                                  )}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium truncate">{item.products?.name || "Unknown Product"}</p>
-                                  <p className="text-[11px] text-muted-foreground">{item.products?.sku}</p>
-                                </div>
-                                <div className="text-right shrink-0">
-                                  <p className={`text-sm font-bold ${
-                                    isNeg ? "text-red-600" : qty === 0 ? "text-muted-foreground" : "text-emerald-600"
-                                  }`}>
-                                    {qty} <span className="text-xs font-normal">{item.products?.unit}</span>
-                                  </p>
-                                  <p className="text-[11px] text-muted-foreground">
-                                    ₹{(qty * Number(item.products?.base_price || 0)).toLocaleString()}
-                                  </p>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
+                  </RadioGroup>
                 </div>
               )}
-            </TabsContent>
-        </Tabs>
 
-        <Dialog open={showAdjust} onOpenChange={setShowAdjust}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Adjust Stock for {adjustProduct?.name}</DialogTitle>
-                    <DialogDescription>
-                        Record a stock movement. Current stock: {adjustProduct?.quantity} {adjustProduct?.unit}
-                    </DialogDescription>
-                </DialogHeader>
-                <form onSubmit={handleAdjust} className="space-y-4">
-                    <div className="space-y-2">
-                        <Label>Movement Type</Label>
-                        <Select value={adjustType} onValueChange={(v) => setAdjustType(v as MovementType)}>
-                            <SelectTrigger>
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {Object.entries(MOVEMENT_TYPES).map(([k, v]) => (
-                                    <SelectItem key={k} value={k}>{v}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
+              <div className="space-y-2">
+                <Label htmlFor="review-notes">Notes</Label>
+                <Textarea
+                  id="review-notes"
+                  value={reviewNotes}
+                  onChange={(e) => setReviewNotes(e.target.value)}
+                  rows={3}
+                />
+              </div>
+            </div>
+          )}
 
-                    <div className="space-y-2">
-                        <Label>Quantity ({adjustProduct?.unit})</Label>
-                        <Input 
-                            type="number" 
-                            step="0.01"
-                            placeholder="0.00" 
-                            value={adjustQty}
-                            onChange={(e) => setAdjustQty(e.target.value)}
-                            required
-                        />
-                         <p className="text-xs text-muted-foreground">
-                            {adjustType === "adjustment" ? "Use negative for reduction." : "Enter positive value, system will apply sign."}
-                        </p>
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label>Reason / Note</Label>
-                        <Textarea 
-                            value={adjustReason}
-                            onChange={(e) => setAdjustReason(e.target.value)}
-                            placeholder="e.g. Broken stock, Received shipment #123"
-                        />
-                    </div>
-
-                    <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => setShowAdjust(false)}>Cancel</Button>
-                        <Button type="submit" disabled={saving}>
-                            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Confirm Adjustment
-                        </Button>
-                    </DialogFooter>
-                </form>
-            </DialogContent>
-        </Dialog>
-
-        {/* Raw Material Adjustment Dialog */}
-        <Dialog open={showRawMaterialAdjust} onOpenChange={setShowRawMaterialAdjust}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>
-                        {rawMaterialAdjustType === "used" ? "Record Usage" : "Physical Count"} - {adjustRawMaterial?.name}
-                    </DialogTitle>
-                    <DialogDescription>
-                        {rawMaterialAdjustType === "used" 
-                            ? `Record how much was consumed. Current stock: ${adjustRawMaterial?.warehouse_quantity || 0} ${adjustRawMaterial?.unit}`
-                            : `Enter the actual remaining quantity. Current stock: ${adjustRawMaterial?.warehouse_quantity || 0} ${adjustRawMaterial?.unit}`
-                        }
-                    </DialogDescription>
-                </DialogHeader>
-                <form onSubmit={handleRawMaterialAdjust} className="space-y-4">
-                    <div className="space-y-2">
-                        <Label>Adjustment Type</Label>
-                        <Select value={rawMaterialAdjustType} onValueChange={(v) => setRawMaterialAdjustType(v as RawMaterialAdjustType)}>
-                            <SelectTrigger>
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {Object.entries(RAW_MATERIAL_ADJUST_TYPES).map(([k, v]) => (
-                                    <SelectItem key={k} value={k}>{v}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label>
-                            {rawMaterialAdjustType === "used" ? "Quantity Used" : "Remaining Quantity"} ({adjustRawMaterial?.unit})
-                        </Label>
-                        <Input 
-                            type="number" 
-                            step="0.01"
-                            min="0"
-                            placeholder="0.00" 
-                            value={rawMaterialQty}
-                            onChange={(e) => setRawMaterialQty(e.target.value)}
-                            required
-                        />
-                        <p className="text-xs text-muted-foreground">
-                            {rawMaterialAdjustType === "used" 
-                                ? "This amount will be deducted from stock."
-                                : "Stock will be set to this value. Difference = consumption."
-                            }
-                        </p>
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label>Reason / Note (optional)</Label>
-                        <Textarea 
-                            value={rawMaterialReason}
-                            onChange={(e) => setRawMaterialReason(e.target.value)}
-                            placeholder={rawMaterialAdjustType === "used" 
-                                ? "e.g. Used for batch #123, Daily production"
-                                : "e.g. Physical count, Stock audit"
-                            }
-                        />
-                    </div>
-
-                    <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => setShowRawMaterialAdjust(false)}>Cancel</Button>
-                        <Button type="submit" disabled={saving}>
-                            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            {rawMaterialAdjustType === "used" ? "Record Usage" : "Update Count"}
-                        </Button>
-                    </DialogFooter>
-                </form>
-            </DialogContent>
-        </Dialog>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSelectedPendingReturn(null);
+                setActualQuantity("");
+                setReviewNotes("");
+                setDifferenceAction("keep");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (!selectedPendingReturn) return;
+                processReturn.mutate({
+                  transferId: selectedPendingReturn.id,
+                  approved: false,
+                  requestedQuantity: Number(selectedPendingReturn.quantity),
+                  actualQty: 0,
+                  action: "keep",
+                  notes: reviewNotes,
+                });
+              }}
+              disabled={processReturn.isPending}
+            >
+              Reject
+            </Button>
+            <Button
+              onClick={() => {
+                if (!selectedPendingReturn) return;
+                const parsedActual = Number(actualQuantity);
+                if (Number.isNaN(parsedActual) || parsedActual < 0) {
+                  toast.error("Enter a valid actual quantity");
+                  return;
+                }
+                if (parsedActual > Number(selectedPendingReturn.quantity)) {
+                  toast.error("Actual quantity cannot exceed requested quantity");
+                  return;
+                }
+                processReturn.mutate({
+                  transferId: selectedPendingReturn.id,
+                  approved: true,
+                  requestedQuantity: Number(selectedPendingReturn.quantity),
+                  actualQty: parsedActual,
+                  action: differenceAction,
+                  notes: reviewNotes,
+                });
+              }}
+              disabled={processReturn.isPending}
+            >
+              Approve
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

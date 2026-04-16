@@ -11,8 +11,10 @@ interface AuthContextType {
   role: AppRole | null;
   profile: { full_name: string; email: string; avatar_url: string | null } | null;
   customer: { id: string; user_id: string | null; name: string; phone: string | null; email: string | null } | null;
+  warehouses: string[]; // Warehouse IDs accessible to user
   loading: boolean;
   signOut: () => Promise<void>;
+  refreshWarehouses: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({

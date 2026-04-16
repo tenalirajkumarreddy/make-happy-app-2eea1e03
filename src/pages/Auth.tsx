@@ -21,21 +21,16 @@ const Logo = () => (
 
 
 async function hasStaffOrCustomerAccess(userId: string): Promise<boolean> {
-  const [{ data: roleData }, { data: customerData }, { data: pendingInvitation }] = await Promise.all([
+  const [{ data: roleData }, { data: customerData }] = await Promise.all([
     supabase.from("user_roles").select("role").eq("user_id", userId).maybeSingle(),
     supabase.from("customers").select("id").eq("user_id", userId).maybeSingle(),
-    supabase.from("staff_invitations").select("id").eq("user_id", userId).maybeSingle(),
   ]);
 
   if (roleData?.role && roleData.role !== "customer") {
     return true;
   }
 
-  if (!!customerData || !!pendingInvitation) {
-    return true;
-  }
-
-  return false;
+  return !!customerData;
 }
 
 const Auth = () => {
@@ -96,12 +91,23 @@ const Auth = () => {
         }
         
         // No access found — check if phone exists in staff_invitations (pending staff)
-        const { data: pendingStaff } = await supabase
-          .from("staff_invitations")
-          .select("id, role, full_name")
-          .eq("phone", session.user.phone)
-          .eq("status", "pending")
-          .maybeSingle();
+        const pendingByPhone = session.user.phone
+          ? await supabase
+              .from("staff_invitations")
+              .select("id, role, full_name")
+              .eq("phone", session.user.phone)
+              .eq("status", "pending")
+              .maybeSingle()
+          : { data: null };
+        const pendingByEmail = session.user.email
+          ? await supabase
+              .from("staff_invitations")
+              .select("id, role, full_name")
+              .eq("email", session.user.email)
+              .eq("status", "pending")
+              .maybeSingle()
+          : { data: null };
+        const pendingStaff = pendingByPhone.data || pendingByEmail.data;
         
         if (pendingStaff) {
           // Pending staff — don't allow to onboard as customer, redirect to login with message
@@ -137,32 +143,40 @@ const Auth = () => {
     }
     setLoading(true);
     try {
+      const db: any = supabase;
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
       const displayId = generateDisplayId("CUST");
+      const customersTable = db.from("customers") as {
+        insert: (values: unknown) => {
+          select: (columns: string) => {
+            single: () => Promise<{ data: { id: string } | null; error: any }>;
+          };
+        };
+      };
 
-      const { data: cust, error } = await supabase
-        .from("customers")
-        .insert({
-          user_id: user.id,
-          display_id: displayId,
-          name: regName.trim(),
-          phone: verifiedPhone || null,
-        })
+      const customerPayload: Record<string, unknown> = {};
+      customerPayload["display_id"] = displayId;
+      customerPayload["name"] = regName.trim();
+      customerPayload["phone"] = verifiedPhone || null;
+
+      const insertCustomer: any = customersTable.insert;
+      const { data: cust, error } = await insertCustomer(customerPayload)
         .select("id")
         .single();
 
       if (error) throw error;
 
       // Mark onboarding complete so user doesn't see it again
-      await supabase.from("profiles").upsert({
+      const profilesTable: any = supabase.from("profiles");
+      await profilesTable.upsert({
         user_id: user.id,
         full_name: regName.trim(),
         phone: verifiedPhone || null,
         onboarding_complete: true,
         phone_verified: true,
-      }, { onConflict: "user_id" });
+      } as any, { onConflict: "user_id" });
 
       // Ensure user_roles has customer role
       await supabase.from("user_roles").upsert({

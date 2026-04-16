@@ -1,4 +1,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { 
+  getCorsHeaders, 
+  getIdempotencyKey, 
+  generateIdempotencyKey,
+  getIdempotencyResponse, 
+  setIdempotencyResponse 
+} from "../_shared/cors.ts";
 
 const ALLOWED_ORIGINS = [
   "https://aquaprimesales.vercel.app",
@@ -6,17 +13,6 @@ const ALLOWED_ORIGINS = [
   "http://localhost:5173",
   "http://localhost:8100",
 ];
-
-function getCorsHeaders(req: Request) {
-  const origin = req.headers.get("Origin") || "";
-  const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
-  return {
-    "Access-Control-Allow-Origin": allowed,
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Vary": "Origin",
-  };
-}
 
 function significantPhone(phone?: string | null): string {
   const digits = (phone || "").replace(/\D/g, "");
@@ -60,6 +56,20 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Idempotency check
+    let idempotencyKey = getIdempotencyKey(req);
+    if (!idempotencyKey) {
+      idempotencyKey = await generateIdempotencyKey(req);
+    }
+    
+    const cachedResponse = getIdempotencyResponse(idempotencyKey);
+    if (cachedResponse) {
+      return new Response(JSON.stringify(cachedResponse), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json", "X-Idempotency-Reused": "true" },
+      });
+    }
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
@@ -251,7 +261,12 @@ Deno.serve(async (req) => {
       options: { redirectTo: `${req.headers.get("origin") || supabaseUrl}/reset-password` },
     });
 
-    return new Response(JSON.stringify({ success: true, user_id: newUser.user.id, mode: "staff_email_provisioned" }), {
+    const responseData = { success: true, user_id: newUser.user.id, mode: "staff_email_provisioned" };
+    
+    // Cache response for idempotency
+    setIdempotencyResponse(idempotencyKey!, responseData);
+
+    return new Response(JSON.stringify(responseData), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error: any) {

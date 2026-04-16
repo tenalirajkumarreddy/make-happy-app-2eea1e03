@@ -67,13 +67,15 @@ class Logger {
   error(message: string, error?: Error | unknown, context?: LogContext) {
     if (!this.shouldLog('error')) return;
     
+    const isError = error != null && typeof error === 'object' && 'message' in error;
+    
     const errorContext = {
       ...context,
-      error: error instanceof Error ? {
-        message: error.message,
-        stack: error.stack,
-        name: error.name,
-      } : error,
+      error: isError ? {
+        message: (error as Error).message,
+        stack: (error as Error).stack,
+        name: (error as Error).name,
+      } : String(error),
     };
 
     console.error(this.formatMessage('error', message, errorContext));
@@ -89,8 +91,9 @@ class Logger {
       const sentry = (window as any).Sentry;
       
       if (level === 'error') {
-        const error = context?.error instanceof Error 
-          ? context.error 
+        const hasErrorProps = context?.error && typeof context.error === 'object' && 'message' in context.error;
+        const error = hasErrorProps
+          ? new Error((context.error as any).message) 
           : new Error(message);
         
         sentry.captureException(error, {

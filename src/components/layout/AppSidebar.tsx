@@ -172,6 +172,7 @@ const NAV_BY_ROLE: Record<string, { main: NavItem[]; secondary: NavItem[] }> = {
   pos: {
     main: [
       { label: "Dashboard", path: "/", icon: LayoutDashboard },
+      { label: "Inventory", path: "/inventory", icon: Warehouse },
       { label: "Sales", path: "/sales", icon: ShoppingCart },
       { label: "Handovers", path: "/handovers", icon: HandCoins },
     ],

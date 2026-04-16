@@ -191,7 +191,45 @@ const Orders = () => {
     if (!storeId) { toast.error("Please select a store"); return; }
     if (orderType === "simple" && !requirementNote.trim()) { toast.error("Please describe the requirement"); return; }
     if (orderType === "detailed" && !orderItems.some((i) => i.product_id)) { toast.error("Please add at least one product"); return; }
+    
     setSaving(true);
+
+    // Check credit limit before creating order (for detailed orders)
+    if (orderType === "detailed") {
+      const validItems = orderItems.filter((i) => i.product_id);
+      const estimatedOrderValue = validItems.reduce((sum, item) => {
+        return sum + (item.quantity * getProductPrice(item.product_id));
+      }, 0);
+
+      if (estimatedOrderValue > 0) {
+        const { data: creditCheck, error: creditError } = await supabase
+          .rpc("check_store_credit_limit", {
+            p_store_id: storeId,
+            p_order_amount: estimatedOrderValue
+          });
+
+        if (creditError) {
+          console.error("Credit check failed:", creditError);
+          // Continue with order creation if credit check fails (non-blocking)
+        } else if (creditCheck && !creditCheck[0]?.can_create) {
+          const check = creditCheck[0];
+          toast.error(
+            `Credit limit warning: Current outstanding ₹${Number(check.current_outstanding).toLocaleString()} + ` +
+            `Order ₹${estimatedOrderValue.toLocaleString()} = ` +
+            `₹${(Number(check.current_outstanding) + estimatedOrderValue).toLocaleString()} ` +
+            `exceeds limit ₹${Number(check.credit_limit).toLocaleString()}. Contact admin for approval.`
+          );
+          setSaving(false);
+          return;
+        } else if (creditCheck?.[0]?.utilization_percent > 80) {
+          // Warn if approaching limit
+          toast.warning(
+            `Credit utilization is ${creditCheck[0].utilization_percent}%. ` +
+            `Available credit: ₹${Number(creditCheck[0].available_credit).toLocaleString()}`
+          );
+        }
+      }
+    }
 
     const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "ORD", seq_name: "ord_display_seq" });
 

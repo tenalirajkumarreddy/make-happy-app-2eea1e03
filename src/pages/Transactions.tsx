@@ -160,28 +160,29 @@ const Transactions = () => {
 
     setSaving(true);
 
+    // Generate display ID first
+    const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "PAY", seq_name: "pay_display_seq" });
+
+    const effectiveRecordedBy = recordedFor || user!.id;
+    const loggedBy = recordedFor ? user!.id : null;
+
     // Queue transaction for offline sync if no network connection
     if (!navigator.onLine) {
-      const effectiveRecordedByOffline = recordedFor || user!.id;
-      const loggedByOffline = recordedFor ? user!.id : null;
       await addToQueue({
         id: crypto.randomUUID(),
         type: "transaction",
         payload: {
-          txData: {
-            store_id: storeId,
-            customer_id: customerId,
-            recorded_by: effectiveRecordedByOffline,
-            logged_by: loggedByOffline,
-            cash_amount: cash,
-            upi_amount: upi,
-            total_amount: totalPayment,
-            old_outstanding: oldOutstanding,
-            new_outstanding: newOutstanding,
-            notes: notes || null,
-            ...(txnDate ? { created_at: new Date(txnDate).toISOString() } : {}),
-          },
-          storeUpdate: { outstanding: newOutstanding },
+          display_id: displayId,
+          store_id: storeId,
+          customer_id: customerId,
+          recorded_by: effectiveRecordedBy,
+          logged_by: loggedBy,
+          cash_amount: cash,
+          upi_amount: upi,
+          total_amount: totalPayment,
+          notes: notes || null,
+          payment_date: txnDate || new Date().toISOString().split('T')[0],
+          created_at: txnDate ? new Date(txnDate).toISOString() : new Date().toISOString(),
         },
         createdAt: new Date().toISOString(),
       });
@@ -192,57 +193,25 @@ const Transactions = () => {
       return;
     }
 
-    const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "PAY", seq_name: "pay_display_seq" });
-
-    const effectiveRecordedBy = recordedFor || user!.id;
-    const loggedBy = recordedFor ? user!.id : null;
-
-    const { error } = await supabase.from("transactions").insert({
-      display_id: displayId,
-      store_id: storeId,
-      customer_id: customerId,
-      recorded_by: effectiveRecordedBy,
-      logged_by: loggedBy,
-      cash_amount: cash,
-      upi_amount: upi,
-      total_amount: totalPayment,
-      old_outstanding: oldOutstanding,
-      new_outstanding: newOutstanding,
-      notes: notes || null,
-      ...(txnDate ? { created_at: new Date(txnDate).toISOString() } : {}),
+    // Use atomic RPC for online transactions
+    const { data: txnResult, error: txnError } = await supabase.rpc("record_transaction", {
+      p_display_id: displayId,
+      p_store_id: storeId,
+      p_customer_id: customerId,
+      p_recorded_by: effectiveRecordedBy,
+      p_logged_by: loggedBy,
+      p_cash_amount: cash,
+      p_upi_amount: upi,
+      p_total_amount: totalPayment,
+      p_notes: notes || null,
+      p_payment_date: txnDate || undefined,
+      p_created_at: txnDate ? new Date(txnDate).toISOString() : undefined,
     });
 
-    if (error) { toast.error(error.message); setSaving(false); return; }
-
-    await supabase.from("stores").update({ outstanding: newOutstanding }).eq("id", storeId);
-
-    // If backdated, recalculate all running balances in chronological order
-    if (txnDate) {
-      try {
-        const { data: storeRow } = await supabase.from("stores").select("opening_balance").eq("id", storeId).maybeSingle();
-        let runBal = Number(storeRow?.opening_balance || 0);
-        const [{ data: allSales }, { data: allTxns }] = await Promise.all([
-          supabase.from("sales").select("id, created_at, total_amount, cash_amount, upi_amount").eq("store_id", storeId).order("created_at", { ascending: true }),
-          supabase.from("transactions").select("id, created_at, total_amount").eq("store_id", storeId).order("created_at", { ascending: true }),
-        ]);
-        const timeline = [
-          ...(allSales || []).map((s: any) => ({ type: "sale", id: s.id, date: s.created_at, delta: Number(s.total_amount) - Number(s.cash_amount) - Number(s.upi_amount) })),
-          ...(allTxns || []).map((t: any) => ({ type: "txn", id: t.id, date: t.created_at, delta: -Number(t.total_amount) })),
-        ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-        for (const entry of timeline) {
-          const oldBal = runBal;
-          runBal += entry.delta;
-          if (entry.type === "sale") {
-            await supabase.from("sales").update({ old_outstanding: oldBal, new_outstanding: runBal }).eq("id", entry.id);
-          } else {
-            await supabase.from("transactions").update({ old_outstanding: oldBal, new_outstanding: runBal }).eq("id", entry.id);
-          }
-        }
-        await supabase.from("stores").update({ outstanding: runBal }).eq("id", storeId);
-      } catch (recalcError) {
-        console.error("Balance recalculation failed:", recalcError);
-        toast.error("Transaction saved but balance recalculation failed. Please contact admin.");
-      }
+    if (txnError) {
+      toast.error(txnError.message);
+      setSaving(false);
+      return;
     }
 
     logActivity(user!.id, "Recorded transaction", "transaction", displayId, undefined, { total: totalPayment, store: storeId });

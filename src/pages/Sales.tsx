@@ -7,7 +7,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { logActivity } from "@/lib/activityLogger";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
-import { addToQueue } from "@/lib/offlineQueue";
+import { addToQueue, generateBusinessKey } from "@/lib/offlineQueue";
 import { resolveCreditLimit } from "@/lib/creditLimit";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2, Plus, Trash2, Download, IndianRupee, CreditCard, Banknote, Clock, UserCircle, Store as StoreIcon, Package, X, CalendarIcon, Receipt, FileText, RotateCcw, ShoppingCart, ChevronRight } from "lucide-react";
@@ -15,6 +15,7 @@ import { QrStoreSelector } from "@/components/shared/QrStoreSelector";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { SaleReceipt } from "@/components/shared/SaleReceipt";
 import { OrderFulfillmentDialog } from "@/components/orders/OrderFulfillmentDialog";
+import { SaleReturnDialog } from "@/components/sales/SaleReturnDialog";
 import { useState, useMemo, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { usePermission } from "@/hooks/usePermission";
@@ -103,6 +104,7 @@ const Sales = () => {
   const [saving, setSaving] = useState(false);
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
   const [receiptSaleId, setReceiptSaleId] = useState<string | null>(null);
+  const [returnSale, setReturnSale] = useState<any | null>(null);
   const [fulfillOrder, setFulfillOrder] = useState<FulfillOrder | null>(null);
   const [loadingOrderId, setLoadingOrderId] = useState<string | null>(null);
 
@@ -406,17 +408,63 @@ const Sales = () => {
       }
     }
 
-    const customerId = selectedStore?.customer_id;
-    if (!customerId) {
-      toast.error("Store has no linked customer");
-      setSaving(false);
-      return;
-    }
+  const customerId = selectedStore?.customer_id;
+  if (!customerId) {
+    toast.error("Store has no linked customer");
+    setSaving(false);
+    return;
+  }
 
-    // Queue sale for offline sync if no network connection
+  // NEW: Check stock availability before sale
+  const hasProducts = items.some(i => i.product_id && i.quantity > 0);
+  if (hasProducts) {
+    const saleItemsForStockCheck = items.filter((i) => i.product_id).map((i) => ({
+      product_id: i.product_id,
+      quantity: i.quantity,
+    }));
+    
+    const { data: stockCheck, error: stockError } = await supabase
+      .rpc("check_stock_availability", {
+        p_user_id: user!.id,
+        p_items: saleItemsForStockCheck,
+      });
+    
+    if (stockError) {
+      console.error("Stock check failed:", stockError);
+      // Continue with sale but log warning - non-blocking
+    } else if (stockCheck && stockCheck.length > 0) {
+      const insufficient = stockCheck.filter((s: any) => !s.available);
+      if (insufficient.length > 0) {
+        const productNames = insufficient.map((i: any) => i.product_name).join(", ");
+        toast.error(
+          `Insufficient stock for: ${productNames}. Available: ${insufficient.map((i: any) => `${i.product_name} (${i.available_qty})`).join(", ")}`
+        );
+        setSaving(false);
+        return;
+      }
+    }
+  }
+
+  // Queue sale for offline sync if no network connection
     if (!navigator.onLine) {
       const effectiveRecordedByOffline = recordedFor || user!.id;
       const loggedByOffline = recordedFor ? user!.id : null;
+      const saleItems = items.filter((i) => i.product_id).map((i) => ({
+        product_id: i.product_id,
+        quantity: i.quantity,
+        unit_price: i.unit_price,
+        total_price: i.quantity * i.unit_price,
+      }));
+      
+      // Generate business key for deduplication
+      const businessKey = generateBusinessKey('sale', {
+        storeId,
+        customerId,
+        amount: totalAmount,
+        products: saleItems.map(i => ({ product_id: i.product_id, quantity: i.quantity })),
+        timestamp: saleDate || new Date().toISOString(),
+      });
+      
       await addToQueue({
         id: crypto.randomUUID(),
         type: "sale",
@@ -434,15 +482,11 @@ const Sales = () => {
             new_outstanding: newOutstanding,
             ...(saleDate ? { created_at: new Date(saleDate).toISOString() } : {}),
           },
-          saleItems: items.filter((i) => i.product_id).map((i) => ({
-            product_id: i.product_id,
-            quantity: i.quantity,
-            unit_price: i.unit_price,
-            total_price: i.quantity * i.unit_price,
-          })),
+          saleItems: saleItems,
           storeUpdate: { outstanding: newOutstanding },
         },
         createdAt: new Date().toISOString(),
+        businessKey,
       });
       toast.warning("You're offline — sale queued and will sync automatically when back online");
       setSaving(false);
@@ -483,15 +527,17 @@ const Sales = () => {
       p_created_at: saleDate ? new Date(saleDate).toISOString() : null,
     });
 
-    if (error) {
-      if (error.message.includes("credit_limit_exceeded")) {
-        toast.error("Credit limit exceeded. Increase payment or reduce items.");
-      } else {
-        toast.error(error.message);
-      }
-      setSaving(false);
-      return;
+  if (error) {
+    if (error.message.includes("credit_limit_exceeded")) {
+      toast.error("Credit limit exceeded. Increase payment or reduce items.");
+    } else if (error.message.includes("insufficient_stock")) {
+      toast.error("Insufficient stock for one or more products. Please check inventory.");
+    } else {
+      toast.error(error.message);
     }
+    setSaving(false);
+    return;
+  }
 
     const saleRow = (result as any)?.[0];
     logActivity(user!.id, "Recorded sale", "sale", displayId, saleRow?.sale_id, { total: totalAmount, store: storeId });
@@ -803,19 +849,44 @@ const Sales = () => {
                 </Avatar>
                <span className="text-xs text-muted-foreground">Recorded by {getRecorderName(selectedSale.recorded_by)}</span>
               </div>
-              {(selectedSale as any).logged_by && (
-                <div className="flex items-center gap-2">
-                  <Avatar className="h-5 w-5">
-                    <AvatarImage src={getRecorderAvatar((selectedSale as any).logged_by) || undefined} />
-                    <AvatarFallback className="text-[9px] bg-accent/20 text-accent-foreground">{getRecorderName((selectedSale as any).logged_by).charAt(0)}</AvatarFallback>
-                  </Avatar>
-                  <span className="text-xs text-muted-foreground">Logged by {getRecorderName((selectedSale as any).logged_by)}</span>
-                </div>
-              )}
+          {(selectedSale as any).logged_by && (
+            <div className="flex items-center gap-2">
+              <Avatar className="h-5 w-5">
+                <AvatarImage src={getRecorderAvatar((selectedSale as any).logged_by) || undefined} />
+                <AvatarFallback className="text-[9px] bg-accent/20 text-accent-foreground">{getRecorderName((selectedSale as any).logged_by).charAt(0)}</AvatarFallback>
+              </Avatar>
+              <span className="text-xs text-muted-foreground">Logged by {getRecorderName((selectedSale as any).logged_by)}</span>
             </div>
           )}
-        </DialogContent>
-      </Dialog>
+          
+          {/* Return Button - NEW */}
+          {selectedSale && (isAdmin || role === 'manager') && (
+            <div className="pt-4 border-t">
+              <Button 
+                variant="outline" 
+                className="w-full"
+                onClick={() => {
+                  setReturnSale(selectedSale);
+                  setSelectedSaleId(null);
+                }}
+              >
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Process Return
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+    </DialogContent>
+  </Dialog>
+  
+  {/* Sale Return Dialog - NEW */}
+  <SaleReturnDialog
+    open={!!returnSale}
+    onOpenChange={(v) => { if (!v) setReturnSale(null); }}
+    sale={returnSale}
+    onSuccess={() => qc.invalidateQueries({ queryKey: ['sales'] })}
+  />
 
       {/* Record Sale Dialog */}
       <Dialog open={showAdd} onOpenChange={(v) => { setShowAdd(v); if (!v) resetForm(); }}>

@@ -4,11 +4,66 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
 /**
- * Subscribes to Supabase Realtime changes on all key tables
+ * Subscribes to Supabase Realtime changes on relevant tables per role
  * and invalidates the relevant React Query caches automatically.
- * Only activates for staff roles (not customers) to limit connections.
+ * Optimized: each role only subscribes to tables they actually need.
  */
 
+// Core tables needed by most roles
+const CORE_TABLES = [
+  "sales", "sale_items", "transactions", "orders", "order_items",
+  "stores", "customers", "handovers", "handover_snapshots",
+];
+
+// Role-specific table subscriptions
+const ROLE_TABLE_MAP: Record<string, string[]> = {
+  super_admin: [
+    // Super admin needs everything
+    "sales", "sale_items", "transactions", "orders", "order_items",
+    "stores", "store_pricing", "store_type_pricing", "store_type_products",
+    "customers", "products", "routes", "route_sessions", "store_visits",
+    "handovers", "handover_snapshots", "expense_claims",
+    "balance_adjustments", "activity_logs", "user_roles", "profiles",
+    "agent_routes", "agent_store_types",
+    "product_stock", "stock_movements", "staff_stock", "stock_transfers", "warehouses",
+  ],
+  manager: [
+    // Manager needs most operational tables
+    "sales", "sale_items", "transactions", "orders", "order_items",
+    "stores", "store_pricing", "store_type_pricing", "store_type_products",
+    "customers", "products", "routes", "route_sessions", "store_visits",
+    "handovers", "handover_snapshots", "expense_claims",
+    "balance_adjustments", "activity_logs", "user_roles", "profiles",
+    "agent_routes", "agent_store_types",
+    "product_stock", "stock_movements", "staff_stock", "stock_transfers", "warehouses",
+  ],
+  agent: [
+    // Agent only needs their operational data
+    "sales", "sale_items", "transactions", "orders", "order_items",
+    "stores", "store_pricing", "store_type_pricing", "store_type_products",
+    "customers", "products", "routes", "route_sessions", "store_visits",
+    "handovers", "handover_snapshots", "expense_claims",
+    "agent_routes", "agent_store_types", "profiles",
+  ],
+  marketer: [
+    // Marketer needs customer and order data
+    "orders", "order_items", "stores", "store_type_products",
+    "customers", "products", "routes", "route_sessions",
+    "transactions",
+    "agent_store_types", "profiles",
+  ],
+  pos: [
+    // POS only needs sales and their own data
+    "sales", "sale_items", "stores", "store_type_products",
+    "products", "handovers", "profiles",
+  ],
+  customer: [
+    // Customer only needs their own data
+    "orders", "order_items", "stores", "customers", "profiles",
+  ],
+};
+
+// Query key mappings for each table
 const TABLE_QUERY_MAP: Record<string, string[]> = {
   sales: ["sales", "dashboard-stats", "agent-dashboard-stats", "mobile-marketer-dashboard", "mobile-pos-dashboard", "mobile-agent-sales-today", "mobile-history-balance-sales", "mobile-history-sales-timeline", "mobile-customer-sales", "mobile-customer-ledger-sales", "mobile-customer-home-sales"],
   sale_items: ["sales", "sale-items"],
@@ -39,6 +94,8 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
   staff_stock: ["staff-stock"],
   stock_transfers: ["stock-transfers", "staff-stock", "inventory"],
   warehouses: ["warehouses"],
+  // Receipts table
+  receipts: ["receipts", "receipt-history"],
 };
 
 const STAFF_ROLES = ["super_admin", "manager", "agent", "marketer", "pos"];
@@ -47,7 +104,14 @@ type RealtimeSubscriber = {
   qc: QueryClient;
   isAdmin: boolean;
   userId?: string | null;
+  role: string | null;
 };
+
+// Get tables to subscribe based on role
+function getTablesForRole(role: string | null): string[] {
+  if (!role) return [];
+  return ROLE_TABLE_MAP[role] || [];
+}
 
 let sharedChannel: any | null = null;
 const subscribers = new Map<symbol, RealtimeSubscriber>();
@@ -82,6 +146,10 @@ function handleRealtimePayload(table: string, payload: any) {
   if (keys.length === 0) return;
 
   subscribers.forEach((sub) => {
+    // Skip if table not relevant for this subscriber's role
+    const roleTables = getTablesForRole(sub.role);
+    if (!roleTables.includes(table)) return;
+    
     if (shouldSkipForSubscriber(sub, table, payload)) return;
     keys.forEach((key) => {
       sub.qc.invalidateQueries({ queryKey: [key] });
@@ -89,10 +157,13 @@ function handleRealtimePayload(table: string, payload: any) {
   });
 }
 
-function ensureSharedChannel() {
+function ensureSharedChannel(role: string | null) {
   if (sharedChannel) return;
 
-  const tables = Object.keys(TABLE_QUERY_MAP);
+  // Subscribe only to tables relevant for this role
+  const tables = getTablesForRole(role);
+  if (tables.length === 0) return;
+
   sharedChannel = supabase.channel("global-realtime-sync");
 
   tables.forEach((table) => {
@@ -103,7 +174,13 @@ function ensureSharedChannel() {
     );
   });
 
-  sharedChannel.subscribe();
+  sharedChannel.subscribe((status: string) => {
+    if (status === 'SUBSCRIBED') {
+      console.log('[Realtime] Subscribed to tables:', tables);
+    } else if (status === 'CHANNEL_ERROR') {
+      console.error('[Realtime] Channel error');
+    }
+  });
 }
 
 function maybeTearDownSharedChannel() {
@@ -121,15 +198,15 @@ export function useRealtimeSync() {
   const isAdmin = role === "super_admin" || role === "manager";
 
   useEffect(() => {
-    if (!isStaff) return;
+    if (!isStaff || !role) return;
 
     const subscriberId = Symbol("realtime-subscriber");
-    subscribers.set(subscriberId, { qc, isAdmin, userId: user?.id });
-    ensureSharedChannel();
+    subscribers.set(subscriberId, { qc, isAdmin, userId: user?.id, role });
+    ensureSharedChannel(role);
 
     return () => {
       subscribers.delete(subscriberId);
       maybeTearDownSharedChannel();
     };
-  }, [qc, isStaff, isAdmin, user?.id]);
+  }, [qc, isStaff, isAdmin, user?.id, role]);
 }
