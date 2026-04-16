@@ -1,39 +1,26 @@
-import { PageHeader } from "@/components/shared/PageHeader";
-import { DataTable } from "@/components/shared/DataTable";
-import { StatusBadge } from "@/components/shared/StatusBadge";
-import { Badge } from "@/components/ui/badge";
-import { Package, Pencil, X, Save, AlertTriangle, Grid3X3, Download, Tags, CheckSquare, DollarSign, Box, ArrowUpDown, RotateCcw, Plus, Minus, ArrowRightLeft, Eye, Warehouse, Users, Loader2 } from "lucide-react";
-import { ImageUpload } from "@/components/shared/ImageUpload";
-import { ProductAccessMatrix } from "@/components/products/ProductAccessMatrix";
-import { ProductCategories } from "@/components/products/ProductCategories";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
-import { logActivity } from "@/lib/activityLogger";
-import { Checkbox } from "@/components/ui/checkbox";
 import { useState, useMemo } from "react";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase";
+import { useAuth } from "@/contexts/AuthContext";
+import { PageHeader } from "@/components/shared/PageHeader";
+import { ProductCard } from "@/components/inventory/ProductCard";
+import { AdjustStockModal } from "@/components/inventory/AdjustStockModal";
+import { PendingReturns } from "@/components/inventory/PendingReturns";
+import { ReturnReviewModal } from "@/components/inventory/ReturnReviewModal";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Loader2, Plus, Search, History } from "lucide-react";
+import { Product, StockTransfer } from "@/lib/types";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
-import { NoticeBox } from "@/components/shared/NoticeBox";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Input } from "@/components/ui/input";
+import { ImageUpload } from "@/components/shared/ImageUpload";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -43,61 +30,302 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { useQueryClient } from "@tanstack/react-query";
-
-interface StockData {
-  product_id: string;
-  warehouse_qty: number;
-  staff_holdings: { staff_id: string; staff_name: string; qty: number }[];
-}
-
-interface PendingReturn {
-  id: string;
-  product_id: string;
-  product_name: string;
-  staff_id: string;
-  staff_name: string;
-  qty: number;
-  reason: string;
-  status: 'pending' | 'approved' | 'rejected';
-  created_at: string;
-}
+import StockMovementReport from "@/components/reporting/StockMovementReport";
 
 const Products = () => {
-  const { user, role } = useAuth();
-  const isMobile = useIsMobile();
-  const canEdit = role === "super_admin" || role === "manager";
+  const { warehouse, role } = useAuth();
   const qc = useQueryClient();
+  const canEdit = role === "super_admin" || role === "manager";
 
-  const [showAdd, setShowAdd] = useState(false);
-  const [showMatrix, setShowMatrix] = useState(false);
-  const [showCategories, setShowCategories] = useState(false);
-  const [editProduct, setEditProduct] = useState<any>(null);
-  const [name, setName] = useState("");
-  const [sku, setSku] = useState("");
-  const [price, setPrice] = useState("");
-  const [unit, setUnit] = useState("PCS");
-  const [category, setCategory] = useState("");
-  const [description, setDescription] = useState("");
-  const [imageUrl, setImageUrl] = useState("");
-  const [hsnCode, setHsnCode] = useState("");
-  const [gstRate, setGstRate] = useState("18");
-  const [saving, setSaving] = useState(false);
-  const [selectMode, setSelectMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [confirmBulkDeactivate, setConfirmBulkDeactivate] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  
-  // Stock management state
-  const [selectedWarehouse, setSelectedWarehouse] = useState<string>("all");
-  const [adjustStockProduct, setAdjustStockProduct] = useState<any>(null);
+  const [showAddEditModal, setShowAddEditModal] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [showAdjustStockModal, setShowAdjustStockModal] = useState(false);
+  const [adjustStockProduct, setAdjustStockProduct] = useState<Product | null>(null);
   const [showReturnReviewModal, setShowReturnReviewModal] = useState(false);
-  const [selectedReturn, setSelectedReturn] = useState<PendingReturn | null>(null);
-  const [stockAdjustmentType, setStockAdjustmentType] = useState<'purchase' | 'sale' | 'transfer'>('purchase');
-  const [stockAdjustmentQty, setStockAdjustmentQty] = useState("");
-  const [stockAdjustmentSource, setStockAdjustmentSource] = useState<string>("");
-  const [stockAdjustmentDestination, setStockAdjustmentDestination] = useState<string>("");
+  const [reviewingTransfer, setReviewingTransfer] = useState<StockTransfer | null>(null);
+  const [showStockHistory, setShowStockHistory] = useState(false);
+
+  const { data: products, isLoading } = useQuery({
+    queryKey: ['products_with_stock', warehouse?.id],
+    queryFn: async () => {
+      if (!warehouse?.id) return [];
+      const { data, error } = await supabase.rpc('get_products_with_stock_breakdown', {
+        p_warehouse_id: warehouse.id
+      });
+      if (error) throw error;
+      return data as Product[];
+    },
+    enabled: !!warehouse?.id,
+  });
+
+  const filteredProducts = useMemo(() => {
+    if (!products) return [];
+    return products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  }, [products, searchTerm]);
+
+  const handleOpenAdd = () => {
+    setEditingProduct(null);
+    setShowAddEditModal(true);
+  };
+
+  const handleOpenEdit = (product: Product) => {
+    setEditingProduct(product);
+    setShowAddEditModal(true);
+  };
+
+  const handleOpenAdjustStock = (product: Product) => {
+    setAdjustStockProduct(product);
+    setShowAdjustStockModal(true);
+  };
+
+  const handleOpenReturnReview = (transfer: StockTransfer) => {
+    setReviewingTransfer(transfer);
+    setShowReturnReviewModal(true);
+  };
+
+  const handleCloseModals = () => {
+    setShowAddEditModal(false);
+    setEditingProduct(null);
+    setShowAdjustStockModal(false);
+    setAdjustStockProduct(null);
+    setShowReturnReviewModal(false);
+    setReviewingTransfer(null);
+    setShowStockHistory(false);
+  };
+
+  return (
+    <div className="space-y-6">
+      <PageHeader title="Products & Inventory" description="View and manage product stock across the warehouse and staff." />
+
+      <div className="flex justify-between items-center">
+        <div className="relative w-full max-w-sm">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search products..."
+            className="pl-8"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+        <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setShowStockHistory(true)}>
+                <History className="mr-2 h-4 w-4" /> Stock History
+            </Button>
+            {canEdit && (
+            <Button onClick={handleOpenAdd}>
+                <Plus className="mr-2 h-4 w-4" /> Add Product
+            </Button>
+            )}
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center items-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {filteredProducts.map(product => (
+            <ProductCard
+              key={product.id}
+              product={product}
+              onEdit={() => handleOpenEdit(product)}
+              onAdjustStock={() => handleOpenAdjustStock(product)}
+            />
+          ))}
+        </div>
+      )}
+
+      <PendingReturns onReview={handleOpenReturnReview} />
+
+      {showAddEditModal && (
+        <AddEditProductModal
+          isOpen={showAddEditModal}
+          onClose={handleCloseModals}
+          product={editingProduct}
+        />
+      )}
+
+      {showAdjustStockModal && adjustStockProduct && (
+        <AdjustStockModal
+          isOpen={showAdjustStockModal}
+          onClose={handleCloseModals}
+          product={adjustStockProduct}
+        />
+      )}
+
+      {showReturnReviewModal && reviewingTransfer && (
+        <ReturnReviewModal
+          isOpen={showReturnReviewModal}
+          onClose={handleCloseModals}
+          transfer={reviewingTransfer}
+        />
+      )}
+
+      <Dialog open={showStockHistory} onOpenChange={setShowStockHistory}>
+        <DialogContent className="max-w-6xl">
+            <DialogHeader>
+                <DialogTitle>Stock Movement History</DialogTitle>
+                <DialogDescription>
+                    Audit trail of all stock movements in the warehouse.
+                </DialogDescription>
+            </DialogHeader>
+            <div className="max-h-[70vh] overflow-y-auto pr-4">
+              <StockMovementReport />
+            </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+// Add/Edit Product Modal Component
+interface AddEditProductModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  product: Product | null;
+}
+
+const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ isOpen, onClose, product }) => {
+    const qc = useQueryClient();
+    const [saving, setSaving] = useState(false);
+    const [name, setName] = useState(product?.name || "");
+    const [sku, setSku] = useState(product?.sku || "");
+    const [price, setPrice] = useState(product?.price?.toString() || "");
+    const [unit, setUnit] = useState(product?.unit || "PCS");
+    const [category, setCategory] = useState(product?.category_id || "");
+    const [description, setDescription] = useState(product?.description || "");
+    const [imageUrl, setImageUrl] = useState(product?.image_url || "");
+    const [hsnCode, setHsnCode] = useState(product?.hsn_code || "");
+    const [gstRate, setGstRate] = useState(product?.gst_rate?.toString() || "18");
+
+    const { data: categories } = useQuery({
+        queryKey: ['product_categories'],
+        queryFn: async () => {
+            const { data, error } = await supabase.from('product_categories').select('*');
+            if (error) throw error;
+            return data;
+        }
+    });
+
+    const handleSave = async () => {
+        setSaving(true);
+        const productData = {
+            name,
+            sku,
+            price: parseFloat(price) || 0,
+            unit,
+            category_id: category || null,
+            description,
+            image_url: imageUrl,
+            hsn_code: hsnCode,
+            gst_rate: parseInt(gstRate) || 18,
+        };
+
+        let error;
+        if (product) {
+            const { error: updateError } = await supabase.from('products').update(productData).eq('id', product.id);
+            error = updateError;
+        } else {
+            const { error: insertError } = await supabase.from('products').insert(productData);
+            error = insertError;
+        }
+
+        if (error) {
+            toast.error(`Failed to save product: ${error.message}`);
+        } else {
+            toast.success(`Product ${product ? 'updated' : 'added'} successfully!`);
+            qc.invalidateQueries({ queryKey: ['products_with_stock'] });
+            onClose();
+        }
+        setSaving(false);
+    };
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogContent className="sm:max-w-lg">
+                <DialogHeader>
+                    <DialogTitle>{product ? 'Edit Product' : 'Add New Product'}</DialogTitle>
+                    <DialogDescription>
+                        {product ? 'Update the details for this product.' : 'Fill in the details for the new product.'}
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto pr-4">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="name" className="text-right">Name</Label>
+                        <Input id="name" value={name} onChange={(e) => setName(e.target.value)} className="col-span-3" />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="sku" className="text-right">SKU</Label>
+                        <Input id="sku" value={sku} onChange={(e) => setSku(e.target.value)} className="col-span-3" />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="price" className="text-right">Price</Label>
+                        <Input id="price" type="number" value={price} onChange={(e) => setPrice(e.target.value)} className="col-span-3" />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="unit" className="text-right">Unit</Label>
+                        <Input id="unit" value={unit} onChange={(e) => setUnit(e.target.value)} className="col-span-3" />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="category" className="text-right">Category</Label>
+                        <Select value={category} onValueChange={setCategory}>
+                            <SelectTrigger className="col-span-3">
+                                <SelectValue placeholder="Select a category" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {categories?.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="hsn" className="text-right">HSN Code</Label>
+                        <Input id="hsn" value={hsnCode} onChange={(e) => setHsnCode(e.target.value)} className="col-span-3" />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="gst" className="text-right">GST Rate (%)</Label>
+                         <Select value={gstRate} onValueChange={setGstRate}>
+                            <SelectTrigger className="col-span-3">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="0">0%</SelectItem>
+                                <SelectItem value="5">5%</SelectItem>
+                                <SelectItem value="12">12%</SelectItem>
+                                <SelectItem value="18">18%</SelectItem>
+                                <SelectItem value="28">28%</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="description" className="text-right">Description</Label>
+                        <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} className="col-span-3" />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label className="text-right">Image</Label>
+                        <div className="col-span-3">
+                            <ImageUpload
+                                onUpload={(url) => setImageUrl(url)}
+                                currentImage={imageUrl}
+                                bucket="product-images"
+                            />
+                        </div>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={onClose}>Cancel</Button>
+                    <Button onClick={handleSave} disabled={saving}>
+                        {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        {saving ? 'Saving...' : 'Save Product'}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+export default Products;
   const [adjustmentNotes, setAdjustmentNotes] = useState("");
 
   const { data: products, isLoading } = useQuery({

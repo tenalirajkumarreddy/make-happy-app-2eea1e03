@@ -1,197 +1,184 @@
-import React, { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { supabase } from "@/integrations/supabase/client";
-import { useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
-import { AlertCircle } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import React, { useState, useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase';
+import { useAuth } from '@/contexts/AuthContext';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { toast } from 'sonner';
+import { StockTransfer } from '@/lib/types';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { AlertTriangle, Loader2 } from 'lucide-react';
+
+const reviewSchema = z.object({
+  actual_quantity: z.coerce.number().min(0, "Actual quantity cannot be negative."),
+  action_taken: z.enum(['keep', 'flag']).optional(),
+  notes: z.string().optional(),
+});
+
+type ReviewFormData = z.infer<typeof reviewSchema>;
 
 interface ReturnReviewModalProps {
   isOpen: boolean;
   onClose: () => void;
-  transfer: any; // Simplified type for prompt constraints
+  transfer: StockTransfer;
 }
 
-export function ReturnReviewModal({ isOpen, onClose, transfer }: ReturnReviewModalProps) {
+export const ReturnReviewModal: React.FC<ReturnReviewModalProps> = ({ isOpen, onClose, transfer }) => {
   const queryClient = useQueryClient();
-  const [actualQty, setActualQty] = useState<string>(transfer?.quantity?.toString() || "");
-  const [diffOption, setDiffOption] = useState<"keep_with_staff" | "mark_as_error">("keep_with_staff");
-  const [notes, setNotes] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { user } = useAuth();
+  const [difference, setDifference] = useState(0);
 
-  const diff = transfer ? transfer.quantity - (parseFloat(actualQty) || 0) : 0;
+  const form = useForm<ReviewFormData>({
+    resolver: zodResolver(reviewSchema),
+    defaultValues: {
+      actual_quantity: transfer.quantity,
+      notes: '',
+    },
+  });
 
-  const handleAccept = async () => {
-    if (!transfer) return;
-    try {
-      setIsSubmitting(true);
-      const aq = parseFloat(actualQty);
-      if (isNaN(aq) || aq < 0) throw new Error("Invalid actual quantity");
+  const actualQuantity = form.watch('actual_quantity');
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
+  useEffect(() => {
+    const diff = transfer.quantity - (actualQuantity || 0);
+    setDifference(diff);
+  }, [actualQuantity, transfer.quantity]);
 
-      const difference = transfer.quantity - aq;
-      const productPrice = transfer.product?.base_price || 0;
+  const processReturn = useMutation({
+    mutationFn: async ({ approved, payload }: { approved: boolean, payload: any }) => {
+      const { error } = await supabase.rpc('process_stock_return', { ...payload, p_approved: approved });
+      if (error) throw error;
+    },
+    onSuccess: (_, { approved }) => {
+      toast.success(`Return ${approved ? 'approved' : 'rejected'} successfully!`);
+      queryClient.invalidateQueries({ queryKey: ['pending_returns'] });
+      queryClient.invalidateQueries({ queryKey: ['products_with_stock'] });
+      onClose();
+    },
+    onError: (error) => {
+      toast.error(`Failed to process return: ${error.message}`);
+    }
+  });
 
-      // 1. Update the transfer record
-      await supabase.from("stock_transfers").update({
-        status: "completed",
-        reviewed_by: user.id,
-        reviewed_at: new Date().toISOString(),
-        actual_quantity: aq,
-        difference: difference,
-        action_taken: difference > 0 ? diffOption : null
-      }).eq("id", transfer.id);
+  const onSubmit = (data: ReviewFormData, approved: boolean) => {
+    if (!user) return;
 
-      // 2. Get current warehouse stock
-      const { data: wStock } = await supabase.from("product_stock")
-        .select("id, quantity").eq("product_id", transfer.product_id).eq("warehouse_id", transfer.to_warehouse_id).maybeSingle();
+    if (difference > 0 && !data.action_taken && approved) {
+        toast.warning("Please select how to handle the difference.");
+        return;
+    }
 
-      // 3. Add actualQty to warehouse stock
-      const newWarehouseQty = (wStock?.quantity ?? 0) + aq;
-      if (wStock?.id) {
-        await supabase.from("product_stock").update({ quantity: newWarehouseQty, updated_at: new Date().toISOString() }).eq("id", wStock.id);
-      } else {
-        await supabase.from("product_stock").insert({ product_id: transfer.product_id, warehouse_id: transfer.to_warehouse_id, quantity: aq });
-      }
-
-      // 4. Update staff_stock
-      const { data: sStock } = await supabase.from("staff_stock")
-        .select("id, quantity").eq("user_id", transfer.from_user_id).eq("product_id", transfer.product_id).maybeSingle(); // Assumes staff operates within one warehouse context per product mostly
-
-      if (sStock) {
-        let newStaffQty: number;
-        if (difference === 0 || diffOption === "mark_as_error") {
-          newStaffQty = Math.max(0, (sStock.quantity ?? 0) - transfer.quantity); // or just set to 0 if we assume full return
-        } else {
-          newStaffQty = difference; // if keeping difference with staff
+    processReturn.mutate({
+        approved,
+        payload: {
+            p_transfer_id: transfer.id,
+            p_actual_quantity: data.actual_quantity,
+            p_difference: difference,
+            p_action: data.action_taken || 'keep',
+            p_notes: data.notes,
+            p_reviewed_by: user.id,
         }
-        await supabase.from("staff_stock").update({
-          quantity: newStaffQty,
-          is_negative: newStaffQty < 0,
-          amount_value: newStaffQty * productPrice,
-          updated_at: new Date().toISOString()
-        }).eq("id", sStock.id);
-      }
-
-      // 5. Log return movement
-      await supabase.from("stock_movements").insert({
-        product_id: transfer.product_id,
-        warehouse_id: transfer.to_warehouse_id,
-        quantity: aq,
-        type: "return",
-        reason: `Staff return (${transfer.display_id}) ${notes ? '- '+notes : ''}`,
-        reference_id: transfer.id,
-        created_by: user.id
-      });
-
-      // 6. Log error movement if marked as error
-      if (difference > 0 && diffOption === "mark_as_error") {
-        await supabase.from("stock_movements").insert({
-          product_id: transfer.product_id,
-          warehouse_id: transfer.to_warehouse_id,
-          quantity: -difference,
-          type: "adjustment",
-          reason: `Error/shortage on return (${transfer.display_id})`,
-          reference_id: transfer.id,
-          created_by: user.id
-        });
-      }
-
-      queryClient.invalidateQueries({ queryKey: ["pending-returns"] });
-      queryClient.invalidateQueries({ queryKey: ["warehouse-stock"] });
-      queryClient.invalidateQueries({ queryKey: ["staff-stock-by-warehouse"] });
-      queryClient.invalidateQueries({ queryKey: ["staff-stock"] });
-      queryClient.invalidateQueries({ queryKey: ["stock-movements"] });
-      
-      toast.success("Return processed successfully");
-      onClose();
-    } catch (error: any) {
-      toast.error(error.message);
-    } finally {
-      setIsSubmitting(false);
-    }
+    });
   };
-
-  const handleReject = async () => {
-    if (!transfer) return;
-    setIsSubmitting(true);
-    try {
-      await supabase.from("stock_transfers").update({ status: "rejected" }).eq("id", transfer.id);
-      queryClient.invalidateQueries({ queryKey: ["pending-returns"] });
-      toast.success("Return request rejected");
-      onClose();
-    } catch (e: any) {
-      toast.error(e.message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  if (!transfer) return null;
 
   return (
-    <Dialog open={isOpen} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent>
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Review Return: {transfer.product?.name}</DialogTitle>
+          <DialogTitle>Review Stock Return</DialogTitle>
+          <DialogDescription>
+            Product: <strong>{transfer.product?.name}</strong> from <strong>{transfer.staff?.full_name}</strong>
+          </DialogDescription>
         </DialogHeader>
-        
-        <div className="space-y-4 py-2">
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <span className="text-muted-foreground mr-2">Requested:</span>
-              <span className="font-semibold">{transfer.quantity}</span>
-            </div>
-            <div>
-              <span className="text-muted-foreground mr-2">Expected in hand:</span>
-              <span className="font-semibold">{transfer.quantity}</span>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Actual Quantity Received</Label>
-            <Input type="number" value={actualQty} onChange={(e) => setActualQty(e.target.value)} min={0} max={transfer.quantity} />
-          </div>
-
-          {diff > 0 && (
-            <div className="space-y-3 p-4 border rounded-md bg-slate-50">
-              <div className="flex items-center gap-2 text-amber-600 font-medium">
-                <AlertCircle className="w-4 h-4" />
-                <span>Difference: {diff} unit{diff > 1 ? 's' : ''}</span>
+        <Form {...form}>
+          <form>
+            <div className="space-y-4 py-4">
+              <div className="p-3 bg-muted rounded-md text-sm">
+                <p>Requested Quantity: <strong>{transfer.quantity} {transfer.product?.unit}</strong></p>
+                <p>Expected in hand: <strong>{transfer.quantity} {transfer.product?.unit}</strong></p>
               </div>
-              <Label>Handle Difference:</Label>
-              <RadioGroup value={diffOption} onValueChange={(v: "keep_with_staff" | "mark_as_error") => setDiffOption(v)}>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="keep_with_staff" id="keep" />
-                  <Label htmlFor="keep" className="cursor-pointer">Keep with Staff ({diff} units stay with user)</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="mark_as_error" id="error" />
-                  <Label htmlFor="error" className="cursor-pointer">Flag as Error (Staff stock drops to zero, variance logged)</Label>
-                </div>
-              </RadioGroup>
+
+              <FormField control={form.control} name="actual_quantity" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Actual Quantity Received</FormLabel>
+                  <FormControl><Input type="number" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}/>
+
+              {difference !== 0 && (
+                <Alert variant={difference > 0 ? "destructive" : "default"}>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>
+                    {difference > 0 ? 'Discrepancy Detected' : 'Excess Stock Received'}
+                  </AlertTitle>
+                  <AlertDescription>
+                    Difference: <strong>{difference} {transfer.product?.unit}</strong>
+                    {difference > 0 && " missing."}
+                    {difference < 0 && " extra."}
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {difference > 0 && (
+                <FormField control={form.control} name="action_taken" render={({ field }) => (
+                  <FormItem className="space-y-3">
+                    <FormLabel>Handle Difference:</FormLabel>
+                    <FormControl>
+                      <RadioGroup
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                        className="flex flex-col space-y-1"
+                      >
+                        <FormItem className="flex items-center space-x-3 space-y-0">
+                          <FormControl><RadioGroupItem value="keep" /></FormControl>
+                          <FormLabel className="font-normal">Keep with User (Staff is responsible for the missing stock)</FormLabel>
+                        </FormItem>
+                        <FormItem className="flex items-center space-x-3 space-y-0">
+                          <FormControl><RadioGroupItem value="flag" /></FormControl>
+                          <FormLabel className="font-normal">Flag as Error (Log discrepancy, staff stock becomes 0)</FormLabel>
+                        </FormItem>
+                      </RadioGroup>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              )}
+
+              <FormField control={form.control} name="notes" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Notes</FormLabel>
+                  <FormControl><Textarea placeholder="Add any notes about the return or discrepancy..." {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}/>
             </div>
-          )}
-
-          <div className="space-y-2">
-            <Label>Notes (Optional)</Label>
-            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Reviewer notes..." />
-          </div>
-        </div>
-
-        <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="outline" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
-          <Button variant="destructive" onClick={handleReject} disabled={isSubmitting}>Reject</Button>
-          <Button onClick={handleAccept} disabled={isSubmitting}>{isSubmitting ? "Processing..." : "Approve Return"}</Button>
-        </DialogFooter>
+            <DialogFooter>
+              <Button type="button" variant="ghost" onClick={onClose} disabled={processReturn.isPending}>Cancel</Button>
+              <Button type="button" variant="destructive" onClick={() => form.handleSubmit((data) => onSubmit(data, false))()} disabled={processReturn.isPending}>
+                {processReturn.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Reject'}
+              </Button>
+              <Button type="button" onClick={() => form.handleSubmit((data) => onSubmit(data, true))()} disabled={processReturn.isPending}>
+                {processReturn.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Approve'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   );
-}
+};
+

@@ -31,6 +31,7 @@ import InventoryTimelineReport from "@/components/reports/InventoryTimelineRepor
 import SalesReturnReport from "@/components/reports/SalesReturnReport";
 import PurchaseReturnReport from "@/components/reports/PurchaseReturnReport";
 import PurchaseReport from "@/components/reports/PurchaseReport";
+import StaffPerformanceReport from "@/components/reporting/StaffPerformanceReport";
 
 const REPORT_CATEGORIES = {
   overview: {
@@ -75,6 +76,7 @@ const REPORT_CATEGORIES = {
       { key: "product", label: "Product Reports", icon: Package, component: ProductReport, description: "Product performance" },
       { key: "stock", label: "Stock Summary", icon: Archive, component: StockSummaryReport, description: "Current stock levels" },
       { key: "inventory-timeline", label: "Stock Timeline", icon: History, component: InventoryTimelineReport, description: "Stock movement history" },
+      { key: "staff-performance", label: "Staff Performance", icon: Users, component: StaffPerformanceReport, description: "Staff stock discrepancy logs" },
       { key: "price-changes", label: "Price Changes", icon: Tag, component: PriceChangeReport, description: "Price revision history" },
     ],
   },
