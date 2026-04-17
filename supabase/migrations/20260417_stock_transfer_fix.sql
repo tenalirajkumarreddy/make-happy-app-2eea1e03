@@ -49,6 +49,7 @@ DECLARE
     v_source_warehouse_id uuid;
     v_dest_warehouse_id uuid;
     v_product_price numeric;
+    v_remaining_qty numeric;
 BEGIN
     -- Get caller identity
     v_caller_id := auth.uid();
@@ -125,9 +126,9 @@ BEGIN
         UPDATE product_stock
         SET quantity = quantity - p_quantity, updated_at = NOW()
         WHERE product_id = p_product_id AND warehouse_id = p_from_warehouse_id
-        RETURNING quantity INTO v_source_warehouse_id;
+        RETURNING quantity INTO v_remaining_qty;
 
-        IF v_source_warehouse_id IS NULL THEN
+        IF v_remaining_qty IS NULL THEN
             RAISE EXCEPTION 'Insufficient stock in warehouse or product not found';
         END IF;
 
@@ -152,9 +153,9 @@ BEGIN
         UPDATE staff_stock
         SET quantity = quantity - p_quantity, transfer_count = transfer_count + 1
         WHERE user_id = p_from_user_id AND product_id = p_product_id AND warehouse_id = p_from_warehouse_id
-        RETURNING quantity INTO v_source_warehouse_id;
+        RETURNING quantity INTO v_remaining_qty;
 
-        IF v_source_warehouse_id IS NULL THEN
+        IF v_remaining_qty IS NULL THEN
             RAISE EXCEPTION 'Insufficient stock with staff member';
         END IF;
     END IF;
@@ -177,9 +178,9 @@ BEGIN
         UPDATE staff_stock
         SET quantity = quantity - p_quantity, transfer_count = transfer_count + 1
         WHERE user_id = p_from_user_id AND product_id = p_product_id AND warehouse_id = v_source_warehouse_id
-        RETURNING quantity INTO v_source_warehouse_id;
+        RETURNING quantity INTO v_remaining_qty;
 
-        IF v_source_warehouse_id IS NULL THEN
+        IF v_remaining_qty IS NULL THEN
             RAISE EXCEPTION 'Insufficient stock with source staff member';
         END IF;
 
@@ -202,9 +203,9 @@ BEGIN
         UPDATE product_stock
         SET quantity = quantity - p_quantity, updated_at = NOW()
         WHERE product_id = p_product_id AND warehouse_id = p_from_warehouse_id
-        RETURNING quantity INTO v_source_warehouse_id;
+        RETURNING quantity INTO v_remaining_qty;
 
-        IF v_source_warehouse_id IS NULL THEN
+        IF v_remaining_qty IS NULL THEN
             RAISE EXCEPTION 'Insufficient stock in source warehouse';
         END IF;
 
