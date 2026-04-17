@@ -6,6 +6,8 @@ import { formatCurrency } from "@/lib/utils";
 
 interface WarehouseStockViewProps {
   products?: any[];
+  selectedWarehouseId?: string;
+  staffHoldingsByProduct?: Record<string, { user_id: string; full_name: string; quantity: number }[]>;
   isLoading?: boolean;
   canAdjust?: boolean;
   canTransfer?: boolean;
@@ -17,6 +19,8 @@ interface WarehouseStockViewProps {
 
 export function WarehouseStockView({ 
   products, 
+  selectedWarehouseId,
+  staffHoldingsByProduct = {},
   isLoading,
   canAdjust,
   canTransfer,
@@ -121,6 +125,8 @@ export function WarehouseStockView({
             <ProductInventoryCard
               key={item.id}
               item={item}
+              warehouseId={selectedWarehouseId}
+              staffHoldings={staffHoldingsByProduct[product.id] || []}
               onAdjust={canAdjust ? () => onAdjustStock?.(product) : undefined}
               onTransfer={canTransfer ? () => onTransferStock?.(product) : undefined}
             />

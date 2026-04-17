@@ -19,6 +19,7 @@ export { useVendorBalance, useVendorsWithBalance } from "./useVendorBalance";
 // Export types
 export type {
   StaffStockItem,
+  StaffStockGroup,
   StaffInventorySummary
 } from "./useStaffStock";
 

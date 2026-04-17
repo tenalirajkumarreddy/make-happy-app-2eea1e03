@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -37,6 +37,14 @@ export function StockAdjustmentModal({ isOpen, onClose, warehouseId, defaultProd
   const [reason, setReason] = useState<string>('Purchase');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    setProductId(defaultProductId || '');
+    setAdjustmentType('purchase');
+    setQuantity('');
+    setReason('Purchase');
+  }, [isOpen, defaultProductId]);
+
   const { data: stockItems } = useQuery({
     queryKey: ['warehouse-stock', warehouseId],
     queryFn: async () => {
@@ -68,6 +76,7 @@ export function StockAdjustmentModal({ isOpen, onClose, warehouseId, defaultProd
 
   const handleSubmit = async () => {
     try {
+      if (!warehouseId) throw new Error("Warehouse is required");
       const qty = parseFloat(quantity);
       if (!qty || qty <= 0) throw new Error("Quantity must be greater than 0");
       if (!productId) throw new Error("Product is required");
