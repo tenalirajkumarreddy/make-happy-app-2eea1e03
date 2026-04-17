@@ -246,7 +246,7 @@ BEGIN
              WHEN p_transfer_type IN ('staff_to_warehouse', 'staff_to_staff') THEN v_source_warehouse_id
              ELSE NULL END,
         -p_quantity,
-        'transfer_out',
+        'transfer',
         p_transfer_type,
         v_transfer_id,
         CASE WHEN p_transfer_type IN ('staff_to_warehouse', 'staff_to_staff') THEN p_from_user_id ELSE NULL END,
@@ -261,7 +261,7 @@ BEGIN
              WHEN p_transfer_type IN ('warehouse_to_staff', 'staff_to_staff') THEN v_dest_warehouse_id
              ELSE NULL END,
         p_quantity,
-        'transfer_in',
+        'transfer',
         p_transfer_type,
         v_transfer_id,
         CASE WHEN p_transfer_type IN ('warehouse_to_staff', 'staff_to_staff') THEN p_to_user_id ELSE NULL END,
@@ -367,7 +367,7 @@ BEGIN
     INSERT INTO stock_movements (product_id, warehouse_id, quantity, type, reason, reference_id, agent_id, created_by)
     VALUES (
         v_transfer.product_id, v_transfer.from_warehouse_id,
-        -v_transfer.quantity, 'transfer_out', 'return_approved',
+        -v_transfer.quantity, 'transfer', 'return_approved',
         p_transfer_id, v_transfer.from_user_id, v_caller_id
     );
 
@@ -375,7 +375,7 @@ BEGIN
     INSERT INTO stock_movements (product_id, warehouse_id, quantity, type, reason, reference_id, agent_id, created_by)
     VALUES (
         v_transfer.product_id, v_transfer.to_warehouse_id,
-        p_actual_quantity, 'transfer_in', 'return_approved',
+        p_actual_quantity, 'transfer', 'return_approved',
         p_transfer_id, v_transfer.from_user_id, v_caller_id
     );
 
