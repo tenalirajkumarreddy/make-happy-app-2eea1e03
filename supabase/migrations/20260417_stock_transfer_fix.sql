@@ -98,13 +98,8 @@ BEGIN
         v_status := 'completed';
     END IF;
 
-    -- Generate display_id
-    SELECT 'TRF-' || COALESCE(MAX(CAST(SUBSTRING(display_id FROM 5 FOR 10) AS integer)), 0) + 1 INTO v_display_id
-    FROM stock_transfers
-    WHERE display_id LIKE 'TRF-%';
-    IF v_display_id IS NULL THEN
-        v_display_id := 'TRF-1';
-    END IF;
+    -- Generate display_id using robust generator
+    v_display_id := public.generate_display_id('TRF');
 
     -- ============================================================
     -- Execute transfer based on type
