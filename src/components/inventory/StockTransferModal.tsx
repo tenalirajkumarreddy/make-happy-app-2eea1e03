@@ -34,6 +34,8 @@ export interface StockTransferModalProps {
   defaultProductId?: string;
   /** Optional pre-fetched staff list — if omitted we fetch internally */
   staffMembers?: { user_id: string; full_name?: string; role?: string }[];
+  allowedTransferTypes?: TransferType[];
+  currentUserId?: string;
 }
 
 type TransferType = "warehouse_to_staff" | "staff_to_warehouse" | "staff_to_staff";
@@ -60,10 +62,14 @@ export function StockTransferModal({
   warehouseId,
   defaultProductId,
   staffMembers,
+  allowedTransferTypes = ["warehouse_to_staff", "staff_to_warehouse", "staff_to_staff"],
+  currentUserId,
 }: StockTransferModalProps) {
   const queryClient = useQueryClient();
 
-  const [transferType, setTransferType] = useState<TransferType>("warehouse_to_staff");
+  const [transferType, setTransferType] = useState<TransferType>(
+    (allowedTransferTypes[0] as TransferType) || "warehouse_to_staff"
+  );
   const [fromId, setFromId] = useState<string>("");
   const [toId, setToId] = useState<string>("");
   const [selectedProducts, setSelectedProducts] = useState<SelectedProduct[]>([]);
@@ -355,7 +361,9 @@ export function StockTransferModal({
                 ["staff_to_warehouse", "Staff → Warehouse"],
                 ["staff_to_staff", "Staff → Staff"],
               ] as [TransferType, string][]
-            ).map(([type, label]) => (
+            )
+              .filter(([type]) => allowedTransferTypes?.includes(type))
+              .map(([type, label]) => (
               <Button
                 key={type}
                 variant={transferType === type ? "default" : "outline"}
