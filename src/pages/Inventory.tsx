@@ -35,6 +35,7 @@ import { toast } from "sonner";
 import {
   useWarehouseStock,
   useStaffStock,
+  useStaffStockByWarehouse,
   useStockTransfer,
   useStockHistory,
   useVendorBalance,
@@ -55,7 +56,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
-type InventoryTab = "my-stock" | "warehouse" | "products" | "raw-materials" | "history";
+type InventoryTab = "stock" | "raw-materials" | "history";
 
 const Inventory = () => {
   const { user, role } = useAuth();
@@ -81,20 +82,20 @@ const Inventory = () => {
   }, [isSuperAdmin, isManager, isPos]);
   const canTransferStock = allowedTransferTypes.length > 0;
 
-  // Role-based tab visibility
+  // Role-based tab visibility - simplified: "stock" covers both warehouse and products
   const visibleTabs = useMemo(() => {
     if (!isInventoryViewer) {
       return [] as InventoryTab[];
     }
 
-    const tabs: InventoryTab[] = ["warehouse", "products", "history"];
+    const tabs: InventoryTab[] = ["stock", "history"];
     if (isSuperAdmin || isManager) {
       tabs.push("raw-materials");
     }
     return tabs;
   }, [isInventoryViewer, isManager, isSuperAdmin]);
 
-  const [activeTab, setActiveTab] = useState<InventoryTab>("warehouse");
+  const [activeTab, setActiveTab] = useState<InventoryTab>("stock");
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>("");
 
   // Modals state
@@ -111,23 +112,20 @@ const Inventory = () => {
   const scopedWarehouseId = selectedWarehouseId || undefined;
   const { 
     warehouses, 
-    products, 
+    items: warehouseItems,
     stats: warehouseStats, 
     isLoading: isLoadingWarehouse,
     updateStock,
   } = useWarehouseStock({ 
     warehouseId: scopedWarehouseId,
-    enabled: ["warehouse", "products", "history"].includes(activeTab),
+    enabled: activeTab === "stock" || activeTab === "history",
   });
 
   const {
     staffStock,
-    summary: staffSummary,
-    isLoading: isLoadingStaffStock,
-  } = useStaffStock({
-    warehouseId: scopedWarehouseId,
-    enabled: ["warehouse", "products"].includes(activeTab),
-  });
+    staffSummary,
+    isLoadingStock: isLoadingStaffStock,
+  } = useStaffStockByWarehouse(scopedWarehouseId || "")
 
   const {
     createTransfer,
@@ -390,7 +388,7 @@ const Inventory = () => {
   // Calculate summary stats
   const summaryStats = useMemo(() => {
     return {
-      totalProducts: products?.length || 0,
+      totalProducts: warehouseItems?.length || 0,
       totalStockValue: warehouseStats?.totalStockValue || 0,
       lowStockProducts: warehouseStats?.lowStockProducts || 0,
       negativeStockItems: staffSummary?.reduce((sum, s) => sum + s.negative_products, 0) || 0,
@@ -398,7 +396,7 @@ const Inventory = () => {
       staffHoldingValue: staffSummary?.reduce((sum, s) => sum + s.total_value, 0) || 0,
       warehouseStockValue: warehouseStats?.totalStockValue || 0,
     };
-  }, [products, warehouseStats, staffSummary, staffStock]);
+  }, [warehouseItems, warehouseStats, staffSummary, staffStock]);
 
   // Loading state
   const isLoading = isLoadingWarehouse || isLoadingStaffStock || isLoadingHistory || isLoadingVendors || isLoadingRawMaterials;
@@ -489,19 +487,11 @@ const Inventory = () => {
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as InventoryTab)}>
         <TabsList className="mb-6">
 
-          {/* Warehouse Tab */}
-          {visibleTabs.includes("warehouse") && (
-            <TabsTrigger value="warehouse" className="flex items-center gap-2">
-              <Warehouse className="h-4 w-4" />
-              Warehouse
-            </TabsTrigger>
-          )}
-
-          {/* Products Tab */}
-          {visibleTabs.includes("products") && (
-            <TabsTrigger value="products" className="flex items-center gap-2">
+          {/* Stock Tab - covers both warehouse and products */}
+          {visibleTabs.includes("stock") && (
+            <TabsTrigger value="stock" className="flex items-center gap-2">
               <Package className="h-4 w-4" />
-              Products
+              Stock
             </TabsTrigger>
           )}
 
@@ -522,44 +512,12 @@ const Inventory = () => {
           )}
         </TabsList>
 
-        {/* Warehouse Tab Content */}
-        {visibleTabs.includes("warehouse") && (
-          <TabsContent value="warehouse" className="space-y-6">
+        {/* Stock Tab Content */}
+        {visibleTabs.includes("stock") && (
+          <TabsContent value="stock" className="space-y-6">
             <WarehouseStockView
               warehouses={warehouseOptions}
-              products={products}
-              selectedWarehouseId={selectedWarehouseId}
-              onWarehouseChange={handleWarehouseChange}
-              isLoading={isLoadingWarehouse}
-              canEdit={canAdjustStock}
-              canAdjust={canAdjustStock}
-              canTransfer={canTransferStock}
-              onViewProduct={(product) => {
-                setPreselectedProduct(product);
-                if (canAdjustStock) {
-                  setShowAdjustmentModal(true);
-                } else if (canTransferStock) {
-                  setShowTransferModal(true);
-                }
-              }}
-              onAdjustStock={(product) => {
-                setPreselectedProduct(product);
-                setShowAdjustmentModal(true);
-              }}
-              onTransferStock={(product) => {
-                setPreselectedProduct(product);
-                setShowTransferModal(true);
-              }}
-            />
-          </TabsContent>
-        )}
-
-        {/* Products Tab Content */}
-        {visibleTabs.includes("products") && (
-          <TabsContent value="products" className="space-y-6">
-            <WarehouseStockView
-              warehouses={warehouseOptions}
-              products={products}
+              products={warehouseItems}
               selectedWarehouseId={selectedWarehouseId}
               onWarehouseChange={handleWarehouseChange}
               isLoading={isLoadingWarehouse}
@@ -613,7 +571,7 @@ const Inventory = () => {
             <StockHistoryView
               movements={stockMovements}
               isLoading={isLoadingHistory}
-              products={products?.map(p => ({ id: p.id, name: p.name }))}
+              products={warehouseItems?.map(p => ({ id: p.id, name: p.product?.name }))}
               warehouses={warehouseOptions}
             />
           </TabsContent>
@@ -702,37 +660,22 @@ const Inventory = () => {
       )}
 
       {/* Modals */}
-      {canTransferStock && (
+      {canTransferStock && selectedWarehouseId && (
         <StockTransferModal
-          open={showTransferModal}
-          onOpenChange={setShowTransferModal}
-          warehouses={warehouses || []}
-          staffMembers={staffSummary?.map(s => ({
-            id: s.user_id,
-            full_name: s.full_name || "Unknown",
-            email: s.email || "",
-            role: s.user_role || "staff",
-            avatar_url: s.avatar_url,
-            warehouse_id: s.warehouse_id,
-          })) || []}
-          products={products || []}
-          currentUserId={user?.id || ""}
-          currentWarehouseId={selectedWarehouseId}
-          onTransfer={handleTransfer}
-          preselectedProduct={preselectedProduct}
-          preselectedStaff={preselectedStaff}
-          allowedTransferTypes={allowedTransferTypes}
+          isOpen={showTransferModal}
+          onClose={() => setShowTransferModal(false)}
+          warehouseId={selectedWarehouseId}
+          defaultProductId={preselectedProduct?.id}
+          staffMembers={staffSummary || []}
         />
       )}
 
       {canAdjustStock && (
         <StockAdjustmentModal
-          open={showAdjustmentModal}
-          onOpenChange={setShowAdjustmentModal}
-          products={products || []}
-          warehouseName={warehouses?.find(w => w.id === selectedWarehouseId)?.name}
-          onAdjust={handleAdjust}
-          preselectedProduct={preselectedProduct}
+          isOpen={showAdjustmentModal}
+          onClose={() => setShowAdjustmentModal(false)}
+          warehouseId={selectedWarehouseId}
+          defaultProductId={preselectedProduct?.id}
         />
       )}
 

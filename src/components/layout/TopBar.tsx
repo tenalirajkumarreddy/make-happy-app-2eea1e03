@@ -1,6 +1,7 @@
-import { Bell, ChevronDown, LogOut, Moon, Sun, CheckCheck, User } from "lucide-react";
+import { Bell, ChevronDown, LogOut, Moon, Sun, CheckCheck, User, Building2 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { useWarehouse } from "@/contexts/WarehouseContext";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,6 +20,13 @@ import { useNotifications, requestNotificationPermission } from "@/hooks/useNoti
 import { Badge } from "@/components/ui/badge";
 import { GlobalSearch } from "./GlobalSearch";
 import { OfflineQueueStatus } from "@/components/shared/OfflineQueueStatus";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 function useTheme() {
   const [dark, setDark] = useState(() => {
@@ -70,6 +78,7 @@ function timeAgo(dateStr: string): string {
 
 export function TopBar() {
   const { profile, role, signOut } = useAuth();
+  const { currentWarehouse, allWarehouses, setActiveWarehouse } = useWarehouse();
   const navigate = useNavigate();
   const { dark, toggle } = useTheme();
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
@@ -91,6 +100,8 @@ export function TopBar() {
     navigate("/auth");
   };
 
+  const canSwitchWarehouse = role === "super_admin" && allWarehouses.length > 0;
+
   const handleNotificationClick = (n: any) => {
     if (!n.is_read) markAsRead(n.id);
     // Navigate based on entity type
@@ -105,8 +116,36 @@ export function TopBar() {
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-card/80 backdrop-blur-sm px-4 lg:px-6">
       <div className="w-10 lg:w-0" />
-      <div className="flex-1 mx-4 max-w-sm">
-        <GlobalSearch />
+      <div className="flex flex-1 items-center gap-3 mx-4 max-w-3xl">
+        <div className="flex-1 max-w-sm">
+          <GlobalSearch />
+        </div>
+        {canSwitchWarehouse && (
+          <div className="hidden md:flex items-center gap-2 rounded-lg border border-border bg-background/80 px-3 py-2">
+            <Building2 className="h-4 w-4 text-muted-foreground" />
+            <div className="min-w-0">
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Warehouse</p>
+              <Select value={currentWarehouse?.id || ""} onValueChange={setActiveWarehouse}>
+                <SelectTrigger className="h-auto w-48 border-0 bg-transparent p-0 text-sm font-medium shadow-none focus:ring-0">
+                  <SelectValue placeholder="Select warehouse" />
+                </SelectTrigger>
+                <SelectContent>
+                  {allWarehouses.map((warehouse) => (
+                    <SelectItem key={warehouse.id} value={warehouse.id}>
+                      {warehouse.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        )}
+        {!canSwitchWarehouse && currentWarehouse && (
+          <Badge variant="secondary" className="hidden md:inline-flex items-center gap-1.5 rounded-lg px-3 py-2 font-medium">
+            <Building2 className="h-3.5 w-3.5" />
+            {currentWarehouse.name}
+          </Badge>
+        )}
       </div>
       <div className="ml-auto flex items-center gap-2">
         {/* Offline queue status indicator */}

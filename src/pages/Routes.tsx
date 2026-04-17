@@ -5,6 +5,7 @@ import { RouteSessionPanel } from "@/components/routes/RouteSessionPanel";
 import { RouteAccessMatrix } from "@/components/routes/RouteAccessMatrix";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
+import { useWarehouse } from "@/contexts/WarehouseContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -30,6 +31,7 @@ const Routes = () => {
   const [storeTypeId, setStoreTypeId] = useState("");
   const [saving, setSaving] = useState(false);
   const qc = useQueryClient();
+  const { currentWarehouse } = useWarehouse();
 
   const { data: storeTypes, isLoading: typesLoading } = useQuery({
     queryKey: ["store-types"],
@@ -40,12 +42,14 @@ const Routes = () => {
   });
 
   const { data: routes, isLoading: routesLoading } = useQuery({
-    queryKey: ["routes-with-stores", role, user?.id],
+    queryKey: ["routes", currentWarehouse?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = (supabase as any)
         .from("routes")
         .select("*, store_types(name), stores(id, outstanding)")
         .eq("is_active", true);
+      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+      const { data, error } = await query;
       if (error) throw error;
 
       const allRoutes = data || [];
@@ -74,7 +78,11 @@ const Routes = () => {
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    const { error } = await supabase.from("routes").insert({ name, store_type_id: storeTypeId });
+    const { error } = await (supabase as any).from("routes").insert({
+      name,
+      store_type_id: storeTypeId,
+      warehouse_id: currentWarehouse?.id || null,
+    });
     setSaving(false);
     if (error) {
       toast.error(error.message);
@@ -82,7 +90,7 @@ const Routes = () => {
       toast.success("Route created");
       setShowAdd(false);
       setName(""); setStoreTypeId("");
-      qc.invalidateQueries({ queryKey: ["routes-with-stores"] });
+      qc.invalidateQueries({ queryKey: ["routes"] });
     }
   };
 
@@ -96,7 +104,7 @@ const Routes = () => {
     <div className="space-y-6 animate-fade-in">
       <PageHeader
         title="Routes"
-        subtitle="Manage delivery routes by store type"
+        subtitle={`Manage delivery routes and assign stores in ${currentWarehouse?.name || "the selected warehouse"}`}
         actions={
           isAdmin
             ? [

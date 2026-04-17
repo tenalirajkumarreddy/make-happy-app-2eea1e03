@@ -2,7 +2,7 @@ import { Suspense, lazy } from "react";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { WarehouseProvider } from "@/contexts/WarehouseContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
@@ -167,6 +167,8 @@ const App = () => {
                 {/* Admin & Manager only */}
               <Route path="/products" element={<Products />} />
               <Route path="/inventory" element={<Inventory />} />
+              <Route path="/vendors" element={<Vendors />} />
+              <Route path="/vendors/:vendorId" element={<VendorDetail />} />
               <Route path="/inventory/vendors" element={<Vendors />} />
               <Route path="/inventory/vendors/:vendorId" element={<VendorDetail />} />
               <Route path="/inventory/purchases" element={<Purchases />} />
@@ -200,10 +202,10 @@ const App = () => {
               <Route path="/portal/orders" element={<CustomerOrders />} />
               <Route path="/portal/transactions" element={<CustomerTransactions />} />
               <Route path="/portal/profile" element={<CustomerProfile />} />
-              <Route path="/admin" element={<RoleGuard roles={['super_admin']} />}>
-                <Route path="/admin/staff" element={<AdminStaffDirectory />} />
-                <Route path="/admin/settings" element={<Settings />} />
-                <Route path="/admin/map" element={<MapPage />} />
+              <Route path="/admin" element={<RoleGuard allowed={["super_admin"]}><Outlet /></RoleGuard>}>
+                <Route path="staff" element={<AdminStaffDirectory />} />
+                <Route path="settings" element={<Settings />} />
+                <Route path="map" element={<MapPage />} />
               </Route>
               <Route path="/hr/staff" element={<WorkersPage />} />
               <Route path="/hr/roles" element={<WorkerRolesPage />} />

@@ -2,9 +2,9 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { DataTable } from '@/components/ui/data-table';
+import { DataTable } from "@/components/shared/DataTable";
 import { purchaseOrderColumns } from '@/components/inventory/purchase-order-columns';
-import { PageHeader } from '@/components/layout/PageHeader';
+import { PageHeader } from "@/components/shared/PageHeader";
 import { PurchaseOrderForm } from '@/components/inventory/PurchaseOrderForm';
 import { TableSkeleton } from '@/components/shared/TableSkeleton';
 

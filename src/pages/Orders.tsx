@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { logActivity } from "@/lib/activityLogger";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { useAuth } from "@/contexts/AuthContext";
+import { useWarehouse } from "@/contexts/WarehouseContext";
 import { useRouteAccess } from "@/hooks/useRouteAccess";
 import { Loader2, Plus, Trash2, XCircle, Package, Download, X, CalendarIcon } from "lucide-react";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
@@ -65,6 +66,7 @@ interface FulfillOrder {
 
 const Orders = () => {
   const { user, role } = useAuth();
+  const { currentWarehouse } = useWarehouse();
   const qc = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -98,12 +100,13 @@ const Orders = () => {
   const [orderItems, setOrderItems] = useState<OrderItem[]>([{ product_id: "", quantity: 1 }]);
 
   const { data: orders, isLoading, isFetching } = useQuery({
-    queryKey: ["orders", statusFilter, filterFrom, filterTo, filterCustomer, loadedPages],
+    queryKey: ["orders", currentWarehouse?.id, statusFilter, filterFrom, filterTo, filterCustomer, loadedPages],
     queryFn: async () => {
       let query = supabase
         .from("orders")
         .select("*, stores(name, route_id, store_type_id), customers(name)")
         .order("created_at", { ascending: false });
+      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
       // Server-side filters
       if (statusFilter !== "all") query = query.eq("status", statusFilter);
       if (filterFrom) query = query.gte("created_at", filterFrom + "T00:00:00");
@@ -122,17 +125,20 @@ const Orders = () => {
   const hasMoreOrders = (orders?.length || 0) >= loadedPages * PAGE_SIZE;
 
   const { data: customers = [] } = useQuery({
-    queryKey: ["customers-for-orders"],
+    queryKey: ["customers-for-orders", currentWarehouse?.id],
     queryFn: async () => {
-      const { data } = await supabase.from("customers").select("id, name").eq("is_active", true);
+      let query = supabase.from("customers").select("id, name").eq("is_active", true);
+      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+      const { data } = await query;
       return data || [];
     },
   });
 
   const { data: stores } = useQuery({
-    queryKey: ["stores-for-order", customerId],
+    queryKey: ["stores-for-order", currentWarehouse?.id, customerId],
     queryFn: async () => {
       let q = supabase.from("stores").select("id, name, display_id, store_type_id, customer_id").eq("is_active", true);
+      if (currentWarehouse?.id) q = q.eq("warehouse_id", currentWarehouse.id);
       if (customerId) q = q.eq("customer_id", customerId);
       const { data } = await q;
       return data || [];
@@ -141,9 +147,11 @@ const Orders = () => {
   });
 
   const { data: products } = useQuery({
-    queryKey: ["products"],
+    queryKey: ["products", currentWarehouse?.id],
     queryFn: async () => {
-      const { data } = await supabase.from("products").select("id, name, sku, base_price, image_url").eq("is_active", true);
+      let query = supabase.from("products").select("id, name, sku, base_price, image_url").eq("is_active", true);
+      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+      const { data } = await query;
       return data || [];
     },
   });

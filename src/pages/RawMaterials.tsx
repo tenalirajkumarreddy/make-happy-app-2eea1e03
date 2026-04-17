@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useWarehouse } from "@/contexts/WarehouseContext";
 import { Loader2, Plus, Pencil, Trash2, Package, Link2 } from "lucide-react";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { useState, useMemo } from "react";
@@ -48,6 +49,7 @@ const NO_VENDOR_VALUE = "__no_vendor__";
 
 const RawMaterials = () => {
   const { user, role } = useAuth();
+  const { currentWarehouse } = useWarehouse();
   const qc = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
   const [editingItem, setEditingItem] = useState<RawMaterial | null>(null);
@@ -73,21 +75,31 @@ const RawMaterials = () => {
   const [linkIsPreferred, setLinkIsPreferred] = useState(false);
 
   const { data: materials = [], isLoading } = useQuery({
-    queryKey: ["raw-materials"],
+    queryKey: ["raw-materials", currentWarehouse?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("raw_materials")
         .select("*, vendors(name, display_id)")
         .order("name");
+
+      if (currentWarehouse?.id) {
+        query = query.eq("warehouse_id", currentWarehouse.id);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       return data as RawMaterial[];
     },
   });
 
   const { data: vendors = [] } = useQuery({
-    queryKey: ["vendors-list"],
+    queryKey: ["vendors-list", currentWarehouse?.id],
     queryFn: async () => {
-      const { data } = await supabase.from("vendors").select("id, name, display_id").eq("is_active", true);
+      let query = supabase.from("vendors").select("id, name, display_id").eq("is_active", true);
+      if (currentWarehouse?.id) {
+        query = query.eq("warehouse_id", currentWarehouse.id);
+      }
+      const { data } = await query;
       return data || [];
     },
   });
@@ -161,6 +173,7 @@ const RawMaterials = () => {
 
         const { error } = await supabase.from("raw_materials").insert({
           display_id: idData,
+          warehouse_id: currentWarehouse?.id || null,
           vendor_id: vendorId || null,
           name: name.trim(),
           description: description.trim() || null,
@@ -305,7 +318,7 @@ const RawMaterials = () => {
     <div className="space-y-6 animate-fade-in">
       <PageHeader
         title="Raw Materials"
-        subtitle="Manage inventory raw materials and link vendors"
+        subtitle={`Manage raw materials and vendor links in ${currentWarehouse?.name || "the selected warehouse"}`}
         primaryAction={{ label: "Add Material", onClick: () => { resetForm(); setShowAdd(true); } }}
       />
 

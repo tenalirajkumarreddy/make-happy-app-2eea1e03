@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useWarehouse } from "@/contexts/WarehouseContext";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -28,6 +29,7 @@ const MapPage = () => {
   const [filterType, setFilterType] = useState<string>("");
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [locating, setLocating] = useState(false);
+  const { currentWarehouse } = useWarehouse();
 
   const { data: storeTypes } = useQuery({
     queryKey: ["store-types-for-map"],
@@ -38,13 +40,14 @@ const MapPage = () => {
   });
 
   const { data: stores, isLoading } = useQuery({
-    queryKey: ["stores-with-location", filterType],
+    queryKey: ["stores-with-location", filterType, currentWarehouse?.id],
     queryFn: async () => {
-      let query = supabase
+      let query = (supabase as any)
         .from("stores")
         .select("id, name, display_id, address, lat, lng, outstanding, is_active, phone, store_type_id, route_id, store_types(name), routes(name), customers(name)")
         .order("name")
         .limit(500);
+      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
       if (filterType) query = query.eq("store_type_id", filterType);
       const { data } = await query;
       return data || [];
@@ -81,17 +84,21 @@ const MapPage = () => {
 
   // Pending orders
   const { data: pendingOrderStoreIds } = useQuery({
-    queryKey: ["pending-orders-map"],
+    queryKey: ["pending-orders-map", currentWarehouse?.id],
     queryFn: async () => {
-      const { data } = await supabase.from("orders").select("store_id").eq("status", "pending");
+      let query = (supabase as any).from("orders").select("store_id").eq("status", "pending");
+      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+      const { data } = await query;
       return new Set((data || []).map((o) => o.store_id));
     },
   });
 
   const { data: routes } = useQuery({
-    queryKey: ["routes-for-map"],
+    queryKey: ["routes-for-map", currentWarehouse?.id],
     queryFn: async () => {
-      const { data } = await supabase.from("routes").select("id, name").eq("is_active", true);
+      let query = (supabase as any).from("routes").select("id, name").eq("is_active", true);
+      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+      const { data } = await query;
       return data || [];
     },
   });

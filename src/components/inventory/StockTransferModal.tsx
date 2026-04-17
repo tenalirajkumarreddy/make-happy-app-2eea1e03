@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -14,22 +14,35 @@ export interface StockTransferModalProps {
   onClose: () => void;
   warehouseId?: string;
   defaultProductId?: string;
+  staffMembers?: { user_id: string; full_name: string; role: string; warehouse_id?: string }[];
 }
 
 type TransferType = 'warehouse_to_staff' | 'staff_to_warehouse' | 'staff_to_staff';
 
-export function StockTransferModal({ isOpen, onClose, warehouseId, defaultProductId }: StockTransferModalProps) {
+export function StockTransferModal({ isOpen, onClose, warehouseId, defaultProductId, staffMembers }: StockTransferModalProps) {
   const queryClient = useQueryClient();
   const [transferType, setTransferType] = useState<TransferType>('warehouse_to_staff');
-  const [fromId, setFromId] = useState<string>(warehouseId || '');
+  const [fromId, setFromId] = useState<string>('');
   const [toId, setToId] = useState<string>('');
   const [productId, setProductId] = useState<string>(defaultProductId || '');
   const [quantity, setQuantity] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Reset form when warehouseId changes or modal opens
+  useEffect(() => {
+    if (isOpen && warehouseId) {
+      setFromId(warehouseId);
+      setTransferType('warehouse_to_staff');
+      setToId('');
+      setProductId(defaultProductId || '');
+      setQuantity('');
+      setNotes('');
+    }
+  }, [isOpen, warehouseId, defaultProductId]);
+
   const { data: warehouses } = useQuery({
-    queryKey: ['warehouses'],
+    queryKey: ['warehouses-transfer'],
     queryFn: async () => {
       const { data, error } = await supabase.from('warehouses').select('id, name').eq('is_active', true);
       if (error) throw error;
@@ -37,20 +50,50 @@ export function StockTransferModal({ isOpen, onClose, warehouseId, defaultProduc
     }
   });
 
-  const { data: staff } = useQuery({
-    queryKey: ['staff_directory'],
+  // Fetch ALL active agents from user_roles + profiles - these are the people who can receive stock
+  const { data: allStaff } = useQuery({
+    queryKey: ['staff-all-from-roles'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('staff_directory').select('user_id, full_name, role').eq('is_active', true).in('role', ['agent', 'manager']);
-      if (error) throw error;
-      return data || [];
+      // Get user_roles with only agent role
+      const { data: rolesData, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('user_id, role')
+        .eq('role', 'agent');
+
+      if (rolesError) throw rolesError;
+      if (!rolesData || rolesData.length === 0) return [];
+
+      // Get profiles for these users
+      const userIds = rolesData.map(r => r.user_id);
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('user_id, full_name, avatar_url')
+        .in('user_id', userIds);
+
+      if (profilesError) throw profilesError;
+
+      // Map profiles to roles and filter out unknown names
+      const profileMap = new Map((profilesData || []).map(p => [p.user_id, p]));
+
+      return rolesData
+        .map(r => ({
+          user_id: r.user_id,
+          role: r.role,
+          full_name: profileMap.get(r.user_id)?.full_name || 'Unknown',
+          avatar_url: profileMap.get(r.user_id)?.avatar_url
+        }))
+        .filter(s => s.full_name && s.full_name !== 'Unknown' && s.full_name.toLowerCase() !== 'staff');
     }
   });
 
-  // Source Stock Logic
+  // Display all active agents - each has their own stock account (staff_stock table)
+  const displayStaff = allStaff || [];
+
+// Source Stock Logic - only run when fromId is a valid UUID
   const { data: sourceStock } = useQuery({
     queryKey: ['source_stock', transferType, fromId, productId],
     queryFn: async () => {
-      if (!fromId) return [];
+      if (!fromId || fromId === 'undefined') return [];
       
       let query;
       if (transferType === 'warehouse_to_staff') {
@@ -64,7 +107,7 @@ export function StockTransferModal({ isOpen, onClose, warehouseId, defaultProduc
       if (productId) return data?.filter(s => s.product_id === productId) || [];
       return data || [];
     },
-    enabled: !!fromId
+    enabled: !!fromId && fromId !== 'undefined'
   });
 
   const selectedStock = sourceStock?.find(s => s.product_id === productId);
@@ -154,18 +197,22 @@ export function StockTransferModal({ isOpen, onClose, warehouseId, defaultProduc
             <Select value={fromId} onValueChange={setFromId}>
               <SelectTrigger><SelectValue placeholder="Select Source" /></SelectTrigger>
               <SelectContent>
-                {transferType === 'warehouse_to_staff' && warehouses?.map(w => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
-                {(transferType === 'staff_to_warehouse' || transferType === 'staff_to_staff') && staff?.map(s => <SelectItem key={s.user_id} value={s.user_id}>{s.full_name}</SelectItem>)}
+{transferType === 'warehouse_to_staff' && warehouses?.map(w => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
+                {(transferType === 'staff_to_warehouse' || transferType === 'staff_to_staff') && displayStaff?.map(s => <SelectItem key={s.user_id} value={s.user_id}>{s.full_name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-2">
             <Label>To</Label>
-            <Select value={toId} onValueChange={setToId}>
+<Select value={toId} onValueChange={setToId}>
               <SelectTrigger><SelectValue placeholder="Select Destination" /></SelectTrigger>
               <SelectContent>
-                {(transferType === 'warehouse_to_staff' || transferType === 'staff_to_staff') && staff?.map(s => <SelectItem key={s.user_id} value={s.user_id}>{s.full_name}</SelectItem>)}
+                {(transferType === 'warehouse_to_staff' || transferType === 'staff_to_staff') && displayStaff?.map(s => (
+                  <SelectItem key={s.user_id} value={s.user_id}>
+                    {s.full_name && s.full_name !== 'Unknown' ? s.full_name : 'Unknown User'}
+                  </SelectItem>
+                ))}
                 {transferType === 'staff_to_warehouse' && warehouses?.map(w => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
               </SelectContent>
             </Select>

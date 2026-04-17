@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { DataTable } from '@/components/ui/data-table';
+import { DataTable } from "@/components/shared/DataTable";
 import { payrollColumns } from '@/components/hr/payroll-columns';
 import { Button } from '@/components/ui/button';
 import { PlusCircle } from 'lucide-react';

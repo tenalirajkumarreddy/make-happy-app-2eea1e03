@@ -143,8 +143,9 @@ export function useStaffStock(options: UseStaffStockOptions = {}) {
     enabled: enabled && (!!userId || !!warehouseId)
   });
 
-  return {
+return {
     staffStock: data,
+    staffSummary: data,
     isLoadingStock: isLoading,
     stockError: error
   };

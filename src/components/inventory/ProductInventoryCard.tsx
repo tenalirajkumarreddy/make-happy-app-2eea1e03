@@ -6,6 +6,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
+function getImageUrl(path: string | null | undefined): string | null {
+  if (!path) return null;
+  if (path.startsWith('http://') || path.startsWith('https://')) return path;
+  const { data } = supabase.storage.from('entity-photos').getPublicUrl(path);
+  return data?.publicUrl || null;
+}
+
 interface ProductInventoryCardProps {
   item: {
     id: string;
@@ -20,9 +27,9 @@ interface ProductInventoryCardProps {
       min_stock_level?: number;
     };
   };
-  warehouseId: string;
-  onAdjust: () => void;
-  onTransfer: () => void;
+  warehouseId?: string;
+  onAdjust?: () => void;
+  onTransfer?: () => void;
 }
 
 export function ProductInventoryCard({ item, warehouseId, onAdjust, onTransfer }: ProductInventoryCardProps) {
@@ -30,9 +37,11 @@ export function ProductInventoryCard({ item, warehouseId, onAdjust, onTransfer }
   if (!product) return null;
 
   // Fetch staff holdings inline for this exact product
-  const { data: staffHoldings } = useQuery({
+const { data: staffHoldings } = useQuery({
     queryKey: ['staff_holdings', warehouseId, product.id],
     queryFn: async () => {
+      if (!warehouseId || warehouseId === 'undefined') return [];
+      
       const { data: stockRows, error } = await supabase
         .from('staff_stock')
         .select('user_id, quantity')
@@ -49,7 +58,8 @@ export function ProductInventoryCard({ item, warehouseId, onAdjust, onTransfer }
         ...row,
         full_name: profiles?.find(p => p.user_id === row.user_id)?.full_name || 'Unknown'
       }));
-    }
+    },
+    enabled: !!warehouseId && warehouseId !== 'undefined'
   });
 
   const getStatusColor = (qty: number, minLevel: number = 0) => {
@@ -67,11 +77,13 @@ export function ProductInventoryCard({ item, warehouseId, onAdjust, onTransfer }
   const minLevel = product.min_stock_level || 0;
   const statusColor = getStatusColor(quantity, minLevel);
 
+const imageUrl = getImageUrl(product?.image_url);
+
   return (
     <Card className="overflow-hidden flex flex-col hover:border-border transition-colors">
       <div className="relative h-40 bg-muted/30 flex items-center justify-center p-4 border-b">
-        {product.image_url ? (
-          <img src={product.image_url} alt={product.name} className="h-full w-auto object-contain drop-shadow-sm" />
+        {imageUrl ? (
+          <img src={imageUrl} alt={product.name} className="h-full w-auto object-contain drop-shadow-sm" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
         ) : (
           <Package className="h-16 w-16 text-muted-foreground/30" />
         )}

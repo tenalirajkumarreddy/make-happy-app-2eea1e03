@@ -20,7 +20,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { Payroll } from './payroll-columns';
-import { generateDisplayId } from '@/lib/utils';
+import { generateDisplayId } from '@/lib/displayId';
 
 const payrollSchema = z.object({
   start_date: z.string().min(1, "Start date is required."),

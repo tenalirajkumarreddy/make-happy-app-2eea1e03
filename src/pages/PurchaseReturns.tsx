@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useWarehouse } from "@/contexts/WarehouseContext";
 import { Loader2, Plus, RotateCcw, Search, Package, CheckCircle, XCircle, Clock, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -24,6 +25,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 
 const PurchaseReturns = () => {
   const { user, role } = useAuth();
+  const { currentWarehouse } = useWarehouse();
   const qc = useQueryClient();
   const isMobile = useIsMobile();
   const canApprove = ["super_admin", "manager"].includes(role || "");
@@ -50,9 +52,9 @@ const PurchaseReturns = () => {
 
   // Fetch returns
   const { data: returns = [], isLoading } = useQuery({
-    queryKey: ["purchase-returns"],
+    queryKey: ["purchase-returns", currentWarehouse?.id],
     queryFn: async () => {
-      const { data, error } = await (supabase
+      let query = (supabase as any)
         .from("purchase_returns")
         .select(`
           *,
@@ -61,7 +63,13 @@ const PurchaseReturns = () => {
           profiles:created_by(full_name),
           approver:approved_by(full_name)
         `)
-        .order("created_at", { ascending: false }) as any);
+        .order("created_at", { ascending: false });
+
+      if (currentWarehouse?.id) {
+        query = query.eq("warehouse_id", currentWarehouse.id);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       return data || [];
     },
@@ -69,13 +77,19 @@ const PurchaseReturns = () => {
 
   // Fetch purchases for dropdown
   const { data: purchases = [] } = useQuery({
-    queryKey: ["purchases-for-return"],
+    queryKey: ["purchases-for-return", currentWarehouse?.id],
     queryFn: async () => {
-      const { data } = await supabase
+      let query = (supabase as any)
         .from("purchases")
         .select("id, display_id, purchase_date, total_amount, vendor_id, vendors(name)")
         .order("purchase_date", { ascending: false })
         .limit(100);
+
+      if (currentWarehouse?.id) {
+        query = query.eq("warehouse_id", currentWarehouse.id);
+      }
+
+      const { data } = await query;
       return data || [];
     },
   });
@@ -192,6 +206,7 @@ const PurchaseReturns = () => {
         .from("purchase_returns")
         .insert({
           display_id: displayId,
+          warehouse_id: currentWarehouse?.id || null,
           purchase_id: purchaseId,
           vendor_id: (purchase as any)?.vendor_id,
           return_date: new Date().toISOString().split("T")[0],

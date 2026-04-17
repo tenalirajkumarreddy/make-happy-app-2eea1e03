@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useWarehouse } from "@/contexts/WarehouseContext";
 
 const UNITS = ["kg", "g", "L", "mL", "pcs", "box", "pack", "ton", "unit"];
 const CATEGORIES = ["Chemicals", "Packaging", "Labels", "Caps & Closures", "Raw Ingredients", "Consumables", "Other"];
@@ -25,6 +26,7 @@ const VendorDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { currentWarehouse } = useWarehouse();
   const qc = useQueryClient();
 
   // Raw material form state
@@ -56,26 +58,37 @@ const VendorDetail = () => {
   };
 
   const { data: vendor, isLoading } = useQuery({
-    queryKey: ["vendor", id],
+    queryKey: ["vendor", id, currentWarehouse?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = (supabase as any)
         .from("vendors")
         .select("*")
-        .eq("id", id)
-        .single();
+        .eq("id", id);
+
+      if (currentWarehouse?.id) {
+        query = query.eq("warehouse_id", currentWarehouse.id);
+      }
+
+      const { data, error } = await query.single();
       if (error) throw error;
       return data;
     },
   });
 
   const { data: purchases = [] } = useQuery({
-    queryKey: ["vendor-purchases", id],
+    queryKey: ["vendor-purchases", id, currentWarehouse?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = (supabase as any)
         .from("purchases")
         .select("*, purchase_items(*, products(name))")
         .eq("vendor_id", id)
         .order("purchase_date", { ascending: false });
+
+      if (currentWarehouse?.id) {
+        query = query.eq("warehouse_id", currentWarehouse.id);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       return data;
     },
@@ -95,13 +108,19 @@ const VendorDetail = () => {
   });
 
   const { data: rawMaterials = [] } = useQuery({
-    queryKey: ["vendor-raw-materials", id],
+    queryKey: ["vendor-raw-materials", id, currentWarehouse?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = (supabase as any)
         .from("raw_materials")
         .select("*")
         .eq("vendor_id", id)
         .order("name");
+
+      if (currentWarehouse?.id) {
+        query = query.eq("warehouse_id", currentWarehouse.id);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       return data;
     },
@@ -109,14 +128,20 @@ const VendorDetail = () => {
 
   // Query for unlinked raw materials (no vendor assigned)
   const { data: unlinkedMaterials = [] } = useQuery({
-    queryKey: ["unlinked-raw-materials"],
+    queryKey: ["unlinked-raw-materials", currentWarehouse?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = (supabase as any)
         .from("raw_materials")
         .select("id, display_id, name, unit, category")
         .is("vendor_id", null)
         .eq("is_active", true)
         .order("name");
+
+      if (currentWarehouse?.id) {
+        query = query.eq("warehouse_id", currentWarehouse.id);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       return data || [];
     },
@@ -157,6 +182,7 @@ const VendorDetail = () => {
 
         const { error } = await supabase.from("raw_materials").insert({
           display_id: idData,
+          warehouse_id: currentWarehouse?.id || null,
           vendor_id: id,
           name: data.name,
           description: data.description || null,

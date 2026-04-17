@@ -3,6 +3,7 @@ import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import { DataTable } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import { StorePricingDialog } from "@/components/stores/StorePricingDialog";
 import { CreateStoreWizard } from "@/components/stores/CreateStoreWizard";
 import { CsvImportDialog } from "@/components/shared/CsvImportDialog";
@@ -11,7 +12,7 @@ import { useInfiniteQuery, useQueryClient, useQuery } from "@tanstack/react-quer
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
-import { DollarSign, Store, Settings2, Upload, Loader2, Phone, MapPin } from "lucide-react";
+import { DollarSign, Store, Settings2, Upload, Loader2, Phone, MapPin, Building2, CheckCircle2 } from "lucide-react";
 import { usePermission } from "@/hooks/usePermission";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -32,7 +33,7 @@ import {
 const Stores = () => {
   const navigate = useNavigate();
   const { user, role } = useAuth();
-  const { currentWarehouse } = useWarehouse();
+  const { currentWarehouse, allWarehouses } = useWarehouse();
   const isMobile = useIsMobile();
   const { allowed: canCreateStores } = usePermission("create_stores");
   const [showAdd, setShowAdd] = useState(false);
@@ -52,6 +53,7 @@ const Stores = () => {
   const canManagePricing = role === "super_admin" || role === "manager";
   const canBulk = role === "super_admin" || role === "manager";
   const canEdit = role === "super_admin" || role === "manager";
+  const warehouseScopeKey = currentWarehouse?.id || "no-warehouse";
 
   const {
     data,
@@ -60,13 +62,13 @@ const Stores = () => {
     isFetchingNextPage,
     isLoading
   } = useInfiniteQuery({
-    queryKey: ["stores", filters, currentWarehouse?.id],
+    queryKey: ["stores", filters, warehouseScopeKey],
     queryFn: async ({ pageParam = 0 }) => {
       let query = supabase
         .from("stores")
         .select("*, customers(name), store_types(name), routes(name)");
 
-      // Scope to active warehouse
+      // Scope all users to selected warehouse context.
       if (currentWarehouse?.id) {
         query = query.eq("warehouse_id", currentWarehouse.id);
       }
@@ -104,9 +106,11 @@ const Stores = () => {
   const stores = useMemo(() => data?.pages.flatMap((page) => page) || [], [data]);
 
   const { data: allRoutes } = useQuery({
-    queryKey: ["all-routes"],
+    queryKey: ["all-routes", currentWarehouse?.id],
     queryFn: async () => {
-      const { data } = await supabase.from("routes").select("id, name").eq("is_active", true);
+      let query = (supabase as any).from("routes").select("id, name").eq("is_active", true);
+      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+      const { data } = await query;
       return data || [];
     },
   });
@@ -120,9 +124,11 @@ const Stores = () => {
   });
 
   const { data: customersList } = useQuery({
-    queryKey: ["customers-list"],
+    queryKey: ["customers-list", currentWarehouse?.id],
     queryFn: async () => {
-      const { data } = await supabase.from("customers").select("id, name, display_id").eq("is_active", true);
+      let query = (supabase as any).from("customers").select("id, name, display_id").eq("is_active", true);
+      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+      const { data } = await query;
       return data || [];
     },
   });
@@ -303,6 +309,7 @@ const Stores = () => {
         )}
       </div>
     )},
+    ...(role === "super_admin" ? [{ header: "Warehouse", accessor: (row: any) => warehouseNameById.get(row.warehouse_id) || "—", className: "hidden xl:table-cell text-sm text-muted-foreground" }] : []),
     { header: "Customer", accessor: (row: any) => row.customers?.name || "—", className: "text-muted-foreground text-sm hidden sm:table-cell" },
     { header: "Phone", accessor: (row: any) => editMode ? (
       <input
@@ -336,15 +343,88 @@ const Stores = () => {
     });
   }, [stores, filters]);
 
+  const warehouseNameById = useMemo(() => {
+    return new Map(allWarehouses.map((warehouse) => [warehouse.id, warehouse.name]));
+  }, [allWarehouses]);
+
+  const visibleStoreCount = filteredStores.length;
+  const activeStoreCount = filteredStores.filter((store: any) => store.is_active).length;
+  const outstandingStoreCount = filteredStores.filter((store: any) => Number(store.outstanding) > 0).length;
+  const warehouseScopeCount = currentWarehouse ? 1 : 0;
+  const scopeTitle = currentWarehouse?.name || "Selected warehouse";
+  const scopeSubtitle = currentWarehouse?.name
+    ? `Showing stores scoped to ${currentWarehouse.name}. Use the top-bar warehouse switcher to change context.`
+    : "Showing stores for the selected warehouse context.";
+
   if (isLoading) {
     return <TableSkeleton columns={7} />;
   }
 
   return (
     <div className="space-y-6 animate-fade-in">
+      <Card className="border-primary/20 bg-gradient-to-r from-primary/5 via-background to-background shadow-sm">
+        <CardContent className="p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary" className="rounded-full px-3 py-1 text-[11px] uppercase tracking-wide">
+                  Warehouse scope
+                </Badge>
+                <Badge variant="outline" className="rounded-full px-3 py-1 text-[11px] uppercase tracking-wide">
+                  Scoped view
+                </Badge>
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">{scopeTitle}</h2>
+                <p className="text-sm text-muted-foreground max-w-2xl">{scopeSubtitle}</p>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 w-full lg:w-auto">
+              <div className="rounded-xl border bg-background/80 px-4 py-3 min-w-[150px]">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Warehouses</p>
+                    <p className="text-2xl font-semibold">{warehouseScopeCount}</p>
+                  </div>
+                  <Building2 className="h-5 w-5 text-primary" />
+                </div>
+              </div>
+              <div className="rounded-xl border bg-background/80 px-4 py-3 min-w-[150px]">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Visible stores</p>
+                    <p className="text-2xl font-semibold">{visibleStoreCount}</p>
+                  </div>
+                  <Store className="h-5 w-5 text-primary" />
+                </div>
+              </div>
+              <div className="rounded-xl border bg-background/80 px-4 py-3 min-w-[150px]">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Active stores</p>
+                    <p className="text-2xl font-semibold">{activeStoreCount}</p>
+                  </div>
+                  <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                </div>
+              </div>
+              <div className="rounded-xl border bg-background/80 px-4 py-3 min-w-[150px]">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">With outstanding</p>
+                    <p className="text-2xl font-semibold">{outstandingStoreCount}</p>
+                  </div>
+                  <DollarSign className="h-5 w-5 text-amber-600" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <PageHeader
         title="Stores"
-        subtitle="Manage store locations and assignments"
+        subtitle={`Manage store locations and assignments in ${currentWarehouse?.name || "the selected warehouse"}`}
         primaryAction={canCreateStores ? { label: "Add Store", onClick: () => setShowAdd(true) } : undefined}
         filterNode={
           <AdvancedFilters
@@ -401,6 +481,7 @@ const Stores = () => {
         <div className="space-y-4">
           <div className="entity-grid">
             {filteredStores.map((row: any) => {
+              const rowWarehouseName = row.warehouse_id ? warehouseNameById.get(row.warehouse_id) : null;
               return (
                 <div
                   key={row.id}
@@ -431,6 +512,9 @@ const Stores = () => {
                     <div>
                       <h3 className="entity-card-title">{row.name}</h3>
                       <p className="entity-card-subtitle mt-0.5">{row.display_id}</p>
+                      {role === "super_admin" && rowWarehouseName && (
+                        <p className="mt-1 text-xs text-muted-foreground">Warehouse: {rowWarehouseName}</p>
+                      )}
                     </div>
 
                     {/* Customer */}
@@ -489,8 +573,11 @@ const Stores = () => {
             })}
           </div>
           {filteredStores.length === 0 && (
-            <div className="text-center py-12 text-muted-foreground">
-              No stores found.
+            <div className="text-center py-12 text-muted-foreground space-y-2">
+              <p className="font-medium text-foreground">No stores found in this scope.</p>
+              <p className="text-sm">
+                {`The selected warehouse ${currentWarehouse?.name ? `(${currentWarehouse.name}) ` : ""}does not have matching stores, or the current filters are too narrow.`}
+              </p>
             </div>
           )}
         </div>
@@ -516,6 +603,11 @@ const Stores = () => {
                   <h3 className="font-semibold text-sm text-foreground truncate">{row.name}</h3>
                   <StatusBadge status={row.is_active ? "active" : "inactive"} />
                 </div>
+                {role === "super_admin" && row.warehouse_id && (
+                  <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
+                    Warehouse: {warehouseNameById.get(row.warehouse_id) || "—"}
+                  </p>
+                )}
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <p className="entity-card-subtitle truncate">{row.display_id}</p>
                   {row.store_types?.name && <Badge variant="outline" className="text-xs h-5 px-1.5 rounded-sm border-muted-foreground/30 text-muted-foreground">{row.store_types.name}</Badge>}

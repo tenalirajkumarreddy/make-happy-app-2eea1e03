@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useWarehouse } from "@/contexts/WarehouseContext";
 import { Loader2, CreditCard } from "lucide-react";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { useState } from "react";
@@ -23,6 +24,7 @@ const VendorPayments = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
+  const { currentWarehouse } = useWarehouse();
   const qc = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -36,24 +38,36 @@ const VendorPayments = () => {
   const [notes, setNotes] = useState("");
 
   const { data: payments = [], isLoading } = useQuery({
-    queryKey: ["vendor_payments"],
+    queryKey: ["vendor_payments", currentWarehouse?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = (supabase as any)
         .from("vendor_payments")
         .select("*, vendors(name, display_id)")
         .order("payment_date", { ascending: false });
+
+      if (currentWarehouse?.id) {
+        query = query.eq("warehouse_id", currentWarehouse.id);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       return data;
     },
   });
 
   const { data: vendors = [] } = useQuery({
-    queryKey: ["vendors-with-outstanding"],
+    queryKey: ["vendors-with-outstanding", currentWarehouse?.id],
     queryFn: async () => {
-      const { data } = await supabase
+      let query = (supabase as any)
         .from("vendors")
         .select("id, name, display_id, outstanding")
         .eq("is_active", true);
+
+      if (currentWarehouse?.id) {
+        query = query.eq("warehouse_id", currentWarehouse.id);
+      }
+
+      const { data } = await query;
       return data || [];
     },
   });
@@ -93,6 +107,7 @@ const VendorPayments = () => {
         .from("vendor_payments")
         .insert({
           display_id: idData,
+          warehouse_id: currentWarehouse?.id || null,
           vendor_id: vendorId,
           payment_date: paymentDate,
           amount: paymentAmount,
