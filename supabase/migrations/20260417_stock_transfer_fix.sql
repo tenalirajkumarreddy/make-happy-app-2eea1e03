@@ -19,6 +19,9 @@ ALTER TABLE staff_stock DROP CONSTRAINT IF EXISTS staff_stock_user_id_product_id
 -- Add new unique constraint with warehouse_id
 ALTER TABLE staff_stock ADD CONSTRAINT staff_stock_user_product_warehouse_key UNIQUE (user_id, product_id, warehouse_id);
 
+-- Create sequence for stock transfers display ID if it doesn't exist
+CREATE SEQUENCE IF NOT EXISTS stock_transfers_seq;
+
 -- ============================================================
 -- STEP 3: Create new record_stock_transfer function (Issues #1, #3, #4, #6, #7)
 -- ============================================================
@@ -98,7 +101,7 @@ BEGIN
         v_status := 'completed';
     END IF;
 
-    -- Generate display_id using robust generator
+    -- Generate display_id using the robust generator (ensure seq exists)
     v_display_id := public.generate_display_id('TRF'::text, 'stock_transfers_seq'::text);
 
     -- ============================================================
