@@ -10,6 +10,7 @@ import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { addToQueue, generateBusinessKey } from "@/lib/offlineQueue";
 import { resolveCreditLimit } from "@/lib/creditLimit";
 import { useAuth } from "@/contexts/AuthContext";
+import { useWarehouse } from "@/contexts/WarehouseContext";
 import { Loader2, Plus, Trash2, Download, IndianRupee, CreditCard, Banknote, Clock, UserCircle, Store as StoreIcon, Package, X, CalendarIcon, Receipt, FileText, RotateCcw, ShoppingCart, ChevronRight } from "lucide-react";
 import { QrStoreSelector } from "@/components/shared/QrStoreSelector";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
@@ -95,6 +96,7 @@ interface FulfillOrder {
 
 const Sales = () => {
   const { user, role } = useAuth();
+  const { currentWarehouse } = useWarehouse();
   const navigate = useNavigate();
   const isPosUser = role === "pos";
   const { allowed: canOverridePrice } = usePermission("price_override");
@@ -145,12 +147,13 @@ const Sales = () => {
   }, [filterFrom, filterTo, filterStore, filterUser, filterPayment]);
 
   const { data: sales, isLoading, isFetching } = useQuery({
-    queryKey: ["sales", isAdmin ? "all" : user?.id, filterFrom, filterTo, filterStore, filterUser, filterPayment, loadedPages],
+    queryKey: ["sales", currentWarehouse?.id, isAdmin ? "all" : user?.id, filterFrom, filterTo, filterStore, filterUser, filterPayment, loadedPages],
     queryFn: async () => {
-      let query = supabase
+      let query = (supabase as any)
         .from("sales")
         .select("*, stores(name, display_id), customers(name, display_id)")
         .order("created_at", { ascending: false });
+      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
       // Non-admin roles (agents, pos, marketer) only see their own records
       if (!isAdmin) query = query.eq("recorded_by", user!.id);
       // Server-side filters
@@ -195,9 +198,11 @@ const Sales = () => {
   };
 
   const { data: stores } = useQuery({
-    queryKey: ["stores-for-sale"],
+    queryKey: ["stores-for-sale", currentWarehouse?.id],
     queryFn: async () => {
-      const { data } = await supabase.from("stores").select("id, name, outstanding, display_id, store_type_id, customer_id, lat, lng, is_active").order("is_active", { ascending: false }).order("name");
+      let query = (supabase as any).from("stores").select("id, name, outstanding, display_id, store_type_id, customer_id, lat, lng, is_active").order("is_active", { ascending: false }).order("name");
+      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+      const { data } = await query;
       return data || [];
     },
   });
@@ -213,9 +218,11 @@ const Sales = () => {
 
   // Fetch customer KYC status for credit limit determination
   const { data: customers } = useQuery({
-    queryKey: ["customers-kyc-for-sale"],
+    queryKey: ["customers-kyc-for-sale", currentWarehouse?.id],
     queryFn: async () => {
-      const { data } = await supabase.from("customers").select("id, kyc_status, credit_limit_override");
+      let query = (supabase as any).from("customers").select("id, kyc_status, credit_limit_override");
+      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+      const { data } = await query;
       return data || [];
     },
   });
@@ -236,7 +243,9 @@ const Sales = () => {
       if (accessData && accessData.length > 0) {
         productList = accessData.map((a: any) => a.products).filter(Boolean);
       } else {
-        const { data } = await supabase.from("products").select("id, name, base_price, sku").eq("is_active", true);
+        let productsQuery = (supabase as any).from("products").select("id, name, base_price, sku").eq("is_active", true);
+        if (currentWarehouse?.id) productsQuery = productsQuery.eq("warehouse_id", currentWarehouse.id);
+        const { data } = await productsQuery;
         productList = data || [];
       }
 
@@ -423,7 +432,7 @@ const Sales = () => {
       quantity: i.quantity,
     }));
     
-    const { data: stockCheck, error: stockError } = await supabase
+    const { data: stockCheck, error: stockError } = await (supabase as any)
       .rpc("check_stock_availability", {
         p_user_id: user!.id,
         p_items: saleItemsForStockCheck,
@@ -432,8 +441,9 @@ const Sales = () => {
     if (stockError) {
       console.error("Stock check failed:", stockError);
       // Continue with sale but log warning - non-blocking
-    } else if (stockCheck && stockCheck.length > 0) {
-      const insufficient = stockCheck.filter((s: any) => !s.available);
+    } else {
+      const stockRows = Array.isArray(stockCheck) ? stockCheck : [];
+      const insufficient = stockRows.filter((s: any) => !s.available);
       if (insufficient.length > 0) {
         const productNames = insufficient.map((i: any) => i.product_name).join(", ");
         toast.error(
@@ -860,7 +870,7 @@ const Sales = () => {
           )}
           
           {/* Return Button - NEW */}
-          {selectedSale && (isAdmin || role === 'manager') && (
+          {selectedSale && isAdmin && (
             <div className="pt-4 border-t">
               <Button 
                 variant="outline" 

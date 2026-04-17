@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { useInfiniteQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useWarehouse } from "@/contexts/WarehouseContext";
 import { Loader2, Users, Phone, Mail, MapPin, Plus, Building2 } from "lucide-react";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { useState, useMemo } from "react";
@@ -21,6 +22,7 @@ import { logActivity } from "@/lib/activityLogger";
 const Vendors = () => {
   const navigate = useNavigate();
   const { user, role } = useAuth();
+  const { currentWarehouse } = useWarehouse();
   const isMobile = useIsMobile();
   const qc = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
@@ -47,13 +49,18 @@ const Vendors = () => {
     isFetchingNextPage,
     isLoading
   } = useInfiniteQuery({
-    queryKey: ["vendors"],
+    queryKey: ["vendors", currentWarehouse?.id],
     queryFn: async ({ pageParam = 0 }) => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("vendors")
         .select("*")
-        .order("created_at", { ascending: false })
-        .range(pageParam * PAGE_SIZE, (pageParam + 1) * PAGE_SIZE - 1);
+        .order("created_at", { ascending: false });
+
+      if (currentWarehouse?.id) {
+        query = query.eq("warehouse_id", currentWarehouse.id);
+      }
+
+      const { data, error } = await query.range(pageParam * PAGE_SIZE, (pageParam + 1) * PAGE_SIZE - 1);
       if (error) throw error;
       return data;
     },
@@ -93,6 +100,7 @@ const Vendors = () => {
 
       const vendorData = {
         display_id: idData,
+        warehouse_id: currentWarehouse?.id || null,
         name: name.trim(),
         contact_person: contactPerson.trim() || null,
         phone: phone.trim() || null,
@@ -184,7 +192,7 @@ const Vendors = () => {
     <div className="space-y-6 animate-fade-in">
       <PageHeader
         title="Vendors"
-        subtitle="Manage vendor accounts and payments"
+        subtitle={`Manage vendor accounts and payments in ${currentWarehouse?.name || "the selected warehouse"}`}
         primaryAction={{ label: "Add Vendor", onClick: () => { resetForm(); setShowAdd(true); } }}
         actions={[
           { 

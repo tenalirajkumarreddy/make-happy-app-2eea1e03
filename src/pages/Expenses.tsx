@@ -15,6 +15,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useWarehouse } from "@/contexts/WarehouseContext";
 import { useFixedCostReminders } from "@/hooks/useFixedCostReminders";
 import { 
   Loader2, Receipt, Calendar, TrendingUp, AlertCircle, 
@@ -40,6 +41,7 @@ const categoryIcons: Record<string, any> = {
 
 const Expenses = () => {
   const { user, role } = useAuth();
+  const { currentWarehouse } = useWarehouse();
   const qc = useQueryClient();
   const isAdmin = role === "super_admin" || role === "manager";
 
@@ -112,12 +114,13 @@ const Expenses = () => {
 
   // Fetch expenses
   const { data: expenses = [], isLoading: loadingExpenses } = useQuery({
-    queryKey: ["expenses", dateRange],
+    queryKey: ["expenses", dateRange, currentWarehouse?.id],
     queryFn: async () => {
-      let query = supabase
+      let query = (supabase as any)
         .from("expenses")
         .select("*, expense_categories(name, color, icon)")
         .order("expense_date", { ascending: false });
+      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
 
       // Apply date filter
       const now = new Date();
@@ -143,13 +146,15 @@ const Expenses = () => {
 
   // Fetch fixed costs
   const { data: fixedCosts = [], isLoading: loadingFixedCosts } = useQuery({
-    queryKey: ["fixed-costs"],
+    queryKey: ["fixed-costs", currentWarehouse?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = (supabase as any)
         .from("fixed_costs")
         .select("*")
         .eq("is_active", true)
         .order("next_due_date");
+      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+      const { data, error } = await query;
       if (error) throw error;
       return data;
     },
@@ -282,6 +287,7 @@ const Expenses = () => {
           name: catName.trim(),
           description: catDescription.trim() || null,
           color: catColor,
+          warehouse_id: currentWarehouse?.id || null,
         });
         if (error) throw error;
         toast.success("Category added");
@@ -334,6 +340,7 @@ const Expenses = () => {
 
       const { error } = await supabase.from("fixed_costs").insert({
         display_id: idData,
+        warehouse_id: currentWarehouse?.id || null,
         name: fcName.trim(),
         description: fcDescription.trim() || null,
         amount: parseFloat(fcAmount),

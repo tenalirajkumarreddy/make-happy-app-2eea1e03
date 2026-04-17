@@ -1,6 +1,7 @@
 import { StatCard } from "@/components/shared/StatCard";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { useAuth } from "@/contexts/AuthContext";
+import { useWarehouse } from "@/contexts/WarehouseContext";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -22,12 +23,13 @@ const MAX_SALES_FOR_CHART = 500;
 
 const Dashboard = () => {
   const { profile } = useAuth();
+  const { currentWarehouse } = useWarehouse();
   
   // Check and send fixed cost reminders when dashboard loads
   useFixedCostReminders();
 
   const { data: stats, isLoading } = useQuery({
-    queryKey: ["dashboard-stats"],
+    queryKey: ["dashboard-stats", currentWarehouse?.id],
     queryFn: async () => {
       const today = new Date().toISOString().split("T")[0];
       const sevenDaysAgo = new Date(Date.now() - CHART_DAYS * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
@@ -44,31 +46,51 @@ const Dashboard = () => {
         ordersRes,
       ] = await Promise.all([
         // Today's sales - usually small, get full data for precise totals
-        supabase.from("sales")
-          .select("total_amount, cash_amount, upi_amount")
-          .gte("created_at", today + "T00:00:00")
-          .limit(500),
+        (() => {
+          let q = (supabase as any).from("sales")
+            .select("total_amount, cash_amount, upi_amount")
+            .gte("created_at", today + "T00:00:00")
+            .limit(500);
+          if (currentWarehouse?.id) q = q.eq("warehouse_id", currentWarehouse.id);
+          return q;
+        })(),
         // Recent sales for charts - bounded to 7 days and limited rows
-        supabase.from("sales")
-          .select("total_amount, created_at, stores(store_type_id, store_types(name))")
-          .gte("created_at", sevenDaysAgo + "T00:00:00")
-          .order("created_at", { ascending: false })
-          .limit(MAX_SALES_FOR_CHART),
+        (() => {
+          let q = (supabase as any).from("sales")
+            .select("total_amount, created_at, stores(store_type_id, store_types(name))")
+            .gte("created_at", sevenDaysAgo + "T00:00:00")
+            .order("created_at", { ascending: false })
+            .limit(MAX_SALES_FOR_CHART);
+          if (currentWarehouse?.id) q = q.eq("warehouse_id", currentWarehouse.id);
+          return q;
+        })(),
         // Customer count only
-        supabase.from("customers")
-          .select("*", { count: "exact", head: true })
-          .eq("is_active", true),
+        (() => {
+          let q = (supabase as any).from("customers")
+            .select("*", { count: "exact", head: true })
+            .eq("is_active", true);
+          if (currentWarehouse?.id) q = q.eq("warehouse_id", currentWarehouse.id);
+          return q;
+        })(),
         // Stores with outstanding - bounded and selected columns
-        supabase.from("stores")
-          .select("id, outstanding")
-          .eq("is_active", true)
-          .limit(500),
+        (() => {
+          let q = (supabase as any).from("stores")
+            .select("id, outstanding")
+            .eq("is_active", true)
+            .limit(500);
+          if (currentWarehouse?.id) q = q.eq("warehouse_id", currentWarehouse.id);
+          return q;
+        })(),
         // Pending orders - just a few for display
-        supabase.from("orders")
-          .select("id, status, display_id, stores(name), created_at")
-          .eq("status", "pending")
-          .order("created_at", { ascending: false })
-          .limit(5),
+        (() => {
+          let q = (supabase as any).from("orders")
+            .select("id, status, display_id, stores(name), created_at")
+            .eq("status", "pending")
+            .order("created_at", { ascending: false })
+            .limit(5);
+          if (currentWarehouse?.id) q = q.eq("warehouse_id", currentWarehouse.id);
+          return q;
+        })(),
       ]);
 
       const todaySales = todaySalesRes.data || [];
@@ -129,7 +151,7 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Dashboard" subtitle={`Welcome back, ${profile?.full_name || "User"}! Here's your business overview.`} />
+      <PageHeader title="Dashboard" subtitle={`Welcome back, ${profile?.full_name || "User"}! Warehouse: ${currentWarehouse?.name || "selected context"}.`} />
 
       {/* Quick Action Button - Floating (hidden in native APK to avoid BottomNav overlap) */}
       {!isNativeApp() && (

@@ -21,7 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { Worker } from './worker-columns';
-import { generateDisplayId } from '@/lib/utils';
+import { generateDisplayId } from '@/lib/displayId';
 
 const workerSchema = z.object({
   full_name: z.string().min(2, "Full name is required."),

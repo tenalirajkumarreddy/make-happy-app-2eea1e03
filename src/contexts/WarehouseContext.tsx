@@ -102,12 +102,15 @@ export function WarehouseProvider({ children }: { children: ReactNode }) {
           const saved = warehouses.find((w) => w.id === savedId);
           const defaultWh = warehouses.find((w) => w.is_default) ?? warehouses[0] ?? null;
           setCurrentWarehouse(saved ?? defaultWh);
+
           setAssignedWarehouseId(null);
         } else {
           // Non-admin: use the assigned warehouse from user_roles
           const result = await fetchAssignedWarehouse(user.id);
+          let resolvedWarehouse: Warehouse | null = null;
+
           if (result?.warehouse) {
-            setCurrentWarehouse(result.warehouse);
+            resolvedWarehouse = result.warehouse;
           } else if (result?.warehouseId) {
             // Have ID but warehouse join failed — fetch directly
             const { data } = await supabase
@@ -115,7 +118,7 @@ export function WarehouseProvider({ children }: { children: ReactNode }) {
               .select("*")
               .eq("id", result.warehouseId)
               .maybeSingle();
-            setCurrentWarehouse((data as Warehouse) ?? null);
+            resolvedWarehouse = (data as Warehouse) ?? null;
           } else {
             // No warehouse assigned — use the default
             const { data } = await supabase
@@ -124,8 +127,11 @@ export function WarehouseProvider({ children }: { children: ReactNode }) {
               .eq("is_default", true)
               .eq("is_active", true)
               .maybeSingle();
-            setCurrentWarehouse((data as Warehouse) ?? null);
+            resolvedWarehouse = (data as Warehouse) ?? null;
           }
+
+          setCurrentWarehouse(resolvedWarehouse);
+
           setAssignedWarehouseId(result?.warehouseId ?? null);
           setAllWarehouses([]);
         }
@@ -141,11 +147,12 @@ export function WarehouseProvider({ children }: { children: ReactNode }) {
 
   const setActiveWarehouse = useCallback(
     (warehouseId: string) => {
-      if (!isAdmin) return; // Only admins can switch
+      if (!isAdmin) return;
+
       const wh = allWarehouses.find((w) => w.id === warehouseId) ?? null;
       setCurrentWarehouse(wh);
       if (wh) {
-        localStorage.setItem(ADMIN_WAREHOUSE_KEY, warehouseId);
+        localStorage.setItem(ADMIN_WAREHOUSE_KEY, wh.id);
       } else {
         localStorage.removeItem(ADMIN_WAREHOUSE_KEY);
       }

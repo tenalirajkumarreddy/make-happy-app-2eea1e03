@@ -6,6 +6,7 @@ import { logActivity } from "@/lib/activityLogger";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { addToQueue } from "@/lib/offlineQueue";
 import { useAuth } from "@/contexts/AuthContext";
+import { useWarehouse } from "@/contexts/WarehouseContext";
 import { Loader2, X, CalendarIcon, Store as StoreIcon, Banknote, CreditCard } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { QrStoreSelector } from "@/components/shared/QrStoreSelector";
@@ -29,6 +30,7 @@ import { format } from "date-fns";
 
 const Transactions = () => {
   const { user, role } = useAuth();
+  const { currentWarehouse } = useWarehouse();
   const isAdmin = role === "super_admin" || role === "manager";
   const { allowed: canRecordBehalf } = usePermission("record_behalf");
   const qc = useQueryClient();
@@ -70,12 +72,13 @@ const Transactions = () => {
   }, [filterFrom, filterTo, filterStore, filterPayment]);
 
   const { data: transactions, isLoading, isError, error: txnError, isFetching } = useQuery({
-    queryKey: ["transactions", isAdmin ? "all" : user?.id, filterFrom, filterTo, filterStore, filterPayment, loadedPages],
+    queryKey: ["transactions", currentWarehouse?.id, isAdmin ? "all" : user?.id, filterFrom, filterTo, filterStore, filterPayment, loadedPages],
     queryFn: async () => {
-      let query = supabase
+      let query = (supabase as any)
         .from("transactions")
         .select("*, stores(name)")
         .order("created_at", { ascending: false });
+      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
       // Non-admin roles only see their own records
       if (!isAdmin) query = query.eq("recorded_by", user!.id);
       // Server-side filters
@@ -95,9 +98,11 @@ const Transactions = () => {
   const hasMoreTransactions = (transactions?.length || 0) >= loadedPages * PAGE_SIZE;
 
   const { data: stores } = useQuery({
-    queryKey: ["stores-for-txn"],
+    queryKey: ["stores-for-txn", currentWarehouse?.id],
     queryFn: async () => {
-      const { data } = await supabase.from("stores").select("id, name, outstanding, display_id, customer_id, is_active").order("is_active", { ascending: false }).order("name");
+      let query = (supabase as any).from("stores").select("id, name, outstanding, display_id, customer_id, is_active").order("is_active", { ascending: false }).order("name");
+      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+      const { data } = await query;
       return data || [];
     },
   });
@@ -194,7 +199,7 @@ const Transactions = () => {
     }
 
     // Use atomic RPC for online transactions
-    const { data: txnResult, error: txnError } = await supabase.rpc("record_transaction", {
+    const { data: txnResult, error: txnError } = await (supabase as any).rpc("record_transaction", {
       p_display_id: displayId,
       p_store_id: storeId,
       p_customer_id: customerId,

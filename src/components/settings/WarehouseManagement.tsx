@@ -52,6 +52,30 @@ export function WarehouseManagement() {
   const [formData, setFormData] = useState<WarehouseFormData>(defaultFormData);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  const getCompatiblePayload = (data: WarehouseFormData) => ({
+    name: data.name,
+    address: data.address || null,
+    city: data.city || null,
+    state: data.state || null,
+    pincode: data.pincode || null,
+    phone: data.phone || null,
+    is_active: data.is_active,
+    is_default: data.is_default,
+  });
+
+  const getMinimalPayload = (data: WarehouseFormData) => ({
+    name: data.name,
+    address: data.address || null,
+    phone: data.phone || null,
+    is_active: data.is_active,
+  });
+
+  const isMissingColumnError = (message?: string) => {
+    if (!message) return false;
+    const lower = message.toLowerCase();
+    return lower.includes("column") && (lower.includes("does not exist") || lower.includes("schema cache"));
+  };
+
   const { data: warehouses, isLoading } = useQuery({
     queryKey: ["warehouses"],
     queryFn: async () => {
@@ -69,36 +93,38 @@ export function WarehouseManagement() {
     mutationFn: async (data: WarehouseFormData & { id?: string }) => {
       // If setting as default, first unset current default
       if (data.is_default) {
-        await supabase.from("warehouses").update({ is_default: false }).eq("is_default", true);
+        const { error: unsetError } = await supabase
+          .from("warehouses")
+          .update({ is_default: false })
+          .eq("is_default", true);
+        if (unsetError && !isMissingColumnError(unsetError.message)) {
+          throw unsetError;
+        }
       }
 
       if (data.id) {
+        const fullPayload = getCompatiblePayload(data);
         const { error } = await supabase
           .from("warehouses")
-          .update({
-            name: data.name,
-            address: data.address || null,
-            city: data.city || null,
-            state: data.state || null,
-            pincode: data.pincode || null,
-            phone: data.phone || null,
-            is_active: data.is_active,
-            is_default: data.is_default,
-          })
+          .update(fullPayload)
           .eq("id", data.id);
-        if (error) throw error;
+        if (error) {
+          if (!isMissingColumnError(error.message)) throw error;
+          const { error: fallbackError } = await supabase
+            .from("warehouses")
+            .update(getMinimalPayload(data))
+            .eq("id", data.id);
+          if (fallbackError) throw fallbackError;
+        }
       } else {
-        const { error } = await supabase.from("warehouses").insert({
-          name: data.name,
-          address: data.address || null,
-          city: data.city || null,
-          state: data.state || null,
-          pincode: data.pincode || null,
-          phone: data.phone || null,
-          is_active: data.is_active,
-          is_default: data.is_default,
-        });
-        if (error) throw error;
+        const { error } = await supabase.from("warehouses").insert(getCompatiblePayload(data));
+        if (error) {
+          if (!isMissingColumnError(error.message)) throw error;
+          const { error: fallbackError } = await supabase
+            .from("warehouses")
+            .insert(getMinimalPayload(data));
+          if (fallbackError) throw fallbackError;
+        }
       }
     },
     onSuccess: () => {
@@ -129,7 +155,14 @@ export function WarehouseManagement() {
 
   const setDefaultMutation = useMutation({
     mutationFn: async (id: string) => {
-      await supabase.from("warehouses").update({ is_default: false }).eq("is_default", true);
+      const { error: unsetError } = await supabase
+        .from("warehouses")
+        .update({ is_default: false })
+        .eq("is_default", true);
+      if (unsetError && !isMissingColumnError(unsetError.message)) {
+        throw unsetError;
+      }
+
       const { error } = await supabase.from("warehouses").update({ is_default: true }).eq("id", id);
       if (error) throw error;
     },

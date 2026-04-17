@@ -9,6 +9,7 @@ import { AdvancedFilters, applyFilters, type FilterValues } from "@/components/s
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useWarehouse } from "@/contexts/WarehouseContext";
 import { logActivity } from "@/lib/activityLogger";
 import { generateDisplayId } from "@/lib/displayId";
 import { validatePhone, validateEmail, normalizePhone } from "@/lib/validation";
@@ -38,6 +39,7 @@ import { toast } from "sonner";
 const Customers = () => {
   const navigate = useNavigate();
   const { user, role } = useAuth();
+  const { currentWarehouse } = useWarehouse();
   const { isOnline } = useOnlineStatus();
   const isMobile = useIsMobile();
   const { allowed: canCreateCustomers } = usePermission("create_customers");
@@ -76,13 +78,14 @@ const Customers = () => {
     isError,
     error: queryError
   } = useInfiniteQuery({
-    queryKey: ["customers"],
+    queryKey: ["customers", currentWarehouse?.id],
     queryFn: async ({ pageParam = 0 }) => {
-      const { data, error } = await supabase
+      let query = (supabase as any)
         .from("customers")
         .select("*, stores(id, outstanding, route_id, store_type_id)")
-        .order("created_at", { ascending: false })
-        .range(pageParam * PAGE_SIZE, (pageParam + 1) * PAGE_SIZE - 1);
+        .order("created_at", { ascending: false });
+      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+      const { data, error } = await query.range(pageParam * PAGE_SIZE, (pageParam + 1) * PAGE_SIZE - 1);
       if (error) throw error;
       return data;
     },
@@ -163,8 +166,9 @@ const Customers = () => {
 
     const displayId = generateDisplayId("CUST");
 
-    const { error } = await supabase.from("customers").insert({
+    const { error } = await (supabase as any).from("customers").insert({
       display_id: displayId,
+      warehouse_id: currentWarehouse?.id || null,
       name,
       phone: normalizedPhone || null,
       email: email?.trim().toLowerCase() || null,
@@ -216,8 +220,9 @@ const Customers = () => {
       }
       
       const displayId = generateDisplayId("CUST");
-      const { error } = await supabase.from("customers").insert({
+      const { error } = await (supabase as any).from("customers").insert({
         display_id: displayId,
+        warehouse_id: currentWarehouse?.id || null,
         name: row.name.trim(),
         phone: row.phone ? normalizePhone(row.phone) : null,
         email: row.email?.trim().toLowerCase() || null,
@@ -435,7 +440,7 @@ const Customers = () => {
     <div className="space-y-6 animate-fade-in">
       <PageHeader
         title="Customers"
-        subtitle="Manage customer accounts and KYC verification"
+        subtitle={`Manage customer accounts and KYC verification in ${currentWarehouse?.name || "the selected warehouse"}`}
         primaryAction={canCreateCustomers ? { label: "Add Customer", onClick: () => setShowAdd(true) } : undefined}
         filterNode={
           <AdvancedFilters

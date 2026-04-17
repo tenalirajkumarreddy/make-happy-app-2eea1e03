@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { DataTable } from '@/components/ui/data-table';
+import { DataTable } from "@/components/shared/DataTable";
 import { payrollItemColumns, PayrollItem } from '@/components/hr/payroll-item-columns';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
