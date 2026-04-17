@@ -99,7 +99,7 @@ BEGIN
     END IF;
 
     -- Generate display_id using robust generator
-    v_display_id := public.generate_display_id('TRF');
+    v_display_id := public.generate_display_id('TRF'::text, 'stock_transfers_seq'::text);
 
     -- ============================================================
     -- Execute transfer based on type
