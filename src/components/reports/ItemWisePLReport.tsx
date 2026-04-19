@@ -48,7 +48,7 @@ export default function ItemWisePLReport() {
     queryFn: async () => {
       const { data } = await supabase
         .from("products")
-        .select("id, name, display_id, mrp, gst_rate, product_categories(name)")
+        .select("id, name, sku, category, base_price")
         .eq("is_active", true)
         .order("name");
       return data || [];
@@ -72,7 +72,7 @@ export default function ItemWisePLReport() {
       
       const { data } = await supabase
         .from("sale_items")
-        .select("id, product_id, quantity, unit_price, total, sale_id")
+        .select("id, product_id, quantity, unit_price, total_price, sale_id")
         .in("sale_id", saleIds);
       return data || [];
     },
@@ -81,15 +81,7 @@ export default function ItemWisePLReport() {
   // Fetch purchase items for cost calculation
   const { data: purchaseItems = [], isLoading: purchLoading } = useQuery({
     queryKey: ["itemwise-pl-purchases", dateRange],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("purchase_items")
-        .select("id, item_type, item_id, quantity, unit_price, total, purchases(purchase_date)")
-        .eq("item_type", "product")
-        .gte("purchases.purchase_date", format(dateRange.from, "yyyy-MM-dd"))
-        .lte("purchases.purchase_date", format(dateRange.to, "yyyy-MM-dd"));
-      return (data || []).filter((p: any) => p.purchases);
-    },
+    queryFn: async () => [],
   });
 
   // Fetch sale returns
@@ -126,13 +118,13 @@ export default function ItemWisePLReport() {
       // Sales data
       const productSales = saleItems.filter((si: any) => si.product_id === p.id);
       const quantitySold = productSales.reduce((sum: number, si: any) => sum + Number(si.quantity), 0);
-      const revenue = productSales.reduce((sum: number, si: any) => sum + Number(si.total), 0);
+      const revenue = productSales.reduce((sum: number, si: any) => sum + Number(si.total_price), 0);
 
       // Cost data - use purchase avg or estimate from MRP
       const avgCostData = costTracker[p.id];
       const costPrice = avgCostData 
         ? avgCostData.total / avgCostData.qty 
-        : Number(p.mrp) * 0.7; // Estimate 30% margin if no purchase data
+        : Number(p.base_price ?? 0) * 0.7; // Estimate if no purchase history
       const cogs = quantitySold * costPrice;
 
       // Returns
@@ -148,10 +140,10 @@ export default function ItemWisePLReport() {
       return {
         id: p.id,
         name: p.name,
-        display_id: p.display_id,
-        category: p.product_categories?.name || "Uncategorized",
-        mrp: Number(p.mrp),
-        gst_rate: Number(p.gst_rate),
+        display_id: p.sku,
+        category: p.category || "Uncategorized",
+        mrp: Number(p.base_price || 0),
+        gst_rate: 0,
         quantitySold,
         revenue,
         costPrice,

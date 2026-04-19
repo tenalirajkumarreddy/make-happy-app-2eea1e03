@@ -9,10 +9,13 @@ import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
 import { useRouteAccess } from "@/hooks/useRouteAccess";
-import { Loader2, Plus, Trash2, XCircle, Package, Download, X, CalendarIcon } from "lucide-react";
+import { usePermission } from "@/hooks/usePermission";
+import { Loader2, Plus, Trash2, XCircle, Package, Download, X, CalendarIcon, ArrowRightLeft, FileText, Edit, MoreHorizontal, Printer, Eye, CheckCircle2 } from "lucide-react";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { useState, useEffect, useMemo } from "react";
 import { OrderFulfillmentDialog } from "@/components/orders/OrderFulfillmentDialog";
+import { TransferOrderDialog } from "@/components/orders/TransferOrderDialog";
+import { InvoiceDialog } from "@/components/orders/InvoiceDialog";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -21,9 +24,15 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
@@ -43,6 +52,7 @@ interface FulfillOrder {
   order_type: "simple" | "detailed";
   status: string;
   requirement_note: string | null;
+  assigned_to?: string | null;
   order_items?: Array<{
     id: string;
     product_id: string;
@@ -61,6 +71,7 @@ interface FulfillOrder {
     name: string;
     store_type_id: string | null;
     customer_id: string | null;
+    route_id?: string | null;
   };
 }
 
@@ -68,13 +79,39 @@ const Orders = () => {
   const { user, role } = useAuth();
   const { currentWarehouse } = useWarehouse();
   const qc = useQueryClient();
+  
+  // Permission hooks
+  const { allowed: canViewOrders } = usePermission("view_orders");
+  const { allowed: canViewAssignedOrders } = usePermission("view_assigned_orders");
+  const { allowed: canCreateOrders } = usePermission("create_orders");
+  const { allowed: canModifyOrders } = usePermission("modify_orders");
+  const { allowed: canModifyPrices } = usePermission("modify_order_item_prices");
+  const { allowed: canTransferOrders } = usePermission("transfer_orders");
+  const { allowed: canDeleteOrders } = usePermission("delete_orders");
+  const { allowed: canFulfillOrders } = usePermission("fulfill_orders");
+  const { allowed: canCancelOrders } = usePermission("cancel_orders");
+  const { allowed: canViewInvoices } = usePermission("view_invoices");
+  const { allowed: canCreateInvoices } = usePermission("create_invoices");
+  const { allowed: canEditInvoices } = usePermission("edit_invoices");
+  
+  // Check if user can see orders at all
+  const hasOrderAccess = canViewOrders || canViewAssignedOrders;
+  
+  // State
   const [showAdd, setShowAdd] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
+  const [showTransfer, setShowTransfer] = useState(false);
+  const [showInvoice, setShowInvoice] = useState(false);
+  const [invoiceMode, setInvoiceMode] = useState<"create" | "edit" | "view">("create");
   const [saving, setSaving] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
   const [cancelOrderId, setCancelOrderId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelling, setCancelling] = useState(false);
   const [fulfillOrder, setFulfillOrder] = useState<FulfillOrder | null>(null);
+  const [editOrder, setEditOrder] = useState<FulfillOrder | null>(null);
+  const [transferOrder, setTransferOrder] = useState<FulfillOrder | null>(null);
+  const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
   const [loadingOrderDetails, setLoadingOrderDetails] = useState<string | null>(null);
 
   // List filters
@@ -89,61 +126,113 @@ const Orders = () => {
   // Reset to page 1 whenever any filter changes
   useEffect(() => {
     setLoadedPages(1);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter, filterFrom, filterTo, filterCustomer]);
 
-  // Form state
+  // Form state for create
   const [customerId, setCustomerId] = useState("");
   const [storeId, setStoreId] = useState("");
   const [orderType, setOrderType] = useState("simple");
   const [requirementNote, setRequirementNote] = useState("");
   const [orderItems, setOrderItems] = useState<OrderItem[]>([{ product_id: "", quantity: 1 }]);
+  const [assignedTo, setAssignedTo] = useState("");
 
   const { data: orders, isLoading, isFetching } = useQuery({
-    queryKey: ["orders", currentWarehouse?.id, statusFilter, filterFrom, filterTo, filterCustomer, loadedPages],
+    queryKey: ["orders", currentWarehouse?.id, statusFilter, filterFrom, filterTo, filterCustomer, loadedPages, user?.id, role],
     queryFn: async () => {
       let query = supabase
         .from("orders")
-        .select("*, stores(name, route_id, store_type_id), customers(name)")
+        .select("*, stores(name, route_id, store_type_id, customer_id), customers(name), assigned_to")
         .order("created_at", { ascending: false });
+      
       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+      
       // Server-side filters
       if (statusFilter !== "all") query = query.eq("status", statusFilter);
       if (filterFrom) query = query.gte("created_at", filterFrom + "T00:00:00");
       if (filterTo) query = query.lte("created_at", filterTo + "T23:59:59");
       if (filterCustomer !== "all") query = query.eq("customer_id", filterCustomer);
+      
       // Cursor pagination
       query = query.range(0, loadedPages * PAGE_SIZE - 1);
       const { data, error } = await query;
       if (error) throw error;
       return data;
     },
+    enabled: hasOrderAccess && !!user?.id,
   });
 
   const { canAccessStore, hasMatrixRestrictions, hasStoreTypeRestrictions } = useRouteAccess(user?.id, role);
 
   const hasMoreOrders = (orders?.length || 0) >= loadedPages * PAGE_SIZE;
 
+  // Fetch customers based on permissions - from customers table (not profiles)
   const { data: customers = [] } = useQuery({
-    queryKey: ["customers-for-orders", currentWarehouse?.id],
+    queryKey: ["customers-for-orders", currentWarehouse?.id, role, user?.id],
     queryFn: async () => {
       let query = supabase.from("customers").select("id, name").eq("is_active", true);
       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+
+      // For marketers, only show customers linked to stores they manage via routes
+      // Routes have agent_id, marketers assign stores to routes
+      if (role === "marketer" && user?.id) {
+        // Get routes assigned to this marketer via user-role mapping
+        const { data: storeData } = await supabase
+          .from("stores")
+          .select("customer_id");
+        // Filter to only stores this marketer can access
+        const customerIds = [...new Set((storeData || []).map(s => s.customer_id).filter(Boolean))];
+        if (customerIds.length > 0) {
+          query = query.in("id", customerIds);
+        }
+      }
+
       const { data } = await query;
-      return data || [];
+      return (data || []).map(c => ({ id: c.id, name: c.name }));
     },
+    enabled: canCreateOrders || canModifyOrders,
   });
 
+  // Fetch stores based on permissions
   const { data: stores } = useQuery({
-    queryKey: ["stores-for-order", currentWarehouse?.id, customerId],
+    queryKey: ["stores-for-order", currentWarehouse?.id, customerId, role, user?.id],
     queryFn: async () => {
-      let q = supabase.from("stores").select("id, name, display_id, store_type_id, customer_id").eq("is_active", true);
+      let q = supabase.from("stores").select("id, name, display_id, store_type_id, customer_id, route_id").eq("is_active", true);
       if (currentWarehouse?.id) q = q.eq("warehouse_id", currentWarehouse.id);
       if (customerId) q = q.eq("customer_id", customerId);
+
+      // Agents only see stores on their routes
+      if (role === "agent" && user?.id && !canViewOrders) {
+        const { data: routeData } = await supabase
+          .from("agent_routes")
+          .select("route_id")
+          .eq("user_id", user.id)
+          .eq("enabled", true);
+        const routeIds = (routeData || []).map(r => r.route_id);
+        if (routeIds.length > 0) {
+          q = q.in("route_id", routeIds);
+        }
+      }
+
       const { data } = await q;
       return data || [];
     },
-    enabled: !!customerId,
+    enabled: (!!customerId && canCreateOrders) || canModifyOrders,
+  });
+
+  // Fetch agents for order assignment - join profiles with user_roles
+  const { data: agents = [] } = useQuery({
+    queryKey: ["agents-for-assignment"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("user_roles")
+        .select("user_id, profiles(full_name)")
+        .eq("role", "agent");
+      return (data || []).map((r: any) => ({ 
+        id: r.user_id, 
+        full_name: r.profiles?.full_name || "Agent" 
+      }));
+    },
+    enabled: canTransferOrders || canCreateOrders,
   });
 
   const { data: products } = useQuery({
@@ -154,6 +243,7 @@ const Orders = () => {
       const { data } = await query;
       return data || [];
     },
+    enabled: canCreateOrders || canModifyOrders,
   });
 
   // Load store pricing data for order creation
@@ -190,7 +280,7 @@ const Orders = () => {
   const removeItem = (idx: number) => setOrderItems(orderItems.filter((_, i) => i !== idx));
 
   const resetForm = () => {
-    setCustomerId(""); setStoreId(""); setOrderType("simple"); setRequirementNote("");
+    setCustomerId(""); setStoreId(""); setOrderType("simple"); setRequirementNote(""); setAssignedTo("");
     setOrderItems([{ product_id: "", quantity: 1 }]);
   };
 
@@ -199,7 +289,7 @@ const Orders = () => {
     if (!storeId) { toast.error("Please select a store"); return; }
     if (orderType === "simple" && !requirementNote.trim()) { toast.error("Please describe the requirement"); return; }
     if (orderType === "detailed" && !orderItems.some((i) => i.product_id)) { toast.error("Please add at least one product"); return; }
-    
+
     setSaving(true);
 
     // Check credit limit before creating order (for detailed orders)
@@ -218,7 +308,6 @@ const Orders = () => {
 
         if (creditError) {
           console.error("Credit check failed:", creditError);
-          // Continue with order creation if credit check fails (non-blocking)
         } else if (creditCheck && !creditCheck[0]?.can_create) {
           const check = creditCheck[0];
           toast.error(
@@ -230,7 +319,6 @@ const Orders = () => {
           setSaving(false);
           return;
         } else if (creditCheck?.[0]?.utilization_percent > 80) {
-          // Warn if approaching limit
           toast.warning(
             `Credit utilization is ${creditCheck[0].utilization_percent}%. ` +
             `Available credit: ₹${Number(creditCheck[0].available_credit).toLocaleString()}`
@@ -241,15 +329,21 @@ const Orders = () => {
 
     const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "ORD", seq_name: "ord_display_seq" });
 
-    const { data: order, error } = await supabase.from("orders").insert({
+    const insertData: any = {
       display_id: displayId,
       store_id: storeId,
-      customer_id: customerId,
+      customer_id: customerId || null,
       order_type: orderType,
       source: "manual",
       created_by: user!.id,
       requirement_note: requirementNote || null,
-    }).select("id").single();
+    };
+    
+    if (assignedTo) {
+      insertData.assigned_to = assignedTo;
+    }
+
+    const { data: order, error } = await supabase.from("orders").insert(insertData).select("id").single();
 
     if (error) { toast.error(error.message); setSaving(false); return; }
 
@@ -257,11 +351,11 @@ const Orders = () => {
       const validItems = orderItems.filter((i) => i.product_id);
       if (validItems.length > 0) {
         await supabase.from("order_items").insert(
-          validItems.map((i) => ({ 
-            order_id: order.id, 
-            product_id: i.product_id, 
+          validItems.map((i) => ({
+            order_id: order.id,
+            product_id: i.product_id,
             quantity: i.quantity,
-            unit_price: getProductPrice(i.product_id)
+            unit_price: canModifyPrices ? (i.unit_price || getProductPrice(i.product_id)) : getProductPrice(i.product_id)
           }))
         );
       }
@@ -287,7 +381,6 @@ const Orders = () => {
       })
       .catch((error) => {
         console.error("Failed to notify admins about new order:", error);
-        // Non-critical: notification failure shouldn't block order creation
       });
 
     setSaving(false);
@@ -296,11 +389,114 @@ const Orders = () => {
     qc.invalidateQueries({ queryKey: ["orders"] });
   };
 
-  // Open fulfillment dialog with full order details
-  const handleOpenFulfillment = async (orderId: string) => {
+  // Handle order edit
+  const handleEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editOrder) return;
+    
+    setSaving(true);
+    
+    const updateData: any = {
+      requirement_note: requirementNote || null,
+      updated_at: new Date().toISOString(),
+    };
+    
+    if (assignedTo !== undefined) {
+      updateData.assigned_to = assignedTo || null;
+    }
+
+    const { error } = await supabase
+      .from("orders")
+      .update(updateData)
+      .eq("id", editOrder.id);
+
+    if (error) {
+      toast.error(error.message);
+      setSaving(false);
+      return;
+    }
+
+    // Update order items if detailed
+    if (orderType === "detailed" && canModifyPrices) {
+      // Delete existing items and recreate
+      await supabase.from("order_items").delete().eq("order_id", editOrder.id);
+      
+      const validItems = orderItems.filter((i) => i.product_id);
+      if (validItems.length > 0) {
+        await supabase.from("order_items").insert(
+          validItems.map((i) => ({
+            order_id: editOrder.id,
+            product_id: i.product_id,
+            quantity: i.quantity,
+            unit_price: i.unit_price || getProductPrice(i.product_id)
+          }))
+        );
+      }
+    }
+
+    logActivity(user!.id, "Modified order", "order", editOrder.display_id, editOrder.id);
+    toast.success("Order updated");
+    
+    setSaving(false);
+    setShowEdit(false);
+    setEditOrder(null);
+    qc.invalidateQueries({ queryKey: ["orders"] });
+  };
+
+  // Open edit dialog with order details
+  const handleOpenEdit = async (orderId: string) => {
+    if (!canModifyOrders) {
+      toast.error("You don't have permission to edit orders");
+      return;
+    }
+    
     setLoadingOrderDetails(orderId);
     try {
-      // Fetch order with items and store info for the dialog
+      const { data: orderData, error } = await supabase
+        .from("orders")
+        .select(`
+          *,
+          stores(id, name, store_type_id, customer_id, route_id),
+          order_items(id, product_id, quantity, unit_price, products(id, name, sku, base_price, image_url))
+        `)
+        .eq("id", orderId)
+        .single();
+
+      if (error) throw error;
+      
+      setEditOrder(orderData as unknown as FulfillOrder);
+      setOrderType(orderData.order_type);
+      setRequirementNote(orderData.requirement_note || "");
+      setAssignedTo(orderData.assigned_to || "");
+
+      if (orderData.order_items && orderData.order_items.length > 0) {
+        setOrderItems(orderData.order_items.map((item: any) => ({
+          product_id: item.product_id,
+          quantity: item.quantity,
+          unit_price: item.unit_price
+        })));
+      } else {
+        setOrderItems([{ product_id: "", quantity: 1 }]);
+      }
+      
+      setShowEdit(true);
+    } catch (error) {
+      console.error("Error loading order details:", error);
+      toast.error("Failed to load order details");
+    } finally {
+      setLoadingOrderDetails(null);
+    }
+  };
+
+  // Open fulfillment dialog
+  const handleOpenFulfillment = async (orderId: string) => {
+    if (!canFulfillOrders) {
+      toast.error("You don't have permission to fulfill orders");
+      return;
+    }
+    
+    setLoadingOrderDetails(orderId);
+    try {
       const { data: orderData, error } = await supabase
         .from("orders")
         .select(`
@@ -312,7 +508,6 @@ const Orders = () => {
         .single();
 
       if (error) throw error;
-
       setFulfillOrder(orderData as unknown as FulfillOrder);
     } catch (error) {
       console.error("Error loading order details:", error);
@@ -322,24 +517,124 @@ const Orders = () => {
     }
   };
 
-  const exportCSV = () => {
-    const rows = (filteredOrders || []).map((o) => ({
+  // Open transfer dialog
+  const handleOpenTransfer = async (orderId: string) => {
+    if (!canTransferOrders) {
+      toast.error("You don't have permission to transfer orders");
+      return;
+    }
+    
+    const order = orders?.find((o: any) => o.id === orderId);
+    if (!order) return;
+    
+    setTransferOrder(order as unknown as FulfillOrder);
+    setShowTransfer(true);
+  };
+
+  // Handle transfer completion
+  const handleTransferComplete = async (orderId: string, newAssigneeId: string) => {
+    const { error } = await supabase
+      .from("orders")
+      .update({ assigned_to: newAssigneeId, updated_at: new Date().toISOString() })
+      .eq("id", orderId);
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    const order = orders?.find((o: any) => o.id === orderId);
+    
+    // Notify the assigned agent
+    sendNotificationToMany([newAssigneeId], {
+      title: "Order Assigned",
+      message: `Order ${order?.display_id} has been assigned to you`,
+      type: "order",
+      entityType: "order",
+      entityId: orderId,
+    });
+
+    logActivity(user!.id, "Transferred order", "order", order?.display_id, orderId, { assigned_to: newAssigneeId });
+    toast.success("Order transferred");
+    setShowTransfer(false);
+    setTransferOrder(null);
+    qc.invalidateQueries({ queryKey: ["orders"] });
+  };
+
+  // Handle invoice button click
+const handleInvoiceAction = async (orderId: string, status: string) => {
+  if (!canViewInvoices) {
+    toast.error("You don't have permission to view invoices");
+    return;
+  }
+
+  setLoadingOrderDetails(orderId);
+  try {
+    // Load order with items
+    const { data: orderData, error: orderError } = await supabase
+      .from("orders")
+      .select(`
+        *,
+        stores(id, name, store_type_id, customer_id),
+        customers(id, name),
+        order_items(id, product_id, quantity, unit_price, products(id, name, sku, base_price, image_url))
+      `)
+      .eq("id", orderId)
+      .single();
+
+    if (orderError) throw orderError;
+
+    // Check if invoice exists for this order
+    const { data: existingInvoice } = await supabase
+      .from("invoices")
+      .select(`
+        *,
+        invoice_items(*, products(id, name))
+      `)
+      .eq("order_ref", orderId)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+
+    setEditOrder(orderData as unknown as FulfillOrder);
+    
+    if (existingInvoice) {
+      // View existing invoice
+      setSelectedInvoice(existingInvoice);
+      setInvoiceMode("view");
+    } else {
+      // Create new invoice
+      setSelectedInvoice(null);
+      setInvoiceMode("create");
+    }
+    
+    setShowInvoice(true);
+  } catch (error) {
+    console.error("Error loading order for invoice:", error);
+    toast.error("Failed to load order details");
+  } finally {
+    setLoadingOrderDetails(null);
+  }
+};
+
+const exportCSV = () => {
+    const rows = (filteredOrders || []).map((o: any) => ({
       "Order ID": o.display_id,
-      "Store": (o as any).stores?.name || "",
-      "Customer": (o as any).customers?.name || "",
+      "Store": o.stores?.name || "",
+      "Customer": o.customers?.name || "",
       "Type": o.order_type,
       "Source": o.source,
       "Status": o.status,
       "Note": o.requirement_note || "",
       "Created": new Date(o.created_at).toLocaleString("en-IN"),
     }));
-    
-    // Handle empty data case
+
     if (rows.length === 0) {
       toast.info("No orders to export");
       return;
     }
-    
+
     const header = Object.keys(rows[0]).join(",");
     const csv = [header, ...rows.map((r) => Object.values(r).map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
@@ -365,12 +660,12 @@ const Orders = () => {
     setCancelling(false);
     if (error) { toast.error(error.message); return; }
 
-    const order = orders?.find((o) => o.id === cancelOrderId);
+    const order = orders?.find((o: any) => o.id === cancelOrderId);
     logActivity(user!.id, "Cancelled order", "order", order?.display_id || "", cancelOrderId, { reason: cancelReason });
 
     // Notify customer if linked
-    if (order?.customers && (order as any).customer_id) {
-      const { data: custData } = await supabase.from("customers").select("user_id").eq("id", (order as any).customer_id).single();
+    if (order?.customers && order.customer_id) {
+      const { data: custData } = await supabase.from("customers").select("user_id").eq("id", order.customer_id).single();
       if (custData?.user_id) {
         sendNotificationToMany([custData.user_id], {
           title: "Order Cancelled",
@@ -388,12 +683,11 @@ const Orders = () => {
     qc.invalidateQueries({ queryKey: ["orders"] });
   };
 
-  // Filtering is now done server-side; local array mirrors the fetched page(s)
-  // PLUS Matrix restrictions need to be enforced so unassigned orders don't leak
+  // Filtering with matrix restrictions
   const filteredOrders = useMemo(() => {
     let data = orders || [];
     if (hasMatrixRestrictions || hasStoreTypeRestrictions) {
-      data = data.filter((o: any) => 
+      data = data.filter((o: any) =>
         o.stores && canAccessStore(o.stores.route_id, o.stores.store_type_id)
       );
     }
@@ -408,39 +702,316 @@ const Orders = () => {
     setFilterCustomer("all");
   };
 
+// Build action buttons based on permissions - icon-only with tooltips
+const buildActions = (row: any) => {
+  // Cancelled orders - show reason only
+  if (row.status === "cancelled") {
+    return (
+      <span className="text-xs text-muted-foreground truncate max-w-[120px] block" title={row.cancellation_reason}>
+        {row.cancellation_reason || "—"}
+      </span>
+    );
+  }
+
+  // Pending orders
+  if (row.status === "pending") {
+    return (
+      <TooltipProvider>
+        <div className="flex items-center gap-1">
+          {canFulfillOrders && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-green-600 hover:bg-green-50 hover:text-green-700"
+                  onClick={() => handleOpenFulfillment(row.id)}
+                  disabled={loadingOrderDetails === row.id}
+                >
+                  {loadingOrderDetails === row.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Package className="h-4 w-4" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Fulfill Order</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+          
+          {canModifyOrders && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                  onClick={() => handleOpenEdit(row.id)}
+                >
+                  <Edit className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Edit Order</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+          
+          {canTransferOrders && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-primary hover:bg-primary/10"
+                  onClick={() => handleOpenTransfer(row.id)}
+                >
+                  <ArrowRightLeft className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Transfer Order</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+          
+          {canViewInvoices && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-purple-600 hover:bg-purple-50 hover:text-purple-700"
+                  onClick={() => handleInvoiceAction(row.id, row.status)}
+                  disabled={loadingOrderDetails === row.id}
+                >
+                  <FileText className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Proforma Invoice</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+          
+          {canCancelOrders && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                  onClick={() => setCancelOrderId(row.id)}
+                >
+                  <XCircle className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Cancel Order</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </div>
+      </TooltipProvider>
+    );
+  }
+
+  // Confirmed orders
+  if (row.status === "confirmed") {
+    return (
+      <TooltipProvider>
+        <div className="flex items-center gap-1">
+          {canFulfillOrders && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-green-600 hover:bg-green-50 hover:text-green-700"
+                  onClick={() => handleOpenFulfillment(row.id)}
+                  disabled={loadingOrderDetails === row.id}
+                >
+                  {loadingOrderDetails === row.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Package className="h-4 w-4" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Fulfill Order</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+          
+          {canModifyOrders && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                  onClick={() => handleOpenEdit(row.id)}
+                >
+                  <Edit className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Edit Order</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+          
+          {canViewInvoices && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-purple-600 hover:bg-purple-50 hover:text-purple-700"
+                  onClick={() => handleInvoiceAction(row.id, row.status)}
+                  disabled={loadingOrderDetails === row.id}
+                >
+                  <FileText className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Proforma Invoice</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+          
+          {canCancelOrders && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                  onClick={() => setCancelOrderId(row.id)}
+                >
+                  <XCircle className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Cancel Order</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </div>
+      </TooltipProvider>
+    );
+  }
+
+  // Delivered orders
+  if (row.status === "delivered") {
+    return (
+      <TooltipProvider>
+        <div className="flex items-center gap-1">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                onClick={() => handleOpenEdit(row.id)}
+              >
+                <Eye className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>View Details</p>
+            </TooltipContent>
+          </Tooltip>
+          
+          {canViewInvoices && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-purple-600 hover:bg-purple-50 hover:text-purple-700"
+                  onClick={() => handleInvoiceAction(row.id, row.status)}
+                  disabled={loadingOrderDetails === row.id}
+                >
+                  {loadingOrderDetails === row.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <FileText className="h-4 w-4" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Tax Invoice</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+          
+          {canModifyOrders && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                  onClick={() => handleOpenEdit(row.id)}
+                >
+                  <Edit className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Edit Order</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </div>
+      </TooltipProvider>
+    );
+  }
+
+  return null;
+};
+
   const columns = [
     { header: "Order ID", accessor: "display_id" as const, className: "font-mono text-xs" },
     { header: "Store", accessor: (row: any) => row.stores?.name || "—", className: "font-medium" },
     { header: "Type", accessor: (row: any) => <Badge variant="secondary">{row.order_type}</Badge>, className: "hidden sm:table-cell" },
-    { header: "Source", accessor: (row: any) => <Badge variant="outline">{row.source}</Badge>, className: "hidden md:table-cell" },
-    { header: "Customer", accessor: (row: any) => row.customers?.name || "—", className: "text-muted-foreground text-sm hidden lg:table-cell" },
-    { header: "Status", accessor: (row: any) => <StatusBadge status={row.status === "delivered" ? "active" : row.status as any} label={row.status} /> },
+  { header: "Source", accessor: (row: any) => <Badge variant="outline">{row.source}</Badge>, className: "hidden md:table-cell" },
+  { header: "Customer", accessor: (row: any) => row.customers?.name || "—", className: "text-muted-foreground text-sm hidden lg:table-cell" },
+  { header: "Status", accessor: (row: any) => <StatusBadge status={row.status === "delivered" ? "active" : row.status as any} label={row.status} /> },
     { header: "Date", accessor: (row: any) => new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }), className: "text-muted-foreground text-xs hidden sm:table-cell" },
-    {
-      header: "Actions",
-      accessor: (row: any) => row.status === "pending" ? (
-        <div className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" className="h-7 text-xs text-green-600" onClick={() => handleOpenFulfillment(row.id)} disabled={loadingOrderDetails === row.id}>
-            {loadingOrderDetails === row.id ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Package className="h-3.5 w-3.5 mr-1" />}
-            Fulfill
-          </Button>
-          <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive" onClick={() => setCancelOrderId(row.id)}>
-            <XCircle className="h-3.5 w-3.5 mr-1" /> Cancel
-          </Button>
-        </div>
-      ) : row.status === "cancelled" ? (
-        <span className="text-xs text-muted-foreground truncate max-w-[120px] block" title={row.cancellation_reason}>{row.cancellation_reason || "—"}</span>
-      ) : null,
-    },
+    { header: "Actions", accessor: (row: any) => buildActions(row) },
   ];
 
   if (isLoading) {
     return <TableSkeleton columns={7} />;
   }
 
+  if (!hasOrderAccess) {
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <PageHeader title="Orders" subtitle="Manage customer orders and fulfillment" />
+        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+          <Package className="h-12 w-12 mb-4 opacity-50" />
+          <p className="text-lg font-medium">Access Denied</p>
+          <p className="text-sm">You don't have permission to view orders</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Orders" subtitle="Manage customer orders and fulfillment" primaryAction={{ label: "Create Order", onClick: () => setShowAdd(true) }} actions={[{ label: "Export CSV", icon: Download, onClick: exportCSV, variant: "outline" as const }]} />
+      <PageHeader 
+        title="Orders" 
+        subtitle="Manage customer orders and fulfillment" 
+        primaryAction={canCreateOrders ? { label: "Create Order", onClick: () => setShowAdd(true) } : undefined}
+        actions={[
+          { label: "Export CSV", icon: Download, onClick: exportCSV, variant: "outline" as const }
+        ]} 
+      />
 
       <Tabs value={statusFilter} onValueChange={setStatusFilter} className="w-full">
         <TabsList className="bg-muted/50 p-1 h-11">
@@ -507,21 +1078,40 @@ const Orders = () => {
                   <Badge variant="outline" className="text-xs h-5 px-1.5">{row.source}</Badge>
                 </div>
                 <h3 className="font-semibold text-sm text-foreground truncate">{row.stores?.name || "—"}</h3>
-                <p className="text-xs text-muted-foreground truncate">{row.customers?.name || "—"}</p>
-              </div>
+            <p className="text-xs text-muted-foreground truncate">{row.customers?.name || "—"}</p>
+          </div>
               <StatusBadge status={row.status === "delivered" ? "active" : row.status as any} label={row.status} />
             </div>
             <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50 gap-2 flex-wrap">
               <p className="text-[10px] text-muted-foreground">{new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}</p>
               {row.status === "pending" && (
-                <div className="flex items-center gap-1.5">
-                  <Button variant="outline" size="sm" className="h-7 text-xs text-green-600 border-green-600/40" onClick={(e) => { e.stopPropagation(); handleOpenFulfillment(row.id); }} disabled={loadingOrderDetails === row.id}>
-                    {loadingOrderDetails === row.id ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Package className="h-3 w-3 mr-1" />}Fulfill
-                  </Button>
-                  <Button variant="outline" size="sm" className="h-7 text-xs text-destructive border-destructive/40" onClick={(e) => { e.stopPropagation(); setCancelOrderId(row.id); }}>
-                    <XCircle className="h-3 w-3 mr-1" />Cancel
-                  </Button>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {canFulfillOrders && (
+                    <Button variant="outline" size="sm" className="h-7 text-xs text-green-600 border-green-600/40" onClick={(e) => { e.stopPropagation(); handleOpenFulfillment(row.id); }} disabled={loadingOrderDetails === row.id}>
+                      {loadingOrderDetails === row.id ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Package className="h-3 w-3 mr-1" />}Fulfill
+                    </Button>
+                  )}
+                  {canModifyOrders && (
+                    <Button variant="outline" size="sm" className="h-7 text-xs text-blue-600 border-blue-600/40" onClick={(e) => { e.stopPropagation(); handleOpenEdit(row.id); }}>
+                      <Edit className="h-3 w-3 mr-1" />Edit
+                    </Button>
+                  )}
+                  {canTransferOrders && (
+                    <Button variant="outline" size="sm" className="h-7 text-xs text-primary border-primary/40" onClick={(e) => { e.stopPropagation(); handleOpenTransfer(row.id); }}>
+                      <ArrowRightLeft className="h-3 w-3 mr-1" />Transfer
+                    </Button>
+                  )}
+                  {canCancelOrders && (
+                    <Button variant="outline" size="sm" className="h-7 text-xs text-destructive border-destructive/40" onClick={(e) => { e.stopPropagation(); setCancelOrderId(row.id); }}>
+                      <XCircle className="h-3 w-3 mr-1" />Cancel
+                    </Button>
+                  )}
                 </div>
+              )}
+              {row.status === "delivered" && canViewInvoices && (
+                <Button variant="outline" size="sm" className="h-7 text-xs text-purple-600 border-purple-600/40" onClick={(e) => { e.stopPropagation(); }}>
+                  <FileText className="h-3 w-3 mr-1" />Invoice
+                </Button>
               )}
               {row.status === "cancelled" && row.cancellation_reason && (
                 <span className="text-xs text-muted-foreground italic truncate max-w-[180px]">{row.cancellation_reason}</span>
@@ -540,17 +1130,19 @@ const Orders = () => {
         </div>
       )}
 
-      <Dialog open={showAdd} onOpenChange={(v) => { setShowAdd(v); if (!v) resetForm(); }}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Create Order</DialogTitle></DialogHeader>
-          <form onSubmit={handleAdd} className="space-y-4">
-            <div>
-              <Label>Customer</Label>
-              <Select value={customerId} onValueChange={(v) => { setCustomerId(v); setStoreId(""); }}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Select customer" /></SelectTrigger>
-                <SelectContent>{customers?.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
+      {/* Create Order Dialog */}
+      {canCreateOrders && (
+        <Dialog open={showAdd} onOpenChange={(v) => { setShowAdd(v); if (!v) resetForm(); }}>
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogHeader><DialogTitle>Create Order</DialogTitle></DialogHeader>
+            <form onSubmit={handleAdd} className="space-y-4">
+              <div>
+                <Label>Customer</Label>
+                <Select value={customerId} onValueChange={(v) => { setCustomerId(v); setStoreId(""); }}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="Select customer" /></SelectTrigger>
+                  <SelectContent>{customers?.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
             <div>
               <Label>Store</Label>
               <Select value={storeId} onValueChange={setStoreId} disabled={!customerId}>
@@ -558,52 +1150,141 @@ const Orders = () => {
                 <SelectContent>{stores?.map((s) => <SelectItem key={s.id} value={s.id}>{s.name} ({s.display_id})</SelectItem>)}</SelectContent>
               </Select>
             </div>
+            {(role === "admin" || role === "manager" || role === "marketer") && (
+              <div>
+                <Label>Assign To Agent (Optional)</Label>
+                <Select value={assignedTo} onValueChange={setAssignedTo}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="Select agent" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Unassigned</SelectItem>
+                    {agents?.map((a) => <SelectItem key={a.id} value={a.id}>{a.full_name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div>
               <Label>Order Type</Label>
-              <Select value={orderType} onValueChange={setOrderType}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <Select value={orderType} onValueChange={setOrderType}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="simple">Simple (Note only)</SelectItem>
+                    <SelectItem value="detailed">Detailed (Products + Qty)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label>Requirement Note</Label>
+                <Textarea value={requirementNote} onChange={(e) => setRequirementNote(e.target.value)} className="mt-1" placeholder="e.g., Need water bottles urgently" />
+              </div>
+
+              {orderType === "detailed" && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <Label>Products</Label>
+                    <Button type="button" variant="outline" size="sm" onClick={addItem}><Plus className="h-3 w-3 mr-1" />Add</Button>
+                  </div>
+                  <div className="space-y-2">
+                    {orderItems.map((item, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <Select value={item.product_id} onValueChange={(v) => { const u = [...orderItems]; u[idx].product_id = v; setOrderItems(u); }}>
+                          <SelectTrigger className="flex-1"><SelectValue placeholder="Product" /></SelectTrigger>
+                          <SelectContent>{products?.map((p) => <SelectItem key={p.id} value={p.id}>{p.name} ({p.sku})</SelectItem>)}</SelectContent>
+                        </Select>
+                        <Input type="number" min={1} value={item.quantity} onChange={(e) => { const u = [...orderItems]; u[idx].quantity = Number(e.target.value); setOrderItems(u); }} className="w-20" placeholder="Qty" />
+                        {canModifyPrices && (
+                          <Input 
+                            type="number" 
+                            min={0} 
+                            step="0.01"
+                            value={item.unit_price || getProductPrice(item.product_id)} 
+                            onChange={(e) => { const u = [...orderItems]; u[idx].unit_price = Number(e.target.value); setOrderItems(u); }} 
+                            className="w-24" 
+                            placeholder="Price" 
+                          />
+                        )}
+                        {orderItems.length > 1 && (
+                          <Button type="button" variant="ghost" size="icon" onClick={() => removeItem(idx)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <Button type="submit" className="w-full" disabled={saving}>
+                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Create Order
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Edit Order Dialog */}
+      {canModifyOrders && (
+        <Dialog open={showEdit} onOpenChange={(v) => { setShowEdit(v); if (!v) { setEditOrder(null); resetForm(); } }}>
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogHeader><DialogTitle>Edit Order {editOrder?.display_id}</DialogTitle></DialogHeader>
+            <form onSubmit={handleEdit} className="space-y-4">
+          <div>
+            <Label>Requirement Note</Label>
+            <Textarea value={requirementNote} onChange={(e) => setRequirementNote(e.target.value)} className="mt-1" />
+          </div>
+          
+          {(role === "admin" || role === "manager" || role === "marketer") && (
+            <div>
+              <Label>Assign To Agent</Label>
+              <Select value={assignedTo} onValueChange={setAssignedTo}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Select agent" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="simple">Simple (Note only)</SelectItem>
-                  <SelectItem value="detailed">Detailed (Products + Qty)</SelectItem>
+                  <SelectItem value="">Unassigned</SelectItem>
+                  {agents?.map((a) => <SelectItem key={a.id} value={a.id}>{a.full_name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
+          )}
 
-            <div>
-              <Label>Requirement Note</Label>
-              <Textarea value={requirementNote} onChange={(e) => setRequirementNote(e.target.value)} className="mt-1" placeholder="e.g., Need water bottles urgently" />
-            </div>
-
-            {orderType === "detailed" && (
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <Label>Products</Label>
-                  <Button type="button" variant="outline" size="sm" onClick={addItem}><Plus className="h-3 w-3 mr-1" />Add</Button>
+          {orderType === "detailed" && canModifyPrices && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <Label>Products & Prices</Label>
+                    <Button type="button" variant="outline" size="sm" onClick={addItem}><Plus className="h-3 w-3 mr-1" />Add</Button>
+                  </div>
+                  <div className="space-y-2">
+                    {orderItems.map((item, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <Select value={item.product_id} onValueChange={(v) => { const u = [...orderItems]; u[idx].product_id = v; setOrderItems(u); }}>
+                          <SelectTrigger className="flex-1"><SelectValue placeholder="Product" /></SelectTrigger>
+                          <SelectContent>{products?.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+                        </Select>
+                        <Input type="number" min={1} value={item.quantity} onChange={(e) => { const u = [...orderItems]; u[idx].quantity = Number(e.target.value); setOrderItems(u); }} className="w-20" placeholder="Qty" />
+                        <Input 
+                          type="number" 
+                          min={0} 
+                          step="0.01"
+                          value={item.unit_price || getProductPrice(item.product_id)} 
+                          onChange={(e) => { const u = [...orderItems]; u[idx].unit_price = Number(e.target.value); setOrderItems(u); }} 
+                          className="w-24" 
+                          placeholder="Price" 
+                        />
+                        {orderItems.length > 1 && (
+                          <Button type="button" variant="ghost" size="icon" onClick={() => removeItem(idx)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  {orderItems.map((item, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
-                      <Select value={item.product_id} onValueChange={(v) => { const u = [...orderItems]; u[idx].product_id = v; setOrderItems(u); }}>
-                        <SelectTrigger className="flex-1"><SelectValue placeholder="Product" /></SelectTrigger>
-                        <SelectContent>{products?.map((p) => <SelectItem key={p.id} value={p.id}>{p.name} ({p.sku})</SelectItem>)}</SelectContent>
-                      </Select>
-                      <Input type="number" min={1} value={item.quantity} onChange={(e) => { const u = [...orderItems]; u[idx].quantity = Number(e.target.value); setOrderItems(u); }} className="w-20" placeholder="Qty" />
-                      {orderItems.length > 1 && (
-                        <Button type="button" variant="ghost" size="icon" onClick={() => removeItem(idx)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+              )}
 
-            <Button type="submit" className="w-full" disabled={saving}>
-              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Create Order
-            </Button>
-          </form>
-        </DialogContent>
-      </Dialog>
+              <Button type="submit" className="w-full" disabled={saving}>
+                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Update Order
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Order Fulfillment Dialog */}
       <OrderFulfillmentDialog
@@ -613,13 +1294,22 @@ const Orders = () => {
         onFulfilled={() => qc.invalidateQueries({ queryKey: ["orders"] })}
       />
 
+      {/* Transfer Order Dialog */}
+      <TransferOrderDialog
+        order={transferOrder}
+        agents={agents}
+        open={showTransfer}
+        onOpenChange={setShowTransfer}
+        onTransfer={handleTransferComplete}
+      />
+
       {/* Cancel Order Dialog */}
       <Dialog open={!!cancelOrderId} onOpenChange={(v) => { if (!v) { setCancelOrderId(null); setCancelReason(""); } }}>
         <DialogContent>
           <DialogHeader><DialogTitle>Cancel Order</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Are you sure you want to cancel order <span className="font-mono font-medium text-foreground">{orders?.find((o) => o.id === cancelOrderId)?.display_id}</span>?
+              Are you sure you want to cancel order <span className="font-mono font-medium text-foreground">{orders?.find((o: any) => o.id === cancelOrderId)?.display_id}</span>?
             </p>
             <div>
               <Label>Reason for cancellation</Label>
@@ -643,6 +1333,16 @@ const Orders = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Invoice Dialog */}
+      <InvoiceDialog
+        order={editOrder}
+        invoice={selectedInvoice}
+        mode={invoiceMode}
+        open={showInvoice}
+        onOpenChange={setShowInvoice}
+        onSuccess={() => qc.invalidateQueries({ queryKey: ["invoices"] })}
+      />
     </div>
   );
 };

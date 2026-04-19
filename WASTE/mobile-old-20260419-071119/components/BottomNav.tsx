@@ -19,7 +19,7 @@ interface Props {
 export const AGENT_TABS: MobileTabItem[] = [
   { id: "home" as MobileTab, label: "Home", icon: Home },
   { id: "routes" as MobileTab, label: "Routes", icon: Map },
-  { id: "scan" as MobileTab, label: "Scan", icon: ScanLine, centerAction: true },
+  { id: "scan" as MobileTab, label: "Record", icon: ScanLine, centerAction: true },
   { id: "customers" as MobileTab, label: "Stores", icon: Users },
   { id: "approvals" as MobileTab, label: "Approvals", icon: CheckSquare },
 ];
@@ -27,7 +27,7 @@ export const AGENT_TABS: MobileTabItem[] = [
 export const MARKETER_TABS: MobileTabItem[] = [
   { id: "home", label: "Home", icon: Home },
   { id: "orders", label: "Orders", icon: ClipboardList },
-  { id: "record", label: "Record", icon: ReceiptIndianRupee, centerAction: true },
+  { id: "record", label: "Payment", icon: ReceiptIndianRupee, centerAction: true },
   { id: "customers", label: "Stores", icon: Users },
   { id: "history", label: "History", icon: History },
 ];
@@ -35,7 +35,7 @@ export const MARKETER_TABS: MobileTabItem[] = [
 export const CUSTOMER_TABS: MobileTabItem[] = [
   { id: "home" as MobileTab, label: "Home", icon: Home },
   { id: "sales" as MobileTab, label: "Sales", icon: ClipboardList },
-  { id: "orders" as MobileTab, label: "Order", icon: Plus, centerAction: true },
+  { id: "orders" as MobileTab, label: "New Order", icon: Plus, centerAction: true },
   { id: "transactions" as MobileTab, label: "Ledger", icon: ReceiptIndianRupee },
   { id: "profile" as MobileTab, label: "Profile", icon: Users },
 ];

@@ -41,7 +41,7 @@ const WarehouseContext = createContext<WarehouseContextType>({
 const ADMIN_WAREHOUSE_KEY = "admin_selected_warehouse_id";
 
 export function WarehouseProvider({ children }: { children: ReactNode }) {
-  const { user, role } = useAuth();
+  const { user, role, setWarehouse } = useAuth();
   const [currentWarehouse, setCurrentWarehouse] = useState<Warehouse | null>(null);
   const [allWarehouses, setAllWarehouses] = useState<Warehouse[]>([]);
   const [assignedWarehouseId, setAssignedWarehouseId] = useState<string | null>(null);
@@ -144,6 +144,15 @@ export function WarehouseProvider({ children }: { children: ReactNode }) {
 
     init();
   }, [user, isAdmin, fetchAllWarehouses, fetchAssignedWarehouse]);
+
+  // Sync currentWarehouse to AuthContext for backwards compatibility
+  useEffect(() => {
+    if (currentWarehouse) {
+      setWarehouse({ id: currentWarehouse.id, name: currentWarehouse.name });
+    } else {
+      setWarehouse(null);
+    }
+  }, [currentWarehouse, setWarehouse]);
 
   const setActiveWarehouse = useCallback(
     (warehouseId: string) => {

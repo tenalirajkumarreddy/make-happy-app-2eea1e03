@@ -22,14 +22,20 @@ export function useNotifications() {
 
   const fetchNotifications = useCallback(async () => {
     if (!user) return;
-    const { data } = await supabase
-      .from("notifications")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(50);
-    setNotifications((data as AppNotification[]) || []);
-    setLoading(false);
+    try {
+      const { data, error } = await supabase
+        .from("notifications")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      setNotifications((data as AppNotification[]) || []);
+    } catch (err) {
+      console.error("Failed to fetch notifications:", err);
+    } finally {
+      setLoading(false);
+    }
   }, [user]);
 
   useEffect(() => {
@@ -77,10 +83,14 @@ export function useNotifications() {
       )
       .subscribe();
 
-    return () => {
+  return () => {
+    try {
       supabase.removeChannel(channel);
-    };
-  }, [user]);
+    } catch (err) {
+      console.error("Failed to remove notification channel:", err);
+    }
+  };
+}, [user]);
 
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 

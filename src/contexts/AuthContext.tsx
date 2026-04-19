@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
 import { logError } from "@/lib/logger";
@@ -248,9 +248,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setWarehouseState(null);
   };
 
-  const setWarehouse = (w: { id: string; name: string } | null) => {
+  const setWarehouse = useCallback((w: { id: string; name: string } | null) => {
     setWarehouseState(w);
-  };
+  }, []);
 
   return (
     <AuthContext.Provider value={{ user, session, role, profile, customer, warehouses, warehouse, loading, signOut, refreshWarehouses, setWarehouse }}>

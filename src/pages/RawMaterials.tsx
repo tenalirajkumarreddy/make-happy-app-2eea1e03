@@ -6,7 +6,7 @@ import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
-import { Loader2, Plus, Pencil, Trash2, Package, Link2 } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Package, Link2, Settings } from "lucide-react";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { useState, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { logActivity } from "@/lib/activityLogger";
+import { useNavigate } from "react-router-dom";
 
 interface RawMaterial {
   id: string;
@@ -25,6 +26,8 @@ interface RawMaterial {
   description?: string;
   unit: string;
   category?: string;
+  category_id?: string;
+  raw_material_categories?: { name: string };
   min_stock_level: number;
   current_stock: number;
   unit_cost: number;
@@ -51,6 +54,7 @@ const RawMaterials = () => {
   const { user, role } = useAuth();
   const { currentWarehouse } = useWarehouse();
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const [showAdd, setShowAdd] = useState(false);
   const [editingItem, setEditingItem] = useState<RawMaterial | null>(null);
   const [showLinkVendor, setShowLinkVendor] = useState(false);
@@ -62,6 +66,7 @@ const RawMaterials = () => {
   const [description, setDescription] = useState("");
   const [unit, setUnit] = useState("kg");
   const [category, setCategory] = useState("");
+  const [categoryId, setCategoryId] = useState("");
   const [minStockLevel, setMinStockLevel] = useState("");
   const [unitCost, setUnitCost] = useState("");
   const [hsnCode, setHsnCode] = useState("");
@@ -79,7 +84,7 @@ const RawMaterials = () => {
     queryFn: async () => {
       let query = supabase
         .from("raw_materials")
-        .select("*, vendors(name, display_id)")
+        .select("*, vendors(name, display_id), raw_material_categories(name)")
         .order("name");
 
       if (currentWarehouse?.id) {
@@ -89,6 +94,14 @@ const RawMaterials = () => {
       const { data, error } = await query;
       if (error) throw error;
       return data as RawMaterial[];
+    },
+  });
+
+  const { data: dbCategories = [] } = useQuery({
+    queryKey: ["raw_material_categories-list"],
+    queryFn: async () => {
+      const { data } = await supabase.from("raw_material_categories").select("id, name").order("name");
+      return data || [];
     },
   });
 
@@ -123,6 +136,7 @@ const RawMaterials = () => {
     setDescription("");
     setUnit("kg");
     setCategory("");
+    setCategoryId("");
     setMinStockLevel("");
     setUnitCost("");
     setHsnCode("");
@@ -154,6 +168,7 @@ const RawMaterials = () => {
             description: description.trim() || null,
             unit,
             category: category || null,
+            category_id: categoryId || null,
             vendor_id: vendorId || null,
             min_stock_level: minStockLevel ? parseFloat(minStockLevel) : 0,
             unit_cost: unitCost ? parseFloat(unitCost) : 0,
@@ -179,6 +194,7 @@ const RawMaterials = () => {
           description: description.trim() || null,
           unit,
           category: category || null,
+          category_id: categoryId || null,
           min_stock_level: minStockLevel ? parseFloat(minStockLevel) : 0,
           unit_cost: unitCost ? parseFloat(unitCost) : 0,
           hsn_code: hsnCode.trim() || null,
@@ -205,6 +221,7 @@ const RawMaterials = () => {
     setDescription(item.description || "");
     setUnit(item.unit);
     setCategory(item.category || "");
+    setCategoryId(item.category_id || "");
     setVendorId((item as any).vendor_id || "");
     setMinStockLevel(item.min_stock_level?.toString() || "");
     setUnitCost(item.unit_cost?.toString() || "");
@@ -279,7 +296,7 @@ const RawMaterials = () => {
     { header: "ID", accessor: "display_id" as const, className: "font-mono text-xs" },
     { header: "Name", accessor: "name" as const, className: "font-medium" },
     { header: "Vendor", accessor: (row: any) => row.vendors?.name || "—", className: "text-sm text-muted-foreground" },
-    { header: "Category", accessor: (row: RawMaterial) => row.category || "—", className: "text-sm text-muted-foreground" },
+    { header: "Category", accessor: (row: RawMaterial) => row.raw_material_categories?.name || row.category || "—", className: "text-sm text-muted-foreground" },
     { header: "Unit", accessor: "unit" as const, className: "text-sm" },
     { header: "Stock", accessor: (row: RawMaterial) => `${row.current_stock} ${row.unit}`, className: "text-sm" },
     { header: "Unit Cost", accessor: (row: RawMaterial) => `₹${row.unit_cost?.toLocaleString() || 0}`, className: "text-sm" },
@@ -336,7 +353,7 @@ const RawMaterials = () => {
                 <h3 className="font-semibold text-sm truncate">{row.name}</h3>
                 <div className="flex items-center gap-1.5 flex-wrap mt-1">
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
-                    {row.category || "Uncategorized"}
+                    {row.raw_material_categories?.name || row.category || "Uncategorized"}
                   </span>
                   {row.vendors?.name && (
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">
@@ -429,16 +446,34 @@ const RawMaterials = () => {
               </div>
               <div className="space-y-2">
                 <Label>Category</Label>
-                <Select value={category} onValueChange={setCategory}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CATEGORIES.map((c) => (
-                      <SelectItem key={c} value={c}>{c}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex gap-2">
+                  <Select 
+                    value={categoryId || "none"} 
+                    onValueChange={(val) => setCategoryId(val === "none" ? "" : val)}
+                  >
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder="Select Category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No Category</SelectItem>
+                      {dbCategories.map((c: any) => (
+                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    size="icon" 
+                    onClick={() => {
+                      setShowAdd(false);
+                      navigate('/admin/setup');
+                    }}
+                    title="Manage Categories"
+                  >
+                    <Settings className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">

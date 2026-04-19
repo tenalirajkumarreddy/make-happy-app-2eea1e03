@@ -13,14 +13,12 @@ import {
   Settings,
   Shield,
   History,
-  Bell,
   ChevronLeft,
   ChevronRight,
   ChevronUp,
   ChevronDown,
   Menu,
   X,
-  Megaphone,
   HandCoins,
   FileText,
   Warehouse,
@@ -31,6 +29,10 @@ import {
   CreditCard,
   Calendar,
   Wallet,
+  Truck,
+  TrendingUp,
+  ClipboardCheck,
+  Package,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -47,6 +49,11 @@ interface NavItem {
   icon: React.ComponentType<{ className?: string }>;
   badge?: number;
   children?: NavChild[];
+}
+
+interface NavSection {
+  label: string;
+  items: NavItem[];
 }
 
 const REPORT_CHILDREN: NavChild[] = [
@@ -84,97 +91,178 @@ const REPORT_CHILDREN: NavChild[] = [
   { label: "Agent Performance", path: "/reports/agent" },
 ];
 
-const NAV_BY_ROLE: Record<string, { main: NavItem[]; secondary: NavItem[] }> = {
+const NAV_BY_ROLE: Record<string, { main: NavSection[]; secondary: NavSection[] }> = {
   super_admin: {
     main: [
-      { label: "Dashboard", path: "/", icon: LayoutDashboard },
-      { label: "Inventory", path: "/inventory", icon: Warehouse },
-      { label: "Customers", path: "/customers", icon: Users },
-      { label: "Vendors", path: "/vendors", icon: Building2 },
-      { label: "Stores", path: "/stores", icon: Store },
-      { label: "Routes", path: "/routes", icon: Route },
-      { label: "Orders", path: "/orders", icon: ClipboardList },
-      { label: "Invoices", path: "/invoices", icon: FileText },
-      { label: "Sales", path: "/sales", icon: ShoppingCart },
-      { label: "Transactions", path: "/transactions", icon: Receipt },
-      { label: "Purchases", path: "/purchases", icon: ShoppingCart },
-      { label: "Vendor Payments", path: "/vendor-payments", icon: CreditCard },
-      { label: "Expenses", path: "/expenses", icon: Wallet },
-      { label: "Attendance", path: "/attendance", icon: Calendar },
-      { label: "Handovers", path: "/handovers", icon: HandCoins },
-      { label: "Stock Transfers", path: "/stock-transfers", icon: ArrowRightLeft },
-      { label: "Map", path: "/map", icon: Map },
-      { label: "Banners", path: "/banners", icon: Image },
+      {
+        label: "Overview",
+        items: [
+          { label: "Dashboard", path: "/", icon: LayoutDashboard },
+          { label: "Orders", path: "/orders", icon: ClipboardList },
+          { label: "Sales", path: "/sales", icon: ShoppingCart },
+          { label: "Transactions", path: "/transactions", icon: Receipt },
+          { label: "Handovers", path: "/handovers", icon: HandCoins },
+        ],
+      },
+      {
+        label: "Operations",
+        items: [
+          { label: "Inventory", path: "/inventory", icon: Warehouse },
+          { label: "Purchases", path: "/purchases", icon: ShoppingCart },
+          { label: "Stock Transfers", path: "/stock-transfers", icon: ArrowRightLeft },
+          { label: "Routes", path: "/routes", icon: Route },
+          { label: "Attendance", path: "/attendance", icon: Calendar },
+          { label: "Map", path: "/map", icon: Map },
+        ],
+      },
+      {
+        label: "Directory",
+        items: [
+          { label: "Customers", path: "/customers", icon: Users },
+          { label: "Stores", path: "/stores", icon: Store },
+          { label: "Vendors", path: "/vendors", icon: Building2 },
+          { label: "Invoices", path: "/invoices", icon: FileText },
+          { label: "Vendor Payments", path: "/vendor-payments", icon: CreditCard },
+          { label: "Expenses", path: "/expenses", icon: Wallet },
+          { label: "Banners", path: "/banners", icon: Image },
+        ],
+      },
     ],
     secondary: [
-      { label: "Reports", path: "/reports", icon: FileText, children: REPORT_CHILDREN },
-      { label: "Analytics", path: "/analytics", icon: BarChart3 },
-      { label: "Activity Log", path: "/activity", icon: History },
-      { label: "Access Control", path: "/access-control", icon: Shield },
-      { label: "Staff Directory", path: "/admin/staff", icon: Users },
-      { label: "Settings", path: "/settings", icon: Settings },
+      {
+        label: "Insights",
+        items: [
+          { label: "Reports", path: "/reports", icon: FileText, children: REPORT_CHILDREN },
+          { label: "Analytics", path: "/analytics", icon: BarChart3 },
+          { label: "Cost Insights", path: "/cost-insights", icon: TrendingUp },
+          { label: "Activity Log", path: "/activity", icon: History },
+        ],
+      },
+      {
+        label: "Administration",
+        items: [
+          { label: "Access Control", path: "/access-control", icon: Shield },
+          { label: "Staff Directory", path: "/staff", icon: Users },
+        { label: "Income", path: "/income", icon: TrendingUp },
+          { label: "ERP Setup", path: "/admin/setup", icon: Settings },
+          { label: "Cost History", path: "/admin/cost-history", icon: TrendingUp },
+          { label: "Vehicles", path: "/admin/vehicles", icon: Truck },
+          { label: "Delivery Feasibility", path: "/admin/delivery-feasibility", icon: Route },
+          { label: "Production Log", path: "/admin/production-log", icon: ClipboardCheck },
+          { label: "Settings", path: "/settings", icon: Settings },
+        ],
+      },
     ],
   },
-  manager: {
+manager: {
     main: [
-      { label: "Dashboard", path: "/", icon: LayoutDashboard },
-      { label: "Inventory", path: "/inventory", icon: Warehouse },
-      { label: "Customers", path: "/customers", icon: Users },
-      { label: "Vendors", path: "/vendors", icon: Building2 },
-      { label: "Stores", path: "/stores", icon: Store },
-      { label: "Routes", path: "/routes", icon: Route },
-      { label: "Orders", path: "/orders", icon: ClipboardList },
-      { label: "Invoices", path: "/invoices", icon: FileText },
-      { label: "Sales", path: "/sales", icon: ShoppingCart },
-      { label: "Transactions", path: "/transactions", icon: Receipt },
-      { label: "Purchases", path: "/purchases", icon: ShoppingCart },
-      { label: "Vendor Payments", path: "/vendor-payments", icon: CreditCard },
-      { label: "Expenses", path: "/expenses", icon: Wallet },
-      { label: "Attendance", path: "/attendance", icon: Calendar },
-      { label: "Handovers", path: "/handovers", icon: HandCoins },
-      { label: "Stock Transfers", path: "/stock-transfers", icon: ArrowRightLeft },
-      { label: "Map", path: "/map", icon: Map },
-      { label: "Banners", path: "/banners", icon: Image },
+      {
+        label: "Overview",
+        items: [
+          { label: "Dashboard", path: "/", icon: LayoutDashboard },
+          { label: "Orders", path: "/orders", icon: ClipboardList },
+          { label: "Sales", path: "/sales", icon: ShoppingCart },
+          { label: "Transactions", path: "/transactions", icon: Receipt },
+          { label: "Handovers", path: "/handovers", icon: HandCoins },
+        ],
+      },
+      {
+        label: "Operations",
+        items: [
+          { label: "Inventory", path: "/inventory", icon: Warehouse },
+          { label: "BOM", path: "/inventory/boms", icon: Package },
+          { label: "Purchases", path: "/purchases", icon: ShoppingCart },
+          { label: "Stock Transfers", path: "/stock-transfers", icon: ArrowRightLeft },
+          { label: "Routes", path: "/routes", icon: Route },
+          { label: "Attendance", path: "/attendance", icon: Calendar },
+          { label: "Map", path: "/map", icon: Map },
+        ],
+      },
+      {
+        label: "Directory",
+        items: [
+          { label: "Customers", path: "/customers", icon: Users },
+          { label: "Stores", path: "/stores", icon: Store },
+          { label: "Vendors", path: "/vendors", icon: Building2 },
+          { label: "Invoices", path: "/invoices", icon: FileText },
+          { label: "Vendor Payments", path: "/vendor-payments", icon: CreditCard },
+          { label: "Expenses", path: "/expenses", icon: Wallet },
+          { label: "Banners", path: "/banners", icon: Image },
+        ],
+      },
     ],
     secondary: [
-      { label: "Reports", path: "/reports", icon: FileText, children: REPORT_CHILDREN },
-      { label: "Analytics", path: "/analytics", icon: BarChart3 },
-      { label: "Activity Log", path: "/activity", icon: History },
-      { label: "Settings", path: "/settings", icon: Settings },
-    ],
-  },
+      {
+        label: "Insights",
+        items: [
+          { label: "Reports", path: "/reports", icon: FileText, children: REPORT_CHILDREN },
+          { label: "Analytics", path: "/analytics", icon: BarChart3 },
+          { label: "Cost Insights", path: "/cost-insights", icon: TrendingUp },
+          { label: "Production Log", path: "/admin/production-log", icon: ClipboardCheck },
+{ label: "Income", path: "/income", icon: TrendingUp },
+        { label: "Activity Log", path: "/activity", icon: History },
+        { label: "Settings", path: "/settings", icon: Settings },
+      ],
+    },
+  ],
+},
   agent: {
     main: [
-      { label: "Dashboard", path: "/", icon: LayoutDashboard },
-      { label: "Customers", path: "/customers", icon: Users },
-      { label: "Stores", path: "/stores", icon: Store },
-      { label: "Routes", path: "/routes", icon: Route },
-      { label: "Sales", path: "/sales", icon: ShoppingCart },
-      { label: "Transactions", path: "/transactions", icon: Receipt },
-      { label: "Orders", path: "/orders", icon: ClipboardList },
-      { label: "Handovers", path: "/handovers", icon: HandCoins },
-      { label: "Stock Transfers", path: "/stock-transfers", icon: ArrowRightLeft },
+      {
+        label: "Today",
+        items: [
+          { label: "Dashboard", path: "/", icon: LayoutDashboard },
+          { label: "Routes", path: "/routes", icon: Route },
+          { label: "Orders", path: "/orders", icon: ClipboardList },
+          { label: "Sales", path: "/sales", icon: ShoppingCart },
+          { label: "Transactions", path: "/transactions", icon: Receipt },
+          { label: "Handovers", path: "/handovers", icon: HandCoins },
+        ],
+      },
+      {
+        label: "Customers",
+        items: [
+          { label: "Customers", path: "/customers", icon: Users },
+          { label: "Stores", path: "/stores", icon: Store },
+          { label: "Stock Transfers", path: "/stock-transfers", icon: ArrowRightLeft },
+        ],
+      },
     ],
     secondary: [],
   },
   marketer: {
     main: [
-      { label: "Dashboard", path: "/", icon: LayoutDashboard },
-      { label: "Customers", path: "/customers", icon: Users },
-      { label: "Stores", path: "/stores", icon: Store },
-      { label: "Orders", path: "/orders", icon: ClipboardList },
-      { label: "Transactions", path: "/transactions", icon: Receipt },
-      { label: "Handovers", path: "/handovers", icon: HandCoins },
-      { label: "Stock Transfers", path: "/stock-transfers", icon: ArrowRightLeft },
+      {
+        label: "Pipeline",
+        items: [
+          { label: "Dashboard", path: "/", icon: LayoutDashboard },
+          { label: "Orders", path: "/orders", icon: ClipboardList },
+          { label: "Transactions", path: "/transactions", icon: Receipt },
+          { label: "Handovers", path: "/handovers", icon: HandCoins },
+        ],
+      },
+      {
+        label: "Relationships",
+        items: [
+          { label: "Customers", path: "/customers", icon: Users },
+          { label: "Stores", path: "/stores", icon: Store },
+          { label: "Stock Transfers", path: "/stock-transfers", icon: ArrowRightLeft },
+        ],
+      },
     ],
     secondary: [],
   },
   pos: {
     main: [
-      { label: "Dashboard", path: "/", icon: LayoutDashboard },
-      { label: "Inventory", path: "/inventory", icon: Warehouse },
-      { label: "Sales", path: "/sales", icon: ShoppingCart },
-      { label: "Handovers", path: "/handovers", icon: HandCoins },
+      {
+        label: "Counter",
+        items: [
+          { label: "Dashboard", path: "/", icon: LayoutDashboard },
+          { label: "Sales", path: "/sales", icon: ShoppingCart },
+          { label: "Handovers", path: "/handovers", icon: HandCoins },
+          { label: "Inventory", path: "/inventory", icon: Warehouse },
+        ],
+      },
     ],
     secondary: [],
   },
@@ -189,23 +277,31 @@ export function AppSidebar() {
   const { role } = useAuth();
 
   const isCustomer = role === "customer";
-  const customerNav: NavItem[] = [
-    { label: "Dashboard", path: "/", icon: LayoutDashboard },
-    { label: "Sales", path: "/portal/sales", icon: ShoppingCart },
-    { label: "Orders", path: "/portal/orders", icon: ClipboardList },
-    { label: "Transactions", path: "/portal/transactions", icon: Receipt },
-    { label: "Profile", path: "/portal/profile", icon: Users },
+  const customerNav: NavSection[] = [
+    {
+      label: "My Account",
+      items: [
+        { label: "Dashboard", path: "/", icon: LayoutDashboard },
+        { label: "Sales", path: "/portal/sales", icon: ShoppingCart },
+        { label: "Orders", path: "/portal/orders", icon: ClipboardList },
+        { label: "Transactions", path: "/portal/transactions", icon: Receipt },
+        { label: "Profile", path: "/portal/profile", icon: Users },
+      ],
+    },
   ];
 
   const roleNav = NAV_BY_ROLE[role || "agent"] || NAV_BY_ROLE.agent;
   const visibleMainNav = isCustomer ? customerNav : roleNav.main;
   const visibleSecondaryNav = isCustomer ? [] : roleNav.secondary;
 
-  const toggleExpanded = (path: string) => {
-    setExpandedItems((prev) => ({ ...prev, [path]: !prev[path] }));
+  const toggleExpanded = (path: string, forceState?: boolean) => {
+    setExpandedItems((prev) => ({
+      ...prev,
+      [path]: forceState ?? !prev[path],
+    }));
   };
 
-  const renderNav = (items: NavItem[]) =>
+  const renderNavItems = (items: NavItem[]) =>
     items.map((item) => {
       const hasChildren = item.children && item.children.length > 0;
       const isActive = location.pathname === item.path;
@@ -250,6 +346,17 @@ export function AppSidebar() {
             {isExpanded && !collapsed && (
               <div className="ml-4 mt-1 space-y-0.5 border-l border-sidebar-border pl-3">
                 {item.children!.map((child) => {
+                  if (child.isHeader) {
+                    return (
+                      <div
+                        key={child.path}
+                        className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted"
+                      >
+                        {child.label}
+                      </div>
+                    );
+                  }
+
                   const childActive = location.pathname === child.path;
                   return (
                     <NavLink
@@ -304,6 +411,23 @@ export function AppSidebar() {
       );
     });
 
+  const renderSections = (sections: NavSection[]) =>
+    sections.map((section) => (
+      <div key={section.label} className="space-y-1">
+        {!collapsed && (
+          <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted">
+            {section.label}
+          </p>
+        )}
+        {collapsed && (
+          <div className="flex justify-center py-1">
+            <span className="h-1.5 w-1.5 rounded-full bg-sidebar-border" />
+          </div>
+        )}
+        {renderNavItems(section.items)}
+      </div>
+    ));
+
   const sidebarContent = (
     <div className="flex h-full flex-col">
       <div className={cn("flex items-center gap-3 px-4 py-5 border-b border-sidebar-border", collapsed && "justify-center px-2")}>
@@ -334,18 +458,12 @@ export function AppSidebar() {
       )}
 
       <nav className="flex-1 space-y-1 px-3 py-3 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-        <p className={cn("px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted", collapsed && "text-center")}>
-          {collapsed ? "•" : "Main"}
-        </p>
-        {renderNav(visibleMainNav)}
+        {renderSections(visibleMainNav)}
 
         {visibleSecondaryNav.length > 0 && (
           <>
             <div className="my-3 border-t border-sidebar-border" />
-            <p className={cn("px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted", collapsed && "text-center")}>
-              {collapsed ? "•" : "System"}
-            </p>
-            {renderNav(visibleSecondaryNav)}
+            {renderSections(visibleSecondaryNav)}
           </>
         )}
       </nav>

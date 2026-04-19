@@ -15,7 +15,9 @@ import { Badge } from "../../components/ui/Badge";
 import { StatCard } from "../../components/ui/StatCard";
 import { LoadingCenter } from "../../components/ui/Loading";
 import { EmptyState } from "../../components/ui/EmptyState";
-import { addToQueue } from "@/lib/offlineQueue";
+import { addToQueue, generateBusinessKey } from "@/mobile-v2/lib/offlineQueue";
+import { validateCreditLimitOffline } from "@/mobile-v2/lib/offlineCreditValidation";
+import { isAdminOrManager } from "@/mobile-v2/lib/permissionCheck";
 
 interface Props {
   store?: StoreOption;
@@ -218,94 +220,206 @@ export function AgentRecord({ store: storeProp, mode: modeProp, onClose, onSucce
     );
   };
 
-  const handleSubmit = async () => {
-    if (mode === "sale" && cart.length === 0) {
-      toast.error("Please add items to cart");
+const handleSubmit = async () => {
+  if (mode === "sale" && cart.length === 0) {
+    toast.error("Please add items to cart");
+    return;
+  }
+
+  if (mode === "payment" && totalPaid <= 0) {
+    toast.error("Please enter payment amount");
+    return;
+  }
+
+  // Validate sale/payment amounts
+  if (cashNum < 0 || upiNum < 0) {
+    toast.error("Payment amounts cannot be negative");
+    return;
+  }
+
+  // For sales, validate credit limit
+  let isAdmin = false;
+  if (mode === "sale" && creditAmount > 0) {
+    isAdmin = await isAdminOrManager(user!.id);
+    const creditCheck = await validateCreditLimitOffline(
+      store.id,
+      creditAmount,
+      isAdmin
+    );
+
+    if (!creditCheck.valid) {
+      toast.error(creditCheck.warning || "Credit limit exceeded");
+      setSubmitting(false);
       return;
     }
 
-    if (mode === "payment" && totalPaid <= 0) {
-      toast.error("Please enter payment amount");
-      return;
+    if (creditCheck.warning) {
+      toast.warning(creditCheck.warning);
     }
+  }
 
-    setSubmitting(true);
+  setSubmitting(true);
 
-    try {
-      // Get current position
-      const position = await getCurrentPosition();
+  try {
+    // Get current position
+    const position = await getCurrentPosition();
+
+    // Check if offline
+    if (!navigator.onLine) {
+      // Queue the action for later sync
+      const businessKey = generateBusinessKey(
+        mode === "sale" ? "sale" : "transaction",
+        {
+          storeId: store.id,
+          customerId: store.customer_id,
+          amount: mode === "sale" ? cartTotal : totalPaid,
+          timestamp: new Date().toISOString(),
+        }
+      );
 
       if (mode === "sale") {
-        // Generate display ID
-        const { data: displayIdData, error: displayIdError } = await supabase.rpc("generate_display_id", { prefix: "SAL" });
-        if (displayIdError) throw displayIdError;
-        if (!displayIdData) throw new Error("Failed to generate display ID");
-        const displayId = displayIdData;
-
-        // Create sale
-        const salePayload = {
-          display_id: displayId,
-          store_id: store.id,
-          customer_id: store.customer_id,
-          recorded_by: user!.id,
-          total_amount: cartTotal,
-          cash_amount: cashNum,
-          upi_amount: upiNum,
-          credit_amount: creditAmount,
-          notes,
-          lat: position?.lat || null,
-          lng: position?.lng || null,
-          items: cart.map(item => ({
-            product_id: item.product_id,
-            quantity: item.quantity,
-            unit_price: item.price,
-            total_price: item.price * item.quantity,
-          })),
-        };
-
-        const { error } = await supabase.rpc("record_sale", salePayload);
-        if (error) throw error;
-
-        toast.success("Sale recorded successfully!");
-      } else {
-        // Generate display ID for transaction
-        const { data: displayIdData, error: displayIdError } = await supabase.rpc("generate_display_id", { prefix: "TXN" });
-        if (displayIdError) throw displayIdError;
-        if (!displayIdData) throw new Error("Failed to generate display ID");
-        const displayId = displayIdData;
-
-        // Create transaction/payment
-        const { error } = await supabase.from("transactions").insert({
-          display_id: displayId,
-          store_id: store.id,
-          customer_id: store.customer_id,
-          recorded_by: user!.id,
-          total_amount: totalPaid,
-          cash_amount: cashNum,
-          upi_amount: upiNum,
-          notes,
-          lat: position?.lat || null,
-          lng: position?.lng || null,
-          type: "payment",
+        await addToQueue({
+          type: "sale",
+          payload: {
+            saleData: {
+              store_id: store.id,
+              customer_id: store.customer_id,
+              recorded_by: user!.id,
+              total_amount: cartTotal,
+              cash_amount: cashNum,
+              upi_amount: upiNum,
+              outstanding_amount: creditAmount,
+              notes,
+              lat: position?.lat || null,
+              lng: position?.lng || null,
+            },
+            saleItems: cart.map((item) => ({
+              product_id: item.product_id,
+              quantity: item.quantity,
+              unit_price: item.price,
+              total_price: item.price * item.quantity,
+            })),
+          },
+          businessKey,
+          context: {
+            storeId: store.id,
+            creditLimit: creditAmount,
+            cached: true,
+          },
         });
-        if (error) throw error;
-
-        toast.success("Payment recorded successfully!");
+      } else {
+        await addToQueue({
+          type: "transaction",
+          payload: {
+            txData: {
+              store_id: store.id,
+              customer_id: store.customer_id,
+              recorded_by: user!.id,
+              total_amount: totalPaid,
+              cash_amount: cashNum,
+              upi_amount: upiNum,
+              notes,
+              lat: position?.lat || null,
+              lng: position?.lng || null,
+            },
+          },
+          businessKey,
+        });
       }
 
-      // Invalidate queries
-      queryClient.invalidateQueries({ queryKey: ["mobile-v2-agent-sales"] });
-      queryClient.invalidateQueries({ queryKey: ["mobile-v2-agent-tx"] });
-      
+      toast.success(
+        `${mode === "sale" ? "Sale" : "Payment"} queued for sync when online`
+      );
       onSuccess?.();
       handleClose();
-    } catch (err: any) {
-      console.error(err);
-      toast.error(err.message || "Failed to record");
-    } finally {
       setSubmitting(false);
+      return;
     }
-  };
+
+    if (mode === "sale") {
+      // Generate display ID
+      const { data: displayIdData, error: displayIdError } = await supabase.rpc(
+        "generate_display_id",
+        { prefix: "SAL", seq_name: "sale_display_seq" }
+      );
+      if (displayIdError) throw displayIdError;
+      if (!displayIdData) throw new Error("Failed to generate display ID");
+      const displayId = displayIdData;
+
+      // Create sale using atomic RPC
+      const { error } = await supabase.rpc("record_sale", {
+        p_display_id: displayId,
+        p_store_id: store.id,
+        p_customer_id: store.customer_id,
+        p_recorded_by: user!.id,
+        p_logged_by: null,
+        p_total_amount: cartTotal,
+        p_cash_amount: cashNum,
+        p_upi_amount: upiNum,
+        p_outstanding_amount: creditAmount,
+        p_sale_items: cart.map((item) => ({
+          product_id: item.product_id,
+          quantity: item.quantity,
+          unit_price: item.price,
+          total_price: item.price * item.quantity,
+        })),
+      });
+
+      if (error) {
+        // Handle specific errors
+        if (error.message?.includes("credit_limit_exceeded")) {
+          toast.error("Credit limit exceeded. Reduce outstanding amount.");
+        } else if (error.message?.includes("insufficient_stock")) {
+          toast.error("Insufficient stock for one or more products.");
+        } else {
+          throw error;
+        }
+        setSubmitting(false);
+        return;
+      }
+
+      toast.success("Sale recorded successfully!");
+    } else {
+      // Generate display ID for transaction
+      const { data: displayIdData, error: displayIdError } = await supabase.rpc(
+        "generate_display_id",
+        { prefix: "PAY", seq_name: "pay_display_seq" }
+      );
+      if (displayIdError) throw displayIdError;
+      if (!displayIdData) throw new Error("Failed to generate display ID");
+      const displayId = displayIdData;
+
+      // Use atomic RPC for transaction
+      const { error } = await supabase.rpc("record_transaction", {
+        p_display_id: displayId,
+        p_store_id: store.id,
+        p_customer_id: store.customer_id,
+        p_recorded_by: user!.id,
+        p_logged_by: null,
+        p_cash_amount: cashNum,
+        p_upi_amount: upiNum,
+        p_notes: notes,
+      });
+
+      if (error) throw error;
+
+      toast.success("Payment recorded successfully!");
+    }
+
+    // Invalidate queries
+    queryClient.invalidateQueries({ queryKey: ["mobile-v2-agent-sales"] });
+    queryClient.invalidateQueries({ queryKey: ["mobile-v2-agent-tx"] });
+
+    onSuccess?.();
+    handleClose();
+  } catch (err: any) {
+    // Log to error tracking but don't expose details to user
+    console.error("Submit error:", err);
+    toast.error(err.message || "Failed to record. Please try again.");
+  } finally {
+    setSubmitting(false);
+  }
+};
 
   return (
     <div className="mv2-page">

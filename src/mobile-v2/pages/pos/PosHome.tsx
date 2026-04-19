@@ -1,381 +1,357 @@
-import { useState, useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { 
-  ShoppingCart, 
-  Search, 
-  Plus,
-  Minus,
-  Trash2,
-  CreditCard,
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import {
+  ShoppingCart,
+  TrendingUp,
   Banknote,
   Smartphone,
   Receipt,
-  User,
-  X,
-  Check
+  Package,
+  Store,
+  History,
+  Plus,
+  Calculator,
+  QrCode,
+  ChevronRight,
+  ArrowUpRight,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Section, Card, Badge, Loading, EmptyState } from "../../components/ui";
+import { StatCard, Section, Card, QuickAction, Badge, Loading, EmptyState } from "@/mobile-v2/components/ui";
 import { formatCurrency } from "@/lib/utils";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
 
-interface CartItem {
-  product_id: string;
+interface InventoryItem {
+  id: string;
   name: string;
-  unit_price: number;
-  quantity: number;
+  sku: string;
+  stock_quantity: number;
+  reorder_level: number;
+  category: string;
 }
 
 export function PosHome() {
-  const { profile } = useAuth();
-  const queryClient = useQueryClient();
-  const [searchQuery, setSearchQuery] = useState("");
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [showCheckout, setShowCheckout] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<string>("cash");
-  const [customerName, setCustomerName] = useState("");
+  const { profile, user } = useAuth();
+  const [greeting] = useState(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Good morning";
+    if (hour < 17) return "Good afternoon";
+    return "Good evening";
+  });
 
-  // Fetch products
-  const { data: products, isLoading } = useQuery({
-    queryKey: ["mobile-v2-pos-products"],
+  const today = new Date().toISOString().split("T")[0];
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date(todayStart);
+  todayEnd.setDate(todayEnd.getDate() + 1);
+
+  const { data: dashboardData, isLoading } = useQuery({
+    queryKey: ["mobile-v2-pos-dashboard", user?.id, today],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("products")
-        .select("id, name, sku, unit_price, category, image_url, stock_quantity")
-        .eq("is_active", true)
-        .order("name", { ascending: true });
+      if (!user?.id) return null;
 
-      if (error) throw error;
-      return data || [];
+      const [
+        todaySalesRes,
+        todayTransactionsRes,
+        inventoryRes,
+        lowStockRes,
+        recentSalesRes,
+      ] = await Promise.all([
+        // Today's counter sales
+        supabase
+          .from("sales")
+          .select("total_amount, cash_amount, upi_amount, payment_type")
+          .eq("recorded_by", user.id)
+          .gte("created_at", todayStart.toISOString())
+          .lt("created_at", todayEnd.toISOString()),
+        // Today's transactions
+        supabase
+          .from("transactions")
+          .select("total_amount, cash_amount, upi_amount, transaction_type")
+          .eq("recorded_by", user.id)
+          .gte("created_at", todayStart.toISOString())
+          .lt("created_at", todayEnd.toISOString()),
+        // Current inventory
+        supabase
+          .from("products")
+          .select("id, name, sku, stock_quantity, reorder_level, category")
+          .eq("is_active", true)
+          .order("stock_quantity", { ascending: true })
+          .limit(20),
+        // Low stock items
+        supabase
+          .from("products")
+          .select("id, name, stock_quantity, reorder_level")
+          .eq("is_active", true)
+          .lte("stock_quantity", supabase.rpc("get_reorder_threshold", {}))
+          .limit(10),
+        // Recent sales
+        supabase
+          .from("sales")
+          .select("id, display_id, total_amount, created_at, status, payment_type")
+          .eq("recorded_by", user.id)
+          .order("created_at", { ascending: false })
+          .limit(10),
+      ]);
+
+      const sales = todaySalesRes.data || [];
+      const transactions = todayTransactionsRes.data || [];
+      const inventory = inventoryRes.data || [];
+      const lowStock = lowStockRes.data || [];
+      const recentSales = recentSalesRes.data || [];
+
+      // Calculate totals
+      const totalCash = sales.reduce((s, r) => s + Number(r.cash_amount || 0), 0) +
+        transactions.reduce((s, r) => s + Number(r.cash_amount || 0), 0);
+      const totalUpi = sales.reduce((s, r) => s + Number(r.upi_amount || 0), 0) +
+        transactions.reduce((s, r) => s + Number(r.upi_amount || 0), 0);
+      const totalSales = sales.reduce((s, r) => s + Number(r.total_amount || 0), 0);
+      const totalTransactions = transactions.reduce((s, r) => s + Number(r.total_amount || 0), 0);
+
+      // Inventory stats
+      const totalProducts = inventory.length;
+      const lowStockCount = lowStock.length;
+      const totalStock = inventory.reduce((s, p) => s + (p.stock_quantity || 0), 0);
+
+      return {
+        stats: {
+          cashInHand: totalCash,
+          upiCollections: totalUpi,
+          totalCollections: totalCash + totalUpi,
+          counterSales: sales.length,
+          totalSalesAmount: totalSales + totalTransactions,
+          totalProducts,
+          lowStockCount,
+          totalStock,
+        },
+        recentSales,
+        lowStockItems: lowStock.slice(0, 5),
+        inventory: inventory.slice(0, 10),
+      };
     },
+    enabled: !!user?.id,
+    staleTime: 30000,
   });
-
-  // Complete sale mutation
-  const completeSaleMutation = useMutation({
-    mutationFn: async () => {
-      const { data: displayIdData } = await supabase.rpc("generate_display_id", {
-        prefix: "POS",
-      });
-
-      const total = cart.reduce((sum, item) => sum + (item.unit_price * item.quantity), 0);
-
-      const { data: sale, error: saleError } = await supabase
-        .from("sales")
-        .insert({
-          display_id: displayIdData,
-          total_amount: total,
-          payment_type: paymentMethod,
-          status: "completed",
-          agent_id: profile?.id,
-          notes: customerName ? `Customer: ${customerName}` : "Walk-in customer",
-        })
-        .select()
-        .single();
-
-      if (saleError) throw saleError;
-
-      // Insert sale items
-      const items = cart.map(item => ({
-        sale_id: sale.id,
-        product_id: item.product_id,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-      }));
-
-      const { error: itemsError } = await supabase
-        .from("sale_items")
-        .insert(items);
-
-      if (itemsError) throw itemsError;
-
-      return sale;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["mobile-v2-pos-products"] });
-      setCart([]);
-      setShowCheckout(false);
-      setCustomerName("");
-      toast.success("Sale completed successfully!");
-    },
-    onError: () => {
-      toast.error("Failed to complete sale");
-    },
-  });
-
-  const filteredProducts = products?.filter(product => {
-    if (!searchQuery) return true;
-    const search = searchQuery.toLowerCase();
-    return (
-      product.name?.toLowerCase().includes(search) ||
-      product.sku?.toLowerCase().includes(search)
-    );
-  });
-
-  // Define product type for the cart
-  type ProductType = NonNullable<typeof products>[number];
-
-  const addToCart = (product: ProductType) => {
-    setCart(prev => {
-      const existing = prev.find(item => item.product_id === product.id);
-      if (existing) {
-        return prev.map(item =>
-          item.product_id === product.id
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
-        );
-      }
-      return [...prev, {
-        product_id: product.id,
-        name: product.name,
-        unit_price: product.unit_price,
-        quantity: 1,
-      }];
-    });
-  };
-
-  const updateQuantity = (productId: string, delta: number) => {
-    setCart(prev => prev.map(item => {
-      if (item.product_id === productId) {
-        const newQty = item.quantity + delta;
-        return newQty > 0 ? { ...item, quantity: newQty } : item;
-      }
-      return item;
-    }).filter(item => item.quantity > 0));
-  };
-
-  const removeFromCart = (productId: string) => {
-    setCart(prev => prev.filter(item => item.product_id !== productId));
-  };
-
-  const cartTotal = cart.reduce((sum, item) => sum + (item.unit_price * item.quantity), 0);
-  const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   if (isLoading) {
     return (
       <div className="mv2-page">
-        <Loading.Skeleton className="h-12 mb-4" />
-        <div className="grid grid-cols-2 gap-3">
-          {[1, 2, 3, 4].map(i => (
-            <Loading.Skeleton key={i} className="h-32" />
-          ))}
+        <Loading.Skeleton className="h-32 mb-4" />
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          <Loading.Skeleton className="h-20" />
+          <Loading.Skeleton className="h-20" />
+          <Loading.Skeleton className="h-20" />
         </div>
+        <Loading.Skeleton className="h-48" />
       </div>
     );
   }
 
+  const s = dashboardData?.stats;
+
   return (
-    <div className="mv2-page pb-32">
-      {/* Page Header */}
-      <div className="mb-4">
-        <h1 className="text-xl font-bold text-foreground">Point of Sale</h1>
-        <p className="text-sm text-muted-foreground">Quick sales terminal</p>
-      </div>
-
-      {/* Search */}
-      <div className="relative mb-4">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <Input
-          placeholder="Search products..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-10 mv2-input"
-        />
-      </div>
-
-      {/* Products Grid */}
-      <Section title="Products">
-        {filteredProducts && filteredProducts.length > 0 ? (
-          <div className="grid grid-cols-2 gap-3">
-            {filteredProducts.map((product) => {
-              const inCart = cart.find(item => item.product_id === product.id);
-
-              return (
-                <Card 
-                  key={product.id} 
-                  variant="outline" 
-                  className={`p-3 cursor-pointer transition-all ${
-                    inCart ? "ring-2 ring-primary" : "hover:bg-muted/50"
-                  }`}
-                  onClick={() => addToCart(product)}
-                >
-                  <div className="w-full aspect-square rounded-lg bg-muted flex items-center justify-center mb-2 overflow-hidden relative">
-                    {product.image_url ? (
-                      <img 
-                        src={product.image_url} 
-                        alt={product.name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <ShoppingCart className="w-8 h-8 text-muted-foreground" />
-                    )}
-                    {inCart && (
-                      <div className="absolute top-1 right-1 w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold">
-                        {inCart.quantity}
-                      </div>
-                    )}
-                  </div>
-                  <p className="font-medium text-foreground text-sm truncate">
-                    {product.name}
-                  </p>
-                  <p className="font-bold text-primary">
-                    {formatCurrency(product.unit_price)}
-                  </p>
-                </Card>
-              );
-            })}
+    <div className="mv2-page">
+      {/* Hero Section */}
+      <div className="mv2-hero mb-4">
+        <div className="mv2-hero-content">
+          <p className="text-white/80 text-sm">{greeting}</p>
+          <h1 className="text-xl font-bold text-white mt-1">
+            {profile?.full_name || "POS Operator"}
+          </h1>
+          <div className="flex items-center gap-2 mt-2">
+            <Badge className="bg-white/20 text-white border-0">
+              <Store className="w-3 h-3 mr-1" />
+              POS Terminal
+            </Badge>
           </div>
-        ) : (
-          <EmptyState
-            icon={ShoppingCart}
-            title="No products found"
-            description="Add products to start selling"
+        </div>
+      </div>
+
+      {/* Today's Collections - 3 cards */}
+      <Section title="Today's Collections" className="mb-4">
+        <div className="grid grid-cols-3 gap-2">
+          <StatCard
+            icon={Banknote}
+            label="Cash"
+            value={formatCurrency(s?.cashInHand || 0)}
+            variant="success"
+            className="text-xs"
           />
+          <StatCard
+            icon={Smartphone}
+            label="UPI"
+            value={formatCurrency(s?.upiCollections || 0)}
+            variant="info"
+            className="text-xs"
+          />
+          <StatCard
+            icon={TrendingUp}
+            label="Total"
+            value={formatCurrency(s?.totalCollections || 0)}
+            variant="primary"
+            className="text-xs"
+          />
+        </div>
+      </Section>
+
+      {/* Counter Sales Stats */}
+      <Section title="Counter Sales" className="mb-4">
+        <div className="grid grid-cols-2 gap-2">
+          <StatCard
+            icon={Receipt}
+            label="Sales Count"
+            value={String(s?.counterSales || 0)}
+            variant="default"
+          />
+          <StatCard
+            icon={ShoppingCart}
+            label="Sales Amount"
+            value={formatCurrency(s?.totalSalesAmount || 0)}
+            variant="success"
+          />
+        </div>
+      </Section>
+
+      {/* Inventory Levels */}
+      <Section title="Inventory Levels" className="mb-4">
+        <div className="grid grid-cols-3 gap-2 mb-3">
+          <StatCard
+            icon={Package}
+            label="Products"
+            value={String(s?.totalProducts || 0)}
+            variant="default"
+            className="text-xs"
+          />
+          <StatCard
+            icon={Store}
+            label="Total Stock"
+            value={String(s?.totalStock || 0)}
+            variant="success"
+            className="text-xs"
+          />
+          <StatCard
+            icon={TrendingUp}
+            label="Low Stock"
+            value={String(s?.lowStockCount || 0)}
+            variant={s?.lowStockCount ? "warning" : "success"}
+            className="text-xs"
+          />
+        </div>
+
+        {/* Low Stock Alert */}
+        {s?.lowStockCount > 0 && (
+          <Card className="p-3 border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800">
+            <div className="flex items-center gap-2 mb-2">
+              <TrendingUp className="w-4 h-4 text-amber-600" />
+              <span className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                Low Stock Items
+              </span>
+            </div>
+            <div className="space-y-2">
+              {dashboardData?.lowStockItems.slice(0, 3).map((item: any) => (
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between text-sm"
+                >
+                  <span className="truncate">{item.name}</span>
+                  <Badge variant="warning" className="text-xs">
+                    {item.stock_quantity} left
+                  </Badge>
+                </div>
+              ))}
+              {dashboardData!.lowStockItems.length > 3 && (
+                <Button
+                  variant="ghost"
+                  className="w-full text-xs mt-1"
+                  onClick={() => window.location.href = "/pos/inventory"}
+                >
+                  View all {dashboardData?.lowStockItems.length} items
+                </Button>
+              )}
+            </div>
+          </Card>
         )}
       </Section>
 
-      {/* Cart Summary Bar */}
-      {cart.length > 0 && (
-        <div className="fixed bottom-20 left-0 right-0 bg-card border-t border-border p-4 shadow-lg safe-area-bottom">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <ShoppingCart className="w-5 h-5 text-primary" />
-              <span className="font-medium text-foreground">
-                {cartItemCount} items
-              </span>
-            </div>
-            <span className="text-xl font-bold text-primary">
-              {formatCurrency(cartTotal)}
-            </span>
-          </div>
-          <Button 
-            className="w-full mv2-btn-primary"
-            onClick={() => setShowCheckout(true)}
-          >
-            <Receipt className="w-4 h-4 mr-2" />
-            Checkout
-          </Button>
+      {/* Quick Billing Actions */}
+      <Section title="Quick Actions" className="mb-4">
+        <div className="grid grid-cols-4 gap-2">
+          <QuickAction
+            icon={Plus}
+            label="New Sale"
+            href="/pos/sales"
+            variant="primary"
+          />
+          <QuickAction
+            icon={Calculator}
+            label="Calculator"
+            href="/pos/calculator"
+          />
+          <QuickAction
+            icon={QrCode}
+            label="Scan QR"
+            href="/pos/scan"
+          />
+          <QuickAction
+            icon={History}
+            label="History"
+            href="/pos/history"
+          />
         </div>
-      )}
+      </Section>
 
-      {/* Checkout Dialog */}
-      <Dialog open={showCheckout} onOpenChange={setShowCheckout}>
-        <DialogContent className="max-w-md mx-4">
-          <DialogHeader>
-            <DialogTitle>Complete Sale</DialogTitle>
-          </DialogHeader>
-
-          {/* Cart Items */}
-          <div className="space-y-2 max-h-48 overflow-y-auto">
-            {cart.map((item) => (
-              <div key={item.product_id} className="flex items-center justify-between p-2 bg-muted rounded-lg">
-                <div className="flex-1">
-                  <p className="font-medium text-foreground text-sm">{item.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {formatCurrency(item.unit_price)} each
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    size="icon"
-                    variant="outline"
-                    className="h-7 w-7"
-                    onClick={() => updateQuantity(item.product_id, -1)}
-                  >
-                    <Minus className="w-3 h-3" />
-                  </Button>
-                  <span className="w-6 text-center font-medium">{item.quantity}</span>
-                  <Button
-                    size="icon"
-                    variant="outline"
-                    className="h-7 w-7"
-                    onClick={() => updateQuantity(item.product_id, 1)}
-                  >
-                    <Plus className="w-3 h-3" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7 text-destructive"
-                    onClick={() => removeFromCart(item.product_id)}
-                  >
-                    <Trash2 className="w-3 h-3" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Total */}
-          <div className="flex items-center justify-between py-3 border-t border-border">
-            <span className="font-medium text-foreground">Total</span>
-            <span className="text-2xl font-bold text-primary">
-              {formatCurrency(cartTotal)}
-            </span>
-          </div>
-
-          {/* Customer Name (Optional) */}
-          <div className="flex items-center gap-2">
-            <User className="w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Customer name (optional)"
-              value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
-              className="mv2-input"
-            />
-          </div>
-
-          {/* Payment Method */}
+      {/* Recent Sales */}
+      <Section title="Recent Sales" className="mb-4">
+        {dashboardData?.recentSales && dashboardData.recentSales.length > 0 ? (
           <div className="space-y-2">
-            <p className="text-sm font-medium text-foreground">Payment Method</p>
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                { id: "cash", icon: Banknote, label: "Cash" },
-                { id: "card", icon: CreditCard, label: "Card" },
-                { id: "mobile", icon: Smartphone, label: "Mobile" },
-              ].map(method => (
-                <Button
-                  key={method.id}
-                  variant={paymentMethod === method.id ? "default" : "outline"}
-                  className="h-auto py-3 flex-col gap-1"
-                  onClick={() => setPaymentMethod(method.id)}
-                >
-                  <method.icon className="w-5 h-5" />
-                  <span className="text-xs">{method.label}</span>
-                </Button>
-              ))}
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="flex gap-2 pt-2">
+            {dashboardData.recentSales.slice(0, 5).map((sale: any) => (
+              <Card
+                key={sale.id}
+                variant="outline"
+                className="p-3 flex items-center justify-between"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Receipt className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-sm">{sale.display_id}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(sale.created_at).toLocaleTimeString()}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="font-semibold">
+                    {formatCurrency(sale.total_amount || 0)}
+                  </p>
+                  <Badge
+                    variant={sale.payment_type === "cash" ? "success" : "info"}
+                    className="text-xs"
+                  >
+                    {sale.payment_type || "cash"}
+                  </Badge>
+                </div>
+              </Card>
+            ))}
             <Button
-              variant="outline"
-              className="flex-1"
-              onClick={() => setShowCheckout(false)}
+              variant="ghost"
+              className="w-full text-sm mt-2"
+              onClick={() => window.location.href = "/pos/sales"}
             >
-              <X className="w-4 h-4 mr-1" />
-              Cancel
-            </Button>
-            <Button
-              className="flex-1 mv2-btn-primary"
-              onClick={() => completeSaleMutation.mutate()}
-              disabled={completeSaleMutation.isPending}
-            >
-              <Check className="w-4 h-4 mr-1" />
-              Complete Sale
+              View all sales
+              <ChevronRight className="w-4 h-4 ml-1" />
             </Button>
           </div>
-        </DialogContent>
-      </Dialog>
+        ) : (
+          <EmptyState
+            icon={Receipt}
+            title="No sales today"
+            description="Start billing to see transactions here"
+          />
+        )}
+      </Section>
     </div>
   );
 }

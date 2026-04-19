@@ -69,9 +69,14 @@ export const PurchaseOrderForm = () => {
   });
 
   const { data: products } = useQuery({
-    queryKey: ['products', warehouse?.id, 'raw_material'], // Assuming a way to filter for raw materials
+    queryKey: ['raw_materials', warehouse?.id],
     queryFn: async () => {
-      const { data, error } = await supabase.from('products').select('id, name').eq('warehouse_id', warehouse?.id).eq('is_raw_material', true); // This filter needs to be implemented
+      const { data, error } = await supabase
+        .from('raw_materials')
+        .select('id, name')
+        .eq('warehouse_id', warehouse?.id)
+        .eq('is_active', true)
+        .order('name');
       if (error) throw error;
       return data;
     },

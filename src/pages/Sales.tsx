@@ -401,14 +401,40 @@ const Sales = () => {
       toast.error("POS sales require full payment. Cash + UPI must equal Total.");
       return;
     }
+
+    // Validate sale date if provided
+    if (saleDate) {
+      const saleDateObj = new Date(saleDate);
+      const now = new Date();
+      const maxPast = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000); // 30 days ago
+      const maxFuture = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 1 day in the future
+
+      if (saleDateObj > maxFuture) {
+        toast.error("Sale date cannot be more than 1 day in the future");
+        return;
+      }
+      if (saleDateObj < maxPast) {
+        toast.error("Sale date cannot be more than 30 days in the past");
+        return;
+      }
+    }
+
     setSaving(true);
 
     // Proximity check for agents
     if (role === "agent" && selectedStore) {
       const { checkProximity } = await import("@/lib/proximity");
-      const result = await checkProximity(selectedStore.lat ?? null, selectedStore.lng ?? null);
+      const result = await checkProximity(
+        selectedStore.lat ?? null,
+        selectedStore.lng ?? null,
+        { noGpsHandling: "require_manager_override", userRole: role }
+      );
       if (!result.withinRange) {
-        toast.error(result.message);
+        if (result.requiresManagerOverride) {
+          toast.error(result.message + " Please ask a manager to update the store's GPS coordinates.");
+        } else {
+          toast.error(result.message);
+        }
         setSaving(false);
         return;
       }
@@ -440,22 +466,25 @@ const Sales = () => {
     
     if (stockError) {
       console.error("Stock check failed:", stockError);
-      // Continue with sale but log warning - non-blocking
-    } else {
-      const stockRows = Array.isArray(stockCheck) ? stockCheck : [];
-      const insufficient = stockRows.filter((s: any) => !s.available);
-      if (insufficient.length > 0) {
-        const productNames = insufficient.map((i: any) => i.product_name).join(", ");
-        toast.error(
-          `Insufficient stock for: ${productNames}. Available: ${insufficient.map((i: any) => `${i.product_name} (${i.available_qty})`).join(", ")}`
-        );
-        setSaving(false);
-        return;
-      }
+      // BLOCKING: Stock check failure should prevent sale
+      toast.error(`Stock check failed: ${stockError.message || "Unable to verify stock availability"}. Please try again.`);
+      setSaving(false);
+      return;
+    }
+
+    const stockRows = Array.isArray(stockCheck) ? stockCheck : [];
+    const insufficient = stockRows.filter((s: any) => !s.available);
+    if (insufficient.length > 0) {
+      const productNames = insufficient.map((i: any) => i.product_name).join(", ");
+      toast.error(
+        `Insufficient stock for: ${productNames}. Available: ${insufficient.map((i: any) => `${i.product_name} (${i.available_qty})`).join(", ")}`
+      );
+      setSaving(false);
+      return;
     }
   }
 
-  // Queue sale for offline sync if no network connection
+// Queue sale for offline sync if no network connection
     if (!navigator.onLine) {
       const effectiveRecordedByOffline = recordedFor || user!.id;
       const loggedByOffline = recordedFor ? user!.id : null;
@@ -465,7 +494,25 @@ const Sales = () => {
         unit_price: i.unit_price,
         total_price: i.quantity * i.unit_price,
       }));
-      
+
+      // OFFLINE CREDIT LIMIT VALIDATION
+      const { validateCreditLimitOffline } = await import("@/lib/offlineCreditValidation");
+      const creditCheck = await validateCreditLimitOffline(
+        storeId,
+        outstandingFromSale,
+        isAdmin
+      );
+
+      if (!creditCheck.valid) {
+        toast.error(creditCheck.warning || "Credit limit exceeded");
+        setSaving(false);
+        return;
+      }
+
+      if (creditCheck.warning) {
+        toast.warning(creditCheck.warning);
+      }
+
       // Generate business key for deduplication
       const businessKey = generateBusinessKey('sale', {
         storeId,
@@ -474,7 +521,7 @@ const Sales = () => {
         products: saleItems.map(i => ({ product_id: i.product_id, quantity: i.quantity })),
         timestamp: saleDate || new Date().toISOString(),
       });
-      
+
       await addToQueue({
         id: crypto.randomUUID(),
         type: "sale",
@@ -497,6 +544,12 @@ const Sales = () => {
         },
         createdAt: new Date().toISOString(),
         businessKey,
+        context: {
+          creditLimit: creditCheck.limit,
+          creditLimitSource: creditCheck.limitSource,
+          currentOutstanding: creditCheck.currentOutstanding,
+          cached: creditCheck.cached,
+        },
       });
       toast.warning("You're offline — sale queued and will sync automatically when back online");
       setSaving(false);

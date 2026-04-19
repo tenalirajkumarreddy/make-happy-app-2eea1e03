@@ -347,81 +347,12 @@ const Stores = () => {
     return new Map(allWarehouses.map((warehouse) => [warehouse.id, warehouse.name]));
   }, [allWarehouses]);
 
-  const visibleStoreCount = filteredStores.length;
-  const activeStoreCount = filteredStores.filter((store: any) => store.is_active).length;
-  const outstandingStoreCount = filteredStores.filter((store: any) => Number(store.outstanding) > 0).length;
-  const warehouseScopeCount = currentWarehouse ? 1 : 0;
-  const scopeTitle = currentWarehouse?.name || "Selected warehouse";
-  const scopeSubtitle = currentWarehouse?.name
-    ? `Showing stores scoped to ${currentWarehouse.name}. Use the top-bar warehouse switcher to change context.`
-    : "Showing stores for the selected warehouse context.";
-
   if (isLoading) {
     return <TableSkeleton columns={7} />;
   }
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <Card className="border-primary/20 bg-gradient-to-r from-primary/5 via-background to-background shadow-sm">
-        <CardContent className="p-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Badge variant="secondary" className="rounded-full px-3 py-1 text-[11px] uppercase tracking-wide">
-                  Warehouse scope
-                </Badge>
-                <Badge variant="outline" className="rounded-full px-3 py-1 text-[11px] uppercase tracking-wide">
-                  Scoped view
-                </Badge>
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-foreground">{scopeTitle}</h2>
-                <p className="text-sm text-muted-foreground max-w-2xl">{scopeSubtitle}</p>
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 w-full lg:w-auto">
-              <div className="rounded-xl border bg-background/80 px-4 py-3 min-w-[150px]">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Warehouses</p>
-                    <p className="text-2xl font-semibold">{warehouseScopeCount}</p>
-                  </div>
-                  <Building2 className="h-5 w-5 text-primary" />
-                </div>
-              </div>
-              <div className="rounded-xl border bg-background/80 px-4 py-3 min-w-[150px]">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Visible stores</p>
-                    <p className="text-2xl font-semibold">{visibleStoreCount}</p>
-                  </div>
-                  <Store className="h-5 w-5 text-primary" />
-                </div>
-              </div>
-              <div className="rounded-xl border bg-background/80 px-4 py-3 min-w-[150px]">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Active stores</p>
-                    <p className="text-2xl font-semibold">{activeStoreCount}</p>
-                  </div>
-                  <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                </div>
-              </div>
-              <div className="rounded-xl border bg-background/80 px-4 py-3 min-w-[150px]">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">With outstanding</p>
-                    <p className="text-2xl font-semibold">{outstandingStoreCount}</p>
-                  </div>
-                  <DollarSign className="h-5 w-5 text-amber-600" />
-                </div>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
       <PageHeader
         title="Stores"
         subtitle={`Manage store locations and assignments in ${currentWarehouse?.name || "the selected warehouse"}`}

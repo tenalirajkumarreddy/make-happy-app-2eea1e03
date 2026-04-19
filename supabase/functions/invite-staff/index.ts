@@ -9,10 +9,44 @@ import {
 
 const ALLOWED_ORIGINS = [
   "https://aquaprimesales.vercel.app",
-  "http://localhost:5000",
-  "http://localhost:5173",
-  "http://localhost:8100",
+  // Local development origins - only allow in development environment
+  ...(Deno.env.get("DENO_ENV") === "development" ? [
+    "http://localhost:5000",
+    "http://localhost:5173",
+    "http://localhost:8100",
+  ] : []),
 ];
+
+// Rate limiting configuration
+const RATE_LIMIT_WINDOW = 60 * 60 * 1000; // 1 hour
+const MAX_INVITES_PER_HOUR = 10;
+
+// Simple in-memory rate limiting store (use Redis/DB in production)
+const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
+
+function checkRateLimit(userId: string): { allowed: boolean; retryAfter?: number } {
+  const now = Date.now();
+  const record = rateLimitStore.get(userId);
+
+  if (!record || now > record.resetTime) {
+    // Reset or create new record
+    rateLimitStore.set(userId, {
+      count: 1,
+      resetTime: now + RATE_LIMIT_WINDOW,
+    });
+    return { allowed: true };
+  }
+
+  if (record.count >= MAX_INVITES_PER_HOUR) {
+    return {
+      allowed: false,
+      retryAfter: Math.ceil((record.resetTime - now) / 1000),
+    };
+  }
+
+  record.count++;
+  return { allowed: true };
+}
 
 function significantPhone(phone?: string | null): string {
   const digits = (phone || "").replace(/\D/g, "");
@@ -102,6 +136,25 @@ Deno.serve(async (req) => {
       .single();
     if (callerRole?.role !== "super_admin") throw new Error("Only super_admin can invite staff");
 
+    // Check rate limit
+    const rateLimit = checkRateLimit(caller.id);
+    if (!rateLimit.allowed) {
+      return new Response(
+        JSON.stringify({
+          error: "Rate limit exceeded",
+          message: `Maximum ${MAX_INVITES_PER_HOUR} invitations per hour. Try again in ${rateLimit.retryAfter} seconds.`,
+        }),
+        {
+          status: 429,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+            "Retry-After": String(rateLimit.retryAfter),
+          },
+        }
+      );
+    }
+
     // Validate request body
     let body: any;
     try {
@@ -110,20 +163,51 @@ Deno.serve(async (req) => {
       throw new Error("Invalid JSON request body");
     }
 
-    const { email, phone, full_name, role, avatar_url } = body;
+  const { email, phone, full_name, role, avatar_url } = body;
 
-    if (!full_name || typeof full_name !== "string" || full_name.trim().length === 0) {
-      throw new Error("Missing required field: full_name");
-    }
+  // Enhanced full_name validation
+  if (!full_name || typeof full_name !== "string" || full_name.trim().length === 0) {
+    throw new Error("Missing required field: full_name");
+  }
 
-    if (!role || typeof role !== "string") {
-      throw new Error("Missing required field: role");
-    }
+  const trimmedFullName = full_name.trim();
+  if (trimmedFullName.length > 100) {
+    throw new Error("Full name must be 100 characters or less");
+  }
+  if (trimmedFullName.length < 2) {
+    throw new Error("Full name must be at least 2 characters");
+  }
+  // Basic name validation - allow letters, spaces, hyphens, and apostrophes
+  if (!/^[\p{L}\s\-'\.]+$/u.test(trimmedFullName)) {
+    throw new Error("Full name contains invalid characters");
+  }
 
-    const validRoles = ["super_admin", "manager", "agent", "marketer", "pos"];
-    if (!validRoles.includes(role)) {
-      throw new Error(`Invalid role: ${role}. Must be one of: ${validRoles.join(", ")}`);
+  if (!role || typeof role !== "string") {
+    throw new Error("Missing required field: role");
+  }
+
+  const validRoles = ["super_admin", "manager", "agent", "marketer", "pos"];
+  if (!validRoles.includes(role)) {
+    throw new Error(`Invalid role: ${role}. Must be one of: ${validRoles.join(", ")}`);
+  }
+
+  // Enhanced avatar_url validation
+  if (avatar_url !== undefined && avatar_url !== null) {
+    if (typeof avatar_url !== "string") {
+      throw new Error("Avatar URL must be a string");
     }
+    if (avatar_url.length > 500) {
+      throw new Error("Avatar URL must be 500 characters or less");
+    }
+    // Basic URL validation - only allow safe URLs
+    const allowedUrlPatterns = [
+      /^https:\/\/[^\s\/$.?#].[^\s]*$/i,  // Standard HTTPS
+      /^data:image\/[a-z]+;base64,/i,      // Base64 data URLs
+    ];
+    if (avatar_url.length > 0 && !allowedUrlPatterns.some(pattern => pattern.test(avatar_url))) {
+      throw new Error("Avatar URL must be a valid HTTPS URL or base64 data URL");
+    }
+  }
 
     const normalizedEmail = email ? String(email).toLowerCase().trim() : null;
 

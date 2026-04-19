@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useWarehouse } from "@/contexts/WarehouseContext";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { FileText, Plus, Eye, Download, XCircle, Printer } from "lucide-react";
 import { toast } from "sonner";
@@ -28,14 +29,15 @@ const Invoices = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const qc = useQueryClient();
+  const { currentWarehouse } = useWarehouse();
   const [cancelDialog, setCancelDialog] = useState<{ id: string; number: string } | null>(null);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelling, setCancelling] = useState(false);
 
   const { data: invoices = [], isLoading } = useQuery({
-    queryKey: ["invoices"],
+    queryKey: ["invoices", currentWarehouse?.id],
     queryFn: async () => {
-      const { data, error } = await (supabase
+      let query = supabase
         .from("invoices")
         .select(`
           *,
@@ -43,11 +45,18 @@ const Invoices = () => {
           stores(name),
           warehouses:dispatch_warehouse_id(name),
           invoice_sales(sale_id)
-        `)
-        .order("invoice_date", { ascending: false }) as any);
+        `);
+      
+      if (currentWarehouse?.id) {
+        query = query.eq("dispatch_warehouse_id", currentWarehouse.id);
+      }
+      
+      const { data, error } = await query.order("invoice_date", { ascending: false });
+      
       if (error) throw error;
       return data;
     },
+    enabled: !!currentWarehouse?.id,
   });
 
   const handleCancel = async () => {

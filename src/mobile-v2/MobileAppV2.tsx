@@ -6,6 +6,7 @@ import ErrorBoundary from "@/components/error/ErrorBoundary";
 // Layout Components
 import { MobileHeader } from "./components/MobileHeader";
 import { BottomNav, AGENT_TABS, MARKETER_TABS, CUSTOMER_TABS, POS_TABS, ADMIN_TABS } from "./components/BottomNav";
+import { OfflineQueueStatus } from "./components/OfflineQueueStatus";
 
 // Agent Pages
 import { 
@@ -205,6 +206,9 @@ export function MobileAppV2() {
 
       {/* Bottom Navigation */}
       {!hideBottomNav && <BottomNav tabs={tabs} />}
+      
+      {/* Offline Queue Status */}
+      <OfflineQueueStatus />
     </div>
   );
 }
