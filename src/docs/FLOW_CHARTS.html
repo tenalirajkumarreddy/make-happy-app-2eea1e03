@@ -214,13 +214,14 @@
     <header class="header">
         <h1>🏢 Aqua Prime - Business Flow Charts</h1>
         <p>Complete documentation of Orders, Sales, Invoices, and Receipts flow</p>
-        <nav class="nav">
-            <a href="#overview" class="nav-btn active">Overview</a>
-            <a href="#orders" class="nav-btn">Orders Flow</a>
-            <a href="#invoices" class="nav-btn">Invoices Flow</a>
-            <a href="#sales" class="nav-btn">Sales Flow</a>
-            <a href="#permissions" class="nav-btn">Permissions</a>
-        </nav>
+<nav class="nav">
+  <a href="#overview" class="nav-btn active">Overview</a>
+  <a href="#orders" class="nav-btn">Orders</a>
+  <a href="#invoices" class="nav-btn">Invoices</a>
+  <a href="#sales" class="nav-btn">Sales</a>
+  <a href="#reversals" class="nav-btn">↩️ Reversals</a>
+  <a href="#permissions" class="nav-btn">Permissions</a>
+</nav>
     </header>
 
     <div class="container">
@@ -366,15 +367,15 @@ flowchart LR
         <tr>
           <td><span class="badge badge-delivered">DELIVERED</span></td>
           <td>Products delivered to customer</td>
-          <td>View, <strong>Sale auto-created</strong>, Optional: Generate Tax Invoice</td>
+          <td><strong>View only</strong> - CANNOT Edit or Cancel (Sale exists)</td>
           <td>Tax Invoice (optional)</td>
         </tr>
-                        <tr>
-                            <td><span class="badge badge-cancelled">CANCELLED</span></td>
-                            <td>Order cancelled</td>
-                            <td>View only, Generate Credit Note if needed</td>
-                            <td>Credit Note</td>
-                        </tr>
+        <tr>
+          <td><span class="badge badge-cancelled">CANCELLED</span></td>
+          <td>Order cancelled (only from Pending/Confirmed)</td>
+          <td>View only, Generate Credit Note if needed</td>
+          <td>Credit Note</td>
+        </tr>
                     </tbody>
                 </table>
             </div>
@@ -385,6 +386,58 @@ flowchart LR
   📝 <strong>Invoice:</strong> Optional - user decides whether to generate or not<br/>
   📄 If invoice IS generated, it links to the Sale (not the Order)<br/>
   💰 Payment is recorded against the Sale, invoice is just a document
+</div>
+
+<div class="warning-box">
+  <strong>⚠️ CRITICAL: Delivered Orders CANNOT Be Cancelled!</strong>
+  <p style="margin-top: 0.5rem;">Once an order is marked <strong>DELIVERED</strong>:</p>
+  <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+    <li>✅ Sale is <strong>auto-created</strong> (stock deducted, balance updated)</li>
+    <li>❌ <strong>CANNOT use "Cancel"</strong> - Cancel only works for Pending/Confirmed orders</li>
+    <li>↩️ Must use <strong>Sale Return</strong> to reverse the transaction</li>
+    <li>📦 Sale Return will: Add stock back, clear outstanding, create audit trail</li>
+  </ul>
+  <p style="margin-top: 0.5rem;"><strong>Why?</strong> Because the Sale has already affected inventory and financial records. A simple "cancel" would leave orphaned data. Sale Return properly reverses everything.</p>
+</div>
+
+<div class="success-box">
+  <strong>✅ Correct Actions by Status:</strong>
+  <table style="width: 100%; margin-top: 0.5rem;">
+    <thead>
+      <tr style="text-align: left;">
+        <th>Status</th>
+        <th>Can Cancel?</th>
+        <th>Need to Reverse?</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="badge badge-pending">PENDING</span></td>
+        <td>✅ Yes</td>
+        <td>❌ No</td>
+        <td>Cancel Order</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-issued">CONFIRMED</span></td>
+        <td>✅ Yes</td>
+        <td>❌ No</td>
+        <td>Cancel Order</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-delivered">DELIVERED</span></td>
+        <td>❌ NO</td>
+        <td>✅ Yes</td>
+        <td><strong>Sale Return</strong></td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-cancelled">CANCELLED</span></td>
+        <td>—</td>
+        <td>—</td>
+        <td>View only</td>
+      </tr>
+    </tbody>
+  </table>
 </div>
 
 <div class="success-box">
@@ -626,18 +679,29 @@ flowchart TB
                 </table>
             </div>
 
-            <div class="info-box">
-                <strong>Order-to-Sale Conversion:</strong>
-                When an order is delivered:
-                <ol style="margin-left: 1.5rem; margin-top: 0.5rem;">
-                    <li>Order status changes to DELIVERED</li>
-                    <li>Sale is automatically or manually created</li>
-                    <li>Sale_items are created from order_items</li>
-                    <li>Stock is reduced</li>
-                    <li>Balance is updated (outstanding added)</li>
-                    <li>Invoice can be generated (if not already)</li>
-                </ol>
-            </div>
+<div class="info-box">
+  <strong>Order-to-Sale Conversion (Auto):</strong>
+  When an order is delivered:
+  <ol style="margin-left: 1.5rem; margin-top: 0.5rem;">
+    <li>Order status changes to DELIVERED</li>
+    <li><strong>Sale is AUTO-CREATED</strong> (mandatory)</li>
+    <li>Sale_items are created from order_items</li>
+    <li>Stock is reduced automatically</li>
+    <li>Balance is updated (outstanding added)</li>
+    <li><strong>Invoice is OPTIONAL</strong> - user decides to generate or not</li>
+    <li>If invoice IS generated, it links to the Sale record</li>
+  </ol>
+</div>
+
+<div class="warning-box">
+  <strong>Important Distinction:</strong>
+  <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+    <li><strong>Sale:</strong> Auto-created on fulfillment (records the transaction)</li>
+    <li><strong>Invoice:</strong> Optional document (for customer billing/records)</li>
+    <li><strong>Payment:</strong> Recorded against Sale, NOT against Invoice</li>
+    <li><strong>Outstanding:</strong> Calculated from Sales, not Invoices</li>
+  </ul>
+</div>
         </section>
 
         <!-- PERMISSIONS SECTION -->
@@ -795,11 +859,14 @@ sequenceDiagram
     Marketer-->>Customer: Send Proforma
     
     Agent->>Order: Fulfill Order
-    Order->>Sale: Create Sale Record
+    Order->>Sale: <strong>AUTO-CREATE Sale</strong>
     Sale->>Stock: Reduce Stock
     Sale->>Balance: Update Outstanding
-    Order->>Invoice: Generate Tax Invoice
-    Invoice-->>Agent: Print Tax Invoice
+    
+    Note right of Sale: Invoice is OPTIONAL
+    
+    Sale-.->>Invoice: Optional: Generate Invoice
+    Invoice-->>Agent: Print Invoice (if requested)
     Agent-->>Customer: Deliver + Invoice
     
     Customer->>Transaction: Make Payment
@@ -826,10 +893,17 @@ sequenceDiagram
                 <p>Proforma is a "quote", Tax Invoice is the "bill". They serve different purposes and should have separate IDs.</p>
             </div>
 
-            <div class="info-box">
-                <strong>2. Order-to-Sale Link</strong>
-                <p>When an order is delivered, a sale record is created. The order is NOT deleted - it tracks the request history.</p>
-            </div>
+<div class="info-box">
+  <strong>2. Order-to-Sale Link</strong>
+  <p>When an order is delivered, a sale record is created. The order is NOT deleted - it tracks the request history.</p>
+  <p style="margin-top: 0.5rem;"><strong>Linking:</strong></p>
+  <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+    <li><code>orders.fulfilled_by_sale_id</code> → Points to the auto-created sale</li>
+    <li><code>sales.fulfilled_order_id</code> → Points back to the original order</li>
+    <li>🔗 UI shows "View Sale" button on delivered orders for quick navigation</li>
+    <li>📊 Both records are needed for complete audit trail</li>
+  </ul>
+</div>
 
             <div class="warning-box">
                 <strong>3. Invoice Cancellation Logic</strong>
@@ -851,25 +925,214 @@ sequenceDiagram
                 </ul>
             </div>
 
-            <div class="success-box">
-                <strong>5. Agent Field Delivery Workflow</strong>
-                <ol style="margin-left: 1.5rem; margin-top: 0.5rem;">
-                    <li>Marketer creates order & assigns to agent</li>
-                    <li>Agent sees assigned orders</li>
-                    <li>Agent delivers and marks order fulfilled</li>
-                    <li>Agent prints Tax Invoice at delivery spot</li>
-                    <li>Customer pays or signs credit acknowledgment</li>
-                    <li>Agent records sale with payment details</li>
-                </ol>
-            </div>
-        </section>
+<div class="success-box">
+  <strong>5. Agent Field Delivery Workflow</strong>
+  <ol style="margin-left: 1.5rem; margin-top: 0.5rem;">
+    <li>Marketer creates order & assigns to agent</li>
+    <li>Agent sees assigned orders</li>
+    <li>Agent delivers and marks order fulfilled</li>
+    <li><strong>Sale is auto-created</strong> (stock deducted, balance updated)</li>
+    <li>Agent optionally generates Tax Invoice if customer needs bill</li>
+    <li>Customer pays or signs credit acknowledgment</li>
+  </ol>
+</div>
 
-        <div class="updated">
-            Last Updated: 2025-01-19 | Current Focus: Orders Page Invoice Integration
-        </div>
-    </div>
+<div class="success-box">
+  <strong>6. Sale vs Invoice - Critical Distinction</strong>
+  <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+    <li><strong>Sale:</strong> Auto-created on fulfillment (the transaction record)</li>
+    <li><strong>Invoice:</strong> Optional document (for customer billing purposes)</li>
+    <li><strong>Payment:</strong> Recorded against Sale, NOT Invoice</li>
+    <li><strong>Outstanding:</strong> Calculated from Sales, not Invoices</li>
+    <li><strong>Legal:</strong> Sale is the transaction, Invoice is just a document</li>
+  </ul>
+</div>
+</section>
 
-    <script>
+<!-- REVERSAL SCENARIOS SECTION -->
+<section id="reversals" class="section">
+  <h2 class="section-title">↩️ Order Reversal & Correction Scenarios</h2>
+
+  <div class="warning-box">
+    <strong>⚠️ KEY RULE: Delivered Orders CANNOT Be Cancelled!</strong>
+    <p style="margin-top: 0.5rem;">Once an order is marked <strong>DELIVERED</strong>, the "Cancel" button is removed. Why?</p>
+    <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+      <li>✅ Sale was <strong>auto-created</strong> (stock deducted, balance updated)</li>
+      <li>❌ Simple "Cancel" would leave orphaned sale record</li>
+      <li>↩️ Must use <strong>Sale Return</strong> to properly reverse everything</li>
+      <li>📦 Sale Return adds stock back, clears outstanding, creates audit trail</li>
+    </ul>
+  </div>
+
+  <div class="mermaid">
+flowchart TB
+    subgraph "SCENARIO 1: Delivered by Mistake (No Payment)"
+        D1[Order Delivered]
+        S1[Sale Auto-Created]
+        RS1[Create Sale Return]
+        S2[Stock Added Back]
+        B2[Outstanding Cleared]
+        O1[Order → Cancelled]
+    end
+
+    D1 --> S1
+    S1 --> RS1
+    RS1 --> S2
+    RS1 --> B2
+    RS1 --> O1
+
+    subgraph "SCENARIO 2: Payment Already Recorded"
+        D2[Delivered & Paid]
+        S2A[Sale Exists]
+        RS2[Sale Return Created]
+        REF2[Refund Issued]
+        CN2[Credit Note]
+        O2[Order Stays DELIVERED]
+    end
+
+    D2 --> S2A
+    S2A --> RS2
+    RS2 --> REF2
+    RS2 --> CN2
+    RS2 --> O2
+
+    subgraph "SCENARIO 3: Wrong Products"
+        D3[Wrong Products]
+        SR3[Create Sale Return]
+        NS3[Create New Sale]
+        INV3[Cancel Old Invoice]
+        INV3A[Generate New Invoice]
+    end
+
+    D3 --> SR3
+    SR3 --> NS3
+    SR3 --> INV3
+    NS3 --> INV3A
+  </div>
+
+  <h3 class="section-subtitle">Cancel vs Sale Return - When to Use Each</h3>
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th>Order Status</th>
+          <th>Action Available</th>
+          <th>Result</th>
+          <th>Why?</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="badge badge-pending">PENDING</span></td>
+          <td>✅ <strong>Cancel</strong></td>
+          <td>Order → CANCELLED</td>
+          <td>No sale created yet</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-issued">CONFIRMED</span></td>
+          <td>✅ <strong>Cancel</strong></td>
+          <td>Order → CANCELLED</td>
+          <td>No sale created yet</td>
+        </tr>
+        <tr style="background: rgba(239, 68, 68, 0.1);">
+          <td><span class="badge badge-delivered">DELIVERED</span></td>
+          <td>❌ <strong>NO Cancel</strong></td>
+          <td>—</td>
+          <td>Sale already created</td>
+        </tr>
+        <tr style="background: rgba(34, 197, 94, 0.1);">
+          <td><span class="badge badge-delivered">DELIVERED</span></td>
+          <td>✅ <strong>Sale Return</strong></td>
+          <td>Stock + Balance restored</td>
+          <td>Properly reverses sale</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 class="section-subtitle">Reversal Rules by Scenario</h3>
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th>Scenario</th>
+          <th>Action</th>
+          <th>Stock</th>
+          <th>Balance</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Delivered by Mistake</strong><br/><span class="text-xs text-muted-foreground">No payment</span></td>
+          <td>Sale Return → Cancel Order</td>
+          <td>✅ Added back</td>
+          <td>✅ Cleared</td>
+        </tr>
+        <tr>
+          <td><strong>Delivered by Mistake</strong><br/><span class="text-xs text-muted-foreground">Payment recorded</span></td>
+          <td>Sale Return + Refund</td>
+          <td>✅ Added back</td>
+          <td>✅ Refunded</td>
+        </tr>
+        <tr>
+          <td><strong>Wrong Products</strong></td>
+          <td>Sale Return + New Sale</td>
+          <td>🔄 Adjusted</td>
+          <td>🔄 Adjusted</td>
+        </tr>
+        <tr>
+          <td><strong>Customer Returns</strong></td>
+          <td>Sale Return + Credit Note</td>
+          <td>✅ Added back</td>
+          <td>✅ Credited</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="info-box">
+    <strong>Step-by-Step Reversal Process:</strong>
+    <ol style="margin-left: 1.5rem; margin-top: 0.5rem;">
+      <li><strong>User realizes error:</strong> "This order was delivered by mistake!"</li>
+      <li><strong>Check if Sale exists:</strong> System confirms sale was auto-created</li>
+      <li><strong>Check payment status:</strong> Was any payment recorded?</li>
+      <li><strong>Create Sale Return:</strong>
+        <ul style="margin-left: 1.5rem;">
+          <li>Select products to return</li>
+          <li>Enter quantity to return</li>
+          <li>Add reason (e.g., "Delivered by mistake")</li>
+        </ul>
+      </li>
+      <li><strong>System automatically:</strong>
+        <ul style="margin-left: 1.5rem;">
+          <li>Adds stock back to warehouse</li>
+          <li>Clears outstanding balance</li>
+          <li>Creates audit trail</li>
+        </ul>
+      </li>
+      <li><strong>If payment recorded:</strong> Issue refund or credit note</li>
+      <li><strong>Order status:</strong> Changed to CANCELLED (if no payment) or stays DELIVERED with return note</li>
+    </ol>
+  </div>
+
+  <div class="success-box">
+    <strong>✅ Best Practices</strong>
+    <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+      <li>🚫 <strong>NEVER delete</strong> orders, sales, or invoices - only reverse them</li>
+      <li>✅ Always use <strong>Sale Return</strong> for delivered orders that need reversal</li>
+      <li>📝 Add clear <strong>reason</strong> for every return (audit trail)</li>
+      <li>👤 Only users with <code>can_create_sale_returns</code> permission can reverse</li>
+      <li>📊 All reversals show in reports as "negative sales"</li>
+    </ul>
+  </div>
+</section>
+
+<div class="updated">
+  Last Updated: 2025-04-19 | Current Focus: Sale Auto-Creation vs Invoice Optional Flow
+</div>
+</div>
+
+<script>
         mermaid.initialize({ 
             startOnLoad: true,
             theme: 'dark',

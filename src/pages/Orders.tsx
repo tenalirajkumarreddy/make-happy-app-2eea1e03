@@ -10,7 +10,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
 import { useRouteAccess } from "@/hooks/useRouteAccess";
 import { usePermission } from "@/hooks/usePermission";
-import { Loader2, Plus, Trash2, XCircle, Package, Download, X, CalendarIcon, ArrowRightLeft, FileText, Edit, MoreHorizontal, Printer, Eye, CheckCircle2 } from "lucide-react";
+import { Loader2, Plus, Trash2, XCircle, Package, Download, X, CalendarIcon, ArrowRightLeft, FileText, Edit, MoreHorizontal, Printer, Eye, CheckCircle2, ShoppingCart, RotateCcw } from "lucide-react";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { useState, useEffect, useMemo } from "react";
 import { OrderFulfillmentDialog } from "@/components/orders/OrderFulfillmentDialog";
@@ -120,13 +120,15 @@ const Orders = () => {
   const [filterFrom, setFilterFrom] = useState(thirtyDaysAgo);
   const [filterTo, setFilterTo] = useState(today);
   const [filterCustomer, setFilterCustomer] = useState("all");
+  const [filterStoreType, setFilterStoreType] = useState("all");
+  const [filterRoute, setFilterRoute] = useState("all");
   const PAGE_SIZE = 100;
   const [loadedPages, setLoadedPages] = useState(1);
 
   // Reset to page 1 whenever any filter changes
   useEffect(() => {
     setLoadedPages(1);
-  }, [statusFilter, filterFrom, filterTo, filterCustomer]);
+  }, [statusFilter, filterFrom, filterTo, filterCustomer, filterStoreType, filterRoute]);
 
   // Form state for create
   const [customerId, setCustomerId] = useState("");
@@ -137,21 +139,29 @@ const Orders = () => {
   const [assignedTo, setAssignedTo] = useState("");
 
   const { data: orders, isLoading, isFetching } = useQuery({
-    queryKey: ["orders", currentWarehouse?.id, statusFilter, filterFrom, filterTo, filterCustomer, loadedPages, user?.id, role],
+    queryKey: ["orders", currentWarehouse?.id, statusFilter, filterFrom, filterTo, filterCustomer, filterStoreType, filterRoute, loadedPages, user?.id, role],
     queryFn: async () => {
       let query = supabase
         .from("orders")
-        .select("*, stores(name, route_id, store_type_id, customer_id), customers(name), assigned_to")
+        .select("*, stores(name, route_id, store_type_id, customer_id), customers(name), assigned_to, fulfilled_by_sale_id")
         .order("created_at", { ascending: false });
-      
+
       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
-      
+
       // Server-side filters
       if (statusFilter !== "all") query = query.eq("status", statusFilter);
       if (filterFrom) query = query.gte("created_at", filterFrom + "T00:00:00");
       if (filterTo) query = query.lte("created_at", filterTo + "T23:59:59");
       if (filterCustomer !== "all") query = query.eq("customer_id", filterCustomer);
       
+      // Store type and route filters (join with stores)
+      if (filterStoreType !== "all") {
+        query = query.eq("stores.store_type_id", filterStoreType);
+      }
+      if (filterRoute !== "all") {
+        query = query.eq("stores.route_id", filterRoute);
+      }
+
       // Cursor pagination
       query = query.range(0, loadedPages * PAGE_SIZE - 1);
       const { data, error } = await query;
@@ -159,6 +169,30 @@ const Orders = () => {
       return data;
     },
     enabled: hasOrderAccess && !!user?.id,
+  });
+  
+  // Fetch store types for filter
+  const { data: storeTypes = [] } = useQuery({
+    queryKey: ["store-types-for-orders", currentWarehouse?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("store_types")
+        .select("id, name")
+        .eq("is_active", true);
+      return data || [];
+    },
+  });
+  
+  // Fetch routes for filter
+  const { data: routes = [] } = useQuery({
+    queryKey: ["routes-for-orders", currentWarehouse?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("routes")
+        .select("id, name")
+        .eq("is_active", true);
+      return data || [];
+    },
   });
 
   const { canAccessStore, hasMatrixRestrictions, hasStoreTypeRestrictions } = useRouteAccess(user?.id, role);
@@ -905,7 +939,7 @@ const buildActions = (row: any) => {
     );
   }
 
-  // Delivered orders
+  // Delivered orders - CANNOT cancel, only Sale Return
   if (row.status === "delivered") {
     return (
       <TooltipProvider>
@@ -922,10 +956,29 @@ const buildActions = (row: any) => {
               </Button>
             </TooltipTrigger>
             <TooltipContent>
-              <p>View Details</p>
+              <p>View Order Details</p>
             </TooltipContent>
           </Tooltip>
-          
+
+          {/* View Sale - links to the auto-created sale */}
+          {row.fulfilled_by_sale_id && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-green-600 hover:bg-green-50 hover:text-green-700"
+                  onClick={() => window.location.href = `/sales/${row.fulfilled_by_sale_id}`}
+                >
+                  <ShoppingCart className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>View Sale Record</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+
           {canViewInvoices && (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -948,24 +1001,28 @@ const buildActions = (row: any) => {
               </TooltipContent>
             </Tooltip>
           )}
-          
-          {canModifyOrders && (
+
+          {/* NO CANCEL BUTTON for delivered - use Sale Return instead */}
+          {/* TODO: Add Sale Return button when feature is ready */}
+          {/*
+          {canCreateSaleReturns && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
-                  onClick={() => handleOpenEdit(row.id)}
+                  className="h-8 w-8 text-orange-600 hover:bg-orange-50 hover:text-orange-700"
+                  onClick={() => handleSaleReturn(row.id)}
                 >
-                  <Edit className="h-4 w-4" />
+                  <RotateCcw className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Edit Order</p>
+                <p>Sale Return (Reverse)</p>
               </TooltipContent>
             </Tooltip>
           )}
+          */}
         </div>
       </TooltipProvider>
     );
@@ -1108,11 +1165,21 @@ const buildActions = (row: any) => {
                   )}
                 </div>
               )}
-              {row.status === "delivered" && canViewInvoices && (
-                <Button variant="outline" size="sm" className="h-7 text-xs text-purple-600 border-purple-600/40" onClick={(e) => { e.stopPropagation(); }}>
+          {row.status === "delivered" && (
+            <div className="flex items-center gap-1.5">
+              {row.fulfilled_by_sale_id && (
+                <Button variant="outline" size="sm" className="h-7 text-xs text-green-600 border-green-600/40" onClick={(e) => { e.stopPropagation(); window.location.href = `/sales/${row.fulfilled_by_sale_id}`; }}>
+                  <ShoppingCart className="h-3 w-3 mr-1" />Sale
+                </Button>
+              )}
+              {canViewInvoices && (
+                <Button variant="outline" size="sm" className="h-7 text-xs text-purple-600 border-purple-600/40" onClick={(e) => { e.stopPropagation(); handleInvoiceAction(row.id, row.status); }}>
                   <FileText className="h-3 w-3 mr-1" />Invoice
                 </Button>
               )}
+              {/* NO CANCEL for delivered - use Sale Return */}
+            </div>
+          )}
               {row.status === "cancelled" && row.cancellation_reason && (
                 <span className="text-xs text-muted-foreground italic truncate max-w-[180px]">{row.cancellation_reason}</span>
               )}

@@ -11,7 +11,7 @@ import { addToQueue, generateBusinessKey } from "@/lib/offlineQueue";
 import { resolveCreditLimit } from "@/lib/creditLimit";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
-import { Loader2, Plus, Trash2, Download, IndianRupee, CreditCard, Banknote, Clock, UserCircle, Store as StoreIcon, Package, X, CalendarIcon, Receipt, FileText, RotateCcw, ShoppingCart, ChevronRight } from "lucide-react";
+import { Loader2, Plus, Trash2, Download, IndianRupee, CreditCard, Banknote, Clock, UserCircle, Store as StoreIcon, Package, X, CalendarIcon, Receipt, FileText, RotateCcw, ShoppingCart, ChevronRight, Eye, ClipboardList } from "lucide-react";
 import { QrStoreSelector } from "@/components/shared/QrStoreSelector";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { SaleReceipt } from "@/components/shared/SaleReceipt";
@@ -32,6 +32,12 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import { format } from "date-fns";
 
@@ -135,6 +141,8 @@ const Sales = () => {
   const [filterFrom, setFilterFrom] = useState(thirtyDaysAgo);
   const [filterTo, setFilterTo] = useState(today);
   const [filterStore, setFilterStore] = useState("all");
+  const [filterStoreType, setFilterStoreType] = useState("all");
+  const [filterRoute, setFilterRoute] = useState("all");
   const [filterUser, setFilterUser] = useState("all");
   const [filterPayment, setFilterPayment] = useState("all");
   const [items, setItems] = useState<SaleItem[]>([{ product_id: "", quantity: 1, unit_price: 0 }]);
@@ -143,15 +151,15 @@ const Sales = () => {
   // Reset to page 1 whenever any filter changes
   useEffect(() => {
     setLoadedPages(1);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterFrom, filterTo, filterStore, filterUser, filterPayment]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterFrom, filterTo, filterStore, filterStoreType, filterRoute, filterUser, filterPayment]);
 
   const { data: sales, isLoading, isFetching } = useQuery({
-    queryKey: ["sales", currentWarehouse?.id, isAdmin ? "all" : user?.id, filterFrom, filterTo, filterStore, filterUser, filterPayment, loadedPages],
+    queryKey: ["sales", currentWarehouse?.id, isAdmin ? "all" : user?.id, filterFrom, filterTo, filterStore, filterStoreType, filterRoute, filterUser, filterPayment, loadedPages],
     queryFn: async () => {
       let query = (supabase as any)
         .from("sales")
-        .select("*, stores(name, display_id), customers(name, display_id)")
+        .select("*, stores(name, display_id, store_type_id, route_id), customers(name, display_id)")
         .order("created_at", { ascending: false });
       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
       // Non-admin roles (agents, pos, marketer) only see their own records
@@ -187,12 +195,14 @@ const Sales = () => {
   // Filtering is now done server-side; local array mirrors the fetched page(s)
   const filteredSales = sales || [];
 
-  const activeFilterCount = [filterStore !== "all", filterUser !== "all", filterPayment !== "all", filterFrom !== thirtyDaysAgo, filterTo !== today].filter(Boolean).length;
+  const activeFilterCount = [filterStore !== "all", filterStoreType !== "all", filterRoute !== "all", filterUser !== "all", filterPayment !== "all", filterFrom !== thirtyDaysAgo, filterTo !== today].filter(Boolean).length;
 
   const clearSalesFilters = () => {
     setFilterFrom(thirtyDaysAgo);
     setFilterTo(today);
     setFilterStore("all");
+    setFilterStoreType("all");
+    setFilterRoute("all");
     setFilterUser("all");
     setFilterPayment("all");
   };
@@ -208,10 +218,20 @@ const Sales = () => {
   });
 
   // Fetch store types for credit limits
+  // Fetch store types for filters and credit limits
   const { data: storeTypes } = useQuery({
     queryKey: ["store-types-credit"],
     queryFn: async () => {
-      const { data } = await supabase.from("store_types").select("id, credit_limit_kyc, credit_limit_no_kyc");
+      const { data } = await supabase.from("store_types").select("id, name, credit_limit_kyc, credit_limit_no_kyc");
+      return data || [];
+    },
+  });
+
+  // Fetch routes for filters
+  const { data: routes } = useQuery({
+    queryKey: ["routes-for-filter"],
+    queryFn: async () => {
+      const { data } = await supabase.from("routes").select("id, name").order("name");
       return data || [];
     },
   });
@@ -776,14 +796,28 @@ const Sales = () => {
             <Calendar mode="single" selected={filterTo ? new Date(filterTo + "T00:00:00") : undefined} onSelect={(d) => setFilterTo(d ? format(d, "yyyy-MM-dd") : "")} initialFocus />
           </PopoverContent>
         </Popover>
-        <Select value={filterStore} onValueChange={setFilterStore}>
-          <SelectTrigger className="h-8 text-xs flex-1 min-w-[120px] sm:flex-none sm:w-40"><SelectValue placeholder="All stores" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All stores</SelectItem>
-            {stores?.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={filterUser} onValueChange={setFilterUser}>
+      <Select value={filterStore} onValueChange={setFilterStore}>
+        <SelectTrigger className="h-8 text-xs flex-1 min-w-[120px] sm:flex-none sm:w-40"><SelectValue placeholder="All stores" /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All stores</SelectItem>
+          {stores?.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+        </SelectContent>
+      </Select>
+      <Select value={filterStoreType} onValueChange={setFilterStoreType}>
+        <SelectTrigger className="h-8 text-xs flex-1 min-w-[120px] sm:flex-none sm:w-40"><SelectValue placeholder="All store types" /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All store types</SelectItem>
+          {storeTypes?.map((st: any) => <SelectItem key={st.id} value={st.id}>{st.name}</SelectItem>)}
+        </SelectContent>
+      </Select>
+      <Select value={filterRoute} onValueChange={setFilterRoute}>
+        <SelectTrigger className="h-8 text-xs flex-1 min-w-[120px] sm:flex-none sm:w-40"><SelectValue placeholder="All routes" /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All routes</SelectItem>
+          {routes?.map((r: any) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+        </SelectContent>
+      </Select>
+      <Select value={filterUser} onValueChange={setFilterUser}>
           <SelectTrigger className="h-8 text-xs flex-1 min-w-[120px] sm:flex-none sm:w-40"><SelectValue placeholder="All users" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All users</SelectItem>
