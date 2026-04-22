@@ -69,11 +69,11 @@ interface UseStaffStockOptions {
  *   isLoadingStock — boolean
  *   stockError     — error | null
  */
-export function useStaffStockByWarehouse(warehouseId: string) {
+export function useStaffStockByWarehouse(warehouseId: string | undefined) {
   const { data, isLoading, error } = useQuery({
     queryKey: ["staff-stock-by-warehouse", warehouseId],
     queryFn: async () => {
-      if (!warehouseId) return { groups: [], summary: [] };
+      if (!warehouseId || warehouseId === "") return { groups: [], summary: [] };
 
       // Step 1: fetch staff_stock rows for this warehouse
       const { data: stockRows, error: stockError } = await supabase

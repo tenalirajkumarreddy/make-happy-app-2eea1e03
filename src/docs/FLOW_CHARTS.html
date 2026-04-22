@@ -212,17 +212,19 @@
 </head>
 <body>
     <header class="header">
-        <h1>🏢 Aqua Prime - Business Flow Charts</h1>
-        <p>Complete documentation of Orders, Sales, Invoices, and Receipts flow</p>
+<h1>🏢 Aqua Prime - Business Flow Charts</h1>
+  <p>Complete documentation of Orders, Sales, Invoices, Transactions, and Receipts flow</p>
 <nav class="nav">
-  <a href="#overview" class="nav-btn active">Overview</a>
-  <a href="#orders" class="nav-btn">Orders</a>
-  <a href="#invoices" class="nav-btn">Invoices</a>
-  <a href="#sales" class="nav-btn">Sales</a>
-  <a href="#reversals" class="nav-btn">↩️ Reversals</a>
-  <a href="#permissions" class="nav-btn">Permissions</a>
-</nav>
-    </header>
+      <a href="#overview" class="nav-btn active">Overview</a>
+      <a href="#orders" class="nav-btn">Orders</a>
+      <a href="#sales" class="nav-btn">Sales</a>
+      <a href="#invoices" class="nav-btn">Invoices</a>
+      <a href="#transactions" class="nav-btn">💳 Transactions</a>
+      <a href="#handovers" class="nav-btn">💰 Handovers</a>
+      <a href="#reversals" class="nav-btn">↩️ Reversals</a>
+      <a href="#permissions" class="nav-btn">Permissions</a>
+    </nav>
+</header>
 
     <div class="container">
         <!-- OVERVIEW SECTION -->
@@ -1050,45 +1052,57 @@ flowchart TB
     </table>
   </div>
 
-  <h3 class="section-subtitle">Reversal Rules by Scenario</h3>
-  <div class="table-container">
-    <table>
-      <thead>
-        <tr>
-          <th>Scenario</th>
-          <th>Action</th>
-          <th>Stock</th>
-          <th>Balance</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td><strong>Delivered by Mistake</strong><br/><span class="text-xs text-muted-foreground">No payment</span></td>
-          <td>Sale Return → Cancel Order</td>
-          <td>✅ Added back</td>
-          <td>✅ Cleared</td>
-        </tr>
-        <tr>
-          <td><strong>Delivered by Mistake</strong><br/><span class="text-xs text-muted-foreground">Payment recorded</span></td>
-          <td>Sale Return + Refund</td>
-          <td>✅ Added back</td>
-          <td>✅ Refunded</td>
-        </tr>
-        <tr>
-          <td><strong>Wrong Products</strong></td>
-          <td>Sale Return + New Sale</td>
-          <td>🔄 Adjusted</td>
-          <td>🔄 Adjusted</td>
-        </tr>
-        <tr>
-          <td><strong>Customer Returns</strong></td>
-          <td>Sale Return + Credit Note</td>
-          <td>✅ Added back</td>
-          <td>✅ Credited</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
+<h3 class="section-subtitle">Reversal Rules by Scenario</h3>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Scenario</th>
+              <th>Action</th>
+              <th>Stock</th>
+              <th>Balance</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Delivered by Mistake</strong><br/><span class="text-xs text-muted-foreground">No payment</span></td>
+              <td>Sale Return → Cancel Order</td>
+              <td>✅ Added back</td>
+              <td>✅ Cleared</td>
+            </tr>
+            <tr>
+              <td><strong>Delivered by Mistake</strong><br/><span class="text-xs text-muted-foreground">Payment recorded</span></td>
+              <td>Sale Return + Refund</td>
+              <td>✅ Added back</td>
+              <td>✅ Refunded</td>
+            </tr>
+            <tr>
+              <td><strong>Wrong Products</strong></td>
+              <td>Sale Return + New Sale</td>
+              <td>🔄 Adjusted</td>
+              <td>🔄 Adjusted</td>
+            </tr>
+            <tr>
+              <td><strong>Customer Returns</strong></td>
+              <td>Sale Return + Credit Note</td>
+              <td>✅ Added back</td>
+              <td>✅ Credited</td>
+            </tr>
+            <tr style="background: rgba(245, 158, 11, 0.1);">
+              <td><strong>Payment Recorded Wrong</strong><br/><span class="text-xs text-muted-foreground">Transaction error</span></td>
+              <td>Payment Return (RET-XXXXXX)</td>
+              <td>—</td>
+              <td>🔄 Adjusted</td>
+            </tr>
+            <tr style="background: rgba(59, 130, 246, 0.1);">
+              <td><strong>Balance Discrepancy</strong><br/><span class="text-xs text-muted-foreground">Audit/Migration</span></td>
+              <td>Balance Correction (ADJ-XXXXXX)</td>
+              <td>—</td>
+              <td>🔄 Corrected</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
   <div class="info-box">
     <strong>Step-by-Step Reversal Process:</strong>
@@ -1127,9 +1141,771 @@ flowchart TB
   </div>
 </section>
 
-<div class="updated">
-  Last Updated: 2025-04-19 | Current Focus: Sale Auto-Creation vs Invoice Optional Flow
+<!-- TRANSACTIONS SECTION -->
+<section id="transactions" class="section">
+  <h2 class="section-title">💳 Transaction (Payment) Flow</h2>
+
+  <div class="mermaid">
+    flowchart TD
+    subgraph "Payment Recording"
+    A[User Initiates<br/>Payment Collection] --> B{Check<br/>Outstanding > 0?}
+    B -->|Yes| C[Record Payment<br/>via Transaction]
+    B -->|No| D[⚠️ Error:<br/>No outstanding to collect]
+
+    C --> E[Transaction Created<br/>with random PAY-XXXXXX ID]
+    E --> F{Who is Recording?}
+
+    F -->|Admin/Manager<br/>on own behalf| G[Deduct from<br/>Warehouse Stock]
+    F -->|Agent/Marketer<br/>on own behalf| H[Deduct from<br/>Staff Stock]
+    F -->|On behalf of<br/>another user| I[Deduct from<br/>Target User's Stock]
+
+    G --> J[Update Store<br/>Outstanding]
+    H --> J
+    I --> J
+
+    J --> K[Old Outstanding: ₹X<br/>Payment: ₹Y<br/>New Outstanding: ₹(X-Y)]
+    K --> L[Generate Receipt<br/>for Customer]
+    end
+
+    subgraph "Transaction History"
+    L --> M[Store Payment History<br/>Audit Trail]
+    M --> N[View Transactions<br/>Filtered by Date/Store]
+    N --> O[Export for<br/>Reconciliation]
+    end
+
+classDef default fill:#1e293b,stroke:#475569,color:#e2e8f0
+classDef error fill:#ef4444,stroke:#dc2626,color:#fff
+classDef success fill:#22c55e,stroke:#16a34a,color:#fff
+classDef highlight fill:#3b82f6,stroke:#2563eb,color:#fff
+classDef warning fill:#f59e0b,stroke:#d97706,color:#fff
+class D error
+class E,K,L success
+class C,J highlight
 </div>
+
+<h3 class="section-subtitle">Transaction Correction Flows</h3>
+<div class="mermaid">
+flowchart TD
+    subgraph "Payment Return"
+    PR[Admin/Manager Initiates<br/>Payment Return] --> PR1{Check<br/>Original Transaction?}
+    PR1 -->|Valid| PR2[Select Return Amount<br/>≤ Original Payment]
+    PR1 -->|Invalid| PR3[❌ Error:<br/>Transaction Not Found]
+    
+    PR2 --> PR4{Return Amount<br/>Valid?}
+    PR4 -->|Yes| PR5[Enter Reason<br/>Mandatory]
+    PR4 -->|No| PR6[⚠️ Error:<br/>Amount Exceeds Original]
+    
+    PR5 --> PR7[Create Return Record<br/>RET-XXXXXX ID]
+    PR7 --> PR8[Update Store Outstanding<br/>Add Return Amount Back]
+    PR8 --> PR9[Store: New Outstanding<br/>= Old + Return]
+    PR9 --> PR10[Audit Trail Created<br/>Original + Return Linked]
+    end
+    
+    subgraph "Balance Correction"
+    BC[Admin/Manager Initiates<br/>Balance Correction] --> BC1[Select Store<br/>View Current Outstanding]
+    
+    BC1 --> BC2{Correction Type}
+    BC2 -->|Increase| BC3[Add Amount<br/>to Outstanding]
+    BC2 -->|Decrease| BC4[Subtract Amount<br/>from Outstanding]
+    BC2 -->|Adjustment| BC5[Set Exact<br/>Balance Amount]
+    
+    BC3 --> BC6[Mandatory Fields:<br/>Reason + Description]
+    BC4 --> BC6
+    BC5 --> BC6
+    
+    BC6 --> BC7{Role Check}
+    BC7 -->|Super Admin| BC8[Auto-Approved<br/>ADJ-XXXXXX Created]
+    BC7 -->|Manager| BC9[Pending Approval<br/>Notify Admin]
+    
+    BC8 --> BC10[Update Store<br/>Outstanding]
+    BC9 --> BC11[Admin Reviews<br/>Approve/Reject]
+    BC11 -->|Approved| BC10
+    BC11 -->|Rejected| BC12[❌ Correction Rejected<br/>Log Reason]
+    
+    BC10 --> BC13[Audit Trail:<br/>Before/After + Who]
+    end
+    
+    classDef default fill:#1e293b,stroke:#475569,color:#e2e8f0
+    classDef error fill:#ef4444,stroke:#dc2626,color:#fff
+    classDef success fill:#22c55e,stroke:#16a34a,color:#fff
+    classDef highlight fill:#3b82f6,stroke:#2563eb,color:#fff
+    classDef warning fill:#f59e0b,stroke:#d97706,color:#fff
+    class PR3,PR6,BC12 error
+    class PR7,PR10,BC8,BC10 success
+    class PR,PR5,BC,BC6,BC7 highlight
+    class BC9,BC11 warning
+</div>
+
+<div class="warning-box">
+<strong>⚠️ Transaction Correction Rules</strong>
+<table style="width:100%; margin-top:0.5rem; font-size:0.9rem;">
+<tr>
+<td style="width:50%; vertical-align:top;">
+<strong>Payment Return:</strong>
+<ul style="margin-left:1rem; margin-top:0.25rem;">
+<li>Only Admin/Manager can process returns</li>
+<li>Return amount ≤ Original payment</li>
+<li>Reason is mandatory</li>
+<li>Return adds back to store outstanding</li>
+<li>Original transaction remains unchanged</li>
+<li>Audit trail links original + return</li>
+</ul>
+</td>
+<td style="width:50%; vertical-align:top;">
+<strong>Balance Correction:</strong>
+<ul style="margin-left:1rem; margin-top:0.25rem;">
+<li>Only Admin/Manager can correct</li>
+<li>Description is <strong>mandatory</strong></li>
+<li>Manager submissions require approval</li>
+<li>Admin actions auto-approved</li>
+<li>Cannot set negative outstanding</li>
+<li>Full audit trail with before/after</li>
+</ul>
+</td>
+</tr>
+</table>
+</div>
+
+  <h3 class="section-subtitle">Transaction Rules</h3>
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th>Rule</th>
+          <th>Description</th>
+          <th>Why</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Payment Amount > 0</strong></td>
+          <td>Total payment must be positive (Cash + UPI > 0)</td>
+          <td>Prevents zero or negative transactions</td>
+        </tr>
+        <tr>
+          <td><strong>Store Must Have Outstanding</strong></td>
+          <td>Payment can only be recorded if store has outstanding balance</td>
+          <td>Prevents over-collection</td>
+        </tr>
+        <tr>
+          <td><strong>Stock Deducted on Transaction</strong></td>
+          <td>Staff pays store, store gets credit</td>
+          <td>Agent's stock reduces, store's outstanding reduces</td>
+        </tr>
+        <tr>
+          <td><strong>Random Transaction ID</strong></td>
+          <td>Format: PAY-XXXXXX (random 6-digit)</td>
+          <td>No sequential disclosure, no race conditions</td>
+        </tr>
+        <tr>
+          <td><strong>Cannot Edit/Delete</strong></td>
+          <td>Transactions are immutable once recorded</td>
+          <td>Financial audit trail integrity</td>
+        </tr>
+        <tr>
+          <td><strong>Offline Queue Support</strong></td>
+          <td>Transactions queued when offline, sync when back</td>
+          <td>Field agents can work offline</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 class="section-subtitle">Permission Matrix for Transactions</h3>
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th>Role</th>
+          <th>Record Own</th>
+          <th>Record on Behalf</th>
+          <th>View All</th>
+          <th>Export</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Super Admin</strong></td>
+          <td>✅</td>
+          <td>✅</td>
+          <td>✅</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td><strong>Manager</strong></td>
+          <td>✅</td>
+          <td>✅</td>
+          <td>✅</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td><strong>Agent</strong></td>
+          <td>✅</td>
+          <td>❌</td>
+          <td>Own Only</td>
+          <td>❌</td>
+        </tr>
+        <tr>
+          <td><strong>Marketer</strong></td>
+          <td>✅</td>
+          <td>❌</td>
+          <td>Own Only</td>
+          <td>❌</td>
+        </tr>
+        <tr>
+          <td><strong>POS</strong></td>
+          <td>✅</td>
+          <td>❌</td>
+          <td>Own Only</td>
+          <td>❌</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="warning-box">
+    <strong>⚠️ Transaction Immutability</strong>
+    <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+      <li>Once a transaction is recorded, it <strong>cannot be edited or deleted</strong></li>
+      <li>If there's an error, record a <strong>counter-transaction</strong> (refund/adjustment)</li>
+      <li>All transactions are logged in the <strong>audit trail</strong> with user and timestamp</li>
+      <li>Backdated transactions trigger a <strong>re-calculation</strong> of running balances</li>
+    </ul>
+  </div>
+
+  <h3 class="section-subtitle">Database Flow</h3>
+  <div class="mermaid">
+    sequenceDiagram
+      actor User
+      participant Client as Transactions.tsx
+      participant RPC as record_transaction()
+      participant DB as PostgreSQL
+
+      User->>Client: Enter Payment (Cash + UPI)
+      Client->>Client: Validate amount > 0
+      Client->>DB: Generate PAY-XXXXXX (random)
+
+      alt Offline Mode
+        Client->>Client: Queue in IndexedDB
+        Client->>User: Show "Queued for sync"
+      else Online Mode
+        Client->>RPC: Call record_transaction()
+        RPC->>DB: Lock store row (FOR UPDATE)
+        RPC->>DB: Get current outstanding
+        RPC->>RPC: Calculate new_outstanding = old - payment
+        RPC->>DB: Insert transaction record
+        RPC->>DB: Update store.outstanding
+        RPC->>Client: Return txn_id, new_outstanding
+        Client->>User: Show success + notification
+      end
+  </div>
+</section>
+
+<!-- ============================================ -->
+    <!-- SECTION: HANDOVERS -->
+    <!-- ============================================ -->
+    <section class="section" id="handovers">
+      <div class="section-header">
+        <h2 class="section-title">💰 Handover Flow</h2>
+        <p class="section-desc">Staff-to-staff money transfers with confirmation workflow and role-based access control</p>
+      </div>
+
+      <div class="info-box">
+        <strong>🏢 Handovers Overview:</strong> Handovers facilitate money transfer between staff members with a confirmation workflow. The system includes role-based access control, admin transfer capabilities, and expense claim management.
+      </div>
+
+      <h3 class="section-subtitle">Role-Based Access Matrix</h3>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Feature</th>
+              <th>Super Admin</th>
+              <th>Manager</th>
+              <th>Agent/Marketer/POS</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>View Handovers</strong></td>
+              <td>✅ All staff</td>
+              <td>✅ All staff</td>
+              <td>✅ Own only</td>
+            </tr>
+            <tr>
+              <td><strong>Create Handover</strong></td>
+              <td>✅ Yes</td>
+              <td>✅ Yes</td>
+              <td>✅ Yes</td>
+            </tr>
+            <tr>
+              <td><strong>Confirm/Reject</strong></td>
+              <td>✅ Any</td>
+              <td>✅ Any</td>
+              <td>✅ Received only</td>
+            </tr>
+            <tr>
+              <td><strong>Edit Handover</strong></td>
+              <td>✅ Any</td>
+              <td>❌ No</td>
+              <td>❌ No</td>
+            </tr>
+            <tr>
+              <td><strong>Admin Transfer</strong></td>
+              <td>✅ Any staff → Any staff</td>
+              <td>❌ No</td>
+              <td>❌ No</td>
+            </tr>
+            <tr>
+              <td><strong>Cancel Handover</strong></td>
+              <td>✅ Any pending</td>
+              <td>Own only</td>
+              <td>✅ Own pending</td>
+            </tr>
+            <tr>
+              <td><strong>View Balances Tab</strong></td>
+              <td>✅ Yes</td>
+              <td>✅ Yes</td>
+              <td>❌ No</td>
+            </tr>
+            <tr>
+              <td><strong>Approve Expenses</strong></td>
+              <td>✅ All claims</td>
+              <td>✅ All claims</td>
+              <td>❌ No</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="section-subtitle">Standard Handover Flow</h3>
+      <div class="mermaid">
+flowchart TD
+  subgraph "Staff Actions"
+    A[Agent Records Sales] --> B{Calculate Balance}
+    B -->|Sales - Sent + Received| C[Available Balance]
+    C --> D[Click Create Handover]
+    D --> E[Select Recipient]
+    E --> F[Server Calculates Split]
+    F -->|Cash + UPI| G[Send Handover]
+  end
+
+  subgraph "Recipient Actions"
+    G --> H{Recipient Views}
+    H -->|Confirm| I[Status: Confirmed]
+    H -->|Reject| J[Status: Rejected]
+    H -->|Ignore| K[Status: Pending]
+  end
+
+  subgraph "Balance Impact"
+    I --> L[Sender: -Amount]
+    I --> M[Recipient: +Amount]
+    J --> N[Sender: Balance Restored]
+    K --> O[Sender: Amount Locked]
+  end
+
+  style A fill:#1e293b,stroke:#3b82f6
+  style I fill:#065f46,stroke:#10b981
+  style J fill:#7f1d1d,stroke:#ef4444
+  style O fill:#92400e,stroke:#f59e0b
+      </div>
+
+      <h3 class="section-subtitle">Admin Transfer Flow (Super Admin Only)</h3>
+      <div class="mermaid">
+flowchart TD
+  subgraph "Admin Initiates"
+    A[Super Admin Opens Admin Transfer] --> B[Select 'From' Staff]
+    B --> C[Select 'To' Staff]
+    C --> D[Enter Amount]
+    D --> E[Add Reason]
+    E --> F[Submit Transfer]
+  end
+
+  subgraph "System Processing"
+    F --> G{Valid Transfer?}
+    G -->|Different staff| H[Create Handover Record]
+    G -->|Same staff| I[Show Error]
+    H --> J[Auto-Confirm Handover]
+    J --> K[Update Balances]
+    K --> L[Send Notifications]
+  end
+
+  subgraph "Audit Trail"
+    L --> M[Log Admin Action]
+    M --> N[Record Before/After State]
+  end
+
+  style A fill:#1e293b,stroke:#a855f7
+  style H fill:#065f46,stroke:#10b981
+  style I fill:#7f1d1d,stroke:#ef4444
+      </div>
+
+      <h3 class="section-subtitle">Handover Status Flow</h3>
+      <div class="mermaid">
+stateDiagram-v2
+    [*] --> AwaitingConfirmation: Create Handover
+    AwaitingConfirmation --> Confirmed: Recipient Accepts
+    AwaitingConfirmation --> Rejected: Recipient Rejects
+    AwaitingConfirmation --> Cancelled: Sender Cancels
+    Confirmed --> [*]: Complete
+    Rejected --> [*]: Complete
+    Cancelled --> [*]: Complete
+
+    note right of AwaitingConfirmation
+      Super Admin can edit
+      amount/status while pending
+    end note
+      </div>
+
+      <h3 class="section-subtitle">Edit/Modify Capabilities</h3>
+      <div class="mermaid">
+flowchart LR
+  subgraph "Admin Edit Handover"
+    A[Select Handover] --> B{Can Edit?}
+    B -->|Super Admin| C[Open Edit Dialog]
+    B -->|Other Role| D[Access Denied]
+    C --> E[Modify Amount]
+    C --> F[Change Status]
+    C --> G[Add Notes]
+    E --> H[Save Changes]
+    F --> H
+    G --> H
+    H --> I[Update Database]
+    I --> J[Add Audit Log]
+  end
+
+  style A fill:#1e293b,stroke:#a855f7
+  style D fill:#7f1d1d,stroke:#ef4444
+  style H fill:#065f46,stroke:#10b981
+      </div>
+
+      <h3 class="section-subtitle">Approval Hierarchy</h3>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Action</th>
+              <th>Super Admin</th>
+              <th>Manager</th>
+              <th>Staff</th>
+              <th>Permission Required</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Create Handover</strong></td>
+              <td>✅ Yes</td>
+              <td>✅ Yes</td>
+              <td>✅ Yes</td>
+              <td>None (authenticated)</td>
+            </tr>
+            <tr>
+              <td><strong>Confirm Handover</strong></td>
+              <td>✅ Any</td>
+              <td>✅ Any</td>
+              <td>✅ Received only</td>
+              <td>None (authenticated)</td>
+            </tr>
+            <tr>
+              <td><strong>Reject Handover</strong></td>
+              <td>✅ Any</td>
+              <td>✅ Any</td>
+              <td>✅ Received only</td>
+              <td>None (authenticated)</td>
+            </tr>
+            <tr>
+              <td><strong>Cancel Handover</strong></td>
+              <td>✅ Any pending</td>
+              <td>Own only</td>
+              <td>✅ Own pending</td>
+              <td>None (authenticated)</td>
+            </tr>
+            <tr>
+              <td><strong>Edit Handover</strong></td>
+              <td>✅ Any</td>
+              <td>❌ No</td>
+              <td>❌ No</td>
+              <td><code>modify_handovers</code></td>
+            </tr>
+            <tr>
+              <td><strong>Admin Transfer</strong></td>
+              <td>✅ Yes</td>
+              <td>❌ No</td>
+              <td>❌ No</td>
+              <td><code>transfer_between_staff</code></td>
+            </tr>
+            <tr>
+              <td><strong>View All Balances</strong></td>
+              <td>✅ Yes</td>
+              <td>✅ Yes</td>
+              <td>❌ No</td>
+              <td><code>see_handover_balance</code></td>
+            </tr>
+            <tr>
+              <td><strong>Approve Expenses</strong></td>
+              <td>✅ Yes</td>
+              <td>✅ Yes</td>
+              <td>❌ No</td>
+              <td><code>approve_expenses</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="section-subtitle">Balance Calculation Formula</h3>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Component</th>
+              <th>Formula</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Sales Total</strong></td>
+              <td>∑(Cash + UPI) recorded by user</td>
+              <td>All sales ever recorded</td>
+            </tr>
+            <tr>
+              <td><strong>Received</strong></td>
+              <td>∑(Handovers received & confirmed)</td>
+              <td>Money handed TO this user</td>
+            </tr>
+            <tr>
+              <td><strong>Sent Confirmed</strong></td>
+              <td>∑(Handovers sent & confirmed)</td>
+              <td>Money sent AND accepted</td>
+            </tr>
+            <tr>
+              <td><strong>Sent Pending</strong></td>
+              <td>∑(Handovers sent & awaiting)</td>
+              <td>Money sent but not confirmed</td>
+            </tr>
+            <tr>
+              <td><strong>Expenses Owed</strong></td>
+              <td>∑(Approved expense claims)</td>
+              <td>Company owes user this amount</td>
+            </tr>
+            <tr>
+              <td><strong>Net Balance</strong></td>
+              <td>Sales + Received - Sent Confirmed - Sent Pending - Expenses</td>
+              <td>Available to handover</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+<h3 class="section-subtitle">Expense Claim Flow</h3>
+<div class="mermaid">
+flowchart LR
+    subgraph "Submit Claim"
+        A[Staff] --> B[Select Category]
+        B --> C[Enter Amount]
+        C --> D[Add Description]
+        D --> E[Upload Receipt]
+        E --> F[Submit]
+    end
+
+    subgraph "Review Process"
+        F --> G{Admin Review}
+        G -->|Approve| H[Adjust Amount?]
+        G -->|Reject| I[Add Reason]
+        H --> J[Mark Approved]
+    end
+
+    subgraph "Balance Impact"
+        J --> K[Add to 'Expenses Owed']
+        K --> L[Deducts from Handover Balance]
+    end
+
+    style A fill:#1e293b,stroke:#3b82f6
+    style G fill:#1e293b,stroke:#f59e0b
+    style J fill:#065f46,stroke:#10b981
+    style I fill:#7f1d1d,stroke:#ef4444
+</div>
+
+      <h3 class="section-subtitle">Tab Visibility by Role</h3>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Tab/Feature</th>
+              <th>Agent/Marketer/POS</th>
+              <th>Manager</th>
+              <th>Super Admin</th>
+              <th>Finalizer</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Mine Tab</strong></td>
+              <td>✅ Own handovers</td>
+              <td>✅ Own handovers</td>
+              <td>✅ All handovers</td>
+              <td>✅ View only</td>
+            </tr>
+            <tr>
+              <td><strong>Expenses Tab</strong></td>
+              <td>✅ Own claims</td>
+              <td>✅ All claims + Review</td>
+              <td>✅ All claims + Review</td>
+              <td>✅ View only</td>
+            </tr>
+            <tr>
+              <td><strong>All Tab</strong></td>
+              <td>❌ Hidden</td>
+              <td>✅ All staff handovers</td>
+              <td>✅ All staff handovers</td>
+              <td>✅ All staff handovers</td>
+            </tr>
+            <tr>
+              <td><strong>Admin Actions Tab</strong></td>
+              <td>❌ Hidden</td>
+              <td>❌ Hidden</td>
+              <td>✅ Transfer + Edit</td>
+              <td>❌ Hidden</td>
+            </tr>
+            <tr>
+              <td><strong>Balances Tab</strong></td>
+              <td>❌ Hidden</td>
+              <td>✅ All staff balances</td>
+              <td>✅ All staff balances</td>
+              <td>✅ All staff balances</td>
+            </tr>
+            <tr>
+              <td><strong>Create Handover</strong></td>
+              <td>✅ Yes</td>
+              <td>✅ Yes</td>
+              <td>✅ Via Admin Transfer</td>
+              <td>❌ No (view only)</td>
+            </tr>
+            <tr>
+              <td><strong>Edit Handover</strong></td>
+              <td>❌ No</td>
+              <td>❌ No</td>
+              <td>✅ Any handover</td>
+              <td>❌ No</td>
+            </tr>
+            <tr>
+              <td><strong>Export CSV</strong></td>
+              <td>❌ No</td>
+              <td>✅ Yes</td>
+              <td>✅ Yes</td>
+              <td>✅ Yes</td>
+            </tr>
+            <tr>
+              <td><strong>Filters Available</strong></td>
+              <td>Date, Status, Search</td>
+              <td>Date, Status, User, Search</td>
+              <td>Date, Status, User, Search</td>
+              <td>Date, Status, User, Search</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="section-subtitle">Key Business Rules</h3>
+      <div class="info-box">
+        <strong>🔒 Handover Constraints</strong>
+        <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+          <li>Can only handover up to <strong>available balance</strong> (cannot go negative)</li>
+          <li>Pending handovers <strong>lock</strong> the amount until confirmed/rejected/cancelled</li>
+          <li><strong>Partial collections</strong> setting can disable handovers below full balance</li>
+          <li>Each staff can have only <strong>one pending handover per day</strong> to same recipient</li>
+          <li>Cannot confirm your own handover (must be recipient)</li>
+          <li>Cancelled handovers immediately restore balance</li>
+          <li><strong>Super Admin</strong> can edit any handover amount and status</li>
+          <li><strong>Admin transfers</strong> bypass normal balance checks and auto-confirm</li>
+        </ul>
+      </div>
+
+      <div class="warning-box">
+        <strong>⚠️ Expense Claim Rules</strong>
+        <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+          <li>Approved expenses <strong>reduce</strong> the handover balance (company owes staff)</li>
+          <li>Admins can <strong>adjust</strong> amount and category during approval</li>
+          <li>Receipt photo is <strong>optional</strong> but recommended</li>
+          <li>Rejected claims don't affect balance</li>
+          <li>Staff see only their own claims; Admins see all</li>
+        </ul>
+      </div>
+
+      <div class="success-box">
+        <strong>✅ Admin Capabilities</strong>
+        <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+          <li><strong>Transfer Between Staff:</strong> Move money from any staff to any staff without balance restrictions</li>
+          <li><strong>Edit Handover:</strong> Modify amount and status of any handover (logged for audit)</li>
+          <li><strong>Cancel Any:</strong> Can cancel any pending handover (not just own)</li>
+          <li><strong>View All:</strong> See all handovers across all staff with full details</li>
+          <li><strong>Audit Trail:</strong> All admin actions are logged with before/after state</li>
+        </ul>
+      </div>
+
+      <h3 class="section-subtitle">Database Flow</h3>
+      <div class="mermaid">
+sequenceDiagram
+    actor Sender as Staff (Sender)
+    actor Recipient as Staff (Recipient)
+    participant Client as Handovers.tsx
+    participant RPC as create_handover()
+    participant DB as PostgreSQL
+
+    Sender->>Client: Click Create Handover
+    Client->>Client: Select Recipient
+    Client->>RPC: Call create_handover()
+    RPC->>DB: Calculate current balance
+    RPC->>DB: Split into Cash + UPI
+    RPC->>DB: Insert handover record
+    RPC->>Client: Return handover_id
+    Client->>Sender: Show success
+    Client->>Recipient: Push notification
+
+    Recipient->>Client: View pending handover
+    alt Confirm
+        Recipient->>RPC: Update status='confirmed'
+        RPC->>DB: Update handover record
+        RPC->>Client: Success
+        Client->>Sender: Notify confirmed
+    else Reject
+        Recipient->>RPC: Update status='rejected'
+        RPC->>DB: Update handover record
+        RPC->>Client: Success
+        Client->>Sender: Notify rejected
+    end
+      </div>
+
+      <h3 class="section-subtitle">Admin Transfer Database Flow</h3>
+      <div class="mermaid">
+sequenceDiagram
+    actor Admin as Super Admin
+    participant Client as Handovers.tsx
+    participant RPC as admin_transfer_between_staff()
+    participant DB as PostgreSQL
+
+    Admin->>Client: Open Admin Transfer Dialog
+    Client->>Client: Select From/To Staff
+    Client->>Client: Enter Amount & Reason
+    Client->>RPC: Call admin_transfer_between_staff()
+
+    RPC->>DB: Validate permissions (Super Admin)
+    RPC->>DB: Validate different staff
+    RPC->>DB: Create handover record
+    RPC->>DB: Auto-confirm handover
+    RPC->>DB: Update both balances
+    RPC->>DB: Log admin action
+
+    RPC->>Client: Return handover_id
+    Client->>Admin: Show success
+    Client->>From Staff: Notify sent
+    Client->>To Staff: Notify received
+      </div>
+</section>
+
+<div class="updated">
+      Last Updated: 2026-04-20 | Current Focus: Handover Flow with Role-Based Access Control, Admin Transfers & Edit Capabilities
+    </div>
 </div>
 
 <script>

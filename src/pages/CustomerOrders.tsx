@@ -69,7 +69,7 @@ const CustomerOrders = () => {
     }
 
     setSaving(true);
-    const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "ORD", seq_name: "ord_display_seq" });
+    const { data: displayId } = await supabase.rpc("generate_random_display_id", { p_prefix: "ORD", p_table_name: "orders" });
     const { error } = await supabase.from("orders").insert({
       display_id: displayId,
       store_id: orderStoreId,

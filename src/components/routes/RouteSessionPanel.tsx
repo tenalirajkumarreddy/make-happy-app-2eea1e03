@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { getCurrentPosition } from "@/lib/proximity";
+import { getCurrentPosition, getDistanceMeters as haversineDistance } from "@/lib/proximity";
 import { useAuth } from "@/contexts/AuthContext";
 import { logActivity } from "@/lib/activityLogger";
 import { Button } from "@/components/ui/button";
@@ -16,19 +16,12 @@ import {
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
-function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number) {
-  const R = 6371000;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLng = ((lng2 - lng1) * Math.PI) / 180;
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
 export function RouteSessionPanel() {
   const { user, role } = useAuth();
-  const isScopedStaff = role === "agent" || role === "marketer" || role === "pos" || role === "manager";
+  const isScopedStaff = role === "agent" || role === "marketer" || role === "pos";
   const qc = useQueryClient();
   const [showStart, setShowStart] = useState(false);
+  const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [selectedRoute, setSelectedRoute] = useState("");
   const [saving, setSaving] = useState(false);
   const [agentLocation, setAgentLocation] = useState<{ lat: number; lng: number } | null>(null);
@@ -164,12 +157,32 @@ export function RouteSessionPanel() {
   const handleStart = async () => {
     if (!selectedRoute) { toast.error("Select a route"); return; }
     setSaving(true);
+
+    const { data: locSetting } = await supabase.from("company_settings").select("value").eq("key", "location_validation").maybeSingle() as any;
+    const enforceProximity = locSetting && locSetting.value === "true";
+
+    if (enforceProximity) {
+      const { checkProximity } = await import("@/lib/proximity");
+      const result = await checkProximity(null, null);
+      if (result.withinRange === false && !result.skippedNoGps) {
+        setSaving(false);
+        toast.error(result.message);
+        return;
+      }
+    }
+
     const loc = await getCurrentPosition();
+    if (!loc) {
+      setSaving(false);
+      toast.error("Could not get your location. Please enable GPS and try again.");
+      return;
+    }
+
     const { error } = await supabase.from("route_sessions").insert({
       user_id: user!.id,
       route_id: selectedRoute,
-      start_lat: loc?.lat || null,
-      start_lng: loc?.lng || null,
+      start_lat: loc.lat,
+      start_lng: loc.lng,
     });
     setSaving(false);
     if (error) toast.error(error.message);
@@ -237,7 +250,7 @@ export function RouteSessionPanel() {
 
   if (loadingSession) return null;
 
-  const visitedCount = routeStores.filter((s: any) => visits?.has(s.id)).length;
+  const visitedCount = visits?.size ?? 0;
 
   return (
     <>
@@ -245,7 +258,8 @@ export function RouteSessionPanel() {
         <div className="rounded-xl border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="h-3 w-3 rounded-full bg-green-500 animate-pulse" />
+              <div className="h-3 w-3 rounded-full bg-green-500 animate-pulse" aria-hidden="true" />
+              <span className="sr-only">Active session in progress: </span>
               <div>
                 <p className="font-semibold">Active Session: {(activeSession as any)?.routes?.name}</p>
                 <p className="text-xs text-muted-foreground">
@@ -253,7 +267,7 @@ export function RouteSessionPanel() {
                 </p>
               </div>
             </div>
-            <Button variant="destructive" size="sm" onClick={handleEnd} disabled={saving}>
+            <Button variant="destructive" size="sm" onClick={() => setShowEndConfirm(true)} disabled={saving}>
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Square className="mr-2 h-4 w-4" />}
               End Session
             </Button>
@@ -336,6 +350,23 @@ export function RouteSessionPanel() {
           <Play className="mr-2 h-4 w-4" />Start Route Session
         </Button>
       )}
+
+      <Dialog open={showEndConfirm} onOpenChange={setShowEndConfirm}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>End Route Session?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            You have visited {visitedCount} of {routeStores.length} stores.
+            Ending now will mark this session as complete. Continue?
+          </p>
+          <div className="flex gap-3 pt-2">
+            <Button variant="outline" className="flex-1" onClick={() => setShowEndConfirm(false)}>Cancel</Button>
+            <Button variant="destructive" className="flex-1" onClick={() => { setShowEndConfirm(false); handleEnd(); }} disabled={saving}>
+              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              End Session
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showStart} onOpenChange={setShowStart}>
         <DialogContent>

@@ -117,12 +117,10 @@ const SuperAdminDashboard = () => {
         (supabase as any).from("handovers")
           .select("cash_amount, upi_amount")
           .in("status", ["pending", "awaiting_confirmation"]),
-        // Low stock alerts (products below reorder level)
-        (supabase as any).from("products")
-          .select("id, name, stock_quantity, reorder_level, warehouse_id")
-          .lte("stock_quantity", "reorder_level")
-          .eq("is_active", true)
-          .limit(5),
+        // Low stock alerts (from per-warehouse product_stock)
+        (supabase as any).from("product_stock")
+          .select("id, warehouse_id, stock_quantity:quantity, products(name, is_active)")
+          .limit(100),
       ]);
 
       const todaySales = todaySalesRes.data || [];
@@ -166,7 +164,17 @@ const SuperAdminDashboard = () => {
         warehouseCount: warehousesRes.count || 0,
         staffCount: staffRes.count || 0,
         pendingHandover,
-        lowStockAlerts: alertsRes.data || [],
+        lowStockAlerts: (alertsRes.data || [])
+          .filter((item: any) => item?.products?.is_active !== false)
+          .filter((item: any) => Number(item.stock_quantity || 0) <= 10)
+          .slice(0, 5)
+          .map((item: any) => ({
+            id: item.id,
+            name: item.products?.name || "Unknown product",
+            stock_quantity: Number(item.stock_quantity || 0),
+            reorder_level: 10,
+            warehouse_id: item.warehouse_id,
+          })),
         weeklySales,
       };
     },
@@ -358,12 +366,10 @@ const ManagerDashboard = () => {
           .order("created_at", { ascending: false })
           .limit(5),
         // Low stock
-        (supabase as any).from("products")
-          .select("id, name, stock_quantity, reorder_level")
+        (supabase as any).from("product_stock")
+          .select("id, warehouse_id, stock_quantity:quantity, products(name, is_active)")
           .eq("warehouse_id", currentWarehouse?.id)
-          .lte("stock_quantity", "reorder_level")
-          .eq("is_active", true)
-          .limit(5),
+          .limit(100),
         // Staff sales today
         (supabase as any).from("sales")
           .select("total_amount, recorded_by, profiles(full_name)")
@@ -399,7 +405,16 @@ const ManagerDashboard = () => {
         todayUpi: totalUpi,
         staffHoldings,
         pendingOrders: pendingOrdersRes.data || [],
-        lowStockItems: lowStockRes.data || [],
+        lowStockItems: (lowStockRes.data || [])
+          .filter((item: any) => item?.products?.is_active !== false)
+          .filter((item: any) => Number(item.stock_quantity || 0) <= 10)
+          .slice(0, 5)
+          .map((item: any) => ({
+            id: item.id,
+            name: item.products?.name || "Unknown product",
+            stock_quantity: Number(item.stock_quantity || 0),
+            reorder_level: 10,
+          })),
         staffHandovers: staffHandoversRes.data || [],
         salesByStaff: salesByStaffData,
       };

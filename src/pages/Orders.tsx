@@ -10,12 +10,14 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
 import { useRouteAccess } from "@/hooks/useRouteAccess";
 import { usePermission } from "@/hooks/usePermission";
-import { Loader2, Plus, Trash2, XCircle, Package, Download, X, CalendarIcon, ArrowRightLeft, FileText, Edit, MoreHorizontal, Printer, Eye, CheckCircle2, ShoppingCart, RotateCcw } from "lucide-react";
+import { Loader2, Plus, Trash2, XCircle, Package, Download, X, CalendarIcon, ArrowRightLeft, FileText, Edit, MoreHorizontal, Printer, Eye, CheckCircle2, ShoppingCart, RotateCcw, Store as StoreIcon, UserCircle, MapPin, Phone, Mail } from "lucide-react";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { useState, useEffect, useMemo } from "react";
+import { Link } from "react-router-dom";
 import { OrderFulfillmentDialog } from "@/components/orders/OrderFulfillmentDialog";
 import { TransferOrderDialog } from "@/components/orders/TransferOrderDialog";
 import { InvoiceDialog } from "@/components/orders/InvoiceDialog";
+import { OrderViewDialog } from "@/components/orders/OrderViewDialog";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -25,11 +27,16 @@ import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
+Tooltip,
+TooltipContent,
+TooltipProvider,
+TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+HoverCard,
+HoverCardContent,
+HoverCardTrigger,
+} from "@/components/ui/hover-card";
 import { Textarea } from "@/components/ui/textarea";
 import {
 Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -93,6 +100,7 @@ const Orders = () => {
   const { allowed: canViewInvoices } = usePermission("view_invoices");
   const { allowed: canCreateInvoices } = usePermission("create_invoices");
   const { allowed: canEditInvoices } = usePermission("edit_invoices");
+  const { allowed: canCreateSaleReturns } = usePermission("create_sale_returns");
   
   // Check if user can see orders at all
   const hasOrderAccess = canViewOrders || canViewAssignedOrders;
@@ -100,6 +108,7 @@ const Orders = () => {
   // State
   const [showAdd, setShowAdd] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
+  const [showView, setShowView] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
   const [showInvoice, setShowInvoice] = useState(false);
   const [invoiceMode, setInvoiceMode] = useState<"create" | "edit" | "view">("create");
@@ -120,15 +129,17 @@ const Orders = () => {
   const [filterFrom, setFilterFrom] = useState(thirtyDaysAgo);
   const [filterTo, setFilterTo] = useState(today);
   const [filterCustomer, setFilterCustomer] = useState("all");
+  const [filterStore, setFilterStore] = useState("all");
   const [filterStoreType, setFilterStoreType] = useState("all");
   const [filterRoute, setFilterRoute] = useState("all");
+  const [filterAssignedTo, setFilterAssignedTo] = useState("all");
   const PAGE_SIZE = 100;
   const [loadedPages, setLoadedPages] = useState(1);
 
   // Reset to page 1 whenever any filter changes
   useEffect(() => {
     setLoadedPages(1);
-  }, [statusFilter, filterFrom, filterTo, filterCustomer, filterStoreType, filterRoute]);
+  }, [statusFilter, filterFrom, filterTo, filterCustomer, filterStore, filterStoreType, filterRoute, filterAssignedTo]);
 
   // Form state for create
   const [customerId, setCustomerId] = useState("");
@@ -139,11 +150,11 @@ const Orders = () => {
   const [assignedTo, setAssignedTo] = useState("");
 
   const { data: orders, isLoading, isFetching } = useQuery({
-    queryKey: ["orders", currentWarehouse?.id, statusFilter, filterFrom, filterTo, filterCustomer, filterStoreType, filterRoute, loadedPages, user?.id, role],
+    queryKey: ["orders", currentWarehouse?.id, statusFilter, filterFrom, filterTo, filterCustomer, filterStore, filterStoreType, filterRoute, filterAssignedTo, loadedPages, user?.id, role],
     queryFn: async () => {
       let query = supabase
         .from("orders")
-        .select("*, stores(name, route_id, store_type_id, customer_id), customers(name), assigned_to, fulfilled_by_sale_id")
+        .select("*, stores(id, name, display_id, route_id, store_type_id, address, outstanding), customers(id, name, display_id, phone, email), assigned_to, fulfilled_by_sale_id")
         .order("created_at", { ascending: false });
 
       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
@@ -153,7 +164,15 @@ const Orders = () => {
       if (filterFrom) query = query.gte("created_at", filterFrom + "T00:00:00");
       if (filterTo) query = query.lte("created_at", filterTo + "T23:59:59");
       if (filterCustomer !== "all") query = query.eq("customer_id", filterCustomer);
-      
+      if (filterStore !== "all") query = query.eq("store_id", filterStore);
+      if (filterAssignedTo !== "all") {
+        if (filterAssignedTo === "__unassigned__") {
+          query = query.is("assigned_to", null);
+        } else {
+          query = query.eq("assigned_to", filterAssignedTo);
+        }
+      }
+
       // Store type and route filters (join with stores)
       if (filterStoreType !== "all") {
         query = query.eq("stores.store_type_id", filterStoreType);
@@ -193,6 +212,18 @@ const Orders = () => {
         .eq("is_active", true);
       return data || [];
     },
+  });
+
+  // Fetch stores for filter
+  const { data: storesForFilter = [] } = useQuery({
+    queryKey: ["stores-for-filter-orders", currentWarehouse?.id],
+    queryFn: async () => {
+      let query = supabase.from("stores").select("id, name, display_id").eq("is_active", true).order("name");
+      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+      const { data } = await query;
+      return data || [];
+    },
+    enabled: hasOrderAccess,
   });
 
   const { canAccessStore, hasMatrixRestrictions, hasStoreTypeRestrictions } = useRouteAccess(user?.id, role);
@@ -258,12 +289,13 @@ const Orders = () => {
     queryKey: ["agents-for-assignment"],
     queryFn: async () => {
       const { data } = await supabase
-        .from("user_roles")
-        .select("user_id, profiles(full_name)")
-        .eq("role", "agent");
+        .from("staff_directory")
+        .select("user_id, full_name")
+        .eq("role", "agent")
+        .eq("is_active", true);
       return (data || []).map((r: any) => ({ 
         id: r.user_id, 
-        full_name: r.profiles?.full_name || "Agent" 
+        full_name: r.full_name || "Agent" 
       }));
     },
     enabled: canTransferOrders || canCreateOrders,
@@ -361,7 +393,7 @@ const Orders = () => {
       }
     }
 
-    const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "ORD", seq_name: "ord_display_seq" });
+    const { data: displayId } = await supabase.rpc("generate_random_display_id", { p_prefix: "ORD", p_table_name: "orders" });
 
     const insertData: any = {
       display_id: displayId,
@@ -420,7 +452,8 @@ const Orders = () => {
     setSaving(false);
     setShowAdd(false);
     resetForm();
-    qc.invalidateQueries({ queryKey: ["orders"] });
+    // Invalidate all orders queries to refresh the list
+    qc.invalidateQueries({ queryKey: ["orders"], exact: false });
   };
 
   // Handle order edit
@@ -477,13 +510,13 @@ const Orders = () => {
     qc.invalidateQueries({ queryKey: ["orders"] });
   };
 
-  // Open edit dialog with order details
+// Open edit dialog with order details
   const handleOpenEdit = async (orderId: string) => {
     if (!canModifyOrders) {
       toast.error("You don't have permission to edit orders");
       return;
     }
-    
+
     setLoadingOrderDetails(orderId);
     try {
       const { data: orderData, error } = await supabase
@@ -497,7 +530,13 @@ const Orders = () => {
         .single();
 
       if (error) throw error;
-      
+
+      // Prevent editing delivered orders
+      if (orderData.status === 'delivered') {
+        toast.error("Delivered orders cannot be edited. Use Sale Return if needed.");
+        return;
+      }
+
       setEditOrder(orderData as unknown as FulfillOrder);
       setOrderType(orderData.order_type);
       setRequirementNote(orderData.requirement_note || "");
@@ -512,8 +551,48 @@ const Orders = () => {
       } else {
         setOrderItems([{ product_id: "", quantity: 1 }]);
       }
-      
+
       setShowEdit(true);
+    } catch (error) {
+      console.error("Error loading order details:", error);
+      toast.error("Failed to load order details");
+    } finally {
+      setLoadingOrderDetails(null);
+    }
+  };
+
+  // Open view dialog for delivered orders (read-only)
+  const handleOpenView = async (orderId: string) => {
+    setLoadingOrderDetails(orderId);
+    try {
+      const { data: orderData, error } = await supabase
+        .from("orders")
+        .select(`
+          *,
+          stores(id, name, store_type_id, customer_id, route_id),
+          order_items(id, product_id, quantity, unit_price, products(id, name, sku, base_price, image_url))
+        `)
+        .eq("id", orderId)
+        .single();
+
+      if (error) throw error;
+
+      setEditOrder(orderData as unknown as FulfillOrder);
+      setOrderType(orderData.order_type);
+      setRequirementNote(orderData.requirement_note || "");
+      setAssignedTo(orderData.assigned_to || "");
+
+      if (orderData.order_items && orderData.order_items.length > 0) {
+        setOrderItems(orderData.order_items.map((item: any) => ({
+          product_id: item.product_id,
+          quantity: item.quantity,
+          unit_price: item.unit_price
+        })));
+      } else {
+        setOrderItems([{ product_id: "", quantity: 1 }]);
+      }
+
+      setShowView(true);
     } catch (error) {
       console.error("Error loading order details:", error);
       toast.error("Failed to load order details");
@@ -690,7 +769,7 @@ const exportCSV = () => {
         cancelled_at: new Date().toISOString(),
       })
       .eq("id", cancelOrderId)
-      .eq("status", "pending");
+      .in("status", ["pending", "confirmed"]);
     setCancelling(false);
     if (error) { toast.error(error.message); return; }
 
@@ -728,12 +807,24 @@ const exportCSV = () => {
     return data;
   }, [orders, hasMatrixRestrictions, hasStoreTypeRestrictions, canAccessStore]);
 
-  const activeOrderFilterCount = [filterCustomer !== "all", filterFrom !== thirtyDaysAgo, filterTo !== today].filter(Boolean).length;
+  const activeOrderFilterCount = [
+    filterCustomer !== "all",
+    filterStore !== "all",
+    filterStoreType !== "all",
+    filterRoute !== "all",
+    filterAssignedTo !== "all",
+    filterFrom !== thirtyDaysAgo,
+    filterTo !== today
+  ].filter(Boolean).length;
 
   const clearOrderFilters = () => {
     setFilterFrom(thirtyDaysAgo);
     setFilterTo(today);
     setFilterCustomer("all");
+    setFilterStore("all");
+    setFilterStoreType("all");
+    setFilterRoute("all");
+    setFilterAssignedTo("all");
   };
 
 // Build action buttons based on permissions - icon-only with tooltips
@@ -939,7 +1030,7 @@ const buildActions = (row: any) => {
     );
   }
 
-  // Delivered orders - CANNOT cancel, only Sale Return
+  // Delivered orders - CANNOT edit/cancel, only view
   if (row.status === "delivered") {
     return (
       <TooltipProvider>
@@ -950,7 +1041,7 @@ const buildActions = (row: any) => {
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
-                onClick={() => handleOpenEdit(row.id)}
+                onClick={() => handleOpenView(row.id)}
               >
                 <Eye className="h-4 w-4" />
               </Button>
@@ -1002,27 +1093,24 @@ const buildActions = (row: any) => {
             </Tooltip>
           )}
 
-          {/* NO CANCEL BUTTON for delivered - use Sale Return instead */}
-          {/* TODO: Add Sale Return button when feature is ready */}
-          {/*
-          {canCreateSaleReturns && (
+          {/* Sale Return button for delivered orders */}
+          {canCreateSaleReturns && row.fulfilled_by_sale_id && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 text-orange-600 hover:bg-orange-50 hover:text-orange-700"
-                  onClick={() => handleSaleReturn(row.id)}
+                  onClick={() => window.location.href = `/sale-returns?sale_id=${row.fulfilled_by_sale_id}`}
                 >
                   <RotateCcw className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Sale Return (Reverse)</p>
+                <p>Create Sale Return</p>
               </TooltipContent>
             </Tooltip>
           )}
-          */}
         </div>
       </TooltipProvider>
     );
@@ -1031,16 +1119,148 @@ const buildActions = (row: any) => {
   return null;
 };
 
-  const columns = [
-    { header: "Order ID", accessor: "display_id" as const, className: "font-mono text-xs" },
-    { header: "Store", accessor: (row: any) => row.stores?.name || "—", className: "font-medium" },
-    { header: "Type", accessor: (row: any) => <Badge variant="secondary">{row.order_type}</Badge>, className: "hidden sm:table-cell" },
+  // Store Hover Card component
+  const StoreHoverCard = ({ store, children }: { store: any; children: React.ReactNode }) => {
+    if (!store) return <span>{children}</span>;
+    return (
+      <HoverCard>
+        <HoverCardTrigger asChild>
+          <Link to={`/stores/${store.id}`} className="hover:underline cursor-pointer">
+            {children}
+          </Link>
+        </HoverCardTrigger>
+        <HoverCardContent className="w-72 p-0" align="start">
+          <div className="p-3 space-y-3">
+            {/* Store Photo and Name */}
+            <div className="flex items-start gap-3">
+              {store.image_url ? (
+                <img 
+                  src={store.image_url} 
+                  alt={store.name}
+                  className="h-14 w-14 rounded-lg object-cover border"
+                />
+              ) : (
+                <div className="h-14 w-14 rounded-lg bg-primary/10 flex items-center justify-center border">
+                  <StoreIcon className="h-6 w-6 text-primary" />
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm truncate">{store.name}</p>
+                <p className="text-xs text-muted-foreground">{store.display_id}</p>
+                {store.routes?.name && (
+                  <div className="flex items-center gap-1 mt-1">
+                    <MapPin className="h-3 w-3 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground truncate">{store.routes.name}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Store Details */}
+            <div className="space-y-1.5 text-xs">
+              {store.store_types?.name && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-muted-foreground min-w-[60px]">Type:</span>
+                  <span className="font-medium">{store.store_types.name}</span>
+                </div>
+              )}
+              {store.address && (
+                <div className="flex items-start gap-1.5">
+                  <span className="text-muted-foreground min-w-[60px]">Address:</span>
+                  <span className="text-muted-foreground line-clamp-2">{store.address}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Balance */}
+            {store.outstanding !== undefined && (
+              <div className="flex items-center justify-between py-2 border-t text-sm">
+                <span className="text-muted-foreground">Balance:</span>
+                <span className={`font-bold ${Number(store.outstanding) > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                  ₹{Number(store.outstanding).toLocaleString()}
+                </span>
+              </div>
+            )}
+
+            <Button size="sm" variant="outline" className="w-full text-xs" asChild>
+              <Link to={`/stores/${store.id}`}>View Store Profile</Link>
+            </Button>
+          </div>
+        </HoverCardContent>
+      </HoverCard>
+    );
+  };
+
+  // Customer Hover Card component
+  const CustomerHoverCard = ({ customer, children }: { customer: any; children: React.ReactNode }) => {
+    if (!customer) return <span>{children}</span>;
+    return (
+      <HoverCard>
+        <HoverCardTrigger asChild>
+          <Link to={`/customers/${customer.id}`} className="hover:underline cursor-pointer">
+            {children}
+          </Link>
+        </HoverCardTrigger>
+        <HoverCardContent className="w-64 p-0" align="start">
+          <div className="p-3 space-y-2">
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                <UserCircle className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <p className="font-semibold text-sm">{customer.name}</p>
+                <p className="text-xs text-muted-foreground">{customer.display_id}</p>
+              </div>
+            </div>
+            {(customer.phone || customer.email) && (
+              <div className="space-y-1 py-1 border-t text-xs">
+                {customer.phone && (
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <Phone className="h-3 w-3" />
+                    <span>{customer.phone}</span>
+                  </div>
+                )}
+                {customer.email && (
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <Mail className="h-3 w-3" />
+                    <span className="truncate">{customer.email}</span>
+                  </div>
+                )}
+              </div>
+            )}
+            <Button size="sm" variant="outline" className="w-full text-xs" asChild>
+              <Link to={`/customers/${customer.id}`}>View Customer Profile</Link>
+            </Button>
+          </div>
+        </HoverCardContent>
+      </HoverCard>
+    );
+  };
+
+const columns = [
+  { header: "Order ID", accessor: "display_id" as const, className: "font-mono text-xs" },
+  { header: "Store", accessor: (row: any) => (
+    <div className="flex items-center gap-2">
+      <StoreIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+      <StoreHoverCard store={row.stores}>
+        <span>{row.stores?.name || "—"}</span>
+      </StoreHoverCard>
+    </div>
+  ), className: "font-medium" },
+  { header: "Type", accessor: (row: any) => <Badge variant="secondary">{row.order_type}</Badge>, className: "hidden sm:table-cell" },
   { header: "Source", accessor: (row: any) => <Badge variant="outline">{row.source}</Badge>, className: "hidden md:table-cell" },
-  { header: "Customer", accessor: (row: any) => row.customers?.name || "—", className: "text-muted-foreground text-sm hidden lg:table-cell" },
+  { header: "Customer", accessor: (row: any) => (
+    <div className="flex items-center gap-2">
+      <UserCircle className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+      <CustomerHoverCard customer={row.customers}>
+        <span>{row.customers?.name || "—"}</span>
+      </CustomerHoverCard>
+    </div>
+  ), className: "text-muted-foreground text-sm hidden lg:table-cell" },
   { header: "Status", accessor: (row: any) => <StatusBadge status={row.status === "delivered" ? "active" : row.status as any} label={row.status} /> },
-    { header: "Date", accessor: (row: any) => new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }), className: "text-muted-foreground text-xs hidden sm:table-cell" },
-    { header: "Actions", accessor: (row: any) => buildActions(row) },
-  ];
+  { header: "Date", accessor: (row: any) => new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }), className: "text-muted-foreground text-xs hidden sm:table-cell" },
+  { header: "Actions", accessor: (row: any) => buildActions(row) },
+];
 
   if (isLoading) {
     return <TableSkeleton columns={7} />;
@@ -1079,66 +1299,113 @@ const buildActions = (row: any) => {
         </TabsList>
       </Tabs>
 
-      <div className="flex flex-wrap items-center gap-2 p-3 rounded-xl border bg-card shadow-sm">
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" className="h-9 text-xs gap-1.5 justify-start font-medium flex-1 min-w-[110px] sm:flex-none bg-accent/5 focus:bg-accent/10 transition-colors">
-              <CalendarIcon className="h-3.5 w-3.5 shrink-0 text-primary/60" />
-              {filterFrom ? format(new Date(filterFrom + "T00:00:00"), "dd MMM yy") : "From"}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
-            <Calendar mode="single" selected={filterFrom ? new Date(filterFrom + "T00:00:00") : undefined} onSelect={(d) => setFilterFrom(d ? format(d, "yyyy-MM-dd") : "")} initialFocus />
-          </PopoverContent>
-        </Popover>
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" className="h-9 text-xs gap-1.5 justify-start font-medium flex-1 min-w-[110px] sm:flex-none bg-accent/5 focus:bg-accent/10 transition-colors">
-              <CalendarIcon className="h-3.5 w-3.5 shrink-0 text-primary/60" />
-              {filterTo ? format(new Date(filterTo + "T00:00:00"), "dd MMM yy") : "To"}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
-            <Calendar mode="single" selected={filterTo ? new Date(filterTo + "T00:00:00") : undefined} onSelect={(d) => setFilterTo(d ? format(d, "yyyy-MM-dd") : "")} initialFocus />
-          </PopoverContent>
-        </Popover>
-        <Select value={filterCustomer} onValueChange={setFilterCustomer}>
-          <SelectTrigger className="h-9 text-xs flex-1 min-w-[140px] sm:flex-none sm:w-48 bg-accent/5 focus:bg-accent/10 transition-colors font-medium">
-            <SelectValue placeholder="All customers" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All customers</SelectItem>
-            {customers?.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        {activeOrderFilterCount > 0 && (
-          <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={clearOrderFilters}>
-            <X className="h-3 w-3 mr-1" /> Clear ({activeOrderFilterCount})
+<div className="flex flex-wrap items-center gap-2 p-3 rounded-xl border bg-card shadow-sm">
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="outline" className="h-9 text-xs gap-1.5 justify-start font-medium flex-1 min-w-[110px] sm:flex-none bg-accent/5 focus:bg-accent/10 transition-colors">
+            <CalendarIcon className="h-3.5 w-3.5 shrink-0 text-primary/60" />
+            {filterFrom ? format(new Date(filterFrom + "T00:00:00"), "dd MMM yy") : "From"}
           </Button>
-        )}
-        <span className="ml-auto text-xs text-muted-foreground">{filteredOrders.length}{hasMoreOrders ? "+" : ""} result{filteredOrders.length !== 1 ? "s" : ""}</span>
-      </div>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start">
+          <Calendar mode="single" selected={filterFrom ? new Date(filterFrom + "T00:00:00") : undefined} onSelect={(d) => setFilterFrom(d ? format(d, "yyyy-MM-dd") : "")} initialFocus />
+        </PopoverContent>
+      </Popover>
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="outline" className="h-9 text-xs gap-1.5 justify-start font-medium flex-1 min-w-[110px] sm:flex-none bg-accent/5 focus:bg-accent/10 transition-colors">
+            <CalendarIcon className="h-3.5 w-3.5 shrink-0 text-primary/60" />
+            {filterTo ? format(new Date(filterTo + "T00:00:00"), "dd MMM yy") : "To"}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start">
+          <Calendar mode="single" selected={filterTo ? new Date(filterTo + "T00:00:00") : undefined} onSelect={(d) => setFilterTo(d ? format(d, "yyyy-MM-dd") : "")} initialFocus />
+        </PopoverContent>
+      </Popover>
+      <Select value={filterStore} onValueChange={setFilterStore}>
+        <SelectTrigger className="h-9 text-xs flex-1 min-w-[140px] sm:flex-none sm:w-48 bg-accent/5 focus:bg-accent/10 transition-colors font-medium">
+          <SelectValue placeholder="All stores" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All stores</SelectItem>
+          {storesForFilter?.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.name} ({s.display_id})</SelectItem>)}
+        </SelectContent>
+      </Select>
+      <Select value={filterStoreType} onValueChange={setFilterStoreType}>
+        <SelectTrigger className="h-9 text-xs flex-1 min-w-[140px] sm:flex-none sm:w-48 bg-accent/5 focus:bg-accent/10 transition-colors font-medium">
+          <SelectValue placeholder="All store types" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All store types</SelectItem>
+          {storeTypes?.map((st: any) => <SelectItem key={st.id} value={st.id}>{st.name}</SelectItem>)}
+        </SelectContent>
+      </Select>
+      <Select value={filterRoute} onValueChange={setFilterRoute}>
+        <SelectTrigger className="h-9 text-xs flex-1 min-w-[140px] sm:flex-none sm:w-48 bg-accent/5 focus:bg-accent/10 transition-colors font-medium">
+          <SelectValue placeholder="All routes" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All routes</SelectItem>
+          {routes?.map((r: any) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+        </SelectContent>
+      </Select>
+      <Select value={filterCustomer} onValueChange={setFilterCustomer}>
+        <SelectTrigger className="h-9 text-xs flex-1 min-w-[140px] sm:flex-none sm:w-48 bg-accent/5 focus:bg-accent/10 transition-colors font-medium">
+          <SelectValue placeholder="All customers" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All customers</SelectItem>
+          {customers?.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+        </SelectContent>
+      </Select>
+      <Select value={filterAssignedTo} onValueChange={setFilterAssignedTo}>
+        <SelectTrigger className="h-9 text-xs flex-1 min-w-[140px] sm:flex-none sm:w-48 bg-accent/5 focus:bg-accent/10 transition-colors font-medium">
+          <SelectValue placeholder="All assignees" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All assignees</SelectItem>
+          <SelectItem value="__unassigned__">Unassigned</SelectItem>
+          {agents?.map((a) => <SelectItem key={a.id} value={a.id}>{a.full_name}</SelectItem>)}
+        </SelectContent>
+      </Select>
+      {activeOrderFilterCount > 0 && (
+        <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={clearOrderFilters}>
+          <X className="h-3 w-3 mr-1" /> Clear ({activeOrderFilterCount})
+        </Button>
+      )}
+      <span className="ml-auto text-xs text-muted-foreground">{filteredOrders.length}{hasMoreOrders ? "+" : ""} result{filteredOrders.length !== 1 ? "s" : ""}</span>
+    </div>
 
-      <DataTable
-        columns={columns}
-        data={filteredOrders}
-        searchKey="display_id"
-        searchPlaceholder="Search by order ID..."
-        emptyMessage={statusFilter === "all" ? "No orders created yet." : `No ${statusFilter} orders.`}
-        renderMobileCard={(row: any) => (
-          <div className="rounded-lg border bg-card p-3">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                  <span className="font-mono text-xs text-primary font-medium">{row.display_id}</span>
-                  <Badge variant="secondary" className="text-xs h-5 px-1.5">{row.order_type}</Badge>
-                  <Badge variant="outline" className="text-xs h-5 px-1.5">{row.source}</Badge>
-                </div>
-                <h3 className="font-semibold text-sm text-foreground truncate">{row.stores?.name || "—"}</h3>
-            <p className="text-xs text-muted-foreground truncate">{row.customers?.name || "—"}</p>
-          </div>
-              <StatusBadge status={row.status === "delivered" ? "active" : row.status as any} label={row.status} />
+<DataTable
+      columns={columns}
+      data={filteredOrders}
+      searchKey="display_id"
+      searchPlaceholder="Search by order ID..."
+      emptyMessage={statusFilter === "all" ? "No orders created yet." : `No ${statusFilter} orders.`}
+      renderMobileCard={(row: any) => (
+        <div className="rounded-lg border bg-card p-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                <span className="font-mono text-xs text-primary font-medium">{row.display_id}</span>
+                <Badge variant="secondary" className="text-xs h-5 px-1.5">{row.order_type}</Badge>
+                <Badge variant="outline" className="text-xs h-5 px-1.5">{row.source}</Badge>
+              </div>
+              <div className="flex items-center gap-1.5 mb-1">
+                <StoreIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <StoreHoverCard store={row.stores}>
+                  <span className="font-semibold text-sm text-foreground truncate cursor-pointer hover:underline">{row.stores?.name || "—"}</span>
+                </StoreHoverCard>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <UserCircle className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <CustomerHoverCard customer={row.customers}>
+                  <span className="text-xs text-muted-foreground truncate cursor-pointer hover:underline">{row.customers?.name || "—"}</span>
+                </CustomerHoverCard>
+              </div>
             </div>
+            <StatusBadge status={row.status === "delivered" ? "active" : row.status as any} label={row.status} />
+          </div>
             <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50 gap-2 flex-wrap">
               <p className="text-[10px] text-muted-foreground">{new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}</p>
               {row.status === "pending" && (
@@ -1165,21 +1432,24 @@ const buildActions = (row: any) => {
                   )}
                 </div>
               )}
-          {row.status === "delivered" && (
-            <div className="flex items-center gap-1.5">
-              {row.fulfilled_by_sale_id && (
-                <Button variant="outline" size="sm" className="h-7 text-xs text-green-600 border-green-600/40" onClick={(e) => { e.stopPropagation(); window.location.href = `/sales/${row.fulfilled_by_sale_id}`; }}>
-                  <ShoppingCart className="h-3 w-3 mr-1" />Sale
-                </Button>
+              {row.status === "delivered" && (
+                <div className="flex items-center gap-1.5">
+                  <Button variant="outline" size="sm" className="h-7 text-xs text-blue-600 border-blue-600/40" onClick={(e) => { e.stopPropagation(); handleOpenView(row.id); }}>
+                    <Eye className="h-3 w-3 mr-1" />View
+                  </Button>
+                  {row.fulfilled_by_sale_id && (
+                    <Button variant="outline" size="sm" className="h-7 text-xs text-green-600 border-green-600/40" onClick={(e) => { e.stopPropagation(); window.location.href = `/sales/${row.fulfilled_by_sale_id}`; }}>
+                      <ShoppingCart className="h-3 w-3 mr-1" />Sale
+                    </Button>
+                  )}
+                  {canViewInvoices && (
+                    <Button variant="outline" size="sm" className="h-7 text-xs text-purple-600 border-purple-600/40" onClick={(e) => { e.stopPropagation(); handleInvoiceAction(row.id, row.status); }}>
+                      <FileText className="h-3 w-3 mr-1" />Invoice
+                    </Button>
+                  )}
+                  {/* NO CANCEL for delivered - use Sale Return */}
+                </div>
               )}
-              {canViewInvoices && (
-                <Button variant="outline" size="sm" className="h-7 text-xs text-purple-600 border-purple-600/40" onClick={(e) => { e.stopPropagation(); handleInvoiceAction(row.id, row.status); }}>
-                  <FileText className="h-3 w-3 mr-1" />Invoice
-                </Button>
-              )}
-              {/* NO CANCEL for delivered - use Sale Return */}
-            </div>
-          )}
               {row.status === "cancelled" && row.cancellation_reason && (
                 <span className="text-xs text-muted-foreground italic truncate max-w-[180px]">{row.cancellation_reason}</span>
               )}
@@ -1348,10 +1618,24 @@ const buildActions = (row: any) => {
                 {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Update Order
               </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
-      )}
+      </form>
+      </DialogContent>
+    </Dialog>
+  )}
+
+      {/* View Order Dialog - Modern UI */}
+      <OrderViewDialog
+        orderId={showView ? editOrder?.id || null : null}
+        open={showView}
+        onOpenChange={(open) => {
+          setShowView(open);
+          if (!open) {
+            setEditOrder(null);
+          }
+        }}
+        onViewSale={(saleId) => window.location.href = `/sales/${saleId}`}
+        onCreateInvoice={(orderId) => handleInvoiceAction(orderId, "delivered")}
+      />
 
       {/* Order Fulfillment Dialog */}
       <OrderFulfillmentDialog

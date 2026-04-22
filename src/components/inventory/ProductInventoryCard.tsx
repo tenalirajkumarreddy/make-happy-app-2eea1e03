@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Package, ArrowRightLeft, Plus } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { supabase } from '@/integrations/supabase/client';
@@ -59,7 +59,7 @@ export function ProductInventoryCard({ item, staffHoldings = [], onAdjust, onTra
   const minLevel = product.min_stock_level || 0;
   const statusColor = getStatusColor(quantity, minLevel);
 
-const imageUrl = getImageUrl(product?.image_url);
+  const imageUrl = useMemo(() => getImageUrl(product?.image_url), [product?.image_url]);
 
   return (
     <Card className="overflow-hidden flex flex-col hover:border-border transition-colors">
@@ -69,9 +69,14 @@ const imageUrl = getImageUrl(product?.image_url);
         ) : (
           <Package className="h-16 w-16 text-muted-foreground/30" />
         )}
-        <div className={`absolute top-2 right-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider ring-1 ring-inset shadow-xs uppercase ${statusColor}`}>
-          {getStatusText(quantity, minLevel)}
-        </div>
+      <div 
+        className={`absolute top-2 right-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider ring-1 ring-inset shadow-xs uppercase ${statusColor}`}
+        role="status"
+        aria-label={`Stock status: ${getStatusText(quantity, minLevel)}. Current quantity: ${quantity} ${product.unit}`}
+      >
+        <span className="sr-only">Stock status: </span>
+        {getStatusText(quantity, minLevel)}
+      </div>
       </div>
       
       <CardContent className="p-4 flex-1 flex flex-col">

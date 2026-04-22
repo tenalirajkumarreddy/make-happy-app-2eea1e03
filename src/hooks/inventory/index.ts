@@ -24,8 +24,7 @@ export type {
 } from "./useStaffStock";
 
 export type {
-  WarehouseStockItem,
-  StockAllocation
+  Warehouse
 } from "./useWarehouseStock";
 
 export type {

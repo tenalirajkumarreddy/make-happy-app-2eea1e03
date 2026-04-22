@@ -1544,11 +1544,56 @@ export type Database = {
           new_outstanding: number
         }[]
       }
-      update_updated_at_column: {
-        Args: Record<PropertyKey, never>
-        Returns: unknown
+    update_updated_at_column: {
+      Args: Record<PropertyKey, never>
+      Returns: unknown
+    }
+    adjust_stock: {
+      Args: {
+        p_product_id: string
+        p_warehouse_id: string
+        p_quantity_change: number
+        p_adjustment_type: string
+        p_reason?: string | null
+        p_created_by?: string | null
+      }
+      Returns: {
+        success: boolean
+        stock_id?: string
+        previous_quantity?: number
+        new_quantity?: number
+        error?: string
       }
     }
+    adjust_staff_stock: {
+      Args: {
+        p_staff_stock_id: string
+        p_quantity: number
+        p_reason?: string | null
+        p_created_by?: string | null
+      }
+      Returns: {
+        success: boolean
+        staff_stock_id?: string
+        previous_quantity?: number
+        new_quantity?: number
+        error?: string
+      }
+    }
+    batch_stock_transfer: {
+      Args: {
+        p_transfers: string
+        p_created_by?: string | null
+      }
+      Returns: {
+        success: boolean
+        processed?: number
+        total?: number
+        message?: string
+        error?: string
+      }
+    }
+  }
     Enums: {
       app_role:
         | "super_admin"

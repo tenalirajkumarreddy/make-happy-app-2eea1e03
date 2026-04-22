@@ -38,7 +38,7 @@ export interface StockTransferModalProps {
   currentUserId?: string;
 }
 
-type TransferType = "warehouse_to_staff" | "staff_to_warehouse" | "staff_to_staff";
+type TransferType = "warehouse_to_staff" | "staff_to_warehouse" | "staff_to_staff" | "warehouse_to_warehouse";
 
 interface SelectedProduct {
   product_id: string;
@@ -153,7 +153,8 @@ export function StockTransferModal({
     queryFn: async () => {
       if (!fromId) return [];
 
-      if (transferType === "warehouse_to_staff") {
+      if (transferType === "warehouse_to_staff" || transferType === "warehouse_to_warehouse") {
+        // Fetch from warehouse stock
         const { data, error } = await supabase
           .from("product_stock")
           .select(
@@ -167,7 +168,7 @@ export function StockTransferModal({
           product: Array.isArray(r.product) ? r.product[0] : r.product,
         }));
       } else {
-        // staff_to_warehouse or staff_to_staff
+        // staff_to_warehouse or staff_to_staff - fetch from staff stock
         const { data, error } = await supabase
           .from("staff_stock")
           .select(
@@ -236,7 +237,7 @@ export function StockTransferModal({
     0
   );
 
-  // ── Atomic RPC transfer ────────────────────────────────────────────────────
+  // ── Batch atomic transfer ───────────────────────────────────────────────────
   const transferMutation = useMutation({
     mutationFn: async () => {
       if (!fromId) throw new Error("Source is required");
@@ -259,56 +260,76 @@ export function StockTransferModal({
       } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      // ── For each product, call the atomic RPC ──────────────────────────────
-      const errors: string[] = [];
-
-      for (const item of selectedProducts) {
+      // ── Build batch transfers array ─────────────────────────────────────────
+      const transfers = selectedProducts.map((item) => {
         const qty = parseFloat(item.quantity);
-
-                // Build RPC payload based on transfer type
-        const payload: Record<string, unknown> = {
-          p_product_id: item.product_id,
-          p_quantity: qty,
-          p_transfer_type: transferType,
-          p_description: notes || null,
-          p_from_warehouse_id: null,
-          p_from_user_id: null,
-          p_to_warehouse_id: null,
-          p_to_user_id: null,
-        };
+        
+        // Determine warehouse/user IDs based on transfer type
+        let fromWarehouseId = null;
+        let toWarehouseId = null;
+        let fromUserId = null;
+        let toUserId = null;
 
         if (transferType === "warehouse_to_staff") {
-          payload.p_from_warehouse_id = fromId;
-          payload.p_to_user_id = toId;
+          fromWarehouseId = fromId;
+          toUserId = toId;
+          // toWarehouse is the same as fromWarehouse for warehouse_to_staff
+          toWarehouseId = fromId;
         } else if (transferType === "staff_to_warehouse") {
-          payload.p_from_user_id = fromId;
-          payload.p_to_warehouse_id = toId;
-          // staff→warehouse uses the staff_stock warehouse_id as origin
+          fromUserId = fromId;
+          toWarehouseId = toId;
+          // Get source warehouse from staff_stock
           const sourceRow = sourceStock.find((s) => s.product_id === item.product_id);
           if (sourceRow && "warehouse_id" in sourceRow) {
-            payload.p_from_warehouse_id = (sourceRow as any).warehouse_id;
+            fromWarehouseId = (sourceRow as any).warehouse_id;
           }
+        } else if (transferType === "warehouse_to_warehouse") {
+          fromWarehouseId = fromId;
+          toWarehouseId = toId;
         } else {
           // staff_to_staff
-          payload.p_from_user_id = fromId;
-          payload.p_to_user_id = toId;
+          fromUserId = fromId;
+          toUserId = toId;
+          // Get warehouse from staff_stock
+          const sourceRow = sourceStock.find((s) => s.product_id === item.product_id);
+          if (sourceRow && "warehouse_id" in sourceRow) {
+            fromWarehouseId = (sourceRow as any).warehouse_id;
+            toWarehouseId = (sourceRow as any).warehouse_id; // Same warehouse
+          }
         }
 
-        const { error } = await supabase.rpc(
-          "record_stock_transfer" as any,
-          payload as any
-        );
+        return {
+          product_id: item.product_id,
+          quantity: qty,
+          transfer_type: transferType,
+          from_warehouse_id: fromWarehouseId,
+          to_warehouse_id: toWarehouseId,
+          from_user_id: fromUserId,
+          to_user_id: toUserId,
+          description: notes || null,
+        };
+      });
 
-        if (error) {
-          errors.push(`${item.product_name}: ${error.message}`);
+      // ── Call batch transfer RPC (atomic - all or nothing) ──────────────────
+      const { data: result, error } = await supabase.rpc(
+        "batch_stock_transfer",
+        {
+          p_transfers: JSON.stringify(transfers),
         }
+      );
+
+      if (error) {
+        throw new Error(error.message || "Transfer failed");
       }
 
-      if (errors.length > 0) {
-        throw new Error(errors.join("\n"));
+      // Check if RPC returned an error
+      if (result && !result.success) {
+        throw new Error(result.error || "Batch transfer failed");
       }
+
+      return result;
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       // Invalidate all relevant query keys
       queryClient.invalidateQueries({ queryKey: ["product-stock"] });
       queryClient.invalidateQueries({ queryKey: ["warehouse-stock"] });
@@ -320,7 +341,7 @@ export function StockTransferModal({
       queryClient.invalidateQueries({ queryKey: ["inventory-pending-returns"] });
       queryClient.invalidateQueries({ queryKey: ["source-stock-transfer"] });
 
-      toast.success(`Transferred ${totalItems} product(s) successfully`);
+      toast.success(result?.message || `Transferred ${totalItems} product(s) successfully`);
       onClose();
     },
     onError: (error: Error) => {
@@ -338,7 +359,11 @@ export function StockTransferModal({
     } else if (type === "staff_to_warehouse") {
       setFromId("");
       setToId(warehouseId ?? warehouses[0]?.id ?? "");
+    } else if (type === "warehouse_to_warehouse") {
+      setFromId(warehouseId ?? warehouses[0]?.id ?? "");
+      setToId("");
     } else {
+      // staff_to_staff
       setFromId("");
       setToId("");
     }
@@ -353,17 +378,18 @@ export function StockTransferModal({
         </DialogHeader>
 
         <div className="flex flex-col flex-1 overflow-hidden space-y-4">
-          {/* ── Transfer type ── */}
-          <div className="flex gap-2 flex-wrap">
-            {(
-              [
-                ["warehouse_to_staff", "Warehouse → Staff"],
-                ["staff_to_warehouse", "Staff → Warehouse"],
-                ["staff_to_staff", "Staff → Staff"],
-              ] as [TransferType, string][]
-            )
-              .filter(([type]) => allowedTransferTypes?.includes(type))
-              .map(([type, label]) => (
+        {/* ── Transfer type ── */}
+        <div className="flex gap-2 flex-wrap">
+          {(
+            [
+              ["warehouse_to_staff", "Warehouse → Staff"],
+              ["staff_to_warehouse", "Staff → Warehouse"],
+              ["staff_to_staff", "Staff → Staff"],
+              ["warehouse_to_warehouse", "Warehouse → Warehouse"],
+            ] as [TransferType, string][]
+          )
+            .filter(([type]) => allowedTransferTypes?.includes(type))
+            .map(([type, label]) => (
               <Button
                 key={type}
                 variant={transferType === type ? "default" : "outline"}
@@ -373,7 +399,7 @@ export function StockTransferModal({
                 {label}
               </Button>
             ))}
-          </div>
+        </div>
 
           {/* ── From / To selects ── */}
           <div className="grid grid-cols-2 gap-4">
@@ -383,21 +409,22 @@ export function StockTransferModal({
                 <SelectTrigger>
                   <SelectValue placeholder="Select Source" />
                 </SelectTrigger>
-                <SelectContent>
-                  {transferType === "warehouse_to_staff" &&
-                    warehouses.map((w) => (
-                      <SelectItem key={w.id} value={w.id}>
-                        {w.name}
-                      </SelectItem>
-                    ))}
-                  {(transferType === "staff_to_warehouse" ||
-                    transferType === "staff_to_staff") &&
-                    displayStaff.map((s) => (
-                      <SelectItem key={s.user_id} value={s.user_id}>
-                        {s.full_name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
+            <SelectContent>
+              {(transferType === "warehouse_to_staff" ||
+                transferType === "warehouse_to_warehouse") &&
+                warehouses.map((w) => (
+                  <SelectItem key={w.id} value={w.id}>
+                    {w.name}
+                  </SelectItem>
+                ))}
+              {(transferType === "staff_to_warehouse" ||
+                transferType === "staff_to_staff") &&
+                displayStaff.map((s) => (
+                  <SelectItem key={s.user_id} value={s.user_id}>
+                    {s.full_name}
+                  </SelectItem>
+                ))}
+            </SelectContent>
               </Select>
             </div>
 
@@ -407,23 +434,26 @@ export function StockTransferModal({
                 <SelectTrigger>
                   <SelectValue placeholder="Select Destination" />
                 </SelectTrigger>
-                <SelectContent>
-                  {(transferType === "warehouse_to_staff" ||
-                    transferType === "staff_to_staff") &&
-                    displayStaff
-                      .filter((s) => s.user_id !== fromId)
-                      .map((s) => (
-                        <SelectItem key={s.user_id} value={s.user_id}>
-                          {s.full_name}
-                        </SelectItem>
-                      ))}
-                  {transferType === "staff_to_warehouse" &&
-                    warehouses.map((w) => (
-                      <SelectItem key={w.id} value={w.id}>
-                        {w.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
+            <SelectContent>
+              {(transferType === "warehouse_to_staff" ||
+                transferType === "staff_to_staff") &&
+                displayStaff
+                  .filter((s) => s.user_id !== fromId)
+                  .map((s) => (
+                    <SelectItem key={s.user_id} value={s.user_id}>
+                      {s.full_name}
+                    </SelectItem>
+                  ))}
+              {(transferType === "staff_to_warehouse" ||
+                transferType === "warehouse_to_warehouse") &&
+                warehouses
+                  .filter((w) => w.id !== fromId)
+                  .map((w) => (
+                    <SelectItem key={w.id} value={w.id}>
+                      {w.name}
+                    </SelectItem>
+                  ))}
+            </SelectContent>
               </Select>
             </div>
           </div>

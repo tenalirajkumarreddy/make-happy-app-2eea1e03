@@ -33,6 +33,7 @@ import {
   ROLE_DEFAULTS,
   type PermissionKey,
 } from "@/components/access/UserPermissionsPanel";
+import { Fragment } from "react";
 
 const STAFF_ROLES = [
   { value: "manager", label: "Manager" },
@@ -431,7 +432,7 @@ const AccessControl = () => {
                         </TableHeader>
                         <TableBody>
                           {Object.entries(byType).map(([tid, group]) => (
-                            <>
+                            <Fragment key={tid}>
                               <TableRow key={`type-${tid}`} className="bg-accent/30 hover:bg-accent/30">
                                 <TableCell colSpan={agents.length + 1} className="text-xs font-bold uppercase tracking-wider text-muted-foreground py-1.5 pl-4">
                                   {group.typeName}
@@ -456,7 +457,7 @@ const AccessControl = () => {
                                   ))}
                                 </TableRow>
                               ))}
-                            </>
+                            </Fragment>
                           ))}
                         </TableBody>
                       </Table>

@@ -163,7 +163,6 @@ const Expenses = () => {
         .select("*")
         .eq("is_active", true)
         .order("next_due_date");
-      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
       const { data, error } = await query;
       if (error) throw error;
       return data;
@@ -357,7 +356,6 @@ const Expenses = () => {
 
       const { error } = await supabase.from("fixed_costs").insert({
         display_id: idData,
-        warehouse_id: currentWarehouse?.id || null,
         name: fcName.trim(),
         description: fcDescription.trim() || null,
         amount: parseFloat(fcAmount),

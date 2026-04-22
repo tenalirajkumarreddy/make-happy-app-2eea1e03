@@ -18,7 +18,7 @@ export function useWarehouseStock(options: UseWarehouseStockOptions = {}) {
   const { warehouseId, enabled: enabledProp = true } = options;
   const queryClient = useQueryClient();
   
-  const enabled = enabledProp && !!warehouseId && warehouseId !== 'all';
+  const enabled = enabledProp && !!warehouseId;
 
   // Query for warehouse stock items
   const { data: items, isLoading, error } = useQuery({
@@ -98,7 +98,7 @@ export function useWarehouseStock(options: UseWarehouseStockOptions = {}) {
     return { totalStockValue, lowStockProducts };
   }, [items]);
 
-  // Mutation to update stock
+  // Mutation to update stock with retry logic
   const updateStock = useMutation({
     mutationFn: async (params: {
       productId: string;
@@ -115,9 +115,25 @@ export function useWarehouseStock(options: UseWarehouseStockOptions = {}) {
         p_reason: params.reason,
         p_user_id: (await supabase.auth.getUser()).data.user?.id,
       });
-      
-      if (error) throw error;
+
+      if (error) {
+        // Classify errors for better UX
+        if (error.code === '42501') {
+          throw new Error('Permission denied: You do not have access to update this stock');
+        } else if (error.code === '23514') {
+          throw new Error('Validation failed: Check stock constraints');
+        } else if (error.code?.startsWith('23')) {
+          throw new Error('Data validation error: ' + error.message);
+        } else {
+          throw error;
+        }
+      }
     },
+    retry: (failureCount, error: any) => {
+      // Retry on network errors only, not on permission/validation errors
+      return failureCount < 3 && !error?.code?.startsWith('425') && !error?.code?.startsWith('235');
+    },
+    retryDelay: (attemptIndex) => Math.min(1000 * (2 ** attemptIndex), 10000), // Exponential backoff
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['warehouse-stock'] });
       queryClient.invalidateQueries({ queryKey: ['stock-movements'] });

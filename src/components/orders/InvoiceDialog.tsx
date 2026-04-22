@@ -61,6 +61,8 @@ interface OrderData {
     id: string;
     name: string;
     address?: string;
+    phone?: string;
+    customer_id?: string | null;
   };
   customers?: {
     id: string;
@@ -78,6 +80,7 @@ interface OrderData {
       name: string;
       sku: string;
       base_price: number;
+      image_url?: string;
     };
   }>;
 }
@@ -373,13 +376,16 @@ export function InvoiceDialog({
         return { id: invoice.id };
       }
     },
-    onSuccess: () => {
-      setSaving(false);
-      toast.success(mode === "create" ? "Invoice created" : "Invoice updated");
-      qc.invalidateQueries({ queryKey: ["invoices"] });
-      onSuccess?.();
-      onOpenChange(false);
-    },
+  onSuccess: (data) => {
+    setSaving(false);
+    toast.success(mode === "create" ? "Invoice created successfully" : "Invoice updated");
+    // Invalidate all related queries
+    qc.invalidateQueries({ queryKey: ["invoices"], exact: false });
+    qc.invalidateQueries({ queryKey: ["orders"], exact: false });
+    // Call the onSuccess callback if provided
+    onSuccess?.();
+    onOpenChange(false);
+  },
     onError: (error) => {
       setSaving(false);
       toast.error(error.message || "Failed to save invoice");
@@ -803,8 +809,22 @@ export function InvoiceDialog({
             
             {canEdit && (
               <Button 
-                onClick={() => saveInvoice.mutate()}
-                disabled={saving || items.length === 0}
+  onClick={() => {
+                // Validate items before saving
+                if (items.length === 0) {
+                  toast.error("Please add at least one item");
+                  return;
+                }
+                const invalidItems = items.filter(item => 
+                  item.quantity <= 0 || item.unit_price < 0
+                );
+                if (invalidItems.length > 0) {
+                  toast.error("Please check item quantities and prices");
+                  return;
+                }
+                saveInvoice.mutate();
+              }}
+              disabled={saving}
               >
                 {saving ? (
                   <>

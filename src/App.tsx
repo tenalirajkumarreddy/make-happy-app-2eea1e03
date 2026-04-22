@@ -39,6 +39,7 @@ const Sales = lazy(() => import("./pages/Sales"));
 const Transactions = lazy(() => import("./pages/Transactions"));
 const Orders = lazy(() => import("./pages/Orders"));
 const Handovers = lazy(() => import("./pages/Handovers"));
+const HandoverRequests = lazy(() => import("./pages/HandoverRequests"));
 const Reports = lazy(() => import("./pages/Reports"));
 const Analytics = lazy(() => import("./pages/Analytics"));
 const Inventory = lazy(() => import("./pages/Inventory"));
@@ -182,7 +183,7 @@ const App = () => {
               <Route path="/vendors/:vendorId" element={<VendorDetail />} />
               <Route path="/inventory/vendors" element={<Vendors />} />
               <Route path="/inventory/vendors/:vendorId" element={<VendorDetail />} />
-              <Route path="/inventory/purchases" element={<Purchases />} />
+              <Route path="/inventory/purchases" element={<RoleGuard allowed={["super_admin", "manager"]}><Purchases /></RoleGuard>} />
               <Route path="/inventory/raw-materials" element={<RawMaterialsPage />} />
               <Route path="/inventory/boms" element={<BillOfMaterialsPage />} />
               <Route path="/inventory/boms/:bomId" element={<BomDetailPage />} />
@@ -199,17 +200,18 @@ const App = () => {
               <Route path="/sale-returns" element={<SaleReturns />} />
               <Route path="/transactions" element={<Transactions />} />
               <Route path="/purchase-returns" element={<PurchaseReturns />} />
-              <Route path="/purchases" element={<Purchases />} />
+              <Route path="/purchases" element={<RoleGuard allowed={["super_admin", "manager"]}><Purchases /></RoleGuard>} />
               <Route path="/stock-transfers" element={<StockTransfers />} />
               <Route path="/vendor-payments" element={<VendorPayments />} />
               <Route path="/expenses" element={<Expenses />} />
-              <Route path="/attendance" element={<Attendance />} />
+              <Route path="/attendance" element={<RoleGuard allowed={["super_admin", "manager"]}><Attendance /></RoleGuard>} />
               <Route path="/banners" element={<Banners />} />
               <Route path="/invoices" element={<Invoices />} />
               <Route path="/invoices/new" element={<InvoiceForm />} />
               <Route path="/invoices/:id" element={<InvoiceView />} />
               <Route path="/orders" element={<Orders />} />
               <Route path="/handovers" element={<Handovers />} />
+              <Route path="/handover-requests" element={<HandoverRequests />} />
               <Route path="/reports" element={<Reports />} />
               <Route path="/reports/:type" element={<Reports />} />
               <Route path="/analytics" element={<Analytics />} />

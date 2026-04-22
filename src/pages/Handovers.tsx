@@ -4,12 +4,13 @@ import { ImageUpload } from "@/components/shared/ImageUpload";
 import {
   Banknote, CheckCircle, Clock, AlertCircle, Loader2, Send,
   ArrowDownLeft, XCircle, User, ChevronDown, Users, ShoppingCart, Wallet, Eye,
-  Receipt, Tag, FileText, Edit2, Image
+  Receipt, Tag, FileText, Edit2, Image, Download, Search, CalendarIcon, X, Store as StoreIcon, MapPin, Phone, Mail
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermission } from "@/hooks/usePermission";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
@@ -21,8 +22,16 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner";
 import { sendNotification, sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { useState, useMemo } from "react";
+import { Link } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format, startOfDay } from "date-fns";
+import { DataTable } from "@/components/shared/DataTable";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
+import { Calendar } from "@/components/ui/calendar";
 
 type ExpenseCategory = {
   id: string;
@@ -43,6 +52,15 @@ const Handovers = () => {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null);
 
+  // Filter states
+  const today = new Date().toISOString().split("T")[0];
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const [filterFrom, setFilterFrom] = useState(thirtyDaysAgo);
+  const [filterTo, setFilterTo] = useState(today);
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterUser, setFilterUser] = useState("all");
+  const [filterExpenseStatus, setFilterExpenseStatus] = useState("all");
+
   // Expense claim states
   const [expenseOpen, setExpenseOpen] = useState(false);
   const [expenseAmount, setExpenseAmount] = useState("");
@@ -51,20 +69,36 @@ const Handovers = () => {
   const [expenseDate, setExpenseDate] = useState(new Date().toISOString().split("T")[0]);
   const [expenseReceiptUrl, setExpenseReceiptUrl] = useState<string | null>(null);
   const [expenseSubmitting, setExpenseSubmitting] = useState(false);
-  
+
   // Expense review states
   const [reviewExpense, setReviewExpense] = useState<any>(null);
   const [reviewCategory, setReviewCategory] = useState("");
   const [reviewAmount, setReviewAmount] = useState("");
   const [reviewNotes, setReviewNotes] = useState("");
 
-  const isAdminOrManager = role === "super_admin" || role === "manager";
+  // Granular role-based permissions
+  const isSuperAdmin = role === "super_admin";
+  const isManager = role === "manager";
+  const isAdminOrManager = isSuperAdmin || isManager;
+  const isStaff = ["agent", "marketer", "pos"].includes(role || "");
+
   const { allowed: isFinalizer } = usePermission("finalizer");
   const { allowed: canSeeBalances } = usePermission("see_handover_balance");
   const { allowed: canSubmitExpenses, loading: expensePermLoading } = usePermission("submit_expenses");
-  
-  // DEBUG: Remove after testing
-  console.log("[Handovers] role:", role, "| isAdminOrManager:", isAdminOrManager, "| canSubmitExpenses:", canSubmitExpenses);
+  const { allowed: canModifyHandovers } = usePermission("modify_handovers");
+  const { allowed: canApproveExpenses } = usePermission("approve_expenses");
+  const { allowed: canTransferBetweenStaff } = usePermission("transfer_between_staff");
+
+  // Admin-specific states
+  const [adminTransferOpen, setAdminTransferOpen] = useState(false);
+  const [adminTransferFrom, setAdminTransferFrom] = useState("");
+  const [adminTransferTo, setAdminTransferTo] = useState("");
+  const [adminTransferAmount, setAdminTransferAmount] = useState("");
+  const [adminTransferReason, setAdminTransferReason] = useState("");
+  const [selectedHandoverForEdit, setSelectedHandoverForEdit] = useState<any>(null);
+  const [editHandoverOpen, setEditHandoverOpen] = useState(false);
+  const [editHandoverAmount, setEditHandoverAmount] = useState("");
+  const [editHandoverStatus, setEditHandoverStatus] = useState("");
 
   const { data: staffProfiles } = useQuery({
     queryKey: ["staff-profiles", user?.id],
@@ -109,14 +143,23 @@ const Handovers = () => {
     enabled: !!user,
   });
 
+  // Fetch handovers based on role
   const { data: handovers, isLoading } = useQuery({
-    queryKey: ["handovers", user?.id],
+    queryKey: ["handovers", user?.id, role],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("handovers")
         .select("*")
         .order("created_at", { ascending: false })
         .limit(500);
+
+      // Staff only see their own handovers (as sender or recipient)
+      if (isStaff) {
+        query = query.or(`user_id.eq.${user!.id},handed_to.eq.${user!.id}`);
+      }
+      // Super Admin and Manager see all handovers (no filter needed)
+
+      const { data, error } = await query;
       if (error) throw error;
       return data || [];
     },
@@ -213,10 +256,6 @@ const Handovers = () => {
   const notHandedOver = salesTotalAll + receivedConfirmed - sentConfirmed - sentPending;
   const awaitingAmount = sentPending;
 
-  const breakdownSales = salesToday;
-  const breakdownStaff = todayReceivedConfirmed;
-  const breakdownPast = Math.max(0, notHandedOver - breakdownSales - breakdownStaff);
-
   const incoming = myHandovers.filter((h) => h.handed_to === user?.id && h.status === "awaiting_confirmation");
 
   // Fetch partial_collections setting
@@ -246,11 +285,18 @@ const Handovers = () => {
   const { data: expenseClaims = [], isLoading: expenseClaimsLoading } = useQuery<any[]>({
     queryKey: ["expense-claims", user?.id, isAdminOrManager],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      let query = (supabase as any)
         .from("expense_claims")
         .select("*, expense_categories(id, name, color, icon)")
         .order("created_at", { ascending: false })
         .limit(200);
+
+      // Staff only see their own expense claims
+      if (isStaff) {
+        query = query.eq("user_id", user!.id);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       return data || [];
     },
@@ -275,18 +321,18 @@ const Handovers = () => {
     return (expenseClaims || []).filter((e: any) => e.user_id === user?.id);
   }, [expenseClaims, user?.id]);
 
+  // Admin/Manager can review pending claims
   const pendingExpenseClaimsForReview = useMemo(() => {
-    return isAdminOrManager 
+    return canApproveExpenses
       ? (expenseClaims || []).filter((e: any) => e.status === "pending")
       : [];
-  }, [expenseClaims, isAdminOrManager]);
+  }, [expenseClaims, canApproveExpenses]);
 
   const handleCreate = async () => {
     if (!toUserId || !amount || Number(amount) <= 0) {
       toast.error("Select a recipient and enter a valid amount");
       return;
     }
-    // If partial collections disabled, require exact full balance
     if (!partialSetting && !isFinalizer && Number(amount) < Math.max(0, notHandedOver)) {
       toast.error(`Partial handovers are disabled. Enter the full balance: ₹${Math.max(0, notHandedOver).toLocaleString()}`);
       return;
@@ -295,45 +341,41 @@ const Handovers = () => {
       toast.error("Amount exceeds your available balance");
       return;
     }
-  setSubmitting(true);
-  
-  // NEW: Use server-side calculation for race condition prevention
-  const { data: handoverResult, error: handoverError } = await supabase
-    .rpc("create_handover", {
-      p_user_id: user!.id,
-      p_handed_to: toUserId,
-      p_notes: notes || null,
-    });
-  
-  setSubmitting(false);
-  
-  if (handoverError) {
-    if (handoverError.message.includes("duplicate_handover")) {
-      toast.error("You already have a pending handover for today. Complete or cancel it first.");
-    } else {
-      toast.error(handoverError.message);
-    }
-    return;
-  }
-  
-  const createdHandover = handoverResult?.[0];
-  if (createdHandover) {
-    toast.success(
-      `Handover of ₹${Number(createdHandover.total_amount).toLocaleString()} ` +
-      `(Cash: ₹${Number(createdHandover.cash_amount).toLocaleString()}, ` +
-      `UPI: ₹${Number(createdHandover.upi_amount).toLocaleString()}) ` +
-      `sent for confirmation`
-    );
+    setSubmitting(true);
 
-  // Notify the recipient
-    sendNotification({
-      userId: toUserId,
-      title: "Handover Received",
-      message: `₹${Number(createdHandover.total_amount).toLocaleString()} handover (Cash: ₹${Number(createdHandover.cash_amount).toLocaleString()}, UPI: ₹${Number(createdHandover.upi_amount).toLocaleString()}) awaiting your confirmation`,
-      type: "handover",
-      entityType: "handover",
-      entityId: createdHandover.handover_id,
-    });
+    const { data: handoverResult, error: handoverError } = await supabase
+      .rpc("create_handover", {
+        p_user_id: user!.id,
+        p_handed_to: toUserId,
+        p_notes: notes || null,
+      });
+
+    setSubmitting(false);
+
+    if (handoverError) {
+      if (handoverError.message.includes("duplicate_handover")) {
+        toast.error("You already have a pending handover for today. Complete or cancel it first.");
+      } else {
+        toast.error(handoverError.message);
+      }
+      return;
+    }
+
+    const createdHandover = handoverResult?.[0];
+    if (createdHandover) {
+      const totalAmount = Number(createdHandover.cash_amount) + Number(createdHandover.upi_amount);
+      toast.success(
+        `Handover of ₹${totalAmount.toLocaleString()} sent for confirmation`
+      );
+
+      sendNotification({
+        userId: toUserId,
+        title: "Handover Received",
+        message: `₹${totalAmount.toLocaleString()} handover awaiting your confirmation`,
+        type: "handover",
+        entityType: "handover",
+        entityId: createdHandover.display_id || createdHandover.id,
+      });
 
       setCreateOpen(false);
       setAmount("");
@@ -434,6 +476,106 @@ const Handovers = () => {
     }
   };
 
+  // ========== Admin Handover Handlers ==========
+  const handleAdminTransfer = async () => {
+    if (!adminTransferFrom || !adminTransferTo || !adminTransferAmount || Number(adminTransferAmount) <= 0) {
+      toast.error("Select both staff members and enter a valid amount");
+      return;
+    }
+    if (adminTransferFrom === adminTransferTo) {
+      toast.error("Cannot transfer to the same staff member");
+      return;
+    }
+    if (!canTransferBetweenStaff) {
+      toast.error("You don't have permission to transfer between staff");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const { data: transferResult, error: transferError } = await supabase
+        .rpc("admin_transfer_between_staff", {
+          p_from_user_id: adminTransferFrom,
+          p_to_user_id: adminTransferTo,
+          p_amount: Number(adminTransferAmount),
+          p_reason: adminTransferReason.trim() || null,
+          p_admin_id: user!.id,
+        });
+
+      if (transferError) throw transferError;
+
+      toast.success(`Admin transfer of ₹${Number(adminTransferAmount).toLocaleString()} completed successfully`);
+
+      sendNotification({
+        userId: adminTransferFrom,
+        title: "Admin Handover Sent",
+        message: `Admin transferred ₹${Number(adminTransferAmount).toLocaleString()} to ${getName(adminTransferTo)}`,
+        type: "handover",
+        entityType: "handover",
+        entityId: transferResult?.[0]?.id || "",
+      });
+
+      sendNotification({
+        userId: adminTransferTo,
+        title: "Admin Handover Received",
+        message: `Admin transferred ₹${Number(adminTransferAmount).toLocaleString()} from ${getName(adminTransferFrom)}`,
+        type: "handover",
+        entityType: "handover",
+        entityId: transferResult?.[0]?.id || "",
+      });
+
+      setAdminTransferOpen(false);
+      setAdminTransferFrom("");
+      setAdminTransferTo("");
+      setAdminTransferAmount("");
+      setAdminTransferReason("");
+      qc.invalidateQueries({ queryKey: ["handovers"] });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to complete admin transfer");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleEditHandover = async () => {
+    if (!selectedHandoverForEdit || !editHandoverAmount || Number(editHandoverAmount) < 0) {
+      toast.error("Enter a valid amount");
+      return;
+    }
+    if (!canModifyHandovers) {
+      toast.error("You don't have permission to modify handovers");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from("handovers")
+        .update({
+          cash_amount: Number(editHandoverAmount),
+          upi_amount: 0,
+          status: editHandoverStatus || selectedHandoverForEdit.status,
+          notes: selectedHandoverForEdit.notes
+            ? `${selectedHandoverForEdit.notes}\n[Admin Edit: ${new Date().toLocaleString()}]`
+            : `[Admin Edit: ${new Date().toLocaleString()}]`,
+        })
+        .eq("id", selectedHandoverForEdit.id);
+
+      if (error) throw error;
+
+      toast.success("Handover updated successfully");
+      setEditHandoverOpen(false);
+      setSelectedHandoverForEdit(null);
+      setEditHandoverAmount("");
+      setEditHandoverStatus("");
+      qc.invalidateQueries({ queryKey: ["handovers"] });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update handover");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   // ========== Expense Claim Handlers ==========
   const handleCreateExpenseClaim = async () => {
     if (!expenseCategory || !expenseAmount || Number(expenseAmount) <= 0 || !expenseDescription.trim()) {
@@ -446,7 +588,6 @@ const Handovers = () => {
     }
     setExpenseSubmitting(true);
     try {
-      // Generate display ID
       const { data: displayId } = await supabase.rpc("generate_display_id", {
         prefix: "EXC",
         seq_name: "expense_claims_display_seq"
@@ -467,8 +608,7 @@ const Handovers = () => {
       if (error) throw error;
 
       toast.success("Expense claim submitted for approval");
-      
-      // Notify admins
+
       const adminIds = await getAdminUserIds();
       sendNotificationToMany(adminIds, {
         title: "New Expense Claim",
@@ -503,7 +643,6 @@ const Handovers = () => {
         reviewer_notes: reviewNotes.trim() || null,
       };
 
-      // If approving with different category or amount
       if (action === "approve") {
         if (reviewCategory && reviewCategory !== reviewExpense.category_id) {
           updates.category_id = reviewCategory;
@@ -523,12 +662,11 @@ const Handovers = () => {
       if (error) throw error;
 
       toast.success(`Expense claim ${action === "approve" ? "approved" : "rejected"}`);
-      
-      // Notify the claimant
+
       sendNotification({
         userId: reviewExpense.user_id,
         title: `Expense Claim ${action === "approve" ? "Approved" : "Rejected"}`,
-        message: action === "approve" 
+        message: action === "approve"
           ? `Your ₹${Number(updates.approved_amount).toLocaleString()} expense claim was approved`
           : `Your ₹${Number(reviewExpense.amount).toLocaleString()} expense claim was rejected`,
         type: "system",
@@ -569,92 +707,136 @@ const Handovers = () => {
   const getName = (userId: string | null) => getProfile(userId).name;
   const getInitials = (name: string) => name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
 
-  const UserAvatar = ({ userId, size = "sm" }: { userId: string | null; size?: "sm" | "md" | "lg" }) => {
+  // User Hover Card component
+  const UserHoverCard = ({ userId, children, size = "sm" }: { userId: string | null; children?: React.ReactNode; size?: "sm" | "md" | "lg" }) => {
     const p = getProfile(userId);
+    if (!userId) return <span>{children || p.name}</span>;
+
     const cls = size === "lg" ? "h-10 w-10" : size === "md" ? "h-9 w-9" : "h-7 w-7";
     const textCls = size === "lg" ? "text-sm" : size === "md" ? "text-xs" : "text-[10px]";
+
     return (
-      <Avatar className={`${cls} ring-2 ring-background`}>
-        <AvatarImage src={p.avatar || undefined} alt={p.name} />
-        <AvatarFallback className={`bg-primary/10 text-primary font-semibold ${textCls}`}>
-          {getInitials(p.name) || <User className="h-3 w-3" />}
-        </AvatarFallback>
-      </Avatar>
+      <HoverCard>
+        <HoverCardTrigger asChild>
+          {children ? (
+            <span className="cursor-pointer hover:underline">{children}</span>
+          ) : (
+            <Avatar className={`${cls} ring-2 ring-background cursor-pointer hover:ring-primary/30 transition-all`}>
+              <AvatarImage src={p.avatar || undefined} alt={p.name} />
+              <AvatarFallback className={`bg-primary/10 text-primary font-semibold ${textCls}`}>
+                {getInitials(p.name) || <User className="h-3 w-3" />}
+              </AvatarFallback>
+            </Avatar>
+          )}
+        </HoverCardTrigger>
+        <HoverCardContent className="w-56 p-0" align="start">
+          <div className="p-3 space-y-2">
+            <div className="flex items-center gap-2">
+              <Avatar className="h-10 w-10">
+                <AvatarImage src={p.avatar || undefined} />
+                <AvatarFallback className="bg-primary/10 text-primary font-semibold text-sm">
+                  {getInitials(p.name)}
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <p className="font-semibold text-sm">{p.name}</p>
+                <p className="text-xs text-muted-foreground">Staff Member</p>
+              </div>
+            </div>
+            <Button size="sm" variant="outline" className="w-full text-xs" asChild>
+              <Link to={`/staff/${userId}`}>View Profile</Link>
+            </Button>
+          </div>
+        </HoverCardContent>
+      </HoverCard>
     );
   };
 
-  const HandoverCard = ({ item, showActions = false }: { item: typeof myHandovers[0]; showActions?: boolean }) => {
+  // ========== SIMPLIFIED HANDOVER CARD ==========
+  const HandoverCard = ({ item, showActions = false, showAdminActions = false }: { item: typeof myHandovers[0]; showActions?: boolean; showAdminActions?: boolean }) => {
     const isSender = item.user_id === user?.id;
-    const isReceiver = item.handed_to === user?.id;
     const total = Number(item.cash_amount) + Number(item.upi_amount);
-    const statusLabel = item.status === "confirmed" ? "Confirmed" 
-      : item.status === "rejected" ? "Rejected" 
-      : item.status === "cancelled" ? "Cancelled"
-      : "Pending";
     const isLoading = actionLoading === item.id;
     const canCancel = isSender && item.status === "awaiting_confirmation";
 
+    const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
+      confirmed: { label: "Confirmed", color: "text-green-600", bg: "bg-green-50" },
+      rejected: { label: "Rejected", color: "text-red-600", bg: "bg-red-50" },
+      cancelled: { label: "Cancelled", color: "text-slate-500", bg: "bg-slate-100" },
+      awaiting_confirmation: { label: "Pending", color: "text-amber-600", bg: "bg-amber-50" },
+    };
+    const status = statusConfig[item.status] || statusConfig.awaiting_confirmation;
+
     return (
-      <div className={`group flex items-center gap-4 rounded-lg border bg-card px-4 py-3 hover:shadow-sm transition-shadow border-l-4 ${
-        item.status === "confirmed" ? "border-l-green-500" :
-        item.status === "rejected" ? "border-l-red-500" :
-        item.status === "cancelled" ? "border-l-slate-400" :
-        "border-l-orange-500"
-      }`}>
-        <div className="flex items-center -space-x-2.5 shrink-0">
-          <UserAvatar userId={item.user_id} size="lg" />
-          <UserAvatar userId={item.handed_to} size="lg" />
-        </div>
+      <div className="flex items-center gap-3 rounded-lg border bg-card px-4 py-3 hover:shadow-sm transition-shadow">
+        {/* Recipient Avatar (primary) */}
+        <UserHoverCard userId={item.handed_to} size="md" />
 
+        {/* Amount & Status */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-base font-bold tabular-nums">₹{total.toLocaleString()}</span>
-            <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded-full ${
-              item.status === "confirmed" ? "bg-success/10 text-success" :
-              item.status === "rejected" ? "bg-destructive/10 text-destructive" :
-              item.status === "cancelled" ? "bg-muted text-muted-foreground" :
-              "bg-warning/10 text-warning"
-            }`}>{statusLabel}</span>
-          </div>
-          <p className="text-xs text-muted-foreground mt-0.5 truncate">
-            {getName(item.user_id)} → {getName(item.handed_to)}
-          </p>
-          <div className="flex items-center gap-2 mt-0.5">
-            <span className="text-[11px] text-muted-foreground">
-              {format(new Date(item.created_at), "dd MMM, hh:mm a")}
+          <div className="flex items-center gap-2">
+            <span className="text-lg font-bold tabular-nums">₹{total.toLocaleString()}</span>
+            <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${status.bg} ${status.color}`}>
+              {status.label}
             </span>
-            {isSender && (
-              <span className="text-[10px] font-medium bg-primary/8 text-primary px-1.5 py-px rounded">Sent</span>
-            )}
-            {isReceiver && (
-              <span className="text-[10px] font-medium bg-accent text-accent-foreground px-1.5 py-px rounded">Received</span>
-            )}
           </div>
-          {item.notes && (
-            <p className="text-[11px] text-muted-foreground/70 italic mt-1 truncate">"{item.notes}"</p>
-          )}
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {format(new Date(item.created_at), "dd MMM, hh:mm a")}
+          </p>
         </div>
 
+        {/* Actions */}
         {showActions && (
-          <div className="flex flex-col gap-1.5 shrink-0">
-            <Button size="sm" className="h-7 text-xs gap-1 px-2.5" onClick={() => handleConfirm(item.id)} disabled={isLoading}>
-              {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle className="h-3 w-3" />} Accept
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Button size="sm" className="h-8 text-xs gap-1" onClick={() => handleConfirm(item.id)} disabled={isLoading}>
+              {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle className="h-3 w-3" />}
+              Accept
             </Button>
-            <Button size="sm" variant="ghost" className="h-7 text-xs gap-1 px-2.5 text-destructive hover:text-destructive" onClick={() => handleReject(item.id)} disabled={isLoading}>
-              {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <XCircle className="h-3 w-3" />} Reject
+            <Button size="sm" variant="ghost" className="h-8 text-xs text-destructive hover:text-destructive" onClick={() => handleReject(item.id)} disabled={isLoading}>
+              Reject
             </Button>
           </div>
         )}
 
-        {canCancel && !showActions && (
-          <Button 
-            size="sm" 
-            variant="ghost" 
-            className="h-7 text-xs gap-1 px-2.5 text-muted-foreground hover:text-destructive shrink-0" 
+        {showAdminActions && (
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs gap-1"
+              onClick={() => {
+                setSelectedHandoverForEdit(item);
+                setEditHandoverAmount((Number(item.cash_amount) + Number(item.upi_amount)).toString());
+                setEditHandoverStatus(item.status);
+                setEditHandoverOpen(true);
+              }}
+              disabled={isLoading}
+            >
+              <Edit2 className="h-3 w-3" /> Edit
+            </Button>
+            {item.status === "awaiting_confirmation" && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 text-xs text-destructive hover:text-destructive"
+                onClick={() => handleCancel(item.id)}
+                disabled={isLoading}
+              >
+                Cancel
+              </Button>
+            )}
+          </div>
+        )}
+
+        {canCancel && !showActions && !showAdminActions && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8 text-xs text-muted-foreground hover:text-destructive shrink-0"
             onClick={() => setCancelConfirmId(item.id)}
             disabled={isLoading}
           >
-            {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <XCircle className="h-3 w-3" />} Cancel
+            Cancel
           </Button>
         )}
       </div>
@@ -665,11 +847,11 @@ const Handovers = () => {
   const ExpenseClaimCard = ({ item, showReviewAction = false }: { item: any; showReviewAction?: boolean }) => {
     const isOwner = item.user_id === user?.id;
     const isLoading = actionLoading === item.id;
-    const statusLabel = item.status === "approved" ? "Approved" 
-      : item.status === "rejected" ? "Rejected" 
+    const statusLabel = item.status === "approved" ? "Approved"
+      : item.status === "rejected" ? "Rejected"
       : "Pending";
-    const displayAmount = item.status === "approved" && item.approved_amount 
-      ? Number(item.approved_amount) 
+    const displayAmount = item.status === "approved" && item.approved_amount
+      ? Number(item.approved_amount)
       : Number(item.amount);
     const wasAmountChanged = item.status === "approved" && item.approved_amount && Number(item.approved_amount) !== Number(item.amount);
     const wasCategoryChanged = item.status === "approved" && item.category_id !== item.original_category_id;
@@ -700,7 +882,7 @@ const Handovers = () => {
             {item.description}
           </p>
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-            <span 
+            <span
               className="text-[10px] font-medium px-1.5 py-px rounded"
               style={{ backgroundColor: `${getCategoryColor(item.category_id)}20`, color: getCategoryColor(item.category_id) }}
             >
@@ -712,7 +894,7 @@ const Handovers = () => {
             </span>
             {!isOwner && (
               <span className="text-[10px] font-medium bg-primary/8 text-primary px-1.5 py-px rounded">
-                by {getName(item.user_id)}
+                by <UserHoverCard userId={item.user_id}>{getName(item.user_id)}</UserHoverCard>
               </span>
             )}
           </div>
@@ -722,9 +904,9 @@ const Handovers = () => {
         </div>
 
         {showReviewAction && item.status === "pending" && (
-          <Button 
-            size="sm" 
-            className="h-7 text-xs gap-1 px-2.5 shrink-0" 
+          <Button
+            size="sm"
+            className="h-7 text-xs gap-1 px-2.5 shrink-0"
             onClick={() => openReviewDialog(item)}
             disabled={isLoading}
           >
@@ -753,232 +935,395 @@ const Handovers = () => {
     return format(new Date(dateStr + "T00:00:00"), "dd MMM yyyy");
   };
 
+  // Filtered data computation
+  const filteredHandovers = useMemo(() => {
+    let data = isAdminOrManager ? (handovers || []) : myHandovers;
+
+    // Date range filter
+    if (filterFrom) {
+      data = data.filter((h: any) => h.created_at >= filterFrom + "T00:00:00");
+    }
+    if (filterTo) {
+      data = data.filter((h: any) => h.created_at <= filterTo + "T23:59:59");
+    }
+
+    // Status filter
+    if (filterStatus !== "all") {
+      data = data.filter((h: any) => h.status === filterStatus);
+    }
+
+    // User filter (admin only)
+    if (filterUser !== "all") {
+      data = data.filter((h: any) => h.user_id === filterUser || h.handed_to === filterUser);
+    }
+
+    return data;
+  }, [handovers, myHandovers, isAdminOrManager, filterFrom, filterTo, filterStatus, filterUser]);
+
+  const filteredExpenseClaims = useMemo(() => {
+    let data = isAdminOrManager ? expenseClaims : myExpenseClaims;
+
+    // Status filter
+    if (filterExpenseStatus !== "all") {
+      data = data.filter((e: any) => e.status === filterExpenseStatus);
+    }
+
+    // User filter for admin
+    if (isAdminOrManager && filterUser !== "all") {
+      data = data.filter((e: any) => e.user_id === filterUser);
+    }
+
+    return data;
+  }, [expenseClaims, myExpenseClaims, isAdminOrManager, filterExpenseStatus, filterUser]);
+
+  // Export functions
+  const exportHandoversCSV = () => {
+    const rows = filteredHandovers.map((h: any) => ({
+      "Handover ID": h.display_id || h.id,
+      "From": getName(h.user_id),
+      "To": getName(h.handed_to),
+      "Cash": Number(h.cash_amount).toLocaleString(),
+      "UPI": Number(h.upi_amount).toLocaleString(),
+      "Total": (Number(h.cash_amount) + Number(h.upi_amount)).toLocaleString(),
+      "Status": h.status,
+      "Notes": h.notes || "",
+      "Date": new Date(h.created_at).toLocaleString("en-IN"),
+    }));
+
+    if (rows.length === 0) {
+      toast.info("No handovers to export");
+      return;
+    }
+
+    const header = Object.keys(rows[0]).join(",");
+    const csv = [header, ...rows.map((r: any) => Object.values(r).map((v: any) => `"${String(v).replace(/"/g, '""')}"`).join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `handovers-${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Handovers exported");
+  };
+
+  const exportExpensesCSV = () => {
+    const rows = filteredExpenseClaims.map((e: any) => ({
+      "Claim ID": e.display_id || e.id,
+      "Submitted By": getName(e.user_id),
+      "Category": getCategoryName(e.category_id),
+      "Amount": Number(e.amount).toLocaleString(),
+      "Approved Amount": e.approved_amount ? Number(e.approved_amount).toLocaleString() : "",
+      "Status": e.status,
+      "Description": e.description,
+      "Expense Date": format(new Date(e.expense_date), "dd MMM yyyy"),
+      "Submitted Date": new Date(e.created_at).toLocaleString("en-IN"),
+    }));
+
+    if (rows.length === 0) {
+      toast.info("No expenses to export");
+      return;
+    }
+
+    const header = Object.keys(rows[0]).join(",");
+    const csv = [header, ...rows.map((r: any) => Object.values(r).map((v: any) => `"${String(v).replace(/"/g, '""')}"`).join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `expenses-${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Expenses exported");
+  };
+
+  const activeHandoverFilterCount = [
+    filterFrom !== thirtyDaysAgo,
+    filterTo !== today,
+    filterStatus !== "all",
+    filterUser !== "all",
+  ].filter(Boolean).length;
+
+  const clearHandoverFilters = () => {
+    setFilterFrom(thirtyDaysAgo);
+    setFilterTo(today);
+    setFilterStatus("all");
+    setFilterUser("all");
+  };
+
   if (isLoading) {
     return <div className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
-
-  const balanceLabel = isFinalizer ? "Total Income" : "Not Handed Over";
-  const balanceColor = isFinalizer ? "text-success" : "text-destructive";
 
   return (
     <div className="space-y-5 animate-fade-in">
       <PageHeader
         title="Handovers"
         subtitle="Track money flow between team members"
-        primaryAction={!isFinalizer ? { label: "Create Handover", icon: Send, onClick: () => setCreateOpen(true) } : undefined}
+        primaryAction={
+          isSuperAdmin
+            ? { label: "Admin Transfer", icon: Send, onClick: () => setAdminTransferOpen(true) }
+            : !isFinalizer
+            ? { label: "Create Handover", icon: Send, onClick: () => setCreateOpen(true) }
+            : undefined
+        }
       />
 
-      {/* Balance Cards */}
-      <div className="grid grid-cols-2 gap-3">
-        <Popover>
-          <PopoverTrigger asChild>
-            <button className="stat-card text-left w-full cursor-pointer hover:ring-2 hover:ring-primary/20 transition-all group">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-medium text-muted-foreground">{balanceLabel}</span>
-                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
-              </div>
-              <p className={`text-xl font-bold ${balanceColor}`}>₹{Math.max(0, notHandedOver - myApprovedExpenses).toLocaleString()}</p>
-              {myApprovedExpenses > 0 && (
-                <p className="text-[10px] text-success mt-0.5">₹{myApprovedExpenses.toLocaleString()} owed to you</p>
-              )}
-            </button>
-          </PopoverTrigger>
-          <PopoverContent className="w-64 p-3" align="start">
-            <p className="text-xs font-semibold text-foreground mb-2.5">Balance Breakdown</p>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <ShoppingCart className="h-3 w-3" /> Sales (Today)
-                </span>
-                <span className="text-xs font-semibold">₹{breakdownSales.toLocaleString()}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Users className="h-3 w-3" /> Staff (Today)
-                </span>
-                <span className="text-xs font-semibold">₹{breakdownStaff.toLocaleString()}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Clock className="h-3 w-3" /> Carried Forward
-                </span>
-                <span className="text-xs font-semibold">₹{breakdownPast.toLocaleString()}</span>
-              </div>
-              {myApprovedExpenses > 0 && (
-                <div className="flex items-center justify-between">
-                  <span className="flex items-center gap-1.5 text-xs text-success">
-                    <Receipt className="h-3 w-3" /> Expenses Owed
-                  </span>
-                  <span className="text-xs font-semibold text-success">-₹{myApprovedExpenses.toLocaleString()}</span>
-                </div>
-              )}
-              <div className="border-t pt-1.5 flex items-center justify-between">
-                <span className="text-xs font-bold">Total</span>
-                <span className="text-xs font-bold text-primary">₹{Math.max(0, notHandedOver - myApprovedExpenses).toLocaleString()}</span>
-              </div>
-            </div>
-          </PopoverContent>
-        </Popover>
-
-        <div className="stat-card">
-          <div className="mb-1">
-            <span className="text-xs font-medium text-muted-foreground">Awaiting Confirmation</span>
-          </div>
-          <p className="text-xl font-bold text-warning">₹{awaitingAmount.toLocaleString()}</p>
-        </div>
+{/* ========== SIMPLIFIED BALANCE CARDS ========== */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <Card className="bg-blue-50 border border-blue-200">
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="text-sm font-medium text-blue-800">Available Balance</CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 pt-2">
+            <p className="text-2xl font-bold text-blue-600">₹{Math.max(0, notHandedOver - myApprovedExpenses).toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground mt-1">Ready to hand over</p>
+          </CardContent>
+        </Card>
+        
+        <Card className="bg-amber-50 border border-amber-200">
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="text-sm font-medium text-amber-800">Pending Actions</CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 pt-2">
+            <p className="text-2xl font-bold text-amber-600">{incoming.length}</p>
+            <p className="text-xs text-muted-foreground mt-1">Handovers awaiting confirmation</p>
+          </CardContent>
+        </Card>
+        
+        <Card className="bg-green-50 border border-green-200">
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="text-sm font-medium text-green-800">Pending Expenses</CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 pt-2">
+            <p className="text-2xl font-bold text-green-600">₹{myPendingExpenses.toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground mt-1">Claims awaiting approval</p>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Incoming requiring action */}
-      {incoming.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="text-xs font-semibold text-warning flex items-center gap-1.5 uppercase tracking-wide">
-            <ArrowDownLeft className="h-3.5 w-3.5" /> Action Required ({incoming.length})
-          </h3>
-          <div className="space-y-2">
-            {incoming.map((item) => (
-              <HandoverCard key={item.id} item={item} showActions />
-            ))}
-          </div>
-        </div>
-      )}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card className="bg-amber-50 border-amber-200">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">Awaiting Confirmation</p>
+                <p className="text-xl font-bold text-amber-600">₹{awaitingAmount.toLocaleString()}</p>
+              </div>
+              <Clock className="h-8 w-8 text-amber-400" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        {myPendingExpenses > 0 && (
+          <Card className="bg-red-50 border-red-200">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted-foreground">Pending Expenses</p>
+                  <p className="text-xl font-bold text-red-600">₹{myPendingExpenses.toLocaleString()}</p>
+                </div>
+                <Receipt className="h-8 w-8 text-red-400" />
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
 
-      {/* Expense Claims requiring review (for admins) */}
-      {isAdminOrManager && pendingExpenseClaimsForReview.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="text-xs font-semibold text-warning flex items-center gap-1.5 uppercase tracking-wide">
-            <Receipt className="h-3.5 w-3.5" /> Expense Claims to Review ({pendingExpenseClaimsForReview.length})
-          </h3>
-          <div className="space-y-2">
-            {pendingExpenseClaimsForReview.slice(0, 3).map((item: any) => (
-              <ExpenseClaimCard key={item.id} item={item} showReviewAction />
-            ))}
-            {pendingExpenseClaimsForReview.length > 3 && (
-              <p className="text-xs text-muted-foreground text-center py-1">
-                +{pendingExpenseClaimsForReview.length - 3} more in Expenses tab
-              </p>
+      {/* ========== SIMPLIFIED TABS ========== */}
+      <Tabs defaultValue="handovers" className="w-full">
+        <TabsList className="w-full h-10">
+          <TabsTrigger value="handovers" className="flex-1 gap-1.5 text-xs">
+            <Banknote className="h-3.5 w-3.5" />
+            Handovers
+            {incoming.length > 0 && (
+              <span className="ml-1 bg-amber-100 text-amber-700 text-[10px] px-1.5 py-0.5 rounded-full">
+                {incoming.length}
+              </span>
             )}
-          </div>
-        </div>
-      )}
-
-      {/* Tabs */}
-      <Tabs defaultValue="mine" className="w-full">
-        <TabsList className="w-full flex-wrap h-auto gap-1 p-1">
-          <TabsTrigger value="mine" className="flex-1 gap-1.5 text-xs min-w-[80px]">
-            <Banknote className="h-3.5 w-3.5" /> Handovers
           </TabsTrigger>
+
           {(canSubmitExpenses || isAdminOrManager) && (
-            <TabsTrigger value="expenses" className="flex-1 gap-1.5 text-xs min-w-[80px]">
+            <TabsTrigger value="expenses" className="flex-1 gap-1.5 text-xs">
               <Receipt className="h-3.5 w-3.5" /> Expenses
-              {myPendingExpenses > 0 && !isAdminOrManager && (
-                <span className="ml-1 bg-warning/20 text-warning text-[10px] px-1 rounded">
+              {myPendingExpenses > 0 && isStaff && (
+                <span className="ml-1 bg-amber-100 text-amber-700 text-[10px] px-1.5 py-0.5 rounded-full">
                   {myExpenseClaims.filter((e: any) => e.status === "pending").length}
                 </span>
               )}
             </TabsTrigger>
           )}
-          {isAdminOrManager && (
-            <TabsTrigger value="all" className="flex-1 gap-1.5 text-xs min-w-[80px]">
-              <Users className="h-3.5 w-3.5" /> All
-            </TabsTrigger>
-          )}
+
           {canSeeBalances && (
-            <TabsTrigger value="balances" className="flex-1 gap-1.5 text-xs min-w-[80px]">
+            <TabsTrigger value="balances" className="flex-1 gap-1.5 text-xs">
               <Eye className="h-3.5 w-3.5" /> Balances
             </TabsTrigger>
           )}
         </TabsList>
 
-        <TabsContent value="mine" className="space-y-4 mt-3">
-          {myHandovers.filter(h => !(h.handed_to === user?.id && h.status === "awaiting_confirmation")).length === 0 ? (
-            <div className="rounded-lg border bg-card p-8 text-center text-sm text-muted-foreground">No handovers yet.</div>
-          ) : groupByDate(myHandovers.filter(h => !(h.handed_to === user?.id && h.status === "awaiting_confirmation"))).map(([date, items]) => (
-            <div key={date} className="space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{formatDateGroup(date)}</span>
-                <div className="flex-1 h-px bg-border" />
+        {/* ========== HANDOVERS TAB ========== */}
+        <TabsContent value="handovers" className="space-y-4 mt-3">
+          {/* Simplified Filter Bar */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 w-full">
+              <div className="flex flex-wrap gap-2">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="h-9 text-xs gap-1.5">
+                      <CalendarIcon className="h-3.5 w-3.5" />
+                      {filterFrom ? format(new Date(filterFrom + "T00:00:00"), "dd MMM") : "From"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar mode="single" selected={filterFrom ? new Date(filterFrom + "T00:00:00") : undefined} onSelect={(d) => setFilterFrom(d ? format(d, "yyyy-MM-dd") : "")} initialFocus />
+                  </PopoverContent>
+                </Popover>
+                
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="h-9 text-xs gap-1.5">
+                      <CalendarIcon className="h-3.5 w-3.5" />
+                      {filterTo ? format(new Date(filterTo + "T00:00:00"), "dd MMM") : "To"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar mode="single" selected={filterTo ? new Date(filterTo + "T00:00:00") : undefined} onSelect={(d) => setFilterTo(d ? format(d, "yyyy-MM-dd") : "")} initialFocus />
+                  </PopoverContent>
+                </Popover>
+                
+                <Select value={filterStatus} onValueChange={setFilterStatus}>
+                  <SelectTrigger className="h-9 text-xs w-32">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All statuses</SelectItem>
+                    <SelectItem value="awaiting_confirmation">Pending</SelectItem>
+                    <SelectItem value="confirmed">Confirmed</SelectItem>
+                    <SelectItem value="rejected">Rejected</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                  </SelectContent>
+                </Select>
+                
+                {isAdminOrManager && (
+                  <Select value={filterUser} onValueChange={setFilterUser}>
+                    <SelectTrigger className="h-9 text-xs w-36">
+                      <SelectValue placeholder="User" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All staff</SelectItem>
+                      {staffProfiles?.map((p) => <SelectItem key={p.user_id} value={p.user_id}>{p.full_name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )}
+                
+                <div className="flex-1" />
+                
+                {activeHandoverFilterCount > 0 && (
+                  <Button variant="ghost" size="sm" className="h-9 text-xs" onClick={clearHandoverFilters}>
+                    <X className="h-3 w-3 mr-1" /> Clear
+                  </Button>
+                )}
+                
+                <Button variant="outline" size="sm" className="h-9 text-xs gap-1" onClick={exportHandoversCSV}>
+                  <Download className="h-3 w-3" /> Export
+                </Button>
               </div>
-              {items.map((item) => <HandoverCard key={item.id} item={item} />)}
             </div>
-          ))}
+          </div>
+
+          {/* Incoming Actions (integrated into tab) */}
+          {incoming.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="text-xs font-medium text-amber-600 flex items-center gap-1.5">
+                <ArrowDownLeft className="h-3.5 w-3.5" /> Action Required
+              </h3>
+              <div className="space-y-2">
+                {incoming.map((item) => (
+                  <HandoverCard key={item.id} item={item} showActions={!isSuperAdmin} showAdminActions={isSuperAdmin} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Handover List */}
+          {filteredHandovers.length === 0 ? (
+            <div className="rounded-lg border bg-card p-8 text-center text-sm text-muted-foreground">
+              No handovers match your filters.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {groupByDate(filteredHandovers).map(([date, items]) => (
+                <div key={date} className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      {formatDateGroup(date)}
+                    </span>
+                    <div className="flex-1 h-px bg-border" />
+                  </div>
+                  {items.map((item) => (
+                    <HandoverCard
+                      key={item.id}
+                      item={item}
+                      showAdminActions={isAdminOrManager && canModifyHandovers}
+                    />
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
         </TabsContent>
 
-        {isAdminOrManager && (
-          <TabsContent value="all" className="space-y-4 mt-3">
-            {(handovers || []).length === 0 ? (
-              <div className="rounded-lg border bg-card p-8 text-center text-sm text-muted-foreground">No handovers recorded.</div>
-            ) : groupByDate(handovers || []).map(([date, items]) => (
-              <div key={date} className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{formatDateGroup(date)}</span>
-                  <div className="flex-1 h-px bg-border" />
-                </div>
-                {items.map((item) => <HandoverCard key={item.id} item={item} />)}
-              </div>
-            ))}
-          </TabsContent>
-        )}
-
-        {canSeeBalances && (
-          <TabsContent value="balances" className="space-y-2 mt-3">
-            {!allStaffBalances || Object.keys(allStaffBalances).length === 0 ? (
-              <div className="rounded-lg border bg-card p-8 text-center text-sm text-muted-foreground">No staff balances to show.</div>
-            ) : (
-              <div className="space-y-2">
-                {Object.entries(allStaffBalances)
-                  .sort(([, a], [, b]) => b.total - a.total)
-                  .map(([uid, bal]) => {
-                    const withUser = bal.total + bal.sentPending; // awaiting is still "with" the user
-                    return (
-                      <div key={uid} className="flex items-center gap-3 rounded-lg border bg-card px-4 py-3">
-                        <UserAvatar userId={uid} size="lg" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold truncate">{getName(uid)}</p>
-                          <div className="flex items-center gap-3 mt-0.5 text-[11px] text-muted-foreground">
-                            <span>Sales: ₹{bal.sales.toLocaleString()}</span>
-                            <span>Received: ₹{bal.received.toLocaleString()}</span>
-                          </div>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <p className={`text-base font-bold tabular-nums ${withUser > 0 ? "text-destructive" : "text-success"}`}>
-                            ₹{Math.max(0, withUser).toLocaleString()}
-                          </p>
-                          {bal.sentPending > 0 && (
-                            <p className="text-[10px] text-warning">₹{bal.sentPending.toLocaleString()} awaiting</p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-              </div>
-            )}
-          </TabsContent>
-        )}
-
-        {/* Expenses Tab */}
+        {/* ========== EXPENSES TAB ========== */}
         {(canSubmitExpenses || isAdminOrManager) && (
           <TabsContent value="expenses" className="space-y-4 mt-3">
-            {/* Add Expense Button for users with permission or admins */}
+            <div className="flex gap-3">
+              <div className="stat-card flex-1">
+                <span className="text-xs font-medium text-muted-foreground">Pending Claims</span>
+                <p className="text-xl font-bold text-warning">₹{myPendingExpenses.toLocaleString()}</p>
+              </div>
+              <div className="stat-card flex-1">
+                <span className="text-xs font-medium text-muted-foreground">Approved (Owed)</span>
+                <p className="text-xl font-bold text-success">₹{myApprovedExpenses.toLocaleString()}</p>
+              </div>
+            </div>
+
             {(canSubmitExpenses || isAdminOrManager) && (
-              <Button 
-                onClick={() => setExpenseOpen(true)} 
-                className="w-full gap-2"
-                variant="outline"
-              >
+              <Button onClick={() => setExpenseOpen(true)} className="w-full gap-2" variant="outline">
                 <Receipt className="h-4 w-4" /> Submit Expense Claim
               </Button>
             )}
 
-            {/* Summary Cards */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="stat-card">
-                <span className="text-xs font-medium text-muted-foreground">Pending Claims</span>
-                <p className="text-xl font-bold text-warning">₹{myPendingExpenses.toLocaleString()}</p>
-              </div>
-              <div className="stat-card">
-                <span className="text-xs font-medium text-muted-foreground">Approved (Owed)</span>
-                <p className="text-xl font-bold text-success">₹{myApprovedExpenses.toLocaleString()}</p>
-              </div>
+            {/* Expense Filters */}
+            <div className="flex flex-wrap items-center gap-2">
+              <Select value={filterExpenseStatus} onValueChange={setFilterExpenseStatus}>
+                <SelectTrigger className="h-9 text-xs w-32">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All statuses</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="approved">Approved</SelectItem>
+                  <SelectItem value="rejected">Rejected</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {isAdminOrManager && (
+                <Select value={filterUser} onValueChange={setFilterUser}>
+                  <SelectTrigger className="h-9 text-xs w-36">
+                    <SelectValue placeholder="User" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All staff</SelectItem>
+                    {staffProfiles?.map((p) => <SelectItem key={p.user_id} value={p.user_id}>{p.full_name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
+
+              <div className="flex-1" />
+
+              <Button variant="outline" size="sm" className="h-9 text-xs gap-1" onClick={exportExpensesCSV}>
+                <Download className="h-3 w-3" /> Export
+              </Button>
             </div>
 
             {/* Expense Claims List */}
@@ -986,28 +1331,61 @@ const Handovers = () => {
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
               </div>
-            ) : (isAdminOrManager ? expenseClaims : myExpenseClaims).length === 0 ? (
+            ) : filteredExpenseClaims.length === 0 ? (
               <div className="rounded-lg border bg-card p-8 text-center text-sm text-muted-foreground">
-                {canSubmitExpenses 
-                  ? "No expense claims yet. Submit your first claim above."
-                  : "No expense claims to show."}
+                {canSubmitExpenses ? "No expense claims match your filters." : "No expense claims to show."}
               </div>
             ) : (
               <div className="space-y-2">
-                {(isAdminOrManager ? expenseClaims : myExpenseClaims).map((item: any) => (
-                  <ExpenseClaimCard 
-                    key={item.id} 
-                    item={item} 
-                    showReviewAction={isAdminOrManager} 
-                  />
+                {filteredExpenseClaims.map((item: any) => (
+                  <ExpenseClaimCard key={item.id} item={item} showReviewAction={isAdminOrManager} />
                 ))}
+              </div>
+            )}
+          </TabsContent>
+        )}
+
+        {/* ========== BALANCES TAB ========== */}
+        {canSeeBalances && (
+          <TabsContent value="balances" className="space-y-2 mt-3">
+            {!allStaffBalances || Object.keys(allStaffBalances).length === 0 ? (
+              <div className="rounded-lg border bg-card p-8 text-center text-sm text-muted-foreground">No staff balances to show.</div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {Object.entries(allStaffBalances)
+                  .sort(([, a], [, b]) => b.total - a.total)
+                  .map(([uid, bal]) => {
+                    const withUser = bal.total + bal.sentPending;
+                    return (
+                      <Link key={uid} to={`/staff/${uid}`} className="block">
+                        <div className="flex items-center gap-3 rounded-lg border bg-card px-4 py-3 hover:shadow-sm hover:border-primary/30 transition-all cursor-pointer">
+                          <UserHoverCard userId={uid} size="lg" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold truncate">{getName(uid)}</p>
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-0.5 text-[11px] text-muted-foreground">
+                              <span>Sales: ₹{bal.sales.toLocaleString()}</span>
+                              <span>Received: ₹{bal.received.toLocaleString()}</span>
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className={`text-base font-bold tabular-nums ${withUser > 0 ? "text-destructive" : "text-success"}`}>
+                              ₹{Math.max(0, withUser).toLocaleString()}
+                            </p>
+                            {bal.sentPending > 0 && (
+                              <p className="text-[10px] text-warning">₹{bal.sentPending.toLocaleString()} awaiting</p>
+                            )}
+                          </div>
+                        </div>
+                      </Link>
+                    );
+                  })}
               </div>
             )}
           </TabsContent>
         )}
       </Tabs>
 
-      {/* Create Handover Dialog */}
+      {/* ========== SIMPLIFIED CREATE HANDOVER DIALOG ========== */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
           <DialogHeader>
@@ -1015,40 +1393,36 @@ const Handovers = () => {
             <DialogDescription>Send money to another team member for confirmation.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="rounded-lg bg-primary/5 p-3 text-center">
-              <p className="text-xs text-muted-foreground">Available Balance</p>
-              <p className="text-2xl font-bold text-primary">₹{Math.max(0, notHandedOver).toLocaleString()}</p>
+            <div className="rounded-lg bg-muted/50 p-3 flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Available Balance</span>
+              <span className="text-lg font-bold">₹{Math.max(0, notHandedOver).toLocaleString()}</span>
             </div>
+
             <div className="space-y-2">
               <Label>Send To</Label>
               <Select value={toUserId} onValueChange={setToUserId}>
-                <SelectTrigger><SelectValue placeholder="Select staff member" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Select recipient" /></SelectTrigger>
                 <SelectContent>
-                  {(staffProfiles || []).map((p) => {
-                    const detail = p.phone || p.email || "No contact";
-                    return (
-                      <SelectItem key={p.user_id} value={p.user_id}>
-                        <div className="flex w-full items-center justify-between gap-3">
-                          <span className="font-medium">{p.full_name}</span>
-                          <span className="text-xs text-muted-foreground">{p.roleLabel}</span>
-                        </div>
-                        <p className="text-xs text-muted-foreground truncate">{detail}</p>
-                      </SelectItem>
-                    );
-                  })}
+                  {(staffProfiles || []).map((p) => (
+                    <SelectItem key={p.user_id} value={p.user_id}>
+                      {p.full_name} ({p.roleLabel})
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
+
             <div className="space-y-2">
               <Label>Amount (₹)</Label>
               <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Enter amount" min="1" />
               {partialSetting === false && !isFinalizer && (
                 <p className="text-xs text-warning flex items-center gap-1">
                   <AlertCircle className="h-3 w-3 shrink-0" />
-                  Partial handovers are disabled — full balance of ₹{Math.max(0, notHandedOver).toLocaleString()} required
+                  Full balance of ₹{Math.max(0, notHandedOver).toLocaleString()} required
                 </p>
               )}
             </div>
+
             <div className="space-y-2">
               <Label>Notes (optional)</Label>
               <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Add any notes..." rows={2} />
@@ -1074,14 +1448,8 @@ const Handovers = () => {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCancelConfirmId(null)}>
-              Keep it
-            </Button>
-            <Button 
-              variant="destructive" 
-              onClick={() => cancelConfirmId && handleCancel(cancelConfirmId)}
-              disabled={!!actionLoading}
-            >
+            <Button variant="outline" onClick={() => setCancelConfirmId(null)}>Keep it</Button>
+            <Button variant="destructive" onClick={() => cancelConfirmId && handleCancel(cancelConfirmId)} disabled={!!actionLoading}>
               {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <XCircle className="h-4 w-4 mr-2" />}
               Yes, Cancel
             </Button>
@@ -1102,17 +1470,12 @@ const Handovers = () => {
             <div className="space-y-2">
               <Label>Category *</Label>
               <Select value={expenseCategory} onValueChange={setExpenseCategory}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select expense category" />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
                 <SelectContent>
                   {expenseCategories.map((cat: any) => (
                     <SelectItem key={cat.id} value={cat.id}>
                       <div className="flex items-center gap-2">
-                        <div 
-                          className="h-2.5 w-2.5 rounded-full" 
-                          style={{ backgroundColor: cat.color || "#6b7280" }} 
-                        />
+                        <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: cat.color || "#6b7280" }} />
                         {cat.name}
                       </div>
                     </SelectItem>
@@ -1123,48 +1486,22 @@ const Handovers = () => {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>Amount (₹) *</Label>
-                <Input 
-                  type="number" 
-                  value={expenseAmount} 
-                  onChange={(e) => setExpenseAmount(e.target.value)} 
-                  placeholder="0.00" 
-                  min="1" 
-                />
+                <Input type="number" value={expenseAmount} onChange={(e) => setExpenseAmount(e.target.value)} placeholder="0.00" min="1" />
               </div>
               <div className="space-y-2">
                 <Label>Date *</Label>
-                <Input 
-                  type="date" 
-                  value={expenseDate} 
-                  onChange={(e) => setExpenseDate(e.target.value)} 
-                  max={new Date().toISOString().split("T")[0]}
-                />
+                <Input type="date" value={expenseDate} onChange={(e) => setExpenseDate(e.target.value)} max={new Date().toISOString().split("T")[0]} />
               </div>
             </div>
             <div className="space-y-2">
               <Label>Description *</Label>
-              <Textarea 
-                value={expenseDescription} 
-                onChange={(e) => setExpenseDescription(e.target.value)} 
-                placeholder="What was this expense for? (e.g., Taxi fare for customer visit, Office supplies purchase)"
-                rows={3}
-              />
+              <Textarea value={expenseDescription} onChange={(e) => setExpenseDescription(e.target.value)} placeholder="What was this expense for?" rows={3} />
             </div>
             <div className="space-y-2">
               <Label className="flex items-center gap-2">
-                <Image className="h-4 w-4" />
-                Receipt Photo (Optional)
+                <Image className="h-4 w-4" /> Receipt Photo (Optional)
               </Label>
-              <p className="text-xs text-muted-foreground">
-                Upload a photo of the receipt or bill for faster approval
-              </p>
-              <ImageUpload
-                folder="expense-receipts"
-                currentUrl={expenseReceiptUrl}
-                onUploaded={(url) => setExpenseReceiptUrl(url)}
-                onRemoved={() => setExpenseReceiptUrl(null)}
-                size="lg"
-              />
+              <ImageUpload folder="expense-receipts" currentUrl={expenseReceiptUrl} onUploaded={(url) => setExpenseReceiptUrl(url)} onRemoved={() => setExpenseReceiptUrl(null)} size="lg" />
             </div>
           </div>
           <DialogFooter>
@@ -1188,7 +1525,6 @@ const Handovers = () => {
           </DialogHeader>
           {reviewExpense && (
             <div className="space-y-4">
-              {/* Claim Details */}
               <div className="rounded-lg bg-muted/50 p-3 space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-muted-foreground">Submitted by</span>
@@ -1198,52 +1534,20 @@ const Handovers = () => {
                   <span className="text-xs text-muted-foreground">Original Amount</span>
                   <span className="text-sm font-bold">₹{Number(reviewExpense.amount).toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-muted-foreground">Expense Date</span>
-                  <span className="text-sm">{format(new Date(reviewExpense.expense_date), "dd MMM yyyy")}</span>
-                </div>
                 <div className="pt-1 border-t">
                   <span className="text-xs text-muted-foreground">Description</span>
                   <p className="text-sm mt-0.5">{reviewExpense.description}</p>
                 </div>
-                {/* Receipt Image */}
-                {reviewExpense.receipt_url && (
-                  <div className="pt-2 border-t">
-                    <span className="text-xs text-muted-foreground">Receipt</span>
-                    <a
-                      href={reviewExpense.receipt_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block mt-1"
-                    >
-                      <img
-                        src={reviewExpense.receipt_url}
-                        alt="Receipt"
-                        className="max-h-40 rounded-md border cursor-pointer hover:opacity-90 transition-opacity"
-                      />
-                      <span className="text-xs text-primary mt-1 inline-flex items-center gap-1">
-                        <Eye className="h-3 w-3" /> Click to view full size
-                      </span>
-                    </a>
-                  </div>
-                )}
               </div>
-
-              {/* Adjustable Fields */}
               <div className="space-y-2">
-                <Label>Category (can change for accounting)</Label>
+                <Label>Category</Label>
                 <Select value={reviewCategory} onValueChange={setReviewCategory}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select category" />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
                   <SelectContent>
                     {expenseCategories.map((cat: any) => (
                       <SelectItem key={cat.id} value={cat.id}>
                         <div className="flex items-center gap-2">
-                          <div 
-                            className="h-2.5 w-2.5 rounded-full" 
-                            style={{ backgroundColor: cat.color || "#6b7280" }} 
-                          />
+                          <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: cat.color || "#6b7280" }} />
                           {cat.name}
                         </div>
                       </SelectItem>
@@ -1253,52 +1557,156 @@ const Handovers = () => {
               </div>
               <div className="space-y-2">
                 <Label>Approved Amount (₹)</Label>
-                <Input 
-                  type="number" 
-                  value={reviewAmount} 
-                  onChange={(e) => setReviewAmount(e.target.value)} 
-                  placeholder="0.00" 
-                  min="0"
-                />
-                {reviewAmount && Number(reviewAmount) !== Number(reviewExpense.amount) && (
-                  <p className="text-xs text-warning flex items-center gap-1">
-                    <AlertCircle className="h-3 w-3" />
-                    Amount differs from original claim (₹{Number(reviewExpense.amount).toLocaleString()})
-                  </p>
-                )}
+                <Input type="number" value={reviewAmount} onChange={(e) => setReviewAmount(e.target.value)} placeholder="0.00" min="0" />
               </div>
               <div className="space-y-2">
                 <Label>Notes (optional)</Label>
-                <Textarea 
-                  value={reviewNotes} 
-                  onChange={(e) => setReviewNotes(e.target.value)} 
-                  placeholder="Add notes for the claimant (e.g., reason for adjustment or rejection)"
-                  rows={2}
-                />
+                <Textarea value={reviewNotes} onChange={(e) => setReviewNotes(e.target.value)} placeholder="Add notes..." rows={2} />
               </div>
             </div>
           )}
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button 
-              variant="ghost" 
-              onClick={() => setReviewExpense(null)}
-            >
-              Cancel
-            </Button>
-            <Button 
-              variant="destructive" 
-              onClick={() => handleReviewExpenseClaim("reject")}
-              disabled={!!actionLoading}
-            >
+            <Button variant="ghost" onClick={() => setReviewExpense(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => handleReviewExpenseClaim("reject")} disabled={!!actionLoading}>
               {actionLoading === reviewExpense?.id ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <XCircle className="h-4 w-4 mr-2" />}
               Reject
             </Button>
-            <Button 
-              onClick={() => handleReviewExpenseClaim("approve")}
-              disabled={!!actionLoading || !reviewAmount || Number(reviewAmount) <= 0}
-            >
+            <Button onClick={() => handleReviewExpenseClaim("approve")} disabled={!!actionLoading || !reviewAmount || Number(reviewAmount) <= 0}>
               {actionLoading === reviewExpense?.id ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle className="h-4 w-4 mr-2" />}
               Approve
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Admin Transfer Dialog (kept as is) */}
+      <Dialog open={adminTransferOpen} onOpenChange={setAdminTransferOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Admin Transfer Between Staff</DialogTitle>
+            <DialogDescription>
+              Transfer money from one staff member to another. This action is logged for audit purposes.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Transfer From *</Label>
+              <Select value={adminTransferFrom || "__none__"} onValueChange={(v) => setAdminTransferFrom(v === "__none__" ? "" : v)}>
+                <SelectTrigger><SelectValue placeholder="Select sender" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__" disabled>Select sender</SelectItem>
+                  {staffProfiles?.map((p) => {
+                    const bal = allStaffBalances?.[p.user_id];
+                    const balance = bal ? (bal.total + bal.sentPending) : 0;
+                    return (
+                      <SelectItem key={p.user_id} value={p.user_id}>
+                        <div className="flex items-center justify-between w-full gap-3">
+                          <span className="font-medium">{p.full_name}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">{p.roleLabel}</span>
+                            <span className={`text-xs font-semibold ${balance > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                              ₹{balance.toLocaleString()}
+                            </span>
+                          </div>
+                        </div>
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+              {adminTransferFrom && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Available Balance:</span>
+                  <span className={`font-bold ${(allStaffBalances?.[adminTransferFrom]?.total || 0) > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                    ₹{((allStaffBalances?.[adminTransferFrom]?.total || 0) + (allStaffBalances?.[adminTransferFrom]?.sentPending || 0)).toLocaleString()}
+                  </span>
+                </div>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label>Transfer To *</Label>
+              <Select value={adminTransferTo || "__none__"} onValueChange={(v) => setAdminTransferTo(v === "__none__" ? "" : v)}>
+                <SelectTrigger><SelectValue placeholder="Select recipient" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__" disabled>Select recipient</SelectItem>
+                  {staffProfiles?.map((p) => (
+                    <SelectItem key={p.user_id} value={p.user_id} disabled={p.user_id === adminTransferFrom}>
+                      {p.full_name} ({p.roleLabel})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Amount (₹) *</Label>
+              <Input type="number" value={adminTransferAmount} onChange={(e) => setAdminTransferAmount(e.target.value)} placeholder="Enter amount" min="1" />
+            </div>
+            <div className="space-y-2">
+              <Label>Reason (optional)</Label>
+              <Textarea value={adminTransferReason} onChange={(e) => setAdminTransferReason(e.target.value)} placeholder="Reason for audit log" rows={2} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAdminTransferOpen(false)}>Cancel</Button>
+            <Button onClick={handleAdminTransfer} disabled={submitting || !adminTransferFrom || !adminTransferTo || !adminTransferAmount || adminTransferFrom === adminTransferTo}>
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
+              Transfer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Handover Dialog */}
+      <Dialog open={editHandoverOpen} onOpenChange={setEditHandoverOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Handover</DialogTitle>
+            <DialogDescription>
+              Modify the handover amount or status. This action is logged for audit purposes.
+            </DialogDescription>
+          </DialogHeader>
+          {selectedHandoverForEdit && (
+            <div className="space-y-4">
+              <div className="rounded-lg bg-muted/50 p-3 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-muted-foreground">From</span>
+                  <span className="text-sm">{getName(selectedHandoverForEdit.user_id)}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-muted-foreground">To</span>
+                  <span className="text-sm">{getName(selectedHandoverForEdit.handed_to)}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-muted-foreground">Current Amount</span>
+                  <span className="text-sm font-bold">
+                    ₹{(Number(selectedHandoverForEdit.cash_amount) + Number(selectedHandoverForEdit.upi_amount)).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>New Amount (₹)</Label>
+                <Input type="number" value={editHandoverAmount} onChange={(e) => setEditHandoverAmount(e.target.value)} min="0" />
+              </div>
+              <div className="space-y-2">
+                <Label>New Status</Label>
+                <Select value={editHandoverStatus} onValueChange={setEditHandoverStatus}>
+                  <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Keep current</SelectItem>
+                    <SelectItem value="awaiting_confirmation">Pending</SelectItem>
+                    <SelectItem value="confirmed">Confirmed</SelectItem>
+                    <SelectItem value="rejected">Rejected</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setEditHandoverOpen(false); setSelectedHandoverForEdit(null); }}>Cancel</Button>
+            <Button onClick={handleEditHandover} disabled={submitting || !editHandoverAmount}>
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Edit2 className="h-4 w-4 mr-2" />}
+              Save Changes
             </Button>
           </DialogFooter>
         </DialogContent>

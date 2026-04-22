@@ -9,20 +9,7 @@ import { PurchaseOrderForm } from '@/components/inventory/PurchaseOrderForm';
 import { TableSkeleton } from '@/components/shared/TableSkeleton';
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
-
-export type PurchaseOrderView = {
-  id: string;
-  display_id: string;
-  vendor_id: string;
-  warehouse_id: string;
-  status: 'pending' | 'completed' | 'cancelled';
-  total_amount: number;
-  order_date: string;
-  expected_delivery?: string;
-  notes?: string;
-  vendors: { name: string } | null;
-  item_count: number;
-};
+import type { PurchaseOrderView } from '@/types/purchases';
 
 const PurchasesPage = () => {
   const { currentWarehouse } = useWarehouse();
@@ -31,7 +18,7 @@ const PurchasesPage = () => {
     queryKey: ['purchase_orders', currentWarehouse?.id],
     queryFn: async () => {
       if (!currentWarehouse?.id) return [];
-      
+
       // Fetch purchase orders with vendor info
       const { data: orders, error: ordersError } = await supabase
         .from('purchase_orders')
@@ -42,7 +29,7 @@ const PurchasesPage = () => {
         .eq('warehouse_id', currentWarehouse.id)
         .is('deleted_at', null)
         .order('order_date', { ascending: false });
-      
+
       if (ordersError) {
         console.error('Error fetching purchase orders:', ordersError);
         throw ordersError;
@@ -59,6 +46,7 @@ const PurchasesPage = () => {
 
       if (itemsError) {
         console.error('Error fetching purchase items:', itemsError);
+        throw itemsError;
       }
 
       // Count items per order
@@ -86,16 +74,6 @@ const PurchasesPage = () => {
     enabled: !!currentWarehouse?.id,
   });
 
-  // Debug output
-  React.useEffect(() => {
-    if (error) {
-      console.error('Purchase orders query error:', error);
-    }
-    if (purchaseOrders) {
-      console.log('Purchase orders loaded:', purchaseOrders.length, purchaseOrders);
-    }
-  }, [purchaseOrders, error]);
-
   return (
     <div className="space-y-4">
       <PageHeader
@@ -108,7 +86,7 @@ const PurchasesPage = () => {
       {error ? (
         <div className="p-8 text-center">
           <p className="text-red-500">Error loading purchase orders</p>
-          <p className="text-sm text-muted-foreground">{error.message}</p>
+          <p className="text-sm text-muted-foreground">{(error as Error).message}</p>
         </div>
       ) : isLoading ? (
         <TableSkeleton />
@@ -118,7 +96,7 @@ const PurchasesPage = () => {
         <div className="flex flex-col items-center justify-center p-12 border rounded-lg bg-muted/50">
           <p className="text-lg font-medium mb-2">No Purchase Orders</p>
           <p className="text-sm text-muted-foreground mb-4">
-            {currentWarehouse?.name 
+            {currentWarehouse?.name
               ? `No purchase orders found for ${currentWarehouse.name}`
               : 'Select a warehouse to view purchase orders'
             }

@@ -37,6 +37,8 @@ const PERMISSION_KEYS = [
   "delete_orders",
   "fulfill_orders",
   "cancel_orders",
+  // Sale Return permissions
+  "create_sale_returns",
   // Invoice permissions
   "view_invoices",
   "create_invoices",
@@ -60,6 +62,8 @@ const ROLE_DEFAULTS: Record<string, PermissionKey[]> = {
     // Orders - full access
     "view_orders", "create_orders", "modify_orders", "modify_order_item_prices",
     "transfer_orders", "delete_orders", "fulfill_orders", "cancel_orders",
+    // Sale Returns - full access
+    "create_sale_returns",
     // Invoices - full access
     "view_invoices", "create_invoices", "edit_invoices", "delete_invoices", "download_invoices",
     // Agent
@@ -73,6 +77,8 @@ const ROLE_DEFAULTS: Record<string, PermissionKey[]> = {
     // Orders - full access
     "view_orders", "create_orders", "modify_orders", "modify_order_item_prices",
     "transfer_orders", "delete_orders", "fulfill_orders", "cancel_orders",
+    // Sale Returns - full access
+    "create_sale_returns",
     // Invoices - full access
     "view_invoices", "create_invoices", "edit_invoices", "delete_invoices", "download_invoices",
     // Agent
@@ -114,6 +120,7 @@ export const PERMISSION_GROUPS = {
     "delete_orders",
     "fulfill_orders",
     "cancel_orders",
+    "create_sale_returns",
     "view_assigned_orders",
     "accept_order_transfers",
   ],
@@ -165,6 +172,7 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   delete_orders: "Delete Orders",
   fulfill_orders: "Fulfill Orders",
   cancel_orders: "Cancel Orders",
+  create_sale_returns: "Create Sale Returns",
   view_assigned_orders: "View Assigned Orders Only",
   accept_order_transfers: "Accept Order Transfers",
   view_invoices: "View Invoices",

@@ -11,17 +11,17 @@ import { addToQueue, generateBusinessKey } from "@/lib/offlineQueue";
 import { resolveCreditLimit } from "@/lib/creditLimit";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
-import { Loader2, Plus, Trash2, Download, IndianRupee, CreditCard, Banknote, Clock, UserCircle, Store as StoreIcon, Package, X, CalendarIcon, Receipt, FileText, RotateCcw, ShoppingCart, ChevronRight, Eye, ClipboardList } from "lucide-react";
+import { Loader2, Plus, Trash2, Download, IndianRupee, CreditCard, Banknote, Clock, UserCircle, Store as StoreIcon, Package, X, CalendarIcon, Receipt, FileText, RotateCcw, ShoppingCart, ChevronRight, Eye, ClipboardList, Wallet, QrCode, Minus, MapPin, Phone, Mail } from "lucide-react";
 import { QrStoreSelector } from "@/components/shared/QrStoreSelector";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { SaleReceipt } from "@/components/shared/SaleReceipt";
 import { OrderFulfillmentDialog } from "@/components/orders/OrderFulfillmentDialog";
 import { SaleReturnDialog } from "@/components/sales/SaleReturnDialog";
 import { useState, useMemo, useEffect } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useSearchParams, useNavigate, Link } from "react-router-dom";
 import { usePermission } from "@/hooks/usePermission";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,15 +29,20 @@ import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
+Tooltip,
+TooltipContent,
+TooltipProvider,
+TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+HoverCard,
+HoverCardContent,
+HoverCardTrigger,
+} from "@/components/ui/hover-card";
 import { toast } from "sonner";
 import { format } from "date-fns";
 
@@ -157,10 +162,10 @@ const Sales = () => {
   const { data: sales, isLoading, isFetching } = useQuery({
     queryKey: ["sales", currentWarehouse?.id, isAdmin ? "all" : user?.id, filterFrom, filterTo, filterStore, filterStoreType, filterRoute, filterUser, filterPayment, loadedPages],
     queryFn: async () => {
-      let query = (supabase as any)
-        .from("sales")
-        .select("*, stores(name, display_id, store_type_id, route_id), customers(name, display_id)")
-        .order("created_at", { ascending: false });
+let query = (supabase as any)
+      .from("sales")
+  .select("*, stores(id, name, display_id, store_type_id, route_id, address, outstanding), customers(id, name, display_id, phone, email), fulfilled_order_id, invoice_sales(invoice_id)")
+      .order("created_at", { ascending: false });
       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
       // Non-admin roles (agents, pos, marketer) only see their own records
       if (!isAdmin) query = query.eq("recorded_by", user!.id);
@@ -192,8 +197,17 @@ const Sales = () => {
 
   const profileMap = new Map(profiles?.map((p) => [p.user_id, p]) || []);
 
-  // Filtering is now done server-side; local array mirrors the fetched page(s)
-  const filteredSales = sales || [];
+  // Client-side filtering for store type and route (server-side for others)
+  const filteredSales = useMemo(() => {
+    let data = sales || [];
+    if (filterStoreType !== "all") {
+      data = data.filter((s: any) => s.stores?.store_type_id === filterStoreType);
+    }
+    if (filterRoute !== "all") {
+      data = data.filter((s: any) => s.stores?.route_id === filterRoute);
+    }
+    return data;
+  }, [sales, filterStoreType, filterRoute]);
 
   const activeFilterCount = [filterStore !== "all", filterStoreType !== "all", filterRoute !== "all", filterUser !== "all", filterPayment !== "all", filterFrom !== thirtyDaysAgo, filterTo !== today].filter(Boolean).length;
 
@@ -250,25 +264,35 @@ const Sales = () => {
   const selectedStore = stores?.find((s) => s.id === storeId);
   const selectedStoreTypeId = selectedStore?.store_type_id;
 
-  const { data: availableProducts } = useQuery({
-    queryKey: ["products-for-sale", selectedStoreTypeId, storeId],
+  // Fetch all products for adding non-associated items
+  const { data: allProducts } = useQuery({
+    queryKey: ["all-products-for-sale", currentWarehouse?.id],
     queryFn: async () => {
-      if (!selectedStoreTypeId) return [];
+      let query = (supabase as any).from("products").select("id, name, base_price, sku, image_url").eq("is_active", true);
+      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+      const { data } = await query;
+      return data || [];
+    },
+  });
+
+  // Fetch store-associated products with pricing
+  const { data: storeProducts } = useQuery({
+    queryKey: ["store-products-for-sale", selectedStoreTypeId, storeId],
+    queryFn: async () => {
+      if (!selectedStoreTypeId || !storeId) return [];
+      
+      // Get products associated with store type
       const { data: accessData } = await supabase
         .from("store_type_products")
-        .select("product_id, products(id, name, sku, base_price)")
+        .select("product_id, products(id, name, sku, base_price, image_url)")
         .eq("store_type_id", selectedStoreTypeId);
 
-      let productList: any[];
+      let productList: any[] = [];
       if (accessData && accessData.length > 0) {
         productList = accessData.map((a: any) => a.products).filter(Boolean);
-      } else {
-        let productsQuery = (supabase as any).from("products").select("id, name, base_price, sku").eq("is_active", true);
-        if (currentWarehouse?.id) productsQuery = productsQuery.eq("warehouse_id", currentWarehouse.id);
-        const { data } = await productsQuery;
-        productList = data || [];
       }
 
+      // Get pricing
       const { data: typePricing } = await supabase
         .from("store_type_pricing")
         .select("product_id, price")
@@ -285,14 +309,28 @@ const Sales = () => {
 
       return productList.map((p) => {
         let effectivePrice = Number(p.base_price);
-        let priceSource = "base";
-        if (typePriceMap[p.id]) { effectivePrice = typePriceMap[p.id]; priceSource = "type"; }
-        if (storePriceMap[p.id]) { effectivePrice = storePriceMap[p.id]; priceSource = "store"; }
-        return { ...p, effectivePrice, priceSource };
+        if (typePriceMap[p.id]) effectivePrice = typePriceMap[p.id];
+        if (storePriceMap[p.id]) effectivePrice = storePriceMap[p.id];
+        return { ...p, effectivePrice };
       });
     },
     enabled: !!storeId && !!selectedStoreTypeId,
   });
+
+  // Initialize items when store products load
+  useEffect(() => {
+    if (storeProducts && storeProducts.length > 0 && items.length === 1 && !items[0].product_id) {
+      // Auto-populate with store products, quantity 0
+      const autoItems = storeProducts.map((p: any) => ({
+        product_id: p.id,
+        quantity: 0,
+        unit_price: p.effectivePrice,
+        product_name: p.name,
+        product_image: p.image_url,
+      }));
+      setItems(autoItems);
+    }
+  }, [storeProducts]);
 
   // Fetch pending orders for the selected store (shown in record sale dialog)
   const { data: pendingOrders, isLoading: loadingPendingOrders } = useQuery({
@@ -343,14 +381,53 @@ const Sales = () => {
   const creditExceeded = creditLimitInfo && creditLimitInfo.limit > 0 && newOutstanding > creditLimitInfo.limit;
   const creditWarning = creditLimitInfo && creditLimitInfo.limit > 0 && newOutstanding > creditLimitInfo.limit * 0.8 && !creditExceeded;
 
-  const addItem = () => setItems([...items, { product_id: "", quantity: 1, unit_price: 0 }]);
+  // State for adding non-associated products
+  const [showAddProductDialog, setShowAddProductDialog] = useState(false);
+  const [selectedProductToAdd, setSelectedProductToAdd] = useState("");
+
+  const addItem = () => {
+    // Open dialog to select from all products (not just store-associated)
+    setSelectedProductToAdd("");
+    setShowAddProductDialog(true);
+  };
+  
+  const addProductToSale = () => {
+    if (!selectedProductToAdd) return;
+    const product = allProducts?.find((p: any) => p.id === selectedProductToAdd);
+    if (product) {
+      // Check if already in items
+      const existingIdx = items.findIndex(i => i.product_id === product.id);
+      if (existingIdx >= 0) {
+        // Increment quantity
+        updateItem(existingIdx, "quantity", items[existingIdx].quantity + 1);
+      } else {
+        // Add new item
+        const newItem = {
+          product_id: product.id,
+          quantity: 1,
+          unit_price: product.base_price || 0,
+          product_name: product.name,
+          product_image: product.image_url,
+        };
+        setItems([...items, newItem]);
+      }
+      setShowAddProductDialog(false);
+      setSelectedProductToAdd("");
+    }
+  };
+
   const removeItem = (idx: number) => setItems(items.filter((_, i) => i !== idx));
+  
   const updateItem = (idx: number, field: keyof SaleItem, value: any) => {
     const updated = [...items];
     (updated[idx] as any)[field] = value;
     if (field === "product_id") {
-      const p = availableProducts?.find((pr: any) => pr.id === value);
-      if (p) updated[idx].unit_price = p.effectivePrice;
+      const p = allProducts?.find((pr: any) => pr.id === value);
+      if (p) {
+        updated[idx].unit_price = p.effectivePrice || p.base_price;
+        updated[idx].product_name = p.name;
+        updated[idx].product_image = p.image_url;
+      }
     }
     setItems(updated);
   };
@@ -478,11 +555,13 @@ const Sales = () => {
       quantity: i.quantity,
     }));
     
-    const { data: stockCheck, error: stockError } = await (supabase as any)
-      .rpc("check_stock_availability", {
-        p_user_id: user!.id,
-        p_items: saleItemsForStockCheck,
-      });
+      const effectiveRecordedFor = recordedFor || null; // null if recording for self
+      const { data: stockCheck, error: stockError } = await (supabase as any)
+        .rpc("check_stock_availability", {
+          p_user_id: user!.id,
+          p_recorded_for: effectiveRecordedFor,
+          p_items: saleItemsForStockCheck,
+        });
     
     if (stockError) {
       console.error("Stock check failed:", stockError);
@@ -492,13 +571,13 @@ const Sales = () => {
       return;
     }
 
-    const stockRows = Array.isArray(stockCheck) ? stockCheck : [];
-    const insufficient = stockRows.filter((s: any) => !s.available);
-    if (insufficient.length > 0) {
-      const productNames = insufficient.map((i: any) => i.product_name).join(", ");
-      toast.error(
-        `Insufficient stock for: ${productNames}. Available: ${insufficient.map((i: any) => `${i.product_name} (${i.available_qty})`).join(", ")}`
-      );
+      const stockRows = Array.isArray(stockCheck) ? stockCheck : [];
+      const insufficient = stockRows.filter((s: any) => !s.out_available);
+      if (insufficient.length > 0) {
+        const productNames = insufficient.map((i: any) => i.out_product_name).join(", ");
+        toast.error(
+          `Insufficient stock for: ${productNames}. Available: ${insufficient.map((i: any) => `${i.out_product_name} (${i.out_available_qty})`).join(", ")}`
+        );
       setSaving(false);
       return;
     }
@@ -668,14 +747,154 @@ const Sales = () => {
     return p?.avatar_url || null;
   };
 
+  // Store Hover Card component
+  const StoreHoverCard = ({ store, children }: { store: any; children: React.ReactNode }) => {
+    if (!store) return <span>{children}</span>;
+    return (
+      <HoverCard>
+        <HoverCardTrigger asChild>
+          <Link to={`/stores/${store.id}`} className="hover:underline cursor-pointer">
+            {children}
+          </Link>
+        </HoverCardTrigger>
+        <HoverCardContent className="w-72 p-0" align="start">
+          <div className="p-3 space-y-3">
+            {/* Store Photo and Name */}
+            <div className="flex items-start gap-3">
+              {store.image_url ? (
+                <img 
+                  src={store.image_url} 
+                  alt={store.name}
+                  className="h-14 w-14 rounded-lg object-cover border"
+                />
+              ) : (
+                <div className="h-14 w-14 rounded-lg bg-primary/10 flex items-center justify-center border">
+                  <StoreIcon className="h-6 w-6 text-primary" />
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm truncate">{store.name}</p>
+                <p className="text-xs text-muted-foreground">{store.display_id}</p>
+                {store.routes?.name && (
+                  <div className="flex items-center gap-1 mt-1">
+                    <MapPin className="h-3 w-3 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground truncate">{store.routes.name}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Store Details */}
+            <div className="space-y-1.5 text-xs">
+              {store.store_types?.name && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-muted-foreground min-w-[60px]">Type:</span>
+                  <span className="font-medium">{store.store_types.name}</span>
+                </div>
+              )}
+              {store.address && (
+                <div className="flex items-start gap-1.5">
+                  <span className="text-muted-foreground min-w-[60px]">Address:</span>
+                  <span className="text-muted-foreground line-clamp-2">{store.address}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Balance */}
+            {store.outstanding !== undefined && (
+              <div className="flex items-center justify-between py-2 border-t text-sm">
+                <span className="text-muted-foreground">Balance:</span>
+                <span className={`font-bold ${Number(store.outstanding) > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                  ₹{Number(store.outstanding).toLocaleString()}
+                </span>
+              </div>
+            )}
+
+            <Button size="sm" variant="outline" className="w-full text-xs" asChild>
+              <Link to={`/stores/${store.id}`}>View Store Profile</Link>
+            </Button>
+          </div>
+        </HoverCardContent>
+      </HoverCard>
+    );
+  };
+
+  // Customer Hover Card component
+  const CustomerHoverCard = ({ customer, children }: { customer: any; children: React.ReactNode }) => {
+    if (!customer) return <span>{children}</span>;
+    return (
+      <HoverCard>
+        <HoverCardTrigger asChild>
+          <Link to={`/customers/${customer.id}`} className="hover:underline cursor-pointer">
+            {children}
+          </Link>
+        </HoverCardTrigger>
+        <HoverCardContent className="w-64 p-0" align="start">
+          <div className="p-3 space-y-3">
+            {/* Customer Photo and Name */}
+            <div className="flex items-center gap-3">
+              {customer.image_url ? (
+                <img 
+                  src={customer.image_url} 
+                  alt={customer.name}
+                  className="h-12 w-12 rounded-full object-cover border"
+                />
+              ) : (
+                <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center border">
+                  <UserCircle className="h-6 w-6 text-primary" />
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm truncate">{customer.name}</p>
+                <p className="text-xs text-muted-foreground">{customer.display_id}</p>
+              </div>
+            </div>
+
+            {/* Contact Details */}
+            {(customer.phone || customer.email) && (
+              <div className="space-y-1.5 py-2 border-t text-xs">
+                {customer.phone && (
+                  <div className="flex items-center gap-1.5">
+                    <Phone className="h-3 w-3 text-muted-foreground shrink-0" />
+                    <span>{customer.phone}</span>
+                  </div>
+                )}
+                {customer.email && (
+                  <div className="flex items-center gap-1.5">
+                    <Mail className="h-3 w-3 text-muted-foreground shrink-0" />
+                    <span className="truncate">{customer.email}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <Button size="sm" variant="outline" className="w-full text-xs" asChild>
+              <Link to={`/customers/${customer.id}`}>View Customer Profile</Link>
+            </Button>
+          </div>
+        </HoverCardContent>
+      </HoverCard>
+    );
+  };
+
   const columns = [
     { header: "Sale ID", accessor: "display_id" as const, className: "font-mono text-xs", hideOnMobile: true },
     { header: "Store", accessor: (row: any) => (
       <div className="flex items-center gap-2">
         <StoreIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-        <span>{row.stores?.name || "—"}</span>
+        <StoreHoverCard store={row.stores}>
+          <span>{row.stores?.name || "—"}</span>
+        </StoreHoverCard>
       </div>
     ), className: "font-medium" },
+    { header: "Customer", accessor: (row: any) => (
+      <div className="flex items-center gap-2">
+        <UserCircle className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        <CustomerHoverCard customer={row.customers}>
+          <span>{row.customers?.name || "—"}</span>
+        </CustomerHoverCard>
+      </div>
+    ), className: "text-sm hidden md:table-cell" },
     { header: "Total", accessor: (row: any) => <span className="font-semibold">₹{Number(row.total_amount).toLocaleString()}</span> },
     { header: "Cash", accessor: (row: any) => `₹${Number(row.cash_amount).toLocaleString()}`, className: "text-sm hidden lg:table-cell" },
     { header: "UPI", accessor: (row: any) => `₹${Number(row.upi_amount).toLocaleString()}`, className: "text-sm hidden lg:table-cell" },
@@ -696,33 +915,81 @@ const Sales = () => {
     { header: "Date", accessor: (row: any) => (
       <span className="text-xs text-muted-foreground">{format(new Date(row.created_at), "dd MMM yy, hh:mm a")}</span>
     ), className: "hidden sm:table-cell" },
-    { header: "Actions", accessor: (row: any) => (
+  { header: "Actions", accessor: (row: any) => (
+    <TooltipProvider>
       <div className="flex items-center gap-1">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7"
-          onClick={(e) => { e.stopPropagation(); setReceiptSaleId(row.id); }}
-          title="View Receipt"
-        >
-          <Receipt className="h-3.5 w-3.5" />
-        </Button>
-        {isAdmin && !row.has_invoice && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={(e) => { e.stopPropagation(); navigate("/invoices/new", { state: { saleIds: [row.id] } }); }}
-            title="Generate Invoice"
-          >
-            <FileText className="h-3.5 w-3.5" />
-          </Button>
-        )}
-        {row.has_invoice && (
-          <Badge variant="outline" className="text-[10px] px-1.5">Invoiced</Badge>
+        {/* View Receipt */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-primary hover:bg-primary/10"
+              onClick={(e) => { e.stopPropagation(); setReceiptSaleId(row.id); }}
+            >
+              <Receipt className="h-3.5 w-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>View Receipt</p>
+          </TooltipContent>
+        </Tooltip>
+
+              {/* Invoice Button - Blue if no invoice, Green if has invoice */}
+              {isAdmin && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    {row.invoice_sales?.length > 0 ? (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-green-600 hover:bg-green-50 hover:text-green-700"
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          const invoiceId = row.invoice_sales[0]?.invoice_id;
+                          if (invoiceId) navigate(`/invoices/${invoiceId}`);
+                        }}
+                      >
+                        <FileText className="h-3.5 w-3.5" />
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                        onClick={(e) => { e.stopPropagation(); navigate("/invoices/new", { state: { saleIds: [row.id] } }); }}
+                      >
+                        <FileText className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{row.invoice_sales?.length > 0 ? "View Invoice" : "Generate Invoice"}</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+
+        {/* View Associated Order - if sale was created from order fulfillment */}
+        {row.fulfilled_order_id && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                onClick={(e) => { e.stopPropagation(); navigate(`/orders?highlight=${row.fulfilled_order_id}`); }}
+              >
+                <ClipboardList className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>View Source Order</p>
+            </TooltipContent>
+          </Tooltip>
         )}
       </div>
-    ), className: "hidden sm:table-cell" },
+    </TooltipProvider>
+  ), className: "hidden sm:table-cell" },
   ];
 
   if (isLoading) {
@@ -848,39 +1115,102 @@ const Sales = () => {
         searchPlaceholder="Search by sale ID..."
         emptyMessage="No sales recorded yet."
         onRowClick={(row: any) => setSelectedSaleId(row.id)}
-        renderMobileCard={(row: any) => (
-          <div className="rounded-lg border bg-card p-3 cursor-pointer active:bg-muted/30" onClick={() => setSelectedSaleId(row.id)}>
-            {/* Header row: ID + Date */}
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="font-mono text-xs text-primary font-medium">{row.display_id}</span>
-              <span className="text-[10px] text-muted-foreground">{format(new Date(row.created_at), "dd MMM yy, hh:mm a")}</span>
-            </div>
-            {/* Store name */}
-            <div className="flex items-center gap-1.5 mb-2">
-              <StoreIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-              <span className="font-medium text-sm truncate">{row.stores?.name || "—"}</span>
-            </div>
-            {/* Amounts row - inline compact */}
-            <div className="flex items-center gap-3 text-xs">
-              <span className="font-bold text-foreground">₹{Number(row.total_amount).toLocaleString()}</span>
-              <span className="text-muted-foreground">Cash: ₹{Number(row.cash_amount).toLocaleString()}</span>
-              <span className="text-muted-foreground">UPI: ₹{Number(row.upi_amount).toLocaleString()}</span>
-            </div>
-            {/* Footer: Recorder + Outstanding */}
-            <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
-              <div className="flex items-center gap-1.5">
-                <Avatar className="h-4 w-4">
-                  <AvatarImage src={getRecorderAvatar(row.recorded_by) || undefined} />
-                  <AvatarFallback className="text-[8px] bg-primary/10 text-primary">{getRecorderName(row.recorded_by).charAt(0)}</AvatarFallback>
-                </Avatar>
-                <span className="text-[10px] text-muted-foreground truncate max-w-[100px]">{getRecorderName(row.recorded_by)}</span>
-              </div>
-              {Number(row.outstanding_amount) > 0 && (
-                <span className="text-xs font-semibold text-destructive">Due: ₹{Number(row.outstanding_amount).toLocaleString()}</span>
+      renderMobileCard={(row: any) => (
+        <div className="rounded-lg border bg-card p-3">
+          {/* Header row: ID + Date + Actions */}
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="font-mono text-xs text-primary font-medium">{row.display_id}</span>
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] text-muted-foreground mr-1">{format(new Date(row.created_at), "dd MMM yy")}</span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 text-primary hover:bg-primary/10"
+                onClick={(e) => { e.stopPropagation(); setReceiptSaleId(row.id); }}
+                title="View Receipt"
+              >
+                <Receipt className="h-3 w-3" />
+              </Button>
+              {isAdmin && (
+                row.invoice_sales?.length > 0 ? (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-green-600 hover:bg-green-50 hover:text-green-700"
+                    onClick={(e) => { 
+                      e.stopPropagation(); 
+                      const invoiceId = row.invoice_sales[0]?.invoice_id;
+                      if (invoiceId) navigate(`/invoices/${invoiceId}`);
+                    }}
+                    title="View Invoice"
+                  >
+                    <FileText className="h-3 w-3" />
+                  </Button>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                    onClick={(e) => { e.stopPropagation(); navigate("/invoices/new", { state: { saleIds: [row.id] } }); }}
+                    title="Generate Invoice"
+                  >
+                    <FileText className="h-3 w-3" />
+                  </Button>
+                )
               )}
-            </div>
+{row.fulfilled_order_id && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+              onClick={(e) => { e.stopPropagation(); navigate(`/orders?highlight=${row.fulfilled_order_id}`); }}
+              title="View Source Order"
+            >
+              <ClipboardList className="h-3 w-3" />
+            </Button>
+          )}
+        </div>
+      </div>
+      {/* Store name - clickable with hover */}
+      <div className="flex items-center gap-1.5 mb-2">
+        <StoreIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        <StoreHoverCard store={row.stores}>
+          <span className="font-medium text-sm truncate cursor-pointer hover:underline">{row.stores?.name || "—"}</span>
+        </StoreHoverCard>
+      </div>
+      {/* Customer name - clickable with hover */}
+      {row.customers?.name && (
+        <div className="flex items-center gap-1.5 mb-2">
+          <UserCircle className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          <CustomerHoverCard customer={row.customers}>
+            <span className="text-sm text-muted-foreground truncate cursor-pointer hover:underline">{row.customers.name}</span>
+          </CustomerHoverCard>
+        </div>
+      )}
+          {/* Amounts row - inline compact */}
+          <div className="flex items-center gap-3 text-xs cursor-pointer" onClick={() => setSelectedSaleId(row.id)}>
+            <span className="font-bold text-foreground">₹{Number(row.total_amount).toLocaleString()}</span>
+            <span className="text-muted-foreground">Cash: ₹{Number(row.cash_amount).toLocaleString()}</span>
+            <span className="text-muted-foreground">UPI: ₹{Number(row.upi_amount).toLocaleString()}</span>
           </div>
-        )}
+          {/* Footer: Recorder + Outstanding - clickable */}
+          <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50 cursor-pointer" onClick={() => setSelectedSaleId(row.id)}>
+            <div className="flex items-center gap-1.5">
+              <Avatar className="h-4 w-4">
+                <AvatarImage src={getRecorderAvatar(row.recorded_by) || undefined} />
+                <AvatarFallback className="text-[8px] bg-primary/10 text-primary">{getRecorderName(row.recorded_by).charAt(0)}</AvatarFallback>
+              </Avatar>
+              <span className="text-[10px] text-muted-foreground truncate max-w-[100px]">{getRecorderName(row.recorded_by)}</span>
+            </div>
+            {Number(row.outstanding_amount) > 0 && (
+              <span className="text-xs font-semibold text-destructive">Due: ₹{Number(row.outstanding_amount).toLocaleString()}</span>
+            )}
+              {row.invoice_sales?.length > 0 && (
+                <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-green-500 text-green-600">Invoiced</Badge>
+              )}
+          </div>
+        </div>
+      )}
       />
 
       {hasMoreSales && (
@@ -956,19 +1286,31 @@ const Sales = () => {
             </div>
           )}
           
+          {/* Source Order Link - if sale was created from order fulfillment */}
+          {(selectedSale as any).fulfilled_order_id && (
+            <div className="pt-2 border-t">
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => navigate(`/orders?highlight=${(selectedSale as any).fulfilled_order_id}`)}
+              >
+                <ClipboardList className="mr-2 h-4 w-4" /> View Source Order
+              </Button>
+            </div>
+          )}
+
           {/* Return Button - NEW */}
           {selectedSale && isAdmin && (
-            <div className="pt-4 border-t">
-              <Button 
-                variant="outline" 
+            <div className="pt-2 border-t">
+              <Button
+                variant="outline"
                 className="w-full"
                 onClick={() => {
                   setReturnSale(selectedSale);
                   setSelectedSaleId(null);
                 }}
               >
-                <RotateCcw className="mr-2 h-4 w-4" />
-                Process Return
+                <RotateCcw className="mr-2 h-4 w-4" /> Process Return
               </Button>
             </div>
           )}
@@ -982,7 +1324,10 @@ const Sales = () => {
     open={!!returnSale}
     onOpenChange={(v) => { if (!v) setReturnSale(null); }}
     sale={returnSale}
-    onSuccess={() => qc.invalidateQueries({ queryKey: ['sales'] })}
+    onSuccess={() => {
+      qc.invalidateQueries({ queryKey: ['sales'] });
+      qc.invalidateQueries({ queryKey: ['stores'] });
+    }}
   />
 
       {/* Record Sale Dialog */}
@@ -1103,65 +1448,194 @@ const Sales = () => {
               </div>
             )}
 
-            {storeId && (
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <Label>Products</Label>
-                  <Button type="button" variant="outline" size="sm" onClick={addItem}><Plus className="h-3 w-3 mr-1" />Add</Button>
-                </div>
-                {(!availableProducts || availableProducts.length === 0) && (
-                  <p className="text-xs text-muted-foreground py-2">No products available for this store type. Configure the product access matrix first.</p>
-                )}
-                <div className="space-y-2">
-                  {items.map((item, idx) => (
-                    <div key={idx} className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <Select value={item.product_id} onValueChange={(v) => updateItem(idx, "product_id", v)}>
-                          <SelectTrigger className="flex-1"><SelectValue placeholder="Product" /></SelectTrigger>
-                          <SelectContent>
-                            {availableProducts?.map((p: any) => (
-                              <SelectItem key={p.id} value={p.id}>{p.name} ({p.sku})</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <Input type="number" min={1} value={item.quantity} onChange={(e) => updateItem(idx, "quantity", Number(e.target.value))} className="w-16" placeholder="Qty" />
-                        <Input type="number" value={item.unit_price} onChange={(e) => updateItem(idx, "unit_price", Number(e.target.value))} className={`w-24 ${!canOverridePrice ? "bg-muted cursor-not-allowed" : ""}`} placeholder="Price" readOnly={!canOverridePrice} title={!canOverridePrice ? "Price override not allowed" : undefined} />
-                        {items.length > 1 && (
-                          <Button type="button" variant="ghost" size="icon" onClick={() => removeItem(idx)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                        )}
-                      </div>
-                      {item.product_id && availableProducts && (
-                        <p className="text-[11px] text-muted-foreground pl-1">
-                          {(() => {
-                            const p = availableProducts.find((pr: any) => pr.id === item.product_id);
-                            return p ? `₹${p.effectivePrice.toLocaleString()} ${getPriceLabel(p)}` : "";
-                          })()}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
+{storeId && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-base font-semibold">Products</Label>
+              <div className="flex items-center gap-2">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={addItem}
+                  className="text-xs"
+                >
+                  <Plus className="h-3 w-3 mr-1" />Add Other Product
+                </Button>
+              </div>
+            </div>
+            
+            {/* Loading state */}
+            {!storeProducts && storeId && (
+              <div className="text-center py-4">
+                <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
+                <p className="text-xs text-muted-foreground mt-1">Loading products...</p>
               </div>
             )}
+
+            {/* Empty state */}
+            {storeProducts && storeProducts.length === 0 && (
+              <div className="text-center py-4 border border-dashed rounded-lg">
+                <p className="text-sm text-muted-foreground">No products configured for this store type</p>
+                <p className="text-xs text-muted-foreground">Use "Add Other Product" to add items</p>
+              </div>
+            )}
+
+            {/* Products list - Auto-loaded with quantity inputs */}
+            {items.length > 0 && (
+              <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                {items.map((item, idx) => {
+                  const product = item.product_id ? allProducts?.find((p: any) => p.id === item.product_id) : null;
+                  return (
+                    <div key={idx} className="flex items-center gap-3 p-2 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
+                      {/* Product Image/Icon */}
+                      <div className="w-10 h-10 rounded-md bg-muted flex items-center justify-center shrink-0 overflow-hidden">
+                        {product?.image_url ? (
+                          <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <Package className="h-5 w-5 text-muted-foreground" />
+                        )}
+                      </div>
+                      
+                      {/* Product Info */}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">{product?.name || item.product_name || "Select Product"}</p>
+                        <p className="text-xs text-muted-foreground">
+                          ₹{item.unit_price.toLocaleString()} × {item.quantity} = ₹{(item.quantity * item.unit_price).toLocaleString()}
+                        </p>
+                      </div>
+                      
+                      {/* Quantity Controls */}
+                      <div className="flex items-center gap-1">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => updateItem(idx, "quantity", Math.max(0, item.quantity - 1))}
+                        >
+                          <Minus className="h-3 w-3" />
+                        </Button>
+                        <Input 
+                          type="number" 
+                          min={0} 
+                          value={item.quantity} 
+                          onChange={(e) => updateItem(idx, "quantity", Math.max(0, Number(e.target.value) || 0))} 
+                          className="w-14 h-7 text-center text-sm px-1"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => updateItem(idx, "quantity", item.quantity + 1)}
+                        >
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      
+                      {/* Remove button for manually added items */}
+                      {(!product || !storeProducts?.some((sp: any) => sp.id === product.id)) && items.length > 1 && (
+                        <Button 
+                          type="button" 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-7 w-7"
+                          onClick={() => removeItem(idx)}
+                        >
+                          <X className="h-4 w-4 text-destructive" />
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Total summary */}
+            {totalAmount > 0 && (
+              <div className="flex justify-between items-center p-3 rounded-lg border bg-muted/50">
+                <span className="text-sm font-medium">Subtotal</span>
+                <span className="text-lg font-bold">₹{totalAmount.toLocaleString()}</span>
+              </div>
+            )}
+          </div>
+        )}
 
             <div className="rounded-lg border bg-muted/30 p-3 space-y-1 text-sm">
               <div className="flex justify-between"><span>Total</span><span className="font-semibold">₹{totalAmount.toLocaleString()}</span></div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div><Label>Cash (₹)</Label><Input type="number" value={cashAmount} onChange={(e) => setCashAmount(e.target.value)} className="mt-1" placeholder="0" /></div>
-              <div><Label>UPI (₹)</Label><Input type="number" value={upiAmount} onChange={(e) => setUpiAmount(e.target.value)} className="mt-1" placeholder="0" /></div>
-            </div>
+            <div className="space-y-3">
+              <Label className="text-base font-semibold flex items-center gap-2">
+                <Wallet className="h-4 w-4" />
+                Payment Details
+              </Label>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <Label className="text-sm text-muted-foreground flex items-center gap-1">
+                    <Banknote className="h-3 w-3" /> Cash
+                  </Label>
+                  <Input 
+                    type="number" 
+                    value={cashAmount} 
+                    onChange={(e) => setCashAmount(e.target.value)} 
+                    className="text-lg font-semibold" 
+                    placeholder="0" 
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-sm text-muted-foreground flex items-center gap-1">
+                    <QrCode className="h-3 w-3" /> UPI
+                  </Label>
+                  <Input 
+                    type="number" 
+                    value={upiAmount} 
+                    onChange={(e) => setUpiAmount(e.target.value)} 
+                    className="text-lg font-semibold" 
+                    placeholder="0" 
+                  />
+                </div>
+              </div>
 
-            <div className="rounded-lg border bg-muted/30 p-3 space-y-1 text-sm">
-              <div className="flex justify-between"><span>Payment</span><span>₹{(cash + upi).toLocaleString()}</span></div>
-              <div className="flex justify-between font-semibold"><span>New Outstanding</span><span className={newOutstanding > oldOutstanding ? "text-destructive" : "text-success"}>₹{newOutstanding.toLocaleString()}</span></div>
-              {creditLimitInfo && creditLimitInfo.limit > 0 && (
-                <div className="flex justify-between text-xs"><span>Credit Limit ({creditLimitInfo.source})</span><span>₹{creditLimitInfo.limit.toLocaleString()}</span></div>
-              )}
-              {isPosUser && (cash + upi) !== totalAmount && totalAmount > 0 && (
-                <p className="text-xs text-destructive mt-1">⚠ POS sales require full payment (Cash + UPI = Total)</p>
-              )}
+              {/* Payment Summary */}
+              <div className="rounded-lg border bg-muted/50 p-4 space-y-2">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span className="font-medium">₹{totalAmount.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-muted-foreground">Payment Received</span>
+                  <span className="font-medium text-green-600">₹{(cash + upi).toLocaleString()}</span>
+                </div>
+                {outstandingFromSale > 0 && (
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-muted-foreground">Outstanding from Sale</span>
+                    <span className="font-medium text-orange-600">+₹{outstandingFromSale.toLocaleString()}</span>
+                  </div>
+                )}
+                <div className="border-t pt-2 flex justify-between items-center">
+                  <span className="font-semibold">New Outstanding</span>
+                  <span className={`text-lg font-bold ${newOutstanding > 0 ? 'text-red-600' : newOutstanding < 0 ? 'text-green-600' : 'text-muted-foreground'}`}>
+                    ₹{newOutstanding.toLocaleString()}
+                  </span>
+                </div>
+                {creditLimitInfo && creditLimitInfo.limit > 0 && (
+                  <div className="flex justify-between text-xs pt-1">
+                    <span className="text-muted-foreground">Credit Limit ({creditLimitInfo.source})</span>
+                    <span className={newOutstanding > creditLimitInfo.limit ? 'text-red-600 font-medium' : 'text-muted-foreground'}>
+                      ₹{creditLimitInfo.limit.toLocaleString()}
+                    </span>
+                  </div>
+                )}
+                {isPosUser && (cash + upi) !== totalAmount && totalAmount > 0 && (
+                  <p className="text-xs text-destructive mt-2 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    POS sales require full payment
+                  </p>
+                )}
+              </div>
             </div>
 
             {creditExceeded && (
@@ -1201,6 +1675,39 @@ const Sales = () => {
           qc.invalidateQueries({ queryKey: ["pending-orders-for-store"] });
         }}
       />
+
+      {/* Add Product Dialog - for non-associated products */}
+      <Dialog open={showAddProductDialog} onOpenChange={setShowAddProductDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Add Product</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Select a product to add to this sale. This product is not normally associated with this store type.
+            </p>
+            <Select value={selectedProductToAdd} onValueChange={setSelectedProductToAdd}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select product" />
+              </SelectTrigger>
+              <SelectContent className="max-h-60">
+                {allProducts?.filter((p: any) => !items.some((i: any) => i.product_id === p.id)).map((p: any) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    <div className="flex items-center gap-2">
+                      <span>{p.name}</span>
+                      <span className="text-muted-foreground">- ₹{Number(p.base_price).toLocaleString()}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => setShowAddProductDialog(false)}>Cancel</Button>
+              <Button className="flex-1" disabled={!selectedProductToAdd} onClick={addProductToSale}>Add Product</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

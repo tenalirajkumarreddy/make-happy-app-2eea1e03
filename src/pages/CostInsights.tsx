@@ -126,10 +126,6 @@ export default function CostInsights() {
         .lte("created_at", dateRangeCalc.to.toISOString())
         .order("created_at", { ascending: true });
       
-      if (selectedWarehouse !== "all") {
-        query = query.eq("warehouse_id", selectedWarehouse);
-      }
-      
       const { data, error } = await query;
       if (error) throw error;
       return data || [];
@@ -140,19 +136,21 @@ export default function CostInsights() {
   const { data: bomSummary, isLoading: loadingBom } = useQuery({
     queryKey: ["bom_summary", selectedWarehouse],
     queryFn: async () => {
-      const warehouseFilter = selectedWarehouse !== "all" ? selectedWarehouse : null;
-      
       // Get all products with BOMs
       const { data: boms, error: bomError } = await supabase
         .from("bill_of_materials")
-        .select(`
-          finished_product_id,
-          raw_material:raw_materials!bill_of_materials_raw_material_id_fkey(unit_cost, name),
-          quantity
-        `)
+        .select("finished_product_id, raw_material_id, quantity")
         .eq("is_active", true);
       
       if (bomError) throw bomError;
+
+      const rawMaterialIds = [...new Set((boms || []).map((b: any) => b.raw_material_id).filter(Boolean))];
+      const { data: rawMaterials, error: rmError } = await supabase
+        .from("raw_materials")
+        .select("id, unit_cost, name")
+        .in("id", rawMaterialIds.length ? rawMaterialIds : ["00000000-0000-0000-0000-000000000000"]);
+      if (rmError) throw rmError;
+      const rawMaterialMap = new Map((rawMaterials || []).map((rm: any) => [rm.id, rm]));
       
       // Get product names
       const productIds = [...new Set(boms?.map(b => b.finished_product_id) || [])];
@@ -167,7 +165,8 @@ export default function CostInsights() {
       const summary = products?.map(product => {
         const productBoms = boms?.filter(b => b.finished_product_id === product.id) || [];
         const bomCost = productBoms.reduce((sum, b) => {
-          const cost = (b.quantity || 0) * (b.raw_material?.unit_cost || 0);
+          const raw = rawMaterialMap.get((b as any).raw_material_id);
+          const cost = (b.quantity || 0) * (raw?.unit_cost || 0);
           return sum + cost;
         }, 0);
         
