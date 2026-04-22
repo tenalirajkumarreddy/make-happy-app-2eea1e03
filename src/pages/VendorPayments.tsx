@@ -45,10 +45,6 @@ const VendorPayments = () => {
         .select("*, vendors(name, display_id)")
         .order("payment_date", { ascending: false });
 
-      if (currentWarehouse?.id) {
-        query = query.eq("warehouse_id", currentWarehouse.id);
-      }
-
       const { data, error } = await query;
       if (error) throw error;
       return data;
@@ -107,7 +103,6 @@ const VendorPayments = () => {
         .from("vendor_payments")
         .insert({
           display_id: idData,
-          warehouse_id: currentWarehouse?.id || null,
           vendor_id: vendorId,
           payment_date: paymentDate,
           amount: paymentAmount,

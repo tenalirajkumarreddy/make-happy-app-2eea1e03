@@ -19,6 +19,51 @@ const Logo = () => (
   </div>
 );
 
+const STEP_ORDER: Step[] = ["phone", "register", "add-store"];
+
+const STEP_LABELS: Record<Step, string> = {
+  phone: "Verify phone",
+  register: "Profile",
+  "add-store": "Store details",
+};
+
+function OnboardingProgress({ step }: { step: Step }) {
+  const activeIndex = STEP_ORDER.indexOf(step);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        {STEP_ORDER.map((item, index) => {
+          const isActive = index === activeIndex;
+          const isDone = index < activeIndex;
+
+          return (
+            <div key={item} className="flex flex-1 items-center gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold ${
+                  isDone
+                    ? "bg-primary text-primary-foreground"
+                    : isActive
+                    ? "border border-primary bg-primary/10 text-primary"
+                    : "border border-border bg-background text-muted-foreground"
+                }`}>
+                  {index + 1}
+                </div>
+                <span className={`text-xs font-medium ${isActive || isDone ? "text-foreground" : "text-muted-foreground"}`}>
+                  {STEP_LABELS[item]}
+                </span>
+              </div>
+              {index < STEP_ORDER.length - 1 && (
+                <div className={`h-px flex-1 ${index < activeIndex ? "bg-primary/60" : "bg-border"}`} />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 
 async function hasStaffOrCustomerAccess(userId: string): Promise<boolean> {
   const [{ data: roleData }, { data: customerData }] = await Promise.all([
@@ -374,10 +419,11 @@ const Auth = () => {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-center space-y-4">
-          <Logo />
+            <Logo />
           <div className="flex flex-col items-center gap-3">
             <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
-            <p className="text-sm font-medium animate-pulse">Buffering...</p>
+            <p className="text-sm font-medium animate-pulse">Checking your account...</p>
+            <p className="text-xs text-muted-foreground">This usually takes a moment.</p>
           </div>
         </div>
       </div>
@@ -392,8 +438,9 @@ const Auth = () => {
           <div className="text-center">
             <Logo />
             <h1 className="text-2xl font-bold tracking-tight">Create Your Account</h1>
-            <p className="text-sm text-muted-foreground mt-1">Phone verified: {verifiedPhone}</p>
+            <p className="text-sm text-muted-foreground mt-1">Phone verified. Next, tell us who you are.</p>
           </div>
+          <OnboardingProgress step="register" />
           <div className="rounded-xl border bg-card p-6 shadow-sm">
             <form onSubmit={handleRegister} className="space-y-4">
               <div>
@@ -422,8 +469,9 @@ const Auth = () => {
           <div className="text-center">
             <Logo />
             <h1 className="text-2xl font-bold tracking-tight">Add Your Store</h1>
-            <p className="text-sm text-muted-foreground mt-1">Tell us about your business location</p>
+            <p className="text-sm text-muted-foreground mt-1">One last step. Tell us about your business location.</p>
           </div>
+          <OnboardingProgress step="add-store" />
           <div className="rounded-xl border bg-card p-6 shadow-sm">
             <form onSubmit={handleAddStore} className="space-y-4">
               <div>
@@ -492,9 +540,10 @@ const Auth = () => {
           <Logo />
           <h1 className="text-2xl font-bold tracking-tight">Aqua Prime</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Login with your phone number
+            Sign in with your phone number to access your account
           </p>
         </div>
+        <OnboardingProgress step="phone" />
 
         <div className="rounded-xl border bg-card p-6 shadow-sm space-y-4">
           {/* Phone OTP Login — Primary */}
@@ -513,7 +562,7 @@ const Auth = () => {
                   required
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  Enter with country code (e.g., +91 for India) or 10-digit number
+                  Enter with country code (e.g., +91) or a 10-digit mobile number
                 </p>
               </div>
               <Button type="submit" className="w-full" disabled={loading}>

@@ -1,17 +1,9 @@
 {
-  "permissions": {
-    "allow": [
-      "Bash(npm run:*)",
-      "Bash(npm install:*)",
-      "Bash(chmod:*)",
-      "Bash(./node_modules/.bin/vite build:*)",
-      "Bash(npx vite:*)",
-      "Bash(npm cache:*)",
-      "Bash(node node_modules/vite/bin/vite.js build)"
-    ]
-  },
-  "enableAllProjectMcpServers": true,
-  "enabledMcpjsonServers": [
-    "code-review-graph"
-  ]
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://localhost:8082",
+    "ANTHROPIC_AUTH_TOKEN": "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",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "nvidia/llama-3.1-nemotron-70b-instruct",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "nvidia/llama-3.1-nemotron-70b-instruct",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "nvidia/llama-3.1-nemotron-70b-instruct"
+  }
 }

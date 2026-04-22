@@ -1,0 +1,1935 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aqua Prime - Business Flow Charts</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            line-height: 1.6;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            padding: 2rem;
+            border-bottom: 1px solid #334155;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .header h1 {
+            font-size: 2rem;
+            background: linear-gradient(135deg, #60a5fa 0%, #a855f7 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+        
+        .header p {
+            color: #94a3b8;
+            font-size: 0.9rem;
+        }
+        
+        .nav {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+            flex-wrap: wrap;
+        }
+        
+        .nav-btn {
+            padding: 0.5rem 1rem;
+            background: #1e293b;
+            border: 1px solid #475569;
+            border-radius: 0.5rem;
+            color: #94a3b8;
+            text-decoration: none;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        
+        .nav-btn:hover, .nav-btn.active {
+            background: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .section {
+            background: #1e293b;
+            border-radius: 1rem;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            border: 1px solid #334155;
+        }
+        
+        .section-title {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: #60a5fa;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .section-subtitle {
+            font-size: 1.1rem;
+            margin: 1.5rem 0 0.75rem;
+            color: #a78bfa;
+        }
+        
+        .info-box {
+            background: rgba(59, 130, 246, 0.1);
+            border-left: 4px solid #3b82f6;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 0 0.5rem 0.5rem 0;
+        }
+        
+        .warning-box {
+            background: rgba(234, 179, 8, 0.1);
+            border-left: 4px solid #eab308;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 0 0.5rem 0.5rem 0;
+        }
+        
+        .success-box {
+            background: rgba(34, 197, 94, 0.1);
+            border-left: 4px solid #22c55e;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 0 0.5rem 0.5rem 0;
+        }
+        
+        .mermaid {
+            background: #0f172a;
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+            margin: 1.5rem 0;
+            overflow-x: auto;
+        }
+        
+        .table-container {
+            overflow-x: auto;
+            margin: 1rem 0;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+        
+        th, td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid #334155;
+        }
+        
+        th {
+            background: #0f172a;
+            color: #60a5fa;
+            font-weight: 600;
+        }
+        
+        tr:hover {
+            background: rgba(59, 130, 246, 0.05);
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
+        .badge-draft { background: #6b7280; color: white; }
+        .badge-issued { background: #3b82f6; color: white; }
+        .badge-paid { background: #22c55e; color: white; }
+        .badge-cancelled { background: #ef4444; color: white; }
+        .badge-pending { background: #f59e0b; color: white; }
+        .badge-delivered { background: #10b981; color: white; }
+        
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin: 1rem 0;
+            padding: 1rem;
+            background: #0f172a;
+            border-radius: 0.5rem;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+        }
+        
+        .legend-color {
+            width: 1rem;
+            height: 1rem;
+            border-radius: 0.25rem;
+        }
+        
+        code {
+            background: #0f172a;
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            color: #a78bfa;
+        }
+        
+        .updated {
+            text-align: right;
+            color: #64748b;
+            font-size: 0.8rem;
+            margin-top: 2rem;
+            padding-top: 1rem;
+            border-top: 1px solid #334155;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+<h1>🏢 Aqua Prime - Business Flow Charts</h1>
+  <p>Complete documentation of Orders, Sales, Invoices, Transactions, and Receipts flow</p>
+<nav class="nav">
+      <a href="#overview" class="nav-btn active">Overview</a>
+      <a href="#orders" class="nav-btn">Orders</a>
+      <a href="#sales" class="nav-btn">Sales</a>
+      <a href="#invoices" class="nav-btn">Invoices</a>
+      <a href="#transactions" class="nav-btn">💳 Transactions</a>
+      <a href="#handovers" class="nav-btn">💰 Handovers</a>
+      <a href="#reversals" class="nav-btn">↩️ Reversals</a>
+      <a href="#permissions" class="nav-btn">Permissions</a>
+    </nav>
+</header>
+
+    <div class="container">
+        <!-- OVERVIEW SECTION -->
+        <section id="overview" class="section">
+            <h2 class="section-title">📊 System Overview</h2>
+            
+            <div class="info-box">
+                <strong>Key Principle:</strong> Orders and Sales are the two main entry points. 
+                Orders are pre-delivery commitments, Sales are recorded transactions. 
+                Invoices can be generated from either, and Receipts record payments.
+            </div>
+
+            <div class="mermaid">
+graph TB
+    subgraph "Entry Points"
+        O[Order<br/>Pre-delivery commitment]
+        S[Sale<br/>Recorded transaction]
+    end
+    
+    subgraph "Documents"
+        I[Invoice<br/>Payment request]
+        R[Receipt<br/>Payment proof]
+    end
+    
+    subgraph "Financial Records"
+        T[Transaction<br/>Payment record]
+        B[Balance Update<br/>Store/Customer]
+    end
+    
+    O -->|Can generate| I
+    S -->|Can generate| I
+    I -->|Paid with| R
+    S -->|Creates| T
+    T -->|Updates| B
+    I -.->|Optional| T
+            </div>
+
+            <h3 class="section-subtitle">Entity Relationships</h3>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Entity</th>
+                            <th>Purpose</th>
+                            <th>Linked To</th>
+                            <th>Status Flow</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Order</strong></td>
+                            <td>Customer requests products</td>
+                            <td>Store, Customer, Order Items</td>
+                            <td>pending → confirmed → delivered/cancelled</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Sale</strong></td>
+                            <td>Recorded transaction</td>
+                            <td>Store, Sale Items, Transaction</td>
+                            <td>recorded → payment recorded</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Invoice</strong></td>
+                            <td>Payment request document</td>
+                            <td>Order or Sale, Invoice Items</td>
+                            <td>draft → issued → paid/cancelled</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Transaction</strong></td>
+                            <td>Payment record</td>
+                            <td>Sale, Store, Customer</td>
+                            <td>recorded → reconciled</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- ORDERS SECTION -->
+        <section id="orders" class="section">
+            <h2 class="section-title">📦 Orders Flow</h2>
+            
+            <div class="mermaid">
+flowchart LR
+    subgraph "Order Creation"
+        OC[Admin/Manager/<br/>Marketer creates]
+        OD[Simple Order<br/>Note only]
+        OE[Detailed Order<br/>Products + Qty]
+    end
+    
+    subgraph "Order Status"
+        P[<span class='badge-pending'>PENDING</span>]
+        C[<span class='badge-issued'>CONFIRMED</span>]
+        D[<span class='badge-delivered'>DELIVERED</span>]
+        X[<span class='badge-cancelled'>CANCELLED</span>]
+    end
+    
+  subgraph "Post-Delivery (Auto)"
+    S[<strong>Sale Auto-Created</strong><br/>Stock deducted, Balance updated]
+  end
+  
+  subgraph "Optional (Manual)"
+    I[Invoice Generated?<br/>User decides]
+  end
+
+  OC --> OD
+  OC --> OE
+  OD --> P
+  OE --> P
+  P --> C
+  C --> D
+  D --> S
+  D -.->|Optional| I
+  P --> X
+  C --> X
+            </div>
+
+            <h3 class="section-subtitle">Order Lifecycle</h3>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Status</th>
+                            <th>Description</th>
+                            <th>Actions Allowed</th>
+                            <th>Invoice Type</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="badge badge-pending">PENDING</span></td>
+                            <td>Order created, waiting to be fulfilled</td>
+                            <td>Edit, Cancel, Assign to Agent, Generate Proforma</td>
+                            <td>Proforma Invoice</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge badge-issued">CONFIRMED</span></td>
+                            <td>Order confirmed, preparing for delivery</td>
+                            <td>Edit, Cancel, Generate Proforma</td>
+                            <td>Proforma Invoice</td>
+                        </tr>
+        <tr>
+          <td><span class="badge badge-delivered">DELIVERED</span></td>
+          <td>Products delivered to customer</td>
+          <td><strong>View only</strong> - CANNOT Edit or Cancel (Sale exists)</td>
+          <td>Tax Invoice (optional)</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-cancelled">CANCELLED</span></td>
+          <td>Order cancelled (only from Pending/Confirmed)</td>
+          <td>View only, Generate Credit Note if needed</td>
+          <td>Credit Note</td>
+        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+<div class="info-box">
+  <strong>Key Rule - Sale vs Invoice:</strong><br/>
+  ✅ <strong>Sale:</strong> Auto-created when order is fulfilled (stock deducted, balance updated)<br/>
+  📝 <strong>Invoice:</strong> Optional - user decides whether to generate or not<br/>
+  📄 If invoice IS generated, it links to the Sale (not the Order)<br/>
+  💰 Payment is recorded against the Sale, invoice is just a document
+</div>
+
+<div class="warning-box">
+  <strong>⚠️ CRITICAL: Delivered Orders CANNOT Be Cancelled!</strong>
+  <p style="margin-top: 0.5rem;">Once an order is marked <strong>DELIVERED</strong>:</p>
+  <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+    <li>✅ Sale is <strong>auto-created</strong> (stock deducted, balance updated)</li>
+    <li>❌ <strong>CANNOT use "Cancel"</strong> - Cancel only works for Pending/Confirmed orders</li>
+    <li>↩️ Must use <strong>Sale Return</strong> to reverse the transaction</li>
+    <li>📦 Sale Return will: Add stock back, clear outstanding, create audit trail</li>
+  </ul>
+  <p style="margin-top: 0.5rem;"><strong>Why?</strong> Because the Sale has already affected inventory and financial records. A simple "cancel" would leave orphaned data. Sale Return properly reverses everything.</p>
+</div>
+
+<div class="success-box">
+  <strong>✅ Correct Actions by Status:</strong>
+  <table style="width: 100%; margin-top: 0.5rem;">
+    <thead>
+      <tr style="text-align: left;">
+        <th>Status</th>
+        <th>Can Cancel?</th>
+        <th>Need to Reverse?</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="badge badge-pending">PENDING</span></td>
+        <td>✅ Yes</td>
+        <td>❌ No</td>
+        <td>Cancel Order</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-issued">CONFIRMED</span></td>
+        <td>✅ Yes</td>
+        <td>❌ No</td>
+        <td>Cancel Order</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-delivered">DELIVERED</span></td>
+        <td>❌ NO</td>
+        <td>✅ Yes</td>
+        <td><strong>Sale Return</strong></td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-cancelled">CANCELLED</span></td>
+        <td>—</td>
+        <td>—</td>
+        <td>View only</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="success-box">
+  <strong>Best Practice:</strong>
+  <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+    <li><strong>Always:</strong> Order → Fulfill → Sale created (automatic)</li>
+    <li><strong>Optional:</strong> Generate Tax Invoice if customer needs a bill</li>
+    <li><strong>Proforma:</strong> Generate before delivery only if customer requests a quote</li>
+  </ul>
+</div>
+        </section>
+
+        <!-- INVOICES SECTION -->
+        <section id="invoices" class="section">
+            <h2 class="section-title">📄 Invoices Flow</h2>
+            
+            <div class="mermaid">
+flowchart TB
+    subgraph "Invoice Types"
+        PI[<span style='fill:#60a5fa'>PROFORMA</span><br/>Pre-delivery quote]
+        TI[<span style='fill:#22c55e'>TAX INVOICE</span><br/>Final bill after delivery]
+        CN[<span style='fill:#ef4444'>CREDIT NOTE</span><br/>Refund/Adjustment]
+    end
+    
+    subgraph "Proforma Flow"
+        PC[Create from Order]
+        PI2[Proforma Invoice]
+        PI3[Issue to Customer]
+        PCO{Order<br/>Delivered?}
+        CT[Convert to<br/>Tax Invoice]
+    end
+    
+    subgraph "Tax Invoice Flow"
+        TC[Create from<br/>Order or Sale]
+        TI2[Tax Invoice]
+        TI3[Issue to Customer]
+        TP{Payment<br/>Received?}
+        TR[Mark as Paid]
+        TREC[Generate<br/>Receipt]
+    end
+    
+    subgraph "Credit Note Flow"
+        CC[Create from<br/>Cancelled Order/Return]
+        CN2[Credit Note]
+        CN3[Adjust Balance]
+    end
+    
+    PI --> PC
+    PC --> PI2
+    PI2 --> PI3
+    PI3 --> PCO
+    PCO -->|Yes| CT
+    PCO -->|No| PI2
+    
+    TI --> TC
+    TC --> TI2
+    TI2 --> TI3
+    TI3 --> TP
+    TP -->|Yes| TR
+    TR --> TREC
+    
+    CN --> CC
+    CC --> CN2
+    CN2 --> CN3
+            </div>
+
+            <h3 class="section-subtitle">Invoice Status Flow</h3>
+            <div class="mermaid">
+stateDiagram-v2
+    [*] --> Draft: Create
+    Draft --> Issued: Issue to Customer
+    Issued --> Paid: Payment Received
+    Issued --> Overdue: Past Due Date
+    Overdue --> Paid: Payment Received
+    Paid --> [*]
+    
+    Draft --> Cancelled: Cancel
+    Issued --> Cancelled: Cancel
+    Cancelled --> [*]
+    
+    Draft --> Deleted: Soft Delete
+            </div>
+
+            <h3 class="section-subtitle">Invoice Conversion Logic</h3>
+            <div class="warning-box">
+                <strong>Proforma → Tax Invoice Conversion:</strong>
+                <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+                    <li>When an order is delivered, the proforma invoice is NOT automatically converted</li>
+                    <li>User manually creates a Tax Invoice from the delivered order</li>
+                    <li>Proforma remains as historical reference (audit trail)</li>
+                    <li>Tax Invoice becomes the official document for payment</li>
+                    <li>Both invoices linked to the same order via <code>order_ref</code></li>
+                </ul>
+            </div>
+
+            <div class="success-box">
+                <strong>Best Practice:</strong>
+                <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+                    <li>Generate Proforma at Pending/Confirmed status (for customer approval)</li>
+                    <li>Generate Tax Invoice at Delivered status (for payment)</li>
+                    <li>Keep separate IDs for audit purposes</li>
+                    <li>Link both to same order for traceability</li>
+                </ul>
+            </div>
+
+            <h3 class="section-subtitle">Invoice Permissions</h3>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Action</th>
+                            <th>Admin/Manager</th>
+                            <th>Marketer</th>
+                            <th>Agent</th>
+                            <th>POS</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Create Invoice</td>
+                            <td>✅ Yes</td>
+                            <td>✅ Yes (their stores)</td>
+                            <td>❌ No</td>
+                            <td>❌ No</td>
+                        </tr>
+                        <tr>
+                            <td>View Invoice</td>
+                            <td>✅ All</td>
+                            <td>✅ Their stores</td>
+                            <td>✅ Assigned orders</td>
+                            <td>✅ Counter sales</td>
+                        </tr>
+                        <tr>
+                            <td>Edit Invoice</td>
+                            <td>✅ Draft only</td>
+                            <td>✅ Draft only</td>
+                            <td>❌ No</td>
+                            <td>❌ No</td>
+                        </tr>
+                        <tr>
+                            <td>Cancel Invoice</td>
+                            <td>✅ Yes</td>
+                            <td>❌ No</td>
+                            <td>❌ No</td>
+                            <td>❌ No</td>
+                        </tr>
+                        <tr>
+                            <td>Print/Download</td>
+                            <td>✅ Yes</td>
+                            <td>✅ Yes</td>
+                            <td>✅ Yes</td>
+                            <td>✅ Yes</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- SALES SECTION -->
+        <section id="sales" class="section">
+            <h2 class="section-title">💰 Sales Flow</h2>
+            
+            <div class="mermaid">
+flowchart TB
+    subgraph "Sale Entry Points"
+        SO[From Order<br/>Delivery completion]
+        SD[Direct Sale<br/>POS Counter]
+        SA[Agent Sale<br/>On-route recording]
+    end
+    
+    subgraph "Sale Recording"
+        SR[Sale Recorded]
+        SI[Sale Items Created]
+        ST[Stock Reduced]
+    end
+    
+    subgraph "Payment Recording"
+        PR[Transaction Created]
+        PT[Payment Type:<br/>Cash/UPI/Credit]
+        PB[Balance Updated]
+    end
+    
+    subgraph "Documents"
+        INV[Invoice Optional]
+        REC[Receipt Generated]
+    end
+    
+    SO --> SR
+    SD --> SR
+    SA --> SR
+    
+    SR --> SI
+    SI --> ST
+    SR --> PR
+    PR --> PT
+    PR --> PB
+    
+    SR -.->|Optional| INV
+    PR --> REC
+            </div>
+
+            <h3 class="section-subtitle">Sale vs Order Relationship</h3>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Aspect</th>
+                            <th>Order</th>
+                            <th>Sale</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Purpose</strong></td>
+                            <td>Customer requests products</td>
+                            <td>Records actual transaction</td>
+                        </tr>
+                        <tr>
+                            <td><strong>When Created</strong></td>
+                            <td>Before delivery</td>
+                            <td>At/After delivery</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Stock Impact</strong></td>
+                            <td>No (reservation optional)</td>
+                            <td>Yes (reduces stock)</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Invoice Link</strong></td>
+                            <td>Can have multiple invoices</td>
+                            <td>Usually one invoice</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Payment</strong></td>
+                            <td>Not immediate</td>
+                            <td>Immediate or credit</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+<div class="info-box">
+  <strong>Order-to-Sale Conversion (Auto):</strong>
+  When an order is delivered:
+  <ol style="margin-left: 1.5rem; margin-top: 0.5rem;">
+    <li>Order status changes to DELIVERED</li>
+    <li><strong>Sale is AUTO-CREATED</strong> (mandatory)</li>
+    <li>Sale_items are created from order_items</li>
+    <li>Stock is reduced automatically</li>
+    <li>Balance is updated (outstanding added)</li>
+    <li><strong>Invoice is OPTIONAL</strong> - user decides to generate or not</li>
+    <li>If invoice IS generated, it links to the Sale record</li>
+  </ol>
+</div>
+
+<div class="warning-box">
+  <strong>Important Distinction:</strong>
+  <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+    <li><strong>Sale:</strong> Auto-created on fulfillment (records the transaction)</li>
+    <li><strong>Invoice:</strong> Optional document (for customer billing/records)</li>
+    <li><strong>Payment:</strong> Recorded against Sale, NOT against Invoice</li>
+    <li><strong>Outstanding:</strong> Calculated from Sales, not Invoices</li>
+  </ul>
+</div>
+        </section>
+
+        <!-- PERMISSIONS SECTION -->
+        <section id="permissions" class="section">
+            <h2 class="section-title">🔐 Role-Based Access Matrix</h2>
+            
+            <div class="mermaid">
+flowchart TB
+    subgraph "Super Admin / Manager"
+        SA[Full Access<br/>All CRUD Operations]
+        SA --> SA1[All Orders]
+        SA --> SA2[All Sales]
+        SA --> SA3[All Invoices]
+        SA --> SA4[Manage Permissions]
+    end
+    
+    subgraph "Marketer"
+        MK[Limited Access<br/>Store-specific]
+        MK --> MK1[Orders for their stores]
+        MK --> MK2[Create Orders]
+        MK --> MK3[Create Invoices]
+        MK --> MK4[View Reports]
+    end
+    
+    subgraph "Agent"
+        AG[Route-based Access]
+        AG --> AG1[Orders on their routes]
+        AG --> AG2[Record Sales]
+        AG --> AG3[View Invoices]
+        AG --> AG4[Cannot modify orders]
+    end
+    
+    subgraph "POS Operator"
+        PO[Counter Access]
+        PO --> PO1[View Orders]
+        PO --> PO2[Fulfill Orders]
+        PO --> PO3[Record Counter Sales]
+        PO --> PO4[View/Print Invoices]
+    end
+    
+    subgraph "Customer"
+        CU[Self Service]
+        CU --> CU1[Their Orders]
+        CU --> CU2[Their Invoices]
+        CU --> CU3[Place Orders]
+        CU --> CU4[View Balance]
+    end
+            </div>
+
+            <h3 class="section-subtitle">Granular Permissions</h3>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Permission</th>
+                            <th>Admin</th>
+                            <th>Manager</th>
+                            <th>Marketer</th>
+                            <th>Agent</th>
+                            <th>POS</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>view_orders</code></td>
+                            <td>✅</td>
+                            <td>✅</td>
+                            <td>✅</td>
+                            <td>Own</td>
+                            <td>Limited</td>
+                        </tr>
+                        <tr>
+                            <td><code>create_orders</code></td>
+                            <td>✅</td>
+                            <td>✅</td>
+                            <td>✅</td>
+                            <td>❌</td>
+                            <td>❌</td>
+                        </tr>
+                        <tr>
+                            <td><code>modify_orders</code></td>
+                            <td>✅</td>
+                            <td>✅</td>
+                            <td>Own</td>
+                            <td>❌</td>
+                            <td>❌</td>
+                        </tr>
+                        <tr>
+                            <td><code>fulfill_orders</code></td>
+                            <td>✅</td>
+                            <td>✅</td>
+                            <td>❌</td>
+                            <td>✅</td>
+                            <td>✅</td>
+                        </tr>
+                        <tr>
+                            <td><code>view_invoices</code></td>
+                            <td>✅</td>
+                            <td>✅</td>
+                            <td>✅</td>
+                            <td>✅</td>
+                            <td>✅</td>
+                        </tr>
+                        <tr>
+                            <td><code>create_invoices</code></td>
+                            <td>✅</td>
+                            <td>✅</td>
+                            <td>✅</td>
+                            <td>❌</td>
+                            <td>❌</td>
+                        </tr>
+                        <tr>
+                            <td><code>edit_invoices</code></td>
+                            <td>Draft</td>
+                            <td>Draft</td>
+                            <td>❌</td>
+                            <td>❌</td>
+                            <td>❌</td>
+                        </tr>
+                        <tr>
+                            <td><code>transfer_orders</code></td>
+                            <td>✅</td>
+                            <td>✅</td>
+                            <td>✅</td>
+                            <td>❌</td>
+                            <td>❌</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- DATA FLOW SECTION -->
+        <section id="dataflow" class="section">
+            <h2 class="section-title">🔄 Complete Data Flow</h2>
+            
+            <div class="mermaid">
+sequenceDiagram
+    actor Customer
+    actor Marketer
+    actor Admin
+    actor Agent
+    participant Order
+    participant Invoice
+    participant Sale
+    participant Stock
+    participant Balance
+    participant Transaction
+
+    Note over Customer,Transaction: SCENARIO 1: Order with Proforma then Tax Invoice
+    
+    Marketer->>Order: Create Order (Pending)
+    Order->>Invoice: Generate Proforma Invoice
+    Invoice-->>Marketer: Proforma Issued
+    Marketer-->>Customer: Send Proforma
+    
+    Agent->>Order: Fulfill Order
+    Order->>Sale: <strong>AUTO-CREATE Sale</strong>
+    Sale->>Stock: Reduce Stock
+    Sale->>Balance: Update Outstanding
+    
+    Note right of Sale: Invoice is OPTIONAL
+    
+    Sale-.->>Invoice: Optional: Generate Invoice
+    Invoice-->>Agent: Print Invoice (if requested)
+    Agent-->>Customer: Deliver + Invoice
+    
+    Customer->>Transaction: Make Payment
+    Transaction->>Balance: Reduce Outstanding
+    Transaction->>Invoice: Mark as Paid
+
+    Note over Customer,Transaction: SCENARIO 2: Direct Sale (No Order)
+    
+    Agent->>Sale: Record Direct Sale
+    Sale->>Stock: Reduce Stock
+    Sale->>Balance: Update Outstanding
+    Sale->>Transaction: Record Payment
+    Transaction->>Balance: Update Balance
+    Transaction-->>Agent: Generate Receipt
+            </div>
+        </section>
+
+        <!-- SUMMARY SECTION -->
+        <section id="summary" class="section">
+            <h2 class="section-title">📝 Key Takeaways</h2>
+            
+            <div class="success-box">
+                <strong>1. Proforma vs Tax Invoice - Keep Separate</strong>
+                <p>Proforma is a "quote", Tax Invoice is the "bill". They serve different purposes and should have separate IDs.</p>
+            </div>
+
+<div class="info-box">
+  <strong>2. Order-to-Sale Link</strong>
+  <p>When an order is delivered, a sale record is created. The order is NOT deleted - it tracks the request history.</p>
+  <p style="margin-top: 0.5rem;"><strong>Linking:</strong></p>
+  <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+    <li><code>orders.fulfilled_by_sale_id</code> → Points to the auto-created sale</li>
+    <li><code>sales.fulfilled_order_id</code> → Points back to the original order</li>
+    <li>🔗 UI shows "View Sale" button on delivered orders for quick navigation</li>
+    <li>📊 Both records are needed for complete audit trail</li>
+  </ul>
+</div>
+
+            <div class="warning-box">
+                <strong>3. Invoice Cancellation Logic</strong>
+                <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+                    <li>Draft Invoice: Can be deleted (soft delete)</li>
+                    <li>Issued Invoice: Can be cancelled (creates Credit Note if needed)</li>
+                    <li>Cancelled Invoice: Can be hard deleted</li>
+                    <li>If associated Sale exists, ask: "Delete invoice only or also reverse sale?"</li>
+                </ul>
+            </div>
+
+            <div class="info-box">
+                <strong>4. Outstanding Balance Updates</strong>
+                <p>Balance is updated when:</p>
+                <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+                    <li>Sale is recorded (adds to outstanding)</li>
+                    <li>Payment transaction recorded (reduces outstanding)</li>
+                    <li>Credit Note issued (reduces outstanding)</li>
+                </ul>
+            </div>
+
+<div class="success-box">
+  <strong>5. Agent Field Delivery Workflow</strong>
+  <ol style="margin-left: 1.5rem; margin-top: 0.5rem;">
+    <li>Marketer creates order & assigns to agent</li>
+    <li>Agent sees assigned orders</li>
+    <li>Agent delivers and marks order fulfilled</li>
+    <li><strong>Sale is auto-created</strong> (stock deducted, balance updated)</li>
+    <li>Agent optionally generates Tax Invoice if customer needs bill</li>
+    <li>Customer pays or signs credit acknowledgment</li>
+  </ol>
+</div>
+
+<div class="success-box">
+  <strong>6. Sale vs Invoice - Critical Distinction</strong>
+  <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+    <li><strong>Sale:</strong> Auto-created on fulfillment (the transaction record)</li>
+    <li><strong>Invoice:</strong> Optional document (for customer billing purposes)</li>
+    <li><strong>Payment:</strong> Recorded against Sale, NOT Invoice</li>
+    <li><strong>Outstanding:</strong> Calculated from Sales, not Invoices</li>
+    <li><strong>Legal:</strong> Sale is the transaction, Invoice is just a document</li>
+  </ul>
+</div>
+</section>
+
+<!-- REVERSAL SCENARIOS SECTION -->
+<section id="reversals" class="section">
+  <h2 class="section-title">↩️ Order Reversal & Correction Scenarios</h2>
+
+  <div class="warning-box">
+    <strong>⚠️ KEY RULE: Delivered Orders CANNOT Be Cancelled!</strong>
+    <p style="margin-top: 0.5rem;">Once an order is marked <strong>DELIVERED</strong>, the "Cancel" button is removed. Why?</p>
+    <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+      <li>✅ Sale was <strong>auto-created</strong> (stock deducted, balance updated)</li>
+      <li>❌ Simple "Cancel" would leave orphaned sale record</li>
+      <li>↩️ Must use <strong>Sale Return</strong> to properly reverse everything</li>
+      <li>📦 Sale Return adds stock back, clears outstanding, creates audit trail</li>
+    </ul>
+  </div>
+
+  <div class="mermaid">
+flowchart TB
+    subgraph "SCENARIO 1: Delivered by Mistake (No Payment)"
+        D1[Order Delivered]
+        S1[Sale Auto-Created]
+        RS1[Create Sale Return]
+        S2[Stock Added Back]
+        B2[Outstanding Cleared]
+        O1[Order → Cancelled]
+    end
+
+    D1 --> S1
+    S1 --> RS1
+    RS1 --> S2
+    RS1 --> B2
+    RS1 --> O1
+
+    subgraph "SCENARIO 2: Payment Already Recorded"
+        D2[Delivered & Paid]
+        S2A[Sale Exists]
+        RS2[Sale Return Created]
+        REF2[Refund Issued]
+        CN2[Credit Note]
+        O2[Order Stays DELIVERED]
+    end
+
+    D2 --> S2A
+    S2A --> RS2
+    RS2 --> REF2
+    RS2 --> CN2
+    RS2 --> O2
+
+    subgraph "SCENARIO 3: Wrong Products"
+        D3[Wrong Products]
+        SR3[Create Sale Return]
+        NS3[Create New Sale]
+        INV3[Cancel Old Invoice]
+        INV3A[Generate New Invoice]
+    end
+
+    D3 --> SR3
+    SR3 --> NS3
+    SR3 --> INV3
+    NS3 --> INV3A
+  </div>
+
+  <h3 class="section-subtitle">Cancel vs Sale Return - When to Use Each</h3>
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th>Order Status</th>
+          <th>Action Available</th>
+          <th>Result</th>
+          <th>Why?</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="badge badge-pending">PENDING</span></td>
+          <td>✅ <strong>Cancel</strong></td>
+          <td>Order → CANCELLED</td>
+          <td>No sale created yet</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-issued">CONFIRMED</span></td>
+          <td>✅ <strong>Cancel</strong></td>
+          <td>Order → CANCELLED</td>
+          <td>No sale created yet</td>
+        </tr>
+        <tr style="background: rgba(239, 68, 68, 0.1);">
+          <td><span class="badge badge-delivered">DELIVERED</span></td>
+          <td>❌ <strong>NO Cancel</strong></td>
+          <td>—</td>
+          <td>Sale already created</td>
+        </tr>
+        <tr style="background: rgba(34, 197, 94, 0.1);">
+          <td><span class="badge badge-delivered">DELIVERED</span></td>
+          <td>✅ <strong>Sale Return</strong></td>
+          <td>Stock + Balance restored</td>
+          <td>Properly reverses sale</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+<h3 class="section-subtitle">Reversal Rules by Scenario</h3>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Scenario</th>
+              <th>Action</th>
+              <th>Stock</th>
+              <th>Balance</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Delivered by Mistake</strong><br/><span class="text-xs text-muted-foreground">No payment</span></td>
+              <td>Sale Return → Cancel Order</td>
+              <td>✅ Added back</td>
+              <td>✅ Cleared</td>
+            </tr>
+            <tr>
+              <td><strong>Delivered by Mistake</strong><br/><span class="text-xs text-muted-foreground">Payment recorded</span></td>
+              <td>Sale Return + Refund</td>
+              <td>✅ Added back</td>
+              <td>✅ Refunded</td>
+            </tr>
+            <tr>
+              <td><strong>Wrong Products</strong></td>
+              <td>Sale Return + New Sale</td>
+              <td>🔄 Adjusted</td>
+              <td>🔄 Adjusted</td>
+            </tr>
+            <tr>
+              <td><strong>Customer Returns</strong></td>
+              <td>Sale Return + Credit Note</td>
+              <td>✅ Added back</td>
+              <td>✅ Credited</td>
+            </tr>
+            <tr style="background: rgba(245, 158, 11, 0.1);">
+              <td><strong>Payment Recorded Wrong</strong><br/><span class="text-xs text-muted-foreground">Transaction error</span></td>
+              <td>Payment Return (RET-XXXXXX)</td>
+              <td>—</td>
+              <td>🔄 Adjusted</td>
+            </tr>
+            <tr style="background: rgba(59, 130, 246, 0.1);">
+              <td><strong>Balance Discrepancy</strong><br/><span class="text-xs text-muted-foreground">Audit/Migration</span></td>
+              <td>Balance Correction (ADJ-XXXXXX)</td>
+              <td>—</td>
+              <td>🔄 Corrected</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+  <div class="info-box">
+    <strong>Step-by-Step Reversal Process:</strong>
+    <ol style="margin-left: 1.5rem; margin-top: 0.5rem;">
+      <li><strong>User realizes error:</strong> "This order was delivered by mistake!"</li>
+      <li><strong>Check if Sale exists:</strong> System confirms sale was auto-created</li>
+      <li><strong>Check payment status:</strong> Was any payment recorded?</li>
+      <li><strong>Create Sale Return:</strong>
+        <ul style="margin-left: 1.5rem;">
+          <li>Select products to return</li>
+          <li>Enter quantity to return</li>
+          <li>Add reason (e.g., "Delivered by mistake")</li>
+        </ul>
+      </li>
+      <li><strong>System automatically:</strong>
+        <ul style="margin-left: 1.5rem;">
+          <li>Adds stock back to warehouse</li>
+          <li>Clears outstanding balance</li>
+          <li>Creates audit trail</li>
+        </ul>
+      </li>
+      <li><strong>If payment recorded:</strong> Issue refund or credit note</li>
+      <li><strong>Order status:</strong> Changed to CANCELLED (if no payment) or stays DELIVERED with return note</li>
+    </ol>
+  </div>
+
+  <div class="success-box">
+    <strong>✅ Best Practices</strong>
+    <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+      <li>🚫 <strong>NEVER delete</strong> orders, sales, or invoices - only reverse them</li>
+      <li>✅ Always use <strong>Sale Return</strong> for delivered orders that need reversal</li>
+      <li>📝 Add clear <strong>reason</strong> for every return (audit trail)</li>
+      <li>👤 Only users with <code>can_create_sale_returns</code> permission can reverse</li>
+      <li>📊 All reversals show in reports as "negative sales"</li>
+    </ul>
+  </div>
+</section>
+
+<!-- TRANSACTIONS SECTION -->
+<section id="transactions" class="section">
+  <h2 class="section-title">💳 Transaction (Payment) Flow</h2>
+
+  <div class="mermaid">
+    flowchart TD
+    subgraph "Payment Recording"
+    A[User Initiates<br/>Payment Collection] --> B{Check<br/>Outstanding > 0?}
+    B -->|Yes| C[Record Payment<br/>via Transaction]
+    B -->|No| D[⚠️ Error:<br/>No outstanding to collect]
+
+    C --> E[Transaction Created<br/>with random PAY-XXXXXX ID]
+    E --> F{Who is Recording?}
+
+    F -->|Admin/Manager<br/>on own behalf| G[Deduct from<br/>Warehouse Stock]
+    F -->|Agent/Marketer<br/>on own behalf| H[Deduct from<br/>Staff Stock]
+    F -->|On behalf of<br/>another user| I[Deduct from<br/>Target User's Stock]
+
+    G --> J[Update Store<br/>Outstanding]
+    H --> J
+    I --> J
+
+    J --> K[Old Outstanding: ₹X<br/>Payment: ₹Y<br/>New Outstanding: ₹(X-Y)]
+    K --> L[Generate Receipt<br/>for Customer]
+    end
+
+    subgraph "Transaction History"
+    L --> M[Store Payment History<br/>Audit Trail]
+    M --> N[View Transactions<br/>Filtered by Date/Store]
+    N --> O[Export for<br/>Reconciliation]
+    end
+
+classDef default fill:#1e293b,stroke:#475569,color:#e2e8f0
+classDef error fill:#ef4444,stroke:#dc2626,color:#fff
+classDef success fill:#22c55e,stroke:#16a34a,color:#fff
+classDef highlight fill:#3b82f6,stroke:#2563eb,color:#fff
+classDef warning fill:#f59e0b,stroke:#d97706,color:#fff
+class D error
+class E,K,L success
+class C,J highlight
+</div>
+
+<h3 class="section-subtitle">Transaction Correction Flows</h3>
+<div class="mermaid">
+flowchart TD
+    subgraph "Payment Return"
+    PR[Admin/Manager Initiates<br/>Payment Return] --> PR1{Check<br/>Original Transaction?}
+    PR1 -->|Valid| PR2[Select Return Amount<br/>≤ Original Payment]
+    PR1 -->|Invalid| PR3[❌ Error:<br/>Transaction Not Found]
+    
+    PR2 --> PR4{Return Amount<br/>Valid?}
+    PR4 -->|Yes| PR5[Enter Reason<br/>Mandatory]
+    PR4 -->|No| PR6[⚠️ Error:<br/>Amount Exceeds Original]
+    
+    PR5 --> PR7[Create Return Record<br/>RET-XXXXXX ID]
+    PR7 --> PR8[Update Store Outstanding<br/>Add Return Amount Back]
+    PR8 --> PR9[Store: New Outstanding<br/>= Old + Return]
+    PR9 --> PR10[Audit Trail Created<br/>Original + Return Linked]
+    end
+    
+    subgraph "Balance Correction"
+    BC[Admin/Manager Initiates<br/>Balance Correction] --> BC1[Select Store<br/>View Current Outstanding]
+    
+    BC1 --> BC2{Correction Type}
+    BC2 -->|Increase| BC3[Add Amount<br/>to Outstanding]
+    BC2 -->|Decrease| BC4[Subtract Amount<br/>from Outstanding]
+    BC2 -->|Adjustment| BC5[Set Exact<br/>Balance Amount]
+    
+    BC3 --> BC6[Mandatory Fields:<br/>Reason + Description]
+    BC4 --> BC6
+    BC5 --> BC6
+    
+    BC6 --> BC7{Role Check}
+    BC7 -->|Super Admin| BC8[Auto-Approved<br/>ADJ-XXXXXX Created]
+    BC7 -->|Manager| BC9[Pending Approval<br/>Notify Admin]
+    
+    BC8 --> BC10[Update Store<br/>Outstanding]
+    BC9 --> BC11[Admin Reviews<br/>Approve/Reject]
+    BC11 -->|Approved| BC10
+    BC11 -->|Rejected| BC12[❌ Correction Rejected<br/>Log Reason]
+    
+    BC10 --> BC13[Audit Trail:<br/>Before/After + Who]
+    end
+    
+    classDef default fill:#1e293b,stroke:#475569,color:#e2e8f0
+    classDef error fill:#ef4444,stroke:#dc2626,color:#fff
+    classDef success fill:#22c55e,stroke:#16a34a,color:#fff
+    classDef highlight fill:#3b82f6,stroke:#2563eb,color:#fff
+    classDef warning fill:#f59e0b,stroke:#d97706,color:#fff
+    class PR3,PR6,BC12 error
+    class PR7,PR10,BC8,BC10 success
+    class PR,PR5,BC,BC6,BC7 highlight
+    class BC9,BC11 warning
+</div>
+
+<div class="warning-box">
+<strong>⚠️ Transaction Correction Rules</strong>
+<table style="width:100%; margin-top:0.5rem; font-size:0.9rem;">
+<tr>
+<td style="width:50%; vertical-align:top;">
+<strong>Payment Return:</strong>
+<ul style="margin-left:1rem; margin-top:0.25rem;">
+<li>Only Admin/Manager can process returns</li>
+<li>Return amount ≤ Original payment</li>
+<li>Reason is mandatory</li>
+<li>Return adds back to store outstanding</li>
+<li>Original transaction remains unchanged</li>
+<li>Audit trail links original + return</li>
+</ul>
+</td>
+<td style="width:50%; vertical-align:top;">
+<strong>Balance Correction:</strong>
+<ul style="margin-left:1rem; margin-top:0.25rem;">
+<li>Only Admin/Manager can correct</li>
+<li>Description is <strong>mandatory</strong></li>
+<li>Manager submissions require approval</li>
+<li>Admin actions auto-approved</li>
+<li>Cannot set negative outstanding</li>
+<li>Full audit trail with before/after</li>
+</ul>
+</td>
+</tr>
+</table>
+</div>
+
+  <h3 class="section-subtitle">Transaction Rules</h3>
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th>Rule</th>
+          <th>Description</th>
+          <th>Why</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Payment Amount > 0</strong></td>
+          <td>Total payment must be positive (Cash + UPI > 0)</td>
+          <td>Prevents zero or negative transactions</td>
+        </tr>
+        <tr>
+          <td><strong>Store Must Have Outstanding</strong></td>
+          <td>Payment can only be recorded if store has outstanding balance</td>
+          <td>Prevents over-collection</td>
+        </tr>
+        <tr>
+          <td><strong>Stock Deducted on Transaction</strong></td>
+          <td>Staff pays store, store gets credit</td>
+          <td>Agent's stock reduces, store's outstanding reduces</td>
+        </tr>
+        <tr>
+          <td><strong>Random Transaction ID</strong></td>
+          <td>Format: PAY-XXXXXX (random 6-digit)</td>
+          <td>No sequential disclosure, no race conditions</td>
+        </tr>
+        <tr>
+          <td><strong>Cannot Edit/Delete</strong></td>
+          <td>Transactions are immutable once recorded</td>
+          <td>Financial audit trail integrity</td>
+        </tr>
+        <tr>
+          <td><strong>Offline Queue Support</strong></td>
+          <td>Transactions queued when offline, sync when back</td>
+          <td>Field agents can work offline</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 class="section-subtitle">Permission Matrix for Transactions</h3>
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th>Role</th>
+          <th>Record Own</th>
+          <th>Record on Behalf</th>
+          <th>View All</th>
+          <th>Export</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Super Admin</strong></td>
+          <td>✅</td>
+          <td>✅</td>
+          <td>✅</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td><strong>Manager</strong></td>
+          <td>✅</td>
+          <td>✅</td>
+          <td>✅</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td><strong>Agent</strong></td>
+          <td>✅</td>
+          <td>❌</td>
+          <td>Own Only</td>
+          <td>❌</td>
+        </tr>
+        <tr>
+          <td><strong>Marketer</strong></td>
+          <td>✅</td>
+          <td>❌</td>
+          <td>Own Only</td>
+          <td>❌</td>
+        </tr>
+        <tr>
+          <td><strong>POS</strong></td>
+          <td>✅</td>
+          <td>❌</td>
+          <td>Own Only</td>
+          <td>❌</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="warning-box">
+    <strong>⚠️ Transaction Immutability</strong>
+    <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+      <li>Once a transaction is recorded, it <strong>cannot be edited or deleted</strong></li>
+      <li>If there's an error, record a <strong>counter-transaction</strong> (refund/adjustment)</li>
+      <li>All transactions are logged in the <strong>audit trail</strong> with user and timestamp</li>
+      <li>Backdated transactions trigger a <strong>re-calculation</strong> of running balances</li>
+    </ul>
+  </div>
+
+  <h3 class="section-subtitle">Database Flow</h3>
+  <div class="mermaid">
+    sequenceDiagram
+      actor User
+      participant Client as Transactions.tsx
+      participant RPC as record_transaction()
+      participant DB as PostgreSQL
+
+      User->>Client: Enter Payment (Cash + UPI)
+      Client->>Client: Validate amount > 0
+      Client->>DB: Generate PAY-XXXXXX (random)
+
+      alt Offline Mode
+        Client->>Client: Queue in IndexedDB
+        Client->>User: Show "Queued for sync"
+      else Online Mode
+        Client->>RPC: Call record_transaction()
+        RPC->>DB: Lock store row (FOR UPDATE)
+        RPC->>DB: Get current outstanding
+        RPC->>RPC: Calculate new_outstanding = old - payment
+        RPC->>DB: Insert transaction record
+        RPC->>DB: Update store.outstanding
+        RPC->>Client: Return txn_id, new_outstanding
+        Client->>User: Show success + notification
+      end
+  </div>
+</section>
+
+<!-- ============================================ -->
+    <!-- SECTION: HANDOVERS -->
+    <!-- ============================================ -->
+    <section class="section" id="handovers">
+      <div class="section-header">
+        <h2 class="section-title">💰 Handover Flow</h2>
+        <p class="section-desc">Staff-to-staff money transfers with confirmation workflow and role-based access control</p>
+      </div>
+
+      <div class="info-box">
+        <strong>🏢 Handovers Overview:</strong> Handovers facilitate money transfer between staff members with a confirmation workflow. The system includes role-based access control, admin transfer capabilities, and expense claim management.
+      </div>
+
+      <h3 class="section-subtitle">Role-Based Access Matrix</h3>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Feature</th>
+              <th>Super Admin</th>
+              <th>Manager</th>
+              <th>Agent/Marketer/POS</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>View Handovers</strong></td>
+              <td>✅ All staff</td>
+              <td>✅ All staff</td>
+              <td>✅ Own only</td>
+            </tr>
+            <tr>
+              <td><strong>Create Handover</strong></td>
+              <td>✅ Yes</td>
+              <td>✅ Yes</td>
+              <td>✅ Yes</td>
+            </tr>
+            <tr>
+              <td><strong>Confirm/Reject</strong></td>
+              <td>✅ Any</td>
+              <td>✅ Any</td>
+              <td>✅ Received only</td>
+            </tr>
+            <tr>
+              <td><strong>Edit Handover</strong></td>
+              <td>✅ Any</td>
+              <td>❌ No</td>
+              <td>❌ No</td>
+            </tr>
+            <tr>
+              <td><strong>Admin Transfer</strong></td>
+              <td>✅ Any staff → Any staff</td>
+              <td>❌ No</td>
+              <td>❌ No</td>
+            </tr>
+            <tr>
+              <td><strong>Cancel Handover</strong></td>
+              <td>✅ Any pending</td>
+              <td>Own only</td>
+              <td>✅ Own pending</td>
+            </tr>
+            <tr>
+              <td><strong>View Balances Tab</strong></td>
+              <td>✅ Yes</td>
+              <td>✅ Yes</td>
+              <td>❌ No</td>
+            </tr>
+            <tr>
+              <td><strong>Approve Expenses</strong></td>
+              <td>✅ All claims</td>
+              <td>✅ All claims</td>
+              <td>❌ No</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="section-subtitle">Standard Handover Flow</h3>
+      <div class="mermaid">
+flowchart TD
+  subgraph "Staff Actions"
+    A[Agent Records Sales] --> B{Calculate Balance}
+    B -->|Sales - Sent + Received| C[Available Balance]
+    C --> D[Click Create Handover]
+    D --> E[Select Recipient]
+    E --> F[Server Calculates Split]
+    F -->|Cash + UPI| G[Send Handover]
+  end
+
+  subgraph "Recipient Actions"
+    G --> H{Recipient Views}
+    H -->|Confirm| I[Status: Confirmed]
+    H -->|Reject| J[Status: Rejected]
+    H -->|Ignore| K[Status: Pending]
+  end
+
+  subgraph "Balance Impact"
+    I --> L[Sender: -Amount]
+    I --> M[Recipient: +Amount]
+    J --> N[Sender: Balance Restored]
+    K --> O[Sender: Amount Locked]
+  end
+
+  style A fill:#1e293b,stroke:#3b82f6
+  style I fill:#065f46,stroke:#10b981
+  style J fill:#7f1d1d,stroke:#ef4444
+  style O fill:#92400e,stroke:#f59e0b
+      </div>
+
+      <h3 class="section-subtitle">Admin Transfer Flow (Super Admin Only)</h3>
+      <div class="mermaid">
+flowchart TD
+  subgraph "Admin Initiates"
+    A[Super Admin Opens Admin Transfer] --> B[Select 'From' Staff]
+    B --> C[Select 'To' Staff]
+    C --> D[Enter Amount]
+    D --> E[Add Reason]
+    E --> F[Submit Transfer]
+  end
+
+  subgraph "System Processing"
+    F --> G{Valid Transfer?}
+    G -->|Different staff| H[Create Handover Record]
+    G -->|Same staff| I[Show Error]
+    H --> J[Auto-Confirm Handover]
+    J --> K[Update Balances]
+    K --> L[Send Notifications]
+  end
+
+  subgraph "Audit Trail"
+    L --> M[Log Admin Action]
+    M --> N[Record Before/After State]
+  end
+
+  style A fill:#1e293b,stroke:#a855f7
+  style H fill:#065f46,stroke:#10b981
+  style I fill:#7f1d1d,stroke:#ef4444
+      </div>
+
+      <h3 class="section-subtitle">Handover Status Flow</h3>
+      <div class="mermaid">
+stateDiagram-v2
+    [*] --> AwaitingConfirmation: Create Handover
+    AwaitingConfirmation --> Confirmed: Recipient Accepts
+    AwaitingConfirmation --> Rejected: Recipient Rejects
+    AwaitingConfirmation --> Cancelled: Sender Cancels
+    Confirmed --> [*]: Complete
+    Rejected --> [*]: Complete
+    Cancelled --> [*]: Complete
+
+    note right of AwaitingConfirmation
+      Super Admin can edit
+      amount/status while pending
+    end note
+      </div>
+
+      <h3 class="section-subtitle">Edit/Modify Capabilities</h3>
+      <div class="mermaid">
+flowchart LR
+  subgraph "Admin Edit Handover"
+    A[Select Handover] --> B{Can Edit?}
+    B -->|Super Admin| C[Open Edit Dialog]
+    B -->|Other Role| D[Access Denied]
+    C --> E[Modify Amount]
+    C --> F[Change Status]
+    C --> G[Add Notes]
+    E --> H[Save Changes]
+    F --> H
+    G --> H
+    H --> I[Update Database]
+    I --> J[Add Audit Log]
+  end
+
+  style A fill:#1e293b,stroke:#a855f7
+  style D fill:#7f1d1d,stroke:#ef4444
+  style H fill:#065f46,stroke:#10b981
+      </div>
+
+      <h3 class="section-subtitle">Approval Hierarchy</h3>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Action</th>
+              <th>Super Admin</th>
+              <th>Manager</th>
+              <th>Staff</th>
+              <th>Permission Required</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Create Handover</strong></td>
+              <td>✅ Yes</td>
+              <td>✅ Yes</td>
+              <td>✅ Yes</td>
+              <td>None (authenticated)</td>
+            </tr>
+            <tr>
+              <td><strong>Confirm Handover</strong></td>
+              <td>✅ Any</td>
+              <td>✅ Any</td>
+              <td>✅ Received only</td>
+              <td>None (authenticated)</td>
+            </tr>
+            <tr>
+              <td><strong>Reject Handover</strong></td>
+              <td>✅ Any</td>
+              <td>✅ Any</td>
+              <td>✅ Received only</td>
+              <td>None (authenticated)</td>
+            </tr>
+            <tr>
+              <td><strong>Cancel Handover</strong></td>
+              <td>✅ Any pending</td>
+              <td>Own only</td>
+              <td>✅ Own pending</td>
+              <td>None (authenticated)</td>
+            </tr>
+            <tr>
+              <td><strong>Edit Handover</strong></td>
+              <td>✅ Any</td>
+              <td>❌ No</td>
+              <td>❌ No</td>
+              <td><code>modify_handovers</code></td>
+            </tr>
+            <tr>
+              <td><strong>Admin Transfer</strong></td>
+              <td>✅ Yes</td>
+              <td>❌ No</td>
+              <td>❌ No</td>
+              <td><code>transfer_between_staff</code></td>
+            </tr>
+            <tr>
+              <td><strong>View All Balances</strong></td>
+              <td>✅ Yes</td>
+              <td>✅ Yes</td>
+              <td>❌ No</td>
+              <td><code>see_handover_balance</code></td>
+            </tr>
+            <tr>
+              <td><strong>Approve Expenses</strong></td>
+              <td>✅ Yes</td>
+              <td>✅ Yes</td>
+              <td>❌ No</td>
+              <td><code>approve_expenses</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="section-subtitle">Balance Calculation Formula</h3>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Component</th>
+              <th>Formula</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Sales Total</strong></td>
+              <td>∑(Cash + UPI) recorded by user</td>
+              <td>All sales ever recorded</td>
+            </tr>
+            <tr>
+              <td><strong>Received</strong></td>
+              <td>∑(Handovers received & confirmed)</td>
+              <td>Money handed TO this user</td>
+            </tr>
+            <tr>
+              <td><strong>Sent Confirmed</strong></td>
+              <td>∑(Handovers sent & confirmed)</td>
+              <td>Money sent AND accepted</td>
+            </tr>
+            <tr>
+              <td><strong>Sent Pending</strong></td>
+              <td>∑(Handovers sent & awaiting)</td>
+              <td>Money sent but not confirmed</td>
+            </tr>
+            <tr>
+              <td><strong>Expenses Owed</strong></td>
+              <td>∑(Approved expense claims)</td>
+              <td>Company owes user this amount</td>
+            </tr>
+            <tr>
+              <td><strong>Net Balance</strong></td>
+              <td>Sales + Received - Sent Confirmed - Sent Pending - Expenses</td>
+              <td>Available to handover</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+<h3 class="section-subtitle">Expense Claim Flow</h3>
+<div class="mermaid">
+flowchart LR
+    subgraph "Submit Claim"
+        A[Staff] --> B[Select Category]
+        B --> C[Enter Amount]
+        C --> D[Add Description]
+        D --> E[Upload Receipt]
+        E --> F[Submit]
+    end
+
+    subgraph "Review Process"
+        F --> G{Admin Review}
+        G -->|Approve| H[Adjust Amount?]
+        G -->|Reject| I[Add Reason]
+        H --> J[Mark Approved]
+    end
+
+    subgraph "Balance Impact"
+        J --> K[Add to 'Expenses Owed']
+        K --> L[Deducts from Handover Balance]
+    end
+
+    style A fill:#1e293b,stroke:#3b82f6
+    style G fill:#1e293b,stroke:#f59e0b
+    style J fill:#065f46,stroke:#10b981
+    style I fill:#7f1d1d,stroke:#ef4444
+</div>
+
+      <h3 class="section-subtitle">Tab Visibility by Role</h3>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Tab/Feature</th>
+              <th>Agent/Marketer/POS</th>
+              <th>Manager</th>
+              <th>Super Admin</th>
+              <th>Finalizer</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Mine Tab</strong></td>
+              <td>✅ Own handovers</td>
+              <td>✅ Own handovers</td>
+              <td>✅ All handovers</td>
+              <td>✅ View only</td>
+            </tr>
+            <tr>
+              <td><strong>Expenses Tab</strong></td>
+              <td>✅ Own claims</td>
+              <td>✅ All claims + Review</td>
+              <td>✅ All claims + Review</td>
+              <td>✅ View only</td>
+            </tr>
+            <tr>
+              <td><strong>All Tab</strong></td>
+              <td>❌ Hidden</td>
+              <td>✅ All staff handovers</td>
+              <td>✅ All staff handovers</td>
+              <td>✅ All staff handovers</td>
+            </tr>
+            <tr>
+              <td><strong>Admin Actions Tab</strong></td>
+              <td>❌ Hidden</td>
+              <td>❌ Hidden</td>
+              <td>✅ Transfer + Edit</td>
+              <td>❌ Hidden</td>
+            </tr>
+            <tr>
+              <td><strong>Balances Tab</strong></td>
+              <td>❌ Hidden</td>
+              <td>✅ All staff balances</td>
+              <td>✅ All staff balances</td>
+              <td>✅ All staff balances</td>
+            </tr>
+            <tr>
+              <td><strong>Create Handover</strong></td>
+              <td>✅ Yes</td>
+              <td>✅ Yes</td>
+              <td>✅ Via Admin Transfer</td>
+              <td>❌ No (view only)</td>
+            </tr>
+            <tr>
+              <td><strong>Edit Handover</strong></td>
+              <td>❌ No</td>
+              <td>❌ No</td>
+              <td>✅ Any handover</td>
+              <td>❌ No</td>
+            </tr>
+            <tr>
+              <td><strong>Export CSV</strong></td>
+              <td>❌ No</td>
+              <td>✅ Yes</td>
+              <td>✅ Yes</td>
+              <td>✅ Yes</td>
+            </tr>
+            <tr>
+              <td><strong>Filters Available</strong></td>
+              <td>Date, Status, Search</td>
+              <td>Date, Status, User, Search</td>
+              <td>Date, Status, User, Search</td>
+              <td>Date, Status, User, Search</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="section-subtitle">Key Business Rules</h3>
+      <div class="info-box">
+        <strong>🔒 Handover Constraints</strong>
+        <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+          <li>Can only handover up to <strong>available balance</strong> (cannot go negative)</li>
+          <li>Pending handovers <strong>lock</strong> the amount until confirmed/rejected/cancelled</li>
+          <li><strong>Partial collections</strong> setting can disable handovers below full balance</li>
+          <li>Each staff can have only <strong>one pending handover per day</strong> to same recipient</li>
+          <li>Cannot confirm your own handover (must be recipient)</li>
+          <li>Cancelled handovers immediately restore balance</li>
+          <li><strong>Super Admin</strong> can edit any handover amount and status</li>
+          <li><strong>Admin transfers</strong> bypass normal balance checks and auto-confirm</li>
+        </ul>
+      </div>
+
+      <div class="warning-box">
+        <strong>⚠️ Expense Claim Rules</strong>
+        <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+          <li>Approved expenses <strong>reduce</strong> the handover balance (company owes staff)</li>
+          <li>Admins can <strong>adjust</strong> amount and category during approval</li>
+          <li>Receipt photo is <strong>optional</strong> but recommended</li>
+          <li>Rejected claims don't affect balance</li>
+          <li>Staff see only their own claims; Admins see all</li>
+        </ul>
+      </div>
+
+      <div class="success-box">
+        <strong>✅ Admin Capabilities</strong>
+        <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+          <li><strong>Transfer Between Staff:</strong> Move money from any staff to any staff without balance restrictions</li>
+          <li><strong>Edit Handover:</strong> Modify amount and status of any handover (logged for audit)</li>
+          <li><strong>Cancel Any:</strong> Can cancel any pending handover (not just own)</li>
+          <li><strong>View All:</strong> See all handovers across all staff with full details</li>
+          <li><strong>Audit Trail:</strong> All admin actions are logged with before/after state</li>
+        </ul>
+      </div>
+
+      <h3 class="section-subtitle">Database Flow</h3>
+      <div class="mermaid">
+sequenceDiagram
+    actor Sender as Staff (Sender)
+    actor Recipient as Staff (Recipient)
+    participant Client as Handovers.tsx
+    participant RPC as create_handover()
+    participant DB as PostgreSQL
+
+    Sender->>Client: Click Create Handover
+    Client->>Client: Select Recipient
+    Client->>RPC: Call create_handover()
+    RPC->>DB: Calculate current balance
+    RPC->>DB: Split into Cash + UPI
+    RPC->>DB: Insert handover record
+    RPC->>Client: Return handover_id
+    Client->>Sender: Show success
+    Client->>Recipient: Push notification
+
+    Recipient->>Client: View pending handover
+    alt Confirm
+        Recipient->>RPC: Update status='confirmed'
+        RPC->>DB: Update handover record
+        RPC->>Client: Success
+        Client->>Sender: Notify confirmed
+    else Reject
+        Recipient->>RPC: Update status='rejected'
+        RPC->>DB: Update handover record
+        RPC->>Client: Success
+        Client->>Sender: Notify rejected
+    end
+      </div>
+
+      <h3 class="section-subtitle">Admin Transfer Database Flow</h3>
+      <div class="mermaid">
+sequenceDiagram
+    actor Admin as Super Admin
+    participant Client as Handovers.tsx
+    participant RPC as admin_transfer_between_staff()
+    participant DB as PostgreSQL
+
+    Admin->>Client: Open Admin Transfer Dialog
+    Client->>Client: Select From/To Staff
+    Client->>Client: Enter Amount & Reason
+    Client->>RPC: Call admin_transfer_between_staff()
+
+    RPC->>DB: Validate permissions (Super Admin)
+    RPC->>DB: Validate different staff
+    RPC->>DB: Create handover record
+    RPC->>DB: Auto-confirm handover
+    RPC->>DB: Update both balances
+    RPC->>DB: Log admin action
+
+    RPC->>Client: Return handover_id
+    Client->>Admin: Show success
+    Client->>From Staff: Notify sent
+    Client->>To Staff: Notify received
+      </div>
+</section>
+
+<div class="updated">
+      Last Updated: 2026-04-20 | Current Focus: Handover Flow with Role-Based Access Control, Admin Transfers & Edit Capabilities
+    </div>
+</div>
+
+<script>
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'dark',
+            themeVariables: {
+                primaryColor: '#3b82f6',
+                primaryTextColor: '#ffffff',
+                primaryBorderColor: '#60a5fa',
+                lineColor: '#94a3b8',
+                secondaryColor: '#1e293b',
+                tertiaryColor: '#334155'
+            }
+        });
+
+        // Navigation active state
+        const navBtns = document.querySelectorAll('.nav-btn');
+        navBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                navBtns.forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+            });
+        });
+    </script>
+</body>
+</html>

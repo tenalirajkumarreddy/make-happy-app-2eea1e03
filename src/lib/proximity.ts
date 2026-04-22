@@ -5,6 +5,12 @@
 
 const PROXIMITY_RADIUS_METERS = 100;
 
+// Configuration for handling stores without GPS coordinates
+export type NoGpsHandling = "skip" | "block" | "require_manager_override";
+
+// Default behavior can be configured per organization
+const DEFAULT_NO_GPS_HANDLING: NoGpsHandling = "require_manager_override";
+
 type LocationPoint = { lat: number; lng: number };
 type RouteStorePoint = { id: string; lat: number | null; lng: number | null };
 
@@ -39,31 +45,98 @@ export interface ProximityResult {
   message: string;
   /** true when the check was skipped because the store has no GPS coordinates */
   skippedNoGps: boolean;
+  /** true when manager override is required for stores without GPS */
+  requiresManagerOverride: boolean;
 }
 
 /**
  * Checks if the user is within PROXIMITY_RADIUS_METERS of the target store.
- * Returns { withinRange, distance, userLocation, message, skippedNoGps }.
- * If store has no GPS, returns withinRange: true with skippedNoGps: true so
- * callers can surface a warning instead of silently bypassing the check.
+ * Returns { withinRange, distance, userLocation, message, skippedNoGps, requiresManagerOverride }.
+ *
+ * For stores without GPS coordinates, behavior depends on noGpsHandling:
+ * - "skip": Returns withinRange: true with skippedNoGps: true (legacy behavior)
+ * - "block": Returns withinRange: false, blocking the action
+ * - "require_manager_override": Returns withinRange: false with requiresManagerOverride: true
  */
 export async function checkProximity(
   storeLat: number | null,
-  storeLng: number | null
+  storeLng: number | null,
+  options?: {
+    noGpsHandling?: NoGpsHandling;
+    userRole?: string;
+  }
 ): Promise<ProximityResult> {
-  // No store GPS → skip proximity check, but flag it explicitly
+  const noGpsHandling = options?.noGpsHandling ?? DEFAULT_NO_GPS_HANDLING;
+  const userRole = options?.userRole;
+
+  // No store GPS → handle based on configuration
   if (!storeLat || !storeLng) {
-    return { withinRange: true, distance: null, userLocation: null, message: "Store has no GPS coordinates — proximity check skipped", skippedNoGps: true };
+    // Managers and above can bypass the check
+    if (userRole === "super_admin" || userRole === "manager") {
+      return {
+        withinRange: true,
+        distance: null,
+        userLocation: null,
+        message: "Store has no GPS coordinates — manager override applied",
+        skippedNoGps: true,
+        requiresManagerOverride: false,
+      };
+    }
+
+    switch (noGpsHandling) {
+      case "block":
+        return {
+          withinRange: false,
+          distance: null,
+          userLocation: null,
+          message: "Store has no GPS coordinates. Please update store location before recording sales.",
+          skippedNoGps: true,
+          requiresManagerOverride: false,
+        };
+      case "require_manager_override":
+        return {
+          withinRange: false,
+          distance: null,
+          userLocation: null,
+          message: "Store has no GPS coordinates. Manager approval required.",
+          skippedNoGps: true,
+          requiresManagerOverride: true,
+        };
+      case "skip":
+      default:
+        return {
+          withinRange: true,
+          distance: null,
+          userLocation: null,
+          message: "Store has no GPS coordinates — proximity check skipped",
+          skippedNoGps: true,
+          requiresManagerOverride: false,
+        };
+    }
   }
 
   const loc = await getCurrentPosition();
   if (!loc) {
-    return { withinRange: false, distance: null, userLocation: null, message: "Could not get your location. Please enable GPS and try again.", skippedNoGps: false };
+    return {
+      withinRange: false,
+      distance: null,
+      userLocation: null,
+      message: "Could not get your location. Please enable GPS and try again.",
+      skippedNoGps: false,
+      requiresManagerOverride: false,
+    };
   }
 
   const dist = getDistanceMeters(loc.lat, loc.lng, storeLat, storeLng);
   if (dist <= PROXIMITY_RADIUS_METERS) {
-    return { withinRange: true, distance: Math.round(dist), userLocation: loc, message: `You are ${Math.round(dist)}m from the store`, skippedNoGps: false };
+    return {
+      withinRange: true,
+      distance: Math.round(dist),
+      userLocation: loc,
+      message: `You are ${Math.round(dist)}m from the store`,
+      skippedNoGps: false,
+      requiresManagerOverride: false,
+    };
   }
 
   return {
@@ -72,6 +145,7 @@ export async function checkProximity(
     userLocation: loc,
     message: `You are ${Math.round(dist)}m away. Must be within ${PROXIMITY_RADIUS_METERS}m of the store.`,
     skippedNoGps: false,
+    requiresManagerOverride: false,
   };
 }
 

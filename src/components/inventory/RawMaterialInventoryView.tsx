@@ -175,75 +175,55 @@ export function RawMaterialInventoryView({
   return (
     <div className="space-y-6">
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">
-                  Raw Materials
-                </p>
-                <p className="text-2xl font-bold">{stats.total}</p>
-              </div>
-              <div className="h-12 w-12 rounded-full bg-blue-50 flex items-center justify-center">
-                <FlaskConical className="h-6 w-6 text-blue-600" />
-              </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card className="shadow-sm border-none">
+          <CardContent className="p-6 flex items-center justify-between">
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-muted-foreground">Raw Materials</p>
+              <p className="text-3xl font-bold">{stats.total}</p>
+            </div>
+            <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
+              <FlaskConical className="h-6 w-6 text-blue-600" />
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">
-                  Stock Value
-                </p>
-                <p className="text-2xl font-bold">
-                  ₹{stats.value.toLocaleString()}
-                </p>
-              </div>
-              <div className="h-12 w-12 rounded-full bg-emerald-50 flex items-center justify-center">
-                <TrendingUp className="h-6 w-6 text-emerald-600" />
-              </div>
+        <Card className="shadow-sm border-none">
+          <CardContent className="p-6 flex items-center justify-between">
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-muted-foreground">Stock Value</p>
+              <p className="text-3xl font-bold">₹{(stats.value / 1000).toFixed(0)}k</p>
+            </div>
+            <div className="h-12 w-12 rounded-full bg-emerald-100 flex items-center justify-center">
+              <TrendingUp className="h-6 w-6 text-emerald-600" />
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">
-                  Low Stock
-                </p>
-                <p
-                  className={`text-2xl font-bold ${
-                    stats.low > 0 ? "text-amber-600" : ""
-                  }`}
-                >
-                  {stats.low}
-                </p>
-              </div>
-              <div className="h-12 w-12 rounded-full bg-amber-50 flex items-center justify-center">
-                <TrendingDown className="h-6 w-6 text-amber-600" />
-              </div>
+        <Card className="shadow-sm border-none">
+          <CardContent className="p-6 flex items-center justify-between">
+            <div className="space-y-1">
+              <p className={`text-sm font-medium ${stats.low > 0 ? "text-amber-600" : "text-muted-foreground"}`}>
+                Low Stock
+              </p>
+              <p className={`text-3xl font-bold ${stats.low > 0 ? "text-amber-600" : ""}`}>
+                {stats.low}
+              </p>
+            </div>
+            <div className={`h-12 w-12 rounded-full flex items-center justify-center ${stats.low > 0 ? "bg-amber-100" : "bg-amber-50"}`}>
+              <TrendingDown className={`h-6 w-6 ${stats.low > 0 ? "text-amber-600" : "text-amber-400"}`} />
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">
-                  Vendors
-                </p>
-                <p className="text-2xl font-bold">{stats.vendorCount}</p>
-              </div>
-              <div className="h-12 w-12 rounded-full bg-purple-50 flex items-center justify-center">
-                <User className="h-6 w-6 text-purple-600" />
-              </div>
+        <Card className="shadow-sm border-none">
+          <CardContent className="p-6 flex items-center justify-between">
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-muted-foreground">Vendors</p>
+              <p className="text-3xl font-bold">{stats.vendorCount}</p>
+            </div>
+            <div className="h-12 w-12 rounded-full bg-purple-100 flex items-center justify-center">
+              <User className="h-6 w-6 text-purple-600" />
             </div>
           </CardContent>
         </Card>
@@ -309,75 +289,78 @@ export function RawMaterialInventoryView({
       )}
 
       {/* Materials Grid */}
-      <Card>
-        <CardHeader className="pb-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <CardTitle className="text-lg font-semibold flex items-center gap-2">
-              <FlaskConical className="h-5 w-5" />
-              Raw Materials
-              <Badge variant="secondary">{filteredMaterials.length}</Badge>
-            </CardTitle>
-            <div className="flex gap-2">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search materials..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9 w-full sm:w-64"
-                />
-              </div>
-            </div>
+      <div className="space-y-4 pt-2">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="relative flex-1 max-w-md w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+            <Input
+              placeholder="Search materials..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 h-12 bg-background border-none shadow-sm rounded-xl"
+            />
           </div>
-        </CardHeader>
-        <CardContent>
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="mb-4">
-              <TabsTrigger value="all">All Materials</TabsTrigger>
-              <TabsTrigger value="good">In Stock</TabsTrigger>
-              <TabsTrigger value="low">
-                Low Stock
-                {stats.low > 0 && (
-                  <Badge variant="destructive" className="ml-2 text-xs">
-                    {stats.low}
-                  </Badge>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="out">
-                Out of Stock
-                {stats.out > 0 && (
-                  <Badge variant="destructive" className="ml-2 text-xs">
-                    {stats.out}
-                  </Badge>
-                )}
-              </TabsTrigger>
-            </TabsList>
+          <div className="flex items-center gap-3">
+            <Badge variant="outline" className="bg-background text-muted-foreground border-none shadow-sm py-2 px-4 rounded-xl font-normal text-sm">
+              <FlaskConical className="h-4 w-4 mr-2" />
+              {filteredMaterials.length} materials
+            </Badge>
+            <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-none shadow-sm py-2 px-4 rounded-xl font-medium text-sm">
+              {stats.value > 0 ? `₹${stats.value.toLocaleString()}` : "0"} total value
+            </Badge>
+          </div>
+        </div>
 
-            <TabsContent value={activeTab} className="mt-0">
-              {filteredMaterials.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <FlaskConical className="h-12 w-12 mx-auto mb-4 opacity-30" />
-                  <p>No raw materials found matching your criteria.</p>
-                </div>
-              ) : (
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {filteredMaterials.map((material) => (
-                    <RawMaterialCard
-                      key={material.id}
-                      material={material}
-                      canEdit={canEdit}
-                      onView={() => onViewMaterial?.(material)}
-                      onUsed={() => onAdjustStock?.(material, "used")}
-                      onRemaining={() => onAdjustStock?.(material, "remaining")}
-                      onHistory={() => onViewHistory?.(material)}
-                    />
-                  ))}
-                </div>
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="w-full justify-start overflow-x-auto bg-transparent p-0 mb-6 h-auto gap-2">
+            <TabsTrigger value="all" className="gap-2 py-2 px-4 rounded-xl border-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-background data-[state=active]:text-foreground bg-transparent hover:bg-muted/50 data-[state=active]:shadow-sm">
+              All Materials
+            </TabsTrigger>
+            <TabsTrigger value="good" className="gap-2 py-2 px-4 rounded-xl border-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-background data-[state=active]:text-foreground bg-transparent hover:bg-muted/50 data-[state=active]:shadow-sm">
+              In Stock
+            </TabsTrigger>
+            <TabsTrigger value="low" className="gap-2 py-2 px-4 rounded-xl border-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-background data-[state=active]:text-foreground bg-transparent hover:bg-muted/50 data-[state=active]:shadow-sm">
+              Low Stock
+              {stats.low > 0 && (
+                <Badge variant="destructive" className="ml-1 text-[10px] px-1 h-4">
+                  {stats.low}
+                </Badge>
               )}
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
+            </TabsTrigger>
+            <TabsTrigger value="out" className="gap-2 py-2 px-4 rounded-xl border-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-background data-[state=active]:text-foreground bg-transparent hover:bg-muted/50 data-[state=active]:shadow-sm">
+              Out of Stock
+              {stats.out > 0 && (
+                <Badge variant="destructive" className="ml-1 text-[10px] px-1 h-4">
+                  {stats.out}
+                </Badge>
+              )}
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value={activeTab} className="mt-0">
+            {filteredMaterials.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground bg-slate-50/50 rounded-lg border border-dashed">
+                <FlaskConical className="h-12 w-12 mx-auto mb-4 opacity-30" />
+                <p>No raw materials found matching your criteria.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {filteredMaterials.map((material) => (
+                  <RawMaterialCard
+                    key={material.id}
+                    material={material}
+                    canEdit={canEdit}
+                    onView={() => onViewMaterial?.(material)}
+                    onUsed={() => onAdjustStock?.(material, "used")}
+                    onRemaining={() => onAdjustStock?.(material, "remaining")}
+                    onHistory={() => onViewHistory?.(material)}
+                  />
+                ))}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
+      </div>
 
       {/* Recent Adjustments */}
       {recentAdjustments.length > 0 && (

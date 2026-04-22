@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getCurrentPosition } from "@/lib/proximity";
 import { useAuth } from "@/contexts/AuthContext";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -52,6 +52,17 @@ export default function RouteDetail() {
   const { role } = useAuth();
   const qc = useQueryClient();
   const canEdit = role === "super_admin" || role === "manager";
+
+  if (id && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    return (
+      <div className="space-y-4">
+        <Button variant="ghost" size="sm" onClick={() => navigate("/routes")} className="gap-1.5 -ml-2 text-muted-foreground">
+          <ArrowLeft className="h-4 w-4" /> Routes
+        </Button>
+        <p className="text-muted-foreground">Invalid route ID.</p>
+      </div>
+    );
+  }
 
   const [showSetFactory, setShowSetFactory] = useState(false);
   const [factoryLatInput, setFactoryLatInput] = useState("");
@@ -247,6 +258,10 @@ export default function RouteDetail() {
   }
 
   const factorySet = route.factory_lat != null && route.factory_lng != null;
+
+  useEffect(() => {
+    document.title = `${route.name} — Routes`;
+  }, [route.name]);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -450,7 +465,7 @@ export default function RouteDetail() {
                         {store.address || "No address"}
                         {!hasCoords && <span className="ml-1 text-warning">· No GPS</span>}
                       </p>
-                      {store.distFromPrev != null && (
+                      {store.distFromPrev != null && store.store_order != null && (
                         <p className="text-[10px] text-muted-foreground">
                           {idx === 0 ? "From depot: " : "From prev: "}
                           {store.distFromPrev < 1000
@@ -462,7 +477,7 @@ export default function RouteDetail() {
 
                     {/* Outstanding — hidden on mobile */}
                     <div className="hidden sm:block text-right shrink-0">
-                      <p className="text-sm font-bold">₹{Number(store.outstanding).toLocaleString()}</p>
+                      <p className="text-sm font-bold">₹{(Number(store.outstanding) || 0).toLocaleString()}</p>
                       <p className="text-[10px] text-muted-foreground">outstanding</p>
                     </div>
 
@@ -477,6 +492,7 @@ export default function RouteDetail() {
                           window.open(`https://www.google.com/maps/dir/?api=1&destination=${store.lat},${store.lng}`, "_blank");
                         }}
                         title="Get directions"
+                        aria-label={`Get directions to ${store.name}`}
                       >
                         <Navigation className="h-4 w-4" />
                       </Button>

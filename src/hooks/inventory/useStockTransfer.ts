@@ -124,7 +124,7 @@ export function useStockTransfer(options: UseStockTransferOptions = {}) {
         throw new Error("Not authenticated");
       }
 
-      const { data, error } = await supabase.rpc("record_stock_transfer", {
+      const { data, error } = await supabase.rpc("record_stock_transfer" as any, {
         p_transfer_type: transferData.transferType,
         p_from_warehouse_id: transferData.fromWarehouseId ?? null,
         p_from_user_id: transferData.fromUserId ?? null,
@@ -132,9 +132,8 @@ export function useStockTransfer(options: UseStockTransferOptions = {}) {
         p_to_user_id: transferData.toUserId ?? null,
         p_product_id: transferData.productId,
         p_quantity: transferData.quantity,
-        p_reason: transferData.description ?? null,
-        p_created_by: currentUserId,
-      });
+        p_description: transferData.description ?? null,
+      } as any);
 
       if (error) throw error;
       return data;
@@ -142,8 +141,13 @@ export function useStockTransfer(options: UseStockTransferOptions = {}) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["stock-transfers"] });
       queryClient.invalidateQueries({ queryKey: ["staff-stock"] });
+      queryClient.invalidateQueries({ queryKey: ["staff-stock-by-warehouse"] });
       queryClient.invalidateQueries({ queryKey: ["warehouse-products"] });
+      queryClient.invalidateQueries({ queryKey: ["warehouse-stock"] });
+      queryClient.invalidateQueries({ queryKey: ["product-stock"] });
       queryClient.invalidateQueries({ queryKey: ["stock-movements"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory-pending-returns"] });
+      queryClient.invalidateQueries({ queryKey: ["source-stock-transfer"] });
       toast.success("Stock transfer completed successfully");
     },
     onError: (error: any) => {

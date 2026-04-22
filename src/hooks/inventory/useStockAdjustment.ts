@@ -117,7 +117,7 @@ export function useStockAdjustment(options: UseStockAdjustmentOptions = {}) {
     },
   });
 
-  // Mutation to adjust staff stock
+  // Mutation to adjust staff stock - Uses atomic RPC
   const adjustStaffStock = useMutation({
     mutationFn: async ({
       staffStockId,
@@ -128,23 +128,28 @@ export function useStockAdjustment(options: UseStockAdjustmentOptions = {}) {
       quantity: number;
       reason?: string;
     }) => {
-      const { data, error } = await supabase
-        .from("staff_stock")
-        .update({
-          quantity,
-          is_negative: quantity < 0,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", staffStockId)
-        .select()
-        .single();
+      const { data: result, error } = await supabase.rpc(
+        "adjust_staff_stock",
+        {
+          p_staff_stock_id: staffStockId,
+          p_quantity: quantity,
+          p_reason: reason || null,
+        }
+      );
 
       if (error) throw error;
-      return data;
+      
+      // Check if RPC returned an error
+      if (result && !result.success) {
+        throw new Error(result.error || "Staff stock adjustment failed");
+      }
+      
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["staff-stock"] });
       queryClient.invalidateQueries({ queryKey: ["staff-inventory-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["staff-stock-by-warehouse"] });
       toast.success("Staff stock adjusted");
     },
     onError: (error: any) => {

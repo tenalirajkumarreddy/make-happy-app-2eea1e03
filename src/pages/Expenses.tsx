@@ -77,6 +77,16 @@ const Expenses = () => {
   const [catName, setCatName] = useState("");
   const [catDescription, setCatDescription] = useState("");
   const [catColor, setCatColor] = useState("#6366f1");
+  const [catIsOverhead, setCatIsOverhead] = useState(false);
+
+  const openEditCategory = (cat: any) => {
+    setEditingCategory(cat);
+    setCatName(cat.name);
+    setCatDescription(cat.description || "");
+    setCatColor(cat.color || "#6366f1");
+    setCatIsOverhead(cat.is_manufacturing_overhead || false);
+    setShowAddCategory(true);
+  };
 
   // Fixed cost form state
   const [fcName, setFcName] = useState("");
@@ -153,7 +163,6 @@ const Expenses = () => {
         .select("*")
         .eq("is_active", true)
         .order("next_due_date");
-      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
       const { data, error } = await query;
       if (error) throw error;
       return data;
@@ -278,7 +287,12 @@ const Expenses = () => {
     try {
       if (editingCategory) {
         const { error } = await supabase.from("expense_categories")
-          .update({ name: catName.trim(), description: catDescription.trim() || null, color: catColor })
+          .update({ 
+            name: catName.trim(), 
+            description: catDescription.trim() || null, 
+            color: catColor,
+            is_manufacturing_overhead: catIsOverhead
+          })
           .eq("id", editingCategory.id);
         if (error) throw error;
         toast.success("Category updated");
@@ -287,6 +301,7 @@ const Expenses = () => {
           name: catName.trim(),
           description: catDescription.trim() || null,
           color: catColor,
+          is_manufacturing_overhead: catIsOverhead,
           warehouse_id: currentWarehouse?.id || null,
         });
         if (error) throw error;
@@ -298,6 +313,7 @@ const Expenses = () => {
       setCatName("");
       setCatDescription("");
       setCatColor("#6366f1");
+      setCatIsOverhead(false);
     } catch (error: any) {
       toast.error(error.message || "Failed to save category");
     } finally {
@@ -340,7 +356,6 @@ const Expenses = () => {
 
       const { error } = await supabase.from("fixed_costs").insert({
         display_id: idData,
-        warehouse_id: currentWarehouse?.id || null,
         name: fcName.trim(),
         description: fcDescription.trim() || null,
         amount: parseFloat(fcAmount),
@@ -516,32 +531,46 @@ const Expenses = () => {
             const IconComponent = categoryIcons[cat.icon] || Receipt;
             const isSelected = selectedCategoryFilter === cat.id;
             return (
-              <button
-                key={cat.id}
-                onClick={() => setSelectedCategoryFilter(isSelected ? null : cat.id)}
-                className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-all text-left ${
-                  isSelected 
-                    ? 'bg-primary/10 border-primary/30' 
-                    : 'bg-background hover:bg-muted border-transparent'
-                }`}
-              >
-                <div 
-                  className="w-9 h-9 rounded-lg flex items-center justify-center"
-                  style={{ backgroundColor: cat.color + '20' }}
+              <div key={cat.id} className="relative group flex items-center">
+                <button
+                  onClick={() => setSelectedCategoryFilter(isSelected ? null : cat.id)}
+                  className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-all text-left ${
+                    isSelected 
+                      ? 'bg-primary/10 border-primary/30' 
+                      : 'bg-background hover:bg-muted border-transparent'
+                  }`}
                 >
-                  <IconComponent className="h-4 w-4" style={{ color: cat.color }} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm truncate">{cat.name}</p>
-                  <p className="text-xs text-muted-foreground">{cat.count} expense{cat.count !== 1 ? 's' : ''}</p>
-                </div>
-                {cat.total > 0 && (
-                  <span className="text-sm font-semibold">₹{cat.total.toLocaleString()}</span>
+                  <div 
+                    className="w-9 h-9 rounded-lg flex items-center justify-center"
+                    style={{ backgroundColor: cat.color + '20' }}
+                  >
+                    <IconComponent className="h-4 w-4" style={{ color: cat.color }} />
+                  </div>
+                  <div className="flex-1 min-w-0 pr-8">
+                    <p className="font-medium text-sm truncate">{cat.name}</p>
+                    <p className="text-xs text-muted-foreground">{cat.count} expense{cat.count !== 1 ? 's' : ''}</p>
+                  </div>
+                  {cat.total > 0 && (
+                    <span className="text-sm font-semibold">₹{cat.total.toLocaleString()}</span>
+                  )}
+                  {cat.is_system && (
+                    <Badge variant="secondary" className="text-[10px] px-1.5 shrink-0">System</Badge>
+                  )}
+                  {cat.is_manufacturing_overhead && !cat.is_system && (
+                    <Badge variant="outline" className="text-[10px] px-1.5 ml-1 border-blue-200 text-blue-700 bg-blue-50 shrink-0">Mfg</Badge>
+                  )}
+                </button>
+                {isAdmin && !cat.is_system && (
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="absolute right-2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity bg-background border shadow-sm" 
+                    onClick={(e) => { e.stopPropagation(); openEditCategory(cat); }}
+                  >
+                    <Wrench className="h-3.5 w-3.5 text-muted-foreground" />
+                  </Button>
                 )}
-                {cat.is_system && (
-                  <Badge variant="secondary" className="text-[10px] px-1.5">System</Badge>
-                )}
-              </button>
+              </div>
             );
           })}
         </div>
@@ -1054,6 +1083,18 @@ const Expenses = () => {
                   className="font-mono"
                 />
               </div>
+            </div>
+            <div className="flex items-center gap-2 mt-2">
+              <input
+                type="checkbox"
+                id="catIsOverhead"
+                checked={catIsOverhead}
+                onChange={(e) => setCatIsOverhead(e.target.checked)}
+                className="w-4 h-4 cursor-pointer"
+              />
+              <Label htmlFor="catIsOverhead" className="text-sm font-normal cursor-pointer">
+                Manufacturing Overhead (counts towards product costs)
+              </Label>
             </div>
             <Button type="submit" className="w-full" disabled={saving}>
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}

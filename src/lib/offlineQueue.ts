@@ -4,6 +4,8 @@
  * Includes retry logic, deduplication, and failure tracking.
  */
 
+import { toast } from "sonner";
+
 const DB_NAME = "aquaprime_offline";
 const DB_VERSION = 4;
 const STORE_NAME = "pending_actions";
@@ -137,6 +139,7 @@ export async function isBusinessKeyQueued(businessKey: string): Promise<boolean>
 
 /**
  * Generate business key for deduplication
+ * Uses millisecond precision with salt to prevent collisions
  */
 export function generateBusinessKey(
   type: PendingAction['type'],
@@ -163,13 +166,15 @@ export function generateBusinessKey(
     parts.push(productSig);
   }
 
-  // Include timestamp rounded to minute for grouping similar actions
+  // Use millisecond precision with random salt to prevent collisions
   const ts = params.timestamp || Date.now();
-  const roundedTs = typeof ts === 'string'
+  const timestampMs = typeof ts === 'string'
     ? new Date(ts).getTime()
     : ts;
-  const minuteRounded = Math.floor(roundedTs / 60000) * 60000;
-  parts.push(String(minuteRounded));
+
+  // Add random salt for uniqueness (2 random hex characters)
+  const salt = Math.floor(Math.random() * 256).toString(16).padStart(2, '0');
+  parts.push(`${timestampMs}-${salt}`);
 
   return parts.join(':');
 }
@@ -216,9 +221,6 @@ export async function addToQueue(action: PendingAction): Promise<void> {
     tx.onerror = () => reject(tx.error);
   });
 }
-
-// Import toast for warnings in addToQueue
-import { toast } from "sonner";
 
 export async function getQueuedActions(): Promise<PendingAction[]> {
   const db = await openDB();

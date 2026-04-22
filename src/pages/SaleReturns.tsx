@@ -6,10 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2, Plus, RotateCcw, Search, Package, CheckCircle, XCircle, Clock, Eye } from "lucide-react";
+import { Loader2, Plus, RotateCcw, Search, Package, CheckCircle, XCircle, Clock, Eye, Minus } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import {
@@ -21,12 +22,14 @@ import {
 import { DataTable } from "@/components/shared/DataTable";
 import { ResponsiveDataView } from "@/components/shared/ResponsiveDataView";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useSearchParams } from "react-router-dom";
 
 const SaleReturns = () => {
   const { user, role } = useAuth();
   const qc = useQueryClient();
   const isMobile = useIsMobile();
   const canApprove = ["super_admin", "manager"].includes(role || "");
+  const [searchParams] = useSearchParams();
 
   const [showCreate, setShowCreate] = useState(false);
   const [showDetail, setShowDetail] = useState<string | null>(null);
@@ -37,8 +40,27 @@ const SaleReturns = () => {
   const [saleId, setSaleId] = useState("");
   const [reason, setReason] = useState("");
   const [notes, setNotes] = useState("");
-  const [returnItems, setReturnItems] = useState<Array<{ sale_item_id: string; quantity: number; max_qty: number; product_name: string; unit_price: number }>>([]);
+  const [returnItems, setReturnItems] = useState<Array<{ sale_item_id: string; quantity: number; max_qty: number; product_name: string; unit_price: number; selected: boolean }>>([]);
   const [saving, setSaving] = useState(false);
+
+  // Auto-open create dialog with sale_id from URL
+  useEffect(() => {
+    const saleIdParam = searchParams.get("sale_id");
+    if (saleIdParam && !showCreate) {
+      setSaleId(saleIdParam);
+      setShowCreate(true);
+    }
+  }, [searchParams, showCreate]);
+
+  // Auto-select sale when saleId is set from URL
+  useEffect(() => {
+    if (saleId && returnItems.length === 0 && sales.length > 0) {
+      const sale = sales.find((s: any) => s.id === saleId);
+      if (sale) {
+        handleSaleSelect(saleId);
+      }
+    }
+  }, [saleId, sales, returnItems.length]);
 
   // Fetch returns
   const { data: returns = [], isLoading } = useQuery({
@@ -129,6 +151,7 @@ const SaleReturns = () => {
       max_qty: si.quantity,
       product_name: si.products?.name || "Product",
       unit_price: si.unit_price,
+      selected: false,
     }));
     setReturnItems(items);
   };
@@ -142,6 +165,7 @@ const SaleReturns = () => {
         max_qty: Number(si.quantity),
         product_name: si.products?.name || "Product",
         unit_price: Number(si.unit_price),
+        selected: false,
       }));
       setReturnItems(items);
     }
@@ -154,16 +178,36 @@ const SaleReturns = () => {
     }
   }, [saleId, saleItems]);
 
+  const toggleItem = (idx: number) => {
+    setReturnItems((prev) => {
+      const updated = [...prev];
+      updated[idx].selected = !updated[idx].selected;
+      // If selecting, set default quantity to 1 (or max if only 1 available)
+      if (updated[idx].selected && updated[idx].quantity === 0) {
+        updated[idx].quantity = Math.min(1, updated[idx].max_qty);
+      }
+      return updated;
+    });
+  };
+
   const updateItemQuantity = (idx: number, qty: number) => {
     setReturnItems((prev) => {
       const updated = [...prev];
       updated[idx].quantity = Math.min(Math.max(0, qty), updated[idx].max_qty);
+      // Auto-select if quantity > 0
+      if (updated[idx].quantity > 0) {
+        updated[idx].selected = true;
+      } else {
+        updated[idx].selected = false;
+      }
       return updated;
     });
   };
 
   const calculateTotal = () => {
-    return returnItems.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
+    return returnItems
+      .filter((item) => item.selected && item.quantity > 0)
+      .reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
   };
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -245,16 +289,31 @@ const SaleReturns = () => {
         updates.approved_at = new Date().toISOString();
       }
 
-      const { error } = await supabase
-        .from("sale_returns")
-        .update(updates)
-        .eq("id", id);
+      if (newStatus === "completed") {
+        const { data: result, error: processError } = await supabase.rpc("process_completed_sale_return", {
+          p_return_id: id,
+        });
+        if (processError) throw processError;
+        const resultRow = Array.isArray(result) ? result[0] : result;
+        if (resultRow && !resultRow.success) {
+          throw new Error(resultRow.message || "Failed to process return");
+        }
+        toast.success(resultRow?.message || "Return processed successfully");
+      } else {
+        const { error } = await supabase
+          .from("sale_returns")
+          .update(updates)
+          .eq("id", id)
+          .eq("status", "approved");
 
-      if (error) throw error;
+        if (error) throw error;
+        toast.success(`Return ${newStatus}`);
+      }
 
-      toast.success(`Return ${newStatus}`);
       qc.invalidateQueries({ queryKey: ["sale-returns"] });
       qc.invalidateQueries({ queryKey: ["sale-return-detail", id] });
+      qc.invalidateQueries({ queryKey: ["sales"] });
+      qc.invalidateQueries({ queryKey: ["stores"] });
     } catch (err: any) {
       toast.error(err.message);
     }
@@ -397,33 +456,72 @@ const SaleReturns = () => {
 
             {saleId && returnItems.length > 0 && (
               <div className="space-y-3">
-                <Label>Items to Return</Label>
+                <Label className="flex items-center gap-2">
+                  <Package className="h-4 w-4" />
+                  Items to Return
+                </Label>
                 <div className="border rounded-lg divide-y">
                   {returnItems.map((item, idx) => (
-                    <div key={item.sale_item_id} className="p-3 flex items-center gap-4">
-                      <div className="flex-1">
-                        <p className="font-medium">{item.product_name}</p>
-                        <p className="text-sm text-muted-foreground">₹{item.unit_price} × max {item.max_qty}</p>
+                    <div
+                      key={item.sale_item_id}
+                      className={`p-3 flex items-center gap-3 transition-colors ${
+                        item.selected ? "bg-primary/5" : ""
+                      }`}
+                    >
+                      <Checkbox
+                        checked={item.selected}
+                        onCheckedChange={() => toggleItem(idx)}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm">{item.product_name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          ₹{item.unit_price} × max {item.max_qty}
+                        </p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Label className="text-sm">Qty:</Label>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => updateItemQuantity(idx, item.quantity - 1)}
+                          disabled={!item.selected || item.quantity <= 0}
+                        >
+                          <Minus className="h-3 w-3" />
+                        </Button>
                         <Input
                           type="number"
                           min={0}
                           max={item.max_qty}
                           value={item.quantity}
                           onChange={(e) => updateItemQuantity(idx, parseInt(e.target.value) || 0)}
-                          className="w-20"
+                          className="w-14 h-7 text-center text-sm"
+                          disabled={!item.selected}
                         />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => updateItemQuantity(idx, item.quantity + 1)}
+                          disabled={!item.selected || item.quantity >= item.max_qty}
+                        >
+                          <Plus className="h-3 w-3" />
+                        </Button>
                       </div>
-                      <p className="font-medium w-24 text-right">
+                      <p className="font-medium w-20 text-right text-sm">
                         ₹{(item.quantity * item.unit_price).toLocaleString()}
                       </p>
                     </div>
                   ))}
                 </div>
-                <div className="flex justify-end p-3 bg-muted/50 rounded-lg">
-                  <p className="font-semibold">Total Return: ₹{calculateTotal().toLocaleString()}</p>
+                <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
+                  <p className="text-sm text-muted-foreground">
+                    {returnItems.filter(i => i.selected && i.quantity > 0).length} items selected
+                  </p>
+                  <p className="font-semibold">
+                    Total Return: ₹{calculateTotal().toLocaleString()}
+                  </p>
                 </div>
               </div>
             )}
@@ -455,18 +553,18 @@ const SaleReturns = () => {
               />
             </div>
 
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => { setShowCreate(false); resetForm(); }}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={saving || !saleId || calculateTotal() === 0}>
-                {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                Create Return
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <DialogFooter>
+        <Button type="button" variant="outline" onClick={() => { setShowCreate(false); resetForm(); }}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={saving || !saleId || returnItems.filter(i => i.selected && i.quantity > 0).length === 0}>
+          {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+          Create Return
+        </Button>
+      </DialogFooter>
+    </form>
+  </DialogContent>
+</Dialog>
 
       {/* Return Detail Dialog */}
       <Dialog open={!!showDetail} onOpenChange={(open) => !open && setShowDetail(null)}>

@@ -149,17 +149,37 @@ const InvoiceForm = () => {
     },
   });
 
-  // Fetch uninvoiced sales for customer/store
+  // Fetch uninvoiced sales for customer/store OR from selected sale IDs
   const { data: availableSales = [] } = useQuery({
-    queryKey: ["uninvoiced-sales", customerId, storeId],
+    queryKey: ["uninvoiced-sales", customerId, storeId, selectedSales.join(",")],
     queryFn: async () => {
+      // If we have selected sale IDs, fetch those directly
+      if (selectedSales.length > 0) {
+        const { data, error } = await supabase
+          .from("sales")
+          .select("id, display_id, created_at, total_amount, store_id, customer_id, cash_amount, upi_amount, outstanding_amount")
+          .in("id", selectedSales);
+        
+        if (error) {
+          console.error("Error fetching selected sales:", error);
+          return [];
+        }
+        
+        // Auto-populate customer and store from the first sale
+        if (data && data.length > 0) {
+          const firstSale = data[0];
+          if (firstSale.customer_id) setCustomerId(firstSale.customer_id);
+          if (firstSale.store_id) setStoreId(firstSale.store_id);
+        }
+        
+        return data || [];
+      }
+      
+      // Otherwise, fetch by customer
       if (!customerId) return [];
       let query = supabase
         .from("sales")
-        .select(`
-          id, display_id, created_at, total_amount,
-          sale_items(id, product_id, quantity, unit_price, total_price, products(name, hsn_code, gst_rate))
-        `)
+        .select("id, display_id, created_at, total_amount")
         .eq("customer_id", customerId)
         .eq("has_invoice", false);
       
@@ -170,7 +190,7 @@ const InvoiceForm = () => {
       const { data } = await query.order("created_at", { ascending: false });
       return data || [];
     },
-    enabled: !!customerId,
+    enabled: !!customerId || selectedSales.length > 0,
   });
 
   // Set default warehouse
@@ -205,20 +225,33 @@ const InvoiceForm = () => {
     }
   }, [storeId, stores]);
 
+  // Fetch sale items when sales are selected
+  const { data: saleItemsData } = useQuery({
+    queryKey: ["sale-items-for-invoice", selectedSales.join(",")],
+    queryFn: async () => {
+      if (selectedSales.length === 0) return [];
+      const { data } = await supabase
+        .from("sale_items")
+        .select("id, sale_id, product_id, quantity, unit_price, total_price, products(name, hsn_code, gst_rate)")
+        .in("sale_id", selectedSales);
+      return data || [];
+    },
+    enabled: selectedSales.length > 0,
+  });
+
   // Load items from selected sales
   useEffect(() => {
-    if (selectedSales.length > 0 && availableSales.length > 0) {
+    if (selectedSales.length > 0 && saleItemsData && saleItemsData.length > 0) {
       const newItems: InvoiceItem[] = [];
       selectedSales.forEach((saleId) => {
-        const sale = availableSales.find((s: any) => s.id === saleId);
-        if (sale?.sale_items) {
-          sale.sale_items.forEach((item: any) => {
-            const quantity = Number(item.quantity);
-            const unitPrice = Number(item.unit_price);
-            const lineTotal = Number(item.total_price ?? quantity * unitPrice);
-            const taxRate = Number(item.products?.gst_rate || 0);
-            const taxableAmount = taxRate > 0 ? lineTotal / (1 + taxRate / 100) : lineTotal;
-            const lineTax = lineTotal - taxableAmount;
+        const saleItems = saleItemsData.filter((si: any) => si.sale_id === saleId);
+        saleItems.forEach((item: any) => {
+          const quantity = Number(item.quantity);
+          const unitPrice = Number(item.unit_price);
+          const lineTotal = Number(item.total_price ?? quantity * unitPrice);
+          const taxRate = Number(item.products?.gst_rate || 0);
+          const taxableAmount = taxRate > 0 ? lineTotal / (1 + taxRate / 100) : lineTotal;
+          const lineTax = lineTotal - taxableAmount;
 
             newItems.push({
               product_id: item.product_id,
@@ -232,12 +265,11 @@ const InvoiceForm = () => {
               total_amount: Math.round(lineTotal * 100) / 100,
               sale_item_id: item.id,
             });
-          });
-        }
+        });
       });
       setItems(newItems);
     }
-  }, [selectedSales, availableSales]);
+  }, [selectedSales, saleItemsData]);
 
   // Calculate totals with CGST/SGST/IGST breakdown
   const totals = useMemo(() => {

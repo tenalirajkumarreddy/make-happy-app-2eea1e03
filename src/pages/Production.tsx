@@ -17,17 +17,16 @@ const ProductionPage = () => {
   const [isChecking, setIsChecking] = useState(false);
 
   const { data: finishedProducts } = useQuery({
-    queryKey: ['products', warehouse?.id, 'finished'],
+    queryKey: ['products', 'finished'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('products')
         .select('id, name')
-        .eq('warehouse_id', warehouse?.id)
-        .eq('is_raw_material', false);
+        .order('name');
       if (error) throw error;
       return data;
     },
-    enabled: !!warehouse?.id,
+    enabled: true,
   });
 
   const handleCheckFeasibility = async () => {

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import {
   getQueuedActions,
   removeFromQueue,
+  markActionFailed,
   getQueueCount,
   getQueuedFileUploads,
   removeFileUpload,
@@ -17,6 +18,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { logError } from "@/lib/logger";
 import { detectConflicts, ConflictType } from "@/lib/conflictResolver";
+import { validateActionPermission, getUserRole } from "@/lib/permissionCheck";
 
 export function useOnlineStatus() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -152,6 +154,39 @@ export function useOnlineStatus() {
 
     for (const action of actions) {
       try {
+        // Validate user permission before executing the action
+        let userIdToCheck: string | null = null;
+
+        // Extract user ID based on action type
+        if (action.type === "sale") {
+          const { saleData } = action.payload as { saleData: { recorded_by: string } };
+          userIdToCheck = saleData?.recorded_by;
+        } else if (action.type === "transaction") {
+          const { txData } = action.payload as { txData: { recorded_by: string } };
+          userIdToCheck = txData?.recorded_by;
+        } else if (action.type === "visit") {
+          const { userId } = action.payload as { userId: string };
+          userIdToCheck = userId;
+        } else if (action.type === "customer") {
+          // For customer creation, check if user still has permission
+          const { customerData } = action.payload as { customerData: Record<string, unknown> };
+          // Use current authenticated user if not specified
+          const { data: { user } } = await supabase.auth.getUser();
+          userIdToCheck = user?.id ?? null;
+        } else if (action.type === "store") {
+          // For store creation, check current user
+          const { data: { user } } = await supabase.auth.getUser();
+          userIdToCheck = user?.id ?? null;
+        }
+
+        // Validate permission before proceeding
+        if (userIdToCheck) {
+          const permissionCheck = await validateActionPermission(userIdToCheck, action.type);
+          if (!permissionCheck.allowed) {
+            throw new Error(`Permission denied: ${permissionCheck.reason}`);
+          }
+        }
+
         if (action.type === "sale") {
           const { saleData, saleItems } = action.payload as any;
           const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "SALE", seq_name: "sale_display_seq" });
@@ -257,46 +292,65 @@ export function useOnlineStatus() {
         }
       await removeFromQueue(action.id);
       totalSynced++;
-    } catch (err: any) {
-      logError(err, { context: "useOnlineStatus.syncQueue", actionType: action.type, actionId: action.id });
-      
-      // Check if this is a conflict error
-      const errorMessage = err?.message || "";
-      const isConflict = 
-        errorMessage.includes("credit limit") ||
-        errorMessage.includes("price changed") ||
-        errorMessage.includes("inactive") ||
-        errorMessage.includes("unavailable") ||
-        errorMessage.includes("insufficient stock");
-      
-      if (isConflict && action.context) {
-        // Detect and store conflict
-        try {
-          const conflicts = await detectConflicts(action);
-          if (conflicts.length > 0) {
-            for (const conflict of conflicts) {
-              await storeConflict(action.id, {
-                conflictType: conflict.type as any,
-                severity: conflict.severity,
-                reason: conflict.reason,
-                currentValue: conflict.currentState.storeOutstanding,
-                queuedValue: conflict.queuedState.storeOutstandingAtQueueTime,
-                detectedAt: new Date().toISOString(),
-                resolved: false,
-              });
+      } catch (err: any) {
+        logError(err, { context: "useOnlineStatus.syncQueue", actionType: action.type, actionId: action.id });
+
+        // Check if this is a permission error
+        const errorMessage = err?.message || "";
+        const isPermissionError =
+          errorMessage.includes("Permission denied") ||
+          errorMessage.includes("permission") ||
+          errorMessage.includes("unauthorized");
+
+        if (isPermissionError) {
+          // Permission errors should be treated as non-retryable failures
+          // Remove from queue and log the failure
+          await markActionFailed(action.id, errorMessage);
+          logError(new Error(`Permission denied for action ${action.id}: ${errorMessage}`), {
+            context: "useOnlineStatus.syncQueue.permissionDenied",
+            actionType: action.type,
+          });
+          toast.error(`Cannot sync ${action.type}: ${errorMessage}`);
+          totalFailed++;
+          continue;
+        }
+
+        // Check if this is a conflict error
+        const isConflict =
+          errorMessage.includes("credit limit") ||
+          errorMessage.includes("price changed") ||
+          errorMessage.includes("inactive") ||
+          errorMessage.includes("unavailable") ||
+          errorMessage.includes("insufficient stock");
+
+        if (isConflict && action.context) {
+          // Detect and store conflict
+          try {
+            const conflicts = await detectConflicts(action);
+            if (conflicts.length > 0) {
+              for (const conflict of conflicts) {
+                await storeConflict(action.id, {
+                  conflictType: conflict.type as any,
+                  severity: conflict.severity,
+                  reason: conflict.reason,
+                  currentValue: conflict.currentState.storeOutstanding,
+                  queuedValue: conflict.queuedState.storeOutstandingAtQueueTime,
+                  detectedAt: new Date().toISOString(),
+                  resolved: false,
+                });
+              }
+              totalConflicts++;
+              toast.warning(`Conflict detected for ${action.type}: ${conflicts[0].reason}`);
+            } else {
+              totalFailed++;
             }
-            totalConflicts++;
-            toast.warning(`Conflict detected for ${action.type}: ${conflicts[0].reason}`);
-          } else {
+          } catch (conflictErr) {
             totalFailed++;
           }
-        } catch (conflictErr) {
+        } else {
           totalFailed++;
         }
-      } else {
-        totalFailed++;
       }
-    }
   }
 
   setSyncing(false);

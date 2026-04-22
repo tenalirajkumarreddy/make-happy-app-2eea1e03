@@ -39,6 +39,7 @@ const Sales = lazy(() => import("./pages/Sales"));
 const Transactions = lazy(() => import("./pages/Transactions"));
 const Orders = lazy(() => import("./pages/Orders"));
 const Handovers = lazy(() => import("./pages/Handovers"));
+const HandoverRequests = lazy(() => import("./pages/HandoverRequests"));
 const Reports = lazy(() => import("./pages/Reports"));
 const Analytics = lazy(() => import("./pages/Analytics"));
 const Inventory = lazy(() => import("./pages/Inventory"));
@@ -55,9 +56,15 @@ const InvoiceForm = lazy(() => import("./pages/InvoiceForm"));
 const InvoiceView = lazy(() => import("./pages/InvoiceView"));
 const Attendance = lazy(() => import("./pages/Attendance"));
 const Banners = lazy(() => import("./pages/Banners"));
+const CostInsights = lazy(() => import("./pages/CostInsights"));
 const Activity = lazy(() => import("./pages/Activity"));
 const AccessControl = lazy(() => import("./pages/AccessControl"));
 const AdminStaffDirectory = lazy(() => import("./pages/AdminStaffDirectory").then(m => ({ default: m.AdminStaffDirectory })));
+const AdminVehicles = lazy(() => import("./pages/admin/AdminVehicles"));
+const DeliveryFeasibility = lazy(() => import("./pages/admin/DeliveryFeasibility"));
+const AdminSetup = lazy(() => import("./pages/admin/AdminSetup"));
+const AdminCostHistory = lazy(() => import("./pages/admin/AdminCostHistory"));
+const ProductionLogPage = lazy(() => import("./pages/admin/ProductionLog"));
 const Settings = lazy(() => import("./pages/Settings"));
 const StoreTypes = lazy(() => import("./pages/StoreTypes"));
 const StoreTypeAccess = lazy(() => import("./pages/StoreTypeAccess"));
@@ -78,6 +85,11 @@ const WorkerRolesPage = lazy(() => import('./pages/hr/WorkerRoles'));
 const WorkersPage = lazy(() => import('./pages/hr/Workers'));
 const PayrollPage = lazy(() => import('./pages/hr/Payroll'));
 const PayrollDetailPage = lazy(() => import('./pages/hr/PayrollDetail'));
+
+// New features - Staff & Income
+const StaffDirectory = lazy(() => import("./pages/StaffDirectory").then(m => ({ default: m.StaffDirectory })));
+const StaffProfile = lazy(() => import("./pages/StaffProfile").then(m => ({ default: m.StaffProfile })));
+const Income = lazy(() => import("./pages/Income").then(m => ({ default: m.Income })));
 
 // Loading fallback component
 const PageLoader = () => (
@@ -171,7 +183,7 @@ const App = () => {
               <Route path="/vendors/:vendorId" element={<VendorDetail />} />
               <Route path="/inventory/vendors" element={<Vendors />} />
               <Route path="/inventory/vendors/:vendorId" element={<VendorDetail />} />
-              <Route path="/inventory/purchases" element={<Purchases />} />
+              <Route path="/inventory/purchases" element={<RoleGuard allowed={["super_admin", "manager"]}><Purchases /></RoleGuard>} />
               <Route path="/inventory/raw-materials" element={<RawMaterialsPage />} />
               <Route path="/inventory/boms" element={<BillOfMaterialsPage />} />
               <Route path="/inventory/boms/:bomId" element={<BomDetailPage />} />
@@ -188,22 +200,43 @@ const App = () => {
               <Route path="/sale-returns" element={<SaleReturns />} />
               <Route path="/transactions" element={<Transactions />} />
               <Route path="/purchase-returns" element={<PurchaseReturns />} />
+              <Route path="/purchases" element={<RoleGuard allowed={["super_admin", "manager"]}><Purchases /></RoleGuard>} />
+              <Route path="/stock-transfers" element={<StockTransfers />} />
+              <Route path="/vendor-payments" element={<VendorPayments />} />
+              <Route path="/expenses" element={<Expenses />} />
+              <Route path="/attendance" element={<RoleGuard allowed={["super_admin", "manager"]}><Attendance /></RoleGuard>} />
+              <Route path="/banners" element={<Banners />} />
+              <Route path="/invoices" element={<Invoices />} />
+              <Route path="/invoices/new" element={<InvoiceForm />} />
+              <Route path="/invoices/:id" element={<InvoiceView />} />
               <Route path="/orders" element={<Orders />} />
               <Route path="/handovers" element={<Handovers />} />
+              <Route path="/handover-requests" element={<HandoverRequests />} />
               <Route path="/reports" element={<Reports />} />
               <Route path="/reports/:type" element={<Reports />} />
+              <Route path="/analytics" element={<Analytics />} />
               <Route path="/activity" element={<Activity />} />
               <Route path="/access-control" element={<AccessControl />} />
               <Route path="/admin/staff" element={<AdminStaffDirectory />} />
+<Route path="/staff" element={<StaffDirectory />} />
+<Route path="/staff/:userId" element={<StaffProfile />} />
+<Route path="/staff/:userId/edit" element={<StaffProfile />} />
+<Route path="/income" element={<RoleGuard allowed={["super_admin", "manager"]}><Income /></RoleGuard>} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/map" element={<MapPage />} />
               <Route path="/profile" element={<UserProfile />} />
+              <Route path="/cost-insights" element={<CostInsights />} />
               <Route path="/portal/sales" element={<CustomerSales />} />
               <Route path="/portal/orders" element={<CustomerOrders />} />
               <Route path="/portal/transactions" element={<CustomerTransactions />} />
               <Route path="/portal/profile" element={<CustomerProfile />} />
               <Route path="/admin" element={<RoleGuard allowed={["super_admin"]}><Outlet /></RoleGuard>}>
                 <Route path="staff" element={<AdminStaffDirectory />} />
+                <Route path="setup" element={<AdminSetup />} />
+                <Route path="cost-history" element={<AdminCostHistory />} />
+                <Route path="vehicles" element={<AdminVehicles />} />
+                <Route path="delivery-feasibility" element={<DeliveryFeasibility />} />
+                <Route path="production-log" element={<ProductionLogPage />} />
                 <Route path="settings" element={<Settings />} />
                 <Route path="map" element={<MapPage />} />
               </Route>

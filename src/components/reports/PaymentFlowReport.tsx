@@ -30,10 +30,9 @@ export default function PaymentFlowReport() {
     queryFn: async () => {
       const { data } = await supabase
         .from("transactions")
-        .select("id, display_id, amount, payment_method, transaction_date, type")
-        .eq("type", "payment")
-        .gte("transaction_date", format(dateRange.from, "yyyy-MM-dd"))
-        .lte("transaction_date", format(dateRange.to, "yyyy-MM-dd"));
+        .select("id, display_id, total_amount, cash_amount, upi_amount, payment_date")
+        .gte("payment_date", format(dateRange.from, "yyyy-MM-dd"))
+        .lte("payment_date", format(dateRange.to, "yyyy-MM-dd"));
       return data || [];
     },
   });
@@ -81,7 +80,7 @@ export default function PaymentFlowReport() {
 
   // Summary calculations
   const summary = useMemo(() => {
-    const totalInflow = customerPayments.reduce((sum: number, p: any) => sum + Number(p.amount), 0);
+    const totalInflow = customerPayments.reduce((sum: number, p: any) => sum + Number(p.total_amount || 0), 0);
     
     const vendorOutflow = vendorPayments.reduce((sum: number, p: any) => sum + Number(p.amount), 0);
     const expenseOutflow = expenses.reduce((sum: number, e: any) => sum + Number(e.amount), 0);
@@ -93,8 +92,13 @@ export default function PaymentFlowReport() {
     // By payment method
     const inflowByMethod: Record<string, number> = {};
     customerPayments.forEach((p: any) => {
-      const method = p.payment_method || "other";
-      inflowByMethod[method] = (inflowByMethod[method] || 0) + Number(p.amount);
+      const cash = Number(p.cash_amount || 0);
+      const upi = Number(p.upi_amount || 0);
+      if (cash > 0) inflowByMethod.cash = (inflowByMethod.cash || 0) + cash;
+      if (upi > 0) inflowByMethod.upi = (inflowByMethod.upi || 0) + upi;
+      if (cash === 0 && upi === 0) {
+        inflowByMethod.other = (inflowByMethod.other || 0) + Number(p.total_amount || 0);
+      }
     });
 
     const outflowByMethod: Record<string, number> = {};
@@ -140,8 +144,8 @@ export default function PaymentFlowReport() {
 
     return intervals.map((date) => {
       const inflow = customerPayments
-        .filter((p: any) => isSamePeriod(new Date(p.transaction_date), date))
-        .reduce((sum: number, p: any) => sum + Number(p.amount), 0);
+        .filter((p: any) => isSamePeriod(new Date(p.payment_date), date))
+        .reduce((sum: number, p: any) => sum + Number(p.total_amount || 0), 0);
 
       const outflow = 
         vendorPayments.filter((p: any) => isSamePeriod(new Date(p.payment_date), date)).reduce((sum: number, p: any) => sum + Number(p.amount), 0) +

@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { logError } from "@/lib/logger";
 
 /**
  * Subscribes to Supabase Realtime changes on relevant tables per role
@@ -26,6 +27,7 @@ const ROLE_TABLE_MAP: Record<string, string[]> = {
     "balance_adjustments", "activity_logs", "user_roles", "profiles",
     "agent_routes", "agent_store_types",
     "product_stock", "stock_movements", "staff_stock", "stock_transfers", "warehouses",
+    "manufacturing_expenses", "production_log",
   ],
   manager: [
     // Manager needs most operational tables
@@ -36,6 +38,7 @@ const ROLE_TABLE_MAP: Record<string, string[]> = {
     "balance_adjustments", "activity_logs", "user_roles", "profiles",
     "agent_routes", "agent_store_types",
     "product_stock", "stock_movements", "staff_stock", "stock_transfers", "warehouses",
+    "manufacturing_expenses", "production_log",
   ],
   agent: [
     // Agent only needs their operational data
@@ -96,6 +99,9 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
   warehouses: ["warehouses"],
   // Receipts table
   receipts: ["receipts", "receipt-history"],
+  // Manufacturing cost engine
+  manufacturing_expenses: ["manufacturing_expenses", "manufacturing_expenses_summary"],
+  production_log: ["production_log", "production_log_summary", "product_total_costs"],
 };
 
 const STAFF_ROLES = ["super_admin", "manager", "agent", "marketer", "pos"];
@@ -115,6 +121,17 @@ function getTablesForRole(role: string | null): string[] {
 
 let sharedChannel: any | null = null;
 const subscribers = new Map<symbol, RealtimeSubscriber>();
+let isTearingDownChannel = false;
+
+// Retry configuration for realtime connections
+const RETRY_CONFIG = {
+  maxRetries: 5,
+  baseDelay: 1000,
+  maxDelay: 30000,
+};
+
+let retryAttempt = 0;
+let retryTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
 function shouldSkipForSubscriber(sub: RealtimeSubscriber, table: string, payload: any) {
   if (sub.isAdmin) return false;
@@ -175,19 +192,91 @@ function ensureSharedChannel(role: string | null) {
   });
 
   sharedChannel.subscribe((status: string) => {
+    // Ignore status transitions caused by intentional teardown (logout/unmount).
+    if (isTearingDownChannel && (status === 'CLOSED' || status === 'TIMED_OUT')) {
+      return;
+    }
+
     if (status === 'SUBSCRIBED') {
-      console.log('[Realtime] Subscribed to tables:', tables);
+      // Only log in development
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.log('[Realtime] Subscribed to tables:', tables);
+      }
+      retryAttempt = 0; // Reset retry counter on successful subscription
     } else if (status === 'CHANNEL_ERROR') {
-      console.error('[Realtime] Channel error');
+      // Use structured logging instead of console
+      logError(new Error('[Realtime] Channel error'), { context: 'useRealtimeSync' });
+      handleRealtimeError();
+    } else if (status === 'CLOSED' || status === 'TIMED_OUT') {
+      // These statuses can occur transiently and are auto-recovered by retry logic.
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.warn(`[Realtime] Connection ${status.toLowerCase()}, retrying...`);
+      }
+      scheduleRealtimeReconnect();
     }
   });
+}
+
+// Handle realtime connection errors with exponential backoff retry
+function handleRealtimeError() {
+  if (retryAttempt < RETRY_CONFIG.maxRetries) {
+    scheduleRealtimeReconnect();
+  } else {
+    logError(new Error('[Realtime] Max retry attempts reached. Realtime sync disabled until page refresh.'), {
+      context: 'useRealtimeSync',
+      maxRetries: RETRY_CONFIG.maxRetries,
+    });
+  }
+}
+
+// Schedule reconnection with exponential backoff
+function scheduleRealtimeReconnect() {
+  if (retryTimeoutId) {
+    clearTimeout(retryTimeoutId);
+  }
+
+  const delay = Math.min(
+    RETRY_CONFIG.baseDelay * Math.pow(2, retryAttempt),
+    RETRY_CONFIG.maxDelay
+  );
+
+  console.log(`[Realtime] Reconnecting in ${delay}ms (attempt ${retryAttempt + 1}/${RETRY_CONFIG.maxRetries})`);
+
+  retryTimeoutId = setTimeout(() => {
+    retryAttempt++;
+    // Re-establish the shared channel
+    if (sharedChannel) {
+      isTearingDownChannel = true;
+      supabase.removeChannel(sharedChannel);
+      sharedChannel = null;
+      isTearingDownChannel = false;
+    }
+
+    // Get any subscriber's role to re-establish subscriptions
+    const firstSub = subscribers.values().next().value;
+    if (firstSub) {
+      ensureSharedChannel(firstSub.role);
+    }
+  }, delay);
+}
+
+// Cleanup retry timeout on unmount
+function clearRetryTimeout() {
+  if (retryTimeoutId) {
+    clearTimeout(retryTimeoutId);
+    retryTimeoutId = null;
+  }
 }
 
 function maybeTearDownSharedChannel() {
   if (subscribers.size > 0) return;
   if (!sharedChannel) return;
+  isTearingDownChannel = true;
   supabase.removeChannel(sharedChannel);
   sharedChannel = null;
+  isTearingDownChannel = false;
 }
 
 export function useRealtimeSync() {

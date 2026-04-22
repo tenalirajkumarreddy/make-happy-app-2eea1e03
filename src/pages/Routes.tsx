@@ -128,7 +128,7 @@ const Routes = () => {
           <div className="w-full overflow-x-auto pb-2 scrollbar-none">
             <TabsList className="bg-muted/50 p-1 h-11">
               {storeTypes.map((type) => (
-                <TabsTrigger key={type.id} value={type.id}>{type.name}</TabsTrigger>
+                <TabsTrigger key={type.id} id={`tab-${type.id}`} value={type.id}>{type.name}</TabsTrigger>
               ))}
             </TabsList>
           </div>
@@ -136,7 +136,7 @@ const Routes = () => {
           {storeTypes.map((type) => {
             const typeRoutes = routes?.filter(r => r.store_type_id === type.id) || [];
             return (
-              <TabsContent key={type.id} value={type.id} className="space-y-4 mt-4">
+              <TabsContent key={type.id} value={type.id} aria-labelledby={`tab-${type.id}`} className="space-y-4 mt-4">
                 {typeRoutes.length === 0 ? (
                   <div className="rounded-2xl border border-dashed bg-card/50 p-12 text-center flex flex-col items-center justify-center animate-in fade-in zoom-in-95 duration-300">
                     <div className="h-12 w-12 rounded-full bg-muted/50 flex items-center justify-center mb-3">
@@ -163,7 +163,7 @@ const Routes = () => {
                             <h3 className="font-semibold">{route.name}</h3>
                             <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
                               <span className="flex items-center gap-1"><Store className="h-3.5 w-3.5" />{storeCount} stores</span>
-                              <span>Outstanding: <span className="font-medium text-foreground">₹{totalOutstanding.toLocaleString()}</span></span>
+                              <span>Outstanding: <span className="font-medium text-foreground">₹{(totalOutstanding || 0).toLocaleString()}</span></span>
                             </div>
                           </div>
                         </div>

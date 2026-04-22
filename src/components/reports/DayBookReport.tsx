@@ -51,9 +51,9 @@ export default function DayBookReport() {
     queryFn: async () => {
       const { data } = await supabase
         .from("transactions")
-        .select("id, display_id, transaction_date, amount, type, payment_method, notes, created_at, stores(name, customers(name))")
-        .gte("transaction_date", format(dateRange.from, "yyyy-MM-dd"))
-        .lte("transaction_date", format(dateRange.to, "yyyy-MM-dd"))
+        .select("id, display_id, payment_date, total_amount, cash_amount, upi_amount, notes, created_at, stores(name, customers(name))")
+        .gte("payment_date", format(dateRange.from, "yyyy-MM-dd"))
+        .lte("payment_date", format(dateRange.to, "yyyy-MM-dd"))
         .order("created_at", { ascending: true });
       return data || [];
     },
@@ -64,7 +64,7 @@ export default function DayBookReport() {
     queryFn: async () => {
       const { data } = await supabase
         .from("purchases")
-        .select("id, display_id, purchase_date, total_amount, paid_amount, payment_method, notes, created_at, vendors(name)")
+        .select("id, display_id, purchase_date, total_amount, notes, created_at, vendors(name)")
         .gte("purchase_date", format(dateRange.from, "yyyy-MM-dd"))
         .lte("purchase_date", format(dateRange.to, "yyyy-MM-dd"))
         .order("created_at", { ascending: true });
@@ -142,23 +142,30 @@ export default function DayBookReport() {
 
     // Customer Payments (Credit - money coming in)
     transactions.forEach((t: any) => {
-      if (t.type === "payment") {
-        runningBalance += Number(t.amount);
-        allEntries.push({
-          id: t.id,
-          type: "payment",
-          display_id: t.display_id,
-          date: t.transaction_date,
-          time: format(new Date(t.created_at), "HH:mm"),
-          description: "Payment Received",
-          party_name: t.stores?.customers?.name || t.stores?.name || "Customer",
-          debit: 0,
-          credit: Number(t.amount),
-          balance: runningBalance,
-          payment_method: t.payment_method,
-          notes: t.notes,
-        });
-      }
+      const amount = Number(t.total_amount || 0);
+      if (amount <= 0) return;
+
+      const paymentMethod = Number(t.upi_amount || 0) > 0 && Number(t.cash_amount || 0) > 0
+        ? "Mixed"
+        : Number(t.upi_amount || 0) > 0
+          ? "UPI"
+          : "Cash";
+
+      runningBalance += amount;
+      allEntries.push({
+        id: t.id,
+        type: "payment",
+        display_id: t.display_id,
+        date: t.payment_date,
+        time: format(new Date(t.created_at), "HH:mm"),
+        description: "Payment Received",
+        party_name: t.stores?.customers?.name || t.stores?.name || "Customer",
+        debit: 0,
+        credit: amount,
+        balance: runningBalance,
+        payment_method: paymentMethod,
+        notes: t.notes,
+      });
     });
 
     // Purchases (Debit - money going out / liability)
@@ -175,7 +182,7 @@ export default function DayBookReport() {
         debit: Number(p.total_amount),
         credit: 0,
         balance: runningBalance,
-        payment_method: p.payment_method,
+        payment_method: "N/A",
         notes: p.notes,
       });
     });

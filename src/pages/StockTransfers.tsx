@@ -117,16 +117,28 @@ export default function StockTransfers() {
     queryFn: async () => {
       let q = supabase
         .from("user_roles")
-        .select("user_id, profiles(id, full_name)")
+        .select("user_id, role, warehouse_id")
         .in("role", ["agent", "marketer", "pos", "manager"]);
       if (currentWarehouse?.id && !isAdmin) {
         q = q.eq("warehouse_id", currentWarehouse.id);
       }
       const { data, error } = await q;
       if (error) throw error;
-      return (data ?? []).map((r: any) => ({
+
+      const roles = data ?? [];
+      const userIds = Array.from(new Set(roles.map((r: any) => r.user_id).filter(Boolean)));
+      if (userIds.length === 0) return [];
+
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("user_id, full_name")
+        .in("user_id", userIds);
+
+      const profileMap = new Map((profiles ?? []).map((p: any) => [p.user_id, p.full_name]));
+
+      return roles.map((r: any) => ({
         id: r.user_id as string,
-        name: (r.profiles?.full_name as string) ?? "Unknown",
+        name: profileMap.get(r.user_id) ?? "Unknown",
       }));
     },
   });

@@ -83,10 +83,17 @@ export function StaffStockView({ staffStock, isLoading, onViewDetails, onTransfe
     );
   }
 
-  const totalStaffValue = staffStock.reduce((sum, s) => sum + s.totalValue, 0);
-  const totalNegativeValue = staffStock.reduce((sum, s) => 
-    sum + s.items.filter(i => i.is_negative).reduce((isum, i) => isum + (i.amount_value || 0), 0), 0);
-  const totalNegativeItems = staffStock.reduce((sum, s) => sum + s.negativeItems, 0);
+  // Optimized: Single reduce instead of multiple iterations
+  const { totalStaffValue, totalNegativeValue, totalNegativeItems } = staffStock.reduce(
+    (acc, s) => ({
+      totalStaffValue: acc.totalStaffValue + s.totalValue,
+      totalNegativeValue: acc.totalNegativeValue + s.items
+        .filter(i => i.is_negative)
+        .reduce((isum, i) => isum + (i.amount_value || 0), 0),
+      totalNegativeItems: acc.totalNegativeItems + s.negativeItems,
+    }),
+    { totalStaffValue: 0, totalNegativeValue: 0, totalNegativeItems: 0 }
+  );
 
   return (
     <div className="space-y-6">

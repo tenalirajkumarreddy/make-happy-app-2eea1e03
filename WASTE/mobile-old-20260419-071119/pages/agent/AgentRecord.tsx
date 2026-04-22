@@ -953,13 +953,17 @@ function RecordPayment({
       return;
     }
 
-    const { data: displayId } = await (supabase as any).rpc(
-      "generate_display_id",
-      { prefix: "PAY", seq_name: "pay_display_seq" },
-    );
-    const { error } = await supabase.from("transactions").insert({
-      display_id: String(displayId),
-      ...txData,
+    // Use atomic RPC for transaction recording (prevents partial updates)
+    const { data: result, error } = await supabase.rpc("record_transaction", {
+      p_display_id: null, // Will be generated server-side
+      p_store_id: store.id,
+      p_customer_id: store.customer_id,
+      p_recorded_by: effectiveRecordedBy,
+      p_logged_by: loggedBy,
+      p_cash_amount: cash,
+      p_upi_amount: upi,
+      p_notes: notes || null,
+      p_created_at: txnDate ? new Date(txnDate).toISOString() : null,
     });
 
     if (error) {
@@ -967,66 +971,6 @@ function RecordPayment({
       setSaving(false);
       return;
     }
-
-    await supabase
-      .from("stores")
-      .update({ outstanding: newOutstanding })
-      .eq("id", store.id);
-
-    if (txnDate) {
-      const { data: storeRow } = await supabase
-        .from("stores")
-        .select("opening_balance")
-        .eq("id", store.id)
-        .single();
-      let runBal = Number(storeRow?.opening_balance || 0);
-      const [{ data: allSales }, { data: allTxns }] = await Promise.all([
-        supabase
-          .from("sales")
-          .select("id, created_at, total_amount, cash_amount, upi_amount")
-          .eq("store_id", store.id)
-          .order("created_at", { ascending: true }),
-        supabase
-          .from("transactions")
-          .select("id, created_at, total_amount")
-          .eq("store_id", store.id)
-          .order("created_at", { ascending: true }),
-      ]);
-      const timeline = [
-        ...(allSales || []).map((s: any) => ({
-          type: "sale",
-          id: s.id,
-          date: s.created_at,
-          delta:
-            Number(s.total_amount) -
-            Number(s.cash_amount) -
-            Number(s.upi_amount),
-        })),
-        ...(allTxns || []).map((t: any) => ({
-          type: "txn",
-          id: t.id,
-          date: t.created_at,
-          delta: -Number(t.total_amount),
-        })),
-      ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-      for (const entry of timeline) {
-        const oldBal = runBal;
-        runBal += entry.delta;
-        if (entry.type === "sale") {
-          await supabase
-            .from("sales")
-            .update({ old_outstanding: oldBal, new_outstanding: runBal })
-            .eq("id", entry.id);
-        } else {
-          await supabase
-            .from("transactions")
-            .update({ old_outstanding: oldBal, new_outstanding: runBal })
-            .eq("id", entry.id);
-        }
-      }
-      await supabase
-        .from("stores")
-        .update({ outstanding: runBal })
         .eq("id", store.id);
     }
 

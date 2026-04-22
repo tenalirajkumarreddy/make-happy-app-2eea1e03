@@ -207,13 +207,13 @@ export default function Attendance() {
       const userIds = data.map(d => d.user_id);
       const { data: profiles } = await supabase
         .from("profiles")
-        .select("id, full_name, hourly_rate")
-        .in("id", userIds);
+        .select("user_id, full_name")
+        .in("user_id", userIds);
       
       // Merge data
       return data.map(ur => ({
         ...ur,
-        profiles: profiles?.find(p => p.id === ur.user_id) || { full_name: "Unknown", hourly_rate: 0 }
+        profiles: profiles?.find(p => p.user_id === ur.user_id) || { full_name: "Unknown" }
       }));
     },
   });
@@ -265,10 +265,10 @@ export default function Attendance() {
       if (userIds.length > 0) {
         const { data: profiles } = await supabase
           .from("profiles")
-          .select("id, full_name")
-          .in("id", userIds);
+          .select("user_id, full_name")
+          .in("user_id", userIds);
         
-        profiles?.forEach(p => { profilesMap[p.id] = { full_name: p.full_name }; });
+        profiles?.forEach(p => { profilesMap[p.user_id] = { full_name: p.full_name }; });
       }
       
       return data.map(b => ({

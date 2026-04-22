@@ -1,0 +1,203 @@
+<!-- REVERSAL SCENARIOS SECTION -->
+<section id="reversals" class="section">
+  <h2 class="section-title">↩️ Order Reversal & Correction Scenarios</h2>
+  
+  <div class="mermaid">
+flowchart TB
+    subgraph "SCENARIO 1: Delivered by Mistake"
+        D1[Order Delivered]
+        S1[Sale Auto-Created]
+        P1[Payment Recorded?]
+        R1{Reverse Sale?}
+        RS1[Create Sale Return]
+        S2[Add Stock Back]
+        O1[Order → Cancelled]
+    end
+    
+    D1 --> S1
+    S1 --> P1
+    P1 -->|No| R1
+    P1 -->|Yes| RS1
+    RS1 --> S2
+    R1 -->|Yes| RS1
+    RS1 --> O1
+    
+    subgraph "SCENARIO 2: Wrong Products Delivered"
+        D2[Wrong Products]
+        SR2[Create Sale Return]
+        NS2[Create New Sale]
+        INV2[Cancel Old Invoice]
+        INV3[Generate New Invoice]
+    end
+    
+    D2 --> SR2
+    SR2 --> NS2
+    NS2 --> INV3
+    
+    subgraph "SCENARIO 3: Customer Returns After Delivery"
+        D3[Delivered & Paid]
+        R3[Customer Returns]
+        SR3[Sale Return Created]
+        CN3[Credit Note Issued]
+        REF3[Refund or Adjust Balance]
+    end
+    
+    D3 --> R3
+    R3 --> SR3
+    SR3 --> CN3
+    CN3 --> REF3
+    
+    subgraph "SCENARIO 4: Price Correction"
+        D4[Wrong Price Recorded]
+        SAL4[Sale Already Created]
+        ADJ4[Balance Adjustment]
+        NEW4[New Invoice if exists]
+    end
+    
+    D4 --> SAL4
+    SAL4 --> ADJ4
+    ADJ4 --> NEW4
+  </div>
+
+  <h3 class="section-subtitle">Critical Reversal Rules</h3>
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th>Scenario</th>
+          <th>Action Required</th>
+          <th>Stock Impact</th>
+          <th>Balance Impact</th>
+          <th>Invoice Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Delivered by Mistake</strong><br/><span class="text-xs text-muted-foreground">No payment yet</span></td>
+          <td>Reverse Sale → Cancel Order</td>
+          <td>✅ Stock added back</td>
+          <td>✅ Outstanding cleared</td>
+          <td>Delete/Cancel if exists</td>
+        </tr>
+        <tr>
+          <td><strong>Delivered by Mistake</strong><br/><span class="text-xs text-muted-foreground">Payment recorded</span></td>
+          <td>Create Sale Return + Refund</td>
+          <td>✅ Stock added back</td>
+          <td>✅ Refund issued</td>
+          <td>Credit Note issued</td>
+        </tr>
+        <tr>
+          <td><strong>Wrong Products</strong></td>
+          <td>Sale Return + New Sale</td>
+          <td>🔄 Stock adjusted</td>
+          <td>🔄 Balance adjusted</td>
+          <td>Cancel old, create new</td>
+        </tr>
+        <tr>
+          <td><strong>Customer Return</strong><br/><span class="text-xs text-muted-foreground">After delivery</span></td>
+          <td>Sale Return + Credit Note</td>
+          <td>✅ Stock added back</td>
+          <td>✅ Credit issued</td>
+          <td>Credit Note issued</td>
+        </tr>
+        <tr>
+          <td><strong>Price Correction</strong></td>
+          <td>Balance Adjustment</td>
+          <td>❌ No change</td>
+          <td>🔄 Adjust outstanding</td>
+          <td>Update or reissue</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="warning-box">
+    <strong>⚠️ Critical: When Can Order Be Reversed?</strong>
+    <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+      <li><strong>No Payment:</strong> Can reverse completely (stock + balance restored)</li>
+      <li><strong>Partial Payment:</strong> Create Sale Return + Refund difference</li>
+      <li><strong>Fully Paid:</strong> Full Sale Return + Full Refund OR Credit Note</li>
+      <li><strong>Invoice Issued:</strong> Cancel invoice → Reverse Sale → Cancel Order</li>
+      <li><strong>Next Day:</strong> Can still reverse with proper audit trail</li>
+      <li><strong>Month-end Closed:</strong> Requires admin approval + Credit Note</li>
+    </ul>
+  </div>
+
+  <div class="info-box">
+    <strong>Reversal Workflow (Step-by-Step):</strong>
+    <ol style="margin-left: 1.5rem; margin-top: 0.5rem;">
+      <li><strong>Detect Error:</strong> User realizes delivery was wrong</li>
+      <li><strong>Check Payment Status:</strong> Has payment been recorded?</li>
+      <li><strong>If No Payment:</strong>
+        <ul style="margin-left: 1.5rem;">
+          <li>Create Sale Return (adds stock back, clears outstanding)</li>
+          <li>Change Order status to CANCELLED (not deleted)</li>
+          <li>Cancel/Delete any invoices</li>
+        </ul>
+      </li>
+      <li><strong>If Payment Recorded:</strong>
+        <ul style="margin-left: 1.5rem;">
+          <li>Create Sale Return with refund amount</li>
+          <li>Issue Credit Note or process refund</li>
+          <li>Order stays DELIVERED but with return note</li>
+        </ul>
+      </li>
+      <li><strong>Audit Trail:</strong> All actions logged with reason and timestamp</li>
+    </ol>
+  </div>
+
+  <h3 class="section-subtitle">Database Design for Reversals</h3>
+  <div class="mermaid">
+erDiagram
+    ORDERS ||--o{ ORDER_ITEMS : contains
+    ORDERS ||--o{ SALES : can_have
+    SALES ||--o{ SALE_ITEMS : contains
+    SALES ||--o{ SALE_RETURNS : can_have
+    SALE_RETURNS ||--o{ SALE_RETURN_ITEMS : contains
+    SALES ||--o{ INVOICES : can_have
+    SALE_RETURNS ||--o{ CREDIT_NOTES : can_generate
+    
+    ORDERS {
+        string id PK
+        string status
+        string cancellation_reason
+        timestamp delivered_at
+        timestamp cancelled_at
+    }
+    
+    SALES {
+        string id PK
+        string order_id FK
+        string status
+        boolean is_reversed
+        string reversal_reason
+    }
+    
+    SALE_RETURNS {
+        string id PK
+        string sale_id FK
+        string reason
+        string return_type
+        timestamp created_at
+    }
+    
+    CREDIT_NOTES {
+        string id PK
+        string sale_return_id FK
+        string customer_id
+        decimal amount
+        string status
+    }
+  </div>
+
+  <div class="success-box">
+    <strong>✅ Best Practice: NEVER Delete Records</strong>
+    <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+      <li>Orders: Change status to CANCELLED, don't delete</li>
+      <li>Sales: Create Sale_Return record, don't delete</li>
+      <li>Invoices: Issue Credit Note, don't delete</li>
+      <li>Stock: Reverse via Sale_Return (adds back), don't manually adjust</li>
+      <li>Balance: Reverse via Credit Note, don't manually edit</li>
+    </ul>
+  </div>
+</section>

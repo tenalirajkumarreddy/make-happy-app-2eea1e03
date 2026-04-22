@@ -9,10 +9,11 @@ export function usePermission(key: PermissionKey): { allowed: boolean; loading: 
   const { data: permissions, isLoading } = useQuery({
     queryKey: ["my-permissions", user?.id],
     queryFn: async () => {
+      if (!user?.id) return [];
       const { data } = await supabase
         .from("user_permissions")
         .select("permission, enabled")
-        .eq("user_id", user!.id);
+        .eq("user_id", user.id);
       return data || [];
     },
     enabled: !!user?.id,

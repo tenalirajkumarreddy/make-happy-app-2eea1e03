@@ -1,32 +1,35 @@
-import React, { useState, useMemo } from "react";
+import React, { useMemo } from "react";
 import { ProductInventoryCard } from "./ProductInventoryCard";
-import { Input } from "@/components/ui/input";
-import { Search, Package, AlertTriangle, TrendingUp } from "lucide-react";
+import { Package, AlertTriangle, TrendingUp } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 
 interface WarehouseStockViewProps {
   products?: any[];
+  selectedWarehouseId?: string;
+  staffHoldingsByProduct?: Record<string, { user_id: string; full_name: string; quantity: number }[]>;
   isLoading?: boolean;
   canAdjust?: boolean;
   canTransfer?: boolean;
+  searchQuery?: string;
   onViewProduct?: (product: any) => void;
   onAdjustStock?: (product: any) => void;
   onTransferStock?: (product: any) => void;
   warehouseName?: string;
 }
 
-export function WarehouseStockView({ 
-  products, 
+export function WarehouseStockView({
+  products,
+  selectedWarehouseId,
+  staffHoldingsByProduct = {},
   isLoading,
   canAdjust,
   canTransfer,
+  searchQuery = "",
   onViewProduct,
   onAdjustStock,
   onTransferStock,
   warehouseName,
 }: WarehouseStockViewProps) {
-  const [searchQuery, setSearchQuery] = useState("");
-
   const filteredProducts = useMemo(() => {
     if (!searchQuery.trim()) return products;
     const query = searchQuery.toLowerCase();
@@ -47,8 +50,8 @@ export function WarehouseStockView({
     products.forEach((item) => {
       const product = item.product || item;
       const qty = item.quantity || 0;
-      const minLevel = product.min_stock_level || 0;
-      const price = product.base_price || 0;
+      const minLevel = product.min_stock_level ?? 0;  // Use nullish coalescing
+      const price = product.base_price ?? 0;  // Use nullish coalescing to handle 0 price
       if (qty <= 0) outOfStock++;
       else if (qty <= minLevel) lowStock++;
       totalValue += qty * price;
@@ -70,28 +73,10 @@ export function WarehouseStockView({
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header with search and stats */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-        <div className="flex-1 max-w-md">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search products by name or SKU..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-        </div>
-        
-        {/* Quick stats */}
+    <div className="space-y-4">
+      {/* Quick stats - only show low stock/out of stock alerts */}
+      {(stats.outOfStock > 0 || stats.lowStock > 0) && (
         <div className="flex items-center gap-4 text-sm">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-muted/50 rounded-md">
-            <Package className="h-4 w-4 text-muted-foreground" />
-            <span className="font-medium">{stats.total}</span>
-            <span className="text-muted-foreground">products</span>
-          </div>
           {stats.outOfStock > 0 && (
             <div className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-700 rounded-md">
               <AlertTriangle className="h-4 w-4" />
@@ -106,12 +91,8 @@ export function WarehouseStockView({
               <span>low stock</span>
             </div>
           )}
-          <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-md">
-            <span className="font-medium">{formatCurrency(stats.totalValue)}</span>
-            <span className="text-xs">total value</span>
-          </div>
         </div>
-      </div>
+      )}
 
       {/* Products grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -121,6 +102,8 @@ export function WarehouseStockView({
             <ProductInventoryCard
               key={item.id}
               item={item}
+              warehouseId={selectedWarehouseId}
+              staffHoldings={staffHoldingsByProduct[product.id] || []}
               onAdjust={canAdjust ? () => onAdjustStock?.(product) : undefined}
               onTransfer={canTransfer ? () => onTransferStock?.(product) : undefined}
             />

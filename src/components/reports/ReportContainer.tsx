@@ -39,10 +39,17 @@ export function ReportContainer({
   // Render icon - handle both component and element
   const renderIcon = () => {
     if (!Icon) return null;
-    if (typeof Icon === 'function') {
-      return <Icon className="h-5 w-5" />;
+    if (React.isValidElement(Icon)) {
+      return Icon;
     }
-    return Icon;
+
+    // Supports component references including forwardRef/memo icon components.
+    if (typeof Icon === "function" || typeof Icon === "object") {
+      const IconComponent = Icon as React.ElementType;
+      return <IconComponent className="h-5 w-5" />;
+    }
+
+    return null;
   };
 
   // Handle print - support both void and string return types
@@ -177,12 +184,18 @@ export function ReportKPICard({
   // Render icon - handle both component and element
   const renderIcon = () => {
     if (!Icon) return null;
-    if (typeof Icon === 'function') {
-      // It's a component reference like TrendingUp
-      return <Icon className="h-4 w-4" />;
+
+    if (React.isValidElement(Icon)) {
+      return Icon;
     }
-    // It's already a ReactNode/element
-    return Icon;
+
+    // Supports component references including forwardRef/memo icon components.
+    if (typeof Icon === "function" || typeof Icon === "object") {
+      const IconComponent = Icon as React.ElementType;
+      return <IconComponent className="h-4 w-4" />;
+    }
+
+    return null;
   };
 
   return (

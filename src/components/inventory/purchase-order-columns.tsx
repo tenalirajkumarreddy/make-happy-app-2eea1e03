@@ -1,7 +1,5 @@
-"use client";
-
 import { ColumnDef } from "@tanstack/react-table";
-import { MoreHorizontal } from "lucide-react";
+import { MoreHorizontal, Package, Eye, CheckCircle, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -13,105 +11,182 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "react-router-dom";
+import { toast } from "sonner";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase";
+import type { PurchaseOrderView } from "@/types/purchases";
 
-// This is a type definition for the purchase order data
-// based on the new 'purchase_orders' table in the migration.
-export type PurchaseOrder = {
-  id: string;
-  vendor_id: string;
-  product_id: string;
-  quantity: number;
-  price: number;
-  status: 'pending' | 'completed' | 'cancelled';
-  order_date: string;
-  vendors: { name: string }; // Assuming we join to get vendor name
-  products: { name: string }; // Assuming we join to get product name
+// Status badge component with proper styling
+const StatusBadge = ({ status }: { status: PurchaseOrderView['status'] }) => {
+  const variants: Record<PurchaseOrderView['status'], { variant: 'default' | 'secondary' | 'destructive' | 'outline', className: string }> = {
+    completed: { variant: 'default', className: 'bg-green-100 text-green-800 hover:bg-green-100' },
+    cancelled: { variant: 'destructive', className: '' },
+    pending: { variant: 'secondary', className: 'bg-amber-100 text-amber-800 hover:bg-amber-100' },
+  };
+
+  const config = variants[status] || variants.pending;
+  return (
+    <Badge variant={config.variant} className={`capitalize ${config.className}`}>
+      {status}
+    </Badge>
+  );
 };
 
-export const purchaseOrderColumns: ColumnDef<PurchaseOrder>[] = [
+// Actions cell component with actual functionality
+const ActionsCell = ({ po }: { po: PurchaseOrderView }) => {
+  const queryClient = useQueryClient();
+
+  const updateStatus = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: 'completed' | 'cancelled' }) => {
+      const { error } = await supabase
+        .from('purchase_orders')
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: (_, variables) => {
+      toast.success(`Purchase order marked as ${variables.status}`);
+      queryClient.invalidateQueries({ queryKey: ['purchase_orders'] });
+    },
+    onError: (error) => {
+      toast.error(`Failed to update: ${error.message}`);
+    },
+  });
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" className="h-8 w-8 p-0" aria-label="Open actions menu">
+          <span className="sr-only">Open menu</span>
+          <MoreHorizontal className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link to={`/inventory/purchases/${po.id}`} className="cursor-pointer flex items-center">
+            <Eye className="mr-2 h-4 w-4" />
+            View Details
+          </Link>
+        </DropdownMenuItem>
+        {po.status === 'pending' && (
+          <>
+            <DropdownMenuItem
+              onClick={() => updateStatus.mutate({ id: po.id, status: 'completed' })}
+              disabled={updateStatus.isPending}
+              className="cursor-pointer"
+            >
+              <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
+              Mark as Completed
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => updateStatus.mutate({ id: po.id, status: 'cancelled' })}
+              disabled={updateStatus.isPending}
+              className="cursor-pointer text-red-600 focus:text-red-600"
+            >
+              <XCircle className="mr-2 h-4 w-4" />
+              Cancel Order
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+};
+
+export const purchaseOrderColumns: ColumnDef<PurchaseOrderView>[] = [
   {
-    accessorKey: "id",
+    accessorKey: "display_id",
     header: "PO ID",
     cell: ({ row }) => {
-        const id = row.original.id;
-        return <span className="font-mono text-xs">{id.substring(0, 8)}...</span>
-    }
+      const displayId = row.original.display_id;
+      return <span className="font-mono text-xs">{displayId}</span>;
+    },
   },
   {
     accessorKey: "vendors.name",
     header: "Vendor",
     cell: ({ row }) => {
       const po = row.original;
+      const vendorName = po.vendors?.name || 'Unknown Vendor';
       return (
-        <Link to={`/inventory/vendors/${po.vendor_id}`} className="font-medium text-blue-600 hover:underline">
-          {po.vendors.name}
+        <Link
+          to={`/inventory/vendors/${po.vendor_id}`}
+          className="font-medium text-blue-600 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+        >
+          {vendorName}
         </Link>
       );
     },
   },
   {
-    accessorKey: "products.name",
-    header: "Product",
+    accessorKey: "item_count",
+    header: "Items",
     cell: ({ row }) => {
-        const po = row.original;
-        return (
-          <Link to={`/products?id=${po.product_id}`} className="font-medium">
-            {po.products.name}
-          </Link>
-        );
-      },
+      const count = row.original.item_count;
+      return (
+        <div className="flex items-center gap-1">
+          <Package className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          <span>{count}</span>
+        </div>
+      );
+    },
   },
   {
-    accessorKey: "quantity",
-    header: "Quantity",
-  },
-  {
-    accessorKey: "price",
-    header: "Price",
+    accessorKey: "total_amount",
+    header: "Total Amount",
     cell: ({ row }) => {
-        const amount = parseFloat(row.getValue("price"));
-        const formatted = new Intl.NumberFormat("en-IN", {
-          style: "currency",
-          currency: "INR",
-        }).format(amount);
-        return <div className="text-right font-medium">{formatted}</div>;
-      },
+      const amount = row.original.total_amount || 0;
+      const formatted = new Intl.NumberFormat("en-IN", {
+        style: "currency",
+        currency: "INR",
+        minimumFractionDigits: 2,
+      }).format(amount);
+      return <div className="text-right font-medium">{formatted}</div>;
+    },
   },
   {
     accessorKey: "status",
     header: "Status",
-    cell: ({ row }) => {
-      const status = row.getValue("status") as string;
-      const variant = status === 'completed' ? 'success' : status === 'cancelled' ? 'destructive' : 'secondary';
-      return <Badge variant={variant} className="capitalize">{status}</Badge>;
-    },
+    cell: ({ row }) => <StatusBadge status={row.original.status} />,
   },
   {
     accessorKey: "order_date",
     header: "Order Date",
-    cell: ({ row }) => new Date(row.original.order_date).toLocaleDateString(),
+    cell: ({ row }) => {
+      const date = row.original.order_date;
+      try {
+        return new Date(date).toLocaleDateString('en-IN', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+        });
+      } catch {
+        return date;
+      }
+    },
+  },
+  {
+    accessorKey: "expected_delivery",
+    header: "Expected Delivery",
+    cell: ({ row }) => {
+      const date = row.original.expected_delivery;
+      if (!date) return <span className="text-muted-foreground">-</span>;
+      try {
+        return new Date(date).toLocaleDateString('en-IN', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+        });
+      } catch {
+        return date;
+      }
+    },
   },
   {
     id: "actions",
-    cell: ({ row }) => {
-      const po = row.original;
-
-      return (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-8 w-8 p-0">
-              <span className="sr-only">Open menu</span>
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-            <DropdownMenuItem>View Details</DropdownMenuItem>
-            {po.status === 'pending' && <DropdownMenuItem>Mark as Completed</DropdownMenuItem>}
-            {po.status === 'pending' && <DropdownMenuItem>Cancel Order</DropdownMenuItem>}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      );
-    },
+    header: "Actions",
+    cell: ({ row }) => <ActionsCell po={row.original} />,
   },
 ];

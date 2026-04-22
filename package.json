@@ -30,6 +30,7 @@
     "version:major": "npm version major && echo 'Remember to update android/app/build.gradle versionCode and versionName'"
   },
   "dependencies": {
+    "@anthropic-ai/claude-code": "^2.1.114",
     "@capacitor/android": "^8.2.0",
     "@capacitor/app": "^8.0.1",
     "@capacitor/camera": "^8.0.2",

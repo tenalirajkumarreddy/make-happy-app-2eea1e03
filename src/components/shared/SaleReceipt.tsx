@@ -26,19 +26,29 @@ export const SaleReceipt = ({ saleId, open, onClose }: SaleReceiptProps) => {
   const { data: sale, isLoading } = useQuery({
     queryKey: ["sale-receipt", saleId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: saleData, error: saleError } = await supabase
         .from("sales")
-        .select(`
-          *,
-          customers(name, phone),
-          stores(name, address),
-          profiles:recorded_by(full_name),
-          sale_items(*, products(name, unit))
-        `)
+        .select("*")
         .eq("id", saleId)
         .single();
-      if (error) throw error;
-      return data;
+      
+      if (saleError) throw saleError;
+      
+      // Fetch related data separately
+      const [storeRes, customerRes, itemsRes, userRes] = await Promise.all([
+        saleData.store_id ? supabase.from("stores").select("name, address").eq("id", saleData.store_id).single() : Promise.resolve({ data: null }),
+        saleData.customer_id ? supabase.from("customers").select("name, phone").eq("id", saleData.customer_id).single() : Promise.resolve({ data: null }),
+        supabase.from("sale_items").select("*, products(name, unit)").eq("sale_id", saleId),
+        saleData.recorded_by ? supabase.from("profiles").select("full_name").eq("id", saleData.recorded_by).single() : Promise.resolve({ data: null }),
+      ]);
+      
+      return {
+        ...saleData,
+        stores: storeRes.data,
+        customers: customerRes.data,
+        recorded_by: userRes.data,
+        sale_items: itemsRes.data || [],
+      };
     },
     enabled: open && !!saleId,
   });
@@ -54,9 +64,10 @@ export const SaleReceipt = ({ saleId, open, onClose }: SaleReceiptProps) => {
     },
   });
 
-  // Calculate amounts from sale data (since sales table uses cash_amount, upi_amount, outstanding_amount)
+  // Calculate amounts - show SNAPSHOT balance (old_outstanding + outstanding_amount = Total Due after this sale)
   const amountPaid = Number(sale?.cash_amount || 0) + Number(sale?.upi_amount || 0);
-  const outstandingAmount = Number(sale?.outstanding_amount || 0);
+  const previousBalance = Number(sale?.old_outstanding || 0); // Balance BEFORE this sale
+  const totalDue = previousBalance + Number(sale?.outstanding_amount || 0); // Balance AFTER this sale (snapshot)
 
   const handlePrint = () => {
     if (!sale) return;
@@ -72,7 +83,7 @@ export const SaleReceipt = ({ saleId, open, onClose }: SaleReceiptProps) => {
       <div style="margin: 8px 0;">
         <div style="display: flex; justify-content: space-between;">
           <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 8px;">${escapeHtml(item.products?.name || "Unknown")}</span>
-          <span style="font-weight: 600;">₹${Number(item.total_amount).toLocaleString()}</span>
+          <span style="font-weight: 600;">₹${Number(item.total_price || 0).toLocaleString()}</span>
         </div>
         <div style="font-size: 10px; color: #666;">
           ${item.quantity} x ₹${Number(item.unit_price).toLocaleString()}
@@ -151,14 +162,15 @@ export const SaleReceipt = ({ saleId, open, onClose }: SaleReceiptProps) => {
               <span>UPI:</span>
               <span>₹${Number(sale.upi_amount || 0).toLocaleString()}</span>
             </div>
-            ${outstandingAmount > 0 ? `<div class="row bold" style="color: #c00;"><span>Balance Due:</span><span>₹${outstandingAmount.toLocaleString()}</span></div>` : ""}
+            ${previousBalance > 0 ? `<div class="row"><span>Previous Balance:</span><span>₹${previousBalance.toLocaleString()}</span></div>` : ""}
+${totalDue > previousBalance ? `<div class="row bold" style="color: #c00;"><span>Total Due:</span><span>₹${totalDue.toLocaleString()}</span></div>` : ""}
           </div>
           
           <div class="divider"></div>
           
           <div class="center">
             <p class="bold">Thank you for your business!</p>
-            ${sale.profiles?.full_name ? `<p class="small">Served by: ${escapeHtml(sale.profiles.full_name)}</p>` : ""}
+            ${sale.recorded_by?.full_name ? `<p class="small">Served by: ${escapeHtml(sale.recorded_by.full_name)}</p>` : ""}
             <p class="small" style="margin-top: 8px;">This is a computer generated receipt</p>
           </div>
         </body>
@@ -182,12 +194,13 @@ ${sale.stores?.name ? `Store: ${sale.stores.name}` : ""}
 
 Items:
 ${sale.sale_items?.map((item: any) => 
-  `${item.products?.name} x${item.quantity} = ₹${Number(item.total_amount).toLocaleString()}`
+  `${item.products?.name} x${item.quantity} = ₹${Number(item.total_price || 0).toLocaleString()}`
 ).join("\n")}
 
 Total: ₹${Number(sale.total_amount).toLocaleString()}
 Paid: ₹${amountPaid.toLocaleString()}
-${outstandingAmount > 0 ? `Due: ₹${outstandingAmount.toLocaleString()}` : ""}
+${previousBalance > 0 ? `Previous Balance: ₹${previousBalance.toLocaleString()}` : ""}
+${totalDue > previousBalance ? `Total Due: ₹${totalDue.toLocaleString()}` : ""}
 
 Thank you for your business!
 ${settings.business_name || ""}
@@ -284,11 +297,11 @@ ${settings.business_name || ""}
               {sale.sale_items?.map((item: any) => (
                 <div key={item.id} className="text-xs">
                   <div className="flex justify-between">
-                    <span className="flex-1 truncate pr-2">{item.products?.name}</span>
-                    <span className="font-semibold">₹{Number(item.total_amount).toLocaleString()}</span>
+                    <span className="flex-1 truncate pr-2">{item.products?.name || "Unknown"}</span>
+                    <span className="font-semibold">₹{Number(item.total_price || 0).toLocaleString()}</span>
                   </div>
                   <div className="text-muted-foreground text-[10px]">
-                    {item.quantity} x ₹{Number(item.unit_price).toLocaleString()}
+                    {item.quantity} x ₹{Number(item.unit_price || 0).toLocaleString()}
                   </div>
                 </div>
               ))}
@@ -310,10 +323,16 @@ ${settings.business_name || ""}
                 <span>UPI:</span>
                 <span>₹{Number(sale.upi_amount || 0).toLocaleString()}</span>
               </div>
-              {outstandingAmount > 0 && (
+              {previousBalance > 0 && (
+                <div className="flex justify-between">
+                  <span>Previous Balance:</span>
+                  <span>₹{previousBalance.toLocaleString()}</span>
+                </div>
+              )}
+              {totalDue > previousBalance && (
                 <div className="flex justify-between text-red-600 font-semibold">
-                  <span>Balance Due:</span>
-                  <span>₹{outstandingAmount.toLocaleString()}</span>
+                  <span>Total Due:</span>
+                  <span>₹{totalDue.toLocaleString()}</span>
                 </div>
               )}
             </div>
@@ -323,8 +342,8 @@ ${settings.business_name || ""}
             {/* Footer */}
             <div className="text-center text-xs space-y-1">
               <p className="font-semibold">Thank you for your business!</p>
-              {sale.profiles?.full_name && (
-                <p className="text-muted-foreground">Served by: {sale.profiles.full_name}</p>
+              {sale.recorded_by?.full_name && (
+                <p className="text-muted-foreground">Served by: {sale.recorded_by.full_name}</p>
               )}
               <p className="text-[10px] text-muted-foreground mt-2">
                 This is a computer generated receipt

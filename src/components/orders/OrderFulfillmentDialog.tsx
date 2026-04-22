@@ -108,6 +108,7 @@ export function OrderFulfillmentDialog({
   // State
   const [items, setItems] = useState<FulfillmentItem[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [productStock, setProductStock] = useState<Map<string, number>>(new Map());
   const [storePricing, setStorePricing] = useState<Map<string, number>>(new Map());
   const [storeTypePricing, setStoreTypePricing] = useState<Map<string, number>>(new Map());
   const [cashAmount, setCashAmount] = useState<string>("0");
@@ -159,6 +160,33 @@ export function OrderFulfillmentDialog({
 
         if (productsError) throw productsError;
         setProducts(productsData || []);
+
+        // Load warehouse stock for products
+        const { data: { user: currentUser } } = await supabase.auth.getUser();
+        if (currentUser) {
+          const { data: userRole } = await supabase
+            .from("user_roles")
+            .select("warehouse_id, role")
+            .eq("user_id", currentUser.id)
+            .single();
+          
+          if (userRole?.warehouse_id) {
+            const productIds = productsData?.map(p => p.id) || [];
+            if (productIds.length > 0) {
+              const { data: stockData } = await supabase
+                .from("product_stock")
+                .select("product_id, current_stock")
+                .eq("warehouse_id", userRole.warehouse_id)
+                .in("product_id", productIds);
+              
+              if (stockData) {
+                const stockMap = new Map<string, number>();
+                stockData.forEach(s => stockMap.set(s.product_id, Number(s.current_stock)));
+                setProductStock(stockMap);
+              }
+            }
+          }
+        }
 
         // Load store-specific pricing
         if (order.store_id) {
@@ -404,12 +432,13 @@ export function OrderFulfillmentDialog({
 
       if (linkError) throw linkError;
 
-      // Update order status to delivered
+      // Update order status to delivered with sale link
       const { error: orderError } = await supabase
         .from("orders")
         .update({
           status: "delivered",
           fulfilled_by: user.id,
+          fulfilled_by_sale_id: newSale.id,
           delivered_at: new Date().toISOString(),
         })
         .eq("id", order.id);
@@ -554,6 +583,18 @@ export function OrderFulfillmentDialog({
                           <div className="flex-1 min-w-0">
                             <div className="font-medium truncate">{item.product_name}</div>
                             <div className="text-xs text-muted-foreground">{item.sku}</div>
+                            {productStock.has(item.product_id) && (
+                              <div className={`text-xs mt-0.5 ${
+                                (productStock.get(item.product_id) || 0) < item.quantity 
+                                  ? "text-red-500 font-medium" 
+                                  : "text-green-600"
+                              }`}>
+                                Stock: {productStock.get(item.product_id) || 0} available
+                                {(productStock.get(item.product_id) || 0) < item.quantity && (
+                                  <span className="ml-1">⚠️ Insufficient</span>
+                                )}
+                              </div>
+                            )}
                           </div>
 
                           {/* Quantity controls */}

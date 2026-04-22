@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 const PERMISSION_KEYS = [
+  // General permissions
   "price_override",
   "record_behalf",
   "create_customers",
@@ -15,6 +16,7 @@ const PERMISSION_KEYS = [
   "finalizer",
   "see_handover_balance",
   "submit_expenses",
+  // Vendor & Purchase permissions
   "view_vendors",
   "manage_vendors",
   "view_purchases",
@@ -23,8 +25,29 @@ const PERMISSION_KEYS = [
   "manage_vendor_payments",
   "view_raw_materials",
   "manage_raw_materials",
+  // Attendance permissions
   "view_attendance",
   "manage_attendance",
+  // Order permissions
+  "view_orders",
+  "create_orders",
+  "modify_orders",
+  "modify_order_item_prices",
+  "transfer_orders",
+  "delete_orders",
+  "fulfill_orders",
+  "cancel_orders",
+  // Sale Return permissions
+  "create_sale_returns",
+  // Invoice permissions
+  "view_invoices",
+  "create_invoices",
+  "edit_invoices",
+  "delete_invoices",
+  "download_invoices",
+  // Agent-specific order permissions
+  "view_assigned_orders",
+  "accept_order_transfers",
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
@@ -32,20 +55,150 @@ export type PermissionKey = (typeof PERMISSION_KEYS)[number];
 /** Default permissions per role — these are the "inherent" ones that can't be toggled off */
 const ROLE_DEFAULTS: Record<string, PermissionKey[]> = {
   super_admin: [
-    "price_override", "record_behalf", "create_customers", "create_stores", 
+    "price_override", "record_behalf", "create_customers", "create_stores",
     "edit_balance", "opening_balance", "view_vendors", "manage_vendors",
     "view_purchases", "manage_purchases", "view_vendor_payments", "manage_vendor_payments",
-    "view_raw_materials", "manage_raw_materials", "view_attendance", "manage_attendance"
+    "view_raw_materials", "manage_raw_materials", "view_attendance", "manage_attendance",
+    // Orders - full access
+    "view_orders", "create_orders", "modify_orders", "modify_order_item_prices",
+    "transfer_orders", "delete_orders", "fulfill_orders", "cancel_orders",
+    // Sale Returns - full access
+    "create_sale_returns",
+    // Invoices - full access
+    "view_invoices", "create_invoices", "edit_invoices", "delete_invoices", "download_invoices",
+    // Agent
+    "view_assigned_orders", "accept_order_transfers",
   ],
   manager: [
-    "price_override", "record_behalf", "create_customers", "create_stores", 
+    "price_override", "record_behalf", "create_customers", "create_stores",
     "edit_balance", "opening_balance", "view_vendors", "manage_vendors",
     "view_purchases", "manage_purchases", "view_vendor_payments", "manage_vendor_payments",
-    "view_raw_materials", "manage_raw_materials", "view_attendance", "manage_attendance"
+    "view_raw_materials", "manage_raw_materials", "view_attendance", "manage_attendance",
+    // Orders - full access
+    "view_orders", "create_orders", "modify_orders", "modify_order_item_prices",
+    "transfer_orders", "delete_orders", "fulfill_orders", "cancel_orders",
+    // Sale Returns - full access
+    "create_sale_returns",
+    // Invoices - full access
+    "view_invoices", "create_invoices", "edit_invoices", "delete_invoices", "download_invoices",
+    // Agent
+    "view_assigned_orders", "accept_order_transfers",
   ],
-  agent: ["create_customers", "create_stores"],
-  marketer: ["create_customers", "create_stores"],
-  pos: [],
+  marketer: [
+    "create_customers", "create_stores",
+    // Orders - can view all, create for assigned stores, but limited modify
+    "view_orders", "create_orders", "modify_orders", "transfer_orders",
+    // Invoices - view only (can't create/edit)
+    "view_invoices", "download_invoices",
+  ],
+  agent: [
+    "create_customers", "create_stores",
+    // Orders - view assigned only, no create/modify
+    "view_assigned_orders", "accept_order_transfers",
+    // Invoices - view only
+    "view_invoices", "download_invoices",
+  ],
+  pos: [
+    // POS has minimal access - mainly view and fulfill
+    "view_orders", "fulfill_orders",
+    "view_invoices", "download_invoices",
+  ],
+  customer: [
+    // Customers can only view their own
+    "view_orders", "view_invoices", "download_invoices",
+  ],
+};
+
+// Permission groupings for display
+export const PERMISSION_GROUPS = {
+  "Orders": [
+    "view_orders",
+    "create_orders",
+    "modify_orders",
+    "modify_order_item_prices",
+    "transfer_orders",
+    "delete_orders",
+    "fulfill_orders",
+    "cancel_orders",
+    "create_sale_returns",
+    "view_assigned_orders",
+    "accept_order_transfers",
+  ],
+  "Invoices": [
+    "view_invoices",
+    "create_invoices",
+    "edit_invoices",
+    "delete_invoices",
+    "download_invoices",
+  ],
+  "Sales & Pricing": [
+    "price_override",
+    "record_behalf",
+    "edit_balance",
+    "opening_balance",
+    "finalizer",
+    "see_handover_balance",
+  ],
+  "Customers & Stores": [
+    "create_customers",
+    "create_stores",
+  ],
+  "Vendors & Purchases": [
+    "view_vendors",
+    "manage_vendors",
+    "view_purchases",
+    "manage_purchases",
+    "view_vendor_payments",
+    "manage_vendor_payments",
+    "view_raw_materials",
+    "manage_raw_materials",
+  ],
+  "Attendance": [
+    "view_attendance",
+    "manage_attendance",
+  ],
+  "Other": [
+    "submit_expenses",
+  ],
+};
+
+// Human-readable labels for permissions
+export const PERMISSION_LABELS: Record<PermissionKey, string> = {
+  view_orders: "View All Orders",
+  create_orders: "Create Orders",
+  modify_orders: "Modify Orders",
+  modify_order_item_prices: "Modify Order Item Prices",
+  transfer_orders: "Transfer Orders to Other Staff",
+  delete_orders: "Delete Orders",
+  fulfill_orders: "Fulfill Orders",
+  cancel_orders: "Cancel Orders",
+  create_sale_returns: "Create Sale Returns",
+  view_assigned_orders: "View Assigned Orders Only",
+  accept_order_transfers: "Accept Order Transfers",
+  view_invoices: "View Invoices",
+  create_invoices: "Create Invoices",
+  edit_invoices: "Edit Invoices",
+  delete_invoices: "Delete Invoices",
+  download_invoices: "Download/Print Invoices",
+  price_override: "Override Product Prices",
+  record_behalf: "Record Sales on Behalf",
+  create_customers: "Create Customers",
+  create_stores: "Create Stores",
+  edit_balance: "Edit Customer Balances",
+  opening_balance: "Set Opening Balances",
+  finalizer: "Finalize Reports",
+  see_handover_balance: "See Handover Balance",
+  submit_expenses: "Submit Expenses",
+  view_vendors: "View Vendors",
+  manage_vendors: "Manage Vendors",
+  view_purchases: "View Purchases",
+  manage_purchases: "Manage Purchases",
+  view_vendor_payments: "View Vendor Payments",
+  manage_vendor_payments: "Manage Vendor Payments",
+  view_raw_materials: "View Raw Materials",
+  manage_raw_materials: "Manage Raw Materials",
+  view_attendance: "View Attendance",
+  manage_attendance: "Manage Attendance",
 };
 
 interface InlinePermissionCheckboxProps {

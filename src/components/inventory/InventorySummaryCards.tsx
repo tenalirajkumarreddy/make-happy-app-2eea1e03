@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Package, Users, AlertTriangle, TrendingUp, TrendingDown, DollarSign, Warehouse } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatCurrency } from "@/lib/utils";
 
 interface InventorySummary {
   totalProducts: number;
@@ -45,14 +46,14 @@ export function InventorySummaryCards({ summary, isLoading, warehouseName }: Inv
       bgColor: "bg-blue-50",
       subtitle: warehouseName ? `in ${warehouseName}` : "",
     },
-    {
-      title: "Stock Value",
-      value: `₹${(summary?.totalStockValue ?? 0).toLocaleString()}`,
-      icon: DollarSign,
-      color: "text-emerald-600",
-      bgColor: "bg-emerald-50",
-      subtitle: "Total inventory value",
-    },
+  {
+    title: "Stock Value",
+    value: formatCurrency(summary?.totalStockValue ?? 0),
+    icon: DollarSign,
+    color: "text-emerald-600",
+    bgColor: "bg-emerald-50",
+    subtitle: "Total inventory value",
+  },
     {
       title: "Low Stock Items",
       value: summary?.lowStockProducts ?? 0,
@@ -68,9 +69,9 @@ export function InventorySummaryCards({ summary, isLoading, warehouseName }: Inv
       icon: Users,
       color: "text-indigo-600",
       bgColor: "bg-indigo-50",
-      subtitle: summary?.staffHoldingValue 
-        ? `₹${summary.staffHoldingValue.toLocaleString()} value` 
-        : "Products with staff",
+    subtitle: summary?.staffHoldingValue
+      ? `${formatCurrency(summary.staffHoldingValue)} value`
+      : "Products with staff",
     },
   ];
 

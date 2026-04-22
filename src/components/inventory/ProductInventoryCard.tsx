@@ -1,10 +1,15 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Package, ArrowRightLeft, Plus } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
-import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+
+interface StaffHolding {
+  user_id: string;
+  full_name: string;
+  quantity: number;
+}
 
 function getImageUrl(path: string | null | undefined): string | null {
   if (!path) return null;
@@ -28,39 +33,16 @@ interface ProductInventoryCardProps {
     };
   };
   warehouseId?: string;
+  staffHoldings?: StaffHolding[];
   onAdjust?: () => void;
   onTransfer?: () => void;
 }
 
-export function ProductInventoryCard({ item, warehouseId, onAdjust, onTransfer }: ProductInventoryCardProps) {
+export function ProductInventoryCard({ item, staffHoldings = [], onAdjust, onTransfer }: ProductInventoryCardProps) {
   const { product, quantity } = item;
   if (!product) return null;
-
-  // Fetch staff holdings inline for this exact product
-const { data: staffHoldings } = useQuery({
-    queryKey: ['staff_holdings', warehouseId, product.id],
-    queryFn: async () => {
-      if (!warehouseId || warehouseId === 'undefined') return [];
-      
-      const { data: stockRows, error } = await supabase
-        .from('staff_stock')
-        .select('user_id, quantity')
-        .eq('product_id', product.id)
-        .eq('warehouse_id', warehouseId)
-        .gt('quantity', 0);
-      
-      if (error || !stockRows?.length) return [];
-      
-      const userIds = [...new Set(stockRows.map(r => r.user_id))];
-      const { data: profiles } = await supabase.from('profiles').select('user_id, full_name').in('user_id', userIds);
-      
-      return stockRows.map(row => ({
-        ...row,
-        full_name: profiles?.find(p => p.user_id === row.user_id)?.full_name || 'Unknown'
-      }));
-    },
-    enabled: !!warehouseId && warehouseId !== 'undefined'
-  });
+  const rawBasePrice = Number(product.base_price);
+  const basePrice = Number.isFinite(rawBasePrice) ? rawBasePrice : 0;
 
   const getStatusColor = (qty: number, minLevel: number = 0) => {
     if (qty <= 0) return "text-red-500 bg-red-50 ring-red-500/20";
@@ -77,19 +59,24 @@ const { data: staffHoldings } = useQuery({
   const minLevel = product.min_stock_level || 0;
   const statusColor = getStatusColor(quantity, minLevel);
 
-const imageUrl = getImageUrl(product?.image_url);
+  const imageUrl = useMemo(() => getImageUrl(product?.image_url), [product?.image_url]);
 
   return (
     <Card className="overflow-hidden flex flex-col hover:border-border transition-colors">
       <div className="relative h-40 bg-muted/30 flex items-center justify-center p-4 border-b">
         {imageUrl ? (
-          <img src={imageUrl} alt={product.name} className="h-full w-auto object-contain drop-shadow-sm" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+          <img src={imageUrl} alt={product.name} loading="lazy" className="h-full w-auto object-contain drop-shadow-sm" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
         ) : (
           <Package className="h-16 w-16 text-muted-foreground/30" />
         )}
-        <div className={`absolute top-2 right-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider ring-1 ring-inset shadow-xs uppercase ${statusColor}`}>
-          {getStatusText(quantity, minLevel)}
-        </div>
+      <div 
+        className={`absolute top-2 right-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider ring-1 ring-inset shadow-xs uppercase ${statusColor}`}
+        role="status"
+        aria-label={`Stock status: ${getStatusText(quantity, minLevel)}. Current quantity: ${quantity} ${product.unit}`}
+      >
+        <span className="sr-only">Stock status: </span>
+        {getStatusText(quantity, minLevel)}
+      </div>
       </div>
       
       <CardContent className="p-4 flex-1 flex flex-col">
@@ -102,11 +89,11 @@ const imageUrl = getImageUrl(product?.image_url);
           <div className="grid grid-cols-2 gap-2 mb-4">
             <div className="bg-slate-50 rounded p-2 border">
               <span className="text-[10px] uppercase font-bold text-muted-foreground block mb-0.5">Price / {product.unit}</span>
-              <span className="font-medium text-sm">{formatCurrency(product.base_price)}</span>
+              <span className="font-medium text-sm">{formatCurrency(basePrice)}</span>
             </div>
             <div className="bg-slate-50 rounded p-2 border">
               <span className="text-[10px] uppercase font-bold text-muted-foreground block mb-0.5">Total Value</span>
-              <span className="font-medium text-sm">{formatCurrency(product.base_price * quantity)}</span>
+              <span className="font-medium text-sm">{formatCurrency(basePrice * Number(quantity || 0))}</span>
             </div>
           </div>
           
