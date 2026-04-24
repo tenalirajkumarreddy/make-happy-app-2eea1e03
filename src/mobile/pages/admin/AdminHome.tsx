@@ -4,6 +4,7 @@ import {
   HandCoins, AlertCircle, Package, Warehouse, Loader2,
   Receipt, ClipboardList, Map, BarChart3, FileText, Settings,
   Shield, UserCircle, Route, History as HistoryIcon,
+  Building2, ArrowRightLeft, TrendingUp, Factory, CreditCard, Wallet,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
@@ -199,6 +200,20 @@ export function AdminHome({ role, onNavigate }: Props) {
             <QuickButton label="Transactions" icon={Receipt} onClick={() => onNavigate("/transactions")} />
             <QuickButton label="Analytics" icon={BarChart3} onClick={() => onNavigate("/analytics")} />
             <QuickButton label="Map" icon={Map} onClick={() => onNavigate("/map")} />
+          </div>
+          <div className="grid grid-cols-4 gap-2 mt-2">
+            <QuickButton label="Vendors" icon={Building2} onClick={() => onNavigate("/vendors")} />
+            <QuickButton label="Purchases" icon={ShoppingCart} onClick={() => onNavigate("/purchases")} />
+            <QuickButton label="Expenses" icon={Wallet} onClick={() => onNavigate("/expenses")} />
+            <QuickButton label="Costs" icon={TrendingUp} onClick={() => onNavigate("/cost-insights")} />
+          </div>
+          <div className="grid grid-cols-4 gap-2 mt-2">
+            <QuickButton label="Transfers" icon={ArrowRightLeft} onClick={() => onNavigate("/stock-transfers")} />
+            {role === "super_admin" && (
+              <QuickButton label="Production" icon={Factory} onClick={() => onNavigate("/production")} />
+            )}
+            <QuickButton label="Invoices" icon={FileText} onClick={() => onNavigate("/invoices")} />
+            <QuickButton label="Payments" icon={CreditCard} onClick={() => onNavigate("/vendor-payments")} />
           </div>
           <div className="grid grid-cols-4 gap-2 mt-2">
             <QuickButton label="Activity" icon={HistoryIcon} onClick={() => onNavigate("/activity")} />

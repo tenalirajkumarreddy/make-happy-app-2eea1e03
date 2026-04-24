@@ -4,25 +4,11 @@ import { Capacitor } from "@capacitor/core";
 import { matchPath, useLocation, useNavigate } from "react-router-dom";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import {
-  Menu,
-  LayoutDashboard,
-  Package,
-  Users,
-  Store,
-  Route,
-  ShoppingCart,
-  Receipt,
-  ClipboardList,
-  HandCoins,
-  Map,
-  FileText,
-  BarChart3,
-  History,
-  Shield,
-  Settings,
-  Warehouse,
-  User,
-  LogOut,
+  Menu, LayoutDashboard, Package, Users, Store, Route, ShoppingCart,
+  Receipt, ClipboardList, HandCoins, Map, FileText, BarChart3, History,
+  Shield, Settings, Warehouse, User, LogOut, ArrowRightLeft, Building2,
+  Calendar, CreditCard, Image, Wallet, Truck, TrendingUp, ClipboardCheck,
+  Factory, Undo2, UserCog, Coins,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { isNativeApp } from "@/lib/capacitorUtils";
@@ -51,6 +37,32 @@ import AccessControl from "@/pages/AccessControl";
 import SettingsPage from "@/pages/Settings";
 import MapPage from "@/pages/MapPage";
 import UserProfile from "@/pages/UserProfile";
+import Vendors from "@/pages/Vendors";
+import VendorDetail from "@/pages/VendorDetail";
+import Purchases from "@/pages/Purchases";
+import StockTransfers from "@/pages/StockTransfers";
+import Expenses from "@/pages/Expenses";
+import Attendance from "@/pages/Attendance";
+import Banners from "@/pages/Banners";
+import Invoices from "@/pages/Invoices";
+import InvoiceView from "@/pages/InvoiceView";
+import { StaffDirectory } from "@/pages/StaffDirectory";
+import { Income } from "@/pages/Income";
+import CostInsights from "@/pages/CostInsights";
+import HandoverRequests from "@/pages/HandoverRequests";
+import SaleReturns from "@/pages/SaleReturns";
+import PurchaseReturns from "@/pages/PurchaseReturns";
+import VendorPayments from "@/pages/VendorPayments";
+import StoreTypes from "@/pages/StoreTypes";
+import ProductionPage from "@/pages/Production";
+import WorkersPage from "@/pages/hr/Workers";
+import PayrollPage from "@/pages/hr/Payroll";
+import AdminSetup from "@/pages/admin/AdminSetup";
+import AdminVehicles from "@/pages/admin/AdminVehicles";
+import DeliveryFeasibility from "@/pages/admin/DeliveryFeasibility";
+import ProductionLogPage from "@/pages/admin/ProductionLog";
+import AdminCostHistory from "@/pages/admin/AdminCostHistory";
+import { MobilePageWrapper } from "./components/MobilePageWrapper";
 import { AgentHome } from "./pages/agent/AgentHome";
 import { AgentRoutes } from "./pages/agent/AgentRoutes";
 import { AgentScan } from "./pages/agent/AgentScan";
@@ -96,46 +108,117 @@ type StaffMenuItem = {
   icon: React.ComponentType<{ className?: string }>;
 };
 
-const STAFF_MENU_BY_ROLE: Record<StaffRole, StaffMenuItem[]> = {
-  super_admin: [
-    { id: "dashboard", label: "Dashboard", path: "/", icon: LayoutDashboard },
-    { id: "products", label: "Products", path: "/products", icon: Package },
-    { id: "inventory", label: "Inventory", path: "/inventory", icon: Warehouse },
-    { id: "customers", label: "Customers", path: "/customers", icon: Users },
-    { id: "stores", label: "Stores", path: "/stores", icon: Store },
-    { id: "routes", label: "Routes", path: "/routes", icon: Route },
-    { id: "sales", label: "Sales", path: "/sales", icon: ShoppingCart },
-    { id: "transactions", label: "Transactions", path: "/transactions", icon: Receipt },
-    { id: "orders", label: "Orders", path: "/orders", icon: ClipboardList },
-    { id: "handovers", label: "Handovers", path: "/handovers", icon: HandCoins },
-    { id: "map", label: "Map", path: "/map", icon: Map },
-    { id: "reports", label: "Reports", path: "/reports", icon: FileText },
-    { id: "analytics", label: "Analytics", path: "/analytics", icon: BarChart3 },
-    { id: "activity", label: "Activity Log", path: "/activity", icon: History },
-    { id: "access", label: "Access Control", path: "/access-control", icon: Shield },
-    { id: "profile", label: "My Profile", path: "/profile", icon: User },
-    { id: "settings", label: "Settings", path: "/settings", icon: Settings },
-  ],
-  manager: [
-    { id: "dashboard", label: "Dashboard", path: "/", icon: LayoutDashboard },
-    { id: "products", label: "Products", path: "/products", icon: Package },
-    { id: "inventory", label: "Inventory", path: "/inventory", icon: Warehouse },
-    { id: "customers", label: "Customers", path: "/customers", icon: Users },
-    { id: "stores", label: "Stores", path: "/stores", icon: Store },
-    { id: "routes", label: "Routes", path: "/routes", icon: Route },
-    { id: "sales", label: "Sales", path: "/sales", icon: ShoppingCart },
-    { id: "transactions", label: "Transactions", path: "/transactions", icon: Receipt },
-    { id: "orders", label: "Orders", path: "/orders", icon: ClipboardList },
-    { id: "handovers", label: "Handovers", path: "/handovers", icon: HandCoins },
-    { id: "map", label: "Map", path: "/map", icon: Map },
-    { id: "reports", label: "Reports", path: "/reports", icon: FileText },
-    { id: "analytics", label: "Analytics", path: "/analytics", icon: BarChart3 },
-    { id: "activity", label: "Activity Log", path: "/activity", icon: History },
-    { id: "profile", label: "My Profile", path: "/profile", icon: User },
-    { id: "settings", label: "Settings", path: "/settings", icon: Settings },
-  ],
+type StaffMenuSection = {
+  section: string;
+  items: StaffMenuItem[];
 };
 
+const STAFF_MENU_BY_ROLE: Record<StaffRole, StaffMenuSection[]> = {
+  super_admin: [
+    { section: "Overview", items: [
+      { id: "dashboard", label: "Dashboard", path: "/", icon: LayoutDashboard },
+      { id: "orders", label: "Orders", path: "/orders", icon: ClipboardList },
+      { id: "sales", label: "Sales", path: "/sales", icon: ShoppingCart },
+      { id: "transactions", label: "Transactions", path: "/transactions", icon: Receipt },
+      { id: "handovers", label: "Handovers", path: "/handovers", icon: HandCoins },
+      { id: "handover-requests", label: "Handover Requests", path: "/handover-requests", icon: HandCoins },
+    ]},
+    { section: "Operations", items: [
+      { id: "products", label: "Products", path: "/products", icon: Package },
+      { id: "inventory", label: "Inventory", path: "/inventory", icon: Warehouse },
+      { id: "purchases", label: "Purchases", path: "/purchases", icon: ShoppingCart },
+      { id: "stock-transfers", label: "Stock Transfers", path: "/stock-transfers", icon: ArrowRightLeft },
+      { id: "routes", label: "Routes", path: "/routes", icon: Route },
+      { id: "attendance", label: "Attendance", path: "/attendance", icon: Calendar },
+      { id: "map", label: "Map", path: "/map", icon: Map },
+    ]},
+    { section: "Directory", items: [
+      { id: "customers", label: "Customers", path: "/customers", icon: Users },
+      { id: "stores", label: "Stores", path: "/stores", icon: Store },
+      { id: "store-types", label: "Store Types", path: "/store-types", icon: Store },
+      { id: "vendors", label: "Vendors", path: "/vendors", icon: Building2 },
+      { id: "invoices", label: "Invoices", path: "/invoices", icon: FileText },
+      { id: "vendor-payments", label: "Vendor Payments", path: "/vendor-payments", icon: CreditCard },
+      { id: "expenses", label: "Expenses", path: "/expenses", icon: Wallet },
+      { id: "sale-returns", label: "Sale Returns", path: "/sale-returns", icon: Undo2 },
+      { id: "purchase-returns", label: "Purchase Returns", path: "/purchase-returns", icon: Undo2 },
+      { id: "banners", label: "Banners", path: "/banners", icon: Image },
+    ]},
+    { section: "Insights", items: [
+      { id: "reports", label: "Reports", path: "/reports", icon: FileText },
+      { id: "analytics", label: "Analytics", path: "/analytics", icon: BarChart3 },
+      { id: "cost-insights", label: "Cost Insights", path: "/cost-insights", icon: TrendingUp },
+      { id: "income", label: "Income", path: "/income", icon: Coins },
+      { id: "activity", label: "Activity Log", path: "/activity", icon: History },
+    ]},
+    { section: "Manufacturing", items: [
+      { id: "production", label: "Production", path: "/production", icon: Factory },
+      { id: "production-log", label: "Production Log", path: "/admin/production-log", icon: ClipboardCheck },
+    ]},
+    { section: "Administration", items: [
+      { id: "access", label: "Access Control", path: "/access-control", icon: Shield },
+      { id: "staff-dir", label: "Staff Directory", path: "/staff", icon: Users },
+      { id: "admin-setup", label: "ERP Setup", path: "/admin/setup", icon: Settings },
+      { id: "cost-history", label: "Cost History", path: "/admin/cost-history", icon: TrendingUp },
+      { id: "vehicles", label: "Vehicles", path: "/admin/vehicles", icon: Truck },
+      { id: "delivery-feasibility", label: "Delivery Feasibility", path: "/admin/delivery-feasibility", icon: Route },
+      { id: "settings", label: "Settings", path: "/settings", icon: Settings },
+      { id: "profile", label: "My Profile", path: "/profile", icon: User },
+    ]},
+    { section: "HR", items: [
+      { id: "hr-workers", label: "Workers", path: "/hr/staff", icon: UserCog },
+      { id: "hr-payroll", label: "Payroll", path: "/hr/payroll", icon: Wallet },
+    ]},
+  ],
+  manager: [
+    { section: "Overview", items: [
+      { id: "dashboard", label: "Dashboard", path: "/", icon: LayoutDashboard },
+      { id: "orders", label: "Orders", path: "/orders", icon: ClipboardList },
+      { id: "sales", label: "Sales", path: "/sales", icon: ShoppingCart },
+      { id: "transactions", label: "Transactions", path: "/transactions", icon: Receipt },
+      { id: "handovers", label: "Handovers", path: "/handovers", icon: HandCoins },
+      { id: "handover-requests", label: "Handover Requests", path: "/handover-requests", icon: HandCoins },
+    ]},
+    { section: "Operations", items: [
+      { id: "products", label: "Products", path: "/products", icon: Package },
+      { id: "inventory", label: "Inventory", path: "/inventory", icon: Warehouse },
+      { id: "purchases", label: "Purchases", path: "/purchases", icon: ShoppingCart },
+      { id: "stock-transfers", label: "Stock Transfers", path: "/stock-transfers", icon: ArrowRightLeft },
+      { id: "routes", label: "Routes", path: "/routes", icon: Route },
+      { id: "attendance", label: "Attendance", path: "/attendance", icon: Calendar },
+      { id: "map", label: "Map", path: "/map", icon: Map },
+    ]},
+    { section: "Directory", items: [
+      { id: "customers", label: "Customers", path: "/customers", icon: Users },
+      { id: "stores", label: "Stores", path: "/stores", icon: Store },
+      { id: "vendors", label: "Vendors", path: "/vendors", icon: Building2 },
+      { id: "invoices", label: "Invoices", path: "/invoices", icon: FileText },
+      { id: "vendor-payments", label: "Vendor Payments", path: "/vendor-payments", icon: CreditCard },
+      { id: "expenses", label: "Expenses", path: "/expenses", icon: Wallet },
+      { id: "sale-returns", label: "Sale Returns", path: "/sale-returns", icon: Undo2 },
+      { id: "purchase-returns", label: "Purchase Returns", path: "/purchase-returns", icon: Undo2 },
+      { id: "banners", label: "Banners", path: "/banners", icon: Image },
+    ]},
+    { section: "Insights", items: [
+      { id: "reports", label: "Reports", path: "/reports", icon: FileText },
+      { id: "analytics", label: "Analytics", path: "/analytics", icon: BarChart3 },
+      { id: "cost-insights", label: "Cost Insights", path: "/cost-insights", icon: TrendingUp },
+      { id: "income", label: "Income", path: "/income", icon: Coins },
+      { id: "production-log", label: "Production Log", path: "/admin/production-log", icon: ClipboardCheck },
+      { id: "activity", label: "Activity Log", path: "/activity", icon: History },
+    ]},
+    { section: "Manage", items: [
+      { id: "access", label: "Access Control", path: "/access-control", icon: Shield },
+      { id: "staff-dir", label: "Staff Directory", path: "/staff", icon: Users },
+      { id: "settings", label: "Settings", path: "/settings", icon: Settings },
+      { id: "profile", label: "My Profile", path: "/profile", icon: User },
+    ]},
+    { section: "HR", items: [
+      { id: "hr-workers", label: "Workers", path: "/hr/staff", icon: UserCog },
+      { id: "hr-payroll", label: "Payroll", path: "/hr/payroll", icon: Wallet },
+    ]},
+  ],
+};
 function StaffApp({ role }: { role: StaffRole }) {
   useRealtimeSync();
   const { profile, signOut } = useAuth();
@@ -143,11 +226,12 @@ function StaffApp({ role }: { role: StaffRole }) {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const menuItems = STAFF_MENU_BY_ROLE[role];
+  const menuSections = STAFF_MENU_BY_ROLE[role];
+  const allMenuItems = menuSections.flatMap((s) => s.items);
 
   const activeMenuItem =
-    menuItems.find((item) => location.pathname === item.path || (item.path !== "/" && location.pathname.startsWith(item.path))) ||
-    menuItems[0];
+    allMenuItems.find((item) => location.pathname === item.path || (item.path !== "/" && location.pathname.startsWith(item.path))) ||
+    allMenuItems[0];
 
   const handleNavigate = (path: string) => {
     navigate(path);
@@ -157,26 +241,65 @@ function StaffApp({ role }: { role: StaffRole }) {
   const renderCurrentScreen = () => {
     const path = location.pathname;
 
-    if (matchPath("/customers/:id", path)) return <CustomerDetail />;
-    if (matchPath("/stores/:id", path)) return <StoreDetail />;
-    if (matchPath("/routes/:id", path)) return <RouteDetail />;
+    // Detail pages — wrapped with back-nav
+    if (matchPath("/customers/:id", path)) return <MobilePageWrapper showBack><CustomerDetail /></MobilePageWrapper>;
+    if (matchPath("/stores/:id", path)) return <MobilePageWrapper showBack><StoreDetail /></MobilePageWrapper>;
+    if (matchPath("/routes/:id", path)) return <MobilePageWrapper showBack><RouteDetail /></MobilePageWrapper>;
+    if (matchPath("/vendors/:id", path)) return <MobilePageWrapper showBack><VendorDetail /></MobilePageWrapper>;
+    if (matchPath("/invoices/:id", path)) return <MobilePageWrapper showBack><InvoiceView /></MobilePageWrapper>;
 
-    if (path.startsWith("/reports")) return <Reports />;
-    if (path === "/products") return <Products />;
-    if (path === "/inventory") return <Inventory />;
-    if (path === "/customers") return <Customers />;
-    if (path === "/stores") return <Stores />;
-    if (path === "/routes") return <RoutesPage />;
-    if (path === "/sales") return <Sales />;
-    if (path === "/transactions") return <Transactions />;
-    if (path === "/orders") return <Orders />;
-    if (path === "/handovers") return <Handovers />;
-    if (path === "/map") return <MapPage />;
-    if (path === "/analytics") return <Analytics />;
-    if (path === "/activity") return <Activity />;
-    if (path === "/access-control" && role === "super_admin") return <AccessControl />;
-    if (path === "/profile") return <UserProfile />;
-    if (path === "/settings") return <SettingsPage />;
+    // Overview
+    if (path === "/orders") return <MobilePageWrapper><Orders /></MobilePageWrapper>;
+    if (path === "/sales") return <MobilePageWrapper><Sales /></MobilePageWrapper>;
+    if (path === "/transactions") return <MobilePageWrapper><Transactions /></MobilePageWrapper>;
+    if (path === "/handovers") return <MobilePageWrapper><Handovers /></MobilePageWrapper>;
+    if (path === "/handover-requests") return <MobilePageWrapper><HandoverRequests /></MobilePageWrapper>;
+
+    // Operations
+    if (path === "/products") return <MobilePageWrapper><Products /></MobilePageWrapper>;
+    if (path === "/inventory") return <MobilePageWrapper><Inventory /></MobilePageWrapper>;
+    if (path === "/purchases") return <MobilePageWrapper><Purchases /></MobilePageWrapper>;
+    if (path === "/stock-transfers") return <MobilePageWrapper><StockTransfers /></MobilePageWrapper>;
+    if (path === "/routes") return <MobilePageWrapper><RoutesPage /></MobilePageWrapper>;
+    if (path === "/attendance") return <MobilePageWrapper><Attendance /></MobilePageWrapper>;
+    if (path === "/map") return <MobilePageWrapper><MapPage /></MobilePageWrapper>;
+
+    // Directory
+    if (path === "/customers") return <MobilePageWrapper><Customers /></MobilePageWrapper>;
+    if (path === "/stores") return <MobilePageWrapper><Stores /></MobilePageWrapper>;
+    if (path === "/store-types") return <MobilePageWrapper><StoreTypes /></MobilePageWrapper>;
+    if (path === "/vendors") return <MobilePageWrapper><Vendors /></MobilePageWrapper>;
+    if (path === "/invoices") return <MobilePageWrapper><Invoices /></MobilePageWrapper>;
+    if (path === "/vendor-payments") return <MobilePageWrapper><VendorPayments /></MobilePageWrapper>;
+    if (path === "/expenses") return <MobilePageWrapper><Expenses /></MobilePageWrapper>;
+    if (path === "/sale-returns") return <MobilePageWrapper><SaleReturns /></MobilePageWrapper>;
+    if (path === "/purchase-returns") return <MobilePageWrapper><PurchaseReturns /></MobilePageWrapper>;
+    if (path === "/banners") return <MobilePageWrapper><Banners /></MobilePageWrapper>;
+
+    // Insights
+    if (path.startsWith("/reports")) return <MobilePageWrapper><Reports /></MobilePageWrapper>;
+    if (path === "/analytics") return <MobilePageWrapper><Analytics /></MobilePageWrapper>;
+    if (path === "/cost-insights") return <MobilePageWrapper><CostInsights /></MobilePageWrapper>;
+    if (path === "/income") return <MobilePageWrapper><Income /></MobilePageWrapper>;
+    if (path === "/activity") return <MobilePageWrapper><Activity /></MobilePageWrapper>;
+
+    // Manufacturing
+    if (path === "/production") return <MobilePageWrapper><ProductionPage /></MobilePageWrapper>;
+    if (path === "/admin/production-log") return <MobilePageWrapper><ProductionLogPage /></MobilePageWrapper>;
+
+    // Administration
+    if (path === "/access-control") return <MobilePageWrapper><AccessControl /></MobilePageWrapper>;
+    if (path === "/staff") return <MobilePageWrapper><StaffDirectory /></MobilePageWrapper>;
+    if (path === "/admin/setup") return <MobilePageWrapper><AdminSetup /></MobilePageWrapper>;
+    if (path === "/admin/cost-history") return <MobilePageWrapper><AdminCostHistory /></MobilePageWrapper>;
+    if (path === "/admin/vehicles") return <MobilePageWrapper><AdminVehicles /></MobilePageWrapper>;
+    if (path === "/admin/delivery-feasibility") return <MobilePageWrapper><DeliveryFeasibility /></MobilePageWrapper>;
+    if (path === "/settings") return <MobilePageWrapper><SettingsPage /></MobilePageWrapper>;
+    if (path === "/profile") return <MobilePageWrapper><UserProfile /></MobilePageWrapper>;
+
+    // HR
+    if (path === "/hr/staff") return <MobilePageWrapper><WorkersPage /></MobilePageWrapper>;
+    if (path === "/hr/payroll") return <MobilePageWrapper><PayrollPage /></MobilePageWrapper>;
 
     // Dashboard: render mobile-native AdminHome
     return <AdminHome role={role} onNavigate={handleNavigate} />;
@@ -250,43 +373,52 @@ function StaffApp({ role }: { role: StaffRole }) {
               </div>
             </div>
 
-            {/* Menu Items */}
-            <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
-              {menuItems.map((item) => {
-                const Icon = item.icon;
-                const isActive =
-                  location.pathname === item.path ||
-                  (item.path !== "/" && location.pathname.startsWith(item.path));
+            {/* Menu Items — Grouped by Section */}
+            <nav className="flex-1 px-3 py-2 overflow-y-auto">
+              {menuSections.map((section, si) => (
+                <div key={section.section} className={si > 0 ? "mt-3" : ""}>
+                  <p className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                    {section.section}
+                  </p>
+                  <div className="space-y-0.5">
+                    {section.items.map((item) => {
+                      const Icon = item.icon;
+                      const isActive =
+                        location.pathname === item.path ||
+                        (item.path !== "/" && location.pathname.startsWith(item.path));
 
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => handleNavigate(item.path)}
-                    className={cn(
-                      "w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all active:scale-[0.98]",
-                      isActive
-                        ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-semibold shadow-sm"
-                        : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
-                    )}
-                  >
-                    <div className={cn(
-                      "h-8 w-8 rounded-lg flex items-center justify-center shrink-0 transition-colors",
-                      isActive
-                        ? "bg-blue-100 dark:bg-blue-800/50"
-                        : "bg-slate-100 dark:bg-slate-800"
-                    )}>
-                      <Icon className={cn(
-                        "h-4 w-4",
-                        isActive ? "text-blue-600 dark:text-blue-400" : "text-slate-500 dark:text-slate-400"
-                      )} />
-                    </div>
-                    <span className="truncate">{item.label}</span>
-                    {isActive && (
-                      <div className="ml-auto h-1.5 w-1.5 rounded-full bg-blue-500" />
-                    )}
-                  </button>
-                );
-              })}
+                      return (
+                        <button
+                          key={item.id}
+                          onClick={() => handleNavigate(item.path)}
+                          className={cn(
+                            "w-full flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-all active:scale-[0.98]",
+                            isActive
+                              ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-semibold shadow-sm"
+                              : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+                          )}
+                        >
+                          <div className={cn(
+                            "h-7 w-7 rounded-lg flex items-center justify-center shrink-0 transition-colors",
+                            isActive
+                              ? "bg-blue-100 dark:bg-blue-800/50"
+                              : "bg-slate-100 dark:bg-slate-800"
+                          )}>
+                            <Icon className={cn(
+                              "h-3.5 w-3.5",
+                              isActive ? "text-blue-600 dark:text-blue-400" : "text-slate-500 dark:text-slate-400"
+                            )} />
+                          </div>
+                          <span className="truncate">{item.label}</span>
+                          {isActive && (
+                            <div className="ml-auto h-1.5 w-1.5 rounded-full bg-blue-500" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </nav>
 
             {/* Sign Out */}

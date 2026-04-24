@@ -1,0 +1,305 @@
+/*
+ * Mobile Page Overrides
+ * Applied inside .mobile-page-wrapper to transform web pages into mobile-native layouts.
+ * These target shadcn/ui components and common page patterns.
+ */
+
+/* ───────────────── Page Headers ───────────────── */
+/* Hide duplicate page titles - MobileHeader already shows the title */
+.mobile-page-wrapper > div > h1:first-of-type,
+.mobile-page-wrapper > div > .flex:first-child > h1,
+.mobile-page-wrapper > .flex:first-child > h1,
+.mobile-page-wrapper > h1:first-child {
+  display: none !important;
+}
+
+/* Hide the entire header row that contains page title + action buttons */
+.mobile-page-wrapper > div > [data-page-header],
+.mobile-page-wrapper [data-page-header] {
+  display: none !important;
+}
+
+/* ───────────────── Layout & Spacing ───────────────── */
+.mobile-page-wrapper {
+  padding: 0.75rem;
+  min-height: auto !important;
+  overflow-x: hidden;
+}
+
+/* Remove min-height constraints from page containers */
+.mobile-page-wrapper > div {
+  min-height: auto !important;
+}
+
+/* Tighter spacing between sections */
+.mobile-page-wrapper .space-y-6 {
+  --tw-space-y-reverse: 0;
+  gap: 0.75rem;
+}
+
+.mobile-page-wrapper .space-y-8 {
+  --tw-space-y-reverse: 0;
+  gap: 1rem;
+}
+
+/* ───────────────── Cards ───────────────── */
+.mobile-page-wrapper .rounded-lg,
+.mobile-page-wrapper .rounded-xl {
+  border-radius: 1rem;
+}
+
+.mobile-page-wrapper [class*="shadow-sm"],
+.mobile-page-wrapper [class*="shadow-md"] {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+/* Card inner padding — slightly tighter for mobile */
+.mobile-page-wrapper .p-6 {
+  padding: 1rem;
+}
+
+.mobile-page-wrapper .p-8 {
+  padding: 1.25rem;
+}
+
+.mobile-page-wrapper .px-6 {
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+.mobile-page-wrapper .py-6 {
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+}
+
+/* ───────────────── Tables ───────────────── */
+/* Make all tables horizontally scrollable */
+.mobile-page-wrapper table {
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  white-space: nowrap;
+  font-size: 0.8125rem;
+}
+
+.mobile-page-wrapper thead {
+  display: table;
+  width: 100%;
+  table-layout: auto;
+}
+
+.mobile-page-wrapper tbody {
+  display: table;
+  width: 100%;
+  table-layout: auto;
+}
+
+.mobile-page-wrapper tr {
+  display: table-row;
+}
+
+.mobile-page-wrapper th,
+.mobile-page-wrapper td {
+  display: table-cell;
+  padding: 0.625rem 0.75rem;
+  white-space: nowrap;
+}
+
+/* Table container wrapper */
+.mobile-page-wrapper .overflow-auto,
+.mobile-page-wrapper [class*="overflow-x"] {
+  border-radius: 0.75rem;
+}
+
+/* ───────────────── Buttons & Touch Targets ───────────────── */
+/* Ensure minimum 44px touch targets */
+.mobile-page-wrapper button,
+.mobile-page-wrapper [role="button"],
+.mobile-page-wrapper a[class*="btn"],
+.mobile-page-wrapper .inline-flex[class*="h-9"],
+.mobile-page-wrapper .inline-flex[class*="h-8"] {
+  min-height: 2.5rem;
+  min-width: 2.5rem;
+}
+
+/* Button sizing */
+.mobile-page-wrapper button[class*="h-9"] {
+  height: 2.5rem;
+  font-size: 0.8125rem;
+}
+
+.mobile-page-wrapper button[class*="h-10"] {
+  height: 2.75rem;
+}
+
+/* Button pill radius */
+.mobile-page-wrapper button[class*="rounded-md"] {
+  border-radius: 0.75rem;
+}
+
+/* ───────────────── Form Inputs ───────────────── */
+.mobile-page-wrapper input[type="text"],
+.mobile-page-wrapper input[type="email"],
+.mobile-page-wrapper input[type="password"],
+.mobile-page-wrapper input[type="number"],
+.mobile-page-wrapper input[type="search"],
+.mobile-page-wrapper input[type="tel"],
+.mobile-page-wrapper input[type="url"],
+.mobile-page-wrapper input[type="date"],
+.mobile-page-wrapper textarea,
+.mobile-page-wrapper select,
+.mobile-page-wrapper [class*="SelectTrigger"],
+.mobile-page-wrapper [role="combobox"] {
+  min-height: 2.75rem;
+  font-size: 1rem; /* Prevents iOS zoom on focus */
+  border-radius: 0.75rem;
+}
+
+/* Labels */
+.mobile-page-wrapper label[class*="text-sm"] {
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+/* ───────────────── Tabs ───────────────── */
+/* Make tab lists horizontally scrollable */
+.mobile-page-wrapper [role="tablist"] {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  white-space: nowrap;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border-radius: 0.75rem;
+}
+
+.mobile-page-wrapper [role="tablist"]::-webkit-scrollbar {
+  display: none;
+}
+
+.mobile-page-wrapper [role="tab"] {
+  white-space: nowrap;
+  font-size: 0.8125rem;
+  padding: 0.5rem 0.875rem;
+  border-radius: 0.625rem;
+  min-height: 2.25rem;
+}
+
+/* ───────────────── Dialogs & Sheets ───────────────── */
+/* Make dialogs full-width on mobile */
+.mobile-page-wrapper ~ [role="dialog"],
+[data-state="open"][role="dialog"] {
+  width: calc(100% - 2rem) !important;
+  max-width: 100% !important;
+  border-radius: 1rem !important;
+}
+
+/* Sheet content improvements */
+[data-state="open"][class*="SheetContent"] {
+  border-radius: 1rem 1rem 0 0;
+}
+
+/* ───────────────── Grid Layouts ───────────────── */
+/* Force 1-2 columns on mobile for card grids */
+.mobile-page-wrapper .grid-cols-3 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.mobile-page-wrapper .grid-cols-4 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.mobile-page-wrapper .sm\:grid-cols-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.mobile-page-wrapper .lg\:grid-cols-3,
+.mobile-page-wrapper .md\:grid-cols-3 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.mobile-page-wrapper .lg\:grid-cols-4,
+.mobile-page-wrapper .md\:grid-cols-4 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+/* ───────────────── Badges & Pills ───────────────── */
+.mobile-page-wrapper [class*="badge"],
+.mobile-page-wrapper .inline-flex[class*="rounded-full"][class*="text-xs"] {
+  font-size: 0.6875rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+}
+
+/* ───────────────── Typography ───────────────── */
+/* Scale down desktop-sized headings */
+.mobile-page-wrapper h2 {
+  font-size: 1.125rem;
+  line-height: 1.4;
+}
+
+.mobile-page-wrapper h3 {
+  font-size: 1rem;
+  line-height: 1.4;
+}
+
+.mobile-page-wrapper .text-2xl {
+  font-size: 1.25rem;
+}
+
+.mobile-page-wrapper .text-3xl {
+  font-size: 1.5rem;
+}
+
+/* ───────────────── Search / Filter Bars ───────────────── */
+/* Make search + filter rows stack vertically */
+.mobile-page-wrapper > div > .flex.items-center.gap-4,
+.mobile-page-wrapper > div > .flex.items-center.gap-2 {
+  flex-wrap: wrap;
+}
+
+/* ───────────────── Stat Cards ───────────────── */
+/* Common stat card pattern */
+.mobile-page-wrapper [class*="stat-card"],
+.mobile-page-wrapper .grid > div > .text-2xl,
+.mobile-page-wrapper .grid > div > .text-3xl {
+  font-size: 1.25rem;
+}
+
+/* ───────────────── Scrollbars ───────────────── */
+.mobile-page-wrapper ::-webkit-scrollbar {
+  height: 3px;
+  width: 3px;
+}
+
+.mobile-page-wrapper ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 3px;
+}
+
+/* ───────────────── Dark Mode Refinements ───────────────── */
+.dark .mobile-page-wrapper {
+  background-color: transparent;
+}
+
+.dark .mobile-page-wrapper ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* ───────────────── Animation & Transitions ───────────────── */
+.mobile-page-wrapper * {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-page-wrapper button:active,
+.mobile-page-wrapper [role="button"]:active {
+  transform: scale(0.97);
+  transition: transform 0.1s ease;
+}
+
+/* ───────────────── Empty States ───────────────── */
+.mobile-page-wrapper [class*="empty-state"],
+.mobile-page-wrapper .flex.flex-col.items-center.justify-center {
+  padding: 2rem 1rem;
+}
