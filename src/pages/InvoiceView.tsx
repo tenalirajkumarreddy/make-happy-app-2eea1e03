@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { formatDate } from "@/lib/utils";
 import { useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -39,6 +39,12 @@ const InvoiceView = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const printRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (invoice) {
+      document.title = `Invoice ${invoice.invoice_number}`;
+    }
+  }, [invoice]);
 
   // Fetch invoice
   const { data: invoice, isLoading } = useQuery({

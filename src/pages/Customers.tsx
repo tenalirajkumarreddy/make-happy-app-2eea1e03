@@ -13,9 +13,9 @@ import { useWarehouse } from "@/contexts/WarehouseContext";
 import { logActivity } from "@/lib/activityLogger";
 import { generateDisplayId } from "@/lib/displayId";
 import { validatePhone, validateEmail, normalizePhone } from "@/lib/validation";
+import { sanitizeString, sanitizeObject } from "@/lib/sanitization";
 import { Loader2, User, Upload, AlertCircle, Phone, Mail, Store as StoreIcon } from "lucide-react";
 import { usePermission } from "@/hooks/usePermission";
-import { useRouteAccess } from "@/hooks/useRouteAccess";
 import { addToQueue } from "@/lib/offlineQueue";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
@@ -23,6 +23,17 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
+
+// Set page title
+const usePageTitle = (title: string) => {
+  useEffect(() => {
+    const originalTitle = document.title;
+    document.title = title;
+    return () => {
+      document.title = originalTitle;
+    };
+  }, [title]);
+};
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -37,6 +48,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
 const Customers = () => {
+  usePageTitle("Customers | BizManager");
   const navigate = useNavigate();
   const { user, role } = useAuth();
   const { currentWarehouse } = useWarehouse();
@@ -67,8 +79,6 @@ const Customers = () => {
   const canBulk = role === "super_admin" || role === "manager";
   const canEdit = role === "super_admin" || role === "manager";
 
-  const { canAccessRoute, canAccessStore, loading: routeLoading, hasMatrixRestrictions, hasStoreTypeRestrictions } = useRouteAccess(user?.id, role);
-
   const {
     data,
     fetchNextPage,
@@ -78,16 +88,26 @@ const Customers = () => {
     isError,
     error: queryError
   } = useInfiniteQuery({
-    queryKey: ["customers", currentWarehouse?.id],
+    queryKey: ["customers", currentWarehouse?.id, user?.id, role],
     queryFn: async ({ pageParam = 0 }) => {
-      let query = (supabase as any)
-        .from("customers")
-        .select("*, stores(id, outstanding, route_id, store_type_id)")
-        .order("created_at", { ascending: false });
-      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
-      const { data, error } = await query.range(pageParam * PAGE_SIZE, (pageParam + 1) * PAGE_SIZE - 1);
+      // Use database function that handles route access filtering
+      const { data, error } = await supabase.rpc("get_accessible_customers", {
+        p_user_id: user?.id,
+        p_warehouse_id: currentWarehouse?.id || null,
+        p_limit: PAGE_SIZE,
+        p_offset: pageParam * PAGE_SIZE,
+      });
       if (error) throw error;
-      return data;
+      // Transform data to match expected format
+      return (data || []).map((c: any) => ({
+        ...c,
+        stores: c.store_count > 0 ? [{ 
+          id: c.id, 
+          outstanding: c.total_outstanding,
+          // Note: route_id and store_type_id are not returned by the function
+          // These are used for filtering which is now done server-side
+        }] : [],
+      }));
     },
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) => {
@@ -98,15 +118,26 @@ const Customers = () => {
 
   const customers = useMemo(() => data?.pages.flatMap((page) => page) || [], [data]);
   
-  // Real-time phone duplicate check
+  // Real-time phone duplicate check using database function
   useEffect(() => {
     if (!phone.trim() || phone.trim().length < 6) { setDuplicateCustomer(null); return; }
-    const timer = setTimeout(() => {
-      const match = (customers || []).find((c: any) => c.phone && c.phone === phone.trim());
-      setDuplicateCustomer(match || null);
+    const timer = setTimeout(async () => {
+      const { data, error } = await supabase.rpc("check_duplicate_customer_phone", {
+        p_phone: phone.trim(),
+        p_exclude_id: null,
+      });
+      if (!error && data && data.length > 0) {
+        setDuplicateCustomer(data[0]);
+      } else {
+        setDuplicateCustomer(null);
+      }
     }, 400);
     return () => clearTimeout(timer);
-  }, [phone, customers]);
+  }, [phone]);
+
+  useEffect(() => {
+    document.title = "Customers";
+  }, []);
 
     const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -139,12 +170,13 @@ const Customers = () => {
     const normalizedPhone = normalizePhone(phone);
 
     if (!isOnline) {
-       await addToQueue({
+      const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      await addToQueue({
         id: crypto.randomUUID(),
         type: "customer",
         payload: {
           customerData: {
-            id: crypto.randomUUID(), // Generate ID on client for offline caching/relationships
+            tempId, // Temporary ID for client-side reference
             name,
             phone: normalizedPhone || null,
             email: email?.trim().toLowerCase() || null,
@@ -166,15 +198,15 @@ const Customers = () => {
 
     const displayId = generateDisplayId("CUST");
 
-    const { error } = await (supabase as any).from("customers").insert({
-      display_id: displayId,
-      warehouse_id: currentWarehouse?.id || null,
-      name,
-      phone: normalizedPhone || null,
-      email: email?.trim().toLowerCase() || null,
-      address: address || null,
-      photo_url: photoUrl || null,
-    });
+     const { error } = await supabase.from("customers").insert({
+       display_id: displayId,
+       warehouse_id: currentWarehouse?.id || null,
+       name,
+       phone: normalizedPhone || null,
+       email: email?.trim().toLowerCase() || null,
+       address: address || null,
+       photo_url: photoUrl || null,
+     });
     setSaving(false);
     if (error) {
       toast.error(error.message);
@@ -193,14 +225,15 @@ const Customers = () => {
     const errors: string[] = [];
 
     for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      
+      // Sanitize entire row to prevent XSS
+      const row = sanitizeObject(rows[i]);
+
       // Validate required name
       if (!row.name?.trim()) {
         errors.push(`Row ${i + 2}: Customer name is required`);
         continue;
       }
-      
+
       // Validate phone if provided
       if (row.phone) {
         const phoneValidation = validatePhone(row.phone);
@@ -209,7 +242,7 @@ const Customers = () => {
           continue;
         }
       }
-      
+
       // Validate email if provided
       if (row.email) {
         const emailValidation = validateEmail(row.email);
@@ -218,16 +251,16 @@ const Customers = () => {
           continue;
         }
       }
-      
+
       const displayId = generateDisplayId("CUST");
-      const { error } = await (supabase as any).from("customers").insert({
-        display_id: displayId,
-        warehouse_id: currentWarehouse?.id || null,
-        name: row.name.trim(),
-        phone: row.phone ? normalizePhone(row.phone) : null,
-        email: row.email?.trim().toLowerCase() || null,
-        address: row.address?.trim() || null,
-      });
+       const { error } = await supabase.from("customers").insert({
+         display_id: displayId,
+         warehouse_id: currentWarehouse?.id || null,
+         name: row.name.trim(),
+         phone: row.phone ? normalizePhone(row.phone) : null,
+         email: row.email?.trim().toLowerCase() || null,
+         address: row.address?.trim() || null,
+       });
       if (error) {
         errors.push(`Row ${i + 2}: ${error.message}`);
       } else {
@@ -304,19 +337,37 @@ const Customers = () => {
       setEditMode(false);
       return;
     }
-    const results = await Promise.all(
-      changed.map((c: any) => {
-        const d = editData[c.id];
-        return supabase.from("customers").update({ name: d.name || null, phone: d.phone || null, email: d.email || null }).eq("id", c.id);
-      })
-    );
+    
+    // Use database function for atomic bulk updates with individual error tracking
+    const updates = changed.map((c: any) => ({
+      id: c.id,
+      name: editData[c.id].name || null,
+      phone: editData[c.id].phone || null,
+      email: editData[c.id].email || null,
+    }));
+    
+    const { data: results, error } = await supabase.rpc("bulk_update_customers", {
+      p_updates: updates,
+    });
+    
     setBulkSaving(false);
-    const errCount = results.filter((r) => r.error).length;
-    if (errCount > 0) { toast.error(`${errCount} update(s) failed`); }
-    else {
+    
+    if (error) {
+      toast.error(`Bulk update failed: ${error.message}`);
+      return;
+    }
+    
+    const failures = results?.filter((r: any) => !r.success) || [];
+    const successCount = changed.length - failures.length;
+    
+    if (failures.length > 0) {
+      toast.warning(`${successCount} updated, ${failures.length} failed`);
+      console.error("Failed updates:", failures);
+    } else {
       toast.success(`${changed.length} customer(s) updated`);
       logActivity(user!.id, `Bulk updated ${changed.length} customers`, "customer");
     }
+    
     setEditMode(false);
     setEditData({});
     qc.invalidateQueries({ queryKey: ["customers"] });
@@ -381,37 +432,35 @@ const Customers = () => {
     ) : (
       <span className="text-muted-foreground text-sm">{row.email || "—"}</span>
     ), className: "hidden md:table-cell" },
-    { header: "Stores", accessor: (row: any) => row.stores?.length || 0, className: "text-center hidden sm:table-cell" },
-    { header: "Outstanding", accessor: (row: any) => {
-      const total = (row.stores || []).reduce((s: number, st: any) => s + Number(st.outstanding || 0), 0);
-      return `₹${total.toLocaleString()}`;
-    }},
-    { header: "KYC", accessor: (row: any) => (
-      <button onClick={() => canReviewKyc && row.kyc_status !== "not_requested" ? setKycCustomer(row) : null} className={canReviewKyc && row.kyc_status !== "not_requested" ? "cursor-pointer hover:opacity-80" : ""}>
-        <StatusBadge status={row.kyc_status === "verified" ? "verified" : row.kyc_status === "pending" ? "pending" : row.kyc_status === "rejected" ? "rejected" : "inactive"} label={row.kyc_status.replace("_", " ")} />
-      </button>
-    )},
+{ header: "Stores", accessor: (row: any) => row.store_count || 0, className: "text-center hidden sm:table-cell" },
+  { header: "Outstanding", accessor: (row: any) => {
+    const total = Number(row.total_outstanding || 0);
+    return `₹${total.toLocaleString()}`;
+  }},
+{ header: "KYC", accessor: (row: any) => (
+    <button 
+      onClick={() => canReviewKyc && row.kyc_status !== "not_requested" ? setKycCustomer(row) : null} 
+      className={canReviewKyc && row.kyc_status !== "not_requested" ? "cursor-pointer hover:opacity-80" : ""}
+      aria-label={`Review KYC for ${row.name}`}
+      disabled={!canReviewKyc || row.kyc_status === "not_requested"}
+    >
+      <StatusBadge status={row.kyc_status === "verified" ? "verified" : row.kyc_status === "pending" ? "pending" : row.kyc_status === "rejected" ? "rejected" : "inactive"} label={row.kyc_status.replace("_", " ")} />
+    </button>
+  )},
     { header: "Status", accessor: (row: any) => <StatusBadge status={row.is_active ? "active" : "inactive"} /> },
   ];
 
   const filteredCustomers = useMemo(() => {
-    let data = customers || [];
-    if (hasMatrixRestrictions || hasStoreTypeRestrictions) {
-      data = data.filter((c: any) => {
-        // If customer has no stores, let agents see them (e.g. for newly onboarded customers)
-        if (!c.stores || c.stores.length === 0) return true;
-        // Otherwise, they must have at least one store the agent can access
-        return c.stores.some((s: any) => canAccessStore(s.route_id, s.store_type_id));
-      });
-    }
-    return applyFilters(data, filters, {
+    // Route access filtering is now done server-side via get_accessible_customers
+    // We only need to apply the UI filters (date range, KYC status, etc.)
+    return applyFilters(customers || [], filters, {
       dateField: "created_at",
       kycField: "kyc_status",
       statusField: "is_active",
     });
-  }, [customers, filters, hasMatrixRestrictions, hasStoreTypeRestrictions, canAccessStore]);
+  }, [customers, filters]);
 
-  if (isLoading || routeLoading) {
+  if (isLoading) {
     return <TableSkeleton columns={7} />;
   }
 

@@ -297,32 +297,19 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
         }
       }
 
-      // Create store
-      const { data: allStores } = await supabase.from("stores").select("id");
-      const storeCount = (allStores?.length || 0) + 1;
-      const storeDisplayId = `STR-${String(storeCount).padStart(6, "0")}`;
-
-      const ob = obAmount && Number(obAmount) > 0 ? (obType === "credit" ? -Number(obAmount) : Number(obAmount)) : 0;
-      const { data: newStore, error: storeErr } = await supabase.from("stores").insert({
-        display_id: storeDisplayId,
-        name,
-        customer_id: finalCustomerId,
-        store_type_id: storeTypeId,
-        route_id: routeId || null,
-        phone: storePhone,
-        photo_url: photoUrl || null,
-        lat, lng,
-        address: address || null,
-        street: street || null,
-        area: area || null,
-        city: city || null,
-        district: district || null,
-        state: state || null,
-        pincode: pincode || null,
-        opening_balance: ob,
-        outstanding: ob,
-        warehouse_id: currentWarehouse?.id || null,
-      }).select("id").single();
+    // Create store with atomic display_id generation
+    const ob = obAmount && Number(obAmount) > 0 ? (obType === "credit" ? -Number(obAmount) : Number(obAmount)) : 0;
+    const { data: newStore, error: storeErr } = await supabase.rpc("create_store_with_display_id", {
+      p_name: name,
+      p_customer_id: finalCustomerId,
+      p_store_type_id: storeTypeId,
+      p_route_id: routeId || null,
+      p_phone: storePhone,
+      p_address: address || null,
+      p_warehouse_id: currentWarehouse?.id || null,
+      p_lat: lat,
+      p_lng: lng,
+    });
 
       if (storeErr) { toast.error(storeErr.message); setSaving(false); return; }
 

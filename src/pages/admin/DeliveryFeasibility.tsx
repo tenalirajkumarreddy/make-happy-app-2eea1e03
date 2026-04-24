@@ -48,6 +48,10 @@ export default function DeliveryFeasibility() {
 
   const [result, setResult] = useState<FeasibilityResult | null>(null);
 
+  useEffect(() => {
+    document.title = 'Delivery Feasibility';
+  }, []);
+
   // Queries
   const { data: vehicles } = useQuery({
     queryKey: ['admin_vehicles'],

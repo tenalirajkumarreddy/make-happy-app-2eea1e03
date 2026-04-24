@@ -1,9 +1,10 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { Navigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
+import type { AppRole } from "@/types/roles";
 
 interface RoleGuardProps {
-  allowed: string[];
+  allowed: AppRole[];
   children: React.ReactNode;
 }
 
@@ -18,7 +19,7 @@ export function RoleGuard({ allowed, children }: RoleGuardProps) {
     );
   }
 
-  if (!role || !allowed.includes(role)) {
+  if (!role || !allowed.includes(role as AppRole)) {
     return <Navigate to="/" replace />;
   }
 

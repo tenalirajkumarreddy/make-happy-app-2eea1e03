@@ -34,3 +34,5 @@ dist-ssr
 # Replit config (may contain secrets)
 .replit
 replit.nix
+/graphify-out
+/src/graphify-out

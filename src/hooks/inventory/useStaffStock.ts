@@ -94,9 +94,10 @@ export function useStaffStockByWarehouse(warehouseId: string | undefined) {
       if (!stockRows?.length) return { groups: [], summary: [] };
 
       // Step 2: resolve profiles + roles for all user_ids
+      // Use Promise.allSettled to handle partial failures gracefully
       const userIds = [...new Set(stockRows.map((r) => r.user_id))];
 
-      const [{ data: profiles }, { data: roles }] = await Promise.all([
+      const [profilesResult, rolesResult] = await Promise.allSettled([
         supabase
           .from("profiles")
           .select("user_id, full_name, avatar_url, email")
@@ -106,6 +107,18 @@ export function useStaffStockByWarehouse(warehouseId: string | undefined) {
           .select("user_id, role")
           .in("user_id", userIds),
       ]);
+
+      // Extract data from settled promises (handle failures gracefully)
+      const profiles = profilesResult.status === "fulfilled" ? profilesResult.value.data : [];
+      const roles = rolesResult.status === "fulfilled" ? rolesResult.value.data : [];
+
+      // Log warnings for debugging
+      if (profilesResult.status === "rejected") {
+        console.warn("Failed to fetch profiles for staff stock:", profilesResult.reason);
+      }
+      if (rolesResult.status === "rejected") {
+        console.warn("Failed to fetch roles for staff stock:", rolesResult.reason);
+      }
 
       const profileMap = Object.fromEntries(
         (profiles ?? []).map((p) => [p.user_id, p])

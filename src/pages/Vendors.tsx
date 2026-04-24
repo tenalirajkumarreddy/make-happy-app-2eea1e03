@@ -8,7 +8,18 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
 import { Loader2, Users, Phone, Mail, MapPin, Plus, Building2 } from "lucide-react";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+
+// Set page title hook
+const usePageTitle = (title: string) => {
+  useEffect(() => {
+    const originalTitle = document.title;
+    document.title = title;
+    return () => {
+      document.title = originalTitle;
+    };
+  }, [title]);
+};
 import { useNavigate } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -18,8 +29,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { logActivity } from "@/lib/activityLogger";
+import { sanitizeString } from "@/lib/sanitization";
 
 const Vendors = () => {
+  usePageTitle("Vendors | BizManager");
   const navigate = useNavigate();
   const { user, role } = useAuth();
   const { currentWarehouse } = useWarehouse();
@@ -98,21 +111,21 @@ const Vendors = () => {
         seq_name: "vendors_display_id_seq"
       });
 
-      const vendorData = {
-        display_id: idData,
-        warehouse_id: currentWarehouse?.id || null,
-        name: name.trim(),
-        contact_person: contactPerson.trim() || null,
-        phone: phone.trim() || null,
-        email: email.trim() || null,
-        address: address.trim() || null,
-        gstin: gstin.trim() || null,
-        pan: pan.trim() || null,
-        payment_terms: paymentTerms.trim() || "Net 30 days",
-        credit_limit: creditLimit ? parseFloat(creditLimit) : 0,
-        notes: notes.trim() || null,
-        created_by: user!.id
-      };
+    const vendorData = {
+      display_id: idData,
+      warehouse_id: currentWarehouse?.id || null,
+      name: sanitizeString(name.trim()),
+      contact_person: sanitizeString(contactPerson.trim()) || null,
+      phone: sanitizeString(phone.trim()) || null,
+      email: sanitizeString(email.trim()) || null,
+      address: sanitizeString(address.trim()) || null,
+      gstin: sanitizeString(gstin.trim()) || null,
+      pan: sanitizeString(pan.trim()) || null,
+      payment_terms: sanitizeString(paymentTerms.trim()) || "Net 30 days",
+      credit_limit: creditLimit ? parseFloat(creditLimit) : 0,
+      notes: sanitizeString(notes.trim()) || null,
+      created_by: user!.id
+    };
 
       if (editingVendor) {
         // Update existing vendor
@@ -177,7 +190,7 @@ const Vendors = () => {
       header: "Outstanding", 
       accessor: (row: any) => (
         <span className={`font-semibold ${Number(row.outstanding) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-          ₹{Number(row.outstanding).toLocaleString()}
+          ₹{Number(row.outstanding || 0).toLocaleString()}
         </span>
       )
     },
@@ -264,21 +277,22 @@ const Vendors = () => {
                   <div className="entity-card-stat">
                     <p className="entity-card-label">Outstanding</p>
                     <p className={`font-bold text-lg ${Number(vendor.outstanding) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                      ₹{Number(vendor.outstanding).toLocaleString()}
+                      ₹{Number(vendor.outstanding || 0).toLocaleString()}
                     </p>
                   </div>
 
-                  {/* Edit button */}
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="w-full text-xs" 
-                    onClick={(e) => { 
-                      e.stopPropagation(); 
-                      handleEdit(vendor); 
-                    }}
-                  >
-                    Edit Vendor
+  {/* Edit button */}
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full text-xs"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleEdit(vendor);
+              }}
+              aria-label={`Edit vendor ${vendor.name}`}
+            >
+              Edit Vendor
                   </Button>
                 </div>
               </div>
@@ -313,7 +327,7 @@ const Vendors = () => {
                 <div className="flex items-center justify-between mt-1.5">
                   <span className="text-xs text-muted-foreground">Outstanding</span>
                   <span className={`font-bold text-sm ${Number(row.outstanding) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                    ₹{Number(row.outstanding).toLocaleString()}
+                    ₹{Number(row.outstanding || 0).toLocaleString()}
                   </span>
                 </div>
               </div>

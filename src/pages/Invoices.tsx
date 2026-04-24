@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable } from "@/components/shared/DataTable";
@@ -33,6 +33,10 @@ const Invoices = () => {
   const [cancelDialog, setCancelDialog] = useState<{ id: string; number: string } | null>(null);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelling, setCancelling] = useState(false);
+
+  useEffect(() => {
+    document.title = 'Invoices';
+  }, []);
 
   const { data: invoices = [], isLoading } = useQuery({
     queryKey: ["invoices", currentWarehouse?.id],

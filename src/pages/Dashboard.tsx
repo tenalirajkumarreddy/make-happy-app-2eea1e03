@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { StatCard } from "@/components/shared/StatCard";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { useAuth } from "@/contexts/AuthContext";
@@ -86,39 +87,39 @@ const SuperAdminDashboard = () => {
         alertsRes,
       ] = await Promise.all([
         // Today's sales across all warehouses
-        (supabase as any).from("sales")
+        supabase.from("sales")
           .select("total_amount, cash_amount, upi_amount")
           .gte("created_at", today + "T00:00:00")
           .limit(500),
         // Recent sales for trend
-        (supabase as any).from("sales")
+        supabase.from("sales")
           .select("total_amount, created_at")
           .gte("created_at", sevenDaysAgo + "T00:00:00")
           .order("created_at", { ascending: false })
           .limit(500),
         // Customer count
-        (supabase as any).from("customers")
+        supabase.from("customers")
           .select("*", { count: "exact", head: true })
           .eq("is_active", true),
         // Stores with outstanding
-        (supabase as any).from("stores")
+        supabase.from("stores")
           .select("id, outstanding")
           .eq("is_active", true)
           .limit(500),
         // Warehouses count
-        (supabase as any).from("warehouses")
+        supabase.from("warehouses")
           .select("*", { count: "exact", head: true })
           .eq("is_active", true),
         // Active staff count
-        (supabase as any).from("staff_directory")
+        supabase.from("staff_directory")
           .select("*", { count: "exact", head: true })
           .eq("is_active", true),
         // Pending handovers
-        (supabase as any).from("handovers")
+        supabase.from("handovers")
           .select("cash_amount, upi_amount")
           .in("status", ["pending", "awaiting_confirmation"]),
         // Low stock alerts (from per-warehouse product_stock)
-        (supabase as any).from("product_stock")
+        supabase.from("product_stock")
           .select("id, warehouse_id, stock_quantity:quantity, products(name, is_active)")
           .limit(100),
       ]);
@@ -346,32 +347,32 @@ const ManagerDashboard = () => {
         pendingOrdersRes,
         lowStockRes,
         staffSalesRes,
-      ] = await Promise.all([
-        // Today's sales for this warehouse
-        (supabase as any).from("sales")
-          .select("total_amount, cash_amount, upi_amount")
-          .eq("warehouse_id", currentWarehouse?.id)
-          .gte("created_at", today + "T00:00:00"),
-        // Staff handovers pending
-        (supabase as any).from("handovers")
-          .select("cash_amount, upi_amount, status, profiles(full_name)")
-          .in("status", ["pending", "awaiting_confirmation"])
-          .eq("warehouse_id", currentWarehouse?.id)
-          .limit(10),
-        // Pending orders
-        (supabase as any).from("orders")
-          .select("id, display_id, stores(name), created_at, total_amount")
-          .eq("warehouse_id", currentWarehouse?.id)
-          .eq("status", "pending")
-          .order("created_at", { ascending: false })
-          .limit(5),
+       ] = await Promise.all([
+         // Today's sales for this warehouse
+         supabase.from("sales")
+           .select("total_amount, cash_amount, upi_amount")
+           .eq("warehouse_id", currentWarehouse?.id)
+           .gte("created_at", today + "T00:00:00"),
+         // Staff handovers pending
+         supabase.from("handovers")
+           .select("cash_amount, upi_amount, status, profiles(full_name)")
+           .in("status", ["pending", "awaiting_confirmation"])
+           .eq("warehouse_id", currentWarehouse?.id)
+           .limit(10),
+         // Pending orders
+         supabase.from("orders")
+           .select("id, display_id, stores(name), created_at, total_amount")
+           .eq("warehouse_id", currentWarehouse?.id)
+           .eq("status", "pending")
+           .order("created_at", { ascending: false })
+           .limit(5),
         // Low stock
-        (supabase as any).from("product_stock")
+        supabase.from("product_stock")
           .select("id, warehouse_id, stock_quantity:quantity, products(name, is_active)")
           .eq("warehouse_id", currentWarehouse?.id)
           .limit(100),
         // Staff sales today
-        (supabase as any).from("sales")
+        supabase.from("sales")
           .select("total_amount, recorded_by, profiles(full_name)")
           .eq("warehouse_id", currentWarehouse?.id)
           .gte("created_at", today + "T00:00:00"),
@@ -848,7 +849,7 @@ const CustomerDashboard = () => {
                   <Badge variant={order.status === "pending" ? "secondary" : "default"} className="text-xs">
                     {order.status}
                   </Badge>
-                  <p className="text-sm font-semibold mt-1">₹{Number(order.total_amount).toLocaleString()}</p>
+                  <p className="text-sm font-semibold mt-1">₹{Number(order.total_amount || 0).toLocaleString()}</p>
                 </div>
               </div>
             ))}
@@ -868,7 +869,7 @@ const CustomerDashboard = () => {
                   <p className="text-sm">Payment</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-semibold">₹{Number(payment.total_amount).toLocaleString()}</p>
+                  <p className="text-sm font-semibold">₹{Number(payment.total_amount || 0).toLocaleString()}</p>
                   <p className="text-xs text-muted-foreground">{formatDate(payment.created_at)}</p>
                 </div>
               </div>
@@ -902,23 +903,23 @@ const DefaultDashboard = () => {
         storesRes,
         ordersRes,
       ] = await Promise.all([
-        (supabase as any).from("sales")
+        supabase.from("sales")
           .select("total_amount, cash_amount, upi_amount")
           .gte("created_at", today + "T00:00:00")
           .limit(500),
-        (supabase as any).from("sales")
+        supabase.from("sales")
           .select("total_amount, created_at, stores(store_type_id, store_types(name))")
           .gte("created_at", sevenDaysAgo + "T00:00:00")
           .order("created_at", { ascending: false })
           .limit(500),
-        (supabase as any).from("customers")
+        supabase.from("customers")
           .select("*", { count: "exact", head: true })
           .eq("is_active", true),
-        (supabase as any).from("stores")
+        supabase.from("stores")
           .select("id, outstanding")
           .eq("is_active", true)
           .limit(500),
-        (supabase as any).from("orders")
+        supabase.from("orders")
           .select("id, status, display_id, stores(name), created_at")
           .eq("status", "pending")
           .order("created_at", { ascending: false })
@@ -1146,6 +1147,18 @@ const DefaultDashboard = () => {
 
 const Dashboard = () => {
   const { role, loading } = useAuth();
+
+  useEffect(() => {
+    const names: Record<string, string> = {
+      super_admin: "Admin Dashboard",
+      manager: "Manager Dashboard",
+      agent: "Agent Dashboard",
+      marketer: "Marketer Dashboard",
+      pos: "POS Dashboard",
+      customer: "Customer Dashboard",
+    };
+    document.title = (names[role || ""] || "Dashboard") + " — BizManager";
+  }, [role]);
 
   if (loading) {
     return <DashboardSkeleton />;

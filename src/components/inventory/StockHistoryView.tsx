@@ -109,33 +109,26 @@ export function StockHistoryView({ warehouseId }: StockHistoryViewProps) {
   const [tab, setTab] = useState<"movements" | "transfers">("movements");
 
   // ── Stock Movements ─────────────────────────────────────────────────────────
+  // Uses optimized RPC that eliminates N+1 query pattern by joining with profiles
   const { data: movements = [], isLoading: isLoadingMovements } = useQuery({
     queryKey: ["stock-movements", warehouseId],
     queryFn: async () => {
       if (!warehouseId) return [];
-      const { data, error } = await supabase
-        .from("stock_movements")
-        .select("id, quantity, type, reason, created_at, created_by, product:products(name, sku)")
-        .eq("warehouse_id", warehouseId)
-        .order("created_at", { ascending: false })
-        .limit(100);
+      
+      // Use optimized RPC that joins movements with creator profiles
+      const { data, error } = await supabase.rpc("get_stock_movements_with_creator", {
+        p_warehouse_id: warehouseId,
+        p_limit: 100,
+        p_offset: 0,
+      });
+
       if (error) throw error;
-      if (!data?.length) return [];
-
-      const userIds = [...new Set(data.filter((m) => m.created_by).map((m) => m.created_by))] as string[];
-      const profileMap: Record<string, string> = {};
-      if (userIds.length) {
-        const { data: profiles } = await supabase
-          .from("profiles")
-          .select("user_id, full_name")
-          .in("user_id", userIds);
-        for (const p of profiles ?? []) profileMap[p.user_id] = p.full_name ?? "Unknown";
-      }
-
-      return data.map((m) => ({
+      
+      // Map to Movement interface
+      return (data || []).map((m: any) => ({
         ...m,
-        product: Array.isArray(m.product) ? m.product[0] : m.product,
-        creator_name: m.created_by ? (profileMap[m.created_by] ?? "Unknown") : "System",
+        product: { name: m.product_name, sku: m.product_sku },
+        creator_name: m.creator_name || (m.created_by ? "Unknown" : "System"),
       })) as Movement[];
     },
     enabled: !!warehouseId,

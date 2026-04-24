@@ -2,25 +2,8 @@ import { createContext, useContext, useEffect, useState, ReactNode, useCallback 
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
 import { logError } from "@/lib/logger";
-
-type AppRole = "super_admin" | "manager" | "operator" | "agent" | "marketer" | "pos" | "customer";
-
-function normalizeRole(rawRole: string | null | undefined): AppRole {
-  if (!rawRole) return "customer";
-  if (rawRole === "admin") return "super_admin";
-  if (
-    rawRole === "super_admin" ||
-    rawRole === "manager" ||
-    rawRole === "operator" ||
-    rawRole === "agent" ||
-    rawRole === "marketer" ||
-    rawRole === "pos" ||
-    rawRole === "customer"
-  ) {
-    return rawRole;
-  }
-  return "customer";
-}
+import type { AppRole } from "@/types/roles";
+import { normalizeRole } from "@/types/roles";
 
 async function resolveUserType(supabaseClient: any, userId: string): Promise<{
   role: AppRole;

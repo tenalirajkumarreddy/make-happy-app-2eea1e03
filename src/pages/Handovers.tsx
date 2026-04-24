@@ -21,7 +21,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
 import { sendNotification, sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format, startOfDay } from "date-fns";
@@ -51,6 +51,8 @@ const Handovers = () => {
   const [submitting, setSubmitting] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null);
+
+  useEffect(() => { document.title = "Handovers"; }, []);
 
   // Filter states
   const today = new Date().toISOString().split("T")[0];
@@ -268,40 +270,39 @@ const Handovers = () => {
   });
 
   // Fetch expense categories
-  const { data: expenseCategories = [] } = useQuery<ExpenseCategory[]>({
-    queryKey: ["expense-categories"],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("expense_categories")
-        .select("*")
-        .eq("is_active", true)
-        .order("name");
-      if (error) throw error;
-      return (data || []) as ExpenseCategory[];
-    },
-  });
+   const { data: expenseCategories = [] } = useQuery<ExpenseCategory[]>({
+     queryKey: ["expense-categories"],
+     queryFn: async () => {
+       const { data, error } = await supabase
+         .from("expense_categories")
+         .select("*")
+         .eq("is_active", true)
+         .order("name");
+       if (error) throw error;
+       return (data || []) as ExpenseCategory[];
+     },
+   });
 
   // Fetch expense claims (own for staff, all for admin)
-  const { data: expenseClaims = [], isLoading: expenseClaimsLoading } = useQuery<any[]>({
-    queryKey: ["expense-claims", user?.id, isAdminOrManager],
-    queryFn: async () => {
-      let query = (supabase as any)
-        .from("expense_claims")
-        .select("*, expense_categories(id, name, color, icon)")
-        .order("created_at", { ascending: false })
-        .limit(200);
+   const { data: expenseClaims = [], isLoading: expenseClaimsLoading } = useQuery<any[]>({
+     queryKey: ["expense-claims", user?.id, isAdminOrManager],
+     queryFn: async () => {
+       let query = supabase
+         .from("expense_claims")
+         .select("*, expense_categories(id, name, color, icon)")
+         .order("created_at", { ascending: false })
+         .limit(200);
 
-      // Staff only see their own expense claims
-      if (isStaff) {
-        query = query.eq("user_id", user!.id);
-      }
+       // Staff only see their own expense claims
+       if (isStaff) {
+         query = query.eq("user_id", user!.id);
+       }
 
-      const { data, error } = await query;
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!user,
-  });
+       const { data, error } = await query;
+       if (error) throw error;
+       return data || [];
+     },
+   });
 
   // Compute expense totals for balance
   const myApprovedExpenses = useMemo(() => {
@@ -593,17 +594,17 @@ const Handovers = () => {
         seq_name: "expense_claims_display_seq"
       });
 
-      const { error } = await (supabase as any).from("expense_claims").insert({
-        display_id: displayId || `EXC-${Date.now()}`,
-        user_id: user!.id,
-        category_id: expenseCategory,
-        original_category_id: expenseCategory,
-        amount: Number(expenseAmount),
-        expense_date: expenseDate,
-        description: expenseDescription.trim(),
-        receipt_url: expenseReceiptUrl,
-        status: "pending",
-      });
+       const { error } = await supabase.from("expense_claims").insert({
+         display_id: displayId || `EXC-${Date.now()}`,
+         user_id: user!.id,
+         category_id: expenseCategory,
+         original_category_id: expenseCategory,
+         amount: Number(expenseAmount),
+         expense_date: expenseDate,
+         description: expenseDescription.trim(),
+         receipt_url: expenseReceiptUrl,
+         status: "pending",
+       });
 
       if (error) throw error;
 
@@ -654,10 +655,10 @@ const Handovers = () => {
         }
       }
 
-      const { error } = await (supabase as any)
-        .from("expense_claims")
-        .update(updates)
-        .eq("id", reviewExpense.id);
+       const { error } = await supabase
+         .from("expense_claims")
+         .update(updates)
+         .eq("id", reviewExpense.id);
 
       if (error) throw error;
 
@@ -775,7 +776,7 @@ const Handovers = () => {
         {/* Amount & Status */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-lg font-bold tabular-nums">₹{total.toLocaleString()}</span>
+            <span className="text-lg font-bold tabular-nums">₹{(total || 0).toLocaleString()}</span>
             <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${status.bg} ${status.color}`}>
               {status.label}
             </span>
@@ -868,9 +869,9 @@ const Handovers = () => {
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-base font-bold tabular-nums">₹{displayAmount.toLocaleString()}</span>
+            <span className="text-base font-bold tabular-nums">₹{(displayAmount || 0).toLocaleString()}</span>
             {wasAmountChanged && (
-              <span className="text-[10px] text-muted-foreground line-through">₹{Number(item.amount).toLocaleString()}</span>
+              <span className="text-[10px] text-muted-foreground line-through">₹{Number(item.amount || 0).toLocaleString()}</span>
             )}
             <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded-full ${
               item.status === "approved" ? "bg-success/10 text-success" :
@@ -1076,7 +1077,7 @@ const Handovers = () => {
             <CardTitle className="text-sm font-medium text-blue-800">Available Balance</CardTitle>
           </CardHeader>
           <CardContent className="p-4 pt-2">
-            <p className="text-2xl font-bold text-blue-600">₹{Math.max(0, notHandedOver - myApprovedExpenses).toLocaleString()}</p>
+            <p className="text-2xl font-bold text-blue-600">₹{Math.max(0, (notHandedOver || 0) - (myApprovedExpenses || 0)).toLocaleString()}</p>
             <p className="text-xs text-muted-foreground mt-1">Ready to hand over</p>
           </CardContent>
         </Card>
@@ -1096,7 +1097,7 @@ const Handovers = () => {
             <CardTitle className="text-sm font-medium text-green-800">Pending Expenses</CardTitle>
           </CardHeader>
           <CardContent className="p-4 pt-2">
-            <p className="text-2xl font-bold text-green-600">₹{myPendingExpenses.toLocaleString()}</p>
+            <p className="text-2xl font-bold text-green-600">₹{(myPendingExpenses || 0).toLocaleString()}</p>
             <p className="text-xs text-muted-foreground mt-1">Claims awaiting approval</p>
           </CardContent>
         </Card>
@@ -1108,7 +1109,7 @@ const Handovers = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-muted-foreground">Awaiting Confirmation</p>
-                <p className="text-xl font-bold text-amber-600">₹{awaitingAmount.toLocaleString()}</p>
+                <p className="text-xl font-bold text-amber-600">₹{(awaitingAmount || 0).toLocaleString()}</p>
               </div>
               <Clock className="h-8 w-8 text-amber-400" />
             </div>
@@ -1121,7 +1122,7 @@ const Handovers = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs text-muted-foreground">Pending Expenses</p>
-                  <p className="text-xl font-bold text-red-600">₹{myPendingExpenses.toLocaleString()}</p>
+                  <p className="text-xl font-bold text-red-600">₹{(myPendingExpenses || 0).toLocaleString()}</p>
                 </div>
                 <Receipt className="h-8 w-8 text-red-400" />
               </div>
@@ -1279,11 +1280,11 @@ const Handovers = () => {
             <div className="flex gap-3">
               <div className="stat-card flex-1">
                 <span className="text-xs font-medium text-muted-foreground">Pending Claims</span>
-                <p className="text-xl font-bold text-warning">₹{myPendingExpenses.toLocaleString()}</p>
+                <p className="text-xl font-bold text-warning">₹{(myPendingExpenses || 0).toLocaleString()}</p>
               </div>
               <div className="stat-card flex-1">
                 <span className="text-xs font-medium text-muted-foreground">Approved (Owed)</span>
-                <p className="text-xl font-bold text-success">₹{myApprovedExpenses.toLocaleString()}</p>
+                <p className="text-xl font-bold text-success">₹{(myApprovedExpenses || 0).toLocaleString()}</p>
               </div>
             </div>
 
@@ -1363,16 +1364,16 @@ const Handovers = () => {
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold truncate">{getName(uid)}</p>
                             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-0.5 text-[11px] text-muted-foreground">
-                              <span>Sales: ₹{bal.sales.toLocaleString()}</span>
-                              <span>Received: ₹{bal.received.toLocaleString()}</span>
+                              <span>Sales: ₹{(bal.sales || 0).toLocaleString()}</span>
+                              <span>Received: ₹{(bal.received || 0).toLocaleString()}</span>
                             </div>
                           </div>
                           <div className="text-right shrink-0">
-                            <p className={`text-base font-bold tabular-nums ${withUser > 0 ? "text-destructive" : "text-success"}`}>
-                              ₹{Math.max(0, withUser).toLocaleString()}
+                            <p className={`text-base font-bold tabular-nums ${(withUser || 0) > 0 ? "text-destructive" : "text-success"}`}>
+                              ₹{Math.max(0, withUser || 0).toLocaleString()}
                             </p>
-                            {bal.sentPending > 0 && (
-                              <p className="text-[10px] text-warning">₹{bal.sentPending.toLocaleString()} awaiting</p>
+                            {(bal.sentPending || 0) > 0 && (
+                              <p className="text-[10px] text-warning">₹{(bal.sentPending || 0).toLocaleString()} awaiting</p>
                             )}
                           </div>
                         </div>
@@ -1395,7 +1396,7 @@ const Handovers = () => {
           <div className="space-y-4">
             <div className="rounded-lg bg-muted/50 p-3 flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Available Balance</span>
-              <span className="text-lg font-bold">₹{Math.max(0, notHandedOver).toLocaleString()}</span>
+              <span className="text-lg font-bold">₹{Math.max(0, notHandedOver || 0).toLocaleString()}</span>
             </div>
 
             <div className="space-y-2">
@@ -1418,7 +1419,7 @@ const Handovers = () => {
               {partialSetting === false && !isFinalizer && (
                 <p className="text-xs text-warning flex items-center gap-1">
                   <AlertCircle className="h-3 w-3 shrink-0" />
-                  Full balance of ₹{Math.max(0, notHandedOver).toLocaleString()} required
+                  Full balance of ₹{Math.max(0, notHandedOver || 0).toLocaleString()} required
                 </p>
               )}
             </div>
@@ -1532,7 +1533,7 @@ const Handovers = () => {
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-muted-foreground">Original Amount</span>
-                  <span className="text-sm font-bold">₹{Number(reviewExpense.amount).toLocaleString()}</span>
+                  <span className="text-sm font-bold">₹{Number(reviewExpense.amount || 0).toLocaleString()}</span>
                 </div>
                 <div className="pt-1 border-t">
                   <span className="text-xs text-muted-foreground">Description</span>
@@ -1604,8 +1605,8 @@ const Handovers = () => {
                           <span className="font-medium">{p.full_name}</span>
                           <div className="flex items-center gap-2">
                             <span className="text-xs text-muted-foreground">{p.roleLabel}</span>
-                            <span className={`text-xs font-semibold ${balance > 0 ? 'text-destructive' : 'text-green-600'}`}>
-                              ₹{balance.toLocaleString()}
+                            <span className={`text-xs font-semibold ${(balance || 0) > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                              ₹{(balance || 0).toLocaleString()}
                             </span>
                           </div>
                         </div>
@@ -1679,7 +1680,7 @@ const Handovers = () => {
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-muted-foreground">Current Amount</span>
                   <span className="text-sm font-bold">
-                    ₹{(Number(selectedHandoverForEdit.cash_amount) + Number(selectedHandoverForEdit.upi_amount)).toLocaleString()}
+                    ₹{(Number(selectedHandoverForEdit.cash_amount || 0) + Number(selectedHandoverForEdit.upi_amount || 0)).toLocaleString()}
                   </span>
                 </div>
               </div>

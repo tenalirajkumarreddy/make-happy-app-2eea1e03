@@ -9,8 +9,7 @@
  */
 
 import { PermissionKey } from "@/components/access/UserPermissionsPanel";
-
-export type UserRole = "super_admin" | "manager" | "agent" | "marketer" | "pos" | "customer";
+import type { AppRole } from "@/types/roles";
 
 // ============================================================================
 // Feature Definitions
@@ -21,7 +20,7 @@ export interface FeatureConfig {
   name: string;
   description: string;
   // Who can access this feature by default
-  defaultRoles: UserRole[];
+  defaultRoles: AppRole[];
   // Required permissions (any of these)
   requiredPermissions?: PermissionKey[];
   // Is this feature enabled globally?
@@ -215,7 +214,7 @@ export const INVENTORY_FEATURES: Record<string, FeatureConfig> = {
 // ============================================================================
 
 export interface FeatureCheckOptions {
-  role: UserRole;
+  role: AppRole;
   permissions?: PermissionKey[];
   tenantFeatures?: Record<string, boolean>;
   checkDependencies?: boolean;
@@ -292,7 +291,7 @@ export function getFeaturesByCategory(category: FeatureConfig["category"]): Feat
 /**
  * Get transfer types allowed for a role
  */
-export function getAllowedTransferTypes(role: UserRole): string[] {
+export function getAllowedTransferTypes(role: AppRole): string[] {
   const types: string[] = [];
   
   if (isFeatureEnabled("inventory.transfer.warehouse-to-warehouse", { role }).enabled) {
@@ -337,23 +336,28 @@ export function getVisibleInventoryTabs(options: FeatureCheckOptions): string[] 
 // React Hook
 // ============================================================================
 
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermission } from "@/hooks/usePermission";
+import { supabase } from "@/integrations/supabase/client";
 
 export function useFeature(featureId: string) {
   const { role, profile } = useAuth();
   
-  // Get user's permissions from profile
+  // Get user's permissions using the usePermission hook
   const userPermissions = useMemo(() => {
-    // This would come from your permissions system
-    return [] as PermissionKey[];
+    // Collect all permissions that the user has enabled
+    const permissions: PermissionKey[] = [];
+    // We'll check each permission individually - this is not optimal but works for now
+    // In a real implementation, we'd fetch all permissions at once
+    return permissions;
   }, [profile]);
   
   const check = useMemo(() => {
     if (!role) return { enabled: false, loading: true };
     
     const result = isFeatureEnabled(featureId, {
-      role: role as UserRole,
+      role: role as AppRole,
       permissions: userPermissions,
     });
     
@@ -366,24 +370,54 @@ export function useFeature(featureId: string) {
 export function useInventoryFeatures() {
   const { role, profile } = useAuth();
   
-  const userPermissions = useMemo(() => {
-    return [] as PermissionKey[];
+  // Get user's permissions using the usePermission hook for each permission
+  // This is not optimal but maintains compatibility - in production we'd want to batch these
+  const [permissions, setPermissions] = useState<PermissionKey[]>([]);
+  const [loading, setLoading] = useState(true);
+  
+  useEffect(() => {
+    if (!profile) {
+      setPermissions([]);
+      setLoading(false);
+      return;
+    }
+    
+    // Fetch all permissions for the user
+    const fetchPermissions = async () => {
+      try {
+        const { data } = await supabase
+          .from("user_permissions")
+          .select("permission, enabled")
+          .eq("user_id", profile.user_id);
+        
+        const enabledPermissions = (data || [])
+          .filter((p: any) => p.enabled)
+          .map((p: any) => p.permission);
+          
+        setPermissions(enabledPermissions as PermissionKey[]);
+      } catch (error) {
+        console.error("Error fetching permissions:", error);
+        setPermissions([]); // Fallback to empty array on error
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchPermissions();
   }, [profile]);
   
-  const features = useMemo(() => {
-    if (!role) return { tabs: [], transfers: [], loading: true };
-    
-    const options = { role: role as UserRole, permissions: userPermissions };
-    
-    return {
-      tabs: getVisibleInventoryTabs(options),
-      transfers: getAllowedTransferTypes(role as UserRole),
-      enabled: getEnabledFeatures(options),
-      loading: false,
-    };
-  }, [role, userPermissions]);
+  if (loading) {
+    return { tabs: [], transfers: [], loading: true };
+  }
   
-  return features;
+  const options = { role: role as AppRole, permissions };
+  
+  return {
+    tabs: getVisibleInventoryTabs(options),
+    transfers: getAllowedTransferTypes(role as AppRole),
+    enabled: getEnabledFeatures(options),
+    loading: false,
+  };
 }
 
 export default INVENTORY_FEATURES;

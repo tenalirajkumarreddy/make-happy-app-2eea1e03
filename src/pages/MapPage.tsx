@@ -2,12 +2,13 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { getCurrentPosition } from "@/lib/proximity";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { MapPin, Navigation, Loader2 } from "lucide-react";
+import { MapPin, Navigation, Loader2, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useWarehouse } from "@/contexts/WarehouseContext";
+import { toast } from "sonner";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -20,6 +21,17 @@ L.Icon.Default.mergeOptions({
 
 const TYPE_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ef4444", "#06b6d4", "#ec4899", "#84cc16"];
 
+// Escape HTML to prevent XSS in popup content
+function escapeHtml(unsafe: string): string {
+  if (!unsafe) return "";
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 const MapPage = () => {
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMap = useRef<L.Map | null>(null);
@@ -29,9 +41,10 @@ const MapPage = () => {
   const [filterType, setFilterType] = useState<string>("");
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [locating, setLocating] = useState(false);
+  const [mapError, setMapError] = useState<string | null>(null);
   const { currentWarehouse } = useWarehouse();
 
-  const { data: storeTypes } = useQuery({
+  const { data: storeTypes, isLoading: isLoadingStoreTypes } = useQuery({
     queryKey: ["store-types-for-map"],
     queryFn: async () => {
       const { data } = await supabase.from("store_types").select("id, name").order("name");
@@ -42,28 +55,44 @@ const MapPage = () => {
   const { data: stores, isLoading } = useQuery({
     queryKey: ["stores-with-location", filterType, currentWarehouse?.id],
     queryFn: async () => {
-      let query = (supabase as any)
-        .from("stores")
-        .select("id, name, display_id, address, lat, lng, outstanding, is_active, phone, store_type_id, route_id, store_types(name), routes(name), customers(name)")
-        .order("name")
-        .limit(500);
-      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
-      if (filterType) query = query.eq("store_type_id", filterType);
-      const { data } = await query;
-      return data || [];
+      const { data, error } = await supabase.rpc("get_stores_for_map", {
+        p_warehouse_id: currentWarehouse?.id || null,
+        p_store_type_id: filterType || null,
+        p_route_id: selectedRoute || null,
+        p_limit: 500,
+      });
+      if (error) throw error;
+      // Transform to match expected format
+      return (data || []).map((s: any) => ({
+        ...s,
+        store_types: s.store_type_name ? { name: s.store_type_name } : null,
+        routes: s.route_name ? { name: s.route_name } : null,
+        customers: s.customer_name ? { name: s.customer_name } : null,
+      }));
     },
   });
 
-  const { data: activeSessions } = useQuery({
-    queryKey: ["active-sessions-map"],
+  const { data: activeSessions, isLoading: isLoadingSessions } = useQuery({
+    queryKey: ["active-sessions-map", currentWarehouse?.id],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("route_sessions")
-        .select("id, user_id, started_at, current_lat, current_lng, location_updated_at, routes(name)")
-        .eq("status", "active") as any;
-      return (data || []) as any[];
+      const { data, error } = await supabase.rpc("get_active_agent_locations", {
+        p_warehouse_id: currentWarehouse?.id || null,
+      });
+      if (error) throw error;
+      // Transform to match expected format
+      return (data || []).map((s: any) => ({
+        id: s.session_id,
+        user_id: s.user_id,
+        started_at: s.started_at,
+        current_lat: s.current_lat,
+        current_lng: s.current_lng,
+        location_updated_at: s.location_updated_at,
+        routes: s.route_name ? { name: s.route_name } : null,
+        profiles: s.agent_name ? { full_name: s.agent_name } : null,
+      }));
     },
-    refetchInterval: 15000,
+    refetchInterval: 30000, // Increased to 30s to reduce DB load
+    refetchIntervalInBackground: false,
   });
 
   // Get visited store IDs from active sessions
@@ -72,38 +101,47 @@ const MapPage = () => {
     queryKey: ["visited-stores-map", activeSessionIds],
     queryFn: async () => {
       if (activeSessionIds.length === 0) return new Set<string>();
-      const { data } = await supabase
+      const { data, error } = await supabase.rpc("get_visited_store_count", {
+        p_session_ids: activeSessionIds,
+      });
+      if (error) throw error;
+      // We only get a count from this function, so we need to fetch the actual store_ids
+      // Keep original query for now as getting distinct store_ids requires a different approach
+      const { data: visits } = await supabase
         .from("store_visits")
         .select("store_id")
-        .in("session_id", activeSessionIds);
-      return new Set((data || []).map((v) => v.store_id));
+        .in("session_id", activeSessionIds)
+        .not("visited_at", "is", null);
+      return new Set((visits || []).map((v) => v.store_id));
     },
     enabled: activeSessionIds.length > 0,
-    refetchInterval: 15000,
+    refetchInterval: 30000, // Increased to 30s
+    refetchIntervalInBackground: false,
   });
 
   // Pending orders
   const { data: pendingOrderStoreIds } = useQuery({
     queryKey: ["pending-orders-map", currentWarehouse?.id],
     queryFn: async () => {
-      let query = (supabase as any).from("orders").select("store_id").eq("status", "pending");
-      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
-      const { data } = await query;
+      const { data, error } = await supabase.rpc("get_pending_order_stores", {
+        p_warehouse_id: currentWarehouse?.id || null,
+      });
+      if (error) throw error;
       return new Set((data || []).map((o) => o.store_id));
     },
   });
 
-  const { data: routes } = useQuery({
-    queryKey: ["routes-for-map", currentWarehouse?.id],
-    queryFn: async () => {
-      let query = (supabase as any).from("routes").select("id, name").eq("is_active", true);
-      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
-      const { data } = await query;
-      return data || [];
-    },
-  });
+   const { data: routes, isLoading: isLoadingRoutes } = useQuery({
+     queryKey: ["routes-for-map", currentWarehouse?.id],
+     queryFn: async () => {
+       let query = supabase.from("routes").select("id, name").eq("is_active", true);
+       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+       const { data } = await query;
+       return data || [];
+     },
+   });
 
-  const { data: companySettings } = useQuery({
+  const { data: companySettings, isLoading: isLoadingSettings } = useQuery({
     queryKey: ["company-settings-map"],
     queryFn: async () => {
       const { data } = await supabase.from("company_settings").select("key, value");
@@ -122,13 +160,30 @@ const MapPage = () => {
 
   const locateMe = async () => {
     setLocating(true);
-    const pos = await getCurrentPosition();
-    if (pos) {
-      setUserLocation(pos);
-      leafletMap.current?.setView([pos.lat, pos.lng], 16);
+    try {
+      const pos = await getCurrentPosition();
+      if (pos) {
+        setUserLocation(pos);
+        leafletMap.current?.setView([pos.lat, pos.lng], 16);
+        toast.success("Location found");
+      } else {
+        toast.error("Could not get your location. Please enable location permissions in your browser settings.");
+      }
+    } catch (error) {
+      console.error("Geolocation error:", error);
+      toast.error("Location access failed. Please check your device settings.");
+    } finally {
+      setLocating(false);
     }
-    setLocating(false);
   };
+
+  // Set page title
+  useEffect(() => {
+    document.title = "Store Map | BizManager";
+    return () => {
+      document.title = "BizManager";
+    };
+  }, []);
 
   // Route stores for route visualization
   const activeRouteStoreIds = useMemo(() => {
@@ -151,22 +206,23 @@ const MapPage = () => {
   useEffect(() => {
     if (!mapRef.current || (storesWithLocation.length === 0 && !companyCoords)) return;
 
-    if (!leafletMap.current) {
-      const initCenter: [number, number] = companyCoords
-        ? [companyCoords.lat, companyCoords.lng]
-        : storesWithLocation.length > 0
-        ? [storesWithLocation[0].lat!, storesWithLocation[0].lng!]
-        : [20.5937, 78.9629];
-      const initZoom = companyCoords || storesWithLocation.length > 0 ? 13 : 5;
-      leafletMap.current = L.map(mapRef.current, {
-        center: initCenter,
-        zoom: initZoom,
-        scrollWheelZoom: true,
-      });
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-      }).addTo(leafletMap.current);
-    }
+    try {
+      if (!leafletMap.current) {
+        const initCenter: [number, number] = companyCoords
+          ? [companyCoords.lat, companyCoords.lng]
+          : storesWithLocation.length > 0
+          ? [storesWithLocation[0].lat!, storesWithLocation[0].lng!]
+          : [20.5937, 78.9629];
+        const initZoom = companyCoords || storesWithLocation.length > 0 ? 13 : 5;
+        leafletMap.current = L.map(mapRef.current, {
+          center: initCenter,
+          zoom: initZoom,
+          scrollWheelZoom: true,
+        });
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        }).addTo(leafletMap.current);
+      }
 
     const map = leafletMap.current;
     map.eachLayer((layer) => {
@@ -213,16 +269,16 @@ const MapPage = () => {
 
       marker.bindPopup(`
         <div style="min-width: 200px; font-family: system-ui, sans-serif;">
-          <strong style="font-size: 14px;">${store.name}</strong>
-          <div style="color: #666; font-size: 11px; margin: 2px 0;">${store.display_id}</div>
+          <strong style="font-size: 14px;">${escapeHtml(store.name)}</strong>
+          <div style="color: #666; font-size: 11px; margin: 2px 0;">${escapeHtml(store.display_id)}</div>
           <div style="margin-top: 6px; font-size: 12px;">
             <div>${statusTag}</div>
-            <div><b>Customer:</b> ${store.customers?.name || "—"}</div>
-            <div><b>Type:</b> ${typeName}</div>
-            <div><b>Route:</b> ${store.routes?.name || "—"}</div>
+            <div><b>Customer:</b> ${escapeHtml(store.customers?.name) || "—"}</div>
+            <div><b>Type:</b> ${escapeHtml(typeName)}</div>
+            <div><b>Route:</b> ${escapeHtml(store.routes?.name) || "—"}</div>
             <div><b>Outstanding:</b> <span style="color: ${Number(store.outstanding) > 0 ? '#ef4444' : '#10b981'};">₹${Number(store.outstanding).toLocaleString()}</span></div>
-            ${store.phone ? `<div><b>Phone:</b> ${store.phone}</div>` : ""}
-            ${store.address ? `<div style="margin-top:4px; color:#888;">${store.address}</div>` : ""}
+            ${store.phone ? `<div><b>Phone:</b> ${escapeHtml(store.phone)}</div>` : ""}
+            ${store.address ? `<div style="margin-top:4px; color:#888;">${escapeHtml(store.address)}</div>` : ""}
           </div>
           <a href="https://www.google.com/maps?q=${store.lat},${store.lng}" target="_blank" rel="noopener" style="display:inline-block; margin-top:6px; font-size:11px; color:#3b82f6;">Open in Google Maps →</a>
         </div>
@@ -247,20 +303,24 @@ const MapPage = () => {
       });
       L.marker([companyCoords.lat, companyCoords.lng], { icon: companyIcon, zIndexOffset: 1000 })
         .addTo(map)
-        .bindPopup(`
-          <div style="font-family:system-ui;min-width:180px;">
-            <strong style="font-size:14px;">${companySettings?.company_name || "Company"}</strong>
-            <div style="color:#7c3aed;font-size:12px;font-weight:600;">${label}</div>
-            ${companySettings?.address ? `<div style="margin-top:4px;font-size:12px;color:#666;">${companySettings.address}</div>` : ""}
-            ${companySettings?.customer_care_number ? `<div style="font-size:11px;color:#888;">${companySettings.customer_care_number}</div>` : ""}
-            <a href="https://www.google.com/maps?q=${companyCoords.lat},${companyCoords.lng}" target="_blank" rel="noopener" style="display:inline-block;margin-top:6px;font-size:11px;color:#7c3aed;">Open in Google Maps →</a>
-          </div>
-        `);
+      .bindPopup(`
+        <div style="font-family:system-ui;min-width:180px;">
+          <strong style="font-size:14px;">${escapeHtml(companySettings?.company_name) || "Company"}</strong>
+          <div style="color:#7c3aed;font-size:12px;font-weight:600;">${escapeHtml(label)}</div>
+          ${companySettings?.address ? `<div style="margin-top:4px;font-size:12px;color:#666;">${escapeHtml(companySettings.address)}</div>` : ""}
+          ${companySettings?.customer_care_number ? `<div style="font-size:11px;color:#888;">${escapeHtml(companySettings.customer_care_number)}</div>` : ""}
+          <a href="https://www.google.com/maps?q=${companyCoords.lat},${companyCoords.lng}" target="_blank" rel="noopener" style="display:inline-block;margin-top:6px;font-size:11px;color:#7c3aed;">Open in Google Maps →</a>
+        </div>
+      `);
       bounds.push([companyCoords.lat, companyCoords.lng]);
     }
 
     if (bounds.length > 0) {
       map.fitBounds(bounds as L.LatLngBoundsExpression, { padding: [40, 40], maxZoom: 14 });
+    }
+    } catch (error) {
+      console.error("Map initialization failed:", error);
+      setMapError("Failed to load map. Please refresh the page.");
     }
   }, [storesWithLocation, storeTypeColorMap, visitedStoreIds, pendingOrderStoreIds, activeRouteStoreIds, companyCoords, companySettings]);
 
@@ -306,12 +366,13 @@ const MapPage = () => {
       });
       const marker = L.marker([session.current_lat, session.current_lng], { icon, zIndexOffset: 3000 })
         .addTo(leafletMap.current!)
-        .bindPopup(`<div style="font-family:system-ui;min-width:150px;"><strong>${agentName}</strong><div style="color:#7c3aed;font-size:12px;">${routeName}</div>${updatedAt ? `<div style="color:#888;font-size:11px;">Updated: ${updatedAt}</div>` : ""}</div>`);
+        .bindPopup(`<div style="font-family:system-ui;min-width:150px;"><strong>${escapeHtml(agentName)}</strong><div style="color:#7c3aed;font-size:12px;">${escapeHtml(routeName)}</div>${updatedAt ? `<div style="color:#888;font-size:11px;">Updated: ${updatedAt}</div>` : ""}</div>`);
       agentMarkersRef.current.push(marker);
     });
   }, [activeSessions]);
 
-  if (isLoading) return <TableSkeleton columns={3} rows={5} />;
+  const isAnyLoading = isLoading || isLoadingStoreTypes || isLoadingSessions || isLoadingRoutes || isLoadingSettings;
+  if (isAnyLoading) return <TableSkeleton columns={3} rows={5} />;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -360,23 +421,29 @@ const MapPage = () => {
       {/* Route filter + My Location */}
       <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-3">
-          <select
-            value={selectedRoute}
-            onChange={(e) => setSelectedRoute(e.target.value)}
-            className="rounded-lg border bg-card px-3 py-1.5 text-sm"
-          >
-            <option value="">All Routes</option>
-            {routes?.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-          </select>
+      <label className="sr-only" htmlFor="route-filter">Filter by route</label>
+      <select
+        id="route-filter"
+        value={selectedRoute}
+        onChange={(e) => setSelectedRoute(e.target.value)}
+        className="rounded-lg border bg-card px-3 py-1.5 text-sm"
+        aria-label="Filter stores by route"
+      >
+        <option value="">All Routes</option>
+        {routes?.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+      </select>
 
-          <select
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
-            className="rounded-lg border bg-card px-3 py-1.5 text-sm"
-          >
-            <option value="">All Types</option>
-            {storeTypes?.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}
-          </select>
+      <label className="sr-only" htmlFor="type-filter">Filter by store type</label>
+      <select
+        id="type-filter"
+        value={filterType}
+        onChange={(e) => setFilterType(e.target.value)}
+        className="rounded-lg border bg-card px-3 py-1.5 text-sm"
+        aria-label="Filter stores by type"
+      >
+        <option value="">All Types</option>
+        {storeTypes?.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}
+      </select>
 
           <Button variant="outline" size="sm" onClick={locateMe} disabled={locating} className="h-8 gap-1.5">
             {locating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Navigation className="h-3.5 w-3.5" />}
@@ -425,11 +492,19 @@ const MapPage = () => {
         </div>
       </div>
 
+  {mapError && (
+        <div className="rounded-xl border border-destructive/50 bg-destructive/10 p-4 mb-4">
+          <div className="flex items-center gap-2 text-destructive">
+            <AlertTriangle className="h-5 w-5" />
+            <span className="font-medium">{mapError}</span>
+          </div>
+        </div>
+      )}
       <div className="rounded-xl border bg-card overflow-hidden">
         {storesWithLocation.length > 0 || companyCoords ? (
-          <div ref={mapRef} className="h-[500px] w-full" />
+          <div ref={mapRef} className="h-[50vh] min-h-[300px] max-h-[600px] w-full" tabIndex={0} aria-label="Interactive map showing store locations" />
         ) : (
-          <div className="flex flex-col items-center justify-center h-[400px] text-center px-6">
+          <div className="flex flex-col items-center justify-center h-[300px] sm:h-[400px] text-center px-6">
             <MapPin className="h-12 w-12 text-muted-foreground/40 mb-3" />
             <p className="text-sm font-medium text-muted-foreground">No stores with GPS coordinates</p>
             <p className="text-xs text-muted-foreground mt-1">Add GPS location to stores to see them on the map</p>

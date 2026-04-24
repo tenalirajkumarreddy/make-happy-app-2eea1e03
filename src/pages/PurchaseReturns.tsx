@@ -51,19 +51,19 @@ const PurchaseReturns = () => {
   const [saving, setSaving] = useState(false);
 
   // Fetch returns
-  const { data: returns = [], isLoading } = useQuery({
-    queryKey: ["purchase-returns", currentWarehouse?.id],
-    queryFn: async () => {
-      let query = (supabase as any)
-        .from("purchase_returns")
-        .select(`
-          *,
-          purchases(display_id, total_amount),
-          vendors(name),
-          profiles:created_by(full_name),
-          approver:approved_by(full_name)
-        `)
-        .order("created_at", { ascending: false });
+   const { data: returns = [], isLoading } = useQuery({
+     queryKey: ["purchase-returns", currentWarehouse?.id],
+     queryFn: async () => {
+       let query = supabase
+         .from("purchase_returns")
+         .select(`
+           *,
+           purchases(display_id, total_amount),
+           vendors(name),
+           profiles:created_by(full_name),
+           approver:approved_by(full_name)
+         `)
+         .order("created_at", { ascending: false });
 
       if (currentWarehouse?.id) {
         query = query.eq("warehouse_id", currentWarehouse.id);
@@ -75,15 +75,15 @@ const PurchaseReturns = () => {
     },
   });
 
-  // Fetch purchases for dropdown
-  const { data: purchases = [] } = useQuery({
-    queryKey: ["purchases-for-return", currentWarehouse?.id],
-    queryFn: async () => {
-      let query = (supabase as any)
-        .from("purchases")
-        .select("id, display_id, purchase_date, total_amount, vendor_id, vendors(name)")
-        .order("purchase_date", { ascending: false })
-        .limit(100);
+   // Fetch purchases for dropdown
+   const { data: purchases = [] } = useQuery({
+     queryKey: ["purchases-for-return", currentWarehouse?.id],
+     queryFn: async () => {
+       let query = supabase
+         .from("purchases")
+         .select("id, display_id, purchase_date, total_amount, vendor_id, vendors(name)")
+         .order("purchase_date", { ascending: false })
+         .limit(100);
 
       if (currentWarehouse?.id) {
         query = query.eq("warehouse_id", currentWarehouse.id);

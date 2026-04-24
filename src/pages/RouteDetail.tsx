@@ -84,44 +84,44 @@ export default function RouteDetail() {
   const companyLocationAvailable = companyLat != null && !isNaN(companyLat) && companyLng != null && !isNaN(companyLng);
 
   // ── Data ──────────────────────────────────────────────────────────────────
-  const { data: route, isLoading: routeLoading } = useQuery<RouteRow | null>({
-    queryKey: ["route-detail", id],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("routes")
-        .select("*, store_types(name)")
-        .eq("id", id!)
-        .single();
-      if (error) throw error;
-      return data as RouteRow;
-    },
-    enabled: !!id,
-  });
+   const { data: route, isLoading: routeLoading } = useQuery<RouteRow | null>({
+     queryKey: ["route-detail", id],
+     queryFn: async () => {
+       const { data, error } = await supabase
+         .from("routes")
+         .select("*, store_types(name)")
+         .eq("id", id!)
+         .single();
+       if (error) throw error;
+       return data as RouteRow;
+     },
+     enabled: !!id,
+   });
 
-  const { data: stores, isLoading: storesLoading } = useQuery<StoreRow[]>({
-    queryKey: ["route-stores", id],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("stores")
-        .select("id, display_id, name, address, lat, lng, outstanding, store_order, photo_url, customers(name)")
-        .eq("route_id", id!)
-        .order("store_order", { ascending: true, nullsFirst: false });
-      if (error) throw error;
-      return (data || []) as StoreRow[];
-    },
-    enabled: !!id,
-  });
+   const { data: stores, isLoading: storesLoading } = useQuery<StoreRow[]>({
+     queryKey: ["route-stores", id],
+     queryFn: async () => {
+       const { data, error } = await supabase
+         .from("stores")
+         .select("id, display_id, name, address, lat, lng, outstanding, store_order, photo_url, customers(name)")
+         .eq("route_id", id!)
+         .order("store_order", { ascending: true, nullsFirst: false });
+       if (error) throw error;
+       return (data || []) as StoreRow[];
+     },
+     enabled: !!id,
+   });
 
   // Today's visited store IDs (across any route session for this route)
   const todayStart = new Date().toISOString().split("T")[0] + "T00:00:00";
-  const { data: visitedStoreIds } = useQuery<Set<string>>({
-    queryKey: ["route-visits-today", id],
-    queryFn: async () => {
-      const { data } = await (supabase as any)
-        .from("store_visits")
-        .select("store_id, route_sessions!inner(route_id)")
-        .eq("route_sessions.route_id", id!)
-        .gte("visited_at", todayStart);
+   const { data: visitedStoreIds } = useQuery<Set<string>>({
+     queryKey: ["route-visits-today", id],
+     queryFn: async () => {
+       const { data } = await supabase
+         .from("store_visits")
+         .select("store_id, route_sessions!inner(route_id)")
+         .eq("route_sessions.route_id", id!)
+         .gte("visited_at", todayStart);
       return new Set((data || []).map((v: any) => v.store_id));
     },
     enabled: !!id,
@@ -197,7 +197,7 @@ export default function RouteDetail() {
     if (lat < -90 || lat > 90) { toast.error("Latitude must be between -90 and 90"); return; }
     if (lng < -180 || lng > 180) { toast.error("Longitude must be between -180 and 180"); return; }
     setSavingFactory(true);
-    const { error } = await (supabase as any).from("routes").update({ factory_lat: lat, factory_lng: lng }).eq("id", id!);
+     const { error } = await supabase.from("routes").update({ factory_lat: lat, factory_lng: lng }).eq("id", id!);
     setSavingFactory(false);
     if (error) { toast.error(error.message); return; }
     toast.success("Factory location saved");
@@ -222,9 +222,9 @@ export default function RouteDetail() {
       stores
     );
     // Persist store_order for each store
-    const updates = ordered.map((store, idx) =>
-      (supabase as any).from("stores").update({ store_order: idx + 1 }).eq("id", store.id)
-    );
+     const updates = ordered.map((store, idx) =>
+       supabase.from("stores").update({ store_order: idx + 1 }).eq("id", store.id)
+     );
     const results = await Promise.all(updates);
     const firstError = results.find((r) => r.error);
     setRecomputing(false);

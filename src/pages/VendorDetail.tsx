@@ -15,15 +15,28 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
+import { sanitizeString } from "@/lib/sanitization";
+
+// Set page title hook
+const usePageTitle = (title: string) => {
+  useEffect(() => {
+    const originalTitle = document.title;
+    document.title = title;
+    return () => {
+      document.title = originalTitle;
+    };
+  }, [title]);
+};
 
 const UNITS = ["kg", "g", "L", "mL", "pcs", "box", "pack", "ton", "unit"];
 const CATEGORIES = ["Chemicals", "Packaging", "Labels", "Caps & Closures", "Raw Ingredients", "Consumables", "Other"];
 
 const VendorDetail = () => {
   const { id } = useParams();
+  usePageTitle(`Vendor ${id?.slice(0, 8)}... | BizManager`);
   const navigate = useNavigate();
   const { user } = useAuth();
   const { currentWarehouse } = useWarehouse();
@@ -57,42 +70,42 @@ const VendorDetail = () => {
     setEditingMaterial(null);
   };
 
-  const { data: vendor, isLoading } = useQuery({
-    queryKey: ["vendor", id, currentWarehouse?.id],
-    queryFn: async () => {
-      let query = (supabase as any)
-        .from("vendors")
-        .select("*")
-        .eq("id", id);
+   const { data: vendor, isLoading } = useQuery({
+     queryKey: ["vendor", id, currentWarehouse?.id],
+     queryFn: async () => {
+       let query = supabase
+         .from("vendors")
+         .select("*")
+         .eq("id", id);
 
-      if (currentWarehouse?.id) {
-        query = query.eq("warehouse_id", currentWarehouse.id);
-      }
+       if (currentWarehouse?.id) {
+         query = query.eq("warehouse_id", currentWarehouse.id);
+       }
 
-      const { data, error } = await query.single();
-      if (error) throw error;
-      return data;
-    },
-  });
+       const { data, error } = await query.single();
+       if (error) throw error;
+       return data;
+     },
+   });
 
-  const { data: purchases = [] } = useQuery({
-    queryKey: ["vendor-purchases", id, currentWarehouse?.id],
-    queryFn: async () => {
-      let query = (supabase as any)
-        .from("purchases")
-        .select("*, purchase_items(*, products(name))")
-        .eq("vendor_id", id)
-        .order("purchase_date", { ascending: false });
+   const { data: purchases = [] } = useQuery({
+     queryKey: ["vendor-purchases", id, currentWarehouse?.id],
+     queryFn: async () => {
+       let query = supabase
+         .from("purchases")
+         .select("*, purchase_items(*, products(name))")
+         .eq("vendor_id", id)
+         .order("purchase_date", { ascending: false });
 
-      if (currentWarehouse?.id) {
-        query = query.eq("warehouse_id", currentWarehouse.id);
-      }
+       if (currentWarehouse?.id) {
+         query = query.eq("warehouse_id", currentWarehouse.id);
+       }
 
-      const { data, error } = await query;
-      if (error) throw error;
-      return data;
-    },
-  });
+       const { data, error } = await query;
+       if (error) throw error;
+       return data;
+     },
+   });
 
   const { data: payments = [] } = useQuery({
     queryKey: ["vendor-payments", id],
@@ -107,14 +120,14 @@ const VendorDetail = () => {
     },
   });
 
-  const { data: rawMaterials = [] } = useQuery({
-    queryKey: ["vendor-raw-materials", id, currentWarehouse?.id],
-    queryFn: async () => {
-      let query = (supabase as any)
-        .from("raw_materials")
-        .select("*")
-        .eq("vendor_id", id)
-        .order("name");
+   const { data: rawMaterials = [] } = useQuery({
+     queryKey: ["vendor-raw-materials", id, currentWarehouse?.id],
+     queryFn: async () => {
+       let query = supabase
+         .from("raw_materials")
+         .select("*")
+         .eq("vendor_id", id)
+         .order("name");
 
       if (currentWarehouse?.id) {
         query = query.eq("warehouse_id", currentWarehouse.id);
@@ -127,25 +140,24 @@ const VendorDetail = () => {
   });
 
   // Query for unlinked raw materials (no vendor assigned)
-  const { data: unlinkedMaterials = [] } = useQuery({
-    queryKey: ["unlinked-raw-materials", currentWarehouse?.id],
-    queryFn: async () => {
-      let query = (supabase as any)
-        .from("raw_materials")
-        .select("id, display_id, name, unit, category")
-        .is("vendor_id", null)
-        .eq("is_active", true)
-        .order("name");
+   const { data: unlinkedMaterials = [] } = useQuery({
+     queryKey: ["unlinked-raw-materials", currentWarehouse?.id],
+     queryFn: async () => {
+       let query = supabase
+         .from("raw_materials")
+         .select("*")
+         .eq("vendor_id", id)
+         .order("name");
 
-      if (currentWarehouse?.id) {
-        query = query.eq("warehouse_id", currentWarehouse.id);
-      }
+       if (currentWarehouse?.id) {
+         query = query.eq("warehouse_id", currentWarehouse.id);
+       }
 
-      const { data, error } = await query;
-      if (error) throw error;
-      return data || [];
-    },
-  });
+       const { data, error } = await query;
+       if (error) throw error;
+       return data;
+     },
+   });
 
   // Raw Material mutations
   const saveMaterialMutation = useMutation({
@@ -239,19 +251,19 @@ const VendorDetail = () => {
       }
     }
 
-    setSavingMaterial(true);
-    saveMaterialMutation.mutate({
-      id: editingMaterial?.id,
-      mode: materialMode,
-      existing_material_id: selectedExistingMaterialId,
-      name: materialName.trim(),
-      description: materialDesc.trim(),
-      unit: materialUnit,
-      category: materialCategory,
-      min_stock_level: materialMinStock ? parseFloat(materialMinStock) : 0,
-      unit_cost: materialUnitCost ? parseFloat(materialUnitCost) : 0,
-      hsn_code: materialHsn.trim(),
-    });
+  setSavingMaterial(true);
+  saveMaterialMutation.mutate({
+    id: editingMaterial?.id,
+    mode: materialMode,
+    existing_material_id: selectedExistingMaterialId,
+    name: sanitizeString(materialName.trim()),
+    description: sanitizeString(materialDesc.trim()),
+    unit: materialUnit,
+    category: materialCategory,
+    min_stock_level: materialMinStock ? parseFloat(materialMinStock) : 0,
+    unit_cost: materialUnitCost ? parseFloat(materialUnitCost) : 0,
+    hsn_code: sanitizeString(materialHsn.trim()),
+  });
     setSavingMaterial(false);
   };
 

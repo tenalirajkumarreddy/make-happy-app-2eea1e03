@@ -37,13 +37,13 @@ const VendorPayments = () => {
   const [paymentReference, setPaymentReference] = useState("");
   const [notes, setNotes] = useState("");
 
-  const { data: payments = [], isLoading } = useQuery({
-    queryKey: ["vendor_payments", currentWarehouse?.id],
-    queryFn: async () => {
-      let query = (supabase as any)
-        .from("vendor_payments")
-        .select("*, vendors(name, display_id)")
-        .order("payment_date", { ascending: false });
+   const { data: payments = [], isLoading } = useQuery({
+     queryKey: ["vendor_payments", currentWarehouse?.id],
+     queryFn: async () => {
+       let query = supabase
+         .from("vendor_payments")
+         .select("*, vendors(name, display_id)")
+         .order("payment_date", { ascending: false });
 
       const { data, error } = await query;
       if (error) throw error;
@@ -54,10 +54,10 @@ const VendorPayments = () => {
   const { data: vendors = [] } = useQuery({
     queryKey: ["vendors-with-outstanding", currentWarehouse?.id],
     queryFn: async () => {
-      let query = (supabase as any)
-        .from("vendors")
-        .select("id, name, display_id, outstanding")
-        .eq("is_active", true);
+       let query = supabase
+         .from("vendors")
+         .select("id, name, display_id, outstanding")
+         .eq("is_active", true);
 
       if (currentWarehouse?.id) {
         query = query.eq("warehouse_id", currentWarehouse.id);

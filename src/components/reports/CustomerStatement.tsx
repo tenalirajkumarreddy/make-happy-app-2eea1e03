@@ -1,21 +1,29 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, FileText, ShoppingCart, CreditCard, RotateCcw, Printer, X } from "lucide-react";
-import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
+import { format, subMonths, startOfMonth } from "date-fns";
 import { ReportFilters, DateRange } from "./ReportFilters";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { generatePrintHTML } from "@/utils/printUtils";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { PageHeader } from "@/components/shared/PageHeader";
+import { useWarehouse } from "@/contexts/WarehouseContext";
 
 interface CustomerStatementProps {
-  customerId: string;
-  customerName: string;
+  customerId?: string;
+  customerName?: string;
   storeId?: string;
   storeName?: string;
   onClose?: () => void;
+  standalone?: boolean;
 }
 
 interface StatementEntry {
@@ -32,14 +40,26 @@ interface StatementEntry {
   notes?: string;
 }
 
-export function CustomerStatement({ customerId, customerName, storeId, storeName, onClose }: CustomerStatementProps) {
+export function CustomerStatement({ customerId: propCustomerId, customerName: propCustomerName, storeId: propStoreId, storeName: propStoreName, onClose, standalone }: CustomerStatementProps) {
+  const { user } = useAuth();
+  const { currentWarehouse } = useWarehouse();
   const [dateRange, setDateRange] = useState<DateRange>({
     from: startOfMonth(subMonths(new Date(), 2)),
     to: new Date(),
   });
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>(propCustomerId || "");
+  const [selectedStoreId, setSelectedStoreId] = useState<string>(propStoreId || "");
   const { data: companySettings } = useCompanySettings();
 
-  // Fetch business info
+  const effectiveCustomerId = standalone ? selectedCustomerId : propCustomerId;
+  const effectiveStoreId = standalone ? selectedStoreId : propStoreId;
+  const effectiveCustomerName = propCustomerName;
+  const effectiveStoreName = propStoreName;
+
+  useEffect(() => {
+    if (standalone) document.title = "Customer Statements";
+  }, [standalone]);
+
   const { data: businessInfo } = useQuery({
     queryKey: ["business-info"],
     queryFn: async () => {
@@ -48,23 +68,52 @@ export function CustomerStatement({ customerId, customerName, storeId, storeName
     },
   });
 
+  const { data: customers = [] } = useQuery({
+    queryKey: ["statement-customers", currentWarehouse?.id],
+    queryFn: async () => {
+      let query = supabase
+        .from("customers")
+        .select("id, name, phone, stores(id, name)")
+        .order("name");
+      if (currentWarehouse?.id) {
+        const { data: whStores } = await supabase.from("stores").select("customer_id").eq("warehouse_id", currentWarehouse.id);
+        if (whStores && whStores.length > 0) {
+          query = query.in("id", [...new Set(whStores.map(s => s.customer_id).filter(Boolean))]);
+        }
+      }
+      const { data } = await query;
+      return data || [];
+    },
+    enabled: !!standalone,
+  });
+
+  const { data: customerStores = [] } = useQuery({
+    queryKey: ["statement-customer-stores", effectiveCustomerId],
+    queryFn: async () => {
+      if (!effectiveCustomerId) return [];
+      const { data } = await supabase.from("stores").select("id, name").eq("customer_id", effectiveCustomerId).order("name");
+      return data || [];
+    },
+    enabled: !!effectiveCustomerId,
+  });
+
   // Fetch customer details
   const { data: customer } = useQuery({
-    queryKey: ["customer-detail", customerId],
+    queryKey: ["customer-detail", effectiveCustomerId],
     queryFn: async () => {
       const { data } = await supabase
         .from("customers")
         .select("*, stores(id, name, display_id, opening_balance, outstanding)")
-        .eq("id", customerId)
+        .eq("id", effectiveCustomerId)
         .single();
       return data;
     },
-    enabled: !!customerId,
+    enabled: !!effectiveCustomerId,
   });
 
   // Fetch sales for the customer's stores
   const { data: sales = [], isLoading: salesLoading } = useQuery({
-    queryKey: ["statement-sales", customerId, storeId, dateRange],
+    queryKey: ["statement-sales", effectiveCustomerId, effectiveStoreId, dateRange],
     queryFn: async () => {
       let query = supabase
         .from("sales")
@@ -72,11 +121,10 @@ export function CustomerStatement({ customerId, customerName, storeId, storeName
         .gte("created_at", format(dateRange.from, "yyyy-MM-dd"))
         .lte("created_at", format(dateRange.to, "yyyy-MM-dd") + "T23:59:59");
 
-      if (storeId) {
-        query = query.eq("store_id", storeId);
-      } else {
-        // Get all stores for this customer
-        const { data: stores } = await supabase.from("stores").select("id").eq("customer_id", customerId);
+      if (effectiveStoreId) {
+        query = query.eq("store_id", effectiveStoreId);
+      } else if (effectiveCustomerId) {
+        const { data: stores } = await supabase.from("stores").select("id").eq("customer_id", effectiveCustomerId);
         if (stores && stores.length > 0) {
           query = query.in("store_id", stores.map(s => s.id));
         }
@@ -85,12 +133,12 @@ export function CustomerStatement({ customerId, customerName, storeId, storeName
       const { data } = await query.order("created_at", { ascending: true });
       return data || [];
     },
-    enabled: !!customerId,
+    enabled: !!effectiveCustomerId,
   });
 
   // Fetch transactions (payments)
   const { data: transactions = [], isLoading: txnLoading } = useQuery({
-    queryKey: ["statement-transactions", customerId, storeId, dateRange],
+    queryKey: ["statement-transactions", effectiveCustomerId, effectiveStoreId, dateRange],
     queryFn: async () => {
       let query = supabase
         .from("transactions")
@@ -98,10 +146,10 @@ export function CustomerStatement({ customerId, customerName, storeId, storeName
         .gte("transaction_date", format(dateRange.from, "yyyy-MM-dd"))
         .lte("transaction_date", format(dateRange.to, "yyyy-MM-dd"));
 
-      if (storeId) {
-        query = query.eq("store_id", storeId);
-      } else {
-        const { data: stores } = await supabase.from("stores").select("id").eq("customer_id", customerId);
+      if (effectiveStoreId) {
+        query = query.eq("store_id", effectiveStoreId);
+      } else if (effectiveCustomerId) {
+        const { data: stores } = await supabase.from("stores").select("id").eq("customer_id", effectiveCustomerId);
         if (stores && stores.length > 0) {
           query = query.in("store_id", stores.map(s => s.id));
         }
@@ -110,12 +158,12 @@ export function CustomerStatement({ customerId, customerName, storeId, storeName
       const { data } = await query.order("transaction_date", { ascending: true });
       return data || [];
     },
-    enabled: !!customerId,
+    enabled: !!effectiveCustomerId,
   });
 
   // Fetch sale returns
   const { data: returns = [], isLoading: returnsLoading } = useQuery({
-    queryKey: ["statement-returns", customerId, storeId, dateRange],
+    queryKey: ["statement-returns", effectiveCustomerId, effectiveStoreId, dateRange],
     queryFn: async () => {
       let query = supabase
         .from("sale_returns")
@@ -124,10 +172,10 @@ export function CustomerStatement({ customerId, customerName, storeId, storeName
         .gte("return_date", format(dateRange.from, "yyyy-MM-dd"))
         .lte("return_date", format(dateRange.to, "yyyy-MM-dd"));
 
-      if (storeId) {
-        query = query.eq("store_id", storeId);
-      } else {
-        const { data: stores } = await supabase.from("stores").select("id").eq("customer_id", customerId);
+      if (effectiveStoreId) {
+        query = query.eq("store_id", effectiveStoreId);
+      } else if (effectiveCustomerId) {
+        const { data: stores } = await supabase.from("stores").select("id").eq("customer_id", effectiveCustomerId);
         if (stores && stores.length > 0) {
           query = query.in("store_id", stores.map(s => s.id));
         }
@@ -136,19 +184,19 @@ export function CustomerStatement({ customerId, customerName, storeId, storeName
       const { data } = await query.order("return_date", { ascending: true });
       return data || [];
     },
-    enabled: !!customerId,
+    enabled: !!effectiveCustomerId,
   });
 
   const isLoading = salesLoading || txnLoading || returnsLoading;
 
   // Calculate opening balance before the date range
   const openingBalance = useMemo(() => {
-    if (storeId) {
-      const store = customer?.stores?.find((s: any) => s.id === storeId);
+    if (effectiveStoreId) {
+      const store = customer?.stores?.find((s: any) => s.id === effectiveStoreId);
       return Number(store?.opening_balance || 0);
     }
     return customer?.stores?.reduce((sum: number, s: any) => sum + Number(s.opening_balance || 0), 0) || 0;
-  }, [customer, storeId]);
+  }, [customer, effectiveStoreId]);
 
   // Combine and calculate running balance
   const entries = useMemo(() => {
@@ -269,9 +317,11 @@ export function CustomerStatement({ customerId, customerName, storeId, storeName
     const info = companySettings || businessInfo;
     if (!info) return;
     const fmt = (n: number) => `₹${Math.abs(n).toLocaleString("en-IN")}`;
+    const name = effectiveCustomerName || customer?.name || "Customer";
+    const storeNameStr = effectiveStoreName || (effectiveStoreId ? customerStores.find((s: any) => s.id === effectiveStoreId)?.name : "") || "";
     const htmlContent = `
       <div style="margin-bottom:16px;padding:12px 16px;background:#f8f9fa;border-radius:6px;">
-        <p style="margin:0 0 4px;font-size:13px;"><strong>Customer:</strong> ${customerName}${storeName ? ` • ${storeName}` : ""}</p>
+        <p style="margin:0 0 4px;font-size:13px;"><strong>Customer:</strong> ${name}${storeNameStr ? ` • ${storeNameStr}` : ""}</p>
       </div>
 
       <div class="kpi-row">
@@ -310,7 +360,7 @@ export function CustomerStatement({ customerId, customerName, storeId, storeName
     const html = generatePrintHTML({
       title: "Customer Statement",
       dateRange: `${format(dateRange.from, "MMM d, yyyy")} — ${format(dateRange.to, "MMM d, yyyy")}`,
-      metadata: { "Customer": customerName, "Debit": fmt(totals.totalDebit), "Credit": fmt(totals.totalCredit), "Closing": `${fmt(totals.closingBalance)} ${totals.closingBalance >= 0 ? 'Due' : 'Adv'}` },
+      metadata: { "Customer": name, "Debit": fmt(totals.totalDebit), "Credit": fmt(totals.totalCredit), "Closing": `${fmt(totals.closingBalance)} ${totals.closingBalance >= 0 ? 'Due' : 'Adv'}` },
       companyInfo: info,
       htmlContent,
     });
@@ -320,124 +370,184 @@ export function CustomerStatement({ customerId, customerName, storeId, storeName
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-semibold">Customer Statement</h2>
-          <p className="text-sm text-muted-foreground">
-            {customerName} {storeName && `• ${storeName}`}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handlePrintHTML}>
-            <Printer className="h-4 w-4 mr-2" />
-            Print / PDF
-          </Button>
-          {onClose && (
-            <Button variant="ghost" size="sm" onClick={onClose}>
-              <X className="h-4 w-4" />
-            </Button>
+      {standalone && (
+        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-end">
+          <div className="flex-1 min-w-[200px]">
+            <Label className="mb-1.5 block">Customer</Label>
+            <Select value={selectedCustomerId} onValueChange={(v) => { setSelectedCustomerId(v); setSelectedStoreId(""); }}>
+              <SelectTrigger><SelectValue placeholder="Select a customer" /></SelectTrigger>
+              <SelectContent>
+                {customers.map((c: any) => (
+                  <SelectItem key={c.id} value={c.id}>{c.name} {c.phone ? `(${c.phone})` : ""}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {customerStores.length > 0 && (
+            <div className="flex-1 min-w-[200px]">
+              <Label className="mb-1.5 block">Store (optional)</Label>
+              <Select value={selectedStoreId} onValueChange={setSelectedStoreId}>
+                <SelectTrigger><SelectValue placeholder="All stores" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All stores</SelectItem>
+                  {customerStores.map((s: any) => (
+                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           )}
         </div>
-      </div>
-
-      <ReportFilters dateRange={dateRange} onDateRangeChange={setDateRange} />
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="p-4">
-          <p className="text-sm text-muted-foreground">Opening Balance</p>
-          <p className="text-2xl font-bold">₹{openingBalance.toLocaleString()}</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-sm text-muted-foreground">Total Debit (Sales)</p>
-          <p className="text-2xl font-bold text-blue-600">₹{totals.totalDebit.toLocaleString()}</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-sm text-muted-foreground">Total Credit (Payments)</p>
-          <p className="text-2xl font-bold text-green-600">₹{totals.totalCredit.toLocaleString()}</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-sm text-muted-foreground">Closing Balance</p>
-          <p className={`text-2xl font-bold ${totals.closingBalance >= 0 ? "text-red-600" : "text-green-600"}`}>
-            ₹{Math.abs(totals.closingBalance).toLocaleString()}
-            <span className="text-xs font-normal ml-1">{totals.closingBalance >= 0 ? "Due" : "Advance"}</span>
-          </p>
-        </Card>
-      </div>
-
-      {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      ) : (
-        <Card>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-muted/50">
-                  <tr className="text-left text-sm">
-                    <th className="px-4 py-3 font-medium">Date</th>
-                    <th className="px-4 py-3 font-medium">Type</th>
-                    <th className="px-4 py-3 font-medium">ID</th>
-                    <th className="px-4 py-3 font-medium">Description</th>
-                    <th className="px-4 py-3 font-medium text-right">Debit</th>
-                    <th className="px-4 py-3 font-medium text-right">Credit</th>
-                    <th className="px-4 py-3 font-medium text-right">Balance</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {entries.map((entry, idx) => (
-                    <tr key={`${entry.type}-${entry.id}`} className={entry.type === "opening" ? "bg-muted/30" : "hover:bg-muted/20"}>
-                      <td className="px-4 py-3 text-sm">{format(new Date(entry.date), "dd MMM yyyy")}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          {getTypeIcon(entry.type)}
-                          <Badge variant="outline" className="text-xs capitalize">{entry.type}</Badge>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-sm font-mono text-muted-foreground">{entry.display_id}</td>
-                      <td className="px-4 py-3 text-sm">
-                        <div>
-                          <span>{entry.description}</span>
-                          {entry.payment_method && (
-                            <span className="text-xs text-muted-foreground ml-2 capitalize">({entry.payment_method.replace("_", " ")})</span>
-                          )}
-                        </div>
-                        {entry.handled_by && <p className="text-xs text-muted-foreground">By: {entry.handled_by}</p>}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-right font-medium text-blue-600">
-                        {entry.debit > 0 ? `₹${entry.debit.toLocaleString()}` : "—"}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-right font-medium text-green-600">
-                        {entry.credit > 0 ? `₹${entry.credit.toLocaleString()}` : "—"}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-right font-bold">
-                        <span className={entry.balance >= 0 ? "text-red-600" : "text-green-600"}>
-                          ₹{Math.abs(entry.balance).toLocaleString()}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot className="bg-muted/70 font-semibold">
-                  <tr>
-                    <td colSpan={4} className="px-4 py-3 text-right">TOTAL</td>
-                    <td className="px-4 py-3 text-right text-blue-600">₹{totals.totalDebit.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-right text-green-600">₹{totals.totalCredit.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-right">
-                      <span className={totals.closingBalance >= 0 ? "text-red-600" : "text-green-600"}>
-                        ₹{Math.abs(totals.closingBalance).toLocaleString()}
-                      </span>
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
       )}
 
+      {!standalone && (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-semibold">Customer Statement</h2>
+            <p className="text-sm text-muted-foreground">
+              {effectiveCustomerName} {effectiveStoreName && `• ${effectiveStoreName}`}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={handlePrintHTML}>
+              <Printer className="h-4 w-4 mr-2" />
+              Print / PDF
+            </Button>
+            {onClose && (
+              <Button variant="ghost" size="sm" onClick={onClose}>
+                <X className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
 
+      {standalone && (
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-semibold">Customer Statement</h2>
+            <p className="text-sm text-muted-foreground">
+              {customer?.name} {effectiveStoreName && `• ${effectiveStoreName}`}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={handlePrintHTML} disabled={!effectiveCustomerId}>
+              <Printer className="h-4 w-4 mr-2" />
+              Print / PDF
+            </Button>
+            {onClose && (
+              <Button variant="ghost" size="sm" onClick={onClose}>
+                <X className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {!effectiveCustomerId ? (
+        <Card className="p-12 text-center">
+          <p className="text-muted-foreground">Select a customer to view their statement.</p>
+        </Card>
+      ) : (
+        <>
+          <ReportFilters dateRange={dateRange} onDateRangeChange={setDateRange} />
+
+          {/* Summary Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card className="p-4">
+              <p className="text-sm text-muted-foreground">Opening Balance</p>
+              <p className="text-2xl font-bold">₹{(openingBalance || 0).toLocaleString()}</p>
+            </Card>
+            <Card className="p-4">
+              <p className="text-sm text-muted-foreground">Total Debit (Sales)</p>
+              <p className="text-2xl font-bold text-blue-600">₹{(totals.totalDebit || 0).toLocaleString()}</p>
+            </Card>
+            <Card className="p-4">
+              <p className="text-sm text-muted-foreground">Total Credit (Payments)</p>
+              <p className="text-2xl font-bold text-green-600">₹{(totals.totalCredit || 0).toLocaleString()}</p>
+            </Card>
+            <Card className="p-4">
+              <p className="text-sm text-muted-foreground">Closing Balance</p>
+              <p className={`text-2xl font-bold ${(totals.closingBalance || 0) >= 0 ? "text-red-600" : "text-green-600"}`}>
+                ₹{Math.abs(totals.closingBalance || 0).toLocaleString()}
+                <span className="text-xs font-normal ml-1">{(totals.closingBalance || 0) >= 0 ? "Due" : "Advance"}</span>
+              </p>
+            </Card>
+          </div>
+
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <Card>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-muted/50">
+                      <tr className="text-left text-sm">
+                        <th className="px-4 py-3 font-medium">Date</th>
+                        <th className="px-4 py-3 font-medium">Type</th>
+                        <th className="px-4 py-3 font-medium">ID</th>
+                        <th className="px-4 py-3 font-medium">Description</th>
+                        <th className="px-4 py-3 font-medium text-right">Debit</th>
+                        <th className="px-4 py-3 font-medium text-right">Credit</th>
+                        <th className="px-4 py-3 font-medium text-right">Balance</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {entries.map((entry) => (
+                        <tr key={`${entry.type}-${entry.id}`} className={entry.type === "opening" ? "bg-muted/30" : "hover:bg-muted/20"}>
+                          <td className="px-4 py-3 text-sm">{format(new Date(entry.date), "dd MMM yyyy")}</td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              {getTypeIcon(entry.type)}
+                              <Badge variant="outline" className="text-xs capitalize">{entry.type}</Badge>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-sm font-mono text-muted-foreground">{entry.display_id}</td>
+                          <td className="px-4 py-3 text-sm">
+                            <div>
+                              <span>{entry.description}</span>
+                              {entry.payment_method && (
+                                <span className="text-xs text-muted-foreground ml-2 capitalize">({entry.payment_method.replace("_", " ")})</span>
+                              )}
+                            </div>
+                            {entry.handled_by && <p className="text-xs text-muted-foreground">By: {entry.handled_by}</p>}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-right font-medium text-blue-600">
+                            {(entry.debit || 0) > 0 ? `₹${(entry.debit || 0).toLocaleString()}` : "—"}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-right font-medium text-green-600">
+                            {(entry.credit || 0) > 0 ? `₹${(entry.credit || 0).toLocaleString()}` : "—"}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-right font-bold">
+                            <span className={(entry.balance || 0) >= 0 ? "text-red-600" : "text-green-600"}>
+                              ₹{Math.abs(entry.balance || 0).toLocaleString()}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="bg-muted/70 font-semibold">
+                      <tr>
+                        <td colSpan={4} className="px-4 py-3 text-right">TOTAL</td>
+                        <td className="px-4 py-3 text-right text-blue-600">₹{(totals.totalDebit || 0).toLocaleString()}</td>
+                        <td className="px-4 py-3 text-right text-green-600">₹{(totals.totalCredit || 0).toLocaleString()}</td>
+                        <td className="px-4 py-3 text-right">
+                          <span className={(totals.closingBalance || 0) >= 0 ? "text-red-600" : "text-green-600"}>
+                            ₹{Math.abs(totals.closingBalance || 0).toLocaleString()}
+                          </span>
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </>
+      )}
     </div>
   );
 }

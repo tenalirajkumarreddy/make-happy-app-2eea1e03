@@ -24,7 +24,18 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+
+// Set page title hook
+const usePageTitle = (title: string) => {
+  useEffect(() => {
+    const originalTitle = document.title;
+    document.title = title;
+    return () => {
+      document.title = originalTitle;
+    };
+  }, [title]);
+};
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
@@ -38,6 +49,7 @@ import { CustomerStatement } from "@/components/reports/CustomerStatement";
 
 const StoreDetail = () => {
   const { id } = useParams<{ id: string }>();
+  usePageTitle(`Store ${id?.slice(0, 8)}... | BizManager`);
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { role, user } = useAuth();
@@ -73,43 +85,43 @@ const StoreDetail = () => {
     route_id: "",
   });
 
-  const { data: store, isLoading } = useQuery({
-    queryKey: ["store", id, currentWarehouse?.id],
-    queryFn: async () => {
-      let query = (supabase as any)
-        .from("stores")
-        .select("*, customers(id, name, is_active, kyc_status, kyc_selfie_url, kyc_aadhar_front_url, kyc_aadhar_back_url, kyc_rejection_reason, kyc_submitted_at, kyc_verified_at), store_types(name, credit_limit_kyc, credit_limit_no_kyc), routes(name)")
-        .eq("id", id!);
-      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
-      const { data, error } = await query.maybeSingle();
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!id,
-  });
+   const { data: store, isLoading } = useQuery({
+     queryKey: ["store", id, currentWarehouse?.id],
+     queryFn: async () => {
+       let query = supabase
+         .from("stores")
+         .select("*, customers(id, name, is_active, kyc_status, kyc_selfie_url, kyc_aadhar_front_url, kyc_aadhar_back_url, kyc_rejection_reason, kyc_submitted_at, kyc_verified_at), store_types(name, credit_limit_kyc, credit_limit_no_kyc), routes(name)")
+         .eq("id", id!);
+       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+       const { data, error } = await query.maybeSingle();
+       if (error) throw error;
+       return data;
+     },
+     enabled: !!id,
+   });
 
   // Customer list for transfer
-  const { data: allCustomers } = useQuery({
-    queryKey: ["customers-for-transfer", currentWarehouse?.id],
-    queryFn: async () => {
-      let query = (supabase as any).from("customers").select("id, name, display_id").eq("is_active", true);
-      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
-      const { data } = await query.order("name");
-      return data || [];
-    },
-    enabled: canEdit,
-  });
+   const { data: allCustomers } = useQuery({
+     queryKey: ["customers-for-transfer", currentWarehouse?.id],
+     queryFn: async () => {
+       let query = supabase.from("customers").select("id, name, display_id").eq("is_active", true);
+       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+       const { data } = await query.order("name");
+       return data || [];
+     },
+     enabled: canEdit,
+   });
 
-  const { data: allRoutes } = useQuery({
-    queryKey: ["routes-for-edit", currentWarehouse?.id],
-    queryFn: async () => {
-      let query = (supabase as any).from("routes").select("id, name");
-      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
-      const { data } = await query.order("name");
-      return data || [];
-    },
-    enabled: canEdit,
-  });
+   const { data: allRoutes } = useQuery({
+     queryKey: ["routes-for-edit", currentWarehouse?.id],
+     queryFn: async () => {
+       let query = supabase.from("routes").select("id, name");
+       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+       const { data } = await query.order("name");
+       return data || [];
+     },
+     enabled: canEdit,
+   });
 
   const { data: allStoreTypes } = useQuery({
     queryKey: ["store-types-for-edit"],
@@ -124,12 +136,12 @@ const StoreDetail = () => {
   const { data: storeProducts } = useQuery({
     queryKey: ["store-products-tab", id, store?.store_type_id],
     queryFn: async () => {
-      if (!store?.store_type_id) {
-        let query = (supabase as any).from("products").select("id, name, sku, base_price").eq("is_active", true);
-        if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
-        const { data } = await query.order("name");
-        return data || [];
-      }
+       if (!store?.store_type_id) {
+         let query = supabase.from("products").select("id, name, sku, base_price").eq("is_active", true);
+         if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+         const { data } = await query.order("name");
+         return data || [];
+       }
       const { data: accessData } = await supabase
         .from("store_type_products")
         .select("product_id, products(id, name, sku, base_price)")
@@ -137,10 +149,10 @@ const StoreDetail = () => {
       if (accessData && accessData.length > 0) {
         return accessData.map((a: any) => a.products).filter(Boolean);
       }
-      let query = (supabase as any).from("products").select("id, name, sku, base_price").eq("is_active", true);
-      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
-      const { data } = await query.order("name");
-      return data || [];
+       let query = supabase.from("products").select("id, name, sku, base_price").eq("is_active", true);
+       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+       const { data } = await query.order("name");
+       return data || [];
     },
     enabled: !!store,
   });

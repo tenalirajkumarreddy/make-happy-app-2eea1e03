@@ -16,7 +16,18 @@ import { DollarSign, Store, Settings2, Upload, Loader2, Phone, MapPin, Building2
 import { usePermission } from "@/hooks/usePermission";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+
+// Set page title hook
+const usePageTitle = (title: string) => {
+  useEffect(() => {
+    const originalTitle = document.title;
+    document.title = title;
+    return () => {
+      document.title = originalTitle;
+    };
+  }, [title]);
+};
 import { useNavigate } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
@@ -25,12 +36,14 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { logActivity } from "@/lib/activityLogger";
+import { sanitizeString, sanitizeObject } from "@/lib/sanitization";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
 const Stores = () => {
+  usePageTitle("Stores | BizManager");
   const navigate = useNavigate();
   const { user, role } = useAuth();
   const { currentWarehouse, allWarehouses } = useWarehouse();
@@ -54,6 +67,10 @@ const Stores = () => {
   const canBulk = role === "super_admin" || role === "manager";
   const canEdit = role === "super_admin" || role === "manager";
   const warehouseScopeKey = currentWarehouse?.id || "no-warehouse";
+
+  useEffect(() => {
+    document.title = "Stores";
+  }, []);
 
   const {
     data,
@@ -105,15 +122,15 @@ const Stores = () => {
 
   const stores = useMemo(() => data?.pages.flatMap((page) => page) || [], [data]);
 
-  const { data: allRoutes } = useQuery({
-    queryKey: ["all-routes", currentWarehouse?.id],
-    queryFn: async () => {
-      let query = (supabase as any).from("routes").select("id, name").eq("is_active", true);
-      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
-      const { data } = await query;
-      return data || [];
-    },
-  });
+   const { data: allRoutes } = useQuery({
+     queryKey: ["all-routes", currentWarehouse?.id],
+     queryFn: async () => {
+       let query = supabase.from("routes").select("id, name").eq("is_active", true);
+       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+       const { data } = await query;
+       return data || [];
+     },
+   });
 
   const { data: storeTypes } = useQuery({
     queryKey: ["store-types-list"],
@@ -123,15 +140,15 @@ const Stores = () => {
     },
   });
 
-  const { data: customersList } = useQuery({
-    queryKey: ["customers-list", currentWarehouse?.id],
-    queryFn: async () => {
-      let query = (supabase as any).from("customers").select("id, name, display_id").eq("is_active", true);
-      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
-      const { data } = await query;
-      return data || [];
-    },
-  });
+   const { data: customersList } = useQuery({
+     queryKey: ["customers-list", currentWarehouse?.id],
+     queryFn: async () => {
+       let query = supabase.from("customers").select("id, name, display_id").eq("is_active", true);
+       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+       const { data } = await query;
+       return data || [];
+     },
+   });
 
   const enterEditMode = () => {
     const data: Record<string, { name: string; phone: string }> = {};
@@ -157,19 +174,36 @@ const Stores = () => {
       setEditMode(false);
       return;
     }
-    const results = await Promise.all(
-      changed.map((s: any) => {
-        const d = editData[s.id];
-        return supabase.from("stores").update({ name: d.name || null, phone: d.phone || null }).eq("id", s.id);
-      })
-    );
+
+    // Use database function for atomic bulk updates with individual error tracking
+    const updates = changed.map((s: any) => ({
+      id: s.id,
+      name: editData[s.id].name || null,
+      phone: editData[s.id].phone || null,
+    }));
+
+    const { data: results, error } = await supabase.rpc("bulk_update_stores", {
+      p_updates: updates,
+    });
+
     setBulkSaving(false);
-    const errCount = results.filter((r) => r.error).length;
-    if (errCount > 0) { toast.error(`${errCount} update(s) failed`); }
-    else {
+
+    if (error) {
+      toast.error(`Bulk update failed: ${error.message}`);
+      return;
+    }
+
+    const failures = results?.filter((r: any) => !r.success) || [];
+    const successCount = changed.length - failures.length;
+
+    if (failures.length > 0) {
+      toast.warning(`${successCount} updated, ${failures.length} failed`);
+      console.error("Failed updates:", failures);
+    } else {
       toast.success(`${changed.length} store(s) updated`);
       logActivity(user!.id, `Bulk updated ${changed.length} stores`, "store");
     }
+
     setEditMode(false);
     setEditData({});
     qc.invalidateQueries({ queryKey: ["stores"] });
@@ -181,10 +215,10 @@ const Stores = () => {
   const handleCsvImport = async (rows: Record<string, string>[]) => {
     let success = 0;
     const errors: string[] = [];
-    const currentCount = stores?.length || 0;
 
     for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
+      // Sanitize entire row to prevent XSS
+      const row = sanitizeObject(rows[i]);
 
       // Match customer by name or display_id
       const customer = customersList?.find(
@@ -213,17 +247,17 @@ const Stores = () => {
         routeId = route.id;
       }
 
-      const displayId = `STR-${String(currentCount + success + 1).padStart(6, "0")}`;
-      const { error } = await supabase.from("stores").insert({
-        display_id: displayId,
-        name: row.name,
-        customer_id: customer.id,
-        store_type_id: storeType.id,
-        route_id: routeId,
-        phone: row.phone || null,
-        address: row.address || null,
-        warehouse_id: currentWarehouse?.id || null,
+      // Use database function to generate display_id
+      const { data: newStore, error } = await supabase.rpc("create_store_with_display_id", {
+        p_name: row.name,
+        p_customer_id: customer.id,
+        p_store_type_id: storeType.id,
+        p_route_id: routeId,
+        p_phone: row.phone || null,
+        p_address: row.address || null,
+        p_warehouse_id: currentWarehouse?.id || null,
       });
+
       if (error) {
         errors.push(`Row ${i + 2}: ${error.message}`);
       } else {
@@ -324,13 +358,19 @@ const Stores = () => {
     ), className: "hidden md:table-cell" },
     { header: "Type", accessor: (row: any) => row.store_types?.name ? <Badge variant="secondary">{row.store_types.name}</Badge> : "—", className: "hidden sm:table-cell" },
     { header: "Route", accessor: (row: any) => row.routes?.name || "—", className: "text-sm hidden lg:table-cell" },
-    { header: "Outstanding", accessor: (row: any) => `₹${Number(row.outstanding).toLocaleString()}`, className: "font-semibold" },
+    { header: "Outstanding", accessor: (row: any) => `₹${Number(row.outstanding || 0).toLocaleString()}`, className: "font-semibold" },
     { header: "Status", accessor: (row: any) => <StatusBadge status={row.is_active ? "active" : "inactive"} /> },
-    ...(canManagePricing ? [{ header: "Pricing", accessor: (row: any) => (
-      <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={(e: React.MouseEvent) => { e.stopPropagation(); setPricingStore(row); }}>
-        <DollarSign className="mr-1 h-3 w-3" />Set Prices
-      </Button>
-    ), hideOnMobile: true }] : []),
+  ...(canManagePricing ? [{ header: "Pricing", accessor: (row: any) => (
+    <Button 
+      variant="ghost" 
+      size="sm" 
+      className="h-7 text-xs" 
+      onClick={(e: React.MouseEvent) => { e.stopPropagation(); setPricingStore(row); }}
+      aria-label={`Set prices for ${row.name}`}
+    >
+      <DollarSign className="mr-1 h-3 w-3" />Set Prices
+    </Button>
+  ), hideOnMobile: true }] : []),
   ];
 
   const filteredStores = useMemo(() => {
@@ -391,21 +431,22 @@ const Stores = () => {
         </div>
       )}
 
-      {canBulk && selectMode && selected.size > 0 && (
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-accent/50 p-3">
-          <span className="text-sm font-medium">{selected.size} selected</span>
-          <Button variant="outline" size="sm" onClick={() => handleBulkStatus(true)}>Activate</Button>
-          <Button variant="outline" size="sm" className="text-destructive border-destructive/40" onClick={() => setConfirmBulkDeactivate(true)}>Deactivate</Button>
-          <div className="flex items-center gap-2">
-            <Select value={bulkRoute} onValueChange={setBulkRoute}>
-              <SelectTrigger className="h-8 w-40"><SelectValue placeholder="Assign route" /></SelectTrigger>
-              <SelectContent>{allRoutes?.map((r) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}</SelectContent>
-            </Select>
-            <Button variant="outline" size="sm" onClick={handleBulkRoute} disabled={!bulkRoute}>Assign</Button>
-          </div>
-          <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>Clear</Button>
-        </div>
-      )}
+  {canBulk && selectMode && selected.size > 0 && (
+    <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-accent/50 p-3" role="region" aria-label="Bulk actions">
+      <span className="text-sm font-medium">{selected.size} selected</span>
+      <Button variant="outline" size="sm" onClick={() => handleBulkStatus(true)} aria-label={`Activate ${selected.size} stores`}>Activate</Button>
+      <Button variant="outline" size="sm" className="text-destructive border-destructive/40" onClick={() => setConfirmBulkDeactivate(true)} aria-label={`Deactivate ${selected.size} stores`}>Deactivate</Button>
+      <div className="flex items-center gap-2">
+        <label htmlFor="bulk-route-select" className="sr-only">Assign route</label>
+        <Select value={bulkRoute} onValueChange={setBulkRoute}>
+          <SelectTrigger className="h-8 w-40" id="bulk-route-select" aria-label="Select route to assign"><SelectValue placeholder="Assign route" /></SelectTrigger>
+          <SelectContent>{allRoutes?.map((r) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}</SelectContent>
+        </Select>
+        <Button variant="outline" size="sm" onClick={handleBulkRoute} disabled={!bulkRoute} aria-label="Assign selected route">Assign</Button>
+      </div>
+      <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())} aria-label="Clear selection">Clear</Button>
+    </div>
+  )}
 
       {/* Desktop: Card Grid, Mobile: Table */}
       {!isMobile ? (
@@ -480,7 +521,7 @@ const Stores = () => {
                     {/* Outstanding */}
                     <div className="entity-card-stat">
                       <p className="entity-card-label">Outstanding</p>
-                      <p className="font-bold text-lg text-foreground">₹{Number(row.outstanding).toLocaleString()}</p>
+                      <p className="font-bold text-lg text-foreground">₹{Number(row.outstanding || 0).toLocaleString()}</p>
                     </div>
 
                     {/* Pricing button for admins */}
@@ -545,7 +586,7 @@ const Stores = () => {
                 </div>
                 <div className="flex items-center justify-between mt-1.5">
                   <span className="text-xs text-muted-foreground truncate">{row.customers?.name || "—"}</span>
-                  <p className={`font-bold text-sm ${Number(row.outstanding) > 0 ? 'text-red-600' : 'text-foreground'}`}>₹{Number(row.outstanding).toLocaleString()}</p>
+                  <p className={`font-bold text-sm ${Number(row.outstanding || 0) > 0 ? 'text-red-600' : 'text-foreground'}`}>₹{Number(row.outstanding || 0).toLocaleString()}</p>
                 </div>
               </div>
             </div>

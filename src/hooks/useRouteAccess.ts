@@ -74,19 +74,19 @@ export function useRouteAccess(userId?: string | null, role?: string | null) {
     enabled: !!userId && scoped,
   });
 
-  const { data: storeTypeRows, isLoading: loadingStoreTypes } = useQuery({
-    queryKey: ["store-type-access-matrix", userId, role],
-    queryFn: async () => {
-      if (!userId || !scoped) return [] as Array<{ store_type_id: string; enabled: boolean }>;
-      const { data, error } = await (supabase as any)
-        .from("agent_store_types")
-        .select("store_type_id, enabled")
-        .eq("user_id", userId);
-      if (error) throw error;
-      return (data || []) as Array<{ store_type_id: string; enabled: boolean }>;
-    },
-    enabled: !!userId && scoped,
-  });
+   const { data: storeTypeRows, isLoading: loadingStoreTypes } = useQuery({
+     queryKey: ["store-type-access-matrix", userId, role],
+     queryFn: async () => {
+       if (!userId || !scoped) return [] as Array<{ store_type_id: string; enabled: boolean }>;
+       const { data, error } = await supabase
+         .from("agent_store_types")
+         .select("store_type_id, enabled")
+         .eq("user_id", userId);
+       if (error) throw error;
+       return (data || []) as Array<{ store_type_id: string; enabled: boolean }>;
+     },
+     enabled: !!userId && scoped,
+   });
 
   return useMemo(() => {
     const routeAccess = computeRouteAccess(routeRows, role);

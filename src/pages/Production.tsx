@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -15,6 +15,10 @@ const ProductionPage = () => {
   const [quantity, setQuantity] = useState<number>(1);
   const [feasibilityData, setFeasibilityData] = useState<FeasibilityResultData | null>(null);
   const [isChecking, setIsChecking] = useState(false);
+
+  useEffect(() => {
+    document.title = 'Production Feasibility';
+  }, []);
 
   const { data: finishedProducts } = useQuery({
     queryKey: ['products', 'finished'],

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase';
 import { useWarehouse } from '@/contexts/WarehouseContext';
@@ -13,6 +13,8 @@ import type { PurchaseOrderView } from '@/types/purchases';
 
 const PurchasesPage = () => {
   const { currentWarehouse } = useWarehouse();
+
+  useEffect(() => { document.title = "Purchases"; }, []);
 
   const { data: purchaseOrders, isLoading, error } = useQuery({
     queryKey: ['purchase_orders', currentWarehouse?.id],
