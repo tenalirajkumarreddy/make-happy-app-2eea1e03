@@ -1,10 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
 import { format } from "date-fns";
 
 export default function AdminCostHistory() {
+  useEffect(() => {
+    document.title = 'Cost History';
+  }, []);
+
   const { data: history, isLoading } = useQuery({
     queryKey: ["wac_cost_history"],
     queryFn: async () => {

@@ -67,6 +67,10 @@ const Transactions = () => {
   const [recordedFor, setRecordedFor] = useState("");
   const [txnDate, setTxnDate] = useState("");
 
+  useEffect(() => {
+    document.title = "Transactions";
+  }, []);
+
   // List filters
   const today = new Date().toISOString().split("T")[0];
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
@@ -90,24 +94,24 @@ const Transactions = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterFrom, filterTo, filterStore, filterStoreType, filterRoute, filterUser, filterCustomer, filterPayment]);
 
-  const { data: transactions, isLoading, isError, error: txnError, isFetching } = useQuery({
-    queryKey: ["transactions", currentWarehouse?.id, isAdmin ? "all" : user?.id, filterFrom, filterTo, filterStore, filterStoreType, filterRoute, filterUser, filterCustomer, filterPayment, loadedPages],
-    queryFn: async () => {
-      let query = (supabase as any)
-      .from("transactions")
-      .select("*, stores(name, display_id, store_type_id, route_id, outstanding, customer_id), customers(id, name, display_id)")
-      .order("created_at", { ascending: false });
-      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
-      // Non-admin roles only see their own records
-      if (!isAdmin) query = query.eq("recorded_by", user!.id);
-      // Server-side filters
-      if (filterFrom) query = query.gte("created_at", filterFrom + "T00:00:00");
-      if (filterTo) query = query.lte("created_at", filterTo + "T23:59:59");
-      if (filterStore !== "all") query = query.eq("store_id", filterStore);
-      if (filterUser !== "all") query = query.eq("recorded_by", filterUser);
-      if (filterCustomer !== "all") query = query.eq("customer_id", filterCustomer);
-      if (filterPayment === "cash") query = query.gt("cash_amount", 0);
-      if (filterPayment === "upi") query = query.gt("upi_amount", 0);
+   const { data: transactions, isLoading, isError, error: txnError, isFetching } = useQuery({
+      queryKey: ["transactions", currentWarehouse?.id, isAdmin ? "all" : user?.id, filterFrom, filterTo, filterStore, filterStoreType, filterRoute, filterUser, filterCustomer, filterPayment, loadedPages],
+      queryFn: async () => {
+       let query = supabase
+       .from("transactions")
+       .select("*, stores(name, display_id, store_type_id, route_id, outstanding, customer_id), customers(id, name, display_id)")
+       .order("created_at", { ascending: false });
+       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+       // Non-admin roles only see their own records
+       if (!isAdmin) query = query.eq("recorded_by", user!.id);
+       // Server-side filters
+       if (filterFrom) query = query.gte("created_at", filterFrom + "T00:00:00");
+       if (filterTo) query = query.lte("created_at", filterTo + "T23:59:59");
+       if (filterStore !== "all") query = query.eq("store_id", filterStore);
+       if (filterUser !== "all") query = query.eq("recorded_by", filterUser);
+       if (filterCustomer !== "all") query = query.eq("customer_id", filterCustomer);
+       if (filterPayment === "cash") query = query.gt("cash_amount", 0);
+       if (filterPayment === "upi") query = query.gt("upi_amount", 0);
       // Store type and route filters (join with stores)
       if (filterStoreType !== "all") {
         query = query.eq("stores.store_type_id", filterStoreType);
@@ -125,15 +129,15 @@ const Transactions = () => {
 
   const hasMoreTransactions = (transactions?.length || 0) >= loadedPages * PAGE_SIZE;
 
-  const { data: stores } = useQuery({
-    queryKey: ["stores-for-txn", currentWarehouse?.id],
-    queryFn: async () => {
-      let query = (supabase as any).from("stores").select("id, name, outstanding, display_id, customer_id, is_active").order("is_active", { ascending: false }).order("name");
-      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
-      const { data } = await query;
-      return data || [];
-    },
-  });
+   const { data: stores } = useQuery({
+     queryKey: ["stores-for-txn", currentWarehouse?.id],
+     queryFn: async () => {
+       let query = supabase.from("stores").select("id, name, outstanding, display_id, customer_id, is_active").order("is_active", { ascending: false }).order("name");
+       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+       const { data } = await query;
+       return data || [];
+     },
+   });
 
   // Fetch store types for filter
   const { data: storeTypes = [] } = useQuery({
@@ -282,8 +286,8 @@ const Transactions = () => {
       return;
     }
 
-    // Use atomic RPC for online transactions
-    const { data: txnResult, error: txnError } = await (supabase as any).rpc("record_transaction", {
+     // Use atomic RPC for online transactions
+     const { data: txnResult, error: txnError } = await supabase.rpc("record_transaction", {
       p_display_id: displayId,
       p_store_id: storeId,
       p_customer_id: customerId,
@@ -372,11 +376,11 @@ const Transactions = () => {
   const columns = [
     { header: "Payment ID", accessor: "display_id" as const, className: "font-mono text-xs" },
     { header: "Store", accessor: (row: any) => row.stores?.name || "—", className: "font-medium" },
-    { header: "Total", accessor: (row: any) => `₹${Number(row.total_amount).toLocaleString()}`, className: "font-semibold" },
-    { header: "Cash", accessor: (row: any) => `₹${Number(row.cash_amount).toLocaleString()}`, className: "text-sm hidden md:table-cell" },
-    { header: "UPI", accessor: (row: any) => `₹${Number(row.upi_amount).toLocaleString()}`, className: "text-sm hidden md:table-cell" },
-    { header: "Old Bal.", accessor: (row: any) => `₹${Number(row.old_outstanding).toLocaleString()}`, className: "text-muted-foreground text-sm hidden lg:table-cell" },
-    { header: "New Bal.", accessor: (row: any) => `₹${Number(row.new_outstanding).toLocaleString()}`, className: "text-sm hidden lg:table-cell" },
+    { header: "Total", accessor: (row: any) => `₹${Number(row.total_amount || 0).toLocaleString()}`, className: "font-semibold" },
+    { header: "Cash", accessor: (row: any) => `₹${Number(row.cash_amount || 0).toLocaleString()}`, className: "text-sm hidden md:table-cell" },
+    { header: "UPI", accessor: (row: any) => `₹${Number(row.upi_amount || 0).toLocaleString()}`, className: "text-sm hidden md:table-cell" },
+    { header: "Old Bal.", accessor: (row: any) => `₹${Number(row.old_outstanding || 0).toLocaleString()}`, className: "text-muted-foreground text-sm hidden lg:table-cell" },
+    { header: "New Bal.", accessor: (row: any) => `₹${Number(row.new_outstanding || 0).toLocaleString()}`, className: "text-sm hidden lg:table-cell" },
     { header: "Date", accessor: (row: any) => new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }), className: "text-muted-foreground text-xs hidden sm:table-cell" },
     { header: "Actions", accessor: (row: any) => (
       <TooltipProvider>
@@ -440,7 +444,7 @@ const Transactions = () => {
               <div className="flex items-center justify-between text-xs py-1 border-t">
                 <span className="text-muted-foreground">Outstanding:</span>
                 <span className={`font-medium ${Number(store.outstanding) > 0 ? 'text-destructive' : 'text-green-600'}`}>
-                  ₹{Number(store.outstanding).toLocaleString()}
+                  ₹{Number(store.outstanding || 0).toLocaleString()}
                 </span>
               </div>
             )}
@@ -464,11 +468,11 @@ const Transactions = () => {
         </StoreHoverCard>
       </div>
     ), className: "font-medium" },
-    { header: "Total", accessor: (row: any) => `₹${Number(row.total_amount).toLocaleString()}`, className: "font-semibold" },
-    { header: "Cash", accessor: (row: any) => `₹${Number(row.cash_amount).toLocaleString()}`, className: "text-sm hidden md:table-cell" },
-    { header: "UPI", accessor: (row: any) => `₹${Number(row.upi_amount).toLocaleString()}`, className: "text-sm hidden md:table-cell" },
-    { header: "Old Bal.", accessor: (row: any) => `₹${Number(row.old_outstanding).toLocaleString()}`, className: "text-muted-foreground text-sm hidden lg:table-cell" },
-    { header: "New Bal.", accessor: (row: any) => `₹${Number(row.new_outstanding).toLocaleString()}`, className: "text-sm hidden lg:table-cell" },
+    { header: "Total", accessor: (row: any) => `₹${Number(row.total_amount || 0).toLocaleString()}`, className: "font-semibold" },
+    { header: "Cash", accessor: (row: any) => `₹${Number(row.cash_amount || 0).toLocaleString()}`, className: "text-sm hidden md:table-cell" },
+    { header: "UPI", accessor: (row: any) => `₹${Number(row.upi_amount || 0).toLocaleString()}`, className: "text-sm hidden md:table-cell" },
+    { header: "Old Bal.", accessor: (row: any) => `₹${Number(row.old_outstanding || 0).toLocaleString()}`, className: "text-muted-foreground text-sm hidden lg:table-cell" },
+    { header: "New Bal.", accessor: (row: any) => `₹${Number(row.new_outstanding || 0).toLocaleString()}`, className: "text-sm hidden lg:table-cell" },
     { header: "Date", accessor: (row: any) => new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }), className: "text-muted-foreground text-xs hidden sm:table-cell" },
     columns[8], // Keep the actions column
   ];
@@ -590,9 +594,9 @@ const Transactions = () => {
             </div>
             {/* Amounts row - inline compact */}
             <div className="flex items-center gap-3 text-xs">
-              <span className="font-bold text-foreground">₹{Number(row.total_amount).toLocaleString()}</span>
-              <span className="text-muted-foreground">Cash: ₹{Number(row.cash_amount).toLocaleString()}</span>
-              <span className="text-muted-foreground">UPI: ₹{Number(row.upi_amount).toLocaleString()}</span>
+              <span className="font-bold text-foreground">₹{Number(row.total_amount || 0).toLocaleString()}</span>
+              <span className="text-muted-foreground">Cash: ₹{Number(row.cash_amount || 0).toLocaleString()}</span>
+              <span className="text-muted-foreground">UPI: ₹{Number(row.upi_amount || 0).toLocaleString()}</span>
             </div>
             {/* Footer: Recorder + Balance */}
             <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
@@ -605,8 +609,8 @@ const Transactions = () => {
               </div>
               <div className="flex items-center gap-1.5 text-xs">
                 <span className="text-muted-foreground">Bal:</span>
-                <span className={Number(row.new_outstanding) < Number(row.old_outstanding) ? "font-semibold text-green-600" : "text-muted-foreground"}>
-                  ₹{Number(row.new_outstanding).toLocaleString()}
+                <span className={Number(row.new_outstanding || 0) < Number(row.old_outstanding || 0) ? "font-semibold text-green-600" : "text-muted-foreground"}>
+                  ₹{Number(row.new_outstanding || 0).toLocaleString()}
                 </span>
               </div>
             </div>
@@ -714,7 +718,7 @@ const Transactions = () => {
                 variant="outline" 
                 onClick={() => {
                   if (selectedTransaction) {
-                    const text = `Receipt: ${selectedTransaction.display_id}\nStore: ${selectedTransaction.stores?.name}\nDate: ${new Date(selectedTransaction.created_at).toLocaleDateString('en-IN')}\nAmount: ₹${Number(selectedTransaction.total_amount).toLocaleString()}\nPrevious Balance: ₹${Number(selectedTransaction.old_outstanding).toLocaleString()}\nTotal Due: ₹${Number(selectedTransaction.new_outstanding).toLocaleString()}`;
+                    const text = `Receipt: ${selectedTransaction.display_id}\nStore: ${selectedTransaction.stores?.name}\nDate: ${new Date(selectedTransaction.created_at).toLocaleDateString('en-IN')}\nAmount: ₹${Number(selectedTransaction.total_amount || 0).toLocaleString()}\nPrevious Balance: ₹${Number(selectedTransaction.old_outstanding || 0).toLocaleString()}\nTotal Due: ₹${Number(selectedTransaction.new_outstanding || 0).toLocaleString()}`;
                     navigator.clipboard.writeText(text);
                     toast.success("Receipt copied to clipboard");
                   }
@@ -780,13 +784,13 @@ const Transactions = () => {
                 {Number(selectedTransaction.cash_amount) > 0 && (
                   <div className="flex justify-between text-xs">
                     <span>Cash:</span>
-                    <span>₹{Number(selectedTransaction.cash_amount).toLocaleString()}</span>
+                    <span>₹{Number(selectedTransaction.cash_amount || 0).toLocaleString()}</span>
                   </div>
                 )}
-                {Number(selectedTransaction.upi_amount) > 0 && (
+                {Number(selectedTransaction.upi_amount || 0) > 0 && (
                   <div className="flex justify-between text-xs">
                     <span>UPI:</span>
-                    <span>₹{Number(selectedTransaction.upi_amount).toLocaleString()}</span>
+                    <span>₹{Number(selectedTransaction.upi_amount || 0).toLocaleString()}</span>
                   </div>
                 )}
               </div>
@@ -846,8 +850,8 @@ const Transactions = () => {
                 toast.error(`Cannot return more than original payment (₹${maxReturn.toLocaleString()})`);
                 return;
               }
-              setReturnLoading(true);
-              const { error } = await (supabase as any).rpc("record_payment_return", {
+               setReturnLoading(true);
+               const { error } = await supabase.rpc("record_payment_return", {
                 p_original_transaction_id: returnTxnId,
                 p_store_id: txn.store_id,
                 p_customer_id: txn.customer_id,

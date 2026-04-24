@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -119,6 +119,9 @@ function calculateShiftPay(hoursWorked: number, shiftRates: any[]): { rate: numb
 export default function Attendance() {
   const { user } = useAuth();
   const qc = useQueryClient();
+
+  useEffect(() => { document.title = "Attendance"; }, []);
+
   const [activeTab, setActiveTab] = useState("records");
   
   // Workers state

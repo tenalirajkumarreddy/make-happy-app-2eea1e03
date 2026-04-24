@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -53,6 +53,10 @@ export default function AdminSetup() {
   // Conversion State
   const [convOpen, setConvOpen] = useState(false);
   const [editingConvId, setEditingConvId] = useState<string | null>(null);
+
+  useEffect(() => {
+    document.title = 'Setup';
+  }, []);
 
   const { data: categories, isLoading: isLoadingCategories } = useQuery({
     queryKey: ["raw_material_categories"],

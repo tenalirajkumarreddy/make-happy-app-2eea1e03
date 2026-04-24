@@ -110,10 +110,10 @@ export function useOnlineStatus() {
             }
           }
 
-          const { error: dbErr } = await (supabase as any)
-            .from("customers")
-            .update(updated)
-            .eq("id", customerId);
+           const { error: dbErr } = await supabase
+             .from("customers")
+             .update(updated)
+             .eq("id", customerId);
             
           if (dbErr) throw dbErr;
         }
@@ -207,8 +207,8 @@ export function useOnlineStatus() {
         } else if (action.type === "transaction") {
           const { txData } = action.payload as any;
           const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "PAY", seq_name: "pay_display_seq" });
-          // Use atomic RPC — server computes outstanding, locks store row
-          const { error } = await (supabase as any).rpc("record_transaction", {
+           // Use atomic RPC — server computes outstanding, locks store row
+           const { error } = await supabase.rpc("record_transaction", {
             p_display_id: displayId,
             p_store_id: txData.store_id,
             p_customer_id: txData.customer_id,
@@ -284,10 +284,10 @@ export function useOnlineStatus() {
             seq_name: "str_display_seq",
           });
 
-          const { error } = await (supabase as any).from("stores").insert({
-            ...storeData,
-            display_id: String(displayId),
-          });
+           const { error } = await supabase.from("stores").insert({
+             ...storeData,
+             display_id: String(displayId),
+           });
           if (error) throw error;
         }
       await removeFromQueue(action.id);

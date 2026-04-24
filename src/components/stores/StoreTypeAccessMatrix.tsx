@@ -52,15 +52,15 @@ function useStoreTypeAccessMatrix() {
     },
   });
 
-  const { data: accessRecords, refetch: refetchAccess } = useQuery({
-    queryKey: ["agent-store-types-matrix"],
-    queryFn: async () => {
-      const { data } = await (supabase as any)
-        .from("agent_store_types")
-        .select("user_id, store_type_id, enabled");
-      return (data || []) as Array<{ user_id: string; store_type_id: string; enabled: boolean }>;
-    },
-  });
+   const { data: accessRecords, refetch: refetchAccess } = useQuery({
+     queryKey: ["agent-store-types-matrix"],
+     queryFn: async () => {
+       const { data } = await supabase
+         .from("agent_store_types")
+         .select("user_id, store_type_id, enabled");
+       return (data || []) as Array<{ user_id: string; store_type_id: string; enabled: boolean }>;
+     },
+   });
 
   const isEnabled = useCallback(
     (userId: string, storeTypeId: string) =>
@@ -100,19 +100,19 @@ function useStoreTypeAccessMatrix() {
         store_type_id: st.id,
         enabled: st.id !== storeTypeId, // disable the one being toggled off
       }));
-      const { error } = await (supabase as any)
-        .from("agent_store_types")
-        .upsert(rows, { onConflict: "user_id,store_type_id" });
+       const { error } = await supabase
+         .from("agent_store_types")
+         .upsert(rows, { onConflict: "user_id,store_type_id" });
       if (error) toast.error(error.message);
       else await refetchAccess();
     } else {
       // Normal toggle
-      const { error } = await (supabase as any)
-        .from("agent_store_types")
-        .upsert(
-          { user_id: userId, store_type_id: storeTypeId, enabled: !currentlyEnabled },
-          { onConflict: "user_id,store_type_id" }
-        );
+       const { error } = await supabase
+         .from("agent_store_types")
+         .upsert(
+           { user_id: userId, store_type_id: storeTypeId, enabled: !currentlyEnabled },
+           { onConflict: "user_id,store_type_id" }
+         );
       if (error) toast.error(error.message);
       else await refetchAccess();
     }

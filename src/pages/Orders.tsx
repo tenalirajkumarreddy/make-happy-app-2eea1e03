@@ -1176,8 +1176,8 @@ const buildActions = (row: any) => {
             {store.outstanding !== undefined && (
               <div className="flex items-center justify-between py-2 border-t text-sm">
                 <span className="text-muted-foreground">Balance:</span>
-                <span className={`font-bold ${Number(store.outstanding) > 0 ? 'text-destructive' : 'text-green-600'}`}>
-                  ₹{Number(store.outstanding).toLocaleString()}
+                <span className={`font-bold ${Number(store.outstanding || 0) > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                  ₹{Number(store.outstanding || 0).toLocaleString()}
                 </span>
               </div>
             )}

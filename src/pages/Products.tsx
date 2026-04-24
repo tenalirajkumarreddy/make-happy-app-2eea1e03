@@ -59,13 +59,13 @@ const Products = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const qc = useQueryClient();
 
-  const { data: products, isLoading } = useQuery({
-    queryKey: ["products", currentWarehouse?.id],
-    queryFn: async () => {
-      let query = (supabase as any)
-        .from("products")
-        .select("*")
-        .order("created_at", { ascending: false });
+   const { data: products, isLoading } = useQuery({
+     queryKey: ["products", currentWarehouse?.id],
+     queryFn: async () => {
+       let query = supabase
+         .from("products")
+         .select("*")
+         .order("created_at", { ascending: false });
 
       if (currentWarehouse?.id) {
         query = query.eq("warehouse_id", currentWarehouse.id);
@@ -101,22 +101,22 @@ const Products = () => {
     );
   }, [products, searchTerm]);
 
-  const handleAdd = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    const { error } = await (supabase as any).from("products").insert({
-      name,
-      sku,
-      warehouse_id: currentWarehouse?.id || null,
-      base_price: parseFloat(price) || 0,
-      unit,
-      category: category || null,
-      description: description || null,
-      image_url: imageUrl || null,
-      hsn_code: hsnCode.trim() || null,
-      gst_rate: parseFloat(gstRate) || 18,
-      is_gst_inclusive: true,
-    });
+   const handleAdd = async (e: React.FormEvent) => {
+     e.preventDefault();
+     setSaving(true);
+     const { error } = await supabase.from("products").insert({
+       name,
+       sku,
+       warehouse_id: currentWarehouse?.id || null,
+       base_price: parseFloat(price) || 0,
+       unit,
+       category: category || null,
+       description: description || null,
+       image_url: imageUrl || null,
+       hsn_code: hsnCode.trim() || null,
+       gst_rate: parseFloat(gstRate) || 18,
+       is_gst_inclusive: true,
+     });
     setSaving(false);
     if (error) {
       toast.error(error.message);
@@ -142,21 +142,21 @@ const Products = () => {
     setGstRate(String(product.gst_rate || 18));
   };
 
-  const handleEdit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editProduct) return;
-    setSaving(true);
-    const { error } = await (supabase as any).from("products").update({
-      name,
-      sku,
-      base_price: parseFloat(price) || 0,
-      unit,
-      category: category || null,
-      description: description || null,
-      image_url: imageUrl || null,
-      hsn_code: hsnCode.trim() || null,
-      gst_rate: parseFloat(gstRate) || 18,
-    }).eq("id", editProduct.id);
+   const handleEdit = async (e: React.FormEvent) => {
+     e.preventDefault();
+     if (!editProduct) return;
+     setSaving(true);
+     const { error } = await supabase.from("products").update({
+       name,
+       sku,
+       base_price: parseFloat(price) || 0,
+       unit,
+       category: category || null,
+       description: description || null,
+       image_url: imageUrl || null,
+       hsn_code: hsnCode.trim() || null,
+       gst_rate: parseFloat(gstRate) || 18,
+     }).eq("id", editProduct.id);
     setSaving(false);
     if (error) {
       toast.error(error.message);
@@ -169,9 +169,9 @@ const Products = () => {
     }
   };
 
-  const handleToggleActive = async (product: any) => {
-    const newVal = !product.is_active;
-    const { error } = await (supabase as any).from("products").update({ is_active: newVal }).eq("id", product.id);
+   const handleToggleActive = async (product: any) => {
+     const newVal = !product.is_active;
+     const { error } = await supabase.from("products").update({ is_active: newVal }).eq("id", product.id);
     if (error) {
       toast.error(error.message);
       return;
@@ -196,10 +196,10 @@ const Products = () => {
     });
   };
 
-  const handleBulkStatus = async (activate: boolean) => {
-    const ids = Array.from(selectedIds);
-    if (!ids.length) return;
-    const { error } = await (supabase as any).from("products").update({ is_active: activate }).in("id", ids);
+   const handleBulkStatus = async (activate: boolean) => {
+     const ids = Array.from(selectedIds);
+     if (!ids.length) return;
+     const { error } = await supabase.from("products").update({ is_active: activate }).in("id", ids);
     if (error) { toast.error(error.message); return; }
     toast.success(`${ids.length} product(s) ${activate ? "activated" : "deactivated"}`);
     setSelectedIds(new Set());
@@ -227,7 +227,7 @@ const Products = () => {
     )},
     { header: "SKU", accessor: "sku" as const, className: "font-mono text-xs text-muted-foreground hidden sm:table-cell" },
     { header: "Category", accessor: (row: any) => row.category ? <Badge variant="secondary">{row.category}</Badge> : <span className="text-muted-foreground">—</span>, className: "hidden md:table-cell" },
-    { header: "Base Price", accessor: (row: any) => `₹${Number(row.base_price).toLocaleString()}` },
+    { header: "Base Price", accessor: (row: any) => `₹${Number(row.base_price || 0).toLocaleString()}` },
     { header: "Unit", accessor: "unit" as const, className: "hidden sm:table-cell" },
     { header: "Status", accessor: (row: any) => (
       <div className="flex items-center gap-2">
@@ -357,7 +357,7 @@ const Products = () => {
                     </div>
                     <div className="text-right">
                       <p className="entity-card-label">Price (incl. GST)</p>    
-                      <p className="font-bold text-foreground">₹{Number(row.base_price).toLocaleString()}</p>
+                      <p className="font-bold text-foreground">₹{Number(row.base_price || 0).toLocaleString()}</p>
                     </div>
                   </div>
 
@@ -423,7 +423,7 @@ const Products = () => {
                 </div>
                 <p className="entity-card-subtitle mt-0.5">{row.sku}</p>        
                 <div className="flex items-center gap-2 mt-1">
-                  <span className="text-sm font-bold text-foreground">₹{Number(row.base_price).toLocaleString()}</span>
+                  <span className="text-sm font-bold text-foreground">₹{Number(row.base_price || 0).toLocaleString()}</span>
                   <span className="text-xs text-muted-foreground">/ {row.unit}</span>
                 </div>
                 {row.category && (

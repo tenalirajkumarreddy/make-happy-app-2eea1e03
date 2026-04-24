@@ -56,6 +56,10 @@ const InvoiceForm = () => {
   const [saving, setSaving] = useState(false);
   const [loadingNext, setLoadingNext] = useState(true);
 
+  useEffect(() => {
+    document.title = isEdit ? 'Edit Invoice' : 'Create Invoice';
+  }, [isEdit]);
+
   // Fetch business info for state comparison
   const { data: businessInfo } = useQuery({
     queryKey: ["business-info"],

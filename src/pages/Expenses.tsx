@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { formatDate } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable } from "@/components/shared/DataTable";
@@ -44,6 +44,8 @@ const Expenses = () => {
   const { currentWarehouse } = useWarehouse();
   const qc = useQueryClient();
   const isAdmin = role === "super_admin" || role === "manager";
+
+  useEffect(() => { document.title = "Expenses"; }, []);
 
   // Check and send fixed cost reminders
   useFixedCostReminders();
@@ -122,15 +124,15 @@ const Expenses = () => {
     },
   });
 
-  // Fetch expenses
-  const { data: expenses = [], isLoading: loadingExpenses } = useQuery({
-    queryKey: ["expenses", dateRange, currentWarehouse?.id],
-    queryFn: async () => {
-      let query = (supabase as any)
-        .from("expenses")
-        .select("*, expense_categories(name, color, icon)")
-        .order("expense_date", { ascending: false });
-      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+   // Fetch expenses
+   const { data: expenses = [], isLoading: loadingExpenses } = useQuery({
+     queryKey: ["expenses", dateRange, currentWarehouse?.id],
+     queryFn: async () => {
+       let query = supabase
+         .from("expenses")
+         .select("*, expense_categories(name, color, icon)")
+         .order("expense_date", { ascending: false });
+       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
 
       // Apply date filter
       const now = new Date();
@@ -154,20 +156,20 @@ const Expenses = () => {
     },
   });
 
-  // Fetch fixed costs
-  const { data: fixedCosts = [], isLoading: loadingFixedCosts } = useQuery({
-    queryKey: ["fixed-costs", currentWarehouse?.id],
-    queryFn: async () => {
-      let query = (supabase as any)
-        .from("fixed_costs")
-        .select("*")
-        .eq("is_active", true)
-        .order("next_due_date");
-      const { data, error } = await query;
-      if (error) throw error;
-      return data;
-    },
-  });
+   // Fetch fixed costs
+   const { data: fixedCosts = [], isLoading: loadingFixedCosts } = useQuery({
+     queryKey: ["fixed-costs", currentWarehouse?.id],
+     queryFn: async () => {
+       let query = supabase
+         .from("fixed_costs")
+         .select("*")
+         .eq("is_active", true)
+         .order("next_due_date");
+       const { data, error } = await query;
+       if (error) throw error;
+       return data;
+     },
+   });
 
   // Calculate summary
   const summary = useMemo(() => {
@@ -490,7 +492,7 @@ const Expenses = () => {
         return <Badge variant="outline" className="text-xs">{sourceLabels[row.source_type] || "Manual"}</Badge>;
       }
     },
-    { header: "Amount", accessor: (row: any) => `₹${Number(row.amount).toLocaleString()}`, className: "font-semibold text-right" },
+    { header: "Amount", accessor: (row: any) => `₹${Number(row.amount || 0).toLocaleString()}`, className: "font-semibold text-right" },
   ];
 
   // Category sidebar component (reusable for desktop and sheet)
@@ -625,7 +627,7 @@ const Expenses = () => {
                   <div className="mt-3 space-y-1.5 text-sm">
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Amount</span>
-                      <span className="font-semibold">₹{Number(fc.amount).toLocaleString()}</span>
+                      <span className="font-semibold">₹{Number(fc.amount || 0).toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Next Due</span>
@@ -753,7 +755,7 @@ const Expenses = () => {
                           ) : (
                             <span>Due in {fc.daysUntil} day{fc.daysUntil !== 1 ? 's' : ''}</span>
                           )}
-                          {' • '}₹{Number(fc.amount).toLocaleString()}
+                          {' • '}₹{Number(fc.amount || 0).toLocaleString()}
                         </p>
                       </div>
                       <Button size="sm" onClick={() => openPayFixedCost(fc)}>
@@ -1218,7 +1220,7 @@ const Expenses = () => {
                 <CardContent className="p-3">
                   <div className="flex justify-between text-sm">
                     <span>Expected Amount</span>
-                    <span className="font-semibold">₹{Number(selectedFixedCost.amount).toLocaleString()}</span>
+                    <span className="font-semibold">₹{Number(selectedFixedCost.amount || 0).toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between text-sm mt-1">
                     <span>Due Date</span>

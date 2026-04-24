@@ -6,6 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { logActivity } from "@/lib/activityLogger";
+import { sanitizeString } from "@/lib/sanitization";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { addToQueue, generateBusinessKey } from "@/lib/offlineQueue";
 import { resolveCreditLimit } from "@/lib/creditLimit";
@@ -51,7 +52,9 @@ function exportCSV(data: any[], columns: { header: string; key: string }[], file
   const rows = data.map((row) =>
     columns.map((c) => {
       const val = c.key.includes(".") ? c.key.split(".").reduce((o: any, k) => o?.[k], row) : row[c.key];
-      const str = String(val ?? "").replace(/"/g, '""');
+      // Sanitize value to prevent XSS in CSV
+      const sanitized = sanitizeString(String(val ?? ""));
+      const str = sanitized.replace(/"/g, '""');
       return `"${str}"`;
     }).join(",")
   );
@@ -159,24 +162,31 @@ const Sales = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterFrom, filterTo, filterStore, filterStoreType, filterRoute, filterUser, filterPayment]);
 
-  const { data: sales, isLoading, isFetching } = useQuery({
-    queryKey: ["sales", currentWarehouse?.id, isAdmin ? "all" : user?.id, filterFrom, filterTo, filterStore, filterStoreType, filterRoute, filterUser, filterPayment, loadedPages],
-    queryFn: async () => {
-let query = (supabase as any)
-      .from("sales")
-  .select("*, stores(id, name, display_id, store_type_id, route_id, address, outstanding), customers(id, name, display_id, phone, email), fulfilled_order_id, invoice_sales(invoice_id)")
-      .order("created_at", { ascending: false });
-      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
-      // Non-admin roles (agents, pos, marketer) only see their own records
-      if (!isAdmin) query = query.eq("recorded_by", user!.id);
-      // Server-side filters
-      if (filterFrom) query = query.gte("created_at", filterFrom + "T00:00:00");
-      if (filterTo) query = query.lte("created_at", filterTo + "T23:59:59");
-      if (filterStore !== "all") query = query.eq("store_id", filterStore);
-      if (filterUser !== "all") query = query.eq("recorded_by", filterUser);
-      if (filterPayment === "cash") query = query.gt("cash_amount", 0);
-      if (filterPayment === "upi") query = query.gt("upi_amount", 0);
-      if (filterPayment === "outstanding") query = query.gt("outstanding_amount", 0);
+  useEffect(() => {
+    document.title = "Sales | BizManager";
+    return () => {
+      document.title = "BizManager";
+    };
+  }, []);
+
+    const { data: sales, isLoading, isFetching } = useQuery({
+      queryKey: ["sales", currentWarehouse?.id, isAdmin ? "all" : user?.id, filterFrom, filterTo, filterStore, filterStoreType, filterRoute, filterUser, filterPayment, loadedPages],
+      queryFn: async () => {
+let query = supabase
+       .from("sales")
+   .select("*, stores(id, name, display_id, store_type_id, route_id, address, outstanding), customers(id, name, display_id, phone, email), fulfilled_order_id, invoice_sales(invoice_id)")
+       .order("created_at", { ascending: false });
+       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+       // Non-admin roles (agents, pos, marketer) only see their own records
+       if (!isAdmin) query = query.eq("recorded_by", user!.id);
+       // Server-side filters
+       if (filterFrom) query = query.gte("created_at", filterFrom + "T00:00:00");
+       if (filterTo) query = query.lte("created_at", filterTo + "T23:59:59");
+       if (filterStore !== "all") query = query.eq("store_id", filterStore);
+       if (filterUser !== "all") query = query.eq("recorded_by", filterUser);
+       if (filterPayment === "cash") query = query.gt("cash_amount", 0);
+       if (filterPayment === "upi") query = query.gt("upi_amount", 0);
+       if (filterPayment === "outstanding") query = query.gt("outstanding_amount", 0);
       // Cursor pagination: fetch all pages up to current
       query = query.range(0, loadedPages * PAGE_SIZE - 1);
       const { data, error } = await query;
@@ -221,15 +231,15 @@ let query = (supabase as any)
     setFilterPayment("all");
   };
 
-  const { data: stores } = useQuery({
-    queryKey: ["stores-for-sale", currentWarehouse?.id],
-    queryFn: async () => {
-      let query = (supabase as any).from("stores").select("id, name, outstanding, display_id, store_type_id, customer_id, lat, lng, is_active").order("is_active", { ascending: false }).order("name");
-      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
-      const { data } = await query;
-      return data || [];
-    },
-  });
+   const { data: stores } = useQuery({
+     queryKey: ["stores-for-sale", currentWarehouse?.id],
+     queryFn: async () => {
+       let query = supabase.from("stores").select("id, name, outstanding, display_id, store_type_id, customer_id, lat, lng, is_active").order("is_active", { ascending: false }).order("name");
+       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+       const { data } = await query;
+       return data || [];
+     },
+   });
 
   // Fetch store types for credit limits
   // Fetch store types for filters and credit limits
@@ -251,29 +261,29 @@ let query = (supabase as any)
   });
 
   // Fetch customer KYC status for credit limit determination
-  const { data: customers } = useQuery({
-    queryKey: ["customers-kyc-for-sale", currentWarehouse?.id],
-    queryFn: async () => {
-      let query = (supabase as any).from("customers").select("id, kyc_status, credit_limit_override");
-      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
-      const { data } = await query;
-      return data || [];
-    },
-  });
+   const { data: customers } = useQuery({
+     queryKey: ["customers-kyc-for-sale", currentWarehouse?.id],
+     queryFn: async () => {
+       let query = supabase.from("customers").select("id, kyc_status, credit_limit_override");
+       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+       const { data } = await query;
+       return data || [];
+     },
+   });
 
   const selectedStore = stores?.find((s) => s.id === storeId);
   const selectedStoreTypeId = selectedStore?.store_type_id;
 
   // Fetch all products for adding non-associated items
-  const { data: allProducts } = useQuery({
-    queryKey: ["all-products-for-sale", currentWarehouse?.id],
-    queryFn: async () => {
-      let query = (supabase as any).from("products").select("id, name, base_price, sku, image_url").eq("is_active", true);
-      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
-      const { data } = await query;
-      return data || [];
-    },
-  });
+   const { data: allProducts } = useQuery({
+     queryKey: ["all-products-for-sale", currentWarehouse?.id],
+     queryFn: async () => {
+       let query = supabase.from("products").select("id, name, base_price, sku, image_url").eq("is_active", true);
+       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+       const { data } = await query;
+       return data || [];
+     },
+   });
 
   // Fetch store-associated products with pricing
   const { data: storeProducts } = useQuery({
@@ -556,12 +566,12 @@ let query = (supabase as any)
     }));
     
       const effectiveRecordedFor = recordedFor || null; // null if recording for self
-      const { data: stockCheck, error: stockError } = await (supabase as any)
-        .rpc("check_stock_availability", {
-          p_user_id: user!.id,
-          p_recorded_for: effectiveRecordedFor,
-          p_items: saleItemsForStockCheck,
-        });
+       const { data: stockCheck, error: stockError } = await supabase
+         .rpc("check_stock_availability", {
+           p_user_id: user!.id,
+           p_recorded_for: effectiveRecordedFor,
+           p_items: saleItemsForStockCheck,
+         });
     
     if (stockError) {
       console.error("Stock check failed:", stockError);
@@ -805,7 +815,7 @@ let query = (supabase as any)
               <div className="flex items-center justify-between py-2 border-t text-sm">
                 <span className="text-muted-foreground">Balance:</span>
                 <span className={`font-bold ${Number(store.outstanding) > 0 ? 'text-destructive' : 'text-green-600'}`}>
-                  ₹{Number(store.outstanding).toLocaleString()}
+                  ₹{Number(store.outstanding || 0).toLocaleString()}
                 </span>
               </div>
             )}
@@ -895,12 +905,12 @@ let query = (supabase as any)
         </CustomerHoverCard>
       </div>
     ), className: "text-sm hidden md:table-cell" },
-    { header: "Total", accessor: (row: any) => <span className="font-semibold">₹{Number(row.total_amount).toLocaleString()}</span> },
-    { header: "Cash", accessor: (row: any) => `₹${Number(row.cash_amount).toLocaleString()}`, className: "text-sm hidden lg:table-cell" },
-    { header: "UPI", accessor: (row: any) => `₹${Number(row.upi_amount).toLocaleString()}`, className: "text-sm hidden lg:table-cell" },
+    { header: "Total", accessor: (row: any) => <span className="font-semibold">₹{Number(row.total_amount || 0).toLocaleString()}</span> },
+    { header: "Cash", accessor: (row: any) => `₹${Number(row.cash_amount || 0).toLocaleString()}`, className: "text-sm hidden lg:table-cell" },
+    { header: "UPI", accessor: (row: any) => `₹${Number(row.upi_amount || 0).toLocaleString()}`, className: "text-sm hidden lg:table-cell" },
     { header: "Outstanding", accessor: (row: any) => (
-      <span className={Number(row.outstanding_amount) > 0 ? "text-destructive font-medium" : "text-muted-foreground"}>
-        ₹{Number(row.outstanding_amount).toLocaleString()}
+      <span className={Number(row.outstanding_amount || 0) > 0 ? "text-destructive font-medium" : "text-muted-foreground"}>
+        ₹{Number(row.outstanding_amount || 0).toLocaleString()}
       </span>
     ), className: "text-sm hidden md:table-cell" },
     { header: "Recorded By", accessor: (row: any) => (
@@ -1189,9 +1199,9 @@ let query = (supabase as any)
       )}
           {/* Amounts row - inline compact */}
           <div className="flex items-center gap-3 text-xs cursor-pointer" onClick={() => setSelectedSaleId(row.id)}>
-            <span className="font-bold text-foreground">₹{Number(row.total_amount).toLocaleString()}</span>
-            <span className="text-muted-foreground">Cash: ₹{Number(row.cash_amount).toLocaleString()}</span>
-            <span className="text-muted-foreground">UPI: ₹{Number(row.upi_amount).toLocaleString()}</span>
+            <span className="font-bold text-foreground">₹{Number(row.total_amount || 0).toLocaleString()}</span>
+            <span className="text-muted-foreground">Cash: ₹{Number(row.cash_amount || 0).toLocaleString()}</span>
+            <span className="text-muted-foreground">UPI: ₹{Number(row.upi_amount || 0).toLocaleString()}</span>
           </div>
           {/* Footer: Recorder + Outstanding - clickable */}
           <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50 cursor-pointer" onClick={() => setSelectedSaleId(row.id)}>
@@ -1203,7 +1213,7 @@ let query = (supabase as any)
               <span className="text-[10px] text-muted-foreground truncate max-w-[100px]">{getRecorderName(row.recorded_by)}</span>
             </div>
             {Number(row.outstanding_amount) > 0 && (
-              <span className="text-xs font-semibold text-destructive">Due: ₹{Number(row.outstanding_amount).toLocaleString()}</span>
+              <span className="text-xs font-semibold text-destructive">Due: ₹{Number(row.outstanding_amount || 0).toLocaleString()}</span>
             )}
               {row.invoice_sales?.length > 0 && (
                 <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-green-500 text-green-600">Invoiced</Badge>
@@ -1237,10 +1247,10 @@ let query = (supabase as any)
                 <span className="font-medium">{(selectedSale as any).stores?.name || "—"}</span>
               </div>
               <div className="rounded-lg border bg-muted/30 p-3 space-y-1 text-sm">
-                <div className="flex justify-between"><span>Total</span><span className="font-bold">₹{Number(selectedSale.total_amount).toLocaleString()}</span></div>
-                <div className="flex justify-between"><span>Cash</span><span>₹{Number(selectedSale.cash_amount).toLocaleString()}</span></div>
-                <div className="flex justify-between"><span>UPI</span><span>₹{Number(selectedSale.upi_amount).toLocaleString()}</span></div>
-                <div className="flex justify-between font-medium"><span>Outstanding</span><span className={Number(selectedSale.outstanding_amount) > 0 ? "text-destructive" : ""}>₹{Number(selectedSale.outstanding_amount).toLocaleString()}</span></div>
+                <div className="flex justify-between"><span>Total</span><span className="font-bold">₹{Number(selectedSale.total_amount || 0).toLocaleString()}</span></div>
+                <div className="flex justify-between"><span>Cash</span><span>₹{Number(selectedSale.cash_amount || 0).toLocaleString()}</span></div>
+                <div className="flex justify-between"><span>UPI</span><span>₹{Number(selectedSale.upi_amount || 0).toLocaleString()}</span></div>
+                <div className="flex justify-between font-medium"><span>Outstanding</span><span className={Number(selectedSale.outstanding_amount || 0) > 0 ? "text-destructive" : ""}>₹{Number(selectedSale.outstanding_amount || 0).toLocaleString()}</span></div>
               </div>
 
               {/* Items */}
@@ -1254,11 +1264,9 @@ let query = (supabase as any)
                       <div key={item.id} className="flex items-center justify-between rounded-lg border bg-card p-2.5 text-sm">
                         <div>
                           <p className="font-medium">{item.products?.name || "—"}</p>
-                          <p className="text-[11px] text-muted-foreground">{item.products?.sku} · Qty: {Number(item.quantity)}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-semibold">₹{Number(item.total_price).toLocaleString()}</p>
-                          <p className="text-[11px] text-muted-foreground">@ ₹{Number(item.unit_price).toLocaleString()}</p>
+<p className="text-[11px] text-muted-foreground">{item.products?.sku} · Qty: {Number(item.quantity) || 0}</p>
+                          <p className="font-semibold">₹{Number(item.total_price || 0).toLocaleString()}</p>
+                          <p className="text-[11px] text-muted-foreground">@ ₹{Number(item.unit_price || 0).toLocaleString()}</p>
                         </div>
                       </div>
                     ))}
@@ -1695,7 +1703,7 @@ let query = (supabase as any)
                   <SelectItem key={p.id} value={p.id}>
                     <div className="flex items-center gap-2">
                       <span>{p.name}</span>
-                      <span className="text-muted-foreground">- ₹{Number(p.base_price).toLocaleString()}</span>
+                      <span className="text-muted-foreground">- ₹{Number(p.base_price || 0).toLocaleString()}</span>
                     </div>
                   </SelectItem>
                 ))}

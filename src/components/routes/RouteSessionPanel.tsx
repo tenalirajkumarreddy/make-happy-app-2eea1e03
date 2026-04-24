@@ -27,16 +27,16 @@ export function RouteSessionPanel() {
   const [agentLocation, setAgentLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   const { data: activeSession, isLoading: loadingSession } = useQuery({
-    queryKey: ["active-route-session", user?.id],
-    queryFn: async () => {
-      const { data } = await (supabase as any)
-        .from("route_sessions")
-        .select("*, routes(name, stores(id, name, address, lat, lng, store_order))")
-        .eq("user_id", user!.id)
-        .eq("status", "active")
-        .maybeSingle();
-      return data;
-    },
+     queryKey: ["active-route-session", user?.id],
+     queryFn: async () => {
+       const { data } = await supabase
+         .from("route_sessions")
+         .select("*, routes(name, stores(id, name, address, lat, lng, store_order))")
+         .eq("user_id", user!.id)
+         .eq("status", "active")
+         .maybeSingle();
+       return data;
+     },
     enabled: !!user,
   });
 
@@ -105,14 +105,14 @@ export function RouteSessionPanel() {
     const pushLocation = async (lat: number, lng: number) => {
       setAgentLocation({ lat, lng });
       const now = Date.now();
-      // Throttle DB writes to at most once per 15 seconds
-      if (now - lastPushRef.current < 15000) return;
-      lastPushRef.current = now;
-      await (supabase as any).from("route_sessions").update({
-        current_lat: lat,
-        current_lng: lng,
-        location_updated_at: new Date().toISOString(),
-      }).eq("id", activeSession.id);
+       // Throttle DB writes to at most once per 15 seconds
+       if (now - lastPushRef.current < 15000) return;
+       lastPushRef.current = now;
+       await supabase.from("route_sessions").update({
+         current_lat: lat,
+         current_lng: lng,
+         location_updated_at: new Date().toISOString(),
+       }).eq("id", activeSession.id);
     };
 
     locationWatchRef.current = navigator.geolocation.watchPosition(
@@ -185,8 +185,10 @@ export function RouteSessionPanel() {
       start_lng: loc.lng,
     });
     setSaving(false);
-    if (error) toast.error(error.message);
-    else {
+    if (error) {
+      toast.error(error.message);
+      qc.invalidateQueries({ queryKey: ["active-route-session"] });
+    } else {
       toast.success("Route session started!");
       setShowStart(false);
       setSelectedRoute("");
@@ -199,16 +201,20 @@ export function RouteSessionPanel() {
     if (!activeSession) return;
     setSaving(true);
     const loc = await getCurrentPosition();
-    await supabase.from("route_sessions").update({
+    const { error } = await supabase.from("route_sessions").update({
       status: "completed",
       ended_at: new Date().toISOString(),
       end_lat: loc?.lat || null,
       end_lng: loc?.lng || null,
     }).eq("id", activeSession.id);
     setSaving(false);
-    toast.success("Route session ended");
-    qc.invalidateQueries({ queryKey: ["active-route-session"] });
-    logActivity(user!.id, "Ended route session", "route_session");
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success("Route session ended");
+      qc.invalidateQueries({ queryKey: ["active-route-session"] });
+      logActivity(user!.id, "Ended route session", "route_session");
+    }
   };
 
   const handleVisit = async (storeId: string) => {
@@ -233,8 +239,10 @@ export function RouteSessionPanel() {
       lat: loc?.lat || null,
       lng: loc?.lng || null,
     });
-    if (error) toast.error(error.message);
-    else {
+    if (error) {
+      toast.error(error.message);
+      qc.invalidateQueries({ queryKey: ["session-visits"] });
+    } else {
       toast.success("Store marked as visited");
       qc.invalidateQueries({ queryKey: ["session-visits"] });
     }

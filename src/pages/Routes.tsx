@@ -41,16 +41,16 @@ const Routes = () => {
     },
   });
 
-  const { data: routes, isLoading: routesLoading } = useQuery({
-    queryKey: ["routes", currentWarehouse?.id],
-    queryFn: async () => {
-      let query = (supabase as any)
-        .from("routes")
-        .select("*, store_types(name), stores(id, outstanding)")
-        .eq("is_active", true);
-      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
-      const { data, error } = await query;
-      if (error) throw error;
+   const { data: routes, isLoading: routesLoading } = useQuery({
+     queryKey: ["routes", currentWarehouse?.id],
+     queryFn: async () => {
+       let query = supabase
+         .from("routes")
+         .select("*, store_types(name), stores(id, outstanding)")
+         .eq("is_active", true);
+       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+       const { data, error } = await query;
+       if (error) throw error;
 
       const allRoutes = data || [];
       if (!isScopedStaff || !user?.id) return allRoutes;
@@ -78,11 +78,11 @@ const Routes = () => {
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    const { error } = await (supabase as any).from("routes").insert({
-      name,
-      store_type_id: storeTypeId,
-      warehouse_id: currentWarehouse?.id || null,
-    });
+     const { error } = await supabase.from("routes").insert({
+       name,
+       store_type_id: storeTypeId,
+       warehouse_id: currentWarehouse?.id || null,
+     });
     setSaving(false);
     if (error) {
       toast.error(error.message);

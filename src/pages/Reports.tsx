@@ -7,9 +7,9 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import {
   Calendar, ShoppingCart, ClipboardList, Users, Package,
-  Banknote, TrendingDown, Sparkles, BookOpen, RotateCcw, 
+  Banknote, TrendingDown, Sparkles, BookOpen, RotateCcw,
   Truck, Archive, DollarSign, PieChart,
-  History, Wallet, Tag, AlertTriangle
+  History, Wallet, Tag, AlertTriangle, FileText, Clock, Route
 } from "lucide-react";
 import DailyReport from "@/components/reports/DailyReport";
 import DayBookReport from "@/components/reports/DayBookReport";
@@ -26,11 +26,14 @@ import ItemWisePLReport from "@/components/reports/ItemWisePLReport";
 import PaymentFlowReport from "@/components/reports/PaymentFlowReport";
 import CustomerReport from "@/components/reports/CustomerReport";
 import CustomerRiskReport from "@/components/reports/CustomerRiskReport";
+import { CustomerStatement } from "@/components/reports/CustomerStatement";
 import PriceChangeReport from "@/components/reports/PriceChangeReport";
 import InventoryTimelineReport from "@/components/reports/InventoryTimelineReport";
 import SalesReturnReport from "@/components/reports/SalesReturnReport";
 import PurchaseReturnReport from "@/components/reports/PurchaseReturnReport";
 import PurchaseReport from "@/components/reports/PurchaseReport";
+import ReceivablesAgingReport from "@/components/reports/ReceivablesAgingReport";
+import RouteEfficiencyReport from "@/components/reports/RouteEfficiencyReport";
 import StaffPerformanceReport from "@/components/reporting/StaffPerformanceReport";
 
 const REPORT_CATEGORIES = {
@@ -54,8 +57,10 @@ const REPORT_CATEGORIES = {
       { key: "sales-returns", label: "Sales Returns", icon: RotateCcw, component: SalesReturnReport, description: "Return analysis" },
       { key: "payment", label: "Collections", icon: Banknote, component: PaymentOutstandingReport, description: "Payment collections" },
       { key: "outstanding", label: "Outstanding", icon: TrendingDown, component: PaymentOutstandingReport, description: "Pending receivables" },
+      { key: "aging", label: "Receivables Aging", icon: Clock, component: ReceivablesAgingReport, description: "Outstanding by age bucket" },
       { key: "risk-engine", label: "Risk Engine", icon: AlertTriangle, component: CustomerRiskReport, description: "Customer risk scoring" },
       { key: "customers", label: "Customer Analysis", icon: Users, component: CustomerReport, description: "Customer insights" },
+      { key: "statement", label: "Customer Statements", icon: FileText, component: () => <CustomerStatement standalone />, description: "Per-customer account ledger" },
     ],
   },
   purchases: {
@@ -96,6 +101,7 @@ const REPORT_CATEGORIES = {
     color: "bg-cyan-500/10 text-cyan-600 border-cyan-200",
     reports: [
       { key: "agent", label: "Agent Performance", icon: Users, component: AgentPerformanceReport, description: "Agent productivity metrics" },
+      { key: "route-efficiency", label: "Route Efficiency", icon: Route, component: RouteEfficiencyReport, description: "Visit % and collection rate by route" },
     ],
   },
 };
