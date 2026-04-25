@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { getErrorMessage } from "@/lib/errorHandler";
+import { getFriendlyErrorMessage } from "@/lib/errorHandler";
 
 describe("getFriendlyErrorMessage", () => {
   // ─── Credit limit ──────────────────────────────────────────────────────────

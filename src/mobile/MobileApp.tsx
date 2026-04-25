@@ -3,12 +3,12 @@ import { App as CapacitorApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { matchPath, useLocation, useNavigate } from "react-router-dom";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import {
-  Menu, LayoutDashboard, Package, Users, Store, Route, ShoppingCart,
-  Receipt, ClipboardList, HandCoins, Map, FileText, BarChart3, History,
-  Shield, Settings, Warehouse, User, LogOut, ArrowRightLeft, Building2,
-  Calendar, CreditCard, Image, Wallet, Truck, TrendingUp, ClipboardCheck,
-  Factory, Undo2, UserCog, Coins,
+import { 
+Menu, LayoutDashboard, Package, Users, Store, Route, ShoppingCart,
+Receipt, ClipboardList, HandCoins, Map, FileText, BarChart3, History,
+Shield, Settings, Warehouse, User, LogOut, ArrowRightLeft, Building2,
+Calendar, CreditCard, Image, Wallet, Truck, TrendingUp, ClipboardCheck,
+Factory, Undo2, UserCog, Coins,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { isNativeApp } from "@/lib/capacitorUtils";
@@ -16,7 +16,15 @@ import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 import { PermissionSetup } from "./components/PermissionSetup";
 import { MobileHeader } from "./components/MobileHeader";
 import { BottomNav, CUSTOMER_TABS, MARKETER_TABS, MobileTab, POS_TABS, AGENT_TABS } from "./components/BottomNav";
+// Mobile-optimized admin pages (kept only essential ones with native mobile UI)
 import { AdminHome } from "./pages/admin/AdminHome";
+import { AdminOrders } from "./pages/admin/AdminOrders";
+import { AdminSales } from "./pages/admin/AdminSales";
+import { AdminTransactions } from "./pages/admin/AdminTransactions";
+import { AdminInventory } from "./pages/admin/AdminInventory";
+import { AdminPurchases } from "./pages/admin/AdminPurchases";
+// Web app pages (used for all other routes)
+import Dashboard from "@/pages/Dashboard";
 import Products from "@/pages/Products";
 import Customers from "@/pages/Customers";
 import CustomerDetail from "@/pages/CustomerDetail";
@@ -24,45 +32,54 @@ import Stores from "@/pages/Stores";
 import StoreDetail from "@/pages/StoreDetail";
 import RoutesPage from "@/pages/Routes";
 import RouteDetail from "@/pages/RouteDetail";
-import { cn } from "@/lib/utils";
+import Orders from "@/pages/Orders";
 import Sales from "@/pages/Sales";
 import Transactions from "@/pages/Transactions";
-import Orders from "@/pages/Orders";
 import Handovers from "@/pages/Handovers";
-import Reports from "@/pages/Reports";
-import Analytics from "@/pages/Analytics";
 import Inventory from "@/pages/Inventory";
-import Activity from "@/pages/Activity";
-import AccessControl from "@/pages/AccessControl";
-import SettingsPage from "@/pages/Settings";
-import MapPage from "@/pages/MapPage";
-import UserProfile from "@/pages/UserProfile";
-import Vendors from "@/pages/Vendors";
-import VendorDetail from "@/pages/VendorDetail";
 import Purchases from "@/pages/Purchases";
 import StockTransfers from "@/pages/StockTransfers";
-import Expenses from "@/pages/Expenses";
-import Attendance from "@/pages/Attendance";
-import Banners from "@/pages/Banners";
+import Vendors from "@/pages/Vendors";
+import VendorDetail from "@/pages/VendorDetail";
 import Invoices from "@/pages/Invoices";
+import InvoiceForm from "@/pages/InvoiceForm";
 import InvoiceView from "@/pages/InvoiceView";
-import { StaffDirectory } from "@/pages/StaffDirectory";
-import { Income } from "@/pages/Income";
-import CostInsights from "@/pages/CostInsights";
-import HandoverRequests from "@/pages/HandoverRequests";
 import SaleReturns from "@/pages/SaleReturns";
 import PurchaseReturns from "@/pages/PurchaseReturns";
 import VendorPayments from "@/pages/VendorPayments";
+import Expenses from "@/pages/Expenses";
+import Attendance from "@/pages/Attendance";
+import Banners from "@/pages/Banners";
+import UserProfile from "@/pages/UserProfile";
 import StoreTypes from "@/pages/StoreTypes";
-import ProductionPage from "@/pages/Production";
+import StoreTypeAccess from "@/pages/StoreTypeAccess";
 import WorkersPage from "@/pages/hr/Workers";
+import WorkerRolesPage from "@/pages/hr/WorkerRoles";
 import PayrollPage from "@/pages/hr/Payroll";
+import PayrollDetailPage from "@/pages/hr/PayrollDetail";
 import AdminSetup from "@/pages/admin/AdminSetup";
 import AdminVehicles from "@/pages/admin/AdminVehicles";
 import DeliveryFeasibility from "@/pages/admin/DeliveryFeasibility";
 import ProductionLogPage from "@/pages/admin/ProductionLog";
 import AdminCostHistory from "@/pages/admin/AdminCostHistory";
+import Reports from "@/pages/Reports";
+import Analytics from "@/pages/Analytics";
+import Activity from "@/pages/Activity";
+import AccessControl from "@/pages/AccessControl";
+import { AdminStaffDirectory } from "@/pages/AdminStaffDirectory";
+import { StaffDirectory } from "@/pages/StaffDirectory";
+import { StaffProfile } from "@/pages/StaffProfile";
+import CostInsights from "@/pages/CostInsights";
+import Settings from "@/pages/Settings";
+import Production from "@/pages/Production";
+import Income from "@/pages/Income";
+import MapPage from "@/pages/MapPage";
+import RawMaterials from "@/pages/RawMaterials";
+import BillOfMaterials from "@/pages/BillOfMaterials";
+import BomDetail from "@/pages/BomDetail";
+import { cn } from "@/lib/utils";
 import { MobilePageWrapper } from "./components/MobilePageWrapper";
+
 import { AgentHome } from "./pages/agent/AgentHome";
 import { AgentRoutes } from "./pages/agent/AgentRoutes";
 import { AgentScan } from "./pages/agent/AgentScan";
@@ -121,7 +138,6 @@ const STAFF_MENU_BY_ROLE: Record<StaffRole, StaffMenuSection[]> = {
       { id: "sales", label: "Sales", path: "/sales", icon: ShoppingCart },
       { id: "transactions", label: "Transactions", path: "/transactions", icon: Receipt },
       { id: "handovers", label: "Handovers", path: "/handovers", icon: HandCoins },
-      { id: "handover-requests", label: "Handover Requests", path: "/handover-requests", icon: HandCoins },
     ]},
     { section: "Operations", items: [
       { id: "products", label: "Products", path: "/products", icon: Package },
@@ -177,7 +193,6 @@ const STAFF_MENU_BY_ROLE: Record<StaffRole, StaffMenuSection[]> = {
       { id: "sales", label: "Sales", path: "/sales", icon: ShoppingCart },
       { id: "transactions", label: "Transactions", path: "/transactions", icon: Receipt },
       { id: "handovers", label: "Handovers", path: "/handovers", icon: HandCoins },
-      { id: "handover-requests", label: "Handover Requests", path: "/handover-requests", icon: HandCoins },
     ]},
     { section: "Operations", items: [
       { id: "products", label: "Products", path: "/products", icon: Package },
@@ -245,63 +260,72 @@ function StaffApp({ role }: { role: StaffRole }) {
     if (matchPath("/customers/:id", path)) return <MobilePageWrapper showBack><CustomerDetail /></MobilePageWrapper>;
     if (matchPath("/stores/:id", path)) return <MobilePageWrapper showBack><StoreDetail /></MobilePageWrapper>;
     if (matchPath("/routes/:id", path)) return <MobilePageWrapper showBack><RouteDetail /></MobilePageWrapper>;
-    if (matchPath("/vendors/:id", path)) return <MobilePageWrapper showBack><VendorDetail /></MobilePageWrapper>;
+    if (matchPath("/vendors/:vendorId", path)) return <MobilePageWrapper showBack><VendorDetail /></MobilePageWrapper>;
     if (matchPath("/invoices/:id", path)) return <MobilePageWrapper showBack><InvoiceView /></MobilePageWrapper>;
+    if (matchPath("/staff/:userId", path)) return <MobilePageWrapper showBack><StaffProfile /></MobilePageWrapper>;
+    if (matchPath("/staff/:userId/edit", path)) return <MobilePageWrapper showBack><StaffProfile /></MobilePageWrapper>;
+    if (matchPath("/hr/payrolls/:payrollId", path)) return <MobilePageWrapper showBack><PayrollDetailPage /></MobilePageWrapper>;
+    if (matchPath("/inventory/boms/:bomId", path)) return <MobilePageWrapper showBack><BomDetail /></MobilePageWrapper>;
 
-    // Overview
-    if (path === "/orders") return <MobilePageWrapper><Orders /></MobilePageWrapper>;
-    if (path === "/sales") return <MobilePageWrapper><Sales /></MobilePageWrapper>;
-    if (path === "/transactions") return <MobilePageWrapper><Transactions /></MobilePageWrapper>;
+    // Overview - Use mobile-optimized native pages for frequently used pages
+    if (path === "/orders") return <AdminOrders onNavigate={handleNavigate} />;
+    if (path === "/sales") return <AdminSales onNavigate={handleNavigate} />;
+    if (path === "/transactions") return <AdminTransactions onNavigate={handleNavigate} />;
     if (path === "/handovers") return <MobilePageWrapper><Handovers /></MobilePageWrapper>;
-    if (path === "/handover-requests") return <MobilePageWrapper><HandoverRequests /></MobilePageWrapper>;
 
-    // Operations
+    // Operations - Use web app pages wrapped for mobile
     if (path === "/products") return <MobilePageWrapper><Products /></MobilePageWrapper>;
-    if (path === "/inventory") return <MobilePageWrapper><Inventory /></MobilePageWrapper>;
-    if (path === "/purchases") return <MobilePageWrapper><Purchases /></MobilePageWrapper>;
+    if (path === "/inventory") return <AdminInventory onNavigate={handleNavigate} />;
+    if (path === "/purchases") return <AdminPurchases onNavigate={handleNavigate} />;
     if (path === "/stock-transfers") return <MobilePageWrapper><StockTransfers /></MobilePageWrapper>;
     if (path === "/routes") return <MobilePageWrapper><RoutesPage /></MobilePageWrapper>;
     if (path === "/attendance") return <MobilePageWrapper><Attendance /></MobilePageWrapper>;
     if (path === "/map") return <MobilePageWrapper><MapPage /></MobilePageWrapper>;
 
-    // Directory
+    // Directory - Use web app pages wrapped for mobile
     if (path === "/customers") return <MobilePageWrapper><Customers /></MobilePageWrapper>;
     if (path === "/stores") return <MobilePageWrapper><Stores /></MobilePageWrapper>;
     if (path === "/store-types") return <MobilePageWrapper><StoreTypes /></MobilePageWrapper>;
+    if (path === "/store-types/access") return <MobilePageWrapper><StoreTypeAccess /></MobilePageWrapper>;
     if (path === "/vendors") return <MobilePageWrapper><Vendors /></MobilePageWrapper>;
     if (path === "/invoices") return <MobilePageWrapper><Invoices /></MobilePageWrapper>;
+    if (path === "/invoices/new") return <MobilePageWrapper><InvoiceForm /></MobilePageWrapper>;
     if (path === "/vendor-payments") return <MobilePageWrapper><VendorPayments /></MobilePageWrapper>;
     if (path === "/expenses") return <MobilePageWrapper><Expenses /></MobilePageWrapper>;
     if (path === "/sale-returns") return <MobilePageWrapper><SaleReturns /></MobilePageWrapper>;
     if (path === "/purchase-returns") return <MobilePageWrapper><PurchaseReturns /></MobilePageWrapper>;
     if (path === "/banners") return <MobilePageWrapper><Banners /></MobilePageWrapper>;
 
-    // Insights
+    // Insights - Use web app pages wrapped for mobile
     if (path.startsWith("/reports")) return <MobilePageWrapper><Reports /></MobilePageWrapper>;
     if (path === "/analytics") return <MobilePageWrapper><Analytics /></MobilePageWrapper>;
     if (path === "/cost-insights") return <MobilePageWrapper><CostInsights /></MobilePageWrapper>;
     if (path === "/income") return <MobilePageWrapper><Income /></MobilePageWrapper>;
     if (path === "/activity") return <MobilePageWrapper><Activity /></MobilePageWrapper>;
 
-    // Manufacturing
-    if (path === "/production") return <MobilePageWrapper><ProductionPage /></MobilePageWrapper>;
+    // Manufacturing - Use web app pages wrapped for mobile
+    if (path === "/production") return <MobilePageWrapper><Production /></MobilePageWrapper>;
     if (path === "/admin/production-log") return <MobilePageWrapper><ProductionLogPage /></MobilePageWrapper>;
+    if (path === "/inventory/raw-materials") return <MobilePageWrapper><RawMaterials /></MobilePageWrapper>;
+    if (path === "/inventory/boms") return <MobilePageWrapper><BillOfMaterials /></MobilePageWrapper>;
 
-    // Administration
+    // Administration - Use web app pages wrapped for mobile
     if (path === "/access-control") return <MobilePageWrapper><AccessControl /></MobilePageWrapper>;
     if (path === "/staff") return <MobilePageWrapper><StaffDirectory /></MobilePageWrapper>;
+    if (path === "/admin/staff") return <MobilePageWrapper><AdminStaffDirectory /></MobilePageWrapper>;
     if (path === "/admin/setup") return <MobilePageWrapper><AdminSetup /></MobilePageWrapper>;
     if (path === "/admin/cost-history") return <MobilePageWrapper><AdminCostHistory /></MobilePageWrapper>;
     if (path === "/admin/vehicles") return <MobilePageWrapper><AdminVehicles /></MobilePageWrapper>;
     if (path === "/admin/delivery-feasibility") return <MobilePageWrapper><DeliveryFeasibility /></MobilePageWrapper>;
-    if (path === "/settings") return <MobilePageWrapper><SettingsPage /></MobilePageWrapper>;
+    if (path === "/settings") return <MobilePageWrapper><Settings /></MobilePageWrapper>;
     if (path === "/profile") return <MobilePageWrapper><UserProfile /></MobilePageWrapper>;
 
-    // HR
+    // HR - Use web app pages wrapped for mobile
     if (path === "/hr/staff") return <MobilePageWrapper><WorkersPage /></MobilePageWrapper>;
+    if (path === "/hr/roles") return <MobilePageWrapper><WorkerRolesPage /></MobilePageWrapper>;
     if (path === "/hr/payroll") return <MobilePageWrapper><PayrollPage /></MobilePageWrapper>;
 
-    // Dashboard: render mobile-native AdminHome
+    // Dashboard: render native mobile AdminHome
     return <AdminHome role={role} onNavigate={handleNavigate} />;
   };
 

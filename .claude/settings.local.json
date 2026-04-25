@@ -1,6 +1,6 @@
 {
   "env": {
-    "ANTHROPIC_BASE_URL": "http://localhost:8082",
+    "ANTHROPIC_BASE_URL": "https://integrate.api.nvidia.com/v1",
     "ANTHROPIC_AUTH_TOKEN": "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",
     "ANTHROPIC_DEFAULT_HAIKU_MODEL": "nvidia/llama-3.1-nemotron-70b-instruct",
     "ANTHROPIC_DEFAULT_OPUS_MODEL": "nvidia/llama-3.1-nemotron-70b-instruct",

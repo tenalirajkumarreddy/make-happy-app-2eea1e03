@@ -39,7 +39,6 @@ const Sales = lazy(() => import("./pages/Sales"));
 const Transactions = lazy(() => import("./pages/Transactions"));
 const Orders = lazy(() => import("./pages/Orders"));
 const Handovers = lazy(() => import("./pages/Handovers"));
-const HandoverRequests = lazy(() => import("./pages/HandoverRequests"));
 const Reports = lazy(() => import("./pages/Reports"));
 const Analytics = lazy(() => import("./pages/Analytics"));
 const Inventory = lazy(() => import("./pages/Inventory"));
@@ -209,8 +208,7 @@ const App = () => {
                <Route path="/invoices/new" element={<RoleGuard allowed={["super_admin", "manager"]}><InvoiceForm /></RoleGuard>} />
                <Route path="/invoices/:id" element={<RoleGuard allowed={["super_admin", "manager"]}><InvoiceView /></RoleGuard>} />
                <Route path="/orders" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer"]}><Orders /></RoleGuard>} />
-               <Route path="/handovers" element={<RoleGuard allowed={["super_admin", "manager", "agent"]}><Handovers /></RoleGuard>} />
-               <Route path="/handover-requests" element={<RoleGuard allowed={["super_admin", "manager", "agent"]}><HandoverRequests /></RoleGuard>} />
+<Route path="/handovers" element={<RoleGuard allowed={["super_admin", "manager", "agent"]}><Handovers /></RoleGuard>} />
                <Route path="/reports" element={<RoleGuard allowed={["super_admin", "manager"]}><Reports /></RoleGuard>} />
                <Route path="/reports/:type" element={<RoleGuard allowed={["super_admin", "manager"]}><Reports /></RoleGuard>} />
                <Route path="/analytics" element={<RoleGuard allowed={["super_admin", "manager"]}><Analytics /></RoleGuard>} />
