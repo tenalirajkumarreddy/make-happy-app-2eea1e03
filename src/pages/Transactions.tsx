@@ -286,8 +286,9 @@ const Transactions = () => {
       return;
     }
 
-     // Use atomic RPC for online transactions
-     const { data: txnResult, error: txnError } = await supabase.rpc("record_transaction", {
+    // Use atomic RPC for online transactions
+    // Note: p_total_amount is calculated internally by the function (cash + upi)
+    const { data: txnResult, error: txnError } = await supabase.rpc("record_transaction", {
       p_display_id: displayId,
       p_store_id: storeId,
       p_customer_id: customerId,
@@ -295,9 +296,7 @@ const Transactions = () => {
       p_logged_by: loggedBy,
       p_cash_amount: cash,
       p_upi_amount: upi,
-      p_total_amount: totalPayment,
       p_notes: notes || null,
-      p_payment_date: txnDate || undefined,
       p_created_at: txnDate ? new Date(txnDate).toISOString() : undefined,
     });
 

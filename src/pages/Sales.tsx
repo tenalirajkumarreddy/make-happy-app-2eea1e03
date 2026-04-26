@@ -112,7 +112,7 @@ const Sales = () => {
   const { user, role } = useAuth();
   const { currentWarehouse } = useWarehouse();
   const navigate = useNavigate();
-  const isPosUser = role === "pos";
+  const isPosUser = role === "operator";
   const { allowed: canOverridePrice } = usePermission("price_override");
   const { allowed: canRecordBehalf } = usePermission("record_behalf");
   const qc = useQueryClient();
@@ -124,7 +124,7 @@ const Sales = () => {
   const [fulfillOrder, setFulfillOrder] = useState<FulfillOrder | null>(null);
   const [loadingOrderId, setLoadingOrderId] = useState<string | null>(null);
 
-  // POS users are locked to the POS store
+  // Operator users are locked to the POS store
   const isAdmin = role === "super_admin" || role === "manager";
   const [searchParams, setSearchParams] = useSearchParams();
   const [storeId, setStoreId] = useState(isPosUser ? POS_STORE_ID : (searchParams.get("store") ?? ""));
@@ -526,10 +526,12 @@ let query = supabase
       }
     }
 
-    setSaving(true);
+  setSaving(true);
 
-    // Proximity check for agents
-    if (role === "agent" && selectedStore) {
+  // Proximity check for agents (only if geofencing is enabled)
+  if (role === "agent" && selectedStore) {
+    const { data: locSetting } = await supabase.from("company_settings").select("value").eq("key", "location_validation").maybeSingle();
+    if (locSetting?.value === "true") {
       const { checkProximity } = await import("@/lib/proximity");
       const result = await checkProximity(
         selectedStore.lat ?? null,
@@ -549,6 +551,7 @@ let query = supabase
         toast.warning("Store has no GPS coordinates — location check skipped");
       }
     }
+  }
 
   const customerId = selectedStore?.customer_id;
   if (!customerId) {

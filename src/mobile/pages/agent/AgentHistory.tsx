@@ -126,7 +126,7 @@ export function AgentHistory() {
       const { data: roles, error: rolesError } = await supabase
         .from("user_roles")
         .select("user_id, role")
-        .in("role", ["super_admin", "manager", "agent", "marketer", "pos"]);
+        .in("role", ["super_admin", "manager", "agent", "marketer", "operator"]);
 
       const roleByUserId = new Map((roles || []).map((row: any) => [row.user_id, row.role]));
       const ids = Array.from(roleByUserId.keys()).filter((id: string) => id !== user!.id);

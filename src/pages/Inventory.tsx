@@ -74,7 +74,7 @@ const Inventory = () => {
   // Role flags
   const isSuperAdmin = role === "super_admin";
   const isManager = role === "manager";
-  const isPos = role === "pos";
+  const isPos = role === "operator";
   const isAgent = role === "agent";
   const isMarketer = role === "marketer";
   const isInventoryViewer = isSuperAdmin || isManager || isPos || isAgent || isMarketer;

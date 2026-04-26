@@ -709,7 +709,13 @@ const StoreDetail = () => {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <StatCard title="Total Sales" value={`₹${totalSales.toLocaleString()}`} icon={DollarSign} iconColor="primary" />
         <StatCard title="Collections" value={`₹${totalCollected.toLocaleString()}`} icon={Banknote} iconColor="success" />
-        <StatCard title="Outstanding" value={`₹${Number(store.outstanding).toLocaleString()}`} icon={Banknote} iconColor="warning" />
+        <StatCard 
+        title="Outstanding" 
+        value={`₹${Number(store.outstanding).toLocaleString()}`} 
+        icon={Banknote} 
+        iconColor={Number(store.outstanding) > 0 ? "destructive" : Number(store.outstanding) < 0 ? "success" : "warning"}
+        className={Number(store.outstanding) > 0 ? "border-l-4 border-l-destructive" : Number(store.outstanding) < 0 ? "border-l-4 border-l-success" : ""}
+      />
         <StatCard title="Orders" value={String(orders?.length || 0)} icon={ShoppingCart} iconColor="info" />
       </div>
 

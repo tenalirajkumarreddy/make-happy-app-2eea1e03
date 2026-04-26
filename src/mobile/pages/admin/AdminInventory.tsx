@@ -87,55 +87,47 @@ export function AdminInventory({ onNavigate }: { onNavigate: (path: string) => v
   };
 
   return (
-    <div className="pb-6 space-y-4">
-      {/* Header */}
-      <div className="px-4 pt-4 space-y-3">
+    <div className="pb-6">
+      {/* Gradient Header */}
+      <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 dark:from-slate-900 dark:via-blue-950 dark:to-indigo-950 px-4 pt-4 pb-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold">Inventory</h2>
-          <Button
-            size="sm"
-            className="gap-1"
-            onClick={() => onNavigate("/inventory")}
-          >
-            <Plus className="h-4 w-4" />
-            Adjust
+          <div>
+            <h2 className="text-white text-lg font-bold">Inventory</h2>
+            <p className="text-blue-200/80 text-xs mt-0.5">Stock management</p>
+          </div>
+          <Button size="sm" className="gap-1 bg-white/20 hover:bg-white/30 text-white border-0 rounded-xl" onClick={() => onNavigate("/inventory")}>
+            <Plus className="h-4 w-4" /> Adjust
           </Button>
         </div>
+      </div>
 
+      <div className="px-4 -mt-3 space-y-3 mb-4">
         {/* Stats Summary */}
         <div className="grid grid-cols-3 gap-2">
-          <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-2 text-center border border-blue-200 dark:border-blue-800/50">
-            <p className="text-lg font-bold text-blue-700 dark:text-blue-400">{totalItems}</p>
-            <p className="text-[10px] text-blue-600 dark:text-blue-500">Total Items</p>
+          <div className="rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-2.5 text-center">
+            <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{totalItems}</p>
+            <p className="text-[10px] text-slate-500">Total Items</p>
           </div>
-          <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-2 text-center border border-yellow-200 dark:border-yellow-800/50">
-            <p className="text-lg font-bold text-yellow-700 dark:text-yellow-400">{lowStockCount}</p>
-            <p className="text-[10px] text-yellow-600 dark:text-yellow-500">Low Stock</p>
+          <div className="rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-2.5 text-center">
+            <p className="text-lg font-bold text-amber-600 dark:text-amber-400">{lowStockCount}</p>
+            <p className="text-[10px] text-slate-500">Low Stock</p>
           </div>
-          <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-2 text-center border border-red-200 dark:border-red-800/50">
-            <p className="text-lg font-bold text-red-700 dark:text-red-400">{outOfStockCount}</p>
-            <p className="text-[10px] text-red-600 dark:text-red-500">Out of Stock</p>
+          <div className="rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-2.5 text-center">
+            <p className="text-lg font-bold text-red-600 dark:text-red-400">{outOfStockCount}</p>
+            <p className="text-[10px] text-slate-500">Out of Stock</p>
           </div>
         </div>
 
         {/* Total Value */}
-        <div className="bg-muted/50 rounded-lg p-2.5 flex justify-between items-center">
-          <span className="text-xs text-muted-foreground">Total Inventory Value</span>
-          <span className="text-sm font-bold text-primary">{formatAmount(totalValue)}</span>
+        <div className="rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-2.5 flex justify-between items-center">
+          <span className="text-xs text-slate-500 dark:text-slate-400">Total Inventory Value</span>
+          <span className="text-sm font-bold text-slate-800 dark:text-white">{formatAmount(totalValue)}</span>
         </div>
 
         {/* Search & Filter */}
-        <Input
-          placeholder="Search product name or SKU..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="text-sm h-9"
-        />
-
+        <Input placeholder="Search product name or SKU..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="text-sm h-10 rounded-xl bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm" />
         <Select value={stockFilter} onValueChange={setStockFilter}>
-          <SelectTrigger className="h-9 text-sm">
-            <SelectValue />
-          </SelectTrigger>
+          <SelectTrigger className="h-10 text-sm rounded-xl bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Items</SelectItem>
             <SelectItem value="low">Low Stock</SelectItem>
@@ -165,7 +157,7 @@ export function AdminInventory({ onNavigate }: { onNavigate: (path: string) => v
             return (
               <div
                 key={item.id}
-                className="rounded-lg border bg-card overflow-hidden"
+                className="rounded-2xl border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden"
               >
                 {/* Card Content */}
                 <div

@@ -5,7 +5,7 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist", "android", "mobile-redesign", "node_modules", "*.js", "Open-SMS", "opensms-gateway", "vite.config.ts.timestamp-*.mjs"] },
+  { ignores: ["dist", "android", "mobile-redesign", "node_modules", "*.js", "Open-SMS", "opensms-gateway", "WASTE", "vite.config.ts.timestamp-*.mjs"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],

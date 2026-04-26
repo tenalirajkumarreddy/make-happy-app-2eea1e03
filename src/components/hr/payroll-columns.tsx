@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
-import { useNavigate } from 'react-router-dom';
+import type { NavigateFunction } from 'react-router-dom';
 
 export type Payroll = {
   id: string;
@@ -25,10 +25,10 @@ export type Payroll = {
 
 interface PayrollColumnsProps {
   onEdit: (payroll: Payroll) => void;
+  navigate: NavigateFunction;
 }
 
-export const payrollColumns = ({ onEdit }: PayrollColumnsProps): ColumnDef<Payroll>[] => {
-  const navigate = useNavigate();
+export const payrollColumns = ({ onEdit, navigate }: PayrollColumnsProps): ColumnDef<Payroll>[] => {
 
   return [
     {

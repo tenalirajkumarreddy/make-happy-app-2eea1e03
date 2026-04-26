@@ -985,7 +985,6 @@ const DefaultDashboard = () => {
 
   const roleDisplayName = {
     marketer: "Marketer",
-    pos: "POS",
     operator: "Operator",
   }[role || ""] || "User";
 
@@ -1175,7 +1174,6 @@ const Dashboard = () => {
     case "customer":
       return <CustomerDashboard />;
     case "marketer":
-    case "pos":
     case "operator":
     default:
       return <DefaultDashboard />;

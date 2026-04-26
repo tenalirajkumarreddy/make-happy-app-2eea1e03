@@ -23,7 +23,7 @@ import { toast } from "sonner";
 const Routes = () => {
   const { role, user } = useAuth();
   const isAdmin = role === "super_admin" || role === "manager";
-  const isScopedStaff = role === "agent" || role === "marketer" || role === "pos";
+  const isScopedStaff = role === "agent" || role === "marketer" || role === "operator";
   const navigate = useNavigate();
   const [showAdd, setShowAdd] = useState(false);
   const [showAccessDialog, setShowAccessDialog] = useState(false);

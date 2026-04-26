@@ -118,7 +118,7 @@ export default function StockTransfers() {
       let q = supabase
         .from("user_roles")
         .select("user_id, role, warehouse_id")
-        .in("role", ["agent", "marketer", "pos", "manager"]);
+        .in("role", ["super_admin", "agent", "marketer", "operator", "manager"]);
       if (currentWarehouse?.id && !isAdmin) {
         q = q.eq("warehouse_id", currentWarehouse.id);
       }

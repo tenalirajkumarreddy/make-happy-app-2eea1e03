@@ -169,7 +169,7 @@ Deno.serve(async (req: Request) => {
         const records = handoverData.map((agg: any) => ({
           user_id: agg.user_id,
           snapshot_date: p_date,
-          balance_amount: Math.max(0, Number(agg.balance) || 0),
+          balance_amount: Number(agg.balance) || 0, // ISSUE-12 FIX: Preserve negative balances
         }));
         const { error: upsertErr } = await supabase.from("handover_snapshots").upsert(records, { onConflict: "user_id,snapshot_date" });
         if (upsertErr) throw upsertErr;

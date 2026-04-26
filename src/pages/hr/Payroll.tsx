@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -10,6 +11,7 @@ import { PayrollForm } from '@/components/hr/PayrollForm';
 import { Payroll } from '@/components/hr/payroll-columns';
 
 const PayrollPage = () => {
+  const navigate = useNavigate();
   const { warehouse } = useAuth();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedPayroll, setSelectedPayroll] = useState<Payroll | null>(null);
@@ -44,7 +46,7 @@ const PayrollPage = () => {
     setSelectedPayroll(null);
   };
 
-  const columns = payrollColumns({ onEdit: handleEditPayroll });
+  const columns = payrollColumns({ onEdit: handleEditPayroll, navigate });
 
   return (
     <div className="container mx-auto py-10">

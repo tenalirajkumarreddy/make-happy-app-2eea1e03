@@ -88,7 +88,7 @@ Deno.serve(async (req) => {
     const snapshots = salesAggregates.map((agg: any) => ({
       user_id: agg.user_id,
       snapshot_date: today,
-      balance_amount: Math.max(0, agg.balance),
+      balance_amount: agg.balance, // ISSUE-12 FIX: Preserve negative balances for audit accuracy
     }));
 
     const { error: upsertError } = await supabase

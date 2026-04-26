@@ -18,7 +18,7 @@ import { toast } from "sonner";
 
 export function RouteSessionPanel() {
   const { user, role } = useAuth();
-  const isScopedStaff = role === "agent" || role === "marketer" || role === "pos";
+  const isScopedStaff = role === "agent" || role === "marketer" || role === "operator";
   const qc = useQueryClient();
   const [showStart, setShowStart] = useState(false);
   const [showEndConfirm, setShowEndConfirm] = useState(false);

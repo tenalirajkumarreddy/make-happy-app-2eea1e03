@@ -53,17 +53,7 @@ export default function RouteDetail() {
   const qc = useQueryClient();
   const canEdit = role === "super_admin" || role === "manager";
 
-  if (id && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
-    return (
-      <div className="space-y-4">
-        <Button variant="ghost" size="sm" onClick={() => navigate("/routes")} className="gap-1.5 -ml-2 text-muted-foreground">
-          <ArrowLeft className="h-4 w-4" /> Routes
-        </Button>
-        <p className="text-muted-foreground">Invalid route ID.</p>
-      </div>
-    );
-  }
-
+  // All hooks must be called before any conditional logic
   const [showSetFactory, setShowSetFactory] = useState(false);
   const [factoryLatInput, setFactoryLatInput] = useState("");
   const [factoryLngInput, setFactoryLngInput] = useState("");
@@ -237,6 +227,13 @@ export default function RouteDetail() {
     }
   };
 
+  // Document title effect - MUST be before any early returns
+  useEffect(() => {
+    if (route?.name) {
+      document.title = `${route.name} — Routes`;
+    }
+  }, [route?.name]);
+
   // ── Loading / error states ────────────────────────────────────────────────
   if (routeLoading || storesLoading) {
     return (
@@ -246,6 +243,22 @@ export default function RouteDetail() {
     );
   }
 
+  // Compute factorySet before potential early return
+  const factorySet = route?.factory_lat != null && route?.factory_lng != null;
+
+  // Handle invalid ID after all hooks are declared
+  if (id && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    return (
+      <div className="space-y-4">
+        <Button variant="ghost" size="sm" onClick={() => navigate("/routes")} className="gap-1.5 -ml-2 text-muted-foreground">
+          <ArrowLeft className="h-4 w-4" /> Routes
+        </Button>
+        <p className="text-muted-foreground">Invalid route ID.</p>
+      </div>
+    );
+  }
+
+  // Handle not found after all hooks are declared
   if (!route) {
     return (
       <div className="space-y-4">
@@ -256,12 +269,6 @@ export default function RouteDetail() {
       </div>
     );
   }
-
-  const factorySet = route.factory_lat != null && route.factory_lng != null;
-
-  useEffect(() => {
-    document.title = `${route.name} — Routes`;
-  }, [route.name]);
 
   return (
     <div className="space-y-6 animate-fade-in">

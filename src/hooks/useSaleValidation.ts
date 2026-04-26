@@ -45,7 +45,7 @@ const POS_RULES: ValidationRules = {
  * Get validation rules based on user role
  */
 export function getValidationRules(role?: string): ValidationRules {
-  if (role === "pos") {
+  if (role === "operator") {
     return POS_RULES;
   }
   return DEFAULT_RULES;

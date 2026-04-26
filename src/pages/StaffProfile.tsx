@@ -157,7 +157,6 @@ const roleLabels: Record<string, string> = {
   manager: "Manager",
   agent: "Agent",
   marketer: "Marketer",
-  pos: "POS",
   operator: "Operator",
 };
 
@@ -166,8 +165,7 @@ const roleColors: Record<string, string> = {
   manager: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800",
   agent: "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800",
   marketer: "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800",
-  pos: "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-800",
-  operator: "bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800",
+  operator: "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-800",
 };
 
 export function StaffProfile() {

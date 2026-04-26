@@ -93,15 +93,18 @@ const ROLE_DEFAULTS: Record<string, PermissionKey[]> = {
   ],
   agent: [
     "create_customers", "create_stores",
-    // Orders - view assigned only, no create/modify
+    // Orders - view assigned only, can fulfill/cancel assigned orders
     "view_assigned_orders", "accept_order_transfers",
+    "fulfill_orders", "cancel_orders",  // ← Added: agents can fulfill/cancel their assigned orders
     // Invoices - view only
     "view_invoices", "download_invoices",
   ],
-  pos: [
-    // POS has minimal access - mainly view and fulfill
-    "view_orders", "fulfill_orders",
+  operator: [
+    // Operator defaults: POS sales, inventory, attendance
+    // NO orders by default (can be granted via permissions)
+    // NO transactions for stores
     "view_invoices", "download_invoices",
+    "view_attendance", "manage_attendance",
   ],
   customer: [
     // Customers can only view their own

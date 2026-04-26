@@ -104,7 +104,7 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
   production_log: ["production_log", "production_log_summary", "product_total_costs"],
 };
 
-const STAFF_ROLES = ["super_admin", "manager", "agent", "marketer", "pos"];
+const STAFF_ROLES = ["super_admin", "manager", "agent", "marketer", "operator"];
 
 type RealtimeSubscriber = {
   qc: QueryClient;

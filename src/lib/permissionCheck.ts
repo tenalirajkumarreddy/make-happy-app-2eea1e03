@@ -7,7 +7,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { PermissionKey } from "@/components/access/UserPermissionsPanel";
 
-export type UserRole = "super_admin" | "manager" | "agent" | "marketer" | "pos" | "customer";
+export type UserRole = "super_admin" | "manager" | "agent" | "marketer" | "operator" | "customer";
 
 /**
  * Check if a user has a specific permission

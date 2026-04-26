@@ -50,7 +50,7 @@ interface SelectedProduct {
 // ---------------------------------------------------------------------------
 // Allowed staff roles for stock transfers
 // ---------------------------------------------------------------------------
-const ALLOWED_STAFF_ROLES = ["agent", "pos", "marketer", "manager"];
+const ALLOWED_STAFF_ROLES = ["super_admin", "agent", "operator", "marketer", "manager"];
 
 // ---------------------------------------------------------------------------
 // Component
@@ -123,19 +123,18 @@ export function StockTransferModal({
         (profilesData ?? []).map((p) => [p.user_id, p])
       );
 
-      return rolesData
-        .map((r) => ({
-          user_id: r.user_id,
-          role: r.role,
-          full_name: profileMap.get(r.user_id)?.full_name ?? "Unknown",
-          avatar_url: profileMap.get(r.user_id)?.avatar_url ?? null,
-        }))
-        .filter(
-          (s) =>
-            s.full_name &&
-            s.full_name !== "Unknown" &&
-            s.full_name.toLowerCase() !== "staff"
-        );
+return rolesData
+    .map((r) => ({
+      user_id: r.user_id,
+      role: r.role,
+      full_name: profileMap.get(r.user_id)?.full_name ?? "Unknown",
+      avatar_url: profileMap.get(r.user_id)?.avatar_url ?? null,
+    }))
+    .filter(
+      (s) =>
+        s.full_name &&
+        s.full_name !== "Unknown"
+    );
     },
     enabled: !staffMembers || staffMembers.length === 0,
     staleTime: 60_000,
@@ -310,13 +309,13 @@ export function StockTransferModal({
         };
       });
 
-      // ── Call batch transfer RPC (atomic - all or nothing) ──────────────────
-      const { data: result, error } = await supabase.rpc(
-        "batch_stock_transfer",
-        {
-          p_transfers: JSON.stringify(transfers),
-        }
-      );
+    // ── Call batch transfer RPC (atomic - all or nothing) ──────────────────
+    const { data: result, error } = await supabase.rpc(
+      "batch_stock_transfer",
+      {
+        p_transfers: transfers,
+      }
+    );
 
       if (error) {
         throw new Error(error.message || "Transfer failed");

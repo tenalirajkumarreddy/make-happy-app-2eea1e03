@@ -159,7 +159,7 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
     if (items.length === 0) { toast.error("Add at least one product"); return; }
     if (totalAmount === 0) { toast.error("Sale total cannot be zero"); return; }
     if (!store.customer_id) { toast.error("Store has no linked customer"); return; }
-    if (role === "pos" && outstandingFromSale !== 0) {
+    if (role === "operator" && outstandingFromSale !== 0) {
       toast.error("POS sales require full payment. Cash + UPI must equal total amount.");
       return;
     }

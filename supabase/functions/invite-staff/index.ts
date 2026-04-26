@@ -178,7 +178,7 @@ Deno.serve(async (req) => {
     throw new Error("Full name must be at least 2 characters");
   }
   // Basic name validation - allow letters, spaces, hyphens, and apostrophes
-  if (!/^[\p{L}\s\-'\.]+$/u.test(trimmedFullName)) {
+  if (!/^[\p{L}\s\-'.]+$/u.test(trimmedFullName)) {
     throw new Error("Full name contains invalid characters");
   }
 
@@ -186,7 +186,7 @@ Deno.serve(async (req) => {
     throw new Error("Missing required field: role");
   }
 
-  const validRoles = ["super_admin", "manager", "agent", "marketer", "pos"];
+  const validRoles = ["super_admin", "manager", "agent", "marketer", "operator"];
   if (!validRoles.includes(role)) {
     throw new Error(`Invalid role: ${role}. Must be one of: ${validRoles.join(", ")}`);
   }
@@ -201,7 +201,7 @@ Deno.serve(async (req) => {
     }
     // Basic URL validation - only allow safe URLs
     const allowedUrlPatterns = [
-      /^https:\/\/[^\s\/$.?#].[^\s]*$/i,  // Standard HTTPS
+      /^https:\/\/[^\s/$.?#].[^\s]*$/i,  // Standard HTTPS
       /^data:image\/[a-z]+;base64,/i,      // Base64 data URLs
     ];
     if (avatar_url.length > 0 && !allowedUrlPatterns.some(pattern => pattern.test(avatar_url))) {

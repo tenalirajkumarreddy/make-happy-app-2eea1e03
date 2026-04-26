@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 
 describe('Auth Role Logic', () => {
-  const roles = ['super_admin', 'manager', 'agent', 'marketer', 'pos', 'customer'] as const;
-  
+  const roles = ['super_admin', 'manager', 'agent', 'marketer', 'operator', 'customer'] as const;
+
   it('should have valid role types', () => {
     expect(roles).toHaveLength(6);
     expect(roles).toContain('super_admin');
@@ -16,7 +16,7 @@ describe('Auth Role Logic', () => {
         manager: 4,
         agent: 3,
         marketer: 3,
-        pos: 3,
+        operator: 3,
         customer: 1,
       };
 
@@ -28,7 +28,7 @@ describe('Auth Role Logic', () => {
 
   describe('Role-based access patterns', () => {
     it('staff roles should have access to dashboard', () => {
-      const staffRoles = ['super_admin', 'manager', 'agent', 'marketer', 'pos'];
+      const staffRoles = ['super_admin', 'manager', 'agent', 'marketer', 'operator'];
       const hasDashboardAccess = (role: string) => staffRoles.includes(role);
 
       expect(hasDashboardAccess('super_admin')).toBe(true);

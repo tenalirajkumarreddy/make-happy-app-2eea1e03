@@ -94,33 +94,25 @@ export function AdminTransactions({ onNavigate }: { onNavigate: (path: string) =
   };
 
   return (
-    <div className="pb-6 space-y-4">
-      {/* Header */}
-      <div className="px-4 pt-4 space-y-3">
+    <div className="pb-6">
+      {/* Gradient Header */}
+      <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 dark:from-slate-900 dark:via-blue-950 dark:to-indigo-950 px-4 pt-4 pb-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold">Transactions</h2>
-          <Button
-            size="sm"
-            className="gap-1"
-            onClick={() => onNavigate("/transactions")}
-          >
-            <Plus className="h-4 w-4" />
-            Record
+          <div>
+            <h2 className="text-white text-lg font-bold">Transactions</h2>
+            <p className="text-blue-200/80 text-xs mt-0.5">Payment records</p>
+          </div>
+          <Button size="sm" className="gap-1 bg-white/20 hover:bg-white/30 text-white border-0 rounded-xl" onClick={() => onNavigate("/transactions")}>
+            <Plus className="h-4 w-4" /> Record
           </Button>
         </div>
+      </div>
 
-        {/* Search & Filter */}
-        <Input
-          placeholder="Search payment ID or store..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="text-sm h-9"
-        />
-
+      {/* Search & Filter */}
+      <div className="px-4 -mt-3 space-y-2 mb-4">
+        <Input placeholder="Search payment ID or store..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="text-sm h-10 rounded-xl bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm" />
         <Select value={paymentFilter} onValueChange={setPaymentFilter}>
-          <SelectTrigger className="h-9 text-sm">
-            <SelectValue />
-          </SelectTrigger>
+          <SelectTrigger className="h-10 text-sm rounded-xl bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All payments</SelectItem>
             <SelectItem value="cash">Cash only</SelectItem>
@@ -144,7 +136,7 @@ export function AdminTransactions({ onNavigate }: { onNavigate: (path: string) =
           {filteredTxns.map((txn) => (
             <div
               key={txn.id}
-              className="rounded-lg border bg-card overflow-hidden"
+              className="rounded-2xl border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden"
             >
               {/* Card Content */}
               <div

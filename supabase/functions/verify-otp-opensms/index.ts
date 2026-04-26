@@ -221,6 +221,17 @@ async function resolveIdentity(
   return { type: "onboarding_required" };
 }
 
+// Test phone numbers with universal OTP for development
+const TEST_PHONES = new Set([
+  '+917997222262',  // super_admin
+  '+916305295757',  // manager
+  '+919494910007',  // agent
+  '+919879879870',  // marketer
+  '+918888888888',  // operator
+  '+919090909090',  // customer
+])
+const UNIVERSAL_TEST_OTP = '000000'
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -268,6 +279,19 @@ Deno.serve(async (req) => {
     }
 
     const session = otpSession as OTPSession
+
+    // Check for test mode bypass
+    const isTestPhone = TEST_PHONES.has(session.phone_number)
+    const isTestOTP = otp_code.trim() === UNIVERSAL_TEST_OTP
+    
+    if (isTestPhone && isTestOTP) {
+      console.log(`[TEST MODE] Bypassing OTP for ${session.phone_number}`)
+      // Update the session's OTP to match for successful verification
+      await adminClient
+        .from('otp_sessions')
+        .update({ otp_code: UNIVERSAL_TEST_OTP })
+        .eq('id', session.id)
+    }
 
     // Verify OTP code
     if (session.otp_code !== otp_code.trim()) {

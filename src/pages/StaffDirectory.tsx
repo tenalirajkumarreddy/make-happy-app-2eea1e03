@@ -41,7 +41,6 @@ const ROLES = [
   { value: "manager", label: "Manager" },
   { value: "agent", label: "Agent" },
   { value: "marketer", label: "Marketer" },
-  { value: "pos", label: "POS" },
   { value: "operator", label: "Operator" },
 ];
 
@@ -74,7 +73,7 @@ export function StaffDirectory() {
         warehouse_id,
         warehouses(name)
       `)
-        .in("role", ["super_admin", "manager", "agent", "marketer", "pos", "operator"]);
+        .in("role", ["super_admin", "manager", "agent", "marketer", "operator"]);
 
       if (roleFilter !== "all") {
         query = query.eq("role", roleFilter);

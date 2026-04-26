@@ -70,7 +70,7 @@ import { AdminStaffDirectory } from "@/pages/AdminStaffDirectory";
 import { StaffDirectory } from "@/pages/StaffDirectory";
 import { StaffProfile } from "@/pages/StaffProfile";
 import CostInsights from "@/pages/CostInsights";
-import Settings from "@/pages/Settings";
+import SettingsPage from "@/pages/Settings";
 import Production from "@/pages/Production";
 import Income from "@/pages/Income";
 import MapPage from "@/pages/MapPage";
@@ -317,7 +317,7 @@ function StaffApp({ role }: { role: StaffRole }) {
     if (path === "/admin/cost-history") return <MobilePageWrapper><AdminCostHistory /></MobilePageWrapper>;
     if (path === "/admin/vehicles") return <MobilePageWrapper><AdminVehicles /></MobilePageWrapper>;
     if (path === "/admin/delivery-feasibility") return <MobilePageWrapper><DeliveryFeasibility /></MobilePageWrapper>;
-    if (path === "/settings") return <MobilePageWrapper><Settings /></MobilePageWrapper>;
+    if (path === "/settings") return <MobilePageWrapper><SettingsPage /></MobilePageWrapper>;
     if (path === "/profile") return <MobilePageWrapper><UserProfile /></MobilePageWrapper>;
 
     // HR - Use web app pages wrapped for mobile
@@ -844,7 +844,7 @@ export function MobileApp() {
     return <CustomerApp />;
   }
 
-  if (role === "pos") {
+  if (role === "operator") {
     return <PosApp />;
   }
 
@@ -852,7 +852,7 @@ export function MobileApp() {
     <div className="h-screen flex items-center justify-center px-6 text-center bg-background">
       <div>
         <p className="text-lg font-semibold text-foreground">Mobile interface unavailable for this role</p>
-        <p className="text-sm text-muted-foreground mt-1">This APK currently supports agent, marketer, POS, and customer role interfaces.</p>
+        <p className="text-sm text-muted-foreground mt-1">This APK currently supports agent, marketer, operator, and customer role interfaces.</p>
       </div>
     </div>
   );
