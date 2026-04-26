@@ -189,6 +189,68 @@ const Handovers = () => {
     enabled: !!user,
   });
 
+  // NEW: Fetch transaction totals (customer collections)
+  const { data: userTransactionTotals } = useQuery({
+    queryKey: ["user-transaction-totals", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("transactions")
+        .select("cash_amount, upi_amount, created_at")
+        .eq("received_by", user!.id);
+      if (error) throw error;
+      const todayStart = startOfDay(new Date()).toISOString();
+      const all = data || [];
+      const todayTxns = all.filter((t) => t.created_at >= todayStart);
+      return {
+        totalCash: all.reduce((s, r) => s + Number(r.cash_amount || 0), 0),
+        totalUpi: all.reduce((s, r) => s + Number(r.upi_amount || 0), 0),
+        todayCash: todayTxns.reduce((s, r) => s + Number(r.cash_amount || 0), 0),
+        todayUpi: todayTxns.reduce((s, r) => s + Number(r.upi_amount || 0), 0),
+      };
+    },
+    enabled: !!user,
+  });
+
+  // NEW: Get materialized holding_balance from profiles (single source of truth)
+  const { data: userProfile } = useQuery({
+    queryKey: ["user-holding-balance", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("user_id, full_name, holding_balance, holding_balance_updated_at")
+        .eq("user_id", user!.id)
+        .single();
+      if (error) throw error;
+      return data as {
+        user_id: string;
+        full_name: string;
+        holding_balance: number;
+        holding_balance_updated_at: string;
+      };
+    },
+    enabled: !!user && isStaff,
+  });
+
+  // Also fetch detailed breakdown for display (optional)
+  const { data: agentCashHolding } = useQuery({
+    queryKey: ["agent-cash-holding", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .rpc("get_agent_cash_holding", { p_user_id: user!.id });
+      if (error) throw error;
+      return data?.[0] as {
+        net_holding: number;
+        sales_total: number;
+        transactions_total: number;
+        received_confirmed: number;
+        sent_confirmed: number;
+        sent_pending: number;
+        materialized_balance: number;
+      } | undefined;
+    },
+    enabled: !!user && isStaff,
+  });
+
   const { data: profileMap } = useQuery({
     queryKey: ["profile-map"],
     queryFn: async () => {
@@ -243,9 +305,32 @@ const Handovers = () => {
 
   const salesTotalAll = (userSalesTotals?.totalCash || 0) + (userSalesTotals?.totalUpi || 0);
   const salesToday = (userSalesTotals?.todayCash || 0) + (userSalesTotals?.todayUpi || 0);
+  const transactionsTotalAll = (userTransactionTotals?.totalCash || 0) + (userTransactionTotals?.totalUpi || 0);
 
-  const notHandedOver = salesTotalAll + receivedConfirmed - sentConfirmed - sentPending;
+  // PRIMARY: Use materialized holding_balance from profiles (single source of truth)
+  // This is auto-updated by database triggers when sales/transactions/handovers change
+  const materializedHolding = Number(userProfile?.holding_balance || 0);
+  
+  // Fallback to calculated value if materialized not available
+  const calculatedHolding = salesTotalAll + transactionsTotalAll + receivedConfirmed - sentConfirmed - sentPending;
+  
+  // Use materialized value as primary, fallback to calculated
+  const notHandedOver = materializedHolding > 0 ? materializedHolding : calculatedHolding;
+  
+  // Pending handovers should be deducted from materialized balance
   const awaitingAmount = sentPending;
+  
+  // Breakdown for display (from RPC which includes all components)
+  const holdingBreakdown = {
+    sales: agentCashHolding?.sales_total ?? salesTotalAll,
+    transactions: agentCashHolding?.transactions_total ?? transactionsTotalAll,
+    received: agentCashHolding?.received_confirmed ?? receivedConfirmed,
+    sentConfirmed: agentCashHolding?.sent_confirmed ?? sentConfirmed,
+    sentPending: agentCashHolding?.sent_pending ?? sentPending,
+    netHolding: notHandedOver,
+    materializedBalance: materializedHolding,
+    lastUpdated: userProfile?.holding_balance_updated_at,
+  };
 
   const incoming = myHandovers.filter((h) => h.handed_to === user?.id && h.status === "awaiting_confirmation");
 
@@ -333,12 +418,13 @@ const Handovers = () => {
     }
     setSubmitting(true);
 
-    // ISSUE-06 FIX: Pass cash_amount to the RPC
+    // Use create_handover_v2 with holding validation
     const { data: handoverResult, error: handoverError } = await supabase
-      .rpc("create_handover", {
+      .rpc("create_handover_v2", {
         p_user_id: user!.id,
         p_handed_to: toUserId,
         p_cash_amount: Number(amount),
+        p_upi_amount: 0, // Can be extended to support UPI handovers
         p_notes: notes || null,
       });
 
@@ -374,6 +460,11 @@ const Handovers = () => {
       setNotes("");
       setToUserId("");
       qc.invalidateQueries({ queryKey: ["handovers"] });
+      qc.invalidateQueries({ queryKey: ["agent-cash-holding"] });
+      qc.invalidateQueries({ queryKey: ["user-sales-totals"] });
+      qc.invalidateQueries({ queryKey: ["user-transaction-totals"] });
+      qc.invalidateQueries({ queryKey: ["user-holding-balance"] });
+      qc.invalidateQueries({ queryKey: ["agent-dashboard"] });
     }
   };
 
@@ -385,12 +476,15 @@ const Handovers = () => {
       return;
     }
     setActionLoading(id);
-    // ISSUE-10 FIX: Use server-side RPC for atomic validation
-    const { error } = await supabase.rpc("confirm_handover", { p_handover_id: id });
+    // Use confirm_handover_v2 with income entry creation
+    const { error } = await supabase.rpc("confirm_handover_v2", { 
+      p_handover_id: id,
+      p_confirmed_by: user?.id 
+    });
     setActionLoading(null);
     if (error) toast.error(error.message);
     else {
-      toast.success("Handover confirmed");
+      toast.success("Handover confirmed and income entry created");
       if (handover?.user_id) {
         sendNotification({
           userId: handover.user_id,
@@ -402,6 +496,10 @@ const Handovers = () => {
         });
       }
       qc.invalidateQueries({ queryKey: ["handovers"] });
+      qc.invalidateQueries({ queryKey: ["agent-cash-holding"] });
+      qc.invalidateQueries({ queryKey: ["user-holding-balance"] });
+      qc.invalidateQueries({ queryKey: ["all-staff-balances"] });
+      qc.invalidateQueries({ queryKey: ["agent-dashboard"] });
     }
   };
 
@@ -428,6 +526,7 @@ const Handovers = () => {
         });
       }
       qc.invalidateQueries({ queryKey: ["handovers"] });
+      qc.invalidateQueries({ queryKey: ["agent-cash-holding"] });
     }
   };
 
@@ -462,6 +561,7 @@ const Handovers = () => {
         });
       }
       qc.invalidateQueries({ queryKey: ["handovers"] });
+      qc.invalidateQueries({ queryKey: ["agent-cash-holding"] });
     }
   };
 
@@ -1059,7 +1159,7 @@ const Handovers = () => {
         }
       />
 
-{/* ========== SIMPLIFIED BALANCE CARDS ========== */}
+      {/* ========== SIMPLIFIED BALANCE CARDS ========== */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <Card className="bg-blue-50 border border-blue-200">
           <CardHeader className="p-4 pb-2">
@@ -1068,6 +1168,29 @@ const Handovers = () => {
           <CardContent className="p-4 pt-2">
             <p className="text-2xl font-bold text-blue-600">₹{Math.max(0, (notHandedOver || 0) - (myApprovedExpenses || 0)).toLocaleString()}</p>
             <p className="text-xs text-muted-foreground mt-1">Ready to hand over</p>
+            {/* Holding Breakdown */}
+            <div className="mt-3 pt-3 border-t border-blue-200/50 space-y-1 text-xs">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">From Sales</span>
+                <span className="font-medium">₹{(holdingBreakdown.sales || 0).toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">From Collections</span>
+                <span className="font-medium">₹{(holdingBreakdown.transactions || 0).toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Received from Others</span>
+                <span className="font-medium text-green-600">+₹{(holdingBreakdown.received || 0).toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Sent (Confirmed)</span>
+                <span className="font-medium text-red-600">-₹{(holdingBreakdown.sentConfirmed || 0).toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Sent (Pending)</span>
+                <span className="font-medium text-amber-600">-₹{(holdingBreakdown.sentPending || 0).toLocaleString()}</span>
+              </div>
+            </div>
           </CardContent>
         </Card>
         
