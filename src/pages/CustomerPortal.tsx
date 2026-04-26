@@ -151,7 +151,12 @@ const CustomerPortal = () => {
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         <StatCard title="My Stores" value={String(stores?.length || 0)} icon={Store} iconColor="primary" />
-        <StatCard title="Total Outstanding" value={`₹${totalOutstanding.toLocaleString()}`} icon={DollarSign} iconColor="warning" />
+        <StatCard 
+        title="Total Outstanding" 
+        value={`₹${totalOutstanding.toLocaleString()}`} 
+        icon={DollarSign} 
+        iconColor={Number(totalOutstanding) > 0 ? "destructive" : Number(totalOutstanding) < 0 ? "success" : "warning"}
+      />
         <StatCard title="Pending Orders" value={String(pendingOrders)} icon={ShoppingCart} iconColor="info" />
       </div>
 

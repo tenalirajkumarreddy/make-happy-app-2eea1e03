@@ -82,7 +82,7 @@ const Handovers = () => {
   const isSuperAdmin = role === "super_admin";
   const isManager = role === "manager";
   const isAdminOrManager = isSuperAdmin || isManager;
-  const isStaff = ["agent", "marketer", "pos"].includes(role || "");
+  const isStaff = ["agent", "marketer", "operator"].includes(role || "");
 
   const { allowed: isFinalizer } = usePermission("finalizer");
   const { allowed: canSeeBalances } = usePermission("see_handover_balance");
@@ -108,7 +108,7 @@ const Handovers = () => {
       const { data: roles, error: rolesError } = await supabase
         .from("user_roles")
         .select("user_id, role")
-        .in("role", ["super_admin", "manager", "agent", "marketer", "pos"]);
+        .in("role", ["super_admin", "manager", "agent", "marketer", "operator"]);
 
       const staffRoleMap = new Map((roles || []).map((row) => [row.user_id, row.role]));
       const staffIds = Array.from(staffRoleMap.keys()).filter((id) => id !== user?.id);
@@ -199,33 +199,22 @@ const Handovers = () => {
     },
   });
 
-  // For "See Balances" tab: fetch all staff sales and compute balances
+  // ISSUE-08 FIX: Server-side balance aggregation via RPC
   const { data: allStaffBalances } = useQuery({
     queryKey: ["all-staff-balances"],
     queryFn: async () => {
-      // Get all staff user IDs
-      const { data: roles } = await supabase.from("user_roles").select("user_id, role").neq("role", "customer").limit(200);
-      const staffIds = (roles || []).map((r) => r.user_id);
-
-      // Get all sales
-      const { data: allSales } = await supabase.from("sales").select("recorded_by, cash_amount, upi_amount").limit(5000);
-
-      // Get all handovers
-      const { data: allHandovers } = await supabase.from("handovers").select("user_id, handed_to, cash_amount, upi_amount, status").limit(2000);
+      const { data, error } = await supabase.rpc("get_all_staff_balances");
+      if (error) throw error;
 
       const balances: Record<string, { sales: number; received: number; sentConfirmed: number; sentPending: number; total: number }> = {};
-
-      for (const uid of staffIds) {
-        const sales = (allSales || []).filter((s) => s.recorded_by === uid)
-          .reduce((s, r) => s + Number(r.cash_amount) + Number(r.upi_amount), 0);
-        const received = (allHandovers || []).filter((h) => h.handed_to === uid && h.status === "confirmed")
-          .reduce((s, h) => s + Number(h.cash_amount) + Number(h.upi_amount), 0);
-        const sentConfirmed = (allHandovers || []).filter((h) => h.user_id === uid && h.status === "confirmed")
-          .reduce((s, h) => s + Number(h.cash_amount) + Number(h.upi_amount), 0);
-        const sentPending = (allHandovers || []).filter((h) => h.user_id === uid && h.status === "awaiting_confirmation")
-          .reduce((s, h) => s + Number(h.cash_amount) + Number(h.upi_amount), 0);
-        const total = sales + received - sentConfirmed - sentPending;
-        balances[uid] = { sales, received, sentConfirmed, sentPending, total };
+      for (const row of (data || [])) {
+        balances[row.user_id] = {
+          sales: Number(row.sales),
+          received: Number(row.received),
+          sentConfirmed: Number(row.sent_confirmed),
+          sentPending: Number(row.sent_pending),
+          total: Number(row.total),
+        };
       }
       return balances;
     },
@@ -344,10 +333,12 @@ const Handovers = () => {
     }
     setSubmitting(true);
 
+    // ISSUE-06 FIX: Pass cash_amount to the RPC
     const { data: handoverResult, error: handoverError } = await supabase
       .rpc("create_handover", {
         p_user_id: user!.id,
         p_handed_to: toUserId,
+        p_cash_amount: Number(amount),
         p_notes: notes || null,
       });
 
@@ -394,11 +385,8 @@ const Handovers = () => {
       return;
     }
     setActionLoading(id);
-    const { error } = await supabase.from("handovers").update({
-      status: "confirmed",
-      confirmed_by: user!.id,
-      confirmed_at: new Date().toISOString(),
-    }).eq("id", id);
+    // ISSUE-10 FIX: Use server-side RPC for atomic validation
+    const { error } = await supabase.rpc("confirm_handover", { p_handover_id: id });
     setActionLoading(null);
     if (error) toast.error(error.message);
     else {
@@ -550,11 +538,12 @@ const Handovers = () => {
 
     setSubmitting(true);
     try {
+      // ISSUE-11 FIX: Preserve UPI amount instead of zeroing it
       const { error } = await supabase
         .from("handovers")
         .update({
           cash_amount: Number(editHandoverAmount),
-          upi_amount: 0,
+          upi_amount: Number(selectedHandoverForEdit.upi_amount || 0),
           status: editHandoverStatus || selectedHandoverForEdit.status,
           notes: selectedHandoverForEdit.notes
             ? `${selectedHandoverForEdit.notes}\n[Admin Edit: ${new Date().toLocaleString()}]`

@@ -125,10 +125,11 @@ export function Income() {
         case "today":
           dateRange = { from: startOfDay(now), to: endOfDay(now) };
           break;
-        case "yesterday":
-          const yesterday = subDays(now, 1);
-          dateRange = { from: startOfDay(yesterday), to: endOfDay(yesterday) };
-          break;
+      case "yesterday": {
+        const yesterday = subDays(now, 1);
+        dateRange = { from: startOfDay(yesterday), to: endOfDay(yesterday) };
+        break;
+      }
         case "week":
           dateRange = { from: subDays(now, 7), to: now };
           break;
@@ -229,7 +230,7 @@ export function Income() {
           user_roles(role),
           warehouses(name)
         `)
-        .in("account_type", ["manager", "agent", "pos", "operator", "prime_manager"])
+        .in("account_type", ["manager", "agent", "operator", "prime_manager"])
         .order("account_type", { ascending: true });
       
       if (error) throw error;

@@ -40,7 +40,13 @@ interface ProductInventoryCardProps {
 
 export function ProductInventoryCard({ item, staffHoldings = [], onAdjust, onTransfer }: ProductInventoryCardProps) {
   const { product, quantity } = item;
+  
+  // All hooks must be called before any conditional logic
+  const imageUrl = useMemo(() => getImageUrl(product?.image_url), [product?.image_url]);
+  
+  // Early return after all hooks
   if (!product) return null;
+  
   const rawBasePrice = Number(product.base_price);
   const basePrice = Number.isFinite(rawBasePrice) ? rawBasePrice : 0;
 
@@ -58,8 +64,6 @@ export function ProductInventoryCard({ item, staffHoldings = [], onAdjust, onTra
 
   const minLevel = product.min_stock_level || 0;
   const statusColor = getStatusColor(quantity, minLevel);
-
-  const imageUrl = useMemo(() => getImageUrl(product?.image_url), [product?.image_url]);
 
   return (
     <Card className="overflow-hidden flex flex-col hover:border-border transition-colors">

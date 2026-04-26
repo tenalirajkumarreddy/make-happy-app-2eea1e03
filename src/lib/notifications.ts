@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { logError } from "@/lib/logger";
 
-export type NotificationType = "order" | "payment" | "handover" | "system";
+export type NotificationType = "order" | "payment" | "handover" | "system" | "stock_transfer" | "stock_request";
 
 interface NotifyParams {
   userId: string;

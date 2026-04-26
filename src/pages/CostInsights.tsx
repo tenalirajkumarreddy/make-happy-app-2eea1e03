@@ -119,13 +119,13 @@ export default function CostInsights() {
   const { data: wacHistory, isLoading: loadingWac } = useQuery({
     queryKey: ["wac_cost_history", selectedWarehouse, dateRange],
     queryFn: async () => {
-      let query = supabase
+      const query = supabase
         .from("wac_cost_history")
         .select(`*, raw_materials(name, unit)`)
         .gte("created_at", dateRangeCalc.from.toISOString())
         .lte("created_at", dateRangeCalc.to.toISOString())
         .order("created_at", { ascending: true });
-      
+
       const { data, error } = await query;
       if (error) throw error;
       return data || [];

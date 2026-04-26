@@ -5,7 +5,7 @@ describe("route access helpers", () => {
   it("treats scoped roles correctly", () => {
     expect(isScopedRole("agent")).toBe(true);
     expect(isScopedRole("marketer")).toBe(true);
-    expect(isScopedRole("pos")).toBe(true);
+    expect(isScopedRole("operator")).toBe(true);
     expect(isScopedRole("manager")).toBe(false);
     expect(isScopedRole("super_admin")).toBe(false);
     expect(isScopedRole("customer")).toBe(false);

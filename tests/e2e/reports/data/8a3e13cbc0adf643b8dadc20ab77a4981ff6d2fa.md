@@ -1,0 +1,221 @@
+# Instructions
+
+- Following Playwright test failed.
+- Explain why, be concise, respect Playwright best practices.
+- Provide a snippet of code with the fix, if possible.
+
+# Test info
+
+- Name: role-tests\operator.spec.ts >> Operator Role - NEW >> POS-Only Sales >> Full payment required for sales
+- Location: tests\e2e\role-tests\operator.spec.ts:56:5
+
+# Error details
+
+```
+TimeoutError: page.waitForSelector: Timeout 5000ms exceeded.
+Call log:
+  - waiting for locator('text=/Sales|POS/i') to be visible
+
+```
+
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - region "Notifications alt+T"
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: AP
+      - heading "Aqua Prime" [level=1] [ref=e7]
+      - paragraph [ref=e8]: Sign in with your phone number to access your account
+    - generic [ref=e10]:
+      - generic [ref=e12]:
+        - generic [ref=e13]: "1"
+        - generic [ref=e14]: Verify phone
+      - generic [ref=e17]:
+        - generic [ref=e18]: "2"
+        - generic [ref=e19]: Profile
+      - generic [ref=e22]:
+        - generic [ref=e23]: "3"
+        - generic [ref=e24]: Store details
+    - generic [ref=e25]:
+      - generic [ref=e26]:
+        - generic [ref=e27]:
+          - text: Phone Number
+          - textbox "Phone Number" [active] [ref=e28]:
+            - /placeholder: +91XXXXXXXXXX or 10-digit number
+          - paragraph [ref=e29]: Enter with country code (e.g., +91) or a 10-digit mobile number
+        - button "Send OTP" [ref=e30] [cursor=pointer]
+      - generic [ref=e35]: or
+      - button "Continue with Google" [ref=e36] [cursor=pointer]:
+        - img
+        - text: Continue with Google
+```
+
+# Test source
+
+```ts
+  1   | /**
+  2   |  * Operator Role Tests - NEW
+  3   |  * POS-only access, inventory, attendance
+  4   |  */
+  5   | 
+  6   | import { test, expect } from '@playwright/test';
+  7   | import { AITestAgent } from '../ai-test-agent';
+  8   | 
+  9   | test.describe('Operator Role - NEW', () => {
+  10  |   test('Complete test suite', async ({ page, context }) => {
+  11  |     const agent = new AITestAgent(page, context, 'operator');
+  12  |     const results = await agent.runCompleteTestSuite();
+  13  |     
+  14  |     expect(results.success).toBe(true);
+  15  |   });
+  16  | 
+  17  |   test.describe('POS-Only Sales', () => {
+  18  |     test('Store selector is locked to POS', async ({ page, context }) => {
+  19  |       const agent = new AITestAgent(page, context, 'operator');
+  20  |       await agent.login();
+  21  |       await agent.navigate('/sales');
+  22  |       
+  23  |       // Check if store selector exists and is disabled
+  24  |       const storeSelect = await page.$('select[name="store"], [data-testid="store-select"]');
+  25  |       
+  26  |       if (storeSelect) {
+  27  |         const isDisabled = await storeSelect.evaluate(el => 
+  28  |           el.hasAttribute('disabled') || el.classList.contains('disabled')
+  29  |         );
+  30  |         
+  31  |         // Should be disabled or have only POS store
+  32  |         const options = await storeSelect.$$eval('option', opts => opts.length);
+  33  |         
+  34  |         // Operator should see only POS store
+  35  |         expect(options).toBe(1);
+  36  |         
+  37  |         // Check selected value is POS store
+  38  |         const selectedValue = await storeSelect.evaluate(el => (el as HTMLSelectElement).value);
+  39  |         expect(selectedValue).toBe('00000000-0000-0000-0000-000000000001');
+  40  |       }
+  41  |     });
+  42  | 
+  43  |     test('Cannot access other stores', async ({ page, context }) => {
+  44  |       const agent = new AITestAgent(page, context, 'operator');
+  45  |       await agent.login();
+  46  |       await agent.navigate('/stores');
+  47  |       
+  48  |       // Should be redirected or show access denied
+  49  |       const currentUrl = page.url();
+  50  |       const hasAccess = !currentUrl.includes('/stores') || await page.isVisible('text=/Access Denied|Unauthorized/i');
+  51  |       
+  52  |       // Operators should not access stores list
+  53  |       expect(hasAccess).toBe(true);
+  54  |     });
+  55  | 
+  56  |     test('Full payment required for sales', async ({ page, context }) => {
+  57  |       const agent = new AITestAgent(page, context, 'operator');
+  58  |       await agent.login();
+  59  |       await agent.navigate('/sales');
+  60  |       
+  61  |       // Wait for sales page
+> 62  |       await page.waitForSelector('text=/Sales|POS/i', { timeout: 5000 });
+      |                  ^ TimeoutError: page.waitForSelector: Timeout 5000ms exceeded.
+  63  |       
+  64  |       // Try to add a sale without full payment
+  65  |       // This would require form interaction which is tested separately
+  66  |       // For now, verify the validation logic exists
+  67  |       const hasValidation = await page.isVisible('text=/full payment|outstanding|complete payment/i');
+  68  |       expect(hasValidation).toBe(true);
+  69  |     });
+  70  |   });
+  71  | 
+  72  |   test.describe('Inventory Access', () => {
+  73  |     test('Can view inventory', async ({ page, context }) => {
+  74  |       const agent = new AITestAgent(page, context, 'operator');
+  75  |       await agent.login();
+  76  |       const result = await agent.testPageAccess('/inventory', true);
+  77  |       expect(result.success).toBe(true);
+  78  |     });
+  79  | 
+  80  |     test('Can transfer stock', async ({ page, context }) => {
+  81  |       const agent = new AITestAgent(page, context, 'operator');
+  82  |       await agent.login();
+  83  |       await agent.navigate('/stock-transfers');
+  84  |       
+  85  |       // Check if transfer button is visible
+  86  |       const transferBtn = await page.isVisible('button:has-text("Transfer"), a:has-text("New Transfer")');
+  87  |       expect(transferBtn).toBe(true);
+  88  |     });
+  89  |   });
+  90  | 
+  91  |   test.describe('Attendance Management', () => {
+  92  |     test('Can access attendance page', async ({ page, context }) => {
+  93  |       const agent = new AITestAgent(page, context, 'operator');
+  94  |       await agent.login();
+  95  |       const result = await agent.testPageAccess('/attendance', true);
+  96  |       expect(result.success).toBe(true);
+  97  |     });
+  98  | 
+  99  |     test('Can take attendance', async ({ page, context }) => {
+  100 |       const agent = new AITestAgent(page, context, 'operator');
+  101 |       await agent.login();
+  102 |       await agent.navigate('/attendance');
+  103 |       
+  104 |       // Check for check-in/check-out buttons
+  105 |       const hasCheckIn = await page.isVisible('button:has-text("Check In"), button:has-text("Present")');
+  106 |       expect(hasCheckIn).toBe(true);
+  107 |     });
+  108 |   });
+  109 | 
+  110 |   test.describe('HR/Staff Access', () => {
+  111 |     test('Can view workers', async ({ page, context }) => {
+  112 |       const agent = new AITestAgent(page, context, 'operator');
+  113 |       await agent.login();
+  114 |       const result = await agent.testPageAccess('/hr/staff', true);
+  115 |       expect(result.success).toBe(true);
+  116 |     });
+  117 | 
+  118 |     test('Cannot modify staff roles', async ({ page, context }) => {
+  119 |       const agent = new AITestAgent(page, context, 'operator');
+  120 |       await agent.login();
+  121 |       await agent.navigate('/hr/staff');
+  122 |       
+  123 |       // Should not see edit role buttons
+  124 |       const hasEditRoles = await page.isVisible('button:has-text("Edit Role")');
+  125 |       expect(hasEditRoles).toBe(false);
+  126 |     });
+  127 |   });
+  128 | 
+  129 |   test.describe('Orders Restriction', () => {
+  130 |     test('Cannot access orders by default', async ({ page, context }) => {
+  131 |       const agent = new AITestAgent(page, context, 'operator');
+  132 |       await agent.login();
+  133 |       await agent.navigate('/orders');
+  134 |       
+  135 |       // Should be redirected or show access denied
+  136 |       const currentUrl = page.url();
+  137 |       const denied = currentUrl.includes('/orders') === false || 
+  138 |                      await page.isVisible('text=/Access Denied|Unauthorized|Forbidden/i');
+  139 |       
+  140 |       expect(denied).toBe(true);
+  141 |     });
+  142 | 
+  143 |     test('Orders not visible in dashboard', async ({ page, context }) => {
+  144 |       const agent = new AITestAgent(page, context, 'operator');
+  145 |       await agent.login();
+  146 |       await agent.navigate('/dashboard');
+  147 |       
+  148 |       // Check navigation doesn't have orders
+  149 |       const hasOrdersNav = await page.isVisible('nav a:has-text("Orders"), .sidebar a:has-text("Orders")');
+  150 |       expect(hasOrdersNav).toBe(false);
+  151 |     });
+  152 |   });
+  153 | 
+  154 |   test.describe('Transactions Restriction', () => {
+  155 |     test('Cannot access transactions for stores', async ({ page, context }) => {
+  156 |       const agent = new AITestAgent(page, context, 'operator');
+  157 |       await agent.login();
+  158 |       await agent.navigate('/transactions');
+  159 |       
+  160 |       // Should be redirected or show access denied
+  161 |       const currentUrl = page.url();
+  162 |       const denied = currentUrl.includes('/transactions') === false || 
+```

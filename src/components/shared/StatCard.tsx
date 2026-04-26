@@ -9,6 +9,7 @@ interface StatCardProps {
   icon: LucideIcon;
   iconColor?: string;
   iconBgColor?: string;
+  className?: string;
 }
 
 const iconColorMap: Record<string, { bg: string; text: string }> = {
@@ -24,15 +25,15 @@ const iconColorMap: Record<string, { bg: string; text: string }> = {
   "pink": { bg: "bg-pink-100 dark:bg-pink-900/30", text: "text-pink-600 dark:text-pink-400" },
 };
 
-export function StatCard({ title, value, change, changeType = "neutral", icon: Icon, iconColor = "primary", iconBgColor }: StatCardProps) {
+export function StatCard({ title, value, change, changeType = "neutral", icon: Icon, iconColor = "primary", iconBgColor, className }: StatCardProps) {
   const colors = iconColorMap[iconColor] || iconColorMap.primary;
-  
+
   return (
-    <div className="stat-card">
+    <div className={cn("stat-card", className)}>
       <div className="flex items-start justify-between">
-        <div className="space-y-2 min-w-0 flex-1">
-          <p className="text-sm text-muted-foreground truncate">{title}</p>
-          <p className="text-xl sm:text-2xl font-bold tracking-tight truncate">{value}</p>
+      <div className="space-y-2 min-w-0 flex-1">
+        <p className="text-sm text-muted-foreground truncate">{title}</p>
+        <p className={cn("text-xl sm:text-2xl font-bold tracking-tight truncate", colors.text)}>{value}</p>
           {change && (
             <p
               className={cn(

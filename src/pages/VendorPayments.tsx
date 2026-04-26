@@ -39,11 +39,11 @@ const VendorPayments = () => {
 
    const { data: payments = [], isLoading } = useQuery({
      queryKey: ["vendor_payments", currentWarehouse?.id],
-     queryFn: async () => {
-       let query = supabase
-         .from("vendor_payments")
-         .select("*, vendors(name, display_id)")
-         .order("payment_date", { ascending: false });
+    queryFn: async () => {
+      const query = supabase
+        .from("vendor_payments")
+        .select("*, vendors(name, display_id)")
+        .order("payment_date", { ascending: false });
 
       const { data, error } = await query;
       if (error) throw error;

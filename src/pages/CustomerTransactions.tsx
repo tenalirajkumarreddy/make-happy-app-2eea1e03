@@ -117,7 +117,12 @@ const CustomerTransactions = () => {
       <PageHeader title="My Transactions" subtitle="Complete financial history across all stores" />
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard title="Total Outstanding" value={`₹${totalOutstanding.toLocaleString()}`} icon={DollarSign} iconColor="warning" />
+        <StatCard 
+        title="Total Outstanding" 
+        value={`₹${totalOutstanding.toLocaleString()}`} 
+        icon={DollarSign} 
+        iconColor={Number(totalOutstanding) > 0 ? "destructive" : Number(totalOutstanding) < 0 ? "success" : "warning"}
+      />
         <StatCard title="Total Deliveries" value={String(sales?.length || 0)} icon={DollarSign} iconColor="primary" />
         <StatCard title="Total Payments" value={String(transactions?.length || 0)} icon={DollarSign} iconColor="success" />
       </div>

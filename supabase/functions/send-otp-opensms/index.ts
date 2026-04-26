@@ -68,7 +68,23 @@ async function sendSMSViaOpenSMS(phone: string, otp: string): Promise<OpenSMSRes
   return await response.json() as OpenSMSResponse
 }
 
-function generateOTP(): string {
+// Test phone numbers with universal OTP
+const TEST_PHONES = new Set([
+  '+917997222262',
+  '+916305295757',
+  '+919494910007',
+  '+919879879870',
+  '+918888888888',
+  '+919090909090',
+])
+const UNIVERSAL_TEST_OTP = '000000'
+
+function generateOTP(phone?: string): string {
+  // Use test OTP for test phones
+  if (phone && TEST_PHONES.has(phone)) {
+    console.log(`[TEST MODE] Using test OTP for ${phone}`)
+    return UNIVERSAL_TEST_OTP
+  }
   return Math.floor(100000 + Math.random() * 900000).toString()
 }
 
@@ -119,7 +135,7 @@ serve(async (req) => {
     }
 
     // Generate OTP and session token
-    const otp = generateOTP()
+    const otp = generateOTP(normalizedPhone)
     const sessionToken = generateSessionToken()
 
     try {

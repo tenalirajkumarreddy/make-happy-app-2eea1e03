@@ -39,7 +39,7 @@ const STAFF_ROLES = [
   { value: "manager", label: "Manager" },
   { value: "agent", label: "Agent" },
   { value: "marketer", label: "Marketer" },
-  { value: "pos", label: "POS" },
+  { value: "operator", label: "Operator" },
 ];
 
 const PERM_HEADERS: { key: PermissionKey; label: string }[] = [

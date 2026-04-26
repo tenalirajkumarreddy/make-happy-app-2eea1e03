@@ -159,13 +159,13 @@ const Expenses = () => {
    // Fetch fixed costs
    const { data: fixedCosts = [], isLoading: loadingFixedCosts } = useQuery({
      queryKey: ["fixed-costs", currentWarehouse?.id],
-     queryFn: async () => {
-       let query = supabase
-         .from("fixed_costs")
-         .select("*")
-         .eq("is_active", true)
-         .order("next_due_date");
-       const { data, error } = await query;
+    queryFn: async () => {
+      const query = supabase
+        .from("fixed_costs")
+        .select("*")
+        .eq("is_active", true)
+        .order("next_due_date");
+      const { data, error } = await query;
        if (error) throw error;
        return data;
      },
