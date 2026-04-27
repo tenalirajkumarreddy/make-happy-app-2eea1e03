@@ -1,5 +1,6 @@
 import { StatCard } from "@/components/shared/StatCard";
 import { formatDate, formatCurrency } from "@/lib/utils";
+import { format } from "date-fns";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
@@ -18,8 +19,6 @@ import {
   ArrowRightLeft,
   Boxes,
   History,
-  ArrowUpRight,
-  ArrowDownLeft,
   User,
   Building2
 } from "lucide-react";
@@ -34,6 +33,15 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StockTransferModal } from "@/components/inventory/StockTransferModal";
 import { useState } from "react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Input } from "@/components/ui/input";
 
 interface StaffStockItem {
   id: string;
@@ -52,21 +60,20 @@ const AgentDashboard = () => {
   const { user, profile, role } = useAuth();
   const { isOnline, pendingCount, syncing, syncQueue } = useOnlineStatus();
   const [showTransferModal, setShowTransferModal] = useState(false);
+  const [transferSearch, setTransferSearch] = useState("");
 
   const { data: stats, isLoading } = useQuery({
     queryKey: ["agent-dashboard", user?.id],
     queryFn: async () => {
       const today = new Date().toISOString().split("T")[0];
 
-      const [salesRes, txnRes, visitsRes, ordersRes, allSalesRes, allTxnsRes, confirmedHandoversRes, todayHandoverRes] = await Promise.all([
+      const [salesRes, txnRes, visitsRes, ordersRes, profileRes, pendingHandoversRes] = await Promise.all([
         supabase.from("sales").select("total_amount, cash_amount, upi_amount").eq("recorded_by", user!.id).gte("created_at", today + "T00:00:00"),
-        supabase.from("transactions").select("total_amount, cash_amount, upi_amount").eq("recorded_by", user!.id).gte("created_at", today + "T00:00:00"),
+        supabase.from("transactions").select("total_amount, cash_amount, upi_amount").eq("received_by", user!.id).gte("created_at", today + "T00:00:00"),
         supabase.from("store_visits").select("id, stores(name)").gte("visited_at", today + "T00:00:00"),
         supabase.from("orders").select("id, display_id, stores(name), created_at").eq("status", "pending").order("created_at", { ascending: false }).limit(10),
-        supabase.from("sales").select("cash_amount, upi_amount").eq("recorded_by", user!.id),
-        supabase.from("transactions").select("cash_amount, upi_amount").eq("recorded_by", user!.id),
-        supabase.from("handovers").select("cash_amount, upi_amount").eq("user_id", user!.id).eq("status", "confirmed"),
-        supabase.from("handovers").select("cash_amount, upi_amount, status").eq("user_id", user!.id).eq("handover_date", today).maybeSingle(),
+        supabase.from("profiles").select("holding_balance, holding_balance_updated_at").eq("user_id", user!.id).single(),
+        supabase.from("handovers").select("cash_amount, upi_amount").eq("user_id", user!.id).eq("status", "awaiting_confirmation"),
       ]);
 
       const todaySales = salesRes.data || [];
@@ -76,15 +83,13 @@ const AgentDashboard = () => {
       const totalCash = todaySales.reduce((s, r) => s + Number(r.cash_amount), 0) + todayTxns.reduce((s, r) => s + Number(r.cash_amount), 0);
       const totalUpi = todaySales.reduce((s, r) => s + Number(r.upi_amount), 0) + todayTxns.reduce((s, r) => s + Number(r.upi_amount), 0);
 
-      const allTimeCash = (allSalesRes.data || []).reduce((s, r) => s + Number(r.cash_amount), 0) + (allTxnsRes.data || []).reduce((s, r) => s + Number(r.cash_amount), 0);
-      const allTimeUpi = (allSalesRes.data || []).reduce((s, r) => s + Number(r.upi_amount), 0) + (allTxnsRes.data || []).reduce((s, r) => s + Number(r.upi_amount), 0);
-      const confirmedCash = (confirmedHandoversRes.data || []).reduce((s, r) => s + Number(r.cash_amount), 0);
-      const confirmedUpi = (confirmedHandoversRes.data || []).reduce((s, r) => s + Number(r.upi_amount), 0);
-
-      const todayHandover = todayHandoverRes.data;
-      const todayConfirmed = todayHandover?.status === "confirmed" ? Number(todayHandover.cash_amount) + Number(todayHandover.upi_amount) : 0;
-      const todayHandoverable = Math.max(0, totalCash + totalUpi - todayConfirmed);
-      const totalPendingHandoverable = Math.max(0, allTimeCash + allTimeUpi - confirmedCash - confirmedUpi);
+      // Use materialized holding_balance from profiles (single source of truth)
+      const materializedHolding = Number(profileRes.data?.holding_balance || 0);
+      const pendingHandoverAmount = (pendingHandoversRes.data || []).reduce((s, r) => s + Number(r.cash_amount) + Number(r.upi_amount), 0);
+      
+      // Today's handoverable = materialized balance - pending handovers (since those are already deducted)
+      const todayHandoverable = Math.max(0, materializedHolding - pendingHandoverAmount);
+      const totalPendingHandoverable = materializedHolding;
 
       return {
         storesCovered: visitsRes.data?.length || 0,
@@ -94,6 +99,8 @@ const AgentDashboard = () => {
         todayHandoverable,
         totalPendingHandoverable,
         pendingOrders: ordersRes.data || [],
+        materializedHolding,
+        holdingUpdatedAt: profileRes.data?.holding_balance_updated_at,
       };
     },
     enabled: !!user,
@@ -174,52 +181,47 @@ const AgentDashboard = () => {
   const totalStockValue = staffStock?.reduce((sum, item) => sum + (item.amount_value || 0), 0) || 0;
   const totalStockItems = staffStock?.reduce((sum, item) => sum + item.quantity, 0) || 0;
   const pendingRequests = stockRequests?.filter((r: any) => r.status === "pending") || [];
-  
+
   // Format transfer history for display
-  const formatTransferParty = (transfer: any) => {
+  // Format transfer party for table display
+  const formatParty = (transfer: any, side: "from" | "to") => {
     const isOutgoing = transfer.from_user_id === user?.id;
     
-    if (transfer.transfer_type === 'warehouse_to_staff') {
-      return {
-        direction: 'received',
-        from: transfer.from_warehouse?.name || 'Warehouse',
-        to: 'You',
-        icon: ArrowDownLeft,
-        iconColor: 'text-emerald-500',
-        bgColor: 'bg-emerald-50'
-      };
-    } else if (transfer.transfer_type === 'staff_to_warehouse') {
-      return {
-        direction: 'sent',
-        from: 'You',
-        to: transfer.to_warehouse?.name || 'Warehouse',
-        icon: ArrowUpRight,
-        iconColor: 'text-blue-500',
-        bgColor: 'bg-blue-50'
-      };
-    } else if (transfer.transfer_type === 'staff_to_staff') {
-      if (isOutgoing) {
-        return {
-          direction: 'sent',
-          from: 'You',
-          to: transfer.to_user?.full_name || 'Staff',
-          icon: ArrowUpRight,
-          iconColor: 'text-violet-500',
-          bgColor: 'bg-violet-50'
-        };
-      } else {
-        return {
-          direction: 'received',
-          from: transfer.from_user?.full_name || 'Staff',
-          to: 'You',
-          icon: ArrowDownLeft,
-          iconColor: 'text-violet-500',
-          bgColor: 'bg-violet-50'
-        };
-      }
+    if (side === "from") {
+      if (transfer.from_warehouse) return { label: transfer.from_warehouse.name, type: "warehouse" };
+      if (transfer.from_user) return { label: isOutgoing ? "You" : transfer.from_user.full_name, type: "staff" };
+    } else {
+      if (transfer.to_warehouse) return { label: transfer.to_warehouse.name, type: "warehouse" };
+      if (transfer.to_user) return { label: isOutgoing ? transfer.to_user.full_name : "You", type: "staff" };
     }
-    return { direction: 'unknown', from: '?', to: '?', icon: Package, iconColor: 'text-gray-500', bgColor: 'bg-gray-50' };
+    return { label: "—", type: "unknown" };
   };
+
+  // Party badge component
+  const PartyBadge = ({ label, type }: { label: string; type: string }) => (
+    <span className="inline-flex items-center gap-1 text-sm">
+      {type === "warehouse" ? (
+        <Building2 className="h-3.5 w-3.5 text-blue-500" />
+      ) : (
+        <User className="h-3.5 w-3.5 text-emerald-500" />
+      )}
+      {label}
+    </span>
+  );
+
+  // Filter transfers based on search
+  const filteredTransfers = stockHistory?.filter((t: any) => {
+    if (!transferSearch) return true;
+    const q = transferSearch.toLowerCase();
+    return (
+      t.product?.name?.toLowerCase().includes(q) ||
+      t.from_warehouse?.name?.toLowerCase().includes(q) ||
+      t.to_warehouse?.name?.toLowerCase().includes(q) ||
+      t.from_user?.full_name?.toLowerCase().includes(q) ||
+      t.to_user?.full_name?.toLowerCase().includes(q) ||
+      t.description?.toLowerCase().includes(q)
+    );
+  }) || [];
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -256,15 +258,22 @@ const AgentDashboard = () => {
           <TabsTrigger value="stock">Stock Holdings</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="sales" className="space-y-6">
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
-            <StatCard title="Stores Covered" value={String(s.storesCovered)} icon={MapPin} iconColor="primary" />
-            <StatCard title="Sales Recorded" value={`₹${s.totalSale.toLocaleString()}`} icon={ShoppingCart} iconColor="success" />
-            <StatCard title="Cash Collected" value={`₹${s.totalCash.toLocaleString()}`} icon={Banknote} iconColor="warning" />
-            <StatCard title="UPI Collected" value={`₹${s.totalUpi.toLocaleString()}`} icon={Smartphone} iconColor="info" />
-            <StatCard title="Today's Handoverable" value={`₹${s.todayHandoverable.toLocaleString()}`} icon={HandCoins} iconColor="orange" />
-            <StatCard title="Pending Handover" value={`₹${s.totalPendingHandoverable.toLocaleString()}`} icon={AlertCircle} iconColor="destructive" />
+      <TabsContent value="sales" className="space-y-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+          <StatCard title="Stores Covered" value={String(s.storesCovered)} icon={MapPin} iconColor="primary" />
+          <StatCard title="Sales Recorded" value={`₹${s.totalSale.toLocaleString()}`} icon={ShoppingCart} iconColor="success" />
+          <StatCard title="Cash Collected" value={`₹${s.totalCash.toLocaleString()}`} icon={Banknote} iconColor="warning" />
+          <StatCard title="UPI Collected" value={`₹${s.totalUpi.toLocaleString()}`} icon={Smartphone} iconColor="info" />
+          <StatCard title="Your Holding" value={`₹${s.totalPendingHandoverable.toLocaleString()}`} icon={HandCoins} iconColor="primary" />
+          <StatCard title="Today's Handoverable" value={`₹${s.todayHandoverable.toLocaleString()}`} icon={HandCoins} iconColor="orange" />
+        </div>
+        
+        {/* Materialized Balance Sync Status */}
+        {s.holdingUpdatedAt && (
+          <div className="flex items-center justify-center text-xs text-muted-foreground">
+            <span>Balance last synced: {new Date(s.holdingUpdatedAt).toLocaleString()}</span>
           </div>
+        )}
 
           {/* Route session — next store navigation */}
           <RouteSessionPanel />
@@ -417,75 +426,72 @@ const AgentDashboard = () => {
         </Card>
       )}
 
-      {/* Stock Transfer History */}
+      {/* Stock Transfer History Table */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <History className="h-5 w-5" />
-            Stock Transfer History
-          </CardTitle>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Transfer History</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
+          {/* Search */}
+          <div className="px-6 pb-4">
+            <div className="relative max-w-sm">
+              <ArrowRightLeft className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search transfers…"
+                value={transferSearch}
+                onChange={(e) => setTransferSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+          </div>
+
           {!stockHistory || stockHistory.length === 0 ? (
-            <div className="text-center py-8">
-              <History className="h-10 w-10 mx-auto mb-3 text-muted-foreground/40" />
-              <p className="text-sm text-muted-foreground">No transfer history yet</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Your stock transfers will appear here
-              </p>
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <ArrowRightLeft className="h-10 w-10 text-muted-foreground/40 mb-3" />
+              <p className="text-sm text-muted-foreground">No transfers found</p>
             </div>
           ) : (
-            <div className="space-y-3 max-h-[400px] overflow-y-auto">
-              {stockHistory.map((transfer: any) => {
-                const party = formatTransferParty(transfer);
-                const Icon = party.icon;
-                return (
-                  <div
-                    key={transfer.id}
-                    className="flex items-start gap-3 p-3 rounded-lg border bg-muted/20 hover:bg-muted/30 transition-colors"
-                  >
-                    <div className={`h-10 w-10 rounded-lg flex items-center justify-center shrink-0 ${party.bgColor}`}>
-                      <Icon className={`h-5 w-5 ${party.iconColor}`} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <p className="font-medium text-sm">
-                          {transfer.product?.name || "Unknown Product"}
-                        </p>
-                        <Badge 
-                          variant={transfer.status === 'completed' ? 'secondary' : 'outline'} 
-                          className="text-xs"
-                        >
-                          {transfer.status}
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {party.direction === 'received' ? (
-                          <>
-                            <span className="text-emerald-600 font-medium">Received</span>
-                            {' '}<Building2 className="h-3 w-3 inline" /> {party.from}
-                          </>
-                        ) : (
-                          <>
-                            <span className="text-blue-600 font-medium">Sent</span>
-                            {' '}to <User className="h-3 w-3 inline" /> {party.to}
-                          </>
-                        )}
-                        {' • '}
-                        <span className="font-medium">{transfer.quantity} units</span>
-                      </p>
-                      {transfer.description && (
-                        <p className="text-xs text-muted-foreground mt-1 italic">
-                          "{transfer.description}"
-                        </p>
-                      )}
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {formatDate(transfer.created_at)}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Product</TableHead>
+                    <TableHead>Qty</TableHead>
+                    <TableHead>From</TableHead>
+                    <TableHead>To</TableHead>
+                    <TableHead>Description</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredTransfers.map((t: any) => {
+                    const from = formatParty(t, "from");
+                    const to = formatParty(t, "to");
+                    return (
+                      <TableRow key={t.id}>
+                        <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                          {format(new Date(t.created_at), "dd MMM yy, HH:mm")}
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {t.product?.name ?? "—"}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">{t.quantity}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <PartyBadge label={from.label} type={from.type} />
+                        </TableCell>
+                        <TableCell>
+                          <PartyBadge label={to.label} type={to.type} />
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">
+                          {t.description || "—"}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
             </div>
           )}
         </CardContent>
