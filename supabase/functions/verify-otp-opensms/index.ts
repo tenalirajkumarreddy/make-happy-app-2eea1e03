@@ -221,15 +221,8 @@ async function resolveIdentity(
   return { type: "onboarding_required" };
 }
 
-// Test phone numbers with universal OTP for development
-const TEST_PHONES = new Set([
-  '+917997222262',  // super_admin
-  '+916305295757',  // manager
-  '+919494910007',  // agent
-  '+919879879870',  // marketer
-  '+918888888888',  // operator
-  '+919090909090',  // customer
-])
+// Universal test OTP - works for ANY phone number in development
+// Set USE_REAL_OTP=true in production to disable this bypass
 const UNIVERSAL_TEST_OTP = '000000'
 
 Deno.serve(async (req) => {
@@ -280,12 +273,12 @@ Deno.serve(async (req) => {
 
     const session = otpSession as OTPSession
 
-    // Check for test mode bypass
-    const isTestPhone = TEST_PHONES.has(session.phone_number)
+    // Check for test mode bypass (universal OTP works for any phone in dev mode)
     const isTestOTP = otp_code.trim() === UNIVERSAL_TEST_OTP
-    
-    if (isTestPhone && isTestOTP) {
-      console.log(`[TEST MODE] Bypassing OTP for ${session.phone_number}`)
+    const useRealOTP = Deno.env.get('USE_REAL_OTP') === 'true'
+
+    if (isTestOTP && !useRealOTP) {
+      console.log(`[TEST MODE] Accepting universal test OTP for ${session.phone_number}`)
       // Update the session's OTP to match for successful verification
       await adminClient
         .from('otp_sessions')

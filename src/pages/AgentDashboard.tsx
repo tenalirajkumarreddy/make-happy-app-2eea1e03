@@ -69,7 +69,7 @@ const AgentDashboard = () => {
 
       const [salesRes, txnRes, visitsRes, ordersRes, profileRes, pendingHandoversRes] = await Promise.all([
         supabase.from("sales").select("total_amount, cash_amount, upi_amount").eq("recorded_by", user!.id).gte("created_at", today + "T00:00:00"),
-        supabase.from("transactions").select("total_amount, cash_amount, upi_amount").eq("received_by", user!.id).gte("created_at", today + "T00:00:00"),
+        supabase.from("transactions").select("total_amount, cash_amount, upi_amount").eq("recorded_by", user!.id).gte("created_at", today + "T00:00:00"),
         supabase.from("store_visits").select("id, stores(name)").gte("visited_at", today + "T00:00:00"),
         supabase.from("orders").select("id, display_id, stores(name), created_at").eq("status", "pending").order("created_at", { ascending: false }).limit(10),
         supabase.from("profiles").select("holding_balance, holding_balance_updated_at").eq("user_id", user!.id).single(),
@@ -137,14 +137,12 @@ const AgentDashboard = () => {
         .from("stock_requests")
         .select(`
           id, display_id, quantity, status, requested_at, request_notes,
-          product:products!stock_requests_product_id_fkey(name, sku),
-          from_user:profiles!stock_requests_from_user_id_fkey(full_name),
-          to_user:profiles!stock_requests_to_user_id_fkey(full_name)
+          product:products!stock_requests_product_id_fkey(name, sku)
         `)
         .or(`to_user_id.eq.${user!.id},requested_by.eq.${user!.id}`)
         .eq("status", "pending")
         .order("requested_at", { ascending: false });
-      
+
       if (error) throw error;
       return data || [];
     },

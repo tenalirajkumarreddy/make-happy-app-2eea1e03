@@ -395,7 +395,7 @@ const Orders = () => {
 
     const { data: displayId } = await supabase.rpc("generate_random_display_id", { p_prefix: "ORD", p_table_name: "orders" });
 
-    const insertData: any = {
+const insertData: any = {
       display_id: displayId,
       store_id: storeId,
       customer_id: customerId || null,
@@ -403,8 +403,9 @@ const Orders = () => {
       source: "manual",
       created_by: user!.id,
       requirement_note: requirementNote || null,
+      warehouse_id: currentWarehouse?.id || null,
     };
-    
+
     if (assignedTo) {
       insertData.assigned_to = assignedTo;
     }
@@ -427,27 +428,40 @@ const Orders = () => {
       }
     }
 
-    logActivity(user!.id, "Created order", "order", displayId, order.id);
-    toast.success("Order created");
+  logActivity(user!.id, "Created order", "order", displayId, order.id);
+  toast.success("Order created");
 
-    // Notify admins/managers
-    const storeName = stores?.find((s) => s.id === storeId)?.name || "store";
-    getAdminUserIds()
-      .then((ids) => {
-        const others = ids.filter((id) => id !== user!.id);
-        if (others.length > 0) {
-          sendNotificationToMany(others, {
-            title: "New Order Created",
-            message: `Order ${displayId} (${orderType}) placed for ${storeName}`,
-            type: "order",
-            entityType: "order",
-            entityId: order.id,
-          });
-        }
-      })
-      .catch((error) => {
-        console.error("Failed to notify admins about new order:", error);
-      });
+  // Notify admins/managers
+  const storeName = stores?.find((s) => s.id === storeId)?.name || "store";
+  getAdminUserIds()
+    .then((ids) => {
+      const others = ids.filter((id) => id !== user!.id);
+      if (others.length > 0) {
+        sendNotificationToMany(others, {
+          title: "New Order Created",
+          message: `Order ${displayId} (${orderType}) placed for ${storeName}`,
+          type: "order",
+          entityType: "order",
+          entityId: order.id,
+        });
+      }
+    })
+    .catch((error) => {
+      console.error("Failed to notify admins about new order:", error);
+    });
+
+  // Notify assigned agent if order is assigned
+  if (assignedTo && assignedTo !== user!.id) {
+    sendNotificationToMany([assignedTo], {
+      title: "Order Assigned to You",
+      message: `Order ${displayId} (${orderType}) for ${storeName} has been assigned to you`,
+      type: "order",
+      entityType: "order",
+      entityId: order.id,
+    }).catch((error) => {
+      console.error("Failed to notify assigned agent:", error);
+    });
+  }
 
     setSaving(false);
     setShowAdd(false);

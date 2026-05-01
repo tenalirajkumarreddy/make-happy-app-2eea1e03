@@ -134,7 +134,8 @@ let retryAttempt = 0;
 let retryTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
 function shouldSkipForSubscriber(sub: RealtimeSubscriber, table: string, payload: any) {
-  if (sub.isAdmin) return false;
+  // Admins and managers see everything
+  if (sub.isAdmin || sub.role === "super_admin" || sub.role === "manager") return false;
 
   const userId = sub.userId;
   if (!userId) return true;
@@ -153,6 +154,28 @@ function shouldSkipForSubscriber(sub: RealtimeSubscriber, table: string, payload
   if (table === "expense_claims") {
     const claimOwner = payload.new?.user_id ?? payload.old?.user_id;
     if (claimOwner && claimOwner !== userId) return true;
+  }
+
+  // Orders: Non-admin staff (agents) should see orders assigned to them or fulfilled by them
+  if (table === "orders") {
+    const assignedTo = payload.new?.assigned_to ?? payload.old?.assigned_to;
+    const createdBy = payload.new?.created_by ?? payload.old?.created_by;
+    const fulfilledBy = payload.new?.fulfilled_by ?? payload.old?.fulfilled_by;
+    
+    // For agents, show orders assigned to them, created by them, or fulfilled by them
+    if (sub.role === "agent") {
+      if (assignedTo === userId || createdBy === userId || fulfilledBy === userId) {
+        return false;
+      }
+      // Otherwise skip
+      return true;
+    }
+    
+    // For other staff roles, let them see orders they created or are assigned to
+    if (assignedTo === userId || createdBy === userId) {
+      return false;
+    }
+    return true;
   }
 
   return false;

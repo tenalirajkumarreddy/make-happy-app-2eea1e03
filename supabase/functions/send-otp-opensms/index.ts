@@ -68,24 +68,17 @@ async function sendSMSViaOpenSMS(phone: string, otp: string): Promise<OpenSMSRes
   return await response.json() as OpenSMSResponse
 }
 
-// Test phone numbers with universal OTP
-const TEST_PHONES = new Set([
-  '+917997222262',
-  '+916305295757',
-  '+919494910007',
-  '+919879879870',
-  '+918888888888',
-  '+919090909090',
-])
+// Universal test OTP - works for ANY phone number in development
 const UNIVERSAL_TEST_OTP = '000000'
 
-function generateOTP(phone?: string): string {
-  // Use test OTP for test phones
-  if (phone && TEST_PHONES.has(phone)) {
-    console.log(`[TEST MODE] Using test OTP for ${phone}`)
-    return UNIVERSAL_TEST_OTP
+function generateOTP(_phone?: string): string {
+  // Always use test OTP in development/testing
+  // In production, set USE_REAL_OTP=true env variable
+  if (Deno.env.get('USE_REAL_OTP') === 'true') {
+    return Math.floor(100000 + Math.random() * 900000).toString()
   }
-  return Math.floor(100000 + Math.random() * 900000).toString()
+  console.log(`[TEST MODE] Using universal test OTP 000000`)
+  return UNIVERSAL_TEST_OTP
 }
 
 function maskPhoneNumber(phone: string): string {

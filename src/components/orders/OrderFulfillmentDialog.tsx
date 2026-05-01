@@ -26,6 +26,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
+import { usePermission } from "@/hooks/usePermission";
+import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import {
   Package,
   Plus,
@@ -105,19 +107,21 @@ export function OrderFulfillmentDialog({
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // State
-  const [items, setItems] = useState<FulfillmentItem[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [productStock, setProductStock] = useState<Map<string, number>>(new Map());
-  const [storePricing, setStorePricing] = useState<Map<string, number>>(new Map());
-  const [storeTypePricing, setStoreTypePricing] = useState<Map<string, number>>(new Map());
-  const [cashAmount, setCashAmount] = useState<string>("0");
-  const [upiAmount, setUpiAmount] = useState<string>("0");
-  const [notes, setNotes] = useState<string>("");
-  const [selectedProduct, setSelectedProduct] = useState<string>("");
-  const [loading, setLoading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [oldOutstanding, setOldOutstanding] = useState<number>(0);
+   // State
+   const [items, setItems] = useState<FulfillmentItem[]>([]);
+   const [products, setProducts] = useState<Product[]>([]);
+   const [productStock, setProductStock] = useState<Map<string, number>>(new Map());
+   const [storePricing, setStorePricing] = useState<Map<string, number>>(new Map());
+   const [storeTypePricing, setStoreTypePricing] = useState<Map<string, number>>(new Map());
+   const [cashAmount, setCashAmount] = useState<string>("0");
+   const [upiAmount, setUpiAmount] = useState<string>("0");
+   const [notes, setNotes] = useState<string>("");
+const [selectedProduct, setSelectedProduct] = useState<string>("");
+    const [loading, setLoading] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
+    const [oldOutstanding, setOldOutstanding] = useState<number>(0);
+    const { allowed: canFulfill } = usePermission("fulfill_orders");
+    const { allowed: hasSalePermission } = usePermission("record_sale");
 
   // Calculate totals
   const { subtotal, totalPaid, outstandingAmount, newOutstanding } = useMemo(() => {
@@ -361,19 +365,61 @@ export function OrderFulfillmentDialog({
     setCashAmount("0");
   };
 
-  // Submit fulfillment
-  const handleSubmit = async () => {
-    if (!order) return;
-    if (items.length === 0) {
-      toast({
-        title: "No items",
-        description: "Please add at least one item to the order.",
-        variant: "destructive",
-      });
-      return;
-    }
+// Check if any items have insufficient stock
+const hasInsufficientStock = items.some((item) => {
+  const availableStock = productStock.get(item.product_id) || 0;
+  return availableStock < item.quantity;
+});
 
-    setSubmitting(true);
+// Submit fulfillment
+const handleSubmit = async () => {
+  if (!order) return;
+  if (items.length === 0) {
+    toast({
+      title: "No items",
+      description: "Please add at least one item to the order.",
+      variant: "destructive",
+    });
+    return;
+  }
+
+  // Check permission to fulfill orders
+  if (!canFulfill) {
+    toast({
+      title: "Permission Denied",
+      description: "You don't have permission to fulfill orders.",
+      variant: "destructive",
+    });
+    return;
+  }
+
+  // Also need record_sale permission to create sale from order
+  if (!hasSalePermission) {
+    toast({
+      title: "Permission Denied",
+      description: "You don't have permission to record sales.",
+      variant: "destructive",
+    });
+    return;
+  }
+
+  // Check stock availability before fulfillment
+  const insufficientItems = items.filter((item) => {
+    const availableStock = productStock.get(item.product_id) || 0;
+    return availableStock < item.quantity;
+  });
+
+  if (insufficientItems.length > 0) {
+    const itemNames = insufficientItems.map(i => i.product_name).join(", ");
+    toast({
+      title: "Insufficient Stock",
+      description: `Cannot fulfill order. Insufficient stock for: ${itemNames}. Please reduce quantities or add stock.`,
+      variant: "destructive",
+    });
+    return;
+  }
+
+  setSubmitting(true);
     try {
       // Generate display ID for sale
       const { data: displayIdData, error: displayIdError } = await supabase.rpc(
@@ -398,20 +444,33 @@ export function OrderFulfillmentDialog({
         total_price: item.quantity * item.unit_price,
       }));
 
-      // Call record_sale RPC
-      const { error: saleError } = await supabase.rpc("record_sale", {
-        p_display_id: saleDisplayId,
-        p_store_id: order.store_id,
-        p_customer_id: order.stores?.customer_id || null,
-        p_recorded_by: user.id,
-        p_logged_by: null,
-        p_total_amount: subtotal,
-        p_cash_amount: parseFloat(cashAmount) || 0,
-        p_upi_amount: parseFloat(upiAmount) || 0,
-        p_outstanding_amount: outstandingAmount,
-        p_sale_items: saleItems,
-        p_created_at: null,
+    // Get customer_id - use order.customer_id first, fallback to store's customer_id
+    // record_sale requires customer_id to be NOT NULL
+    const customerId = order.customer_id || order.stores?.customer_id;
+    if (!customerId) {
+      toast({
+        title: "Missing Customer",
+        description: "This order is not linked to a customer. Please check the order details.",
+        variant: "destructive",
       });
+      setSubmitting(false);
+      return;
+    }
+
+    // Call record_sale RPC - pass 0 to let it compute from sale_items
+    const { error: saleError } = await supabase.rpc("record_sale", {
+      p_display_id: saleDisplayId,
+      p_store_id: order.store_id,
+      p_customer_id: customerId,
+      p_recorded_by: user.id,
+      p_logged_by: null,
+      p_total_amount: 0, // Let DB compute from sale_items
+      p_cash_amount: parseFloat(cashAmount) || 0,
+      p_upi_amount: parseFloat(upiAmount) || 0,
+      p_outstanding_amount: outstandingAmount,
+      p_sale_items: saleItems,
+      p_created_at: null,
+    });
 
       if (saleError) throw saleError;
 
@@ -456,6 +515,53 @@ export function OrderFulfillmentDialog({
           reference_type: "order",
         });
       }
+
+    // Send notification to admins/managers
+    const storeName = order.stores?.name || "store";
+    const notifications: Promise<void>[] = [];
+
+    // Notify admins/managers
+    const adminNotificationPromise = getAdminUserIds()
+      .then((adminIds) => {
+        const others = adminIds.filter((id) => id !== user.id);
+        if (others.length > 0) {
+          return sendNotificationToMany(others, {
+            title: "Order Fulfilled",
+            message: `Order ${order.display_id} for ${storeName} has been fulfilled by agent. Sale ${saleDisplayId} created.`,
+            type: "order",
+            entityType: "order",
+            entityId: order.id,
+          });
+        }
+      })
+      .catch((err) => console.error("Notification error (admins):", err));
+    notifications.push(adminNotificationPromise as Promise<void>);
+
+    // Notify the agent who fulfilled the order (confirmation)
+    notifications.push(
+      sendNotificationToMany([user.id], {
+        title: "Order Fulfilled Successfully",
+        message: `You have successfully fulfilled order ${order.display_id} for ${storeName}. Sale ${saleDisplayId} was created.`,
+        type: "order",
+        entityType: "order",
+        entityId: order.id,
+      }).catch((err) => console.error("Notification error (fulfiller):", err))
+    );
+
+    // Notify the assigned agent if different from fulfiller
+    if (order.assigned_to && order.assigned_to !== user.id) {
+      notifications.push(
+        sendNotificationToMany([order.assigned_to], {
+          title: "Assigned Order Fulfilled",
+          message: `Order ${order.display_id} for ${storeName} (assigned to you) has been fulfilled by another agent. Sale ${saleDisplayId} created.`,
+          type: "order",
+          entityType: "order",
+          entityId: order.id,
+        }).catch((err) => console.error("Notification error (assigned):", err))
+      );
+    }
+
+    await Promise.all(notifications);
 
       // Log activity
       await supabase.from("activity_log").insert({
