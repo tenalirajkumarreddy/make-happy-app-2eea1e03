@@ -102,28 +102,41 @@ const Handovers = () => {
   const [editHandoverAmount, setEditHandoverAmount] = useState("");
   const [editHandoverStatus, setEditHandoverStatus] = useState("");
 
-  const { data: staffProfiles } = useQuery({
+  const { data: staffProfiles, isLoading: staffLoading, error: staffError } = useQuery({
     queryKey: ["staff-profiles", user?.id],
     queryFn: async () => {
+      console.log("[DEBUG] Fetching staff profiles...");
+      // Exclude super_admin from staff list (admins don't have holding accounts)
       const { data: roles, error: rolesError } = await supabase
         .from("user_roles")
         .select("user_id, role")
-        .in("role", ["super_admin", "manager", "agent", "marketer", "operator"]);
+        .in("role", ["manager", "agent", "marketer", "operator"]); // Removed super_admin
 
+      if (rolesError) {
+        console.error("[DEBUG] Error fetching roles:", rolesError);
+        throw rolesError;
+      }
+
+      console.log("[DEBUG] Found roles:", roles);
       const staffRoleMap = new Map((roles || []).map((row) => [row.user_id, row.role]));
       const staffIds = Array.from(staffRoleMap.keys()).filter((id) => id !== user?.id);
 
+      console.log("[DEBUG] Staff IDs (excluding current user):", staffIds);
+
       let profiles: Array<{ user_id: string; full_name: string; email: string | null; phone: string | null }> = [];
 
-      if (!rolesError && staffIds.length > 0) {
+      if (staffIds.length > 0) {
         const { data: filteredProfiles, error: filteredError } = await supabase
           .from("profiles")
           .select("user_id, full_name, email, phone")
           .in("user_id", staffIds)
           .eq("is_active", true);
-        if (!filteredError) {
-          profiles = (filteredProfiles || []) as typeof profiles;
+        if (filteredError) {
+          console.error("[DEBUG] Error fetching profiles:", filteredError);
+          throw filteredError;
         }
+        console.log("[DEBUG] Found profiles:", filteredProfiles);
+        profiles = (filteredProfiles || []) as typeof profiles;
       }
 
       const roleLabel: Record<string, string> = {
@@ -134,13 +147,16 @@ const Handovers = () => {
         pos: "POS",
       };
 
-      return (profiles || [])
+      const result = (profiles || [])
         .map((profile) => ({
           ...profile,
           role: staffRoleMap.get(profile.user_id) || "agent",
           roleLabel: roleLabel[staffRoleMap.get(profile.user_id) || ""] || "Staff",
         }))
         .sort((a, b) => a.full_name.localeCompare(b.full_name));
+      
+      console.log("[DEBUG] Final staff profiles:", result);
+      return result;
     },
     enabled: !!user,
   });
@@ -196,7 +212,7 @@ const Handovers = () => {
       const { data, error } = await supabase
         .from("transactions")
         .select("cash_amount, upi_amount, created_at")
-        .eq("received_by", user!.id);
+        .eq("recorded_by", user!.id);
       if (error) throw error;
       const todayStart = startOfDay(new Date()).toISOString();
       const all = data || [];
@@ -307,26 +323,31 @@ const Handovers = () => {
   const salesToday = (userSalesTotals?.todayCash || 0) + (userSalesTotals?.todayUpi || 0);
   const transactionsTotalAll = (userTransactionTotals?.totalCash || 0) + (userTransactionTotals?.totalUpi || 0);
 
-  // PRIMARY: Use materialized holding_balance from profiles (single source of truth)
-  // This is auto-updated by database triggers when sales/transactions/handovers change
+  // Get materialized balance from profile
   const materializedHolding = Number(userProfile?.holding_balance || 0);
-  
-  // Fallback to calculated value if materialized not available
-  const calculatedHolding = salesTotalAll + transactionsTotalAll + receivedConfirmed - sentConfirmed - sentPending;
-  
-  // Use materialized value as primary, fallback to calculated
-  const notHandedOver = materializedHolding > 0 ? materializedHolding : calculatedHolding;
+
+  // CORRECTED: When agent makes sales/transactions, they collect money and owe warehouse (negative)
+  // When agent sends handover, they reduce their debt (positive balance direction)
+  // When agent receives handover, they get money and owe more (negative)
+  // Formula: Balance = -(Sales + Transactions + Received - SentConfirmed - SentPending)
+  // This means: positive balance = user owes warehouse, negative balance = warehouse owes user
+  const totalCollected = salesTotalAll + transactionsTotalAll + receivedConfirmed;
+  const totalSent = sentConfirmed + sentPending;
+  const calculatedHolding = -(totalCollected - totalSent);
+
+  // Use materialized value as primary (even if negative), fallback to calculated only if materialized is 0 and no profile
+  const notHandedOver = userProfile?.holding_balance !== undefined ? materializedHolding : calculatedHolding;
   
   // Pending handovers should be deducted from materialized balance
   const awaitingAmount = sentPending;
   
   // Breakdown for display (from RPC which includes all components)
   const holdingBreakdown = {
-    sales: agentCashHolding?.sales_total ?? salesTotalAll,
-    transactions: agentCashHolding?.transactions_total ?? transactionsTotalAll,
-    received: agentCashHolding?.received_confirmed ?? receivedConfirmed,
-    sentConfirmed: agentCashHolding?.sent_confirmed ?? sentConfirmed,
-    sentPending: agentCashHolding?.sent_pending ?? sentPending,
+    sales: (agentCashHolding?.sales_cash || 0) + (agentCashHolding?.sales_upi || 0),
+    transactions: (agentCashHolding?.transactions_cash || 0) + (agentCashHolding?.transactions_upi || 0),
+    received: receivedConfirmed, // From handovers filter above
+    sentConfirmed: (agentCashHolding?.confirmed_handovers_cash || 0) + (agentCashHolding?.confirmed_handovers_upi || 0),
+    sentPending: sentPending, // From handovers filter above
     netHolding: notHandedOver,
     materializedBalance: materializedHolding,
     lastUpdated: userProfile?.holding_balance_updated_at,
@@ -1161,25 +1182,29 @@ const Handovers = () => {
 
       {/* ========== SIMPLIFIED BALANCE CARDS ========== */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <Card className="bg-blue-50 border border-blue-200">
+        <Card className={`border ${notHandedOver > 0 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
           <CardHeader className="p-4 pb-2">
-            <CardTitle className="text-sm font-medium text-blue-800">Available Balance</CardTitle>
+            <CardTitle className={`text-sm font-medium ${notHandedOver > 0 ? 'text-red-800' : 'text-green-800'}`}>Balance Status</CardTitle>
           </CardHeader>
           <CardContent className="p-4 pt-2">
-            <p className="text-2xl font-bold text-blue-600">₹{Math.max(0, (notHandedOver || 0) - (myApprovedExpenses || 0)).toLocaleString()}</p>
-            <p className="text-xs text-muted-foreground mt-1">Ready to hand over</p>
-            {/* Holding Breakdown */}
-            <div className="mt-3 pt-3 border-t border-blue-200/50 space-y-1 text-xs">
+            <p className={`text-2xl font-bold ${notHandedOver > 0 ? 'text-red-600' : 'text-green-600'}`}>
+              ₹{Math.abs(notHandedOver || 0).toLocaleString()}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {notHandedOver > 0 ? 'You owe warehouse (handover required)' : notHandedOver < 0 ? 'Warehouse owes you' : 'No pending balance'}
+            </p>
+            {/* Holding Breakdown - Updated labels for clarity */}
+            <div className={`mt-3 pt-3 border-t space-y-1 text-xs ${notHandedOver > 0 ? 'border-red-200/50' : 'border-green-200/50'}`}>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">From Sales</span>
+                <span className="text-muted-foreground">{role === 'agent' ? 'Sales' : 'From Sales'}</span>
                 <span className="font-medium">₹{(holdingBreakdown.sales || 0).toLocaleString()}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">From Collections</span>
+                <span className="text-muted-foreground">{role === 'agent' ? 'Payments Collected' : 'From Collections'}</span>
                 <span className="font-medium">₹{(holdingBreakdown.transactions || 0).toLocaleString()}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Received from Others</span>
+                <span className="text-muted-foreground">{role === 'agent' ? 'Handovers Received' : 'Received from Others'}</span>
                 <span className="font-medium text-green-600">+₹{(holdingBreakdown.received || 0).toLocaleString()}</span>
               </div>
               <div className="flex justify-between">
@@ -1190,11 +1215,23 @@ const Handovers = () => {
                 <span className="text-muted-foreground">Sent (Pending)</span>
                 <span className="font-medium text-amber-600">-₹{(holdingBreakdown.sentPending || 0).toLocaleString()}</span>
               </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="bg-amber-50 border border-amber-200">
+              <div className={`flex justify-between pt-2 mt-2 border-t ${notHandedOver > 0 ? 'border-red-300' : 'border-green-300'}`}>
+                <span className={`font-semibold ${notHandedOver > 0 ? 'text-red-700' : 'text-green-700'}`}>Net Balance</span>
+                <span className={`font-bold ${notHandedOver > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                  ₹{(holdingBreakdown.netHolding || 0).toLocaleString()}
+                  </span>
+                </div>
+                {(isSuperAdmin || isManager) && holdingBreakdown.materializedBalance !== undefined && (
+                  <div className={`flex justify-between pt-1 border-t ${notHandedOver < 0 ? 'border-red-200/30' : 'border-green-200/30'}`}>
+                    <span className="text-muted-foreground">Materialized Balance</span>
+                    <span className="font-medium text-blue-600">₹{(holdingBreakdown.materializedBalance || 0).toLocaleString()}</span>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-amber-50 border border-amber-200">
           <CardHeader className="p-4 pb-2">
             <CardTitle className="text-sm font-medium text-amber-800">Pending Actions</CardTitle>
           </CardHeader>
@@ -1506,24 +1543,74 @@ const Handovers = () => {
             <DialogDescription>Send money to another team member for confirmation.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="rounded-lg bg-muted/50 p-3 flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Available Balance</span>
-              <span className="text-lg font-bold">₹{Math.max(0, notHandedOver || 0).toLocaleString()}</span>
-            </div>
+              {/* Balance Display with breakdown - CORRECTED: RED when user owes (has money to hand over) */}
+              <div className="rounded-lg bg-muted/50 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Your Balance</span>
+                  <span className={`text-lg font-bold ${notHandedOver > 0 ? 'text-red-600' : notHandedOver < 0 ? 'text-green-600' : 'text-blue-600'}`}>
+                    ₹{Math.abs(notHandedOver || 0).toLocaleString()}
+                  </span>
+                </div>
+                {notHandedOver > 0 ? (
+                  <p className="text-xs text-red-600 font-medium">You owe warehouse ₹{Math.abs(notHandedOver).toLocaleString()} — handover required</p>
+                ) : notHandedOver < 0 ? (
+                  <p className="text-xs text-green-600 font-medium">Warehouse owes you ₹{Math.abs(notHandedOver).toLocaleString()}</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">No pending balance</p>
+                )}
+                
+                {/* Breakdown - always show */}
+                <div className="pt-2 border-t border-muted-foreground/20 space-y-1">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">Sales Collected</span>
+                    <span className="font-medium">+₹{(holdingBreakdown.sales || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">Payments Collected</span>
+                    <span className="font-medium">+₹{(holdingBreakdown.transactions || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">Handovers Received</span>
+                    <span className="font-medium text-green-600">+₹{(holdingBreakdown.received || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">Sent (Confirmed)</span>
+                    <span className="font-medium text-red-600">-₹{(holdingBreakdown.sentConfirmed || 0).toLocaleString()}</span>
+                  </div>
+                  {holdingBreakdown.sentPending > 0 && (
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Sent (Pending)</span>
+                      <span className="font-medium text-amber-600">-₹{(holdingBreakdown.sentPending || 0).toLocaleString()}</span>
+                    </div>
+                  )}
+                  <div className="pt-2 border-t border-muted-foreground/20 flex justify-between">
+                    <span className="text-sm font-medium">Net Balance</span>
+                    <span className={`text-sm font-bold ${notHandedOver > 0 ? 'text-red-600' : notHandedOver < 0 ? 'text-green-600' : 'text-blue-600'}`}>
+                      ₹{(notHandedOver || 0).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              </div>
 
-            <div className="space-y-2">
-              <Label>Send To</Label>
-              <Select value={toUserId} onValueChange={setToUserId}>
-                <SelectTrigger><SelectValue placeholder="Select recipient" /></SelectTrigger>
+              <div className="space-y-2">
+                <Label>Send To</Label>
+                <Select value={toUserId} onValueChange={setToUserId}>
+                  <SelectTrigger><SelectValue placeholder="Select recipient" /></SelectTrigger>
                 <SelectContent>
-                  {(staffProfiles || []).map((p) => (
-                    <SelectItem key={p.user_id} value={p.user_id}>
-                      {p.full_name} ({p.roleLabel})
+                  {staffProfiles?.length === 0 ? (
+                    <SelectItem value="__empty__" disabled>
+                      No staff available
                     </SelectItem>
-                  ))}
+                  ) : (
+                    (staffProfiles || []).map((p) => (
+                      <SelectItem key={p.user_id} value={p.user_id}>
+                        {p.full_name} ({p.roleLabel})
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
-              </Select>
-            </div>
+                </Select>
+              </div>
 
             <div className="space-y-2">
               <Label>Amount (₹)</Label>

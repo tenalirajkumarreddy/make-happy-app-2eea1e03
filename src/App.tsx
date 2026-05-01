@@ -192,8 +192,8 @@ const App = () => {
                <Route path="/stores/:id" element={<RoleGuard allowed={["super_admin", "manager", "agent"]}><StoreDetail /></RoleGuard>} />
                <Route path="/store-types" element={<RoleGuard allowed={["super_admin", "manager"]}><StoreTypes /></RoleGuard>} />
                <Route path="/store-types/access" element={<RoleGuard allowed={["super_admin", "manager"]}><StoreTypeAccess /></RoleGuard>} />
-               <Route path="/routes" element={<RoleGuard allowed={["super_admin", "manager"]}><RoutesPage /></RoleGuard>} />
-               <Route path="/routes/:id" element={<RoleGuard allowed={["super_admin", "manager"]}><RouteDetail /></RoleGuard>} />
+<Route path="/routes" element={<RoleGuard allowed={["super_admin", "manager", "agent"]}><RoutesPage /></RoleGuard>} />
+<Route path="/routes/:id" element={<RoleGuard allowed={["super_admin", "manager", "agent"]}><RouteDetail /></RoleGuard>} />
                <Route path="/sales" element={<RoleGuard allowed={["super_admin", "manager", "agent", "operator"]}><Sales /></RoleGuard>} />
                <Route path="/sale-returns" element={<RoleGuard allowed={["super_admin", "manager", "agent"]}><SaleReturns /></RoleGuard>} />
                <Route path="/transactions" element={<RoleGuard allowed={["super_admin", "manager", "agent"]}><Transactions /></RoleGuard>} />

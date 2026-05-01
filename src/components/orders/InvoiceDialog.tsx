@@ -57,6 +57,7 @@ interface OrderData {
   order_type: "simple" | "detailed";
   status: string;
   requirement_note: string | null;
+  fulfilled_by_sale_id?: string | null;
   stores?: {
     id: string;
     name: string;
@@ -83,6 +84,18 @@ interface OrderData {
       image_url?: string;
     };
   }>;
+}
+
+interface SaleItem {
+  product_id: string;
+  quantity: number;
+  unit_price: number;
+  total_price: number;
+  products?: {
+    id: string;
+    name: string;
+    sku: string;
+  };
 }
 
 interface InvoiceData {
@@ -161,6 +174,21 @@ export function InvoiceDialog({
   const [referenceNumber, setReferenceNumber] = useState("");
   const [items, setItems] = useState<InvoiceItem[]>([]);
 
+  // Fetch sale data if order was fulfilled (for auto-populating invoice from sale)
+  const { data: saleData } = useQuery({
+    queryKey: ["sale-for-invoice", order?.fulfilled_by_sale_id],
+    queryFn: async () => {
+      if (!order?.fulfilled_by_sale_id) return null;
+      const { data: sale } = await supabase
+        .from("sales")
+        .select("id, display_id, total_amount, cash_amount, upi_amount, outstanding_amount, created_at, sale_items(*, products(id, name, sku))")
+        .eq("id", order.fulfilled_by_sale_id)
+        .single();
+      return sale;
+    },
+    enabled: !!order?.fulfilled_by_sale_id && mode === "create",
+  });
+
   // Load invoice data when editing/viewing
   useEffect(() => {
     if (invoice && (mode === "edit" || mode === "view")) {
@@ -185,9 +213,24 @@ export function InvoiceDialog({
       // Pre-fill from order
       setInvoiceType(order.status === "delivered" ? "tax" : "proforma");
       setNotes(`Order Reference: ${order.display_id}\n${order.requirement_note || ""}`);
-      
-      // Pre-fill items from order
-      if (order.order_items && order.order_items.length > 0) {
+
+      // Priority: Use sale items if order was fulfilled, then fall back to order items
+      if (saleData?.sale_items && saleData.sale_items.length > 0) {
+        // Pre-fill from the linked sale (fulfilled order)
+        setItems(
+          saleData.sale_items.map((item: any) => ({
+            product_id: item.product_id,
+            description: item.products?.name || "Item",
+            quantity: item.quantity,
+            unit_price: item.unit_price || item.products?.base_price || 0,
+            discount_percent: 0,
+            tax_percent: 18, // Default GST 18%
+          }))
+        );
+        // Update reference number with sale info
+        setReferenceNumber(`Sale: ${saleData.display_id}`);
+      } else if (order.order_items && order.order_items.length > 0) {
+        // Pre-fill items from order
         setItems(
           order.order_items.map((item) => ({
             product_id: item.product_id,
@@ -210,7 +253,7 @@ export function InvoiceDialog({
         }]);
       }
     }
-  }, [invoice, order, mode, open]);
+  }, [invoice, order, mode, open, saleData]);
 
   // Fetch products
   const { data: products } = useQuery({

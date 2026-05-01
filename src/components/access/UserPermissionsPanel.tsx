@@ -16,6 +16,8 @@ const PERMISSION_KEYS = [
   "finalizer",
   "see_handover_balance",
   "submit_expenses",
+  // Sales permission
+  "record_sale",
   // Vendor & Purchase permissions
   "view_vendors",
   "manage_vendors",
@@ -91,21 +93,22 @@ const ROLE_DEFAULTS: Record<string, PermissionKey[]> = {
     // Invoices - view only (can't create/edit)
     "view_invoices", "download_invoices",
   ],
-  agent: [
-    "create_customers", "create_stores",
-    // Orders - view assigned only, can fulfill/cancel assigned orders
-    "view_assigned_orders", "accept_order_transfers",
-    "fulfill_orders", "cancel_orders",  // ← Added: agents can fulfill/cancel their assigned orders
-    // Invoices - view only
-    "view_invoices", "download_invoices",
-  ],
-  operator: [
-    // Operator defaults: POS sales, inventory, attendance
-    // NO orders by default (can be granted via permissions)
-    // NO transactions for stores
-    "view_invoices", "download_invoices",
-    "view_attendance", "manage_attendance",
-  ],
+   agent: [
+     "create_customers", "create_stores",
+     // Orders - view assigned only, can fulfill/cancel assigned orders
+     "view_assigned_orders", "accept_order_transfers",
+     "fulfill_orders", "cancel_orders", "record_sale",  // ← Added: agents can fulfill/cancel their assigned orders and record sales
+     // Invoices - view only
+     "view_invoices", "download_invoices",
+   ],
+   operator: [
+     // Operator defaults: POS sales, inventory, attendance
+     // NO orders by default (can be granted via permissions)
+     // NO transactions for stores
+     "view_invoices", "download_invoices",
+     "view_attendance", "manage_attendance",
+     "record_sale", "fulfill_orders",  // Added: operators can record sales and fulfill orders (POS)
+   ],
   customer: [
     // Customers can only view their own
     "view_orders", "view_invoices", "download_invoices",
@@ -135,6 +138,7 @@ export const PERMISSION_GROUPS = {
     "download_invoices",
   ],
   "Sales & Pricing": [
+    "record_sale",
     "price_override",
     "record_behalf",
     "edit_balance",
@@ -185,6 +189,7 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   download_invoices: "Download/Print Invoices",
   price_override: "Override Product Prices",
   record_behalf: "Record Sales on Behalf",
+  record_sale: "Record Sales",
   create_customers: "Create Customers",
   create_stores: "Create Stores",
   edit_balance: "Edit Customer Balances",
