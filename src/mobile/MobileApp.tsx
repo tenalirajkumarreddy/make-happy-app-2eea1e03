@@ -367,7 +367,7 @@ function StaffApp({ role }: { role: StaffRole }) {
     <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
       <MobileHeader title={activeMenuItem?.label || "Dashboard"} />
 
-      {/* Hamburger menu button — positioned over the header */}
+      {/* Hamburger menu button — operatoritioned over the header */}
       <button
         onClick={() => setMenuOpen(true)}
         className="fixed left-3 z-50 h-9 w-9 flex items-center justify-center rounded-xl bg-white/15 backdrop-blur-sm hover:bg-white/25 active:scale-95 transition-all"

@@ -6,9 +6,9 @@
 import { test, expect } from '@playwright/test';
 import { AITestAgent } from '../ai-test-agent';
 
-test.describe('Operator Role - NEW', () => {
+test.describe('POS Role - NEW', () => {
   test('Complete test suite', async ({ page, context }) => {
-    const agent = new AITestAgent(page, context, 'operator');
+    const agent = new AITestAgent(page, context, 'pos');
     const results = await agent.runCompleteTestSuite();
     
     expect(results.success).toBe(true);
@@ -16,7 +16,7 @@ test.describe('Operator Role - NEW', () => {
 
   test.describe('POS-Only Sales', () => {
     test('Store selector is locked to POS', async ({ page, context }) => {
-      const agent = new AITestAgent(page, context, 'operator');
+      const agent = new AITestAgent(page, context, 'pos');
       await agent.login();
       await agent.navigate('/sales');
       
@@ -41,7 +41,7 @@ test.describe('Operator Role - NEW', () => {
     });
 
     test('Cannot access other stores', async ({ page, context }) => {
-      const agent = new AITestAgent(page, context, 'operator');
+      const agent = new AITestAgent(page, context, 'pos');
       await agent.login();
       await agent.navigate('/stores');
       
@@ -54,7 +54,7 @@ test.describe('Operator Role - NEW', () => {
     });
 
     test('Full payment required for sales', async ({ page, context }) => {
-      const agent = new AITestAgent(page, context, 'operator');
+      const agent = new AITestAgent(page, context, 'pos');
       await agent.login();
       await agent.navigate('/sales');
       
@@ -71,14 +71,14 @@ test.describe('Operator Role - NEW', () => {
 
   test.describe('Inventory Access', () => {
     test('Can view inventory', async ({ page, context }) => {
-      const agent = new AITestAgent(page, context, 'operator');
+      const agent = new AITestAgent(page, context, 'pos');
       await agent.login();
       const result = await agent.testPageAccess('/inventory', true);
       expect(result.success).toBe(true);
     });
 
     test('Can transfer stock', async ({ page, context }) => {
-      const agent = new AITestAgent(page, context, 'operator');
+      const agent = new AITestAgent(page, context, 'pos');
       await agent.login();
       await agent.navigate('/stock-transfers');
       
@@ -90,14 +90,14 @@ test.describe('Operator Role - NEW', () => {
 
   test.describe('Attendance Management', () => {
     test('Can access attendance page', async ({ page, context }) => {
-      const agent = new AITestAgent(page, context, 'operator');
+      const agent = new AITestAgent(page, context, 'pos');
       await agent.login();
       const result = await agent.testPageAccess('/attendance', true);
       expect(result.success).toBe(true);
     });
 
     test('Can take attendance', async ({ page, context }) => {
-      const agent = new AITestAgent(page, context, 'operator');
+      const agent = new AITestAgent(page, context, 'pos');
       await agent.login();
       await agent.navigate('/attendance');
       
@@ -109,14 +109,14 @@ test.describe('Operator Role - NEW', () => {
 
   test.describe('HR/Staff Access', () => {
     test('Can view workers', async ({ page, context }) => {
-      const agent = new AITestAgent(page, context, 'operator');
+      const agent = new AITestAgent(page, context, 'pos');
       await agent.login();
       const result = await agent.testPageAccess('/hr/staff', true);
       expect(result.success).toBe(true);
     });
 
     test('Cannot modify staff roles', async ({ page, context }) => {
-      const agent = new AITestAgent(page, context, 'operator');
+      const agent = new AITestAgent(page, context, 'pos');
       await agent.login();
       await agent.navigate('/hr/staff');
       
@@ -128,7 +128,7 @@ test.describe('Operator Role - NEW', () => {
 
   test.describe('Orders Restriction', () => {
     test('Cannot access orders by default', async ({ page, context }) => {
-      const agent = new AITestAgent(page, context, 'operator');
+      const agent = new AITestAgent(page, context, 'pos');
       await agent.login();
       await agent.navigate('/orders');
       
@@ -141,7 +141,7 @@ test.describe('Operator Role - NEW', () => {
     });
 
     test('Orders not visible in dashboard', async ({ page, context }) => {
-      const agent = new AITestAgent(page, context, 'operator');
+      const agent = new AITestAgent(page, context, 'pos');
       await agent.login();
       await agent.navigate('/dashboard');
       
@@ -153,7 +153,7 @@ test.describe('Operator Role - NEW', () => {
 
   test.describe('Transactions Restriction', () => {
     test('Cannot access transactions for stores', async ({ page, context }) => {
-      const agent = new AITestAgent(page, context, 'operator');
+      const agent = new AITestAgent(page, context, 'pos');
       await agent.login();
       await agent.navigate('/transactions');
       
@@ -168,7 +168,7 @@ test.describe('Operator Role - NEW', () => {
 
   test.describe('Invoices', () => {
     test('Can view invoices', async ({ page, context }) => {
-      const agent = new AITestAgent(page, context, 'operator');
+      const agent = new AITestAgent(page, context, 'pos');
       await agent.login();
       await agent.navigate('/invoices');
       
@@ -178,7 +178,7 @@ test.describe('Operator Role - NEW', () => {
     });
 
     test('Cannot create invoices', async ({ page, context }) => {
-      const agent = new AITestAgent(page, context, 'operator');
+      const agent = new AITestAgent(page, context, 'pos');
       await agent.login();
       await agent.navigate('/invoices');
       

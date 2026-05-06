@@ -250,6 +250,24 @@ manager: {
         ],
       },
     ],
+secondary: [],
+  },
+  operator: {
+    main: [
+      {
+        label: "Counter",
+        items: [
+          { label: "Dashboard", path: "/", icon: LayoutDashboard },
+          { label: "Handovers", path: "/handovers", icon: HandCoins },
+          { label: "Inventory", path: "/inventory", icon: Warehouse },
+          { label: "Stock Transfers", path: "/stock-transfers", icon: ArrowRightLeft },
+          { label: "Orders", path: "/orders", icon: ClipboardList },
+          { label: "Transactions", path: "/transactions", icon: Receipt },
+          { label: "Attendance", path: "/attendance", icon: Calendar },
+          { label: "Invoices", path: "/invoices", icon: FileText },
+        ],
+      },
+    ],
     secondary: [],
   },
   pos: {
@@ -258,9 +276,12 @@ manager: {
         label: "Counter",
         items: [
           { label: "Dashboard", path: "/", icon: LayoutDashboard },
-          { label: "Sales", path: "/sales", icon: ShoppingCart },
           { label: "Handovers", path: "/handovers", icon: HandCoins },
           { label: "Inventory", path: "/inventory", icon: Warehouse },
+          { label: "Orders", path: "/orders", icon: ClipboardList },
+          { label: "Transactions", path: "/transactions", icon: Receipt },
+          { label: "Attendance", path: "/attendance", icon: Calendar },
+          { label: "Invoices", path: "/invoices", icon: FileText },
         ],
       },
     ],

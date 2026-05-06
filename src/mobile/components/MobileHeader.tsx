@@ -68,7 +68,7 @@ export function MobileHeader({ title }: Props) {
     manager: "Manager",
     super_admin: "Admin",
     marketer: "Marketer",
-    pos: "POS",
+    operator: "Operator",
     customer: "Customer",
   };
 

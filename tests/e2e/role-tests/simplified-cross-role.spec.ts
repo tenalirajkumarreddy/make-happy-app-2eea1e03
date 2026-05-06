@@ -57,11 +57,11 @@ test.describe('Simplified Cross-Role Tests - Working', () => {
           ],
         },
         {
-          role: 'operator',
+          role: 'pos',
           actions: [
             { type: 'navigate', target: '/' },
             { type: 'wait', delay: 5000 },
-            { type: 'screenshot', value: 'operator_dashboard' },
+            { type: 'screenshot', value: 'pos_dashboard' },
           ],
         },
       ],
@@ -97,14 +97,14 @@ test.describe('Simplified Cross-Role Tests - Working', () => {
   test('Permission Boundary - Operator vs Marketer on Orders', async () => {
     const result = await framework.runScenario({
       name: 'Permission_Boundary_Orders',
-      description: 'Operator blocked, Marketer allowed on /orders',
+      description: 'POS blocked, Marketer allowed on /orders',
       agents: [
         {
-          role: 'operator',
+          role: 'pos',
           actions: [
             { type: 'navigate', target: '/orders' },
             { type: 'wait', delay: 3000 },
-            { type: 'screenshot', value: 'operator_orders_attempt' },
+            { type: 'screenshot', value: 'pos_orders_attempt' },
           ],
         },
         {
@@ -121,9 +121,9 @@ test.describe('Simplified Cross-Role Tests - Working', () => {
           type: 'permission_boundary',
           fromAgent: 'operator',
           toAgent: 'marketer',
-          description: 'Operator blocked from orders, Marketer allowed',
+          description: 'POS blocked from orders, Marketer allowed',
           validate: async (agents) => {
-            const operator = Array.from(agents.values()).find(a => a.role === 'operator');
+            const operator = Array.from(agents.values()).find(a => a.role === 'pos');
             const marketer = Array.from(agents.values()).find(a => a.role === 'marketer');
 
             if (!operator || !marketer) return false;
@@ -151,14 +151,14 @@ test.describe('Simplified Cross-Role Tests - Working', () => {
   test('Permission Boundary - Operator vs Manager on Inventory', async () => {
     const result = await framework.runScenario({
       name: 'Permission_Boundary_Inventory',
-      description: 'Both Operator and Manager can access /inventory',
+      description: 'Both POS and Manager can access /inventory',
       agents: [
         {
-          role: 'operator',
+          role: 'pos',
           actions: [
             { type: 'navigate', target: '/inventory' },
             { type: 'wait', delay: 3000 },
-            { type: 'screenshot', value: 'operator_inventory' },
+            { type: 'screenshot', value: 'pos_inventory' },
           ],
         },
         {
@@ -177,7 +177,7 @@ test.describe('Simplified Cross-Role Tests - Working', () => {
           toAgent: 'manager',
           description: 'Both can access inventory',
           validate: async (agents) => {
-            const operator = Array.from(agents.values()).find(a => a.role === 'operator');
+            const operator = Array.from(agents.values()).find(a => a.role === 'pos');
             const manager = Array.from(agents.values()).find(a => a.role === 'manager');
 
             if (!operator || !manager) return false;
@@ -198,7 +198,7 @@ test.describe('Simplified Cross-Role Tests - Working', () => {
   });
 
   test('Page Access - Sales Page for All Roles', async () => {
-    const roles = ['super_admin', 'manager', 'agent', 'operator'];
+    const roles = ['super_admin', 'manager', 'agent', 'pos'];
     const agents = roles.map(role => ({
       role,
       actions: [
@@ -216,7 +216,7 @@ test.describe('Simplified Cross-Role Tests - Working', () => {
         {
           type: 'data_sync',
           fromAgent: 'super_admin',
-          toAgent: 'operator',
+          toAgent: 'pos',
           description: 'All roles can access Sales page',
           validate: async (agentsMap) => {
             let allPassed = true;
@@ -254,7 +254,7 @@ test.describe('Simplified Cross-Role Tests - Working', () => {
   test('Page Access - Attendance for Manager and Operator', async () => {
     const result = await framework.runScenario({
       name: 'Attendance_Page_Access',
-      description: 'Manager and Operator can access Attendance',
+      description: 'Manager and POS can access Attendance',
       agents: [
         {
           role: 'manager',
@@ -265,11 +265,11 @@ test.describe('Simplified Cross-Role Tests - Working', () => {
           ],
         },
         {
-          role: 'operator',
+          role: 'pos',
           actions: [
             { type: 'navigate', target: '/attendance' },
             { type: 'wait', delay: 3000 },
-            { type: 'screenshot', value: 'operator_attendance' },
+            { type: 'screenshot', value: 'pos_attendance' },
           ],
         },
       ],
@@ -281,7 +281,7 @@ test.describe('Simplified Cross-Role Tests - Working', () => {
           description: 'Both can access Attendance page',
           validate: async (agents) => {
             const manager = Array.from(agents.values()).find(a => a.role === 'manager');
-            const operator = Array.from(agents.values()).find(a => a.role === 'operator');
+            const operator = Array.from(agents.values()).find(a => a.role === 'pos');
 
             if (!manager || !operator) return false;
 

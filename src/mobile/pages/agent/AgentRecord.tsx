@@ -64,7 +64,7 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
   });
 
   const { data: availableProducts, isLoading: loadingProducts } = useQuery({
-    queryKey: ["mobile-products-for-sale", store?.store_type_id, store?.id],
+    queryKey: ["mobile-products-for-sale", store?.store_type_id, store?.id, user?.id, recordedFor],
     queryFn: async () => {
       const storeTypeId = store!.store_type_id!;
       const storeId = store!.id;
@@ -89,14 +89,33 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
       const storePriceMap: Record<string, number> = {};
       storePricing?.forEach((p: any) => { storePriceMap[p.product_id] = Number(p.price); });
 
+      // NEW: Fetch stock availability for all products
+      const productIds = productList.map(p => p.id);
+      const { data: stockInfo } = await supabase.rpc("check_stock_availability", {
+        p_user_id: user!.id,
+        p_recorded_for: recordedFor || null,
+        p_items: productIds.map(id => ({ product_id: id, quantity: 0 })) // Check for 0 to just get available counts
+      });
+
+      const stockMap: Record<string, any> = {};
+      (stockInfo as any[])?.forEach(s => {
+        stockMap[s.out_product_id] = s;
+      });
+
       return productList.map((p: any) => {
         let effectivePrice = Number(p.base_price);
         if (typePriceMap[p.id]) effectivePrice = typePriceMap[p.id];
         if (storePriceMap[p.id]) effectivePrice = storePriceMap[p.id];
-        return { ...p, effectivePrice };
+        return { 
+          ...p, 
+          effectivePrice,
+          stock: stockMap[p.id]?.out_available_qty || 0,
+          physical_stock: stockMap[p.id]?.out_physical_qty || 0,
+          pending_out: stockMap[p.id]?.out_pending_outgoing || 0
+        };
       });
     },
-    enabled: !!store?.store_type_id && !!store?.id,
+    enabled: !!store?.store_type_id && !!store?.id && !!user?.id,
   });
 
   const addItem = (productId: string) => {
@@ -159,7 +178,7 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
     if (items.length === 0) { toast.error("Add at least one product"); return; }
     if (totalAmount === 0) { toast.error("Sale total cannot be zero"); return; }
     if (!store.customer_id) { toast.error("Store has no linked customer"); return; }
-    if (role === "operator" && outstandingFromSale !== 0) {
+    if (role === "pos" && outstandingFromSale !== 0) {
       toast.error("POS sales require full payment. Cash + UPI must equal total amount.");
       return;
     }
@@ -170,14 +189,26 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
     const effectiveRecordedBy = recordedFor || user!.id;
     const loggedBy = recordedFor ? user!.id : null;
 
-    if (role === "agent" && store) {
-      const { data: locSetting } = await supabase.from("company_settings").select("value").eq("key", "location_validation").maybeSingle();
-      if (locSetting?.value === "true") {
-        const { checkProximity } = await import("@/lib/proximity");
-        const result = await checkProximity(store.lat ?? null, store.lng ?? null);
-        if (!result.withinRange) { toast.error(result.message); setSaving(false); return; }
-        if (result.skippedNoGps) toast.warning("Store has no GPS — location check skipped");
-      }
+    // NEW: Check stock availability before sale
+    const { data: stockCheck, error: stockError } = await supabase.rpc("check_stock_availability", {
+      p_user_id: user!.id,
+      p_recorded_for: recordedFor || null,
+      p_items: items.map(i => ({ product_id: i.product_id, quantity: i.quantity }))
+    });
+
+    if (stockError) {
+      toast.error("Stock check failed. Please try again.");
+      setSaving(false);
+      return;
+    }
+
+    const stockRows = Array.isArray(stockCheck) ? stockCheck : [];
+    const insufficient = stockRows.filter((s: any) => !s.out_available);
+    if (insufficient.length > 0) {
+      const details = insufficient.map((i: any) => `${i.out_product_name} (Avail: ${i.out_available_qty})`).join(", ");
+      toast.error(`Insufficient stock: ${details}`);
+      setSaving(false);
+      return;
     }
 
     const saleData = {
@@ -359,9 +390,19 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
                     <div className="flex items-center p-3.5 gap-3">
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-slate-800 dark:text-white truncate">{product.name}</p>
-                        <p className="text-xs text-slate-400 mt-0.5">
-                          ₹{product.effectivePrice.toLocaleString("en-IN")} each
-                        </p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <p className="text-xs text-slate-400">
+                            ₹{product.effectivePrice.toLocaleString("en-IN")}
+                          </p>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 font-medium">
+                            Stock: {product.stock}
+                          </span>
+                          {product.pending_out > 0 && (
+                            <span className="text-[10px] text-amber-500 font-medium">
+                              ({product.pending_out} pending)
+                            </span>
+                          )}
+                        </div>
                       </div>
                       {inCart ? (
                         <div className="flex items-center gap-2 shrink-0">

@@ -11,8 +11,8 @@ import {
 
 describe("Sale Validation", () => {
   describe("getValidationRules", () => {
-    it("returns POS rules for operator role", () => {
-      const rules = getValidationRules("operator");
+    it("returns POS rules for pos role", () => {
+      const rules = getValidationRules("pos");
       expect(rules.requireFullPayment).toBe(true);
     });
 

@@ -177,7 +177,7 @@ let query = supabase
    .select("*, stores(id, name, display_id, store_type_id, route_id, address, outstanding), customers(id, name, display_id, phone, email), fulfilled_order_id, invoice_sales(invoice_id)")
        .order("created_at", { ascending: false });
        if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
-       // Non-admin roles (agents, pos, marketer) only see their own records
+       // Non-admin roles (agents, operator, marketer) only see their own records
        if (!isAdmin) query = query.eq("recorded_by", user!.id);
        // Server-side filters
        if (filterFrom) query = query.gte("created_at", filterFrom + "T00:00:00");
@@ -276,18 +276,38 @@ let query = supabase
 
   // Fetch all products for adding non-associated items
    const { data: allProducts } = useQuery({
-     queryKey: ["all-products-for-sale", currentWarehouse?.id],
+     queryKey: ["all-products-for-sale", currentWarehouse?.id, user?.id, recordedFor],
      queryFn: async () => {
        let query = supabase.from("products").select("id, name, base_price, sku, image_url").eq("is_active", true);
        if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
        const { data } = await query;
-       return data || [];
+       
+       if (!data) return [];
+
+       // Fetch stock availability
+       const { data: stockInfo } = await supabase.rpc("check_stock_availability", {
+         p_user_id: user!.id,
+         p_recorded_for: recordedFor || null,
+         p_items: data.map(p => ({ product_id: p.id, quantity: 0 }))
+       });
+
+       const stockMap: Record<string, any> = {};
+       (stockInfo as any[])?.forEach(s => {
+         stockMap[s.out_product_id] = s;
+       });
+
+       return data.map(p => ({
+         ...p,
+         stock: stockMap[p.id]?.out_available_qty || 0,
+         pending_out: stockMap[p.id]?.out_pending_outgoing || 0
+       }));
      },
+     enabled: !!user?.id,
    });
 
   // Fetch store-associated products with pricing
   const { data: storeProducts } = useQuery({
-    queryKey: ["store-products-for-sale", selectedStoreTypeId, storeId],
+    queryKey: ["store-products-for-sale", selectedStoreTypeId, storeId, user?.id, recordedFor],
     queryFn: async () => {
       if (!selectedStoreTypeId || !storeId) return [];
       
@@ -301,6 +321,8 @@ let query = supabase
       if (accessData && accessData.length > 0) {
         productList = accessData.map((a: any) => a.products).filter(Boolean);
       }
+
+      if (productList.length === 0) return [];
 
       // Get pricing
       const { data: typePricing } = await supabase
@@ -317,14 +339,31 @@ let query = supabase
       const storePriceMap: Record<string, number> = {};
       storePricing?.forEach((p) => { storePriceMap[p.product_id] = Number(p.price); });
 
+      // Fetch stock availability
+      const { data: stockInfo } = await supabase.rpc("check_stock_availability", {
+        p_user_id: user!.id,
+        p_recorded_for: recordedFor || null,
+        p_items: productList.map(p => ({ product_id: p.id, quantity: 0 }))
+      });
+
+      const stockMap: Record<string, any> = {};
+      (stockInfo as any[])?.forEach(s => {
+        stockMap[s.out_product_id] = s;
+      });
+
       return productList.map((p) => {
         let effectivePrice = Number(p.base_price);
         if (typePriceMap[p.id]) effectivePrice = typePriceMap[p.id];
         if (storePriceMap[p.id]) effectivePrice = storePriceMap[p.id];
-        return { ...p, effectivePrice };
+        return { 
+          ...p, 
+          effectivePrice,
+          stock: stockMap[p.id]?.out_available_qty || 0,
+          pending_out: stockMap[p.id]?.out_pending_outgoing || 0
+        };
       });
     },
-    enabled: !!storeId && !!selectedStoreTypeId,
+    enabled: !!storeId && !!selectedStoreTypeId && !!user?.id,
   });
 
   // Initialize items when store products load
@@ -1511,9 +1550,21 @@ let query = supabase
                       {/* Product Info */}
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sm truncate">{product?.name || item.product_name || "Select Product"}</p>
-                        <p className="text-xs text-muted-foreground">
-                          ₹{item.unit_price.toLocaleString()} × {item.quantity} = ₹{(item.quantity * item.unit_price).toLocaleString()}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs text-muted-foreground">
+                            ₹{item.unit_price.toLocaleString()} × {item.quantity} = ₹{(item.quantity * item.unit_price).toLocaleString()}
+                          </p>
+                          {(product as any)?.stock !== undefined && (
+                            <Badge variant="outline" className="text-[10px] px-1 h-4 font-normal">
+                              Stock: {(product as any).stock}
+                            </Badge>
+                          )}
+                          {(product as any)?.pending_out > 0 && (
+                            <span className="text-[10px] text-amber-500 font-medium">
+                              ({(product as any).pending_out} pending)
+                            </span>
+                          )}
+                        </div>
                       </div>
                       
                       {/* Quantity Controls */}

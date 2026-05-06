@@ -70,7 +70,7 @@ test.describe('Systematic Page Coverage', () => {
 
       // Basic assertions
       expect(results.has('super_admin')).toBe(true);
-      expect(results.has('operator')).toBe(true);
+      expect(results.has('pos')).toBe(true);
     });
   });
 
@@ -134,15 +134,15 @@ test.describe('Systematic Page Coverage', () => {
   });
 
   test.describe('Orders Page - Permission Test', () => {
-    test('Orders blocked for operator, allowed for others', async ({ page }) => {
+    test('Orders blocked for pos, allowed for others', async ({ page }) => {
       const ordersPage = PAGE_CATALOG.find(p => p.path === '/orders');
       expect(ordersPage).toBeDefined();
 
       // Test that operator is blocked
       console.log('\nTesting Orders page access...');
 
-      // Operator should be blocked
-      const operatorLoggedIn = await runner.loginAs('operator');
+      // POS should be blocked
+      const operatorLoggedIn = await runner.loginAs('pos');
       if (operatorLoggedIn) {
         await page.goto('http://localhost:5003/orders');
         await page.waitForLoadState('networkidle');
@@ -153,7 +153,7 @@ test.describe('Systematic Page Coverage', () => {
                          content.includes('403') ||
                          !(await page.url()).includes('/orders');
 
-        console.log(`Operator blocked from Orders: ${isBlocked}`);
+        console.log(`POS blocked from Orders: ${isBlocked}`);
         expect(isBlocked).toBe(true);
       }
 
@@ -177,11 +177,11 @@ test.describe('Systematic Page Coverage', () => {
   });
 
   test.describe('Attendance Page - All Allowed Roles', () => {
-    test('Attendance page for super_admin, manager, operator', async ({ page }) => {
+    test('Attendance page for super_admin, manager, pos', async ({ page }) => {
       const attendancePage = PAGE_CATALOG.find(p => p.path === '/attendance');
       expect(attendancePage).toBeDefined();
 
-      for (const role of ['super_admin', 'manager', 'operator']) {
+      for (const role of ['super_admin', 'manager', 'pos']) {
         console.log(`\nTesting Attendance for ${role}...`);
 
         const loggedIn = await runner.loginAs(role as keyof typeof TEST_ACCOUNTS);

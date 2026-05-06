@@ -6,10 +6,10 @@ interface RoleRouteProps {
   customerElement: React.ReactNode;
   agentElement?: React.ReactNode;
   marketerElement?: React.ReactNode;
-  posElement?: React.ReactNode;
+  operatorElement?: React.ReactNode;
 }
 
-export function RoleRoute({ staffElement, customerElement, agentElement, marketerElement, posElement }: RoleRouteProps) {
+export function RoleRoute({ staffElement, customerElement, agentElement, marketerElement, operatorElement }: RoleRouteProps) {
   const { role, loading } = useAuth();
 
   if (loading) {
@@ -23,7 +23,7 @@ export function RoleRoute({ staffElement, customerElement, agentElement, markete
   if (role === "customer") return <>{customerElement}</>;
   if (role === "agent" && agentElement) return <>{agentElement}</>;
   if (role === "marketer" && marketerElement) return <>{marketerElement}</>;
-  if (role === "pos" && posElement) return <>{posElement}</>;
+  if (role === "operator" && operatorElement) return <>{operatorElement}</>;
   if (role === "super_admin" || role === "manager") return <>{staffElement}</>;
 
   return (

@@ -15,6 +15,8 @@ import {
   Smartphone,
   Clock,
   ArrowRight,
+  ArrowRightLeft,
+  Boxes,
   ClipboardList,
   Receipt,
   Users2,
@@ -1153,7 +1155,7 @@ const Dashboard = () => {
       manager: "Manager Dashboard",
       agent: "Agent Dashboard",
       marketer: "Marketer Dashboard",
-      pos: "POS Dashboard",
+      operator: "Operator Dashboard",
       customer: "Customer Dashboard",
     };
     document.title = (names[role || ""] || "Dashboard") + " — BizManager";
@@ -1173,11 +1175,208 @@ const Dashboard = () => {
       return <AgentDashboard />;
     case "customer":
       return <CustomerDashboard />;
-    case "marketer":
     case "operator":
+      return <OperatorDashboard />;
+    case "marketer":
     default:
       return <DefaultDashboard />;
   }
+};
+
+// ==================== Operator Dashboard ====================
+
+const OperatorDashboard = () => {
+  const { profile, user } = useAuth();
+  const { currentWarehouse } = useWarehouse();
+  const navigate = useNavigate();
+
+  const { data: stats, isLoading } = useQuery({
+    queryKey: ["operator-dashboard", currentWarehouse?.id, user?.id],
+    queryFn: async () => {
+      const today = new Date().toISOString().split("T")[0];
+
+      const [
+        stockRes,
+        pendingTransfersRes,
+        recentTransfersRes,
+        pendingOrdersRes,
+      ] = await Promise.all([
+        // Warehouse stock
+        supabase.from("product_stock")
+          .select("quantity, products(name, base_price, category)")
+          .eq("warehouse_id", currentWarehouse?.id)
+          .limit(100),
+        // Pending transfers (needing action)
+        supabase.from("stock_transfers")
+          .select("*", { count: "exact", head: true })
+          .in("status", ["pending", "awaiting_acceptance"])
+          .or(`from_warehouse_id.eq.${currentWarehouse?.id},to_warehouse_id.eq.${currentWarehouse?.id}`),
+        // Recent transfer logs
+        supabase.from("stock_transfers")
+          .select(`
+            id, created_at, status, quantity, product_id,
+            from_warehouse_id, to_warehouse_id,
+            product:products(name)
+          `)
+          .or(`from_warehouse_id.eq.${currentWarehouse?.id},to_warehouse_id.eq.${currentWarehouse?.id}`)
+          .order("created_at", { ascending: false })
+          .limit(5),
+        // Pending orders for this warehouse
+        supabase.from("orders")
+          .select("*", { count: "exact", head: true })
+          .eq("warehouse_id", currentWarehouse?.id)
+          .eq("status", "pending"),
+      ]);
+
+      const stockItems = stockRes.data || [];
+      const totalStockItems = stockItems.reduce((acc, item) => acc + (item.quantity || 0), 0);
+      const lowStockCount = stockItems.filter(item => (item.quantity || 0) <= 10).length;
+
+      return {
+        totalStockItems,
+        lowStockCount,
+        pendingTransfersCount: pendingTransfersRes.count || 0,
+        pendingOrdersCount: pendingOrdersRes.count || 0,
+        recentTransfers: recentTransfersRes.data || [],
+        stockList: stockItems.slice(0, 5).map(item => ({
+          name: item.products?.name || "Unknown",
+          quantity: item.quantity,
+          category: item.products?.category
+        })),
+      };
+    },
+    enabled: !!currentWarehouse?.id,
+  });
+
+  if (isLoading) return <DashboardSkeleton />;
+  const s = stats!;
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <PageHeader
+        title="Operator Dashboard"
+        subtitle={`Welcome, ${profile?.full_name || "Operator"}! Managing Warehouse: ${currentWarehouse?.name || "N/A"}`}
+      />
+
+      {/* Stats Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <StatCard
+          title="Total Stock Units"
+          value={s.totalStockItems.toLocaleString()}
+          icon={Boxes}
+          iconColor="primary"
+        />
+        <StatCard
+          title="Pending Transfers"
+          value={String(s.pendingTransfersCount)}
+          icon={ArrowRightLeft}
+          iconColor="warning"
+          change={s.pendingTransfersCount > 0 ? "Action required" : "All caught up"}
+          changeType={s.pendingTransfersCount > 0 ? "warning" : "positive"}
+        />
+        <StatCard
+          title="Low Stock Alert"
+          value={String(s.lowStockCount)}
+          icon={AlertCircle}
+          iconColor="destructive"
+          change="Below 10 units"
+          changeType="negative"
+        />
+        <StatCard
+          title="Pending Orders"
+          value={String(s.pendingOrdersCount)}
+          icon={ShoppingCart}
+          iconColor="info"
+        />
+      </div>
+
+      {/* Quick Actions */}
+      <div className="rounded-xl border bg-card p-5">
+        <h3 className="text-sm font-semibold mb-4">Inventory Operations</h3>
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+          <Button variant="outline" className="h-auto min-h-20 flex-col gap-2 py-4" onClick={() => navigate("/inventory")}>
+            <Package className="h-5 w-5 text-primary" />
+            Check Stock
+          </Button>
+          <Button variant="outline" className="h-auto min-h-20 flex-col gap-2 py-4" onClick={() => navigate("/stock-transfers")}>
+            <ArrowRightLeft className="h-5 w-5 text-warning" />
+            Stock Transfers
+          </Button>
+          <Button variant="outline" className="h-auto min-h-20 flex-col gap-2 py-4" onClick={() => navigate("/inventory")}>
+            <Plus className="h-5 w-5 text-success" />
+            Add Adjustment
+          </Button>
+          <Button variant="outline" className="h-auto min-h-20 flex-col gap-2 py-4" onClick={() => navigate("/reports")}>
+            <FileText className="h-5 w-5 text-info" />
+            Stock Report
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Current Stock Preview */}
+        <div className="rounded-xl border bg-card p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold">Warehouse Stock (Top Items)</h3>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/inventory")} className="text-xs">
+              View All <ArrowRight className="ml-1 h-3 w-3" />
+            </Button>
+          </div>
+          <div className="space-y-3">
+            {s.stockList.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">No stock data available</p>
+            ) : (
+              s.stockList.map((item, idx) => (
+                <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-muted/30">
+                  <div>
+                    <p className="text-sm font-medium">{item.name}</p>
+                    <p className="text-[10px] text-muted-foreground uppercase">{item.category || "General"}</p>
+                  </div>
+                  <Badge variant={item.quantity <= 10 ? "destructive" : "secondary"}>
+                    {item.quantity} units
+                  </Badge>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Recent Transfer Logs */}
+        <div className="rounded-xl border bg-card p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold">Recent Transfers</h3>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/stock-transfers")} className="text-xs">
+              View History <ArrowRight className="ml-1 h-3 w-3" />
+            </Button>
+          </div>
+          <div className="space-y-3">
+            {s.recentTransfers.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">No recent transfers</p>
+            ) : (
+              s.recentTransfers.map((t: any) => (
+                <div key={t.id} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-full ${t.status === 'completed' ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}>
+                      <ArrowRightLeft className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">{t.product?.name || "Product"}</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {formatDate(t.created_at)} • {t.quantity} units
+                      </p>
+                    </div>
+                  </div>
+                  <Badge variant={t.status === "completed" ? "default" : "outline"} className="text-[10px] h-5">
+                    {t.status}
+                  </Badge>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default Dashboard;

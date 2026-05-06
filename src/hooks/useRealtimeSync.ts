@@ -47,6 +47,7 @@ const ROLE_TABLE_MAP: Record<string, string[]> = {
     "customers", "products", "routes", "route_sessions", "store_visits",
     "handovers", "handover_snapshots", "expense_claims",
     "agent_routes", "agent_store_types", "profiles",
+    "stock_transfers", "staff_stock",
   ],
   marketer: [
     // Marketer needs customer and order data
@@ -60,6 +61,12 @@ const ROLE_TABLE_MAP: Record<string, string[]> = {
     "sales", "sale_items", "stores", "store_type_products",
     "products", "handovers", "profiles",
   ],
+  operator: [
+    // Operator needs stock and transfer data
+    "sales", "sale_items", "transactions", "orders", "order_items",
+    "stores", "customers", "products", "handovers", "profiles",
+    "product_stock", "stock_movements", "staff_stock", "stock_transfers", "warehouses",
+  ],
   customer: [
     // Customer only needs their own data
     "orders", "order_items", "stores", "customers", "profiles",
@@ -68,17 +75,17 @@ const ROLE_TABLE_MAP: Record<string, string[]> = {
 
 // Query key mappings for each table
 const TABLE_QUERY_MAP: Record<string, string[]> = {
-  sales: ["sales", "dashboard-stats", "agent-dashboard-stats", "mobile-marketer-dashboard", "mobile-pos-dashboard", "mobile-agent-sales-today", "mobile-history-balance-sales", "mobile-history-sales-timeline", "mobile-customer-sales", "mobile-customer-ledger-sales", "mobile-customer-home-sales"],
+  sales: ["sales", "dashboard-stats", "agent-dashboard-stats", "manager-dashboard", "agent-dashboard", "default-dashboard", "mobile-marketer-dashboard", "mobile-pos-dashboard", "mobile-agent-sales-today", "mobile-history-balance-sales", "mobile-history-sales-timeline", "mobile-customer-sales", "mobile-customer-ledger-sales", "mobile-customer-home-sales"],
   sale_items: ["sales", "sale-items"],
-  orders: ["orders", "dashboard-stats", "mobile-marketer-dashboard", "store-orders", "mobile-marketer-orders", "mobile-customer-orders", "mobile-customer-orders-self", "mobile-customer-orders-stores", "mobile-agent-all-orders", "mobile-route-pending-orders"],
+  orders: ["orders", "dashboard-stats", "manager-dashboard", "operator-dashboard", "agent-dashboard", "customer-dashboard", "default-dashboard", "mobile-marketer-dashboard", "store-orders", "mobile-marketer-orders", "mobile-customer-orders", "mobile-customer-orders-self", "mobile-customer-orders-stores", "mobile-agent-all-orders", "mobile-route-pending-orders"],
   order_items: ["orders", "order-items"],
-  transactions: ["transactions", "dashboard-stats", "agent-dashboard-stats", "mobile-marketer-dashboard", "mobile-pos-dashboard", "store-transactions", "customer-transactions", "mobile-agent-tx-today", "mobile-history-transactions-timeline", "mobile-customer-ledger-self", "mobile-customer-ledger-stores", "mobile-customer-ledger-payments"],
+  transactions: ["transactions", "dashboard-stats", "agent-dashboard-stats", "manager-dashboard", "agent-dashboard", "customer-dashboard", "mobile-marketer-dashboard", "mobile-pos-dashboard", "store-transactions", "customer-transactions", "mobile-agent-tx-today", "mobile-history-transactions-timeline", "mobile-customer-ledger-self", "mobile-customer-ledger-stores", "mobile-customer-ledger-payments"],
   stores: ["stores", "dashboard-stats", "store", "customer-stores", "mobile-marketer-stores", "mobile-customer-home-stores", "mobile-customer-profile-stores", "mobile-store-profile"],
   store_pricing: ["store-pricing", "store-pricing-tab", "stores", "mobile-store-pricing"],
   store_type_pricing: ["store-type-pricing-tab", "mobile-store-type-pricing"],
   store_type_products: ["store-type-products", "store-products-tab", "mobile-store-products", "mobile-products-for-sale"],
   store_visits: ["session-visits", "store-visits"],
-  handovers: ["handovers", "dashboard-stats", "agent-dashboard-stats"],
+  handovers: ["handovers", "dashboard-stats", "agent-dashboard-stats", "manager-dashboard"],
   handover_snapshots: ["handover-snapshots"],
   expense_claims: ["expense-claims", "handovers", "dashboard-stats", "agent-dashboard-stats"],
   customers: ["customers", "dashboard-stats", "customer", "customers-list", "customers-for-orders", "customers-for-invoice", "customers-kyc-for-sale", "mobile-marketer-order-customers", "mobile-customers-kyc-sale"],
@@ -92,10 +99,10 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
   agent_routes: ["route-access-matrix", "routes", "mobile-agent-routes"],
   agent_store_types: ["store-type-access-matrix", "route-access-matrix", "mobile-marketer-store-types", "mobile-store-types-credit"],
   // Inventory tables
-  product_stock: ["inventory", "stock-movements"],
-  stock_movements: ["stock-movements", "inventory"],
-  staff_stock: ["staff-stock"],
-  stock_transfers: ["stock-transfers", "staff-stock", "inventory"],
+  product_stock: ["inventory", "stock-movements", "warehouse-stock", "operator-dashboard", "manager-dashboard"],
+  stock_movements: ["stock-movements", "inventory", "warehouse-stock"],
+  staff_stock: ["staff-stock", "staff-stock-by-warehouse"],
+  stock_transfers: ["stock-transfers", "staff-stock", "staff-stock-by-warehouse", "inventory", "warehouse-stock", "operator-dashboard"],
   warehouses: ["warehouses"],
   // Receipts table
   receipts: ["receipts", "receipt-history"],
@@ -134,8 +141,8 @@ let retryAttempt = 0;
 let retryTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
 function shouldSkipForSubscriber(sub: RealtimeSubscriber, table: string, payload: any) {
-  // Admins and managers see everything
-  if (sub.isAdmin || sub.role === "super_admin" || sub.role === "manager") return false;
+  // Admins, managers and operators see everything (filtered by warehouse context in queries)
+  if (sub.isAdmin || sub.role === "super_admin" || sub.role === "manager" || sub.role === "operator") return false;
 
   const userId = sub.userId;
   if (!userId) return true;
@@ -176,6 +183,18 @@ function shouldSkipForSubscriber(sub: RealtimeSubscriber, table: string, payload
       return false;
     }
     return true;
+  }
+
+  if (table === "stock_transfers") {
+    const fromUser = payload.new?.from_user_id ?? payload.old?.from_user_id;
+    const toUser = payload.new?.to_user_id ?? payload.old?.to_user_id;
+    const requestedBy = payload.new?.requested_by ?? payload.old?.requested_by;
+    if (fromUser !== userId && toUser !== userId && requestedBy !== userId) return true;
+  }
+
+  if (table === "staff_stock") {
+    const stockOwner = payload.new?.user_id ?? payload.old?.user_id;
+    if (stockOwner && stockOwner !== userId) return true;
   }
 
   return false;

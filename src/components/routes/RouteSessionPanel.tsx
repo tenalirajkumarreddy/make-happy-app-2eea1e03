@@ -116,7 +116,7 @@ export function RouteSessionPanel() {
     };
 
     locationWatchRef.current = navigator.geolocation.watchPosition(
-      (pos) => pushLocation(pos.coords.latitude, pos.coords.longitude),
+      (operator) => pushLocation(operator.coords.latitude, operator.coords.longitude),
       () => {},
       { enableHighAccuracy: true, maximumAge: 30000, timeout: 10000 }
     );

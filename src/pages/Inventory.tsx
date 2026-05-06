@@ -85,8 +85,10 @@ const Inventory = () => {
   const allowedTransferTypes = useMemo(() => {
     if (isSuperAdmin) return ["warehouse_to_staff", "staff_to_warehouse", "staff_to_staff", "warehouse_to_warehouse"];
     if (isManager) return ["warehouse_to_staff", "staff_to_warehouse", "staff_to_staff"];
+    // operator: can send TO staff (wh → staff), staff → staff
     if (isPos) return ["warehouse_to_staff", "staff_to_staff"];
-    if (isAgent || isMarketer) return ["staff_to_warehouse", "staff_to_staff"];
+    // agent/marketer: first choice is staff_to_warehouse (most common), also wh→staff, staff→staff
+    if (isAgent || isMarketer) return ["staff_to_warehouse", "staff_to_staff", "warehouse_to_staff"];
     return [] as string[];
   }, [isSuperAdmin, isManager, isPos, isAgent, isMarketer]);
   const canTransferStock = allowedTransferTypes.length > 0;
@@ -188,12 +190,12 @@ const Inventory = () => {
       const fallback =
         (isSuperAdmin
           ? allWarehouses[0]?.id
-          : assignedWarehouseId ?? currentWarehouse?.id) ?? "";
+          : assignedWarehouseId ?? currentWarehouse?.id ?? allWarehouses[0]?.id) ?? "";
       if (fallback) setSelectedWarehouseId(fallback);
     }, 100);
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isInventoryViewer, selectedWarehouseId, isSuperAdmin, assignedWarehouseId, currentWarehouse?.id]);
+  }, [isInventoryViewer, selectedWarehouseId, isSuperAdmin, assignedWarehouseId, currentWarehouse?.id, allWarehouses]);
 
   // Build staff holdings by product map
   const staffHoldingsByProduct = useMemo(() => {
@@ -296,7 +298,7 @@ const Inventory = () => {
         <Alert>
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            You don&apos;t have permission to view inventory. Contact your administrator.
+            You don&aoperator;t have permission to view inventory. Contact your administrator.
           </AlertDescription>
         </Alert>
       </div>

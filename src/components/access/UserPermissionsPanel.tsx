@@ -101,14 +101,14 @@ const ROLE_DEFAULTS: Record<string, PermissionKey[]> = {
      // Invoices - view only
      "view_invoices", "download_invoices",
    ],
-   operator: [
-     // Operator defaults: POS sales, inventory, attendance
-     // NO orders by default (can be granted via permissions)
-     // NO transactions for stores
-     "view_invoices", "download_invoices",
-     "view_attendance", "manage_attendance",
-     "record_sale", "fulfill_orders",  // Added: operators can record sales and fulfill orders (POS)
-   ],
+operator: [
+      // Operator defaults: POS sales, inventory, attendance
+      // NO orders by default (can be granted via permissions)
+      // NO transactions for stores
+      "view_invoices", "download_invoices",
+      "view_attendance", "manage_attendance",
+      "record_sale", "fulfill_orders", "see_handover_balance",  // Added: operators can record sales, fulfill orders, and see balances (POS)
+    ],
   customer: [
     // Customers can only view their own
     "view_orders", "view_invoices", "download_invoices",

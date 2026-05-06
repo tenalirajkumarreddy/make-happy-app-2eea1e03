@@ -159,7 +159,7 @@ export function AgentHistory() {
         manager: "Manager",
         agent: "Agent",
         marketer: "Marketer",
-        pos: "POS",
+        operator: "Operator",
       };
 
       return (profiles || []).map((profile: any) => {

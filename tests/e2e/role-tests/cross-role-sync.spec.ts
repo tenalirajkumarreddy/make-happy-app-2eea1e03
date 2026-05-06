@@ -56,7 +56,7 @@ test.describe('Cross-Role Data Synchronization', () => {
     });
   });
 
-  test('TC-CRS-03: Stock transfer updates Operator inventory', async () => {
+  test('TC-CRS-03: Stock transfer updates POS inventory', async () => {
     const scenario = CROSS_ROLE_SCENARIOS[2]; // Stock_Transfer_Visibility
     const result = await framework.runScenario(scenario);
 
@@ -121,11 +121,11 @@ test.describe('Cross-Role Data Synchronization', () => {
           ],
         },
         {
-          role: 'operator',
+          role: 'pos',
           actions: [
             { type: 'navigate', target: '/dashboard' },
             { type: 'wait', delay: 3000 },
-            { type: 'screenshot', value: 'operator_dashboard' },
+            { type: 'screenshot', value: 'pos_dashboard' },
           ],
         },
       ],
@@ -133,7 +133,7 @@ test.describe('Cross-Role Data Synchronization', () => {
         {
           type: 'data_sync',
           fromAgent: 'super_admin',
-          toAgent: 'operator',
+          toAgent: 'pos',
           description: 'All roles successfully logged in simultaneously',
           validate: async (agents) => {
             const allLoggedIn = Array.from(agents.values()).every(a => a.loggedIn);
