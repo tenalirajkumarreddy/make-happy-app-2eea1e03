@@ -131,6 +131,14 @@ export default function StockTransfers() {
   const isAgent = role === "agent" || role === "marketer";
   const isInventoryViewer = isSuperAdmin || isManager || isAgent || isOperator;
 
+  // Derive allowed transfer types — mirrors the same logic as Inventory.tsx
+  const allowedTransferTypes = useMemo(() => {
+    if (isSuperAdmin || isManager) return ["warehouse_to_staff", "staff_to_warehouse", "staff_to_staff", "warehouse_to_warehouse"];
+    if (isOperator) return ["warehouse_to_staff", "staff_to_staff"];
+    if (isAgent) return ["staff_to_warehouse", "staff_to_staff"];
+    return [] as string[];
+  }, [isSuperAdmin, isManager, isOperator, isAgent]);
+
   useEffect(() => {
     console.log("StockTransfers: role:", role, "warehouse:", currentWarehouse?.id, "user:", user?.id);
   }, [role, currentWarehouse, user]);
@@ -560,6 +568,7 @@ export default function StockTransfers() {
         isOpen={dialogOpen}
         onClose={() => setDialogOpen(false)}
         currentUserId={user?.id}
+        allowedTransferTypes={allowedTransferTypes as any}
       />
 
       {/* ── Reject Transfer Dialog ────────────────────────────────── */}

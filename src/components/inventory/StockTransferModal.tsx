@@ -82,15 +82,20 @@ export function StockTransferModal({
 
   const allowedTransferTypes = useMemo(() => {
     if (initialAllowedTypes) return initialAllowedTypes;
+    // Admin: full access
     if (isSuperAdmin) return ["warehouse_to_staff", "staff_to_warehouse", "staff_to_staff", "warehouse_to_warehouse"] as TransferType[];
+    // Manager: all transfers including wh→wh
     if (isManager) return ["warehouse_to_staff", "staff_to_warehouse", "staff_to_staff", "warehouse_to_warehouse"] as TransferType[];
-    if (isOperator) return ["warehouse_to_staff", "staff_to_staff"] as TransferType[]; // Operators usually send stock TO staff
-    if (isAgent) return ["staff_to_warehouse", "staff_to_staff"] as TransferType[]; // Agents cannot initiate WH -> Staff
-    return ["warehouse_to_staff"] as TransferType[];
+    // Operator: dispatch from their WH to staff, or staff-to-staff within their WH
+    if (isOperator) return ["warehouse_to_staff", "staff_to_staff"] as TransferType[];
+    // Agent/Marketer: only from own stock — never from warehouse
+    if (isAgent) return ["staff_to_warehouse", "staff_to_staff"] as TransferType[];
+    // Unknown role: no transfers allowed
+    return [] as TransferType[];
   }, [isSuperAdmin, isManager, isOperator, isAgent, initialAllowedTypes]);
 
   const [transferType, setTransferType] = useState<TransferType>(
-    (allowedTransferTypes[0] as TransferType) || "warehouse_to_staff"
+    (allowedTransferTypes[0] as TransferType) || "staff_to_staff"
   );
   const [fromId, setFromId] = useState<string>("");
   const [toId, setToId] = useState<string>("");
@@ -101,6 +106,7 @@ export function StockTransferModal({
   const { data: warehouses = [] } = useQuery({
     queryKey: ["warehouses-transfer", currentUserId],
     queryFn: async () => {
+      console.log("[StockTransfer] Fetching warehouses for:", currentUserId);
       // First get user's direct warehouse assignment
       const { data: userRoles, error: rolesError } = await supabase
         .from("user_roles")
@@ -143,6 +149,7 @@ export function StockTransferModal({
 
       const { data, error } = await query.order("name");
       if (error) throw error;
+      console.log("[StockTransfer] Warehouses found:", data?.length || 0);
       return data ?? [];
     },
     staleTime: 60_000,
@@ -200,9 +207,10 @@ export function StockTransferModal({
   }, [staffMembers, fetchedStaff]);
 
   // ── Source stock ───────────────────────────────────────────────────────────
-  const { data: sourceStock = [] } = useQuery({
+  const { data: sourceStock = [], isLoading: isLoadingStock } = useQuery({
     queryKey: ["source-stock-transfer", transferType, fromId],
     queryFn: async () => {
+      console.log("[StockTransfer] Fetching stock for:", { transferType, fromId });
       let physicalStock: any[] = [];
       let pendingOutgoing: Record<string, number> = {};
 
@@ -229,12 +237,13 @@ export function StockTransferModal({
           pendingOutgoing[p.product_id] = (pendingOutgoing[p.product_id] || 0) + Number(p.quantity);
         });
       } else {
-        // staff_to_warehouse or staff_to_staff - fetch from selected user's stock
+        // staff_to_warehouse or staff_to_staff — fetch from selected user's stock
+        // NOTE: Do NOT filter quantity > 0 here; we need rows with pending transfers too.
         const { data, error } = await supabase
           .from("staff_stock")
           .select("product_id, quantity, warehouse_id, product:products(id, name, sku, unit, base_price)")
           .eq("user_id", fromId)
-          .gt("quantity", 0);
+          .gte("quantity", 0); // include zero-quantity rows to detect fully-pending stock
         if (error) throw error;
         physicalStock = data ?? [];
 
@@ -250,26 +259,29 @@ export function StockTransferModal({
         });
       }
 
-      return physicalStock.map((r) => {
+      const result = physicalStock.map((r) => {
         const product = Array.isArray(r.product) ? r.product[0] : r.product;
         const pending = pendingOutgoing[r.product_id] || 0;
         return {
           ...r,
           product,
           physical_quantity: r.quantity,
-          quantity: Math.max(0, r.quantity - pending), // This is the "Truly Available" quantity
+          quantity: Math.max(0, r.quantity - pending), // "Truly Available" after pending
           pending_out: pending
         };
       }).filter(r => r.quantity > 0 || r.pending_out > 0);
+
+      console.log("[StockTransfer] Stock fetched:", physicalStock.length, "rows → ", result.length, "usable items");
+      return result;
     },
-    enabled: !!currentUserId,
+    enabled: !!currentUserId && !!fromId,
   });
 
   // ── Reset on open ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!isOpen || !currentUserId) return;
-    // Use the first allowed transfer type as default
-    const defaultType = (allowedTransferTypes?.[0] as TransferType) || "warehouse_to_staff";
+    // Use the first allowed transfer type as default; safe fallback is staff_to_staff
+    const defaultType = (allowedTransferTypes?.[0] as TransferType) || "staff_to_staff";
     setTransferType(defaultType);
     
     const defaultWhId = warehouseId || currentWarehouse?.id || warehouses[0]?.id || "";
@@ -277,7 +289,7 @@ export function StockTransferModal({
     // Staff transfers: from current user; warehouse transfers: from warehouse
     if (["warehouse_to_staff", "warehouse_to_warehouse"].includes(defaultType)) {
       setFromId(defaultWhId);
-      setToId(isAgent && defaultType === "warehouse_to_staff" ? currentUserId : "");
+      setToId("");
     } else {
       setFromId(currentUserId);
       setToId(defaultType === "staff_to_warehouse" ? defaultWhId : "");
@@ -285,7 +297,9 @@ export function StockTransferModal({
     
     setSelectedProducts([]);
     setNotes("");
+    console.log("[StockTransfer] Reset state:", { defaultType, defaultWhId });
   }, [isOpen, currentUserId, warehouses, currentWarehouse]);
+
 
   // ── Update fromId when transferType changes ─────────────────────────────────
   useEffect(() => {
@@ -375,24 +389,26 @@ const {
       } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      // Determine IDs based on transfer type
+      // Determine IDs based on transfer type - convert empty strings to null
       let fromWarehouseId: string | null = null;
       let toWarehouseId: string | null = null;
       let fromUserId: string | null = null;
       let toUserId: string | null = null;
 
+      const emptyToNull = (v: string) => (!v || v === 'undefined' ? null : v);
+
       if (transferType === "warehouse_to_staff") {
-        fromWarehouseId = fromId;
-        toUserId = toId;
+        fromWarehouseId = emptyToNull(fromId);
+        toUserId = emptyToNull(toId);
       } else if (transferType === "staff_to_warehouse") {
-        fromUserId = fromId;
-        toWarehouseId = toId;
+        fromUserId = emptyToNull(fromId);
+        toWarehouseId = emptyToNull(toId);
       } else if (transferType === "warehouse_to_warehouse") {
-        fromWarehouseId = fromId;
-        toWarehouseId = toId;
+        fromWarehouseId = emptyToNull(fromId);
+        toWarehouseId = emptyToNull(toId);
       } else {
-        fromUserId = fromId;
-        toUserId = toId;
+        fromUserId = emptyToNull(fromId);
+        toUserId = emptyToNull(toId);
       }
 
       const isSender = 
@@ -633,7 +649,12 @@ const {
           <div className="space-y-2 flex-1 overflow-hidden">
             <Label>Products ({selectedProducts.length} selected)</Label>
             <ScrollArea className="h-[250px] border rounded-md p-2">
-              {sourceStock.length > 0 ? (
+              {isLoadingStock ? (
+                <div className="flex flex-col items-center justify-center h-full text-muted-foreground py-8">
+                  <Loader2 className="h-8 w-8 animate-spin mb-2" />
+                  <p className="text-sm">Loading products...</p>
+                </div>
+              ) : sourceStock.length > 0 ? (
                 <div className="space-y-2">
                   {sourceStock.map((item) => {
                     const sel = isSelected(item.product_id);
@@ -643,15 +664,17 @@ const {
                     return (
                       <div
                         key={item.product_id}
-                        className={`flex items-start gap-3 p-2 rounded-md border transition-colors ${
+                        className={`flex items-start gap-3 p-2 rounded-md border transition-colors cursor-pointer ${
                           sel
                             ? "bg-muted/50 border-primary"
                             : "hover:bg-muted/30"
                         }`}
+                        onClick={() => toggleProduct(item)}
                       >
                         <Checkbox
                           checked={sel}
                           onCheckedChange={() => toggleProduct(item)}
+                          onClick={(e) => e.stopPropagation()}
                           className="mt-1"
                         />
                         <div className="flex-1 min-w-0">
@@ -664,7 +687,7 @@ const {
                           </div>
                         </div>
                         {sel && (
-                          <div className="w-24">
+                          <div className="w-24" onClick={(e) => e.stopPropagation()}>
                             <Input
                               type="number"
                               placeholder="Qty"
@@ -672,24 +695,34 @@ const {
                               onChange={(e) =>
                                 updateQuantity(item.product_id, e.target.value)
                               }
+                              onClick={(e) => e.stopPropagation()}
                               min={1}
                               max={item.quantity}
                               className="h-8 text-sm"
+                              autoFocus
                             />
                           </div>
                         )}
                       </div>
+
                     );
                   })}
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground py-8">
                   <Package className="h-12 w-12 mb-2 opacity-30" />
-                  <p className="text-sm">
-                    {fromId
-                      ? "No products available from this source"
-                      : "Select a source first"}
+                  <p className="text-sm font-medium">
+                    {!fromId
+                      ? "Select a source first"
+                      : ["staff_to_warehouse", "staff_to_staff"].includes(transferType)
+                        ? "No stock assigned to this staff member yet"
+                        : "No stock available in this warehouse"}
                   </p>
+                  {fromId && ["staff_to_warehouse", "staff_to_staff"].includes(transferType) && (
+                    <p className="text-xs mt-1 text-center px-4">
+                      Stock is assigned when a manager or operator completes a warehouse → staff transfer.
+                    </p>
+                  )}
                 </div>
               )}
             </ScrollArea>

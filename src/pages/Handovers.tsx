@@ -109,7 +109,6 @@ const Handovers = () => {
   const { data: staffProfiles, isLoading: staffLoading, error: staffError } = useQuery({
     queryKey: ["staff-profiles", user?.id],
     queryFn: async () => {
-      console.log("[DEBUG] Fetching staff profiles...");
       // Exclude super_admin from staff list (admins don't have holding accounts)
       const { data: roles, error: rolesError } = await supabase
         .from("user_roles")
@@ -117,15 +116,11 @@ const Handovers = () => {
         .in("role", ["manager", "agent", "marketer", "operator"]); // Removed super_admin
 
       if (rolesError) {
-        console.error("[DEBUG] Error fetching roles:", rolesError);
         throw rolesError;
       }
 
-      console.log("[DEBUG] Found roles:", roles);
       const staffRoleMap = new Map((roles || []).map((row) => [row.user_id, row.role]));
       const staffIds = Array.from(staffRoleMap.keys()).filter((id) => id !== user?.id);
-
-      console.log("[DEBUG] Staff IDs (excluding current user):", staffIds);
 
       let profiles: Array<{ user_id: string; full_name: string; email: string | null; phone: string | null }> = [];
 
@@ -136,10 +131,8 @@ const Handovers = () => {
           .in("user_id", staffIds)
           .eq("is_active", true);
         if (filteredError) {
-          console.error("[DEBUG] Error fetching profiles:", filteredError);
           throw filteredError;
         }
-        console.log("[DEBUG] Found profiles:", filteredProfiles);
         profiles = (filteredProfiles || []) as typeof profiles;
       }
 
@@ -159,7 +152,6 @@ const Handovers = () => {
         }))
         .sort((a, b) => a.full_name.localeCompare(b.full_name));
       
-      console.log("[DEBUG] Final staff profiles:", result);
       return result;
     },
     enabled: !!user,
@@ -201,48 +193,25 @@ const Handovers = () => {
     enabled: !!user,
   });
 
-  const { data: userSalesTotals } = useQuery({
-    queryKey: ["user-sales-totals", user?.id],
+  const { data: userDailyBalance, isLoading: userDailyBalanceLoading } = useQuery({
+    queryKey: ["user-daily-balance", user?.id],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("sales")
-        .select("cash_amount, upi_amount, created_at")
-        .eq("recorded_by", user!.id);
+        .rpc("get_user_daily_balance", { p_user_id: user!.id });
       if (error) throw error;
-      const todayStart = startOfDay(new Date()).toISOString();
-      const all = data || [];
-      const todaySales = all.filter((s) => s.created_at >= todayStart);
-      return {
-        totalCash: all.reduce((s, r) => s + Number(r.cash_amount), 0),
-        totalUpi: all.reduce((s, r) => s + Number(r.upi_amount), 0),
-        todayCash: todaySales.reduce((s, r) => s + Number(r.cash_amount), 0),
-        todayUpi: todaySales.reduce((s, r) => s + Number(r.upi_amount), 0),
-      };
+      return data?.[0] as {
+        today_sales: number;
+        today_payments: number;
+        today_received: number;
+        today_sent_confirmed: number;
+        today_sent_pending: number;
+        prev_pending: number;
+        total_holding: number;
+      } | undefined;
     },
-    enabled: !!user,
+    enabled: !!user && isStaff,
   });
 
-  // NEW: Fetch transaction totals (customer collections)
-  const { data: userTransactionTotals } = useQuery({
-    queryKey: ["user-transaction-totals", user?.id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("transactions")
-        .select("cash_amount, upi_amount, created_at")
-        .eq("recorded_by", user!.id);
-      if (error) throw error;
-      const todayStart = startOfDay(new Date()).toISOString();
-      const all = data || [];
-      const todayTxns = all.filter((t) => t.created_at >= todayStart);
-      return {
-        totalCash: all.reduce((s, r) => s + Number(r.cash_amount || 0), 0),
-        totalUpi: all.reduce((s, r) => s + Number(r.upi_amount || 0), 0),
-        todayCash: todayTxns.reduce((s, r) => s + Number(r.cash_amount || 0), 0),
-        todayUpi: todayTxns.reduce((s, r) => s + Number(r.upi_amount || 0), 0),
-      };
-    },
-    enabled: !!user,
-  });
 
   // NEW: Get materialized holding_balance from profiles (single source of truth)
   const { data: userProfile } = useQuery({
@@ -346,14 +315,21 @@ const Handovers = () => {
       const { data, error } = await supabase.rpc("get_all_staff_balances");
       if (error) throw error;
 
-      const balances: Record<string, { sales: number; received: number; sentConfirmed: number; sentPending: number; total: number }> = {};
+      const balances: Record<string, {
+        today_sales: number;
+        today_payments: number;
+        today_sent: number;
+        prev_pending: number;
+        total_holding: number;
+      }> = {};
+      
       for (const row of (data || [])) {
         balances[row.user_id] = {
-          sales: Number(row.sales),
-          received: Number(row.received),
-          sentConfirmed: Number(row.sent_confirmed),
-          sentPending: Number(row.sent_pending),
-          total: Number(row.total),
+          today_sales: Number(row.today_sales || 0),
+          today_payments: Number(row.today_payments || 0),
+          today_sent: Number(row.today_sent || 0),
+          prev_pending: Number(row.prev_pending || 0),
+          total_holding: Number(row.total_holding || 0),
         };
       }
       return balances;
@@ -381,40 +357,33 @@ const Handovers = () => {
     .filter((h) => h.handed_to === user?.id && h.status === "confirmed" && h.created_at >= todayStart)
     .reduce((s, h) => s + Number(h.cash_amount) + Number(h.upi_amount), 0);
 
-  const salesTotalAll = (userSalesTotals?.totalCash || 0) + (userSalesTotals?.totalUpi || 0);
-  const salesToday = (userSalesTotals?.todayCash || 0) + (userSalesTotals?.todayUpi || 0);
-  const transactionsTotalAll = (userTransactionTotals?.totalCash || 0) + (userTransactionTotals?.totalUpi || 0);
-
   // Get materialized balance from profile
   const materializedHolding = Number(userProfile?.holding_balance || 0);
 
-  // CORRECTED: When agent makes sales/transactions, they collect money and owe warehouse (negative)
-  // When agent sends handover, they reduce their debt (positive balance direction)
-  // When agent receives handover, they get money and owe more (negative)
-  // Formula: Balance = -(Sales + Transactions + Received - SentConfirmed - SentPending)
-  // This means: positive balance = user owes warehouse, negative balance = warehouse owes user
-  const totalCollected = salesTotalAll + transactionsTotalAll + receivedConfirmed;
-  const totalSent = sentConfirmed + sentPending;
-  const calculatedHolding = -(totalCollected - totalSent);
-
-  // Use materialized value as primary (even if negative), fallback to calculated only if materialized is 0 and no profile
-  const notHandedOver = userProfile?.holding_balance !== undefined ? materializedHolding : calculatedHolding;
-  
-  // Pending handovers should be deducted from materialized balance
-  const awaitingAmount = sentPending;
-  
-  // Breakdown for display (from RPC which includes all components)
-  const holdingBreakdown = {
-    sales: (agentCashHolding?.sales_cash || 0) + (agentCashHolding?.sales_upi || 0),
-    transactions: (agentCashHolding?.transactions_cash || 0) + (agentCashHolding?.transactions_upi || 0),
-    received: receivedConfirmed, // From handovers filter above
-    sentConfirmed: (agentCashHolding?.confirmed_handovers_cash || 0) + (agentCashHolding?.confirmed_handovers_upi || 0),
-    sentPending: sentPending, // From handovers filter above
-    netHolding: notHandedOver,
-    materializedBalance: materializedHolding,
-    lastUpdated: userProfile?.holding_balance_updated_at,
+  // Use the new userDailyBalance RPC for the breakdown
+  const dailyData = userDailyBalance || {
+    today_sales: 0,
+    today_payments: 0,
+    today_received: 0,
+    today_sent_confirmed: 0,
+    today_sent_pending: 0,
+    prev_pending: 0,
+    total_holding: materializedHolding
   };
 
+  const holdingBreakdown = useMemo(() => ({
+    sales: dailyData.today_sales,
+    transactions: dailyData.today_payments,
+    received: dailyData.today_received,
+    sentConfirmed: dailyData.today_sent_confirmed,
+    sentPending: dailyData.today_sent_pending,
+  }), [dailyData]);
+
+  const notHandedOver = materializedHolding;
+  
+  // Pending handovers
+  const awaitingAmount = dailyData.today_sent_pending;
+  
   const incoming = myHandovers.filter((h) => h.handed_to === user?.id && h.status === "awaiting_confirmation");
 
   // Fetch partial_collections setting
@@ -495,7 +464,7 @@ const Handovers = () => {
       toast.error(`Partial handovers are disabled. Enter the full balance: ₹${Math.max(0, notHandedOver).toLocaleString()}`);
       return;
     }
-    if (!isFinalizer && Number(amount) > Math.max(0, notHandedOver)) {
+    if (!isFinalizer && notHandedOver > 0 && Number(amount) > notHandedOver) {
       toast.error("Amount exceeds your available balance");
       return;
     }
@@ -509,7 +478,7 @@ const Handovers = () => {
         p_cash_amount: Number(amount),
         p_upi_amount: 0,
         p_notes: notes || null,
-        p_handover_type: handoverType,
+        p_handover_type: "transfer",
       });
 
     setSubmitting(false);
@@ -517,8 +486,6 @@ const Handovers = () => {
     if (handoverError) {
       if (handoverError.message.includes("DUPLICATE")) {
         toast.error("You already have a pending handover for today. Complete or cancel it first.");
-      } else if (handoverError.message.includes("collection")) {
-        toast.error("Collection handovers must be sent to a manager or finalizer");
       } else {
         toast.error(handoverError.message);
       }
@@ -528,7 +495,7 @@ const Handovers = () => {
     const createdHandover = handoverResult?.[0];
     if (createdHandover) {
       const totalAmount = Number(createdHandover.cash_amount) + Number(createdHandover.upi_amount);
-      const typeLabel = handoverType === 'collection' ? 'Collection' : 'Transfer';
+      const typeLabel = 'Transfer';
       toast.success(
         `${typeLabel} request of ₹${totalAmount.toLocaleString()} sent`
       );
@@ -730,17 +697,16 @@ const Handovers = () => {
     setSubmitting(true);
     try {
       // ISSUE-11 FIX: Preserve UPI amount instead of zeroing it
-      const { error } = await supabase
-        .from("handovers")
-        .update({
-          cash_amount: Number(editHandoverAmount),
-          upi_amount: Number(selectedHandoverForEdit.upi_amount || 0),
-          status: editHandoverStatus || selectedHandoverForEdit.status,
-          notes: selectedHandoverForEdit.notes
-            ? `${selectedHandoverForEdit.notes}\n[Admin Edit: ${new Date().toLocaleString()}]`
-            : `[Admin Edit: ${new Date().toLocaleString()}]`,
-        })
-        .eq("id", selectedHandoverForEdit.id);
+      const { error } = await supabase.rpc("edit_handover", {
+        p_handover_id: selectedHandoverForEdit.id,
+        p_admin_id: user!.id,
+        p_cash_amount: Number(editHandoverAmount),
+        p_upi_amount: Number(selectedHandoverForEdit.upi_amount || 0),
+        p_status: editHandoverStatus || selectedHandoverForEdit.status,
+        p_notes: selectedHandoverForEdit.notes
+          ? `${selectedHandoverForEdit.notes}\n[Admin Edit: ${new Date().toLocaleString()}]`
+          : `[Admin Edit: ${new Date().toLocaleString()}]`
+      });
 
       if (error) throw error;
 
@@ -750,6 +716,9 @@ const Handovers = () => {
       setEditHandoverAmount("");
       setEditHandoverStatus("");
       qc.invalidateQueries({ queryKey: ["handovers"] });
+      qc.invalidateQueries({ queryKey: ["all-staff-balances"] });
+      qc.invalidateQueries({ queryKey: ["user-holding-balance"] });
+      qc.invalidateQueries({ queryKey: ["user-daily-balance"] });
     } catch (err: any) {
       toast.error(err.message || "Failed to update handover");
     } finally {
@@ -1278,88 +1247,111 @@ const Handovers = () => {
 
       {/* ========== BALANCE CARDS ========== */}
       {!isSuperAdmin && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-          <Card className={`border ${notHandedOver > 0 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
-            <CardHeader className="p-4 pb-2">
-              <CardTitle className={`text-sm font-medium ${notHandedOver > 0 ? 'text-red-800' : 'text-green-800'}`}>Balance Status</CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 pt-2">
-              <p className={`text-2xl font-bold ${notHandedOver > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                ₹{Math.abs(notHandedOver || 0).toLocaleString()}
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                {notHandedOver > 0 ? 'You owe warehouse (handover required)' : notHandedOver < 0 ? 'Warehouse owes you' : 'No pending balance'}
-              </p>
-              <div className={`mt-3 pt-3 border-t space-y-1 text-xs ${notHandedOver > 0 ? 'border-red-200/50' : 'border-green-200/50'}`}>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">{role === 'agent' ? 'Sales' : 'From Sales'}</span>
-                  <span className="font-medium">₹{(holdingBreakdown.sales || 0).toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">{role === 'agent' ? 'Payments Collected' : 'From Collections'}</span>
-                  <span className="font-medium">₹{(holdingBreakdown.transactions || 0).toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">{role === 'agent' ? 'Handovers Received' : 'Received from Others'}</span>
-                  <span className="font-medium text-green-600">+₹{(holdingBreakdown.received || 0).toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Sent (Confirmed)</span>
-                  <span className="font-medium text-red-600">-₹{(holdingBreakdown.sentConfirmed || 0).toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Sent (Pending)</span>
-                  <span className="font-medium text-amber-600">-₹{(holdingBreakdown.sentPending || 0).toLocaleString()}</span>
-                </div>
-                <div className={`flex justify-between pt-2 mt-2 border-t ${notHandedOver > 0 ? 'border-red-300' : 'border-green-300'}`}>
-                  <span className={`font-semibold ${notHandedOver > 0 ? 'text-red-700' : 'text-green-700'}`}>Net Balance</span>
-                  <span className={`font-bold ${notHandedOver > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                    ₹{(holdingBreakdown.netHolding || 0).toLocaleString()}
-                  </span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-amber-50 border border-amber-200">
-            <CardHeader className="p-4 pb-2">
-              <CardTitle className="text-sm font-medium text-amber-800">Pending Actions</CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 pt-2">
-              <p className="text-2xl font-bold text-amber-600">{incoming.length}</p>
-              <p className="text-xs text-muted-foreground mt-1">Handovers awaiting confirmation</p>
-              {awaitingAmount > 0 && <p className="text-sm font-bold text-amber-600 mt-1">₹{awaitingAmount.toLocaleString()}</p>}
-            </CardContent>
-          </Card>
-
-          {isFinalizer ? (
-            <Card className="bg-emerald-50 border border-emerald-200">
+        <div className="space-y-4 mb-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card className="bg-blue-50 border border-blue-200">
               <CardHeader className="p-4 pb-2">
-                <CardTitle className="text-sm font-medium text-emerald-800">Holding Balance</CardTitle>
+                <CardTitle className="text-xs font-medium text-blue-800">Today's Sales</CardTitle>
               </CardHeader>
-              <CardContent className="p-4 pt-2">
-                <p className="text-2xl font-bold text-emerald-600">
-                  ₹{(Number(finalizerAccount?.cash_balance || 0) + Number(finalizerAccount?.upi_balance || 0)).toLocaleString()}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">Income since last daily reset</p>
-                {finalizerAccount?.last_reset_at && (
-                  <p className="text-[10px] text-muted-foreground mt-0.5">
-                    Reset: {format(new Date(finalizerAccount.last_reset_at), "dd MMM, hh:mm a")}
+              <CardContent className="p-4 pt-0">
+                <p className="text-xl font-bold text-blue-600">₹{(dailyData.today_sales || 0).toLocaleString()}</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-indigo-50 border border-indigo-200">
+              <CardHeader className="p-4 pb-2">
+                <CardTitle className="text-xs font-medium text-indigo-800">Today's Payments</CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 pt-0">
+                <p className="text-xl font-bold text-indigo-600">₹{(dailyData.today_payments || 0).toLocaleString()}</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-green-50 border border-green-200">
+              <CardHeader className="p-4 pb-2">
+                <CardTitle className="text-xs font-medium text-green-800">Transferred Today</CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 pt-0">
+                <p className="text-xl font-bold text-green-600">₹{(dailyData.today_sent_confirmed || 0).toLocaleString()}</p>
+                {(dailyData.today_sent_pending || 0) > 0 && (
+                  <p className="text-[10px] text-amber-600 font-medium mt-0.5">
+                    +₹{(dailyData.today_sent_pending || 0).toLocaleString()} pending
                   </p>
                 )}
               </CardContent>
             </Card>
-          ) : (
-            <Card className="bg-green-50 border border-green-200">
+
+            <Card className="bg-rose-50 border border-rose-200">
               <CardHeader className="p-4 pb-2">
-                <CardTitle className="text-sm font-medium text-green-800">Pending Expenses</CardTitle>
+                <CardTitle className="text-xs font-medium text-rose-800">Previous Pending</CardTitle>
               </CardHeader>
-              <CardContent className="p-4 pt-2">
-                <p className="text-2xl font-bold text-green-600">₹{(myPendingExpenses || 0).toLocaleString()}</p>
-                <p className="text-xs text-muted-foreground mt-1">Claims awaiting approval</p>
+              <CardContent className="p-4 pt-0">
+                <p className="text-xl font-bold text-rose-600">₹{(dailyData.prev_pending || 0).toLocaleString()}</p>
               </CardContent>
             </Card>
-          )}
+          </div>
+
+          <div className={`p-4 rounded-lg border flex items-center justify-between ${notHandedOver > 0 ? 'bg-red-50/50 border-red-200' : 'bg-green-50/50 border-green-200'}`}>
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Net Balance</p>
+              <p className="text-xs text-muted-foreground">
+                {notHandedOver > 0 ? 'You owe warehouse (handover required)' : notHandedOver < 0 ? 'Warehouse owes you' : 'No pending balance'}
+              </p>
+            </div>
+            <p className={`text-2xl font-bold ${notHandedOver > 0 ? 'text-red-600' : 'text-green-600'}`}>
+              ₹{Math.abs(notHandedOver || 0).toLocaleString()}
+            </p>
+          </div>
+
+          {/* Pending Actions & Finalizer Account side-by-side */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card className="bg-amber-50 border border-amber-200">
+              <CardHeader className="p-4 pb-2">
+                <CardTitle className="text-sm font-medium text-amber-800">Pending Actions</CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 pt-2 flex items-center justify-between">
+                <div>
+                  <p className="text-2xl font-bold text-amber-600">{incoming.length}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Handovers awaiting confirmation</p>
+                </div>
+                {awaitingAmount > 0 && (
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-amber-600">₹{awaitingAmount.toLocaleString()}</p>
+                    <p className="text-[10px] text-muted-foreground">Sent by you</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {isFinalizer ? (
+              <Card className="bg-emerald-50 border border-emerald-200">
+                <CardHeader className="p-4 pb-2">
+                  <CardTitle className="text-sm font-medium text-emerald-800">Holding Balance</CardTitle>
+                </CardHeader>
+                <CardContent className="p-4 pt-2">
+                  <p className="text-2xl font-bold text-emerald-600">
+                    ₹{(Number(finalizerAccount?.cash_balance || 0) + Number(finalizerAccount?.upi_balance || 0)).toLocaleString()}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">Income since last daily reset</p>
+                  {finalizerAccount?.last_reset_at && (
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      Reset: {format(new Date(finalizerAccount.last_reset_at), "dd MMM, hh:mm a")}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            ) : (
+              <Card className="bg-green-50 border border-green-200">
+                <CardHeader className="p-4 pb-2">
+                  <CardTitle className="text-sm font-medium text-green-800">Pending Expenses</CardTitle>
+                </CardHeader>
+                <CardContent className="p-4 pt-2 flex flex-col justify-center">
+                  <p className="text-2xl font-bold text-green-600">₹{(myPendingExpenses || 0).toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Claims awaiting approval</p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
         </div>
       )}
 
@@ -1592,9 +1584,9 @@ const Handovers = () => {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {Object.entries(allStaffBalances)
-                  .sort(([, a], [, b]) => b.total - a.total)
+                  .sort(([, a], [, b]) => b.total_holding - a.total_holding)
                   .map(([uid, bal]) => {
-                    const withUser = bal.total + bal.sentPending;
+                    const total = bal.total_holding;
                     return (
                       <Link key={uid} to={`/staff/${uid}`} className="block">
                         <div className="flex items-center gap-3 rounded-lg border bg-card px-4 py-3 hover:shadow-sm hover:border-primary/30 transition-all cursor-pointer">
@@ -1602,17 +1594,14 @@ const Handovers = () => {
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold truncate">{getName(uid)}</p>
                             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-0.5 text-[11px] text-muted-foreground">
-                              <span>Sales: ₹{(bal.sales || 0).toLocaleString()}</span>
-                              <span>Received: ₹{(bal.received || 0).toLocaleString()}</span>
+                              <span>Today: ₹{((bal.today_sales || 0) + (bal.today_payments || 0)).toLocaleString()}</span>
+                              <span>Prev: ₹{(bal.prev_pending || 0).toLocaleString()}</span>
                             </div>
                           </div>
                           <div className="text-right shrink-0">
-                            <p className={`text-base font-bold tabular-nums ${(withUser || 0) > 0 ? "text-destructive" : "text-success"}`}>
-                              ₹{Math.max(0, withUser || 0).toLocaleString()}
+                            <p className={`text-base font-bold tabular-nums ${(total || 0) > 0 ? "text-destructive" : "text-success"}`}>
+                              ₹{Math.max(0, total || 0).toLocaleString()}
                             </p>
-                            {(bal.sentPending || 0) > 0 && (
-                              <p className="text-[10px] text-warning">₹{(bal.sentPending || 0).toLocaleString()} awaiting</p>
-                            )}
                           </div>
                         </div>
                       </Link>
@@ -1755,24 +1744,24 @@ const Handovers = () => {
                 <div className="pt-2 border-t border-muted-foreground/20 space-y-1">
                   <div className="flex justify-between text-xs">
                     <span className="text-muted-foreground">Sales Collected</span>
-                    <span className="font-medium">+₹{(holdingBreakdown.sales || 0).toLocaleString()}</span>
+                    <span className="font-medium">+₹{(dailyData?.today_sales || 0).toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between text-xs">
                     <span className="text-muted-foreground">Payments Collected</span>
-                    <span className="font-medium">+₹{(holdingBreakdown.transactions || 0).toLocaleString()}</span>
+                    <span className="font-medium">+₹{(dailyData?.today_payments || 0).toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between text-xs">
                     <span className="text-muted-foreground">Handovers Received</span>
-                    <span className="font-medium text-green-600">+₹{(holdingBreakdown.received || 0).toLocaleString()}</span>
+                    <span className="font-medium text-green-600">+₹{(dailyData?.today_received || 0).toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between text-xs">
                     <span className="text-muted-foreground">Sent (Confirmed)</span>
-                    <span className="font-medium text-red-600">-₹{(holdingBreakdown.sentConfirmed || 0).toLocaleString()}</span>
+                    <span className="font-medium text-red-600">-₹{(dailyData?.today_sent_confirmed || 0).toLocaleString()}</span>
                   </div>
-                  {holdingBreakdown.sentPending > 0 && (
+                  {(dailyData?.today_sent_pending || 0) > 0 && (
                     <div className="flex justify-between text-xs">
                       <span className="text-muted-foreground">Sent (Pending)</span>
-                      <span className="font-medium text-amber-600">-₹{(holdingBreakdown.sentPending || 0).toLocaleString()}</span>
+                      <span className="font-medium text-amber-600">-₹{(dailyData?.today_sent_pending || 0).toLocaleString()}</span>
                     </div>
                   )}
                   <div className="pt-2 border-t border-muted-foreground/20 flex justify-between">
@@ -1805,31 +1794,15 @@ const Handovers = () => {
               </div>
 
               <div className="space-y-2">
-                <Label>Handover Type</Label>
-                <Select value={handoverType} onValueChange={(v) => setHandoverType(v as "collection" | "transfer")}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="transfer">User to User (from holding)</SelectItem>
-                    <SelectItem value="collection">Collection to Manager (becomes income)</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  {handoverType === 'collection' 
-                    ? "Manager receiving = recorded as income" 
-                    : "Regular transfer from your holding balance"}
-                </p>
+                <Label>Amount (₹)</Label>
+                <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Enter amount" min="1" />
+                {partialSetting === false && !isFinalizer && (
+                  <p className="text-xs text-warning flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3 shrink-0" />
+                    Full balance of ₹{Math.max(0, notHandedOver || 0).toLocaleString()} required
+                  </p>
+                )}
               </div>
-
-            <div className="space-y-2">
-              <Label>Amount (₹)</Label>
-              <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Enter amount" min="1" />
-              {partialSetting === false && !isFinalizer && (
-                <p className="text-xs text-warning flex items-center gap-1">
-                  <AlertCircle className="h-3 w-3 shrink-0" />
-                  Full balance of ₹{Math.max(0, notHandedOver || 0).toLocaleString()} required
-                </p>
-              )}
-            </div>
 
             <div className="space-y-2">
               <Label>Notes (optional)</Label>
@@ -1840,7 +1813,7 @@ const Handovers = () => {
             <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
             <Button onClick={handleCreate} disabled={submitting}>
               {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
-              {handoverType === 'collection' ? 'Send Collection' : 'Request Transfer'}
+              Request Transfer
             </Button>
           </DialogFooter>
         </DialogContent>
