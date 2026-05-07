@@ -38,7 +38,7 @@ export const supabase = createClient<Database>(
     auth: {
       storage: localStorage,
       persistSession: true,
-      autoRefreshToken: true,
+      autoRefreshToken: false, // Disable auto-refresh to prevent infinite retry loops on network failure
     },
     global: {
       fetch: createFetchWithTimeout(30000), // 30 second timeout

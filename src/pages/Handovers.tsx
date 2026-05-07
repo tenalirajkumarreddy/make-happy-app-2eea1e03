@@ -90,6 +90,8 @@ const Handovers = () => {
   const { allowed: canSeeBalances } = usePermission("see_handover_balance");
   const { allowed: canSubmitExpenses, loading: expensePermLoading } = usePermission("submit_expenses");
   const { allowed: canModifyHandovers } = usePermission("modify_handovers");
+  const { allowed: canCancelAnyHandover } = usePermission("cancel_any_handover");
+  const { allowed: canAdjustHoldingBalance } = usePermission("adjust_holding_balance");
   const { allowed: canApproveExpenses } = usePermission("approve_expenses");
   const { allowed: canTransferBetweenStaff } = usePermission("transfer_between_staff");
 
@@ -105,6 +107,13 @@ const Handovers = () => {
   const [editHandoverOpen, setEditHandoverOpen] = useState(false);
   const [editHandoverAmount, setEditHandoverAmount] = useState("");
   const [editHandoverStatus, setEditHandoverStatus] = useState("");
+  
+  // Admin holding adjustment states
+  const [adjustHoldingOpen, setAdjustHoldingOpen] = useState(false);
+  const [adjustHoldingUser, setAdjustHoldingUser] = useState("");
+  const [adjustCashAmount, setAdjustCashAmount] = useState("");
+  const [adjustUpiAmount, setAdjustUpiAmount] = useState("");
+  const [adjustReason, setAdjustReason] = useState("");
 
   const { data: staffProfiles, isLoading: staffLoading, error: staffError } = useQuery({
     queryKey: ["staff-profiles", user?.id],
@@ -275,7 +284,7 @@ const Handovers = () => {
       if (error) throw error;
       return (data || []) as Array<{ user_id: string; full_name: string; cash_balance: number; upi_balance: number; total_balance: number; last_reset_at: string }>;
     },
-    enabled: isSuperAdmin || isManager,
+    enabled: isAdminOrManager,
   });
 
   // Also fetch detailed breakdown for display (optional)
@@ -591,12 +600,19 @@ const Handovers = () => {
   const handleCancel = async (id: string) => {
     if (actionLoading) return;
     const handover = myHandovers.find((h) => h.id === id);
-    if (!handover || handover.user_id !== user?.id) {
-      toast.error("You can only cancel your own pending handovers");
+    const isOwner = handover?.user_id === user?.id;
+    
+    if (!handover) {
+      toast.error("Handover not found");
       return;
     }
     if (handover.status !== "awaiting_confirmation") {
       toast.error("Only pending handovers can be cancelled");
+      return;
+    }
+    // Allow owner OR admin/manager with permission to cancel any
+    if (!isOwner && !isAdminOrManager) {
+      toast.error("You can only cancel your own pending handovers");
       return;
     }
     setActionLoading(id);
@@ -721,6 +737,60 @@ const Handovers = () => {
       qc.invalidateQueries({ queryKey: ["user-daily-balance"] });
     } catch (err: any) {
       toast.error(err.message || "Failed to update handover");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleAdjustHoldingBalance = async () => {
+    if (!adjustHoldingUser || !adjustCashAmount || !adjustUpiAmount) {
+      toast.error("Select a user and enter amounts");
+      return;
+    }
+    if (!canAdjustHoldingBalance) {
+      toast.error("You don't have permission to adjust holding balances");
+      return;
+    }
+    
+    const cashAdj = Number(adjustCashAmount);
+    const upiAdj = Number(adjustUpiAmount);
+    if (cashAdj === 0 && upiAdj === 0) {
+      toast.error("Enter at least one amount (cash or UPI)");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const { data: result, error } = await supabase.rpc("adjust_staff_holding_balance", {
+        p_target_user_id: adjustHoldingUser,
+        p_admin_id: user!.id,
+        p_cash_adjustment: cashAdj,
+        p_upi_adjustment: upiAdj,
+        p_reason: adjustReason.trim() || null
+      });
+
+      if (error) throw error;
+
+      toast.success(`Holding balance adjusted successfully`);
+      
+      // Notify the affected user
+      sendNotification({
+        userId: adjustHoldingUser,
+        title: "Holding Balance Adjusted",
+        message: `Your holding has been adjusted: Cash ₹${cashAdj >= 0 ? '+' : ''}${cashAdj}, UPI ₹${upiAdj >= 0 ? '+' : ''}${upiAdj}. Reason: ${adjustReason || 'Admin adjustment'}`,
+        type: "system",
+        entityType: "staff_account",
+      });
+
+      setAdjustHoldingOpen(false);
+      setAdjustHoldingUser("");
+      setAdjustCashAmount("");
+      setAdjustUpiAmount("");
+      setAdjustReason("");
+      qc.invalidateQueries({ queryKey: ["all-staff-balances"] });
+      qc.invalidateQueries({ queryKey: ["user-holding-balance"] });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to adjust holding balance");
     } finally {
       setSubmitting(false);
     }
@@ -905,9 +975,17 @@ const Handovers = () => {
   // ========== SIMPLIFIED HANDOVER CARD ==========
   const HandoverCard = ({ item, showActions = false, showAdminActions = false }: { item: typeof myHandovers[0]; showActions?: boolean; showAdminActions?: boolean }) => {
     const isSender = item.user_id === user?.id;
+    const isRecipient = item.handed_to === user?.id;
+    const isPending = item.status === "awaiting_confirmation";
     const total = Number(item.cash_amount) + Number(item.upi_amount);
     const isLoading = actionLoading === item.id;
-    const canCancel = isSender && item.status === "awaiting_confirmation";
+    
+    // Sender can cancel their own pending handovers
+    const canCancel = (isSender || isAdminOrManager) && isPending;
+    // Recipient can accept/decline pending handovers sent TO them
+    const canAcceptDecline = isRecipient && isPending;
+    // Admins can do everything on pending handovers
+    const canAdminAct = isAdminOrManager && isPending;
 
     const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
       confirmed: { label: "Confirmed", color: "text-green-600", bg: "bg-green-50" },
@@ -935,8 +1013,8 @@ const Handovers = () => {
           </p>
         </div>
 
-        {/* Actions */}
-        {showActions && (
+        {/* Actions: Recipient Accept/Decline - only show for pending handovers sent TO user */}
+        {showActions && canAcceptDecline && (
           <div className="flex items-center gap-1.5 shrink-0">
             <Button size="sm" className="h-8 text-xs gap-1" onClick={() => handleAccept(item.id)} disabled={isLoading}>
               {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle className="h-3 w-3" />}
@@ -948,8 +1026,16 @@ const Handovers = () => {
           </div>
         )}
 
-        {showAdminActions && (
+        {/* Admin: Show Accept/Decline/Edit/Cancel - only for pending handovers */}
+        {showAdminActions && canAdminAct && (
           <div className="flex items-center gap-1.5 shrink-0">
+            <Button size="sm" className="h-8 text-xs gap-1" onClick={() => handleAccept(item.id)} disabled={isLoading}>
+              {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle className="h-3 w-3" />}
+              Accept
+            </Button>
+            <Button size="sm" variant="ghost" className="h-8 text-xs text-destructive hover:text-destructive" onClick={() => handleDecline(item.id)} disabled={isLoading}>
+              Decline
+            </Button>
             <Button
               size="sm"
               variant="outline"
@@ -964,21 +1050,20 @@ const Handovers = () => {
             >
               <Edit2 className="h-3 w-3" /> Edit
             </Button>
-            {item.status === "awaiting_confirmation" && (
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-8 text-xs text-destructive hover:text-destructive"
-                onClick={() => handleCancel(item.id)}
-                disabled={isLoading}
-              >
-                Cancel
-              </Button>
-            )}
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 text-xs text-destructive hover:text-destructive"
+              onClick={() => handleCancel(item.id)}
+              disabled={isLoading}
+            >
+              Cancel
+            </Button>
           </div>
         )}
 
-        {canCancel && !showActions && !showAdminActions && (
+        {/* Sender: Show Cancel only for their own pending handovers */}
+        {canCancel && !canAcceptDecline && !canAdminAct && (
           <Button
             size="sm"
             variant="ghost"
@@ -1237,16 +1322,21 @@ const Handovers = () => {
         title="Handovers"
         subtitle="Track money flow between team members"
         primaryAction={
-          isSuperAdmin
+          isAdminOrManager
             ? { label: "Admin Transfer", icon: Send, onClick: () => setAdminTransferOpen(true) }
             : !isFinalizer
             ? { label: "Create Handover", icon: Send, onClick: () => setCreateOpen(true) }
             : undefined
         }
+        actions={
+          isAdminOrManager && canAdjustHoldingBalance
+            ? [{ label: "Adjust Holding", icon: Wallet, onClick: () => setAdjustHoldingOpen(true), priority: 1 }]
+            : []
+        }
       />
 
       {/* ========== BALANCE CARDS ========== */}
-      {!isSuperAdmin && (
+      {!isAdminOrManager && (
         <div className="space-y-4 mb-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Card className="bg-blue-50 border border-blue-200">
@@ -1470,7 +1560,7 @@ const Handovers = () => {
               </h3>
               <div className="space-y-2">
                 {incoming.map((item) => (
-                  <HandoverCard key={item.id} item={item} showActions={!isSuperAdmin} showAdminActions={isSuperAdmin} />
+                  <HandoverCard key={item.id} item={item} showActions={!isAdminOrManager} showAdminActions={isAdminOrManager} />
                 ))}
               </div>
             </div>
@@ -1616,7 +1706,7 @@ const Handovers = () => {
         {(isFinalizer || isSuperAdmin || isManager) && (
           <TabsContent value="income" className="space-y-4 mt-3">
             {/* Admin/Manager: Finalizer holdings overview */}
-            {(isSuperAdmin || isManager) && (
+            {(isAdminOrManager) && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Finalizer Holdings</h3>
@@ -1718,7 +1808,7 @@ const Handovers = () => {
 
       {/* ========== SIMPLIFIED CREATE HANDOVER DIALOG ========== */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Create Handover</DialogTitle>
             <DialogDescription>Send money to another team member for confirmation.</DialogDescription>
@@ -2092,6 +2182,71 @@ const Handovers = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Adjust Holding Balance Dialog */}
+      {canAdjustHoldingBalance && (
+        <Dialog open={adjustHoldingOpen} onOpenChange={setAdjustHoldingOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Adjust Holding Balance</DialogTitle>
+              <DialogDescription>
+                Adjust the cash or UPI holding balance of any staff member. Use negative values to reduce balance.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Select Staff Member</Label>
+                <Select value={adjustHoldingUser} onValueChange={setAdjustHoldingUser}>
+                  <SelectTrigger><SelectValue placeholder="Select staff" /></SelectTrigger>
+                  <SelectContent>
+                    {(staffProfiles || []).map((staff) => (
+                      <SelectItem key={staff.user_id} value={staff.user_id}>
+                        {staff.full_name} ({staff.roleLabel})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Cash Adjustment (₹)</Label>
+                  <Input 
+                    type="number" 
+                    value={adjustCashAmount} 
+                    onChange={(e) => setAdjustCashAmount(e.target.value)} 
+                    placeholder="e.g. 500 or -200"
+                  />
+                  <span className="text-xs text-muted-foreground">Positive = add, Negative = reduce</span>
+                </div>
+                <div className="space-y-2">
+                  <Label>UPI Adjustment (₹)</Label>
+                  <Input 
+                    type="number" 
+                    value={adjustUpiAmount} 
+                    onChange={(e) => setAdjustUpiAmount(e.target.value)} 
+                    placeholder="e.g. 500 or -200"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Reason (optional)</Label>
+                <Input 
+                  value={adjustReason} 
+                  onChange={(e) => setAdjustReason(e.target.value)} 
+                  placeholder="Reason for adjustment"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => { setAdjustHoldingOpen(false); setAdjustHoldingUser(""); setAdjustCashAmount(""); setAdjustUpiAmount(""); setAdjustReason(""); }}>Cancel</Button>
+              <Button onClick={handleAdjustHoldingBalance} disabled={submitting || !adjustHoldingUser || (!adjustCashAmount && !adjustUpiAmount)}>
+                {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Wallet className="h-4 w-4 mr-2" />}
+                Adjust Balance
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 };

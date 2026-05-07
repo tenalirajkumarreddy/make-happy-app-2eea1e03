@@ -162,7 +162,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let mounted = true;
-
+    let timeoutId: NodeJS.Timeout;
+    
+    // Safety timeout: force loading false after 5 seconds
+    timeoutId = setTimeout(() => {
+      if (mounted) {
+        console.warn("Auth init timeout - forcing loading false");
+        setLoading(false);
+      }
+    }, 5000);
+  
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         if (!mounted) return;
@@ -208,7 +217,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         logError("Auth context initialization error", error);
       } finally {
-        if (mounted) setLoading(false);
+        if (mounted) {
+          clearTimeout(timeoutId);
+          setLoading(false);
+        }
       }
     };
 
@@ -216,6 +228,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => {
       mounted = false;
+      clearTimeout(timeoutId);
       subscription.unsubscribe();
     };
   }, []);

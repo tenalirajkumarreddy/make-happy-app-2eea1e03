@@ -16,6 +16,10 @@ const PERMISSION_KEYS = [
   "finalizer",
   "see_handover_balance",
   "submit_expenses",
+  // Handover permissions
+  "modify_handovers",
+  "cancel_any_handover",
+  "adjust_holding_balance",
   // Sales permission
   "record_sale",
   // Vendor & Purchase permissions
@@ -58,7 +62,9 @@ export type PermissionKey = (typeof PERMISSION_KEYS)[number];
 const ROLE_DEFAULTS: Record<string, PermissionKey[]> = {
   super_admin: [
     "price_override", "record_behalf", "create_customers", "create_stores",
-    "edit_balance", "opening_balance", "view_vendors", "manage_vendors",
+    "edit_balance", "opening_balance", "finalizer", "see_handover_balance",
+    "modify_handovers", "cancel_any_handover", "adjust_holding_balance",
+    "view_vendors", "manage_vendors",
     "view_purchases", "manage_purchases", "view_vendor_payments", "manage_vendor_payments",
     "view_raw_materials", "manage_raw_materials", "view_attendance", "manage_attendance",
     // Orders - full access
@@ -73,7 +79,9 @@ const ROLE_DEFAULTS: Record<string, PermissionKey[]> = {
   ],
   manager: [
     "price_override", "record_behalf", "create_customers", "create_stores",
-    "edit_balance", "opening_balance", "view_vendors", "manage_vendors",
+    "edit_balance", "opening_balance", "finalizer", "see_handover_balance",
+    "modify_handovers", "cancel_any_handover", "adjust_holding_balance",
+    "view_vendors", "manage_vendors",
     "view_purchases", "manage_purchases", "view_vendor_payments", "manage_vendor_payments",
     "view_raw_materials", "manage_raw_materials", "view_attendance", "manage_attendance",
     // Orders - full access
@@ -146,6 +154,11 @@ export const PERMISSION_GROUPS = {
     "finalizer",
     "see_handover_balance",
   ],
+  "Handovers": [
+    "modify_handovers",
+    "cancel_any_handover",
+    "adjust_holding_balance",
+  ],
   "Customers & Stores": [
     "create_customers",
     "create_stores",
@@ -196,6 +209,9 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   opening_balance: "Set Opening Balances",
   finalizer: "Finalize Reports",
   see_handover_balance: "See Handover Balance",
+  modify_handovers: "Modify Handovers",
+  cancel_any_handover: "Cancel Any Handover",
+  adjust_holding_balance: "Adjust Holding Balance",
   submit_expenses: "Submit Expenses",
   view_vendors: "View Vendors",
   manage_vendors: "Manage Vendors",
