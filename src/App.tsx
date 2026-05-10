@@ -117,7 +117,7 @@ function DashboardRouter() {
       customerElement={<CustomerPortal />}
       agentElement={<AgentDashboard />}
       marketerElement={<MarketerDashboard />}
-      posElement={<PosDashboard />}
+      operatorElement={<PosDashboard />}
     />
   );
 }

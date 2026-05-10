@@ -132,14 +132,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { role, profile, customer } = await resolveUserType(supabase, userId);
 
-      if (role === "customer" && !customer) {
-        await supabase.auth.signOut();
-        setUser(null);
-        setSession(null);
-        setRole(null);
-        setProfile(null);
-        return;
-      }
+      // Allow users without a customer record to remain authenticated
+      // so they can complete the onboarding flow. ProtectedRoute will
+      // redirect them to /onboarding if they try to access protected areas.
 
       setProfile(profile);
       setCustomer(customer);
@@ -155,8 +150,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setProfile(null);
         return;
       }
-      setRole("customer");
-      setCustomer(null);
+      // On error, keep whatever was resolved before the error
+      // rather than defaulting to customer+null which triggers /onboarding
     }
   };
 

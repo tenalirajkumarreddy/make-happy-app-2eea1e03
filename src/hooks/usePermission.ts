@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { ROLE_DEFAULTS, type PermissionKey } from "@/components/access/UserPermissionsPanel";
+import { type PermissionKey, hasRoleDefaultPermission, ROLE_DEFAULTS } from "@/lib/permissions";
 
 export function usePermission(key: PermissionKey): { allowed: boolean; loading: boolean } {
   const { user, role } = useAuth();
@@ -31,6 +31,6 @@ export function usePermission(key: PermissionKey): { allowed: boolean; loading: 
   if (dbPerm) return { allowed: dbPerm.enabled, loading: false };
 
   // Fall back to role defaults
-  const isDefault = ROLE_DEFAULTS[role]?.includes(key) ?? false;
+  const isDefault = hasRoleDefaultPermission(role as any, key);
   return { allowed: isDefault, loading: false };
 }

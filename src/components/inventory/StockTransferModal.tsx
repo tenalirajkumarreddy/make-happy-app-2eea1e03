@@ -199,7 +199,7 @@ export function StockTransferModal({
 
   // Prefer prop list, fall back to fetched list
   const displayStaff = useMemo(() => {
-    let list = staffMembers && staffMembers.length > 0 ? staffMembers : fetchedStaff;
+    const list = staffMembers && staffMembers.length > 0 ? staffMembers : fetchedStaff;
     
     // If agent, they can only select themselves as recipient/source in most cases
     // but here we filter based on transfer type in the render section
@@ -212,7 +212,7 @@ export function StockTransferModal({
     queryFn: async () => {
       console.log("[StockTransfer] Fetching stock for:", { transferType, fromId });
       let physicalStock: any[] = [];
-      let pendingOutgoing: Record<string, number> = {};
+      const pendingOutgoing: Record<string, number> = {};
 
       if (!fromId) return [];
 

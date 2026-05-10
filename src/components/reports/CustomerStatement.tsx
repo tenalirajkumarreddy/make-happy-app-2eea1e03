@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { formatCurrency } from '@/lib/currency';
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -551,3 +552,4 @@ export function CustomerStatement({ customerId: propCustomerId, customerName: pr
     </div>
   );
 }
+

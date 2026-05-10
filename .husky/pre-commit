@@ -1,0 +1,1 @@
+npx --no-install gitleaks detect --source . --verbose --redact

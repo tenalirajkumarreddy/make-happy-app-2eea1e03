@@ -10,6 +10,7 @@ const DB_NAME = "aquaprime_offline";
 const DB_VERSION = 4;
 const STORE_NAME = "pending_actions";
 const FILE_STORE_NAME = "pending_files";
+const CONFLICT_STORE_NAME = "conflict_info";
 
 const MAX_RETRIES = 3;
 const RETRY_DELAYS = [1000, 5000, 15000]; // Exponential backoff
@@ -82,6 +83,13 @@ function openDB(): Promise<IDBDatabase> {
         const store = db.createObjectStore(STORE_NAME, { keyPath: "id" });
         store.createIndex("type", "type", { unique: false });
         store.createIndex("createdAt", "createdAt", { unique: false });
+        store.createIndex("businessKey", "businessKey", { unique: false }); // Index for O(1) dedup lookups
+      } else {
+        // Ensure businessKey index exists on existing store (v4 upgrade)
+        const store = tx.objectStore(STORE_NAME);
+        if (!store.indexNames.contains("businessKey")) {
+          store.createIndex("businessKey", "businessKey", { unique: false });
+        }
       }
 
       // Create pending_files store for file uploads (v3+)
@@ -126,13 +134,10 @@ export async function isBusinessKeyQueued(businessKey: string): Promise<boolean>
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, "readonly");
     const store = tx.objectStore(STORE_NAME);
-    const req = store.getAll();
 
-    req.onsuccess = () => {
-      const actions = req.result as PendingAction[];
-      const exists = actions.some(a => a.businessKey === businessKey);
-      resolve(exists);
-    };
+    // Use index for O(log n) lookup instead of O(n) getAll()
+    const req = store.index("businessKey").get(businessKey);
+    req.onsuccess = () => resolve(req.result !== undefined);
     req.onerror = () => reject(req.error);
   });
 }
@@ -460,8 +465,6 @@ export function arrayBufferToBlob(buffer: ArrayBuffer, contentType: string): Blo
 // ─────────────────────────────────────────────────────────────────────────────
 // CONFLICT RESOLUTION FUNCTIONS
 // ─────────────────────────────────────────────────────────────────────────────
-
-const CONFLICT_STORE_NAME = "conflict_info";
 
 /**
  * Add action to queue with context tracking for conflict detection

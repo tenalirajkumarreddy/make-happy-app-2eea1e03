@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { formatCurrency } from '@/lib/currency';
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -288,7 +289,7 @@ export default function StockSummaryReport() {
           <ReportKPICard label="Low Stock" value={totals.lowStock.toString()} trend={totals.lowStock > 0 ? "down" : undefined} icon={<AlertTriangle className="h-4 w-4" />} />
           <ReportKPICard label="Out of Stock" value={totals.outOfStock.toString()} trend={totals.outOfStock > 0 ? "down" : undefined} icon={<TrendingDown className="h-4 w-4" />} />
           <ReportKPICard label="Total Units" value={totals.totalUnits.toLocaleString()} icon={<Archive className="h-4 w-4" />} />
-          <ReportKPICard label="Stock Value" value={`₹${(totals.totalValue / 1000).toFixed(0)}K`} highlight icon={<Package className="h-4 w-4" />} />
+          <ReportKPICard label="Stock Value" value={`${formatCurrency(Number(totals.totalValue)/1000)}k`} highlight icon={<Package className="h-4 w-4" />} />
         </>
       }
     >
@@ -421,3 +422,4 @@ export default function StockSummaryReport() {
     </ReportContainer>
   );
 }
+

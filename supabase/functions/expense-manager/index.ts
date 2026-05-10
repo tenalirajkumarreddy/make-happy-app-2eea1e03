@@ -3,40 +3,42 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const ALLOWED_ORIGINS = [
+const ALLOWED_DOMAINS = [
   "https://aquaprimesales.vercel.app",
-  "http://localhost:5000",
-  "http://localhost:5173",
-  "http://localhost:8100",
-  "http://localhost",
   "capacitor://localhost",
   "ionic://localhost",
 ];
 
 function isAllowedOrigin(origin: string): boolean {
   if (!origin) return false;
-  if (origin === "null") return true;
+
+  // Block null origins (file:// pages, sandboxed iframes)
+  if (origin === "null") return false;
+
+  // Native mobile apps use custom protocols
   if (origin === "capacitor://localhost" || origin === "ionic://localhost") return true;
 
   try {
     const url = new URL(origin);
+
+    // Allow localhost in development only
     if (
       (url.protocol === "http:" || url.protocol === "https:") &&
       (url.hostname === "localhost" || url.hostname === "127.0.0.1")
     ) {
-      return true;
+      return import.meta.env?.DENO_ENV === "development" || Deno.env.get("DENO_ENV") === "development";
     }
-    if (url.protocol === "https:") return true;
-  } catch {
-    // ignore malformed Origin
-  }
 
-  return false;
+    // Explicit allowlist for production domains
+    return ALLOWED_DOMAINS.includes(origin);
+  } catch {
+    return false;
+  }
 }
 
 function getCorsHeaders(req: Request) {
   const origin = req.headers.get("Origin") || "";
-  const allowed = isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS[0];
+  const allowed = isAllowedOrigin(origin) ? origin : ALLOWED_DOMAINS[0];
   return {
     "Access-Control-Allow-Origin": allowed,
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",

@@ -21,6 +21,7 @@ interface VirtualDataTableProps<T> {
   height?: string | number;
   emptyMessage?: string;
   renderMobileCard?: (row: T) => React.ReactNode;
+  keyExtractor?: (row: T) => string | number;
 }
 
 export function VirtualDataTable<T extends Record<string, any>>({
@@ -31,7 +32,8 @@ export function VirtualDataTable<T extends Record<string, any>>({
   onRowClick,
   height = "600px",
   emptyMessage = "No results found.",
-  renderMobileCard
+  renderMobileCard,
+  keyExtractor,
 }: VirtualDataTableProps<T>) {
   const [search, setSearch] = useState("");
   const parentRef = useRef<HTMLDivElement>(null);
@@ -123,7 +125,7 @@ export function VirtualDataTable<T extends Record<string, any>>({
                     className={cn(
                       "absolute top-0 left-0 w-full transition-colors",
                       !shouldRenderCards && "flex items-center border-b px-0 py-2 text-sm hover:bg-muted/50",
-                      shouldRenderCards && "pb-3", // Spacing for cards
+                      shouldRenderCards && "pb-3",
                       onRowClick && !shouldRenderCards ? "cursor-pointer" : ""
                     )}
                     style={{
@@ -150,6 +152,6 @@ export function VirtualDataTable<T extends Record<string, any>>({
       <p className="text-xs text-muted-foreground text-center sm:text-left">
         Showing {filteredData.length} records {shouldRenderCards ? "" : "(virtualized)"}
       </p>
-    </div>
+</div>
   );
 }

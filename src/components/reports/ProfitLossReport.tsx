@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { formatCurrency } from '@/lib/currency';
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -289,11 +290,11 @@ export default function ProfitLossReport() {
       filters={<ReportFilters dateRange={dateRange} onDateRangeChange={setDateRange} />}
       summaryCards={
         <>
-          <ReportKPICard label="Net Revenue" value={`₹${(plData.netRevenue / 1000).toFixed(0)}K`} icon={<ShoppingCart className="h-4 w-4" />} />
-          <ReportKPICard label="COGS" value={`₹${(plData.cogs / 1000).toFixed(0)}K`} icon={<Package className="h-4 w-4" />} />
-          <ReportKPICard label="Gross Profit" value={`₹${(plData.grossProfit / 1000).toFixed(0)}K`} subValue={`${plData.grossMargin.toFixed(1)}% margin`} highlight icon={<TrendingUp className="h-4 w-4" />} />
-          <ReportKPICard label="Expenses" value={`₹${(plData.totalExpenses / 1000).toFixed(0)}K`} trend="down" icon={<Receipt className="h-4 w-4" />} />
-          <ReportKPICard label="Net Profit" value={`₹${(plData.netProfit / 1000).toFixed(0)}K`} subValue={`${plData.netMargin.toFixed(1)}% margin`} trend={plData.netProfit >= 0 ? "up" : "down"} highlight={plData.netProfit >= 0} icon={<Wallet className="h-4 w-4" />} />
+<ReportKPICard label="Net Revenue" value={`${formatCurrency(plData.netRevenue / 1000)}K`} icon={<ShoppingCart className="h-4 w-4" />} />
+        <ReportKPICard label="COGS" value={`${formatCurrency(plData.cogs / 1000)}K`} icon={<Package className="h-4 w-4" />} />
+        <ReportKPICard label="Gross Profit" value={`${formatCurrency(plData.grossProfit / 1000)}K`} subValue={`${plData.grossMargin.toFixed(1)}% margin`} highlight icon={<TrendingUp className="h-4 w-4" />} />
+        <ReportKPICard label="Expenses" value={`${formatCurrency(plData.totalExpenses / 1000)}K`} trend="down" icon={<Receipt className="h-4 w-4" />} />
+        <ReportKPICard label="Net Profit" value={`${formatCurrency(plData.netProfit / 1000)}K`} subValue={`${plData.netMargin.toFixed(1)}% margin`} trend={plData.netProfit >= 0 ? "up" : "down"} highlight={plData.netProfit >= 0} icon={<Wallet className="h-4 w-4" />} />
         </>
       }
     >
@@ -308,7 +309,7 @@ export default function ProfitLossReport() {
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={plBreakdown} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis type="number" tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
+                  <XAxis type="number" tickFormatter={(v) => `${formatCurrency(v / 1000)}k`} />
                   <YAxis type="category" dataKey="name" width={100} />
                   <Tooltip formatter={(v: number) => `₹${v.toLocaleString()}`} />
                   <Bar dataKey="value" fill="#3b82f6" />
@@ -432,3 +433,4 @@ export default function ProfitLossReport() {
     </ReportContainer>
   );
 }
+

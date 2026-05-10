@@ -82,6 +82,103 @@ interface FulfillOrder {
   };
 }
 
+// Extended order interfaces for type safety
+interface Agent {
+  user_id: string;
+  full_name: string;
+}
+
+interface InsertOrder {
+  display_id: string;
+  store_id: string;
+  customer_id: string | null;
+  order_type: "simple" | "detailed";
+  source: "manual" | string;
+  created_by: string;
+  requirement_note: string | null;
+  warehouse_id: string | null;
+  assigned_to?: string | null;
+}
+
+interface UpdateOrder {
+  requirement_note: string | null;
+  updated_at: string;
+  assigned_to?: string | null;
+}
+
+interface OrderRecord {
+  id: string;
+  display_id: string;
+  store_id: string;
+  customer_id: string | null;
+  order_type: "simple" | "detailed";
+  source: string;
+  status: string;
+  requirement_note: string | null;
+  assigned_to: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface OrderItemData {
+  product_id: string;
+  quantity: number;
+  unit_price: number | null;
+}
+
+interface ProductItem {
+  id: string;
+  name: string;
+  sku: string;
+  base_price: number;
+  image_url?: string;
+}
+
+interface CustomerData {
+  id: string;
+  name: string;
+  kyc_status?: string;
+  phone?: string | null;
+  email?: string | null;
+  credit_limit_override?: number | null;
+  outstanding_balance?: number;
+}
+
+interface StoreData {
+  id: string;
+  name: string;
+  display_id: string;
+  store_type_id: string | null;
+  customer_id: string | null;
+  route_id: string | null;
+  route?: {
+    id: string;
+    name: string;
+  } | null;
+  store_types?: {
+    name: string;
+  } | null;
+  lat?: number | null;
+  lng?: number | null;
+  address?: string | null;
+  outstanding?: number;
+}
+
+interface InvoiceData {
+  id: string;
+  display_id?: string;
+  order_id?: string;
+  customer_id?: string | null;
+  invoice_items?: Array<{
+    id: string;
+    product_id: string;
+    quantity: number;
+    unit_price: number;
+  }>;
+  total_amount?: number;
+}
+
 const Orders = () => {
   const { user, role } = useAuth();
   const { currentWarehouse } = useWarehouse();
@@ -293,10 +390,10 @@ const Orders = () => {
         .select("user_id, full_name")
         .eq("role", "agent")
         .eq("is_active", true);
-      return (data || []).map((r: any) => ({ 
-        id: r.user_id, 
-        full_name: r.full_name || "Agent" 
-      }));
+  return (data || []).map((r: { user_id: string; full_name: string | null }) => ({
+    id: r.user_id,
+    full_name: r.full_name || "Agent"
+  }));
     },
     enabled: canTransferOrders || canCreateOrders,
   });
@@ -395,7 +492,7 @@ const Orders = () => {
 
     const { data: displayId } = await supabase.rpc("generate_random_display_id", { p_prefix: "ORD", p_table_name: "orders" });
 
-const insertData: any = {
+    const insertData: InsertOrder = {
       display_id: displayId,
       store_id: storeId,
       customer_id: customerId || null,
@@ -475,16 +572,16 @@ const insertData: any = {
     e.preventDefault();
     if (!editOrder) return;
     
-    setSaving(true);
-    
-    const updateData: any = {
-      requirement_note: requirementNote || null,
-      updated_at: new Date().toISOString(),
-    };
-    
-    if (assignedTo !== undefined) {
-      updateData.assigned_to = assignedTo || null;
-    }
+  setSaving(true);
+
+  const updateData: UpdateOrder = {
+    requirement_note: requirementNote || null,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (assignedTo !== undefined) {
+    updateData.assigned_to = assignedTo || null;
+  }
 
     const { error } = await supabase
       .from("orders")
@@ -498,9 +595,9 @@ const insertData: any = {
     }
 
     // Update order items if detailed
-    if (orderType === "detailed" && canModifyPrices) {
-      // Delete existing items and recreate
-      await supabase.from("order_items").delete().eq("order_id", editOrder.id);
+if (orderType === "detailed" && canModifyPrices) {
+    // Soft delete existing items and recreate
+    await supabase.from("order_items").update({ deleted_at: new Date().toISOString() }).eq("order_id", editOrder.id);
       
       const validItems = orderItems.filter((i) => i.product_id);
       if (validItems.length > 0) {
@@ -557,7 +654,7 @@ const insertData: any = {
       setAssignedTo(orderData.assigned_to || "");
 
       if (orderData.order_items && orderData.order_items.length > 0) {
-        setOrderItems(orderData.order_items.map((item: any) => ({
+        setOrderItems(orderData.order_items.map((item: OrderItemData) => ({
           product_id: item.product_id,
           quantity: item.quantity,
           unit_price: item.unit_price
@@ -597,7 +694,7 @@ const insertData: any = {
       setAssignedTo(orderData.assigned_to || "");
 
       if (orderData.order_items && orderData.order_items.length > 0) {
-        setOrderItems(orderData.order_items.map((item: any) => ({
+        setOrderItems(orderData.order_items.map((item: OrderItemData) => ({
           product_id: item.product_id,
           quantity: item.quantity,
           unit_price: item.unit_price
@@ -651,7 +748,7 @@ const insertData: any = {
       return;
     }
     
-    const order = orders?.find((o: any) => o.id === orderId);
+    const order = orders?.find((o: OrderRecord) => o.id === orderId);
     if (!order) return;
     
     setTransferOrder(order as unknown as FulfillOrder);
@@ -670,7 +767,7 @@ const insertData: any = {
       return;
     }
 
-    const order = orders?.find((o: any) => o.id === orderId);
+    const order = orders?.find((o: OrderRecord) => o.id === orderId);
     
     // Notify the assigned agent
     sendNotificationToMany([newAssigneeId], {
@@ -746,7 +843,7 @@ const handleInvoiceAction = async (orderId: string, status: string) => {
 };
 
 const exportCSV = () => {
-    const rows = (filteredOrders || []).map((o: any) => ({
+    const rows = (filteredOrders || []).map((o: OrderRecord) => ({
       "Order ID": o.display_id,
       "Store": o.stores?.name || "",
       "Customer": o.customers?.name || "",
@@ -787,7 +884,7 @@ const exportCSV = () => {
     setCancelling(false);
     if (error) { toast.error(error.message); return; }
 
-    const order = orders?.find((o: any) => o.id === cancelOrderId);
+    const order = orders?.find((o: OrderRecord) => o.id === cancelOrderId);
     logActivity(user!.id, "Cancelled order", "order", order?.display_id || "", cancelOrderId, { reason: cancelReason });
 
     // Notify customer if linked
@@ -814,7 +911,7 @@ const exportCSV = () => {
   const filteredOrders = useMemo(() => {
     let data = orders || [];
     if (hasMatrixRestrictions || hasStoreTypeRestrictions) {
-      data = data.filter((o: any) =>
+      data = data.filter((o: OrderRecord) =>
         o.stores && canAccessStore(o.stores.route_id, o.stores.store_type_id)
       );
     }
@@ -842,7 +939,7 @@ const exportCSV = () => {
   };
 
 // Build action buttons based on permissions - icon-only with tooltips
-const buildActions = (row: any) => {
+const buildActions = (row: OrderRecord) => {
   // Cancelled orders - show reason only
   if (row.status === "cancelled") {
     return (
@@ -1134,7 +1231,7 @@ const buildActions = (row: any) => {
 };
 
   // Store Hover Card component
-  const StoreHoverCard = ({ store, children }: { store: any; children: React.ReactNode }) => {
+  const StoreHoverCard = ({ store, children }: { store: StoreData; children: React.ReactNode }) => {
     if (!store) return <span>{children}</span>;
     return (
       <HoverCard>
@@ -1206,7 +1303,7 @@ const buildActions = (row: any) => {
   };
 
   // Customer Hover Card component
-  const CustomerHoverCard = ({ customer, children }: { customer: any; children: React.ReactNode }) => {
+  const CustomerHoverCard = ({ customer, children }: { customer: CustomerData; children: React.ReactNode }) => {
     if (!customer) return <span>{children}</span>;
     return (
       <HoverCard>
@@ -1253,7 +1350,7 @@ const buildActions = (row: any) => {
 
 const columns = [
   { header: "Order ID", accessor: "display_id" as const, className: "font-mono text-xs" },
-  { header: "Store", accessor: (row: any) => (
+  { header: "Store", accessor: (row: OrderRecord) => (
     <div className="flex items-center gap-2">
       <StoreIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
       <StoreHoverCard store={row.stores}>
@@ -1261,9 +1358,9 @@ const columns = [
       </StoreHoverCard>
     </div>
   ), className: "font-medium" },
-  { header: "Type", accessor: (row: any) => <Badge variant="secondary">{row.order_type}</Badge>, className: "hidden sm:table-cell" },
-  { header: "Source", accessor: (row: any) => <Badge variant="outline">{row.source}</Badge>, className: "hidden md:table-cell" },
-  { header: "Customer", accessor: (row: any) => (
+  { header: "Type", accessor: (row: OrderRecord) => <Badge variant="secondary">{row.order_type}</Badge>, className: "hidden sm:table-cell" },
+  { header: "Source", accessor: (row: OrderRecord) => <Badge variant="outline">{row.source}</Badge>, className: "hidden md:table-cell" },
+  { header: "Customer", accessor: (row: OrderRecord) => (
     <div className="flex items-center gap-2">
       <UserCircle className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
       <CustomerHoverCard customer={row.customers}>
@@ -1271,9 +1368,9 @@ const columns = [
       </CustomerHoverCard>
     </div>
   ), className: "text-muted-foreground text-sm hidden lg:table-cell" },
-  { header: "Status", accessor: (row: any) => <StatusBadge status={row.status === "delivered" ? "active" : row.status as any} label={row.status} /> },
-  { header: "Date", accessor: (row: any) => new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }), className: "text-muted-foreground text-xs hidden sm:table-cell" },
-  { header: "Actions", accessor: (row: any) => buildActions(row) },
+  { header: "Status", accessor: (row: OrderRecord) => <StatusBadge status={row.status === "delivered" ? "active" : row.status as any} label={row.status} /> },
+  { header: "Date", accessor: (row: OrderRecord) => new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }), className: "text-muted-foreground text-xs hidden sm:table-cell" },
+  { header: "Actions", accessor: (row: OrderRecord) => buildActions(row) },
 ];
 
   if (isLoading) {
@@ -1342,7 +1439,7 @@ const columns = [
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All stores</SelectItem>
-          {storesForFilter?.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.name} ({s.display_id})</SelectItem>)}
+          {storesForFilter?.map((s: StoreData) => <SelectItem key={s.id} value={s.id}>{s.name} ({s.display_id})</SelectItem>)}
         </SelectContent>
       </Select>
       <Select value={filterStoreType} onValueChange={setFilterStoreType}>
@@ -1351,7 +1448,7 @@ const columns = [
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All store types</SelectItem>
-          {storeTypes?.map((st: any) => <SelectItem key={st.id} value={st.id}>{st.name}</SelectItem>)}
+          {storeTypes?.map((st: StoreData) => <SelectItem key={st.id} value={st.id}>{st.name}</SelectItem>)}
         </SelectContent>
       </Select>
       <Select value={filterRoute} onValueChange={setFilterRoute}>
@@ -1360,7 +1457,7 @@ const columns = [
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All routes</SelectItem>
-          {routes?.map((r: any) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+          {routes?.map((r: RouteData) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
         </SelectContent>
       </Select>
       <Select value={filterCustomer} onValueChange={setFilterCustomer}>
@@ -1396,7 +1493,7 @@ const columns = [
       searchKey="display_id"
       searchPlaceholder="Search by order ID..."
       emptyMessage={statusFilter === "all" ? "No orders created yet." : `No ${statusFilter} orders.`}
-      renderMobileCard={(row: any) => (
+      renderMobileCard={(row: OrderRecord) => (
         <div className="rounded-lg border bg-card p-3">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
@@ -1674,7 +1771,7 @@ const columns = [
           <DialogHeader><DialogTitle>Cancel Order</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Are you sure you want to cancel order <span className="font-mono font-medium text-foreground">{orders?.find((o: any) => o.id === cancelOrderId)?.display_id}</span>?
+              Are you sure you want to cancel order <span className="font-mono font-medium text-foreground">{orders?.find((o: OrderRecord) => o.id === cancelOrderId)?.display_id}</span>?
             </p>
             <div>
               <Label>Reason for cancellation</Label>

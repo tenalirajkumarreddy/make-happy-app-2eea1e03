@@ -1,41 +1,44 @@
 /**
  * Shared CORS headers for all Edge Functions.
  *
- * NOTE: CORS is a browser safety mechanism, not an auth layer.
- * We keep it permissive enough to support:
- * - Vercel preview + production deployments
- * - Capacitor/Ionic WebViews
- * - Local development on any port
+ * SECURITY NOTE: CORS is a browser safety mechanism, not an auth layer.
+ * Auth is enforced by service role + JWT verification inside each function.
+ * CORS only controls which origins can *initiate* requests from browsers.
  */
 const DEFAULT_ALLOWED_ORIGIN = "https://aquaprimesales.vercel.app";
+
+// Only these domains are allowed to call edge functions
+const ALLOWED_DOMAINS = [
+  "https://aquaprimesales.vercel.app",
+  "https://*.vercel.app",           // Vercel preview deployments
+  "capacitor://localhost",
+  "ionic://localhost",
+];
 
 function isAllowedOrigin(origin: string): boolean {
   if (!origin) return false;
 
-  // Some WebViews / file:// contexts send `Origin: null`
-  if (origin === "null") return true;
+  // Block null origins (file:// pages, sandboxed iframes)
+  if (origin === "null") return false;
 
-  // Explicitly allow Capacitor / Ionic schemes
+  // Explicitly allow Capacitor / Ionic native app schemes
   if (origin === "capacitor://localhost" || origin === "ionic://localhost") return true;
 
-  try {
-    const url = new URL(origin);
-
-    // Allow any localhost/127.0.0.1 port for dev + WebView
-    if (
-      (url.protocol === "http:" || url.protocol === "https:") &&
-      (url.hostname === "localhost" || url.hostname === "127.0.0.1")
-    ) {
-      return true;
-    }
-
-    // Allow any HTTPS origin (supports custom domains + Vercel previews)
-    if (url.protocol === "https:") return true;
-  } catch {
-    // Ignore malformed Origin values
+  // Block all localhost / 127.0.0.1 unless in development
+  // (production users should never call from localhost)
+  if (origin.startsWith("http://localhost") || origin.startsWith("http://127.0.0.1")) {
+    return Deno.env.get("DENO_ENV") === "development";
   }
 
-  return false;
+  // Explicit allowlist for production domains
+  return ALLOWED_DOMAINS.some(domain => {
+    if (domain.includes("*")) {
+      // Wildcard matching for subdomains
+      const pattern = domain.replace("*.", "^[^.]+\\.").replace(/\./g, "\\.") + "$";
+      return new RegExp(pattern, "i").test(origin);
+    }
+    return origin === domain;
+  });
 }
 
 export function getCorsHeaders(req: Request): Record<string, string> {

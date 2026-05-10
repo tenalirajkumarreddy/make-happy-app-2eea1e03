@@ -5,9 +5,9 @@
  */
 
 import { supabase } from "@/integrations/supabase/client";
-import { PermissionKey } from "@/components/access/UserPermissionsPanel";
+import { PermissionKey, hasRoleDefaultPermission } from "@/lib/permissions";
 
-export type UserRole = "super_admin" | "manager" | "agent" | "marketer" | "operator" | "customer";
+export type UserRole = "super_admin" | "manager" | "agent" | "marketer" | "operator" | "pos" | "customer";
 
 /**
  * Check if a user has a specific permission
@@ -207,85 +207,41 @@ export async function validateActionPermission(
   return { allowed: true };
 }
 
-// Role default permissions (mirrors ROLE_DEFAULTS from UserPermissionsPanel)
+// Role default permissions — now delegated to the canonical source
+// KEPT HERE for backward compat with callers that pass non-canonical permission keys
 const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
   super_admin: [
-    "view_dashboard",
-    "view_sales",
-    "view_stores",
-    "view_inventory",
-    "view_collections",
-    "view_reports",
-    "manage_users",
-    "manage_roles",
-    "record_sale",
-    "record_transaction",
-    "record_visit",
-    "create_customer",
-    "create_store",
-    "edit_store",
-    "delete_store",
-    "view_all_warehouses",
-    "switch_warehouse",
-    "view_routes",
-    "assign_routes",
-    "manage_inventory",
-    "approve_expenses",
-    "view_expenses",
-    "export_data",
-    "import_data",
-    "view_settings",
-    "manage_settings",
+    "view_dashboard", "view_sales", "view_stores", "view_inventory",
+    "view_collections", "view_reports", "manage_users", "manage_roles",
+    "record_sale", "record_transaction", "record_visit",
+    "create_customer", "create_store", "edit_store", "delete_store",
+    "view_all_warehouses", "switch_warehouse",
+    "view_routes", "assign_routes", "manage_inventory",
+    "approve_expenses", "view_expenses",
+    "export_data", "import_data", "view_settings", "manage_settings",
   ],
   manager: [
-    "view_dashboard",
-    "view_sales",
-    "view_stores",
-    "view_inventory",
-    "view_collections",
-    "view_reports",
-    "record_sale",
-    "record_transaction",
-    "record_visit",
-    "create_customer",
-    "create_store",
-    "edit_store",
-    "view_routes",
-    "assign_routes",
-    "view_expenses",
-    "approve_expenses",
+    "view_dashboard", "view_sales", "view_stores", "view_inventory",
+    "view_collections", "view_reports",
+    "record_sale", "record_transaction", "record_visit",
+    "create_customer", "create_store", "edit_store",
+    "view_routes", "assign_routes",
+    "view_expenses", "approve_expenses",
     "export_data",
   ],
   agent: [
-    "view_dashboard",
-    "view_sales",
-    "view_stores",
-    "record_sale",
-    "record_transaction",
-    "record_visit",
-    "create_customer",
-    "view_routes",
-    "view_collections",
+    "view_dashboard", "view_sales", "view_stores",
+    "record_sale", "record_transaction", "record_visit",
+    "create_customer", "view_routes", "view_collections",
   ],
   marketer: [
-    "view_dashboard",
-    "view_stores",
-    "create_customer",
-    "record_visit",
-    "view_routes",
+    "view_dashboard", "view_stores", "create_customer", "record_visit", "view_routes",
   ],
   pos: [
-    "view_dashboard",
-    "view_sales",
-    "record_sale",
-    "record_transaction",
-    "view_stores",
+    "view_dashboard", "view_sales", "record_sale", "record_transaction", "view_stores",
   ],
   customer: [
-    "view_dashboard",
-    "view_orders",
-    "place_order",
-    "view_store",
+    "view_dashboard", "view_orders", "place_order", "view_store",
   ],
 };
 

@@ -172,12 +172,12 @@ const Banners = () => {
         toast.success("Banner created");
       }
 
-      // Sync banner_store_types junction table
-      // Delete existing associations
-      await supabase
-        .from("banner_store_types" as any)
-        .delete()
-        .eq("banner_id", bannerId);
+// Sync banner_store_types junction table
+  // Soft delete existing associations
+  await supabase
+    .from("banner_store_types" as any)
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("banner_id", bannerId);
 
       // Insert new associations
       if (selectedStoreTypeIds.length > 0) {
@@ -199,11 +199,11 @@ const Banners = () => {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this banner?")) return;
+const handleDelete = async (id: string) => {
+  if (!confirm("Are you sure you want to delete this banner?")) return;
 
-    const { error } = await supabase.from("promotional_banners").delete().eq("id", id);
-    if (error) {
+  const { error } = await supabase.from("promotional_banners").update({ deleted_at: new Date().toISOString() }).eq("id", id);
+  if (error) {
       toast.error(error.message);
     } else {
       toast.success("Banner deleted");

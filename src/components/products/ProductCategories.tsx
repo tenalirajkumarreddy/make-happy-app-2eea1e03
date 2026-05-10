@@ -102,8 +102,8 @@ export function ProductCategories({ onBack }: ProductCategoriesProps) {
     setSaving(true);
     // Clear category from products using this category
     await supabase.from("products").update({ category: null }).eq("category", name);
-    // Delete the category
-    const { error } = await supabase.from("product_categories").delete().eq("id", id);
+// Soft delete the category
+  const { error } = await supabase.from("product_categories").update({ deleted_at: new Date().toISOString() }).eq("id", id);
     setSaving(false);
     if (error) { toast.error(error.message); return; }
     toast.success(`Category "${name}" deleted`);

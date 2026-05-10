@@ -196,7 +196,7 @@ const Inventory = () => {
       if (fallback) setSelectedWarehouseId(fallback);
     }, 100);
     return () => clearTimeout(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [isInventoryViewer, selectedWarehouseId, isSuperAdmin, assignedWarehouseId, currentWarehouse?.id, allWarehouses]);
 
   // Build staff holdings by product map

@@ -82,16 +82,16 @@ export function PricingTab({ isAdmin }: { isAdmin: boolean }) {
     // Determine final product access
     const finalAccess = (products || []).filter((p) => isChecked(p.id)).map((p) => p.id);
 
-    // Delete existing, re-insert
-    await supabase.from("store_type_products").delete().eq("store_type_id", selectedTypeId);
-    if (finalAccess.length > 0) {
-      await supabase.from("store_type_products").insert(
-        finalAccess.map((pid) => ({ store_type_id: selectedTypeId, product_id: pid }))
-      );
-    }
+// Soft delete existing, re-insert active ones
+  await supabase.from("store_type_products").update({ deleted_at: new Date().toISOString() }).eq("store_type_id", selectedTypeId);
+  if (finalAccess.length > 0) {
+    await supabase.from("store_type_products").insert(
+      finalAccess.map((pid) => ({ store_type_id: selectedTypeId, product_id: pid }))
+    );
+  }
 
-    // Pricing: delete existing, insert non-empty
-    await supabase.from("store_type_pricing").delete().eq("store_type_id", selectedTypeId);
+  // Pricing: soft delete existing, insert non-empty
+  await supabase.from("store_type_pricing").update({ deleted_at: new Date().toISOString() }).eq("store_type_id", selectedTypeId);
     const pricingInserts = (products || [])
       .filter((p) => {
         const val = getPrice(p.id);

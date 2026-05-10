@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { formatCurrency } from '@/lib/currency';
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -346,7 +347,7 @@ export default function SalesReturnReport() {
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                   <XAxis dataKey="date" tick={{ fontSize: 11 }} />
                   <YAxis yAxisId="left" orientation="left" />
-                  <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}K`} />
+                  <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => `${formatCurrency(Number(v)/1000)}k`} />
                   <Tooltip formatter={(v: number, name: string) => 
                     name === "amount" ? `₹${v.toLocaleString()}` : v
                   } />
@@ -369,7 +370,7 @@ export default function SalesReturnReport() {
               <ResponsiveContainer width="100%" height={250}>
                 <BarChart data={reasonBreakdown} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis type="number" tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}K`} />
+                  <XAxis type="number" tickFormatter={(v) => `${formatCurrency(Number(v)/1000)}k`} />
                   <YAxis type="category" dataKey="reason" width={120} tick={{ fontSize: 10 }} />
                   <Tooltip formatter={(v: number) => `₹${v.toLocaleString()}`} />
                   <Bar dataKey="amount" name="Amount" fill="#ef4444" radius={[0, 4, 4, 0]} />
@@ -457,3 +458,4 @@ export default function SalesReturnReport() {
     </ReportContainer>
   );
 }
+

@@ -429,8 +429,21 @@ function shouldSkipForSubscriber(sub: RealtimeSubscriber, table: string, payload
   return false;
 }
 
-// ── Shared singleton channel ──────────────────────────────────────────────────
-let sharedChannel: ReturnType<typeof supabase.channel> | null = null;
+// ── Channel batching ──────────────────────────────────────────────────────────
+// Supabase Realtime practical limit is ~50 tables per channel.
+// Batch tables into groups of 30 to stay well within limits.
+const BATCH_SIZE = 30;
+
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) {
+    chunks.push(arr.slice(i, i + size));
+  }
+  return chunks;
+}
+
+// ── Shared multi-channel realtime ────────────────────────────────────────────
+const channels = new Map<string, ReturnType<typeof supabase.channel>>();
 const subscribers = new Map<symbol, RealtimeSubscriber>();
 let isTearingDown = false;
 
@@ -450,34 +463,39 @@ function handlePayload(table: string, payload: any) {
 }
 
 function buildChannel(role: string | null) {
-  if (sharedChannel) return;
+  const existingChannels = Array.from(channels.keys());
+  if (existingChannels.length > 0) return; // Already built for this role
   const tables = ROLE_TABLE_MAP[role ?? ""] ?? [];
   if (!tables.length) return;
 
-  let ch = supabase.channel("global-realtime-sync-v2");
-  tables.forEach((table) => {
-    ch = ch.on(
-      "postgres_changes",
-      { event: "*", schema: "public", table },
-      (payload: any) => handlePayload(table, payload)
-    );
-  });
+  const batches = chunkArray(tables, BATCH_SIZE);
+  batches.forEach((batch, idx) => {
+    const channelName = `global-realtime-sync-v2-batch${idx}`;
+    let ch = supabase.channel(channelName);
+    batch.forEach((table) => {
+      ch = ch.on(
+        "postgres_changes",
+        { event: "*", schema: "public", table },
+        (payload: any) => handlePayload(table, payload)
+      );
+    });
 
-  ch.subscribe((status: string) => {
-    if (isTearingDown && (status === "CLOSED" || status === "TIMED_OUT")) return;
-    if (status === "SUBSCRIBED") {
-      retryAttempt = 0;
-      if (import.meta.env.DEV) console.log("[Realtime] ✅ Subscribed to", tables.length, "tables");
-    } else if (status === "CHANNEL_ERROR") {
-      logError(new Error("[Realtime] Channel error"), { context: "useRealtimeSync" });
-      scheduleReconnect(role);
-    } else if (status === "CLOSED" || status === "TIMED_OUT") {
-      if (import.meta.env.DEV) console.warn("[Realtime] Connection", status, "— reconnecting…");
-      scheduleReconnect(role);
-    }
-  });
+    ch.subscribe((status: string) => {
+      if (isTearingDown && (status === "CLOSED" || status === "TIMED_OUT")) return;
+      if (status === "SUBSCRIBED") {
+        retryAttempt = 0;
+        if (import.meta.env.DEV) console.log(`[Realtime] ✅ Batch ${idx} subscribed to ${batch.length} tables`);
+      } else if (status === "CHANNEL_ERROR") {
+        logError(new Error(`[Realtime] Channel error batch ${idx}`), { context: "useRealtimeSync" });
+        scheduleReconnect(role);
+      } else if (status === "CLOSED" || status === "TIMED_OUT") {
+        if (import.meta.env.DEV) console.warn(`[Realtime] Batch ${idx} connection`, status, "— reconnecting…");
+        scheduleReconnect(role);
+      }
+    });
 
-  sharedChannel = ch;
+    channels.set(channelName, ch);
+  });
 }
 
 function scheduleReconnect(role: string | null) {
@@ -489,22 +507,22 @@ function scheduleReconnect(role: string | null) {
   const delay = Math.min(RETRY.baseDelay * 2 ** retryAttempt, RETRY.maxDelay);
   retryTimer = setTimeout(() => {
     retryAttempt++;
-    tearDownChannel();
+    tearDownChannels();
     buildChannel(role);
   }, delay);
 }
 
-function tearDownChannel() {
-  if (!sharedChannel) return;
+function tearDownChannels() {
+  if (channels.size === 0) return;
   isTearingDown = true;
-  supabase.removeChannel(sharedChannel);
-  sharedChannel = null;
+  channels.forEach((ch) => supabase.removeChannel(ch));
+  channels.clear();
   isTearingDown = false;
 }
 
 function maybeTearDown() {
   if (subscribers.size > 0) return;
-  tearDownChannel();
+  tearDownChannels();
   if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
 }
 

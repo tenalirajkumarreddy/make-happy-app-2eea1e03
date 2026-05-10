@@ -136,13 +136,13 @@ export function AdminStaffDirectory() {
   const handleDelete = async () => {
     if (!deleteConfirm) return;
 
-    try {
-      const { error } = await supabase
-        .from("staff_directory" as any)
-        .delete()
-        .eq("id", deleteConfirm.id);
+try {
+    const { error } = await supabase
+      .from("staff_directory" as any)
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("id", deleteConfirm.id);
 
-      if (error) throw error;
+    if (error) throw error;
       toast.success("Staff deleted");
       qc.invalidateQueries({ queryKey: ["staff-directory"] });
       setDeleteConfirm(null);

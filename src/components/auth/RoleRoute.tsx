@@ -23,7 +23,7 @@ export function RoleRoute({ staffElement, customerElement, agentElement, markete
   if (role === "customer") return <>{customerElement}</>;
   if (role === "agent" && agentElement) return <>{agentElement}</>;
   if (role === "marketer" && marketerElement) return <>{marketerElement}</>;
-  if (role === "operator" && operatorElement) return <>{operatorElement}</>;
+  if (role === "operator") return <>{operatorElement}</>;
   if (role === "super_admin" || role === "manager") return <>{staffElement}</>;
 
   return (

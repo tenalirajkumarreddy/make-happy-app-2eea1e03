@@ -18,10 +18,7 @@
       "Bash(npm list *)",
       "Bash(cp src/components/customers/CustomerLedger.tsx CustomerLedger_backup.tsx)",
       "Bash(rm CustomerLedger_backup.tsx)",
-      "mcp__supabase__deploy_edge_function",
-      "Bash(git commit -m ' *)",
-      "Bash(git commit --no-verify -m ' *)",
-      "Bash(git reset *)"
+      "mcp__supabase__deploy_edge_function"
     ]
   },
   "model": "minimax-m2.5-free",

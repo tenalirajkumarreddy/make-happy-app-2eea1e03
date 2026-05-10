@@ -143,9 +143,9 @@ export function BannerManagement() {
       toast.success("Banner created");
     }
 
-    // Sync banner_store_types
-    await supabase.from("banner_store_types" as any).delete().eq("banner_id", bannerId);
-    if (selectedStoreTypeIds.length > 0) {
+// Sync banner_store_types (soft delete existing associations)
+  await supabase.from("banner_store_types" as any).update({ deleted_at: new Date().toISOString() }).eq("banner_id", bannerId);
+  if (selectedStoreTypeIds.length > 0) {
       const rows = selectedStoreTypeIds.map((stId) => ({
         banner_id: bannerId,
         store_type_id: stId,
@@ -159,9 +159,9 @@ export function BannerManagement() {
     qc.invalidateQueries({ queryKey: ["banners-admin"] });
   };
 
-  const handleDelete = async (id: string) => {
-    const { error } = await supabase.from("promotional_banners").delete().eq("id", id);
-    if (error) toast.error(error.message);
+const handleDelete = async (id: string) => {
+  const { error } = await supabase.from("promotional_banners").update({ deleted_at: new Date().toISOString() }).eq("id", id);
+  if (error) toast.error(error.message);
     else { toast.success("Banner deleted"); qc.invalidateQueries({ queryKey: ["banners-admin"] }); }
   };
 

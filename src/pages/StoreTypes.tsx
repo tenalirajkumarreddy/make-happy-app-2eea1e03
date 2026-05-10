@@ -98,11 +98,11 @@ const StoreTypes = () => {
     }
   };
 
-  const handleDelete = async () => {
-    if (!deletingType) return;
-    setDeleting(true);
-    const { error } = await supabase.from("store_types").delete().eq("id", deletingType.id);
-    setDeleting(false);
+const handleDelete = async () => {
+  if (!deletingType) return;
+  setDeleting(true);
+  const { error } = await supabase.from("store_types").update({ deleted_at: new Date().toISOString() }).eq("id", deletingType.id);
+  setDeleting(false);
     if (error) {
       if (error.message.includes("violates foreign key")) {
         toast.error("Cannot delete: this store type is in use by stores or routes");

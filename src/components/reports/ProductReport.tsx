@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { formatCurrency } from '@/lib/currency';
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
@@ -405,3 +406,4 @@ export default function ProductReport() {
     </ReportContainer>
   );
 }
+

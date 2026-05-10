@@ -103,7 +103,7 @@ class ErrorBoundary extends Component<Props, State> {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {this.state.error && (
+              {this.state.error && import.meta.env.DEV && (
                 <div className="mt-4 p-4 bg-muted rounded-md border border-destructive/20 shadow-sm overflow-x-auto">
                   <p className="text-sm font-mono text-destructive font-semibold mb-2">
                     {this.state.error.toString()}
