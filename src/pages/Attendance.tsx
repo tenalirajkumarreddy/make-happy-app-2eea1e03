@@ -1095,8 +1095,12 @@ const totalOwed = balances.reduce((sum, b) => sum + Math.max(0, Number(b.outstan
       </div>
 
       {/* Reports Tab */}
-      <TabsContent value="reports" className="mt-4">
-        <Card>
+      <Tabs defaultValue="reports" className="w-full">
+        <TabsList>
+          <TabsTrigger value="reports">Reports</TabsTrigger>
+        </TabsList>
+        <TabsContent value="reports" className="mt-4">
+          <Card>
             <CardHeader>
               <CardTitle>Attendance & Labor Reports</CardTitle>
               <CardDescription>Monthly summaries and labor costs</CardDescription>
@@ -1186,6 +1190,7 @@ const totalOwed = balances.reduce((sum, b) => sum + Math.max(0, Number(b.outstan
 </CardContent>
         </Card>
         </TabsContent>
+      </Tabs>
 
         {/* Add/Edit Worker Dialog */}
       <Dialog open={showWorkerDialog} onOpenChange={(open) => { setShowWorkerDialog(open); if (!open) resetWorkerForm(); }}>
