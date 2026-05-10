@@ -49,9 +49,11 @@ export const ROLE_DEFAULTS: Record<AppRole, PermissionKey[]> = {
     "view_invoices", "download_invoices",
   ],
   operator: [
-    "view_invoices", "download_invoices",
+    "view_orders", "create_orders", "modify_orders",
+    "fulfill_orders", "cancel_orders", "transfer_orders",
+    "view_invoices", "create_invoices", "edit_invoices", "delete_invoices", "download_invoices",
     "view_attendance", "manage_attendance",
-    "record_sale", "fulfill_orders", "see_handover_balance",
+    "record_sale", "see_handover_balance",
   ],
   pos: [
     "view_invoices", "download_invoices",
