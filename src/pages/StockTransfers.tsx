@@ -430,10 +430,10 @@ export default function StockTransfers() {
                     const isWarehouseSender = t.from_warehouse_id === currentWarehouse?.id;
 
                     const canAccept = (role === "agent" && t.status === "awaiting_acceptance" && isRecipient) ||
-                                     ((role === "operator" || isManager) && t.status === "awaiting_acceptance" && isWarehouseRecipient);
+                                     ((role === "operator" || isManager) && t.status === "awaiting_acceptance" && (isWarehouseRecipient || !currentWarehouse?.id));
 
-                    const canProcess = (isManager || isSuperAdmin || role === "operator") && t.status === "pending" && 
-                                      (isWarehouseRecipient || isWarehouseSender || isSuperAdmin);
+                    const canProcess = (isManager || isSuperAdmin || role === "operator") && t.status === "pending" &&
+                                      (isWarehouseRecipient || isWarehouseSender || isSuperAdmin || !currentWarehouse?.id);
 
                     return (
                       <TableRow key={t.id} id={`transfer-${t.id}`}>
