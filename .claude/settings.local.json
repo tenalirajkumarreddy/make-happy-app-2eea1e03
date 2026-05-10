@@ -1,9 +1,30 @@
 {
   "env": {
-    "ANTHROPIC_BASE_URL": "https://integrate.api.nvidia.com/v1",
-    "ANTHROPIC_AUTH_TOKEN": "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",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "nvidia/llama-3.1-nemotron-70b-instruct",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "nvidia/llama-3.1-nemotron-70b-instruct",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "nvidia/llama-3.1-nemotron-70b-instruct"
-  }
+    "ANTHROPIC_BASE_URL": "https://opencode.ai/zen",
+    "ANTHROPIC_MODEL": "minimax-m2.5-free",
+    "ANTHROPIC_API_KEY": "sk-OBjhgDCRSQRBGSczJtT05TcAH47S7j8z4TQvRWQ7SZqWyhvoi8bDQ07aagVnhg8L",
+    "ENABLE_TOOL_SEARCH": "true"
+  },
+  "permissions": {
+    "allow": [
+      "Bash(node -e ' *)",
+      "Bash(node check_balance.js)",
+      "Bash(npx eslint *)",
+      "Bash(npx tsc *)",
+      "Bash(node -e \"const fs=require\\('fs'\\); const c=fs.readFileSync\\('/dev/stdin','utf8'\\); console.log\\(c\\);\")",
+      "Bash(node --input-type=module -e ' *)",
+      "Bash(ls -la node_modules/.cache/eslint/)",
+      "Bash(ls -la .eslintcache)",
+      "Bash(npm list *)",
+      "Bash(cp src/components/customers/CustomerLedger.tsx CustomerLedger_backup.tsx)",
+      "Bash(rm CustomerLedger_backup.tsx)",
+      "mcp__supabase__deploy_edge_function",
+      "Bash(git commit -m ' *)",
+      "Bash(git commit --no-verify -m ' *)",
+      "Bash(git reset *)"
+    ]
+  },
+  "model": "minimax-m2.5-free",
+  "autoUpdatesChannel": "latest",
+  "theme": "dark"
 }

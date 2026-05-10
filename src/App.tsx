@@ -117,7 +117,7 @@ function DashboardRouter() {
       customerElement={<CustomerPortal />}
       agentElement={<AgentDashboard />}
       marketerElement={<MarketerDashboard />}
-      operatorElement={<Dashboard />}
+      posElement={<PosDashboard />}
     />
   );
 }
@@ -199,16 +199,16 @@ const App = () => {
                <Route path="/transactions" element={<RoleGuard allowed={["super_admin", "manager", "agent"]}><Transactions /></RoleGuard>} />
                <Route path="/purchase-returns" element={<RoleGuard allowed={["super_admin", "manager", "agent"]}><PurchaseReturns /></RoleGuard>} />
                <Route path="/purchases" element={<RoleGuard allowed={["super_admin", "manager"]}><Purchases /></RoleGuard>} />
-               <Route path="/stock-transfers" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer", "operator"]}><StockTransfers /></RoleGuard>} />
+               <Route path="/stock-transfers" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer"]}><StockTransfers /></RoleGuard>} />
                <Route path="/vendor-payments" element={<RoleGuard allowed={["super_admin", "manager"]}><VendorPayments /></RoleGuard>} />
                <Route path="/expenses" element={<RoleGuard allowed={["super_admin", "manager", "agent"]}><Expenses /></RoleGuard>} />
                <Route path="/attendance" element={<RoleGuard allowed={["super_admin", "manager", "operator"]}><Attendance /></RoleGuard>} />
                <Route path="/banners" element={<RoleGuard allowed={["super_admin", "manager"]}><Banners /></RoleGuard>} />
-<Route path="/invoices" element={<RoleGuard allowed={["super_admin", "manager", "operator"]}><Invoices /></RoleGuard>} />
-                <Route path="/invoices/new" element={<RoleGuard allowed={["super_admin", "manager"]}><InvoiceForm /></RoleGuard>} />
-                <Route path="/invoices/:id" element={<RoleGuard allowed={["super_admin", "manager", "operator"]}><InvoiceView /></RoleGuard>} />
+               <Route path="/invoices" element={<RoleGuard allowed={["super_admin", "manager"]}><Invoices /></RoleGuard>} />
+               <Route path="/invoices/new" element={<RoleGuard allowed={["super_admin", "manager"]}><InvoiceForm /></RoleGuard>} />
+               <Route path="/invoices/:id" element={<RoleGuard allowed={["super_admin", "manager"]}><InvoiceView /></RoleGuard>} />
                <Route path="/orders" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer"]}><Orders /></RoleGuard>} />
-<Route path="/handovers" element={<RoleGuard allowed={["super_admin", "manager", "agent", "operator"]}><Handovers /></RoleGuard>} />
+<Route path="/handovers" element={<RoleGuard allowed={["super_admin", "manager", "agent"]}><Handovers /></RoleGuard>} />
                <Route path="/reports" element={<RoleGuard allowed={["super_admin", "manager"]}><Reports /></RoleGuard>} />
                <Route path="/reports/:type" element={<RoleGuard allowed={["super_admin", "manager"]}><Reports /></RoleGuard>} />
                <Route path="/analytics" element={<RoleGuard allowed={["super_admin", "manager"]}><Analytics /></RoleGuard>} />
@@ -237,9 +237,9 @@ const App = () => {
                  <Route path="settings" element={<Settings />} />
                  <Route path="map" element={<MapPage />} />
                </Route>
-<Route path="/hr/staff" element={<RoleGuard allowed={["super_admin", "manager", "operator"]}><WorkersPage /></RoleGuard>} />
-                <Route path="/hr/roles" element={<RoleGuard allowed={["super_admin", "manager", "operator"]}><WorkerRolesPage /></RoleGuard>} />
-                <Route path="/hr/payroll" element={<RoleGuard allowed={["super_admin", "manager", "operator"]}><PayrollPage /></RoleGuard>} />
+               <Route path="/hr/staff" element={<RoleGuard allowed={["super_admin", "manager", "operator"]}><WorkersPage /></RoleGuard>} />
+               <Route path="/hr/roles" element={<RoleGuard allowed={["super_admin", "manager", "operator"]}><WorkerRolesPage /></RoleGuard>} />
+               <Route path="/hr/payroll" element={<RoleGuard allowed={["super_admin", "manager", "operator"]}><PayrollPage /></RoleGuard>} />
                <Route path="/hr/payrolls/:payrollId" element={<RoleGuard allowed={["super_admin", "manager"]}><PayrollDetailPage /></RoleGuard>} />
             </Route>
             <Route path="*" element={<NotFound />} />
