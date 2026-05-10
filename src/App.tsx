@@ -179,9 +179,9 @@ const App = () => {
                <Route path="/inventory" element={<RoleGuard allowed={["super_admin", "manager", "operator"]}><Inventory /></RoleGuard>} />
                <Route path="/vendors" element={<RoleGuard allowed={["super_admin", "manager"]}><Vendors /></RoleGuard>} />
                <Route path="/vendors/:vendorId" element={<RoleGuard allowed={["super_admin", "manager"]}><VendorDetail /></RoleGuard>} />
-               <Route path="/inventory/vendors" element={<RoleGuard allowed={["super_admin", "manager"]}><Vendors /></RoleGuard>} />
-               <Route path="/inventory/vendors/:vendorId" element={<RoleGuard allowed={["super_admin", "manager"]}><VendorDetail /></RoleGuard>} />
-               <Route path="/inventory/purchases" element={<RoleGuard allowed={["super_admin", "manager"]}><Purchases /></RoleGuard>} />
+               <Route path="/inventory/vendors" element={<RoleGuard allowed={["super_admin", "manager", "operator"]}><Vendors /></RoleGuard>} />
+               <Route path="/inventory/vendors/:vendorId" element={<RoleGuard allowed={["super_admin", "manager", "operator"]}><VendorDetail /></RoleGuard>} />
+               <Route path="/inventory/purchases" element={<RoleGuard allowed={["super_admin", "manager", "operator"]}><Purchases /></RoleGuard>} />
                <Route path="/inventory/raw-materials" element={<RoleGuard allowed={["super_admin", "manager"]}><RawMaterialsPage /></RoleGuard>} />
                <Route path="/inventory/boms" element={<RoleGuard allowed={["super_admin", "manager"]}><BillOfMaterialsPage /></RoleGuard>} />
                <Route path="/inventory/boms/:bomId" element={<RoleGuard allowed={["super_admin", "manager"]}><BomDetailPage /></RoleGuard>} />
@@ -196,18 +196,18 @@ const App = () => {
 <Route path="/routes/:id" element={<RoleGuard allowed={["super_admin", "manager", "agent"]}><RouteDetail /></RoleGuard>} />
                <Route path="/sales" element={<RoleGuard allowed={["super_admin", "manager", "agent", "operator"]}><Sales /></RoleGuard>} />
                <Route path="/sale-returns" element={<RoleGuard allowed={["super_admin", "manager", "agent"]}><SaleReturns /></RoleGuard>} />
-               <Route path="/transactions" element={<RoleGuard allowed={["super_admin", "manager", "agent"]}><Transactions /></RoleGuard>} />
+               <Route path="/transactions" element={<RoleGuard allowed={["super_admin", "manager", "agent", "operator"]}><Transactions /></RoleGuard>} />
                <Route path="/purchase-returns" element={<RoleGuard allowed={["super_admin", "manager", "agent"]}><PurchaseReturns /></RoleGuard>} />
-               <Route path="/purchases" element={<RoleGuard allowed={["super_admin", "manager"]}><Purchases /></RoleGuard>} />
-               <Route path="/stock-transfers" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer"]}><StockTransfers /></RoleGuard>} />
+               <Route path="/purchases" element={<RoleGuard allowed={["super_admin", "manager", "operator"]}><Purchases /></RoleGuard>} />
+               <Route path="/stock-transfers" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer", "operator"]}><StockTransfers /></RoleGuard>} />
                <Route path="/vendor-payments" element={<RoleGuard allowed={["super_admin", "manager"]}><VendorPayments /></RoleGuard>} />
-               <Route path="/expenses" element={<RoleGuard allowed={["super_admin", "manager", "agent"]}><Expenses /></RoleGuard>} />
+               <Route path="/expenses" element={<RoleGuard allowed={["super_admin", "manager", "agent", "operator"]}><Expenses /></RoleGuard>} />
                <Route path="/attendance" element={<RoleGuard allowed={["super_admin", "manager", "operator"]}><Attendance /></RoleGuard>} />
                <Route path="/banners" element={<RoleGuard allowed={["super_admin", "manager"]}><Banners /></RoleGuard>} />
-               <Route path="/invoices" element={<RoleGuard allowed={["super_admin", "manager"]}><Invoices /></RoleGuard>} />
-               <Route path="/invoices/new" element={<RoleGuard allowed={["super_admin", "manager"]}><InvoiceForm /></RoleGuard>} />
-               <Route path="/invoices/:id" element={<RoleGuard allowed={["super_admin", "manager"]}><InvoiceView /></RoleGuard>} />
-               <Route path="/orders" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer"]}><Orders /></RoleGuard>} />
+               <Route path="/invoices" element={<RoleGuard allowed={["super_admin", "manager", "operator"]}><Invoices /></RoleGuard>} />
+               <Route path="/invoices/new" element={<RoleGuard allowed={["super_admin", "manager", "operator"]}><InvoiceForm /></RoleGuard>} />
+               <Route path="/invoices/:id" element={<RoleGuard allowed={["super_admin", "manager", "operator"]}><InvoiceView /></RoleGuard>} />
+               <Route path="/orders" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer", "operator"]}><Orders /></RoleGuard>} />
 <Route path="/handovers" element={<RoleGuard allowed={["super_admin", "manager", "agent", "operator"]}><Handovers /></RoleGuard>} />
                <Route path="/reports" element={<RoleGuard allowed={["super_admin", "manager"]}><Reports /></RoleGuard>} />
                <Route path="/reports/:type" element={<RoleGuard allowed={["super_admin", "manager"]}><Reports /></RoleGuard>} />
