@@ -36,6 +36,7 @@ import {
   ArrowDownRight,
   Download,
   FileSpreadsheet,
+  Briefcase,
 } from "lucide-react";
 
 // Export utilities
