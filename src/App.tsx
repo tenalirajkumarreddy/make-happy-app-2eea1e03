@@ -208,7 +208,7 @@ const App = () => {
                <Route path="/invoices/new" element={<RoleGuard allowed={["super_admin", "manager"]}><InvoiceForm /></RoleGuard>} />
                <Route path="/invoices/:id" element={<RoleGuard allowed={["super_admin", "manager"]}><InvoiceView /></RoleGuard>} />
                <Route path="/orders" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer"]}><Orders /></RoleGuard>} />
-<Route path="/handovers" element={<RoleGuard allowed={["super_admin", "manager", "agent"]}><Handovers /></RoleGuard>} />
+<Route path="/handovers" element={<RoleGuard allowed={["super_admin", "manager", "agent", "operator"]}><Handovers /></RoleGuard>} />
                <Route path="/reports" element={<RoleGuard allowed={["super_admin", "manager"]}><Reports /></RoleGuard>} />
                <Route path="/reports/:type" element={<RoleGuard allowed={["super_admin", "manager"]}><Reports /></RoleGuard>} />
                <Route path="/analytics" element={<RoleGuard allowed={["super_admin", "manager"]}><Analytics /></RoleGuard>} />
