@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { formatCurrency } from '@/lib/currency';
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -359,8 +360,8 @@ export default function PurchaseReport() {
                 <LineChart data={dailyTrend}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                   <XAxis dataKey="date" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
-                  <YAxis tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}K`} />
-                  <Tooltip formatter={(v: number) => `₹${v.toLocaleString()}`} />
+<YAxis tickFormatter={(v) => `${formatCurrency(Number(v)/1000)}k`} />
+        <Tooltip formatter={(v: number) => `₹${v.toLocaleString()}`} />
                   <Legend />
                   <Line type="monotone" dataKey="purchases" name="Purchases" stroke="#3b82f6" strokeWidth={2} />
                   <Line type="monotone" dataKey="payments" name="Payments" stroke="#10b981" strokeWidth={2} />
@@ -380,8 +381,8 @@ export default function PurchaseReport() {
               <ResponsiveContainer width="100%" height={250}>
                 <BarChart data={vendorBreakdown} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis type="number" tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}K`} />
-                  <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 10 }} />
+<XAxis type="number" tickFormatter={(v) => `${formatCurrency(Number(v)/1000)}k`} />
+        <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 10 }} />
                   <Tooltip formatter={(v: number) => `₹${v.toLocaleString()}`} />
                   <Bar dataKey="value" name="Amount" fill="#3b82f6" radius={[0, 4, 4, 0]} />
                 </BarChart>
@@ -479,3 +480,4 @@ export default function PurchaseReport() {
     </ReportContainer>
   );
 }
+

@@ -72,16 +72,16 @@ export function ProductAccessDialog({ product, open, onOpenChange }: ProductAcce
     // Determine final access
     const finalAccess = (storeTypes || []).filter((st) => isChecked(st.id)).map((st) => st.id);
 
-    // Delete existing access for this product, re-insert
-    await supabase.from("store_type_products").delete().eq("product_id", product.id);
-    if (finalAccess.length > 0) {
-      await supabase.from("store_type_products").insert(
-        finalAccess.map((stId) => ({ store_type_id: stId, product_id: product.id }))
-      );
-    }
+// Soft delete existing access for this product, re-insert active ones
+  await supabase.from("store_type_products").update({ deleted_at: new Date().toISOString() }).eq("product_id", product.id);
+  if (finalAccess.length > 0) {
+    await supabase.from("store_type_products").insert(
+      finalAccess.map((stId) => ({ store_type_id: stId, product_id: product.id }))
+    );
+  }
 
-    // Pricing: delete existing for this product, insert non-empty
-    await supabase.from("store_type_pricing").delete().eq("product_id", product.id);
+  // Pricing: soft delete existing for this product, insert non-empty
+  await supabase.from("store_type_pricing").update({ deleted_at: new Date().toISOString() }).eq("product_id", product.id);
     const pricingInserts = (storeTypes || [])
       .filter((st) => {
         const val = getPrice(st.id);

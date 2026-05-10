@@ -137,11 +137,11 @@ export function WarehouseManagement() {
     },
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("warehouses").delete().eq("id", id);
-      if (error) throw error;
-    },
+const deleteMutation = useMutation({
+  mutationFn: async (id: string) => {
+    const { error } = await supabase.from("warehouses").update({ deleted_at: new Date().toISOString() }).eq("id", id);
+    if (error) throw error;
+  },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["warehouses"] });
       toast.success("Warehouse deleted");

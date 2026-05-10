@@ -89,3 +89,4 @@ export function ReportSummaryCards({ cards, columns = 4, className }: ReportSumm
     </div>
   );
 }
+

@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { formatCurrency } from '@/lib/currency';
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -383,7 +384,7 @@ export default function ItemWisePLReport() {
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={topProfitChart} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis type="number" tickFormatter={(v) => `₹${(v/1000).toFixed(0)}k`} />
+                  <XAxis type="number" tickFormatter={(v) => `${formatCurrency(Number(v)/1000)}k`} />
                   <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 11 }} />
                   <Tooltip formatter={(v: number) => `₹${v.toLocaleString()}`} />
                   <Legend />
@@ -495,3 +496,4 @@ export default function ItemWisePLReport() {
     </ReportContainer>
   );
 }
+

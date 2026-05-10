@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, ReactNode } from "react";
+import { formatCurrency } from '@/lib/currency';
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -278,3 +279,4 @@ export function PrintTable({
     </table>
   );
 }
+

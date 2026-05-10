@@ -117,65 +117,49 @@ const Auth = () => {
 
 
   useEffect(() => {
+    let cancelled = false;
     const resolveExistingSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      
+
       if (!session?.user) {
-        setLoading(false);
-        setSessionChecked(true);
+        if (!cancelled) {
+          setLoading(false);
+          setSessionChecked(true);
+        }
         return;
       }
-      
-      setLoading(true);
-      
+
+      if (!cancelled) setLoading(true);
+
       try {
-        // Check if user already has staff or customer access (including pending staff invitations)
+        // Check if user already has staff or customer access
         if (await hasStaffOrCustomerAccess(session.user.id)) {
-          navigate("/", { replace: true });
+          if (!cancelled) navigate("/", { replace: true });
           return;
         }
-        
-        // No access found — check if phone exists in staff_invitations (pending staff)
-        const pendingByPhone = session.user.phone
-          ? await supabase
-              .from("staff_invitations")
-              .select("id, role, full_name")
-              .eq("phone", session.user.phone)
-              .eq("status", "pending")
-              .maybeSingle()
-          : { data: null };
-        const pendingByEmail = session.user.email
-          ? await supabase
-              .from("staff_invitations")
-              .select("id, role, full_name")
-              .eq("email", session.user.email)
-              .eq("status", "pending")
-              .maybeSingle()
-          : { data: null };
-        const pendingStaff = pendingByPhone.data || pendingByEmail.data;
-        
-        if (pendingStaff) {
-          // Pending staff — don't allow to onboard as customer, redirect to login with message
-          // They need to be accepted by admin first
+
+        // No access found — send to registration
+        if (!cancelled) {
           setVerifiedPhone(session.user.phone || "");
           setStep("register");
-          return;
         }
-        
-        // Send to registration
-        setVerifiedPhone(session.user.phone || "");
-        setStep("register");
       } catch (error) {
         console.error("Session resolution failed", error);
-        setVerifiedPhone(session.user.phone || "");
-        setStep("register");
+        // On error, let user log in fresh rather than hanging on spinner
+        if (!cancelled) {
+          setVerifiedPhone("");
+          setStep("phone");
+        }
       } finally {
-        setLoading(false);
-        setSessionChecked(true);
+        if (!cancelled) {
+          setLoading(false);
+          setSessionChecked(true);
+        }
       }
     };
 
     resolveExistingSession();
+    return () => { cancelled = true; };
   }, [navigate]);
 
   // ── Handlers ──
@@ -340,13 +324,12 @@ const Auth = () => {
         access_token: data.access_token,
         refresh_token: data.refresh_token,
       });
-      
+
       if (sessionError) throw sessionError;
-      
+
       setVerifiedPhone(data.user.phone);
 
-      // The backend now performs full identity resolution:
-      // staff_invitations → staff_directory → customers → onboarding
+      // Server has done full identity resolution — trust it
       const resolution = data.resolution;
 
       if (resolution?.type === "staff") {
@@ -361,14 +344,7 @@ const Auth = () => {
         return;
       }
 
-      // Fallback: check client-side in case resolution didn't run
-      if (await hasStaffOrCustomerAccess(data.user.id)) {
-        toast.success("Login successful!");
-        navigate("/", { replace: true });
-        return;
-      }
-      
-      // New user — needs to register as customer
+      // New user — needs to register
       setStep("register");
       toast.success("Phone verified! Please complete registration.");
     } catch (error: any) {

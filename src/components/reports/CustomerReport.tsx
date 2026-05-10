@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { formatCurrency } from '@/lib/currency';
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -157,7 +158,7 @@ export default function CustomerReport() {
       const type = c.store_type;
       byType[type] = (byType[type] || 0) + c.outstanding;
     });
-    return Object.entries(byType)
+return Object.entries(byType)
       .filter(([_, v]) => v > 0)
       .map(([name, value]) => ({ name, value }));
   }, [filteredData]);
@@ -165,8 +166,8 @@ export default function CustomerReport() {
   const summaryCards = [
     { label: "Total Customers", value: summary.totalCustomers.toString(), icon: Users, iconColor: "blue" },
     { label: "Active Customers", value: summary.activeCustomers.toString(), icon: ShoppingCart, iconColor: "green" },
-    { label: "Total Revenue", value: `₹${(summary.totalRevenue / 1000).toFixed(0)}K`, icon: TrendingUp, iconColor: "purple" },
-    { label: "Outstanding", value: `₹${(summary.totalOutstanding / 1000).toFixed(0)}K`, icon: DollarSign, iconColor: "red" },
+    { label: "Total Revenue", value: `${formatCurrency(summary.totalRevenue)}K`, icon: TrendingUp, iconColor: "purple" },
+    { label: "Outstanding", value: `${formatCurrency(summary.totalOutstanding)}K`, icon: DollarSign, iconColor: "red" },
   ];
 
   const generateHTML = () => {
@@ -427,3 +428,4 @@ export default function CustomerReport() {
     </ReportContainer>
   );
 }
+

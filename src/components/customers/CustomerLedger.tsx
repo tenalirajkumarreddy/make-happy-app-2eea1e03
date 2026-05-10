@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, memo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,13 +13,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { DataTable } from "@/components/shared/DataTable";
 
 interface LedgerEntry {
   customer_id: string;
   store_id: string;
   record_id: string;
-  reference: string;
   transaction_type: string;
   transaction_date: string;
   debit: number;
@@ -30,6 +28,7 @@ interface LedgerEntry {
   recorded_by: string | null;
   recorded_by_name: string | null;
   store_name: string;
+  reference: string;
   notes: string | null;
 }
 
@@ -38,7 +37,7 @@ interface CustomerLedgerProps {
   customerName?: string;
 }
 
-export function CustomerLedger({ customerId, customerName }: CustomerLedgerProps) {
+export const CustomerLedger = memo(({ customerId, customerName }: CustomerLedgerProps) => {
   const [showStatement, setShowStatement] = useState(false);
 
   const { data: ledger, isLoading } = useQuery({
@@ -80,12 +79,11 @@ export function CustomerLedger({ customerId, customerName }: CustomerLedgerProps
       entry.transaction_type,
       entry.reference,
       entry.store_name,
-      entry.debit || "",
-      entry.credit || "",
-      entry.closing_balance || "",
+      String(entry.debit || ""),
+      String(entry.credit || ""),
+      String(entry.closing_balance || ""),
       entry.notes || "",
     ]);
-
     const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -94,7 +92,6 @@ export function CustomerLedger({ customerId, customerName }: CustomerLedgerProps
     a.download = `ledger-${customerId}-${format(new Date(), "yyyy-MM-dd")}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-
     toast.success("Ledger exported");
   };
 
@@ -111,34 +108,25 @@ export function CustomerLedger({ customerId, customerName }: CustomerLedgerProps
     },
     {
       header: "Type",
-      accessor: (row: LedgerEntry) => (
-        <div className="flex items-center gap-1">
-          {row.transaction_type === "SALE" && (
-            <>
-              <ArrowUpRight className="h-3 w-3 text-red-500" />
-              <Badge variant="destructive" className="text-[10px]">
-                SALE
-              </Badge>
-            </>
-          )}
-          {row.transaction_type === "PAYMENT" && (
-            <>
-              <ArrowDownRight className="h-3 w-3 text-green-500" />
-              <Badge variant="default" className="bg-green-500 text-[10px]">
-                PAYMENT
-              </Badge>
-            </>
-          )}
-          {row.transaction_type === "RETURN" && (
-            <>
-              <ArrowDownRight className="h-3 w-3 text-blue-500" />
-              <Badge variant="secondary" className="text-[10px]">
-                RETURN
-              </Badge>
-            </>
-          )}
-        </div>
-      ),
+      accessor: (row: LedgerEntry) => {
+        const iconClass = row.transaction_type === "SALE" ? "text-red-500"
+          : row.transaction_type === "PAYMENT" ? "text-green-500"
+          : "text-blue-500";
+        const Icon = row.transaction_type === "SALE" ? ArrowUpRight
+          : ArrowDownRight;
+        return (
+          <div className="flex items-center gap-1">
+            <Icon className={`h-3 w-3 ${iconClass}`} />
+            <Badge
+              variant={row.transaction_type === "SALE" ? "destructive"
+                : row.transaction_type === "PAYMENT" ? "default" : "secondary"}
+              className={`text-[10px] ${row.transaction_type === "PAYMENT" ? "bg-green-500" : ""}`}
+            >
+              {row.transaction_type}
+            </Badge>
+          </div>
+        );
+      },
       className: "w-28",
     },
     {
@@ -157,7 +145,7 @@ export function CustomerLedger({ customerId, customerName }: CustomerLedgerProps
       accessor: (row: LedgerEntry) =>
         row.debit > 0 ? (
           <span className="text-red-600 font-medium">
-            ₹{row.debit.toLocaleString()}
+            &#8377;{row.debit.toLocaleString()}
           </span>
         ) : (
           ""
@@ -169,7 +157,7 @@ export function CustomerLedger({ customerId, customerName }: CustomerLedgerProps
       accessor: (row: LedgerEntry) =>
         row.credit > 0 ? (
           <span className="text-green-600 font-medium">
-            ₹{row.credit.toLocaleString()}
+            &#8377;{row.credit.toLocaleString()}
           </span>
         ) : (
           ""
@@ -180,7 +168,7 @@ export function CustomerLedger({ customerId, customerName }: CustomerLedgerProps
       header: "Balance",
       accessor: (row: LedgerEntry) => (
         <span className="font-medium">
-          ₹{row.closing_balance?.toLocaleString() || "—"}
+          &#8377;{row.closing_balance?.toLocaleString() || "—"}
         </span>
       ),
       className: "text-right font-mono font-semibold",
@@ -209,7 +197,7 @@ export function CustomerLedger({ customerId, customerName }: CustomerLedgerProps
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground">Opening Balance</p>
               <p className="text-lg font-bold">
-                ₹{Number(summary.opening_balance).toLocaleString()}
+                &#8377;{Number(summary.opening_balance).toLocaleString()}
               </p>
             </CardContent>
           </Card>
@@ -217,7 +205,7 @@ export function CustomerLedger({ customerId, customerName }: CustomerLedgerProps
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground">Total Sales</p>
               <p className="text-lg font-bold text-red-600">
-                ₹{Number(summary.total_sales).toLocaleString()}
+                &#8377;{Number(summary.total_sales).toLocaleString()}
               </p>
             </CardContent>
           </Card>
@@ -225,7 +213,7 @@ export function CustomerLedger({ customerId, customerName }: CustomerLedgerProps
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground">Total Payments</p>
               <p className="text-lg font-bold text-green-600">
-                ₹{Number(summary.total_payments).toLocaleString()}
+                &#8377;{Number(summary.total_payments).toLocaleString()}
               </p>
             </CardContent>
           </Card>
@@ -233,7 +221,7 @@ export function CustomerLedger({ customerId, customerName }: CustomerLedgerProps
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground">Closing Balance</p>
               <p className="text-lg font-bold">
-                ₹{Number(summary.closing_balance).toLocaleString()}
+                &#8377;{Number(summary.closing_balance).toLocaleString()}
               </p>
             </CardContent>
           </Card>
@@ -264,11 +252,44 @@ export function CustomerLedger({ customerId, customerName }: CustomerLedgerProps
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <DataTable
-            columns={columns}
-            data={ledger || []}
-            keyExtractor={(row) => row.record_id}
-          />
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b">
+                <th className="text-left py-2">Date</th>
+                <th className="text-left">Type</th>
+                <th className="text-left">Reference</th>
+                <th className="text-left">Store</th>
+                <th className="text-right">Debit</th>
+                <th className="text-right">Credit</th>
+                <th className="text-right">Balance</th>
+                <th className="text-xs text-muted-foreground">By</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ledger?.map((entry) => (
+                <tr key={entry.record_id} className="border-b">
+                  <td className="py-2">
+                    {format(new Date(entry.transaction_date), "dd MMM yyyy")}
+                  </td>
+                  <td>{entry.transaction_type}</td>
+                  <td className="font-mono text-xs">{entry.reference}</td>
+                  <td className="max-w-xs truncate">{entry.store_name}</td>
+                  <td className="text-right text-red-600">
+                    {entry.debit > 0 ? `&#8377;${entry.debit.toLocaleString()}` : ""}
+                  </td>
+                  <td className="text-right text-green-600">
+                    {entry.credit > 0 ? `&#8377;${entry.credit.toLocaleString()}` : ""}
+                  </td>
+                  <td className="text-right font-medium">
+                    &#8377;{entry.closing_balance?.toLocaleString()}
+                  </td>
+                  <td className="text-xs text-muted-foreground">
+                    {entry.recorded_by_name || "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </CardContent>
       </Card>
 
@@ -293,25 +314,25 @@ export function CustomerLedger({ customerId, customerName }: CustomerLedgerProps
                   <div>
                     <p className="text-sm text-muted-foreground">Opening Balance</p>
                     <p className="text-lg font-bold">
-                      ₹{Number(summary.opening_balance).toLocaleString()}
+                      &#8377;{Number(summary.opening_balance).toLocaleString()}
                     </p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Sales</p>
                     <p className="text-lg font-bold text-red-600">
-                      ₹{Number(summary.total_sales).toLocaleString()}
+                      &#8377;{Number(summary.total_sales).toLocaleString()}
                     </p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Payments</p>
                     <p className="text-lg font-bold text-green-600">
-                      ₹{Number(summary.total_payments).toLocaleString()}
+                      &#8377;{Number(summary.total_payments).toLocaleString()}
                     </p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Closing Balance</p>
                     <p className="text-lg font-bold">
-                      ₹{Number(summary.closing_balance).toLocaleString()}
+                      &#8377;{Number(summary.closing_balance).toLocaleString()}
                     </p>
                   </div>
                 </div>
@@ -336,13 +357,13 @@ export function CustomerLedger({ customerId, customerName }: CustomerLedgerProps
                         <td>{entry.transaction_type}</td>
                         <td className="font-mono text-xs">{entry.reference}</td>
                         <td className="text-right text-red-600">
-                          {entry.debit > 0 ? `₹${entry.debit.toLocaleString()}` : ""}
+                          {entry.debit > 0 ? `&#8377;${entry.debit.toLocaleString()}` : ""}
                         </td>
                         <td className="text-right text-green-600">
-                          {entry.credit > 0 ? `₹${entry.credit.toLocaleString()}` : ""}
+                          {entry.credit > 0 ? `&#8377;${entry.credit.toLocaleString()}` : ""}
                         </td>
                         <td className="text-right font-medium">
-                          ₹{entry.closing_balance?.toLocaleString()}
+                          &#8377;{entry.closing_balance?.toLocaleString()}
                         </td>
                       </tr>
                     ))}
@@ -355,4 +376,4 @@ export function CustomerLedger({ customerId, customerName }: CustomerLedgerProps
       </Dialog>
     </div>
   );
-}
+});

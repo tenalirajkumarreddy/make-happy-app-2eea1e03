@@ -78,9 +78,9 @@ export function StorePricingDialog({ store, open, onOpenChange }: StorePricingDi
     return `₹${Number(product.base_price).toLocaleString()} (base)`;
   };
 
-  const handleSave = async () => {
-    setSaving(true);
-    await supabase.from("store_pricing").delete().eq("store_id", store.id);
+const handleSave = async () => {
+  setSaving(true);
+  await supabase.from("store_pricing").update({ deleted_at: new Date().toISOString() }).eq("store_id", store.id);
     const inserts = (products || [])
       .filter((p: any) => {
         const val = getStorePrice(p.id);

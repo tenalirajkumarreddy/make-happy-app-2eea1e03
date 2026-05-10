@@ -111,23 +111,25 @@ export class SystematicTestRunner {
         case 'click':
           await this.page.click(action.selector);
           break;
-        case 'fill':
-          // Use a test value or the value from action
-          const testValue = action.id.includes('amount') ? '1000' :
-                           action.id.includes('search') ? 'test' :
-                           action.id.includes('date') ? new Date().toISOString().split('T')[0] :
-                           'test-value';
-          await this.page.fill(action.selector, testValue);
-          break;
-        case 'select':
-          // Try to select first option
-          const options = await this.page.$$eval(`${action.selector} option`, opts =>
-            opts.filter(o => o.value).map(o => o.value)
-          );
-          if (options.length > 0) {
-            await this.page.selectOption(action.selector, options[0]);
-          }
-          break;
+    case 'fill': {
+      // Use a test value or the value from action
+      const testValue = action.id.includes('amount') ? '1000' :
+        action.id.includes('search') ? 'test' :
+        action.id.includes('date') ? new Date().toISOString().split('T')[0] :
+        'test-value';
+      await this.page.fill(action.selector, testValue);
+      break;
+    }
+    case 'select': {
+      // Try to select first option
+      const options = await this.page.$$eval(`${action.selector} option`, opts =>
+        opts.filter(o => o.value).map(o => o.value)
+      );
+      if (options.length > 0) {
+        await this.page.selectOption(action.selector, options[0]);
+      }
+      break;
+    }
         case 'verify':
           await this.page.waitForSelector(action.selector, { timeout: 5000 });
           break;

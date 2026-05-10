@@ -9,6 +9,7 @@ import { logActivity } from "@/lib/activityLogger";
 import { sanitizeString } from "@/lib/sanitization";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { addToQueue, generateBusinessKey } from "@/lib/offlineQueue";
+import { createSaleSchema } from "@/lib/validation/schemas";
 import { resolveCreditLimit } from "@/lib/creditLimit";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
@@ -47,32 +48,52 @@ HoverCardTrigger,
 import { toast } from "sonner";
 import { format } from "date-fns";
 
-function exportCSV(data: any[], columns: { header: string; key: string }[], filename: string) {
-  const header = columns.map((c) => c.header).join(",");
-  const rows = data.map((row) =>
-    columns.map((c) => {
-      const val = c.key.includes(".") ? c.key.split(".").reduce((o: any, k) => o?.[k], row) : row[c.key];
-      // Sanitize value to prevent XSS in CSV
-      const sanitized = sanitizeString(String(val ?? ""));
-      const str = sanitized.replace(/"/g, '""');
-      return `"${str}"`;
-    }).join(",")
-  );
-  const csv = [header, ...rows].join("\n");
-  const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-  toast.success(`Exported ${data.length} rows`);
-}
-
 interface SaleItem {
   product_id: string;
   quantity: number;
   unit_price: number;
+}
+
+interface Customer {
+  id: string;
+  name: string;
+}
+
+interface Store {
+  id: string;
+  name: string;
+  store_type_id: string | null;
+  customer_id: string | null;
+  route_id?: string | null;
+}
+
+interface SaleRecord {
+  id: string;
+  display_id: string;
+  store_id: string;
+  customer_id: string | null;
+  recorded_by: string;
+  recorded_at: string;
+  total_amount: number;
+  total_quantity: number;
+  payment_mode: string;
+  payment_ref: string | null;
+  payment_status: string;
+  notes: string | null;
+  status: string;
+  sale_type: string;
+  is_imported: boolean;
+  approved_by: string | null;
+  approved_at: string | null;
+  created_at: string;
+  updated_at: string;
+  stores?: Store | null;
+  customers?: Customer | null;
+}
+
+interface CsvColumn {
+  header: string;
+  key: string;
 }
 
 const POS_STORE_ID = "00000000-0000-0000-0000-000000000001";
@@ -108,6 +129,28 @@ interface FulfillOrder {
   };
 }
 
+function exportCSV<T extends Record<string, any>>(data: T[], columns: CsvColumn[], filename: string) {
+  const header = columns.map((c) => c.header).join(",");
+  const rows = data.map((row) =>
+    columns.map((c) => {
+      const val = c.key.includes(".") ? c.key.split(".").reduce((o: Record<string, any>, k: string) => o?.[k], row) : row[c.key];
+      // Sanitize value to prevent XSS in CSV
+      const sanitized = sanitizeString(String(val ?? ""));
+      const str = sanitized.replace(/"/g, '""');
+      return `"${str}"`;
+    }).join(",")
+  );
+  const csv = [header, ...rows].join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast.success(`Exported ${data.length} rows`);
+}
+
 const Sales = () => {
   const { user, role } = useAuth();
   const { currentWarehouse } = useWarehouse();
@@ -120,7 +163,7 @@ const Sales = () => {
   const [saving, setSaving] = useState(false);
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
   const [receiptSaleId, setReceiptSaleId] = useState<string | null>(null);
-  const [returnSale, setReturnSale] = useState<any | null>(null);
+  const [returnSale, setReturnSale] = useState<SaleRecord | null>(null);
   const [fulfillOrder, setFulfillOrder] = useState<FulfillOrder | null>(null);
   const [loadingOrderId, setLoadingOrderId] = useState<string | null>(null);
 
@@ -159,7 +202,7 @@ const Sales = () => {
   // Reset to page 1 whenever any filter changes
   useEffect(() => {
     setLoadedPages(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [filterFrom, filterTo, filterStore, filterStoreType, filterRoute, filterUser, filterPayment]);
 
   useEffect(() => {
@@ -530,42 +573,24 @@ let query = supabase
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!storeId || items.some((i) => !i.product_id)) {
-      toast.error("Please fill all required fields");
-      return;
-    }
-    if (items.some((i) => i.quantity <= 0)) {
-      toast.error("All item quantities must be greater than zero");
-      return;
-    }
-    if (totalAmount === 0) {
-      toast.error("Sale total cannot be zero");
-      return;
-    }
-    // POS users: payment must equal total (no outstanding allowed)
-    if (isPosUser && (cash + upi) !== totalAmount) {
-      toast.error("POS sales require full payment. Cash + UPI must equal Total.");
+    
+    // Validate using type-safe schema
+    const validation = validateSaleData({
+      store_id: storeId,
+      items: items.filter(i => i.product_id), // Only non-empty items
+      cash_amount: cash,
+      upi_amount: upi,
+      total_amount: totalAmount,
+      isPosUser,
+      sale_date: saleDate || null,
+    });
+
+    if (!validation.valid) {
+      toast.error(validation.errors[0] || "Validation failed");
       return;
     }
 
-    // Validate sale date if provided
-    if (saleDate) {
-      const saleDateObj = new Date(saleDate);
-      const now = new Date();
-      const maxPast = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000); // 30 days ago
-      const maxFuture = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 1 day in the future
-
-      if (saleDateObj > maxFuture) {
-        toast.error("Sale date cannot be more than 1 day in the future");
-        return;
-      }
-      if (saleDateObj < maxPast) {
-        toast.error("Sale date cannot be more than 30 days in the past");
-        return;
-      }
-    }
-
-  setSaving(true);
+    setSaving(true);
 
   // Proximity check for agents (only if geofencing is enabled)
   if (role === "agent" && selectedStore) {
@@ -1163,11 +1188,11 @@ let query = supabase
       <DataTable
         columns={columns}
         data={filteredSales}
-        searchKey="display_id"
-        searchPlaceholder="Search by sale ID..."
-        emptyMessage="No sales recorded yet."
-        onRowClick={(row: any) => setSelectedSaleId(row.id)}
-      renderMobileCard={(row: any) => (
+          searchKey="display_id"
+          searchPlaceholder="Search by sale ID..."
+          emptyMessage="No sales recorded yet."
+          onRowClick={(row: SaleRecord) => setSelectedSaleId(row.id)}
+          renderMobileCard={(row: SaleRecord) => (
         <div className="rounded-lg border bg-card p-3">
           {/* Header row: ID + Date + Actions */}
           <div className="flex items-center justify-between mb-1.5">
