@@ -1,19 +1,31 @@
-import { useQuery } from "@tanstack/react-query";
-import { Banknote, HandCoins, History, Loader2, ShoppingCart, Smartphone, TrendingUp } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { Banknote, HandCoins, History, Loader2, ShoppingCart, Smartphone, TrendingUp, Store, ChevronRight } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { StorePickerSheet } from "@/mobile/components/StorePickerSheet";
+import type { StoreOption } from "@/mobile/components/StorePickerSheet";
 
 type Props = {
   onOpenRecord: () => void;
   onOpenHistory: () => void;
+  setTab?: (tab: string) => void;
+  activeTab?: string;
+  store?: StoreOption | null;
+  onStoreChange?: (store: StoreOption | null) => void;
 };
 
-export function PosHome({ onOpenRecord, onOpenHistory }: Props) {
+export function PosHome({ onOpenRecord, onOpenHistory, setTab, activeTab, store: externalStore, onStoreChange }: Props) {
   const { user, profile } = useAuth();
+  const qc = useQueryClient();
+  const [internalStore, setInternalStore] = useState<StoreOption | null>(externalStore || null);
+  const store = externalStore || internalStore;
+  const setStore = externalStore ? (onStoreChange || (() => {})) : setInternalStore;
+  const [storePickerOpen, setStorePickerOpen] = useState(false);
 
   const { data: stats, isLoading } = useQuery({
-    queryKey: ["mobile-pos-dashboard", user?.id],
+    queryKey: ["mobile-pos-dashboard", user?.id, store?.id],
     queryFn: async () => {
       const today = new Date().toISOString().split("T")[0];
       const [salesRes, handoversRes] = await Promise.all([
@@ -28,12 +40,20 @@ export function PosHome({ onOpenRecord, onOpenHistory }: Props) {
       const pendingHandover = (handoversRes.data || [])
         .filter(h => h.status === "pending" || h.status === "awaiting_confirmation")
         .reduce((s, h) => s + Number(h.cash_amount || 0) + Number(h.upi_amount || 0), 0);
+
+      let storeOutstanding = 0;
+      if (store?.id) {
+        const { data: storeData } = await supabase.from("stores").select("outstanding").eq("id", store.id).maybeSingle();
+        storeOutstanding = Number(storeData?.outstanding || 0);
+      }
+
       return {
         totalSales: todaySales.reduce((s, r) => s + Number(r.total_amount || 0), 0),
         totalCash: todaySales.reduce((s, r) => s + Number(r.cash_amount || 0), 0),
         totalUpi: todaySales.reduce((s, r) => s + Number(r.upi_amount || 0), 0),
         salesCount: todaySales.length,
         pendingHandover,
+        storeOutstanding,
       };
     },
     enabled: !!user,
@@ -61,6 +81,30 @@ export function PosHome({ onOpenRecord, onOpenHistory }: Props) {
       </div>
 
       <div className="px-4 -mt-5 space-y-3">
+        {/* Store Selector */}
+        <button
+          className={cn(
+            "w-full rounded-2xl p-3.5 flex items-center gap-3 text-left transition-all",
+            store
+              ? "border-2 border-emerald-200 dark:border-emerald-700 bg-emerald-50/50 dark:bg-emerald-900/10"
+              : "border-2 border-dashed border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-emerald-200 dark:hover:border-emerald-700"
+          )}
+          onClick={() => setStorePickerOpen(true)}
+        >
+          <div className={cn("h-9 w-9 rounded-xl flex items-center justify-center shrink-0", store ? "bg-emerald-100 dark:bg-emerald-900/40" : "bg-slate-100 dark:bg-slate-800")}>
+            <Store className={cn("h-4.5 w-4.5", store ? "text-emerald-500" : "text-slate-400")} />
+          </div>
+          {store ? (
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-slate-800 dark:text-white truncate">{store.name}</p>
+              <p className="text-xs text-slate-400">{store.display_id || "No ID"}</p>
+            </div>
+          ) : (
+            <span className="text-sm text-slate-400 flex-1 font-medium">Tap to select store...</span>
+          )}
+          <ChevronRight className={cn("h-4 w-4 shrink-0", store ? "text-emerald-400" : "text-slate-300")} />
+        </button>
+
         {/* Floating Revenue Card */}
         <div className="rounded-2xl bg-white dark:bg-slate-800 shadow-xl border border-slate-100 dark:border-slate-700 p-4">
           <div className="flex items-center justify-between mb-3">
@@ -86,6 +130,28 @@ export function PosHome({ onOpenRecord, onOpenHistory }: Props) {
             </div>
           </div>
         </div>
+
+        {/* Store Balance Card */}
+        {store && (
+          <div className={cn(
+            "rounded-2xl p-4 border-2",
+            (stats?.storeOutstanding ?? 0) > 0
+              ? "bg-amber-50/50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-700/40"
+              : "bg-emerald-50/50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-700/40"
+          )}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 uppercase tracking-widest font-semibold">Store Balance</p>
+                <p className={cn("text-2xl font-bold mt-0.5", (stats?.storeOutstanding ?? 0) > 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400")}>
+                  ₹{(stats?.storeOutstanding ?? 0).toLocaleString("en-IN")}
+                </p>
+              </div>
+              <div className={cn("h-10 w-10 rounded-xl flex items-center justify-center", (stats?.storeOutstanding ?? 0) > 0 ? "bg-amber-100 dark:bg-amber-900/40" : "bg-emerald-100 dark:bg-emerald-900/40")}>
+                <TrendingUp className={cn("h-5 w-5", (stats?.storeOutstanding ?? 0) > 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400")} />
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Mini Stats */}
         <div className="grid grid-cols-3 gap-2">
@@ -116,7 +182,7 @@ export function PosHome({ onOpenRecord, onOpenHistory }: Props) {
             <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200">History</span>
           </button>
           <button
-            onClick={onOpenRecord}
+            onClick={() => setTab("handovers")}
             className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95 transition-all"
           >
             <div className="h-8 w-8 rounded-lg bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center">
@@ -141,6 +207,15 @@ export function PosHome({ onOpenRecord, onOpenHistory }: Props) {
           </div>
         </div>
       </div>
+
+      <StorePickerSheet
+        open={storePickerOpen}
+        onOpenChange={setStorePickerOpen}
+        onSelect={(s) => {
+          setStore(s);
+          qc.invalidateQueries({ queryKey: ["mobile-pos-dashboard"] });
+        }}
+      />
     </div>
   );
 }

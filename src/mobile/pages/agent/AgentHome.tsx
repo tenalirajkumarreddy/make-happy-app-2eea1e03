@@ -301,6 +301,10 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
           </div>
         </div>
 
+        {/*
+        // Holding balance moved to History page
+        */}
+
         <div className="grid grid-cols-3 gap-2">
           <MiniStat label="Sales" value={`₹${totalSales >= 1000 ? `${(totalSales / 1000).toFixed(1)}k` : totalSales.toLocaleString()}`} color="from-blue-500 to-blue-600" icon={TrendingUp} />
           <MiniStat label="Cash" value={`₹${(cashSales + cashCollected) >= 1000 ? `${((cashSales + cashCollected) / 1000).toFixed(1)}k` : (cashSales + cashCollected).toLocaleString()}`} color="from-emerald-500 to-green-600" icon={Banknote} />

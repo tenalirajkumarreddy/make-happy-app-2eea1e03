@@ -18,7 +18,14 @@
       "Bash(npm list *)",
       "Bash(cp src/components/customers/CustomerLedger.tsx CustomerLedger_backup.tsx)",
       "Bash(rm CustomerLedger_backup.tsx)",
-      "mcp__supabase__deploy_edge_function"
+      "mcp__supabase__deploy_edge_function",
+      "Bash(./gradlew.bat assembleDebug)",
+      "Bash(npx cap *)",
+      "Bash(powershell -Command \"./gradlew.bat assembleDebug 2>&1 | Select-Object -Last 8\")",
+      "Bash(powershell -Command \"./gradlew.bat clean assembleDebug 2>&1 | Select-Object -Last 10\")",
+      "Bash(powershell -Command \".\\\\gradlew.bat assembleDebug 2>&1\")",
+      "Bash(Get-ChildItem \"c:\\\\Users\\\\rajku\\\\Documents\\\\PUBLIC PROJECTS\\\\make-happy-app-2eea1e03\\\\android\\\\app\\\\build\\\\outputs\\\\apk\\\\debug\" -Filter \"*.apk\")",
+      "Bash(Select-Object FullName, Length, LastWriteTime)"
     ]
   },
   "model": "minimax-m2.5-free",

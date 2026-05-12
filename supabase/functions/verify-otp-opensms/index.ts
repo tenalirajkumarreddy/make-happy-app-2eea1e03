@@ -187,6 +187,21 @@ async function resolveIdentity(
     console.error("find_customer_by_phone error:", custErr);
   }
 
+  // FALLBACK: direct phone lookup in customers table (handles cases where RPC missed due to phone format)
+  if (!matchingCustomers || matchingCustomers.length < 1) {
+    const phoneDigits = phoneNumber.replace(/\D/g, '').slice(-10);
+    const { data: directCustomers } = await adminClient
+      .from("customers")
+      .select("id, name, phone, user_id")
+      .like("phone", `%${phoneDigits}%`)
+      .is("deleted_at", null)
+      .limit(1);
+    if (directCustomers && directCustomers.length >= 1) {
+      matchingCustomers = directCustomers;
+      console.log("Customer found via direct phone lookup for digits:", phoneDigits);
+    }
+  }
+
   if (matchingCustomers && matchingCustomers.length >= 1) {
     const customer = matchingCustomers[0];
 

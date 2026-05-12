@@ -1,14 +1,15 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
 import {
   ShoppingCart, ClipboardList, TrendingUp, TrendingDown, Wallet,
   Users, Store, Package, ArrowRight, AlertCircle, Receipt, Loader2,
-  BarChart3, Warehouse, Settings,
+  BarChart3, Warehouse, Settings, CheckCircle2, XCircle,
 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 interface DashboardStats {
   totalOrders: number;
@@ -27,7 +28,7 @@ export function AdminHome({
   role: "super_admin" | "manager";
   onNavigate: (path: string) => void;
 }) {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const { currentWarehouse } = useWarehouse();
 
   const { data: stats, isLoading: statsLoading } = useQuery({
@@ -67,6 +68,52 @@ export function AdminHome({
       }));
     },
   });
+
+  const { data: pendingExpenses = [] } = useQuery({
+    queryKey: ["mobile-pending-expense-widget", currentWarehouse?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("expense_claims")
+        .select("id, display_id, amount, description, status, created_at, bill_urls, expense_categories(name, color), profiles(full_name)")
+        .eq("status", "pending")
+        .order("created_at", { ascending: false })
+        .limit(5);
+      return data || [];
+    },
+    refetchInterval: 30_000,
+  });
+
+  const qc = useQueryClient();
+
+  const handleApproveExpense = async (claimId: string) => {
+    try {
+      const { error } = await supabase
+        .from("expense_claims")
+        .update({ status: "approved", reviewed_by: user?.id, reviewed_at: new Date().toISOString(), approved_amount: null })
+        .eq("id", claimId);
+      if (error) throw error;
+      toast.success("Expense approved");
+      qc.invalidateQueries({ queryKey: ["mobile-pending-expense-widget"] });
+      qc.invalidateQueries({ queryKey: ["mobile-pending-expense-claims"] });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to approve");
+    }
+  };
+
+  const handleRejectExpense = async (claimId: string) => {
+    try {
+      const { error } = await supabase
+        .from("expense_claims")
+        .update({ status: "rejected", reviewed_by: user?.id, reviewed_at: new Date().toISOString() })
+        .eq("id", claimId);
+      if (error) throw error;
+      toast.success("Expense rejected");
+      qc.invalidateQueries({ queryKey: ["mobile-pending-expense-widget"] });
+      qc.invalidateQueries({ queryKey: ["mobile-pending-expense-claims"] });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to reject");
+    }
+  };
 
   const greeting = () => {
     const h = new Date().getHours();
@@ -188,6 +235,65 @@ export function AdminHome({
           </div>
         )}
       </div>
+
+      {/* Pending Expenses Widget */}
+      {pendingExpenses.length > 0 && (
+        <div className="px-4 mt-5">
+          <div className="flex items-center justify-between mb-2.5">
+            <SectionLabel className="mb-0 flex items-center gap-2">
+              <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
+              Pending Expenses
+            </SectionLabel>
+            <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-2 py-0.5 rounded-full">
+              {pendingExpenses.length}
+            </span>
+          </div>
+          <div className="space-y-2">
+            {pendingExpenses.map((exp) => (
+              <div key={exp.id} className="rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-3.5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      {exp.expense_categories && (
+                        <div className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: exp.expense_categories.color || "#6366f1" }} />
+                      )}
+                      <p className="text-sm font-bold text-slate-800 dark:text-white truncate">
+                        ₹{Number(exp.amount).toLocaleString("en-IN")}
+                      </p>
+                      <span className="text-[10px] text-slate-400 truncate">
+                        {exp.expense_categories?.name || "Unknown"}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                      {exp.profiles?.full_name || "Unknown"} · {format(new Date(exp.created_at), "dd MMM hh:mm a")}
+                    </p>
+                    {exp.description && (
+                      <p className="text-[11px] text-slate-400 mt-0.5 truncate">{exp.description}</p>
+                    )}
+                    {exp.bill_urls && exp.bill_urls.length > 0 && (
+                      <p className="text-[10px] text-blue-500 mt-0.5">📎 {exp.bill_urls.length} attachment(s)</p>
+                    )}
+                  </div>
+                  <div className="flex gap-1.5 shrink-0">
+                    <button
+                      onClick={() => handleApproveExpense(exp.id)}
+                      className="h-8 w-8 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center hover:bg-emerald-100 dark:hover:bg-emerald-900/50 active:scale-95 transition-all"
+                    >
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                    </button>
+                    <button
+                      onClick={() => handleRejectExpense(exp.id)}
+                      className="h-8 w-8 rounded-lg bg-red-50 dark:bg-red-900/30 flex items-center justify-center hover:bg-red-100 dark:hover:bg-red-900/50 active:scale-95 transition-all"
+                    >
+                      <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* More Navigation */}
       <div className="px-4 mt-5">

@@ -3,19 +3,22 @@ import { App as CapacitorApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { matchPath, useLocation, useNavigate } from "react-router-dom";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { 
+import { useQuery } from "@tanstack/react-query";
+import {
 Menu, LayoutDashboard, Package, Users, Store, Route, ShoppingCart,
 Receipt, ClipboardList, HandCoins, Map, FileText, BarChart3, History,
 Shield, Settings, Warehouse, User, LogOut, ArrowRightLeft, Building2,
 Calendar, CreditCard, Image, Wallet, Truck, TrendingUp, ClipboardCheck,
-Factory, Undo2, UserCog, Coins,
+Factory, Undo2, UserCog, Coins, Home, ScanLine, ReceiptIndianRupee,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { isNativeApp } from "@/lib/capacitorUtils";
 import { useRealtimeSync } from "@/hooks/useRealtimeSync";
+import { supabase } from "@/integrations/supabase/client";
 import { PermissionSetup } from "./components/PermissionSetup";
 import { MobileHeader } from "./components/MobileHeader";
 import { BottomNav, CUSTOMER_TABS, MARKETER_TABS, MobileTab, POS_TABS, AGENT_TABS } from "./components/BottomNav";
+import AdminExpenseAccess from "@/pages/admin/AdminExpenseAccess";
 // Mobile-optimized admin pages (kept only essential ones with native mobile UI)
 import { AdminHome } from "./pages/admin/AdminHome";
 import { AdminOrders } from "./pages/admin/AdminOrders";
@@ -172,6 +175,7 @@ const STAFF_MENU_BY_ROLE: Record<StaffRole, StaffMenuSection[]> = {
       { id: "production-log", label: "Production Log", path: "/admin/production-log", icon: ClipboardCheck },
     ]},
     { section: "Administration", items: [
+      { id: "expense-access", label: "Expense Access", path: "/admin/expense-access", icon: Shield },
       { id: "access", label: "Access Control", path: "/access-control", icon: Shield },
       { id: "staff-dir", label: "Staff Directory", path: "/staff", icon: Users },
       { id: "admin-setup", label: "ERP Setup", path: "/admin/setup", icon: Settings },
@@ -223,6 +227,7 @@ const STAFF_MENU_BY_ROLE: Record<StaffRole, StaffMenuSection[]> = {
       { id: "activity", label: "Activity Log", path: "/activity", icon: History },
     ]},
     { section: "Manage", items: [
+      { id: "expense-access", label: "Expense Access", path: "/admin/expense-access", icon: Shield },
       { id: "access", label: "Access Control", path: "/access-control", icon: Shield },
       { id: "staff-dir", label: "Staff Directory", path: "/staff", icon: Users },
       { id: "settings", label: "Settings", path: "/settings", icon: Settings },
@@ -236,10 +241,24 @@ const STAFF_MENU_BY_ROLE: Record<StaffRole, StaffMenuSection[]> = {
 };
 function StaffApp({ role }: { role: StaffRole }) {
   useRealtimeSync();
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // Badge: pending expense claims for Handovers tab
+  const { data: pendingExpenseCount = 0 } = useQuery({
+    queryKey: ["mobile-pending-expense-claims", role],
+    queryFn: async () => {
+      const { count } = await supabase
+        .from("expense_claims")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "pending");
+      return count ?? 0;
+    },
+    enabled: role === "super_admin" || role === "manager",
+    refetchInterval: 30_000,
+  });
 
   const menuSections = STAFF_MENU_BY_ROLE[role];
   const allMenuItems = menuSections.flatMap((s) => s.items);
@@ -314,6 +333,7 @@ function StaffApp({ role }: { role: StaffRole }) {
     if (path === "/staff") return <MobilePageWrapper><StaffDirectory /></MobilePageWrapper>;
     if (path === "/admin/staff") return <MobilePageWrapper><AdminStaffDirectory /></MobilePageWrapper>;
     if (path === "/admin/setup") return <MobilePageWrapper><AdminSetup /></MobilePageWrapper>;
+    if (path === "/admin/expense-access") return <MobilePageWrapper><AdminExpenseAccess /></MobilePageWrapper>;
     if (path === "/admin/cost-history") return <MobilePageWrapper><AdminCostHistory /></MobilePageWrapper>;
     if (path === "/admin/vehicles") return <MobilePageWrapper><AdminVehicles /></MobilePageWrapper>;
     if (path === "/admin/delivery-feasibility") return <MobilePageWrapper><DeliveryFeasibility /></MobilePageWrapper>;
@@ -475,7 +495,7 @@ function StaffApp({ role }: { role: StaffRole }) {
 }
 
 function CustomerApp() {
-  // useRealtimeSync(); // Excluded for customers to save connections
+  useRealtimeSync();
   const [tab, setTab] = useState<MobileTab>("home");
   const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null);
 
@@ -535,10 +555,27 @@ function CustomerApp() {
 
 function MarketerApp() {
   useRealtimeSync();
+  const { user } = useAuth();
   const [tab, setTab] = useState<MobileTab>("home");
   const [showAddEntity, setShowAddEntity] = useState(false);
   const [recordAction, setRecordAction] = useState<"sale" | "payment" | null>(null);
   const [profileStore, setProfileStore] = useState<StoreOption | null>(null);
+  const [preselectStore, setPreselectStore] = useState<StoreOption | null>(null);
+
+  // Badge: pending incoming handovers for History tab
+  const { data: pendingHandoversCount = 0 } = useQuery({
+    queryKey: ["mobile-pending-incoming-handovers-marketer", user?.id],
+    queryFn: async () => {
+      const { count } = await supabase
+        .from("handovers")
+        .select("id", { count: "exact", head: true })
+        .eq("handed_to", user!.id)
+        .eq("status", "awaiting_confirmation");
+      return count ?? 0;
+    },
+    enabled: !!user,
+    refetchInterval: 30_000,
+  });
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
@@ -553,6 +590,7 @@ function MarketerApp() {
         }
         if (recordAction) {
           setRecordAction(null);
+          setPreselectStore(null);
         } else if (profileStore) {
           setProfileStore(null);
         } else if (tab !== "home") {
@@ -571,6 +609,7 @@ function MarketerApp() {
   }, [tab, recordAction, profileStore, showAddEntity]);
 
   const handleGoRecord = (store: StoreOption, action: "sale" | "payment" = "sale") => {
+    setPreselectStore(store);
     setRecordAction(action);
     setTab("record");
   };
@@ -607,11 +646,14 @@ function MarketerApp() {
             onOpenRecord={() => setTab("record")}
             onOpenStores={() => setTab("customers")}
             onOpenAddEntity={() => setShowAddEntity(true)}
+            onOpenStore={handleOpenStoreProfile}
+            onGoRecord={handleGoRecord}
+            onGoSale={(store) => { setPreselectStore(store); setRecordAction("sale"); setTab("record"); }}
           />
         )}
         {tab === "products" && <AgentProducts />}
         {tab === "orders" && <MarketerOrders />}
-        {tab === "record" && <AgentRecord preselectTab="payment" allowSale={false} />}
+        {tab === "record" && <AgentRecord preselectStore={preselectStore} preselectTab={recordAction === "sale" ? "sale" : "payment"} allowSale={true} allowPayment={true} />}
         {tab === "history" && <AgentHistory />}
         {tab === "customers" && !profileStore && (
           <MarketerStores
@@ -624,23 +666,40 @@ function MarketerApp() {
             store={profileStore}
             onBack={handleCloseStoreProfile}
             onGoRecord={handleGoRecord}
+            onGoSale={(store) => { setPreselectStore(store); setRecordAction("sale"); setTab("record"); }}
           />
         )}
       </main>
 
-      <BottomNav tab={tab} onChange={setTab} tabs={MARKETER_TABS} />
+      <BottomNav tab={tab} onChange={setTab} tabs={[{ id: "home" as MobileTab, label: "Home", icon: Home }, { id: "orders" as MobileTab, label: "Orders", icon: ClipboardList }, { id: "record" as MobileTab, label: "Record", icon: ReceiptIndianRupee, centerAction: true }, { id: "customers" as MobileTab, label: "Stores", icon: Users }, { id: "history" as MobileTab, label: "History", icon: History, badge: pendingHandoversCount }]} />
     </div>
   );
 }
 
 function AgentApp() {
   useRealtimeSync();
+  const { user } = useAuth();
   const [tab, setTab] = useState<MobileTab>("home");
   const [showAddEntity, setShowAddEntity] = useState(false);
   const [preselectStore, setPreselectStore] = useState<StoreOption | null>(null);
   const [recordAction, setRecordAction] = useState<"sale" | "payment" | null>(null);
   const [profileStore, setProfileStore] = useState<StoreOption | null>(null);
   const [profileReturnTab, setProfileReturnTab] = useState<MobileTab>("customers");
+
+  // Badge: pending incoming handovers for History tab
+  const { data: pendingHandoversCount = 0 } = useQuery({
+    queryKey: ["mobile-pending-incoming-handovers", user?.id],
+    queryFn: async () => {
+      const { count } = await supabase
+        .from("handovers")
+        .select("id", { count: "exact", head: true })
+        .eq("handed_to", user!.id)
+        .eq("status", "awaiting_confirmation");
+      return count ?? 0;
+    },
+    enabled: !!user,
+    refetchInterval: 30_000,
+  });
 
   const handleGoRecord = (store: StoreOption | null, action: "sale" | "payment") => {
     setPreselectStore(store || null);
@@ -691,6 +750,7 @@ function AgentApp() {
         }
         if (recordAction) {
           setRecordAction(null);
+          setPreselectStore(null);
         } else if (profileStore) {
           setProfileStore(null);
         } else if (tab !== "home") {
@@ -762,14 +822,31 @@ function AgentApp() {
         )}
       </main>
 
-      <BottomNav tab={tab} onChange={handleTabChange} tabs={AGENT_TABS} />
+      <BottomNav tab={tab} onChange={handleTabChange} tabs={[{ id: "home" as MobileTab, label: "Home", icon: Home }, { id: "routes" as MobileTab, label: "Routes", icon: Map }, { id: "scan" as MobileTab, label: "Scan", icon: ScanLine, centerAction: true }, { id: "customers" as MobileTab, label: "Stores", icon: Users }, { id: "history" as MobileTab, label: "History", icon: History, badge: pendingHandoversCount }]} />
     </div>
   );
 }
 
 function PosApp() {
   useRealtimeSync();
+  const { user } = useAuth();
   const [tab, setTab] = useState<MobileTab>("home");
+  const [posStore, setPosStore] = useState<StoreOption | null>(null);
+
+  // Badge: pending incoming handovers for Handover tab
+  const { data: pendingHandoversCount = 0 } = useQuery({
+    queryKey: ["mobile-pending-incoming-handovers-pos", user?.id],
+    queryFn: async () => {
+      const { count } = await supabase
+        .from("handovers")
+        .select("id", { count: "exact", head: true })
+        .eq("handed_to", user!.id)
+        .eq("status", "awaiting_confirmation");
+      return count ?? 0;
+    },
+    enabled: !!user,
+    refetchInterval: 30_000,
+  });
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
@@ -804,13 +881,14 @@ function PosApp() {
           paddingBottom: "calc(4.5rem + env(safe-area-inset-bottom))",
         }}
       >
-        {tab === "home" && <PosHome onOpenRecord={() => setTab("record")} onOpenHistory={() => setTab("history")} />}
+        {tab === "home" && <PosHome onOpenRecord={() => setTab("record")} onOpenHistory={() => setTab("history")} setTab={setTab} activeTab={tab} store={posStore} onStoreChange={setPosStore} />}
         {tab === "record" && <AgentRecord preselectTab="sale" allowPayment={false} />}
-        {tab === "handovers" && <Handovers />}
+        {tab === "handovers" && <AgentHistory />}
+        {tab === "products" && <AgentProducts />}
         {tab === "history" && <AgentHistory />}
       </main>
 
-      <BottomNav tab={tab} onChange={setTab} tabs={POS_TABS} />
+      <BottomNav tab={tab} onChange={setTab} tabs={[{ id: "home" as MobileTab, label: "Home", icon: Home }, { id: "record" as MobileTab, label: "Sale", icon: ScanLine, centerAction: true }, { id: "handovers" as MobileTab, label: "Handover", icon: HandCoins, badge: pendingHandoversCount }, { id: "products" as MobileTab, label: "Catalog", icon: Package }, { id: "history" as MobileTab, label: "History", icon: History }]} />
     </div>
   );
 }

@@ -8,6 +8,7 @@ import {
   Phone,
   Store,
   Wallet,
+  ShoppingCart,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +20,7 @@ interface Props {
   onBack: () => void;
   onGoRecord: (store: StoreOption) => void;
   onGoOrders?: (store: StoreOption) => void;
+  onGoSale?: (store: StoreOption) => void;
 }
 
 interface StoreProfileRow {
@@ -145,20 +147,29 @@ export function MarketerStoreProfile({ store, onBack, onGoRecord, onGoOrders }: 
 
         <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-4 shadow-sm">
           <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Quick Actions</p>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <button
               onClick={() => onGoOrders?.(currentStore)}
-              className="flex items-center justify-center gap-2 p-3 rounded-2xl bg-blue-600 hover:bg-blue-700 active:scale-95 transition-all shadow-sm"
+              className="flex flex-col items-center gap-1.5 p-3 rounded-2xl bg-blue-600 hover:bg-blue-700 active:scale-95 transition-all shadow-sm"
             >
               <ClipboardList className="h-5 w-5 text-white" />
-              <span className="text-[11px] font-bold text-white text-center">Create Order</span>
+              <span className="text-[10px] font-bold text-white text-center">Create Order</span>
             </button>
+            {onGoSale && (
+              <button
+                onClick={() => onGoSale(currentStore)}
+                className="flex flex-col items-center gap-1.5 p-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 transition-all shadow-sm"
+              >
+                <ShoppingCart className="h-5 w-5 text-white" />
+                <span className="text-[10px] font-bold text-white text-center">Record Sale</span>
+              </button>
+            )}
             <button
               onClick={() => onGoRecord(currentStore)}
-              className="flex items-center justify-center gap-2 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95 transition-all shadow-sm"
+              className="flex flex-col items-center gap-1.5 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95 transition-all shadow-sm"
             >
               <Wallet className="h-5 w-5 text-emerald-500" />
-              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200 text-center">Record Transaction</span>
+              <span className="text-[10px] font-bold text-slate-700 dark:text-slate-200 text-center">Payment</span>
             </button>
           </div>
         </div>

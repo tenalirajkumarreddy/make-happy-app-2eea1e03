@@ -62,6 +62,7 @@ const AdminVehicles = lazy(() => import("./pages/admin/AdminVehicles"));
 const DeliveryFeasibility = lazy(() => import("./pages/admin/DeliveryFeasibility"));
 const AdminSetup = lazy(() => import("./pages/admin/AdminSetup"));
 const AdminCostHistory = lazy(() => import("./pages/admin/AdminCostHistory"));
+const AdminExpenseAccess = lazy(() => import("./pages/admin/AdminExpenseAccess"));
 const ProductionLogPage = lazy(() => import("./pages/admin/ProductionLog"));
 const Settings = lazy(() => import("./pages/Settings"));
 const StoreTypes = lazy(() => import("./pages/StoreTypes"));
@@ -230,6 +231,7 @@ const App = () => {
                <Route path="/admin" element={<RoleGuard allowed={["super_admin"]}><Outlet /></RoleGuard>}>
                  <Route path="staff" element={<AdminStaffDirectory />} />
                  <Route path="setup" element={<AdminSetup />} />
+                 <Route path="expense-access" element={<AdminExpenseAccess />} />
                  <Route path="cost-history" element={<AdminCostHistory />} />
                  <Route path="vehicles" element={<AdminVehicles />} />
                  <Route path="delivery-feasibility" element={<DeliveryFeasibility />} />

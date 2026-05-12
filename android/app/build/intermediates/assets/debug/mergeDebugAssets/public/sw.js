@@ -1,1 +1,60 @@
-if(!self.define){let s,e={};const n=(n,i)=>(n=new URL(n+".js",i).href,e[n]||new Promise(e=>{if("document"in self){const s=document.createElement("script");s.src=n,s.onload=e,document.head.appendChild(s)}else s=n,importScripts(n),e()}).then(()=>{let s=e[n];if(!s)throw new Error(`Module ${n} didn’t register its module`);return s}));self.define=(i,r)=>{const o=s||("document"in self?document.currentScript.src:"")||location.href;if(e[o])return;let l={};const u=s=>n(s,o),c={module:{uri:o},exports:l,require:u};e[o]=Promise.all(i.map(s=>c[s]||u(s))).then(s=>(r(...s),l))}}define(["./workbox-1d305bb8"],function(s){"use strict";self.skipWaiting(),s.clientsClaim(),s.precacheAndRoute([{url:"registerSW.js",revision:"1872c500de691dce40960bb85481de07"},{url:"placeholder.svg",revision:"35707bd9960ba5281c72af927b79291f"},{url:"logo.png",revision:"22a5b7fbb5d49e035686dcbc76d93395"},{url:"index.html",revision:"6ae9ae6d7f2ee8867fa4ea31827889be"},{url:"favicon.png",revision:"22a5b7fbb5d49e035686dcbc76d93395"},{url:"favicon.ico",revision:"22a5b7fbb5d49e035686dcbc76d93395"},{url:"icons/icon-96x96.png",revision:"22a5b7fbb5d49e035686dcbc76d93395"},{url:"icons/icon-72x72.png",revision:"22a5b7fbb5d49e035686dcbc76d93395"},{url:"icons/icon-512x512.png",revision:"22a5b7fbb5d49e035686dcbc76d93395"},{url:"icons/icon-384x384.png",revision:"22a5b7fbb5d49e035686dcbc76d93395"},{url:"icons/icon-192x192.png",revision:"22a5b7fbb5d49e035686dcbc76d93395"},{url:"icons/icon-152x152.png",revision:"22a5b7fbb5d49e035686dcbc76d93395"},{url:"icons/icon-144x144.png",revision:"22a5b7fbb5d49e035686dcbc76d93395"},{url:"icons/icon-128x128.png",revision:"22a5b7fbb5d49e035686dcbc76d93395"},{url:"assets/web-jWXCroXd.js",revision:null},{url:"assets/web-BzLrdgu0.js",revision:null},{url:"assets/web-81fJfMZF.js",revision:null},{url:"assets/Transactions-Czm6_aSS.js",revision:null},{url:"assets/Sales-BoUMuTVv.js",revision:null},{url:"assets/ResetPassword-DGlSnx24.js",revision:null},{url:"assets/QrStoreSelector-ChfYS0Xd.js",revision:null},{url:"assets/Purchases-BwbDfS-G.js",revision:null},{url:"assets/Orders-B2DSYjy3.js",revision:null},{url:"assets/OrderFulfillmentDialog-ylVrN-5f.js",revision:null},{url:"assets/Onboarding-DG_IbgYW.js",revision:null},{url:"assets/offlineCreditValidation-DirseaOh.js",revision:null},{url:"assets/Inventory-Cl6zZStu.js",revision:null},{url:"assets/index-DTv7n1EQ.js",revision:null},{url:"assets/index-BCd9TocF.css",revision:null},{url:"assets/CustomerTransactions-CUQbFSrK.js",revision:null},{url:"assets/CustomerSales-BzHwdvzw.js",revision:null},{url:"assets/CustomerProfile-r39VIZUM.js",revision:null},{url:"assets/CustomerOrders-Dq7DQQP_.js",revision:null},{url:"favicon.ico",revision:"22a5b7fbb5d49e035686dcbc76d93395"},{url:"placeholder.svg",revision:"35707bd9960ba5281c72af927b79291f"}],{}),s.cleanupOutdatedCaches(),s.registerRoute(new s.NavigationRoute(s.createHandlerBoundToURL("index.html"),{denylist:[/^\/(~oauth|auth\/callback|auth\/confirm)/]})),s.registerRoute(/^https:\/\/.*\.supabase\.co\/storage\/.*/i,new s.CacheFirst({cacheName:"supabase-storage",plugins:[new s.ExpirationPlugin({maxEntries:200,maxAgeSeconds:604800}),new s.CacheableResponsePlugin({statuses:[0,200]})]}),"GET"),s.registerRoute(/^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/i,new s.CacheFirst({cacheName:"google-fonts",plugins:[new s.ExpirationPlugin({maxEntries:30,maxAgeSeconds:31536e3}),new s.CacheableResponsePlugin({statuses:[0,200]})]}),"GET")});
+const CACHE_NAME = "aqua-prime-v1";
+const STATIC_ASSETS = ["/", "/index.html"];
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS))
+  );
+  self.skipWaiting();
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    caches.keys().then((keys) =>
+      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
+    )
+  );
+  self.clients.claim();
+});
+
+self.addEventListener("fetch", (event) => {
+  if (event.request.method !== "GET") return;
+  const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin) return;
+  event.respondWith(
+    caches.match(event.request).then((cached) => cached || fetch(event.request))
+  );
+});
+
+self.addEventListener("push", (event) => {
+  let data = { title: "Aqua Prime", body: "You have a new notification." };
+  try {
+    data = event.data ? event.data.json() : data;
+  } catch {
+    data.body = event.data ? event.data.text() : data.body;
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: "/favicon.ico",
+      badge: "/favicon.ico",
+      tag: data.tag || "aqua-prime-notification",
+      data: data.url || "/",
+      vibrate: [200, 100, 200],
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      const targetUrl = event.notification.data || "/";
+      for (const client of clients) {
+        if (client.url === targetUrl && "focus" in client) return client.focus();
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(targetUrl);
+    })
+  );
+});

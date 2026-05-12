@@ -8,6 +8,7 @@ interface MobileTabItem {
   label: string;
   icon: typeof Home;
   centerAction?: boolean;
+  badge?: number;
 }
 
 interface Props {
@@ -104,6 +105,10 @@ export function BottomNav({ tab, onChange, tabs = AGENT_TABS }: Props) {
                 className="flex-1 flex flex-col items-center justify-center h-full gap-1 relative transition-all"
                 onClick={() => onChange(t.id)}
               >
+                {/* Red dot badge */}
+                {(t.badge ?? 0) > 0 && (
+                  <span className="absolute -top-0.5 left-1/2 -translate-x-1/2 h-2 w-2 rounded-full bg-destructive animate-pulse z-50" />
+                )}
                 {/* Active pill indicator */}
                 {isActive && (
                   <span className="absolute top-0 left-1/2 -translate-x-1/2 h-0.5 w-8 bg-blue-600 dark:bg-blue-400 rounded-b-full" />

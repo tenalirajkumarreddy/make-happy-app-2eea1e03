@@ -23,6 +23,7 @@ export const ROLE_DEFAULTS: Record<AppRole, PermissionKey[]> = {
     "create_sale_returns",
     "view_invoices", "create_invoices", "edit_invoices", "delete_invoices", "download_invoices",
     "view_assigned_orders", "accept_order_transfers",
+    "submit_expenses", "manage_expense_access", "approve_expenses",
   ],
   manager: [
     "price_override", "record_behalf", "create_customers", "create_stores",
@@ -36,6 +37,7 @@ export const ROLE_DEFAULTS: Record<AppRole, PermissionKey[]> = {
     "create_sale_returns",
     "view_invoices", "create_invoices", "edit_invoices", "delete_invoices", "download_invoices",
     "view_assigned_orders", "accept_order_transfers",
+    "submit_expenses", "manage_expense_access", "approve_expenses",
   ],
   marketer: [
     "create_customers", "create_stores",
@@ -47,6 +49,7 @@ export const ROLE_DEFAULTS: Record<AppRole, PermissionKey[]> = {
     "view_assigned_orders", "accept_order_transfers",
     "fulfill_orders", "cancel_orders", "record_sale",
     "view_invoices", "download_invoices",
+    "submit_expenses",
   ],
   operator: [
     "view_orders", "create_orders", "modify_orders",
@@ -78,7 +81,7 @@ export const ALL_PERMISSION_KEYS: PermissionKey[] = [
   // General
   "price_override", "record_behalf", "create_customers", "create_stores",
   "edit_balance", "opening_balance", "finalizer", "see_handover_balance",
-  "submit_expenses",
+  "submit_expenses", "manage_expense_access", "approve_expenses",
   // Handover
   "modify_handovers", "cancel_any_handover", "adjust_holding_balance",
   // Sales
@@ -130,6 +133,8 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   cancel_any_handover: "Cancel Any Handover",
   adjust_holding_balance: "Adjust Holding Balance",
   submit_expenses: "Submit Expenses",
+  manage_expense_access: "Manage Expense Access",
+  approve_expenses: "Approve Expenses",
   view_vendors: "View Vendors",
   manage_vendors: "Manage Vendors",
   view_purchases: "View Purchases",
@@ -171,6 +176,6 @@ export const PERMISSION_GROUPS: Record<string, PermissionKey[]> = {
     "view_attendance", "manage_attendance",
   ],
   "Other": [
-    "submit_expenses",
+    "submit_expenses", "manage_expense_access", "approve_expenses",
   ],
 };
