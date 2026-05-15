@@ -1,7 +1,11 @@
 import { useEffect, useState, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { Capacitor } from "@capacitor/core";
+import { LocalNotifications } from "@capacitor/local-notifications";
+import { PushNotifications, PushNotificationSchema } from "@capacitor/push-notifications";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { logDebug, logError } from "@/lib/logger";
 
 export interface AppNotification {
   id: string;
@@ -19,6 +23,23 @@ export function useNotifications() {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [nativeNotificationsReady, setNativeNotificationsReady] = useState(false);
+
+  // Request native notification permission on mount (native only)
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+
+    LocalNotifications.requestPermissions().then((result) => {
+      if (result.granted) {
+        setNativeNotificationsReady(true);
+        logDebug("Native notifications permission granted");
+      } else {
+        logDebug("Native notifications permission denied");
+      }
+    }).catch((err) => {
+      logError("Failed to request native notification permissions", err);
+    });
+  }, []);
 
   const fetchNotifications = useCallback(async () => {
     if (!user) return;
@@ -64,6 +85,10 @@ export function useNotifications() {
           setNotifications((prev) => [newNotif, ...prev].slice(0, 50));
           // Browser push notification
           showBrowserNotification(newNotif.title, newNotif.message);
+          // Fire native Android notification
+          if (nativeNotificationsReady) {
+            fireNativeNotification(newNotif.id, newNotif.title, newNotif.message);
+          }
         }
       )
       .on(
@@ -90,7 +115,34 @@ export function useNotifications() {
       console.error("Failed to remove notification channel:", err);
     }
   };
-}, [user]);
+}, [user, nativeNotificationsReady]);
+
+  // Handle foreground FCM push notifications
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+
+    let mounted = true;
+
+    const handleForegroundPush = (notification: PushNotificationSchema) => {
+      if (!mounted || !nativeNotificationsReady) return;
+      fireNativeNotification(
+        (notification.data?.id as string) || String(Date.now()),
+        notification.title || "Notification",
+        notification.body || ""
+      );
+    };
+
+    PushNotifications.addListener("pushNotificationReceived", handleForegroundPush);
+
+    return () => {
+      mounted = false;
+      try {
+        PushNotifications.removeListener("pushNotificationReceived", handleForegroundPush);
+      } catch {
+        // ignore
+      }
+    };
+  }, [nativeNotificationsReady]);
 
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 
@@ -132,5 +184,21 @@ function showBrowserNotification(title: string, body: string) {
     } catch {
       // Silent fail for environments that don't support notifications
     }
+  }
+}
+
+async function fireNativeNotification(id: string, title: string, body: string) {
+  try {
+    await LocalNotifications.schedule({
+      notifications: [{
+        id: Math.floor(Math.random() * 100000),
+        title,
+        body,
+        smallIcon: "ic_launcher",
+        largeIcon: "ic_launcher",
+      }]
+    });
+  } catch (err) {
+    logError("Failed to fire native notification", err);
   }
 }

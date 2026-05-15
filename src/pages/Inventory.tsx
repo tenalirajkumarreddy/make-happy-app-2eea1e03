@@ -499,6 +499,7 @@ const Inventory = () => {
             staffStock={staffGroups}
             isLoading={isLoadingStaffStock}
             onViewDetails={(staff) => {
+              // eslint-disable-next-line no-console
               console.log("View staff details:", staff);
             }}
             onTransfer={(staff) => {
@@ -516,6 +517,7 @@ const Inventory = () => {
               isLoading={isLoadingRawMaterials}
               canAdjust={canAdjustStock}
               onAdjust={(material) => {
+                // eslint-disable-next-line no-console
                 console.log("Adjust raw material:", material);
               }}
             />

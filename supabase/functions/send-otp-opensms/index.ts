@@ -164,6 +164,8 @@ serve(async (req) => {
           phone_number: normalizedPhone,
           otp_code: otp,
           session_token: sessionToken,
+          attempts: 0,
+          max_attempts: 5,
         })
 
       if (dbError) {

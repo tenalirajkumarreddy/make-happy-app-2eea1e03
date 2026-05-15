@@ -24,7 +24,6 @@ export const GoogleAccountLink = () => {
   const googleIdentity = liveAuthUser?.identities?.find((identity) => identity.provider === "google");
   const isGoogleLinked = !!googleIdentity;
 
-  // Get company settings to check if Google linking is enabled
   const { data: appSettings } = useQuery({
     queryKey: ["company-settings", "google-linking"],
     queryFn: async () => {

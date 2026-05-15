@@ -2,12 +2,12 @@
  * Canonical source for all permission definitions.
  * Single source of truth — all components/hooks must import from here.
  */
+import { type AppRole } from "@/types/roles";
 import { PermissionKey } from "@/components/access/UserPermissionsPanel";
 
 // Re-export so consumers don't need two imports
 export { type PermissionKey } from "@/components/access/UserPermissionsPanel";
-
-export type AppRole = "super_admin" | "manager" | "agent" | "marketer" | "operator" | "pos" | "customer";
+export type { AppRole } from "@/types/roles";
 
 /** Default permissions per role — inherent permissions that can't be toggled off */
 export const ROLE_DEFAULTS: Record<AppRole, PermissionKey[]> = {
@@ -58,11 +58,7 @@ export const ROLE_DEFAULTS: Record<AppRole, PermissionKey[]> = {
     "view_attendance", "manage_attendance",
     "record_sale", "see_handover_balance",
   ],
-  pos: [
-    "view_invoices", "download_invoices",
-    "view_attendance", "manage_attendance",
-    "record_sale", "fulfill_orders", "see_handover_balance",
-  ],
+
   customer: [
     "view_orders", "view_invoices", "download_invoices",
   ],

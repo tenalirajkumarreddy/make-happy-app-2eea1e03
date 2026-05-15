@@ -100,10 +100,15 @@
 @layer base {
   * {
     @apply border-border;
+    touch-action: manipulation;
   }
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  button, [role="button"] {
+    touch-action: manipulation;
   }
 
   h1, h2, h3, h4, h5, h6 {

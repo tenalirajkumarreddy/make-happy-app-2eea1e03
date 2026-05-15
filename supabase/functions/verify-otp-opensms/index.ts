@@ -179,6 +179,76 @@ async function resolveIdentity(
     return { type: "staff", role: staff.role };
   }
 
+  // STEP 2b: Check existing user_roles for already-linked staff (edge case: staff was created
+  // directly in user_roles/profiles without a staff_directory entry, e.g. invited via admin panel)
+  const { data: existingRole } = await adminClient
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (existingRole && existingRole.role !== "customer") {
+    console.log("Staff found via existing user_roles for userId:", userId, "role:", existingRole.role);
+
+    const { error: profileErr } = await adminClient.from("profiles").upsert({
+      user_id: userId, full_name: "Staff",
+      email: userEmail || null, phone: phoneNumber,
+      is_active: true, phone_verified: true, onboarding_complete: true,
+    }, { onConflict: "user_id" });
+    if (profileErr) {
+      console.error("Failed to upsert profile:", profileErr);
+    }
+
+    return { type: "staff", role: existingRole.role };
+  }
+
+  // STEP 2c: Check seeded app_users records by phone.
+  // Some environments seed staff in app_users first, with a separate auth UID created later.
+  const phoneDigits = phoneNumber.replace(/\D/g, '').slice(-10);
+  const { data: appUserMatch, error: appUserErr } = await adminClient
+    .from("app_users")
+    .select("id, phone, google_email, full_name, role, is_active")
+    .eq("is_active", true)
+    .or(`phone.ilike.%${phoneDigits}%,phone.ilike.%${phoneNumber}`)
+    .limit(1);
+
+  if (appUserErr) {
+    console.error("app_users lookup error:", appUserErr);
+  }
+
+  if (appUserMatch && appUserMatch.length >= 1) {
+    const appUser = appUserMatch[0];
+
+    if (appUser.role && appUser.role !== "customer") {
+      await adminClient.from("user_roles").delete().eq("user_id", userId);
+      const { error: roleErr } = await adminClient.from("user_roles").insert({
+        user_id: userId,
+        role: appUser.role,
+      });
+      if (roleErr) {
+        console.error("Failed to insert app_users-derived role:", roleErr);
+        throw new Error(`Failed to assign staff role from app_users: ${roleErr.message}`);
+      }
+
+      const { error: profileErr } = await adminClient.from("profiles").upsert({
+        user_id: userId,
+        full_name: appUser.full_name || "Staff",
+        email: appUser.google_email || userEmail || null,
+        phone: phoneNumber,
+        avatar_url: null,
+        is_active: true,
+        phone_verified: true,
+        onboarding_complete: true,
+      }, { onConflict: "user_id" });
+      if (profileErr) {
+        console.error("Failed to upsert app_users-derived profile:", profileErr);
+        throw new Error(`Failed to create profile from app_users: ${profileErr.message}`);
+      }
+
+      return { type: "staff", role: appUser.role };
+    }
+  }
+
   // STEP 3: Check customers (by phone + by auth user_id link)
   const { data: matchingCustomers, error: custErr } = await adminClient
     .rpc("find_customer_by_phone", { p_phone_digits: phoneNumber });
@@ -325,6 +395,19 @@ Deno.serve(async (req) => {
     }
 
     const session = otpSession as OTPSession
+    const currentAttempts = session.attempts ?? 0
+    const maxAttempts = session.max_attempts ?? 5
+
+    // Check if max attempts exceeded
+    if (currentAttempts >= maxAttempts) {
+      return new Response(
+        JSON.stringify({ error: 'Maximum OTP attempts exceeded. Please request a new OTP.' }),
+        {
+          status: 429,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      )
+    }
 
     // Check for test mode bypass (universal OTP works for any phone in dev mode)
     const isTestOTP = otp_code.trim() === UNIVERSAL_TEST_OTP
@@ -341,8 +424,18 @@ Deno.serve(async (req) => {
 
     // Verify OTP code
     if (session.otp_code !== otp_code.trim()) {
+      // Increment attempt counter on failure
+      await adminClient
+        .from('otp_sessions')
+        .update({ attempts: currentAttempts + 1 })
+        .eq('id', session.id)
+
+      const remainingAttempts = maxAttempts - currentAttempts - 1
       return new Response(
-        JSON.stringify({ error: 'Invalid OTP code' }),
+        JSON.stringify({
+          error: 'Invalid OTP code',
+          remaining_attempts: remainingAttempts,
+        }),
         {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }

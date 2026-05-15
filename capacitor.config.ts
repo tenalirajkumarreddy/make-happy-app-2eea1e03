@@ -23,7 +23,15 @@ const config: CapacitorConfig = {
       style: 'dark',
       backgroundColor: '#1a1a2e'
     },
-    ShareTarget: {}
+    ShareTarget: {},
+    LocalNotifications: {
+      smallIcon: 'ic_launcher',
+      iconColor: '#2196F3',
+    },
+    PushNotifications: {
+      smallIcon: 'ic_launcher',
+      iconColor: '#2196F3',
+    }
   }
 };
 

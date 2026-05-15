@@ -13,11 +13,12 @@ const FILE_STORE_NAME = "pending_files";
 const CONFLICT_STORE_NAME = "conflict_info";
 
 const MAX_RETRIES = 3;
+const MAX_QUEUE_SIZE = 500;
 const RETRY_DELAYS = [1000, 5000, 15000]; // Exponential backoff
 
 export interface PendingAction {
   id: string;
-  type: "sale" | "transaction" | "visit" | "customer" | "store" | "file_upload";
+  type: "sale" | "transaction" | "visit" | "customer" | "store" | "file_upload" | "order";
   payload: unknown;
   createdAt: string;
   retryCount?: number;
@@ -192,6 +193,13 @@ export async function addToQueue(action: PendingAction): Promise<void> {
   // Validate required fields
   if (!action.id || !action.type || action.payload === undefined) {
     throw new Error("Invalid action: missing required fields (id, type, payload)");
+  }
+
+  // Capacity check
+  const currentCount = await getQueueCount();
+  if (currentCount >= MAX_QUEUE_SIZE) {
+    toast.error(`Offline queue is full (${MAX_QUEUE_SIZE} items). Please sync before performing more actions.`);
+    throw new Error(`Queue capacity exceeded: ${MAX_QUEUE_SIZE}`);
   }
 
   // Check for duplicate by ID

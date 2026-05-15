@@ -1,9 +1,9 @@
-import { Home, Map, ScanLine, History, Users, ClipboardList, ReceiptIndianRupee, Plus, HandCoins } from "lucide-react";
+import { Home, Map, ScanLine, History, Users, ClipboardList, ReceiptIndianRupee, Plus, HandCoins, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type MobileTab = "home" | "routes" | "scan" | "history" | "customers" | "orders" | "record" | "sales" | "transactions" | "profile" | "products" | "handovers";
+export type MobileTab = "home" | "routes" | "scan" | "history" | "customers" | "orders" | "record" | "sales" | "transactions" | "profile" | "products" | "handovers" | "inventory" | "staff";
 
-interface MobileTabItem {
+export interface MobileTabItem {
   id: MobileTab;
   label: string;
   icon: typeof Home;
@@ -43,8 +43,8 @@ export const CUSTOMER_TABS: MobileTabItem[] = [
 
 export const POS_TABS: MobileTabItem[] = [
   { id: "home", label: "Home", icon: Home },
-  { id: "record", label: "Sale", icon: ScanLine, centerAction: true },
-  { id: "handovers", label: "Handover", icon: HandCoins },
+  { id: "inventory", label: "Inventory", icon: Package, centerAction: true },
+  { id: "staff", label: "Staff", icon: Users },
   { id: "history", label: "History", icon: History },
 ];
 

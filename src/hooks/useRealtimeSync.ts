@@ -4,24 +4,64 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { logError } from "@/lib/logger";
 
+// ── Shared query key groups (reused across tables to avoid duplication) ──────
+const DASHBOARD = [
+  "dashboard-stats", "agent-dashboard-stats", "manager-dashboard",
+  "agent-dashboard", "customer-dashboard", "default-dashboard",
+  "super-admin-dashboard-stats", "pos-dashboard", "marketer-dashboard",
+  "operator-dashboard",
+];
+const MOBILE_SALES = [
+  "mobile-agent-sales-today", "mobile-sales",
+  "mobile-history-balance-sales", "mobile-history-sales-timeline",
+  "mobile-customer-sales", "mobile-customer-sales-self",
+  "mobile-customer-ledger-sales", "mobile-customer-home-sales",
+  "mobile-pos-dashboard", "mobile-marketer-dashboard",
+];
+const MOBILE_TX = [
+  "mobile-agent-tx-today", "mobile-transactions",
+  "mobile-history-transactions-timeline",
+  "mobile-customer-ledger-self", "mobile-customer-ledger-stores",
+  "mobile-customer-ledger-payments", "mobile-marketer-dashboard",
+  "mobile-pos-dashboard",
+];
+const MOBILE_ORDERS = [
+  "mobile-agent-all-orders", "mobile-agent-pending-orders",
+  "mobile-marketer-orders", "mobile-customer-orders",
+  "mobile-customer-orders-self", "mobile-customer-orders-stores",
+  "mobile-customer-home-orders", "mobile-orders",
+  "mobile-route-pending-orders", "mobile-marketer-dashboard",
+];
+const PL = [
+  "itemwise-pl-sales", "itemwise-pl-purchases", "itemwise-pl-returns",
+  "pl-sales", "pl-purchases", "pl-returns", "pl-expenses", "pl-sale-items",
+];
+const DAYBOOK = [
+  "daybook-sales", "daybook-transactions", "daybook-expenses",
+  "daybook-purchases", "daybook-vendor-payments",
+  "daybook-sale-returns", "daybook-purchase-returns",
+];
+const PAYMENT_FLOW = [
+  "payment-flow-customer", "payment-flow-expenses",
+  "payment-flow-vendor", "payment-flow-worker",
+];
+const ANALYTICS = ["analytics-enhanced", "smart-insights"];
+const INVENTORY = ["inventory", "mobile-inventory", "warehouse-stock"];
+const INVENTORY_TIMELINE = [
+  "inventory-timeline-sales", "inventory-timeline-purchases",
+  "inventory-timeline-sale-returns", "inventory-timeline-purchase-returns",
+];
+
 // ── Table → Query Key Mapping ────────────────────────────────────────────────
-// Every query key used in the codebase is listed here so any DB change
-// automatically invalidates the right React Query caches.
+// Each table maps to the query keys it should invalidate when changed.
+// When adding a new query, include its first segment here if it reads from a DB
+// table listed below.
 const TABLE_QUERY_MAP: Record<string, string[]> = {
   sales: [
-    "sales", "my-sales", "dashboard-stats", "agent-dashboard-stats",
-    "manager-dashboard", "agent-dashboard", "default-dashboard",
-    "super-admin-dashboard-stats", "pos-dashboard", "marketer-dashboard",
-    "operator-dashboard", "mobile-agent-sales-today", "mobile-sales",
-    "mobile-history-balance-sales", "mobile-history-sales-timeline",
-    "mobile-customer-sales", "mobile-customer-sales-self",
-    "mobile-customer-ledger-sales", "mobile-customer-home-sales",
-    "mobile-pos-dashboard", "mobile-marketer-dashboard",
+    "sales", "my-sales", ...DASHBOARD, ...MOBILE_SALES, ...ANALYTICS,
     "daily-report", "daybook-sales", "sales-report",
-    "itemwise-pl-sales", "pl-sales", "sale-for-invoice",
-    "statement-sales", "user-sales-totals",
-    "inventory-timeline-sales", "mobile-recent-activity",
-    "analytics-enhanced", "smart-insights",
+    ...PL, "sale-for-invoice", "statement-sales", "user-sales-totals",
+    ...INVENTORY_TIMELINE, "mobile-recent-activity",
   ],
   sale_items: [
     "sale-items", "sale-items-detail", "sale-items-for-invoice",
@@ -33,51 +73,40 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
     "sales-return-report", "sales-return-report-sales",
     "pending-returns", "return-stats", "return-details",
     "inventory-timeline-sale-returns", "daybook-sale-returns",
-    "itemwise-pl-returns", "pl-returns",
+    "mobile-history-sales-timeline",
+    ...PL,
   ],
   sale_return_items: ["sale-returns", "return-details", "pl-returns"],
   transactions: [
     "transactions", "customer-transactions", "store-transactions",
-    "dashboard-stats", "agent-dashboard-stats", "manager-dashboard",
-    "agent-dashboard", "customer-dashboard", "default-dashboard",
-    "super-admin-dashboard-stats", "mobile-agent-tx-today",
-    "mobile-transactions", "mobile-history-transactions-timeline",
-    "mobile-customer-ledger-self", "mobile-customer-ledger-stores",
-    "mobile-customer-ledger-payments", "mobile-marketer-dashboard",
-    "mobile-pos-dashboard", "daybook-transactions",
-    "statement-transactions", "user-transaction-totals",
-    "my-ledger-txns", "payment-flow-customer", "payment-flow-expenses",
-    "payment-flow-vendor", "payment-flow-worker",
-    "analytics-enhanced", "smart-insights",
+    ...DASHBOARD, ...MOBILE_TX, ...ANALYTICS,
+    "daybook-transactions", "statement-transactions", "user-transaction-totals",
+    "my-ledger-txns", ...PAYMENT_FLOW,
   ],
   orders: [
     "orders", "my-orders", "my-orders-count", "store-orders",
-    "dashboard-stats", "manager-dashboard", "operator-dashboard",
-    "agent-dashboard", "customer-dashboard", "default-dashboard",
-    "super-admin-dashboard-stats", "mobile-agent-all-orders",
-    "mobile-agent-pending-orders", "mobile-marketer-orders",
-    "mobile-customer-orders", "mobile-customer-orders-self",
-    "mobile-customer-orders-stores", "mobile-customer-home-orders",
-    "mobile-orders", "mobile-route-pending-orders",
-    "mobile-marketer-dashboard", "order-report",
-    "pending-orders-for-store", "pending-order-stores",
-    "pending-orders-map", "routes-for-orders", "store-orders",
+    ...DASHBOARD, ...MOBILE_ORDERS,
+    "order-report", "pending-orders-for-store", "mobile-pending-orders-for-store",
+    "pending-order-stores", "pending-orders-map", "routes-for-orders",
     "daybook-sales",
   ],
   order_items: ["orders", "order-items", "mobile-marketer-orders"],
   stores: [
     "stores", "store", "my-stores", "my-stores-outstanding",
-    "customer-stores", "dashboard-stats", "mobile-marketer-stores",
-    "mobile-marketer-store-profile", "mobile-customer-home-stores",
-    "mobile-customer-profile-stores", "mobile-store-profile",
-    "mobile-customers-stores", "stores-for-sale", "stores-for-txn",
-    "stores-for-order", "stores-for-filter-orders", "stores-for-invoice",
+    "customer-stores", ...DASHBOARD,
+    "mobile-marketer-stores", "mobile-marketer-store-profile",
+    "mobile-customer-home-stores", "mobile-customer-profile-stores",
+    "mobile-store-profile", "mobile-customers-stores",
+    "stores-for-sale", "stores-for-txn", "stores-for-order",
+    "stores-for-filter-orders", "stores-for-invoice",
     "stores-with-location", "store-qr-codes", "route-stores",
     "routes-with-stores", "statement-customer-stores",
+    "mobile-marketer-order-stores",
   ],
   store_pricing: [
-    "store-pricing", "store-pricing-tab", "stores", "mobile-store-pricing",
-    "price-change-history", "all-store-type-pricing",
+    "store-pricing", "store-pricing-tab", "stores",
+    "mobile-store-pricing", "price-change-history",
+    "all-store-type-pricing",
   ],
   store_type_pricing: [
     "store-type-pricing", "store-type-pricing-tab", "store-type-pricing-for",
@@ -100,28 +129,28 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
   store_visits: [
     "session-visits", "store-visits", "mobile-session-visits",
     "mobile-agent-visits-today", "visited-stores-map", "route-efficiency",
+    "mobile-session-visits-marketer",
   ],
   handovers: [
-    "handovers", "dashboard-stats", "agent-dashboard-stats",
-    "manager-dashboard", "default-dashboard", "super-admin-dashboard-stats",
+    "handovers", ...DASHBOARD,
     "finalizer-holdings", "finalizer-account",
   ],
   handover_snapshots: ["handover-snapshots", "handovers"],
   handover_requests: ["handovers", "handover-snapshots"],
   expense_claims: [
-    "expense-claims", "handovers", "dashboard-stats",
-    "agent-dashboard-stats", "daybook-expenses",
+    "expense-claims", "handovers", ...DASHBOARD,
+    "daybook-expenses", "mobile-expense-claims",
   ],
   expenses: [
     "expenses", "daybook-expenses", "pl-expenses",
     "itemwise-pl-purchases", "payment-outstanding-report",
     "payment-flow-expenses",
   ],
-  expense_categories: ["expense-categories", "expenses"],
+  expense_categories: ["expense-categories", "expenses", "expense-categories-mobile"],
   expense_category_access: ["expense-category-access-rules", "expense-categories"],
   customers: [
     "customers", "customers-list", "customers-list-simple",
-    "customer", "customer-detail", "dashboard-stats",
+    "customer", "customer-detail", ...DASHBOARD,
     "customers-for-orders", "customers-for-invoice", "customers-for-txn-filter",
     "customers-kyc-for-sale", "customer-balances", "customer-risk-report",
     "customer-report-customers", "statement-customers",
@@ -130,13 +159,14 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
     "mobile-customer-self", "mobile-customer-profile",
     "my-customer",
   ],
+  kyc_documents: ["customer-kyc"],
   products: [
     "products", "products-active", "all-products", "all-products-for-sale",
     "products-for-invoice", "products-for-store", "products-for-warehouse",
     "products-for-wizard", "lookup-products", "product-categories",
     "product-report", "store-products-tab", "mobile-products",
     "mobile-marketer-order-products", "mobile-products-for-sale",
-    "products_finished",
+    "mobile-products-search", "products_finished",
   ],
   product_categories: ["product-categories", "products"],
   routes: [
@@ -149,7 +179,7 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
   route_sessions: [
     "active-route-session", "route-sessions", "route-session",
     "mobile-active-session", "active-sessions-map",
-    "route-efficiency",
+    "route-efficiency", "mobile-marketer-session",
   ],
   agent_routes: [
     "route-access-matrix", "routes", "agent-routes",
@@ -178,12 +208,13 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
     "staff-directory", "staff-directory-enriched",
     "user-holding-balance", "all-staff-balances",
     "finalizer-account", "prime-manager-account",
+    "mobile-history", "mobile-history-balance",
   ],
   user_permissions: ["all-user-permissions", "my-permissions"],
   // ── Inventory ───────────────────────────────────────────────────────────────
   product_stock: [
-    "inventory", "mobile-inventory", "warehouse-stock", "product-stock",
-    "product-stock-history", "stock-summary", "stock-summary-products",
+    ...INVENTORY, "product-stock", "product-stock-history",
+    "stock-summary", "stock-summary-products",
     "stock-summary-stock", "stock-summary-warehouses",
     "warehouse-products", "operator-dashboard", "manager-dashboard",
     "recent-stock-movements", "stock-movement-summary",
@@ -191,33 +222,30 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
   ],
   stock_movements: [
     "stock-movements", "stock-movement-history", "recent-stock-movements",
-    "stock-movement-summary", "inventory", "warehouse-stock",
-    "mobile-inventory",
+    "stock-movement-summary", ...INVENTORY,
   ],
   staff_stock: [
     "staff-stock", "staff-stock-by-warehouse",
     "staff-inventory-summary", "agent-stock-holdings",
     "agent-stock-history", "source-stock-transfer",
-    "inventory", "mobile-inventory",
+    ...INVENTORY, "mobile-agent-stock-holdings",
   ],
   stock_transfers: [
     "stock-transfers", "agent-stock-requests",
     "staff-stock", "staff-stock-by-warehouse",
-    "inventory", "warehouse-stock", "mobile-inventory",
+    ...INVENTORY,
     "operator-dashboard", "manager-dashboard", "agent-dashboard",
   ],
-  stock_requests: [
-    "agent-stock-requests", "stock-transfers", "operator-dashboard",
-  ],
+  stock_requests: ["agent-stock-requests", "stock-transfers", "operator-dashboard"],
   warehouses: [
     "warehouses", "warehouse", "warehouses-for-invoice",
     "warehouses-transfer", "lookup-warehouses",
-    "stock-summary-warehouses",
+    "stock-summary-warehouses", "mobile-warehouses-for-transfer",
   ],
   // ── Finance / Purchases ──────────────────────────────────────────────────────
   purchases: [
     "purchases", "mobile-purchases", "daybook-purchases",
-    "purchase-report", "itemwise-pl-purchases", "pl-purchases",
+    "purchase-report", ...PL,
     "vendor-purchases", "vendor-report-purchases",
     "inventory-timeline-purchases",
   ],
@@ -228,7 +256,7 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
     "purchase-return-report-purchases", "purchase-return-detail",
     "purchases-for-return", "vendor-report-returns",
     "inventory-timeline-purchase-returns", "daybook-purchases",
-    "itemwise-pl-returns", "pl-returns",
+    ...PL,
   ],
   purchase_return_items: ["purchase-returns", "purchase-return-detail"],
   vendors: [
@@ -269,31 +297,19 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
     "raw-materials-list", "raw-materials-inventory",
     "unlinked-raw-materials",
   ],
-  raw_material_categories: [
-    "raw_material_categories", "raw_material_categories-list",
-  ],
+  raw_material_categories: ["raw_material_categories", "raw_material_categories-list"],
   raw_material_stock: ["raw-materials-inventory", "raw-materials"],
-  raw_material_adjustments: [
-    "raw-material-adjustments", "raw-materials-inventory",
-  ],
+  raw_material_adjustments: ["raw-material-adjustments", "raw-materials-inventory"],
   bill_of_materials: ["boms", "bom_summary", "bom_details"],
   // ── Manufacturing ─────────────────────────────────────────────────────────────
-  production_log: [
-    "production_log", "production_log_summary", "product_total_costs",
-    "operator-dashboard",
-  ],
+  production_log: ["production_log", "production_log_summary", "product_total_costs", "operator-dashboard"],
   wac_cost_history: ["wac_cost_history"],
   unit_conversions: ["unit_conversions"],
   // ── Staff / HR ────────────────────────────────────────────────────────────────
-  staff_cash_accounts: [
-    "staff-cash-accounts", "all-staff-balances", "agent-cash-holding",
-    "finalizer-holdings",
-  ],
+  staff_cash_accounts: ["staff-cash-accounts", "all-staff-balances", "agent-cash-holding", "finalizer-holdings"],
   staff_directory: ["staff-directory", "staff-directory-enriched"],
   staff_invitations: ["staff-invitations"],
-  staff_performance_logs: [
-    "staff-performance-logs", "agent-perf-report",
-  ],
+  staff_performance_logs: ["staff-performance-logs", "agent-perf-report"],
   // ── Settings / Config ─────────────────────────────────────────────────────────
   company_settings: [
     "company-settings", "company-settings-care", "company-settings-invoice",
@@ -301,19 +317,15 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
     "company-settings-receipt", "company-settings-txn",
     "business-info", "business-info-invoice",
     "partial-collections-setting", "app-settings-auth",
+    "mobile-customer-care-setting",
   ],
   business_info: ["business-info", "business-info-invoice"],
-  promotional_banners: [
-    "promotional-banners", "banners-admin", "banners-carousel",
-    "store-types-banners",
-  ],
+  promotional_banners: ["promotional-banners", "banners-admin", "banners-carousel", "store-types-banners"],
   banner_store_types: ["promotional-banners", "banners-admin"],
   store_qr_codes: ["store-qr-codes"],
   vehicles: ["vehicles", "admin_vehicles"],
   price_change_history: ["price-change-history"],
-  // ── Receipts ──────────────────────────────────────────────────────────────────
   receipts: ["receipts", "receipt-history", "sale-receipt"],
-  // ── Notifications ─────────────────────────────────────────────────────────────
   notifications: ["notifications"],
 };
 
@@ -343,6 +355,9 @@ const ROLE_TABLE_MAP: Record<string, string[]> = {
     "receipts", "notifications", "price_change_history",
   ],
   operator: [
+    "sales", "sale_items", "sale_returns",
+    "orders", "order_items",
+    "stores", "store_type_products",
     "products", "profiles",
     "product_stock", "stock_movements", "staff_stock", "stock_transfers",
     "stock_requests", "warehouses", "production_log",
@@ -362,6 +377,7 @@ const ROLE_TABLE_MAP: Record<string, string[]> = {
     "notifications", "receipts",
   ],
   marketer: [
+    "sales", "sale_items", "sale_returns",
     "orders", "order_items", "stores", "store_type_products", "store_types",
     "customers", "products", "routes", "route_sessions",
     "transactions", "agent_store_types", "profiles",
@@ -369,19 +385,13 @@ const ROLE_TABLE_MAP: Record<string, string[]> = {
     "expense_categories", "expense_category_access",
     "notifications",
   ],
-  pos: [
-    "sales", "sale_items", "stores", "store_type_products",
-    "products", "handovers", "handover_snapshots", "expense_claims",
-    "expense_categories", "expense_category_access",
-    "profiles", "notifications",
-  ],
   customer: [
     "orders", "order_items", "stores", "customers", "profiles",
     "transactions", "notifications",
   ],
 };
 
-const STAFF_ROLES = ["super_admin", "manager", "agent", "marketer", "operator", "pos"];
+const STAFF_ROLES = ["super_admin", "manager", "agent", "marketer", "operator"];
 
 type RealtimeSubscriber = {
   qc: QueryClient;
@@ -492,7 +502,7 @@ function buildChannel(role: string | null) {
       if (isTearingDown && (status === "CLOSED" || status === "TIMED_OUT")) return;
       if (status === "SUBSCRIBED") {
         retryAttempt = 0;
-        if (import.meta.env.DEV) console.log(`[Realtime] ✅ Batch ${idx} subscribed to ${batch.length} tables`);
+        if (import.meta.env.DEV) console.log(`[Realtime] Batch ${idx} subscribed to ${batch.length} tables`); // eslint-disable-line no-console
       } else if (status === "CHANNEL_ERROR") {
         logError(new Error(`[Realtime] Channel error batch ${idx}`), { context: "useRealtimeSync" });
         scheduleReconnect(role);

@@ -184,7 +184,16 @@ const SuperAdminDashboard = () => {
   });
 
   if (isLoading) return <DashboardSkeleton />;
-  const s = stats!;
+  const s = stats ?? {
+    todaySales: 0,
+    todayCash: 0,
+    todayUpi: 0,
+    staffHoldings: 0,
+    pendingOrders: [],
+    lowStockItems: [],
+    staffHandovers: [],
+    salesByStaff: [],
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -426,7 +435,16 @@ const ManagerDashboard = () => {
   });
 
   if (isLoading) return <DashboardSkeleton />;
-  const s = stats!;
+  const s = stats ?? {
+    todaySales: 0,
+    todayCash: 0,
+    todayUpi: 0,
+    staffHoldings: 0,
+    pendingOrders: [],
+    lowStockItems: [],
+    staffHandovers: [],
+    salesByStaff: [],
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">

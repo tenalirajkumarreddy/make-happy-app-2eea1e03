@@ -4,10 +4,9 @@
  * suitable for use in offline queue sync and other non-React contexts.
  */
 
+import { type AppRole } from "@/types/roles";
 import { supabase } from "@/integrations/supabase/client";
 import { PermissionKey, hasRoleDefaultPermission } from "@/lib/permissions";
-
-export type UserRole = "super_admin" | "manager" | "agent" | "marketer" | "operator" | "pos" | "customer";
 
 /**
  * Check if a user has a specific permission
@@ -30,7 +29,7 @@ export async function checkUserPermission(
       return false;
     }
 
-    const role = roleData?.role as UserRole | undefined;
+    const role = roleData?.role as AppRole | undefined;
 
     // Super admin always has all permissions
     if (role === "super_admin") {
@@ -113,7 +112,7 @@ export async function canCreateStore(userId: string): Promise<boolean> {
 /**
  * Get user's current role from database
  */
-export async function getUserRole(userId: string): Promise<UserRole | null> {
+export async function getUserRole(userId: string): Promise<AppRole | null> {
   try {
     const { data, error } = await supabase
       .from("user_roles")
@@ -125,7 +124,7 @@ export async function getUserRole(userId: string): Promise<UserRole | null> {
       return null;
     }
 
-    return data.role as UserRole;
+    return data.role as AppRole;
   } catch (error) {
     console.error("Error fetching user role:", error);
     return null;
@@ -209,7 +208,7 @@ export async function validateActionPermission(
 
 // Role default permissions — now delegated to the canonical source
 // KEPT HERE for backward compat with callers that pass non-canonical permission keys
-const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
+const ROLE_DEFAULT_PERMISSIONS: Record<AppRole, PermissionKey[]> = {
   super_admin: [
     "view_dashboard", "view_sales", "view_stores", "view_inventory",
     "view_collections", "view_reports", "manage_users", "manage_roles",
@@ -237,7 +236,7 @@ const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
   marketer: [
     "view_dashboard", "view_stores", "create_customer", "record_visit", "view_routes",
   ],
-  pos: [
+  operator: [
     "view_dashboard", "view_sales", "record_sale", "record_transaction", "view_stores",
   ],
   customer: [
@@ -246,7 +245,7 @@ const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, PermissionKey[]> = {
 };
 
 function hasRoleDefaultPermission(
-  role: UserRole | undefined,
+  role: AppRole | undefined,
   permission: PermissionKey
 ): boolean {
   if (!role) return false;

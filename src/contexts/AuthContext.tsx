@@ -31,7 +31,13 @@ async function resolveUserType(supabaseClient: any, userId: string): Promise<{
     .maybeSingle();
 
   const isStaff = !!roleData?.role && roleData.role !== "customer";
-  
+
+  // Edge case: user has a staff role in user_roles but no staff_directory entry.
+  // This happens when staff are created directly via admin panel invite
+  // (AdminStaffDirectory) rather than through the full onboarding flow.
+  // Treat them as staff so they don't get redirected to /onboarding.
+  const explicitStaff = !!roleData?.role && roleData.role !== "customer";
+
   const { data: customerData } = await supabaseClient
     .from("customers")
     .select("id, user_id, name, phone, email")
@@ -40,7 +46,7 @@ async function resolveUserType(supabaseClient: any, userId: string): Promise<{
 
   const isCustomer = !!customerData;
 
-  const role = isStaff 
+  const role = isStaff || explicitStaff
     ? normalizeRole(roleData?.role ?? null)
     : "customer";
 
@@ -59,6 +65,7 @@ interface AuthContextType {
   role: AppRole | null;
   profile: { full_name: string; email: string; avatar_url: string | null } | null;
   customer: { id: string; user_id: string | null; name: string; phone: string | null; email: string | null } | null;
+  needsOnboarding: boolean;
   warehouses: string[]; // Warehouse IDs accessible to user
   warehouse: { id: string; name: string } | null; // Current selected warehouse
   loading: boolean;
@@ -73,6 +80,7 @@ const AuthContext = createContext<AuthContextType>({
   role: null,
   profile: null,
   customer: null,
+  needsOnboarding: false,
   warehouses: [],
   warehouse: null,
   loading: true,
@@ -87,6 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<AppRole | null>(null);
   const [profile, setProfile] = useState<AuthContextType["profile"]>(null);
   const [customer, setCustomer] = useState<AuthContextType["customer"]>(null);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [warehouses, setWarehouses] = useState<string[]>([]);
   const [warehouse, setWarehouseState] = useState<AuthContextType["warehouse"]>(null);
   const [loading, setLoading] = useState(true);
@@ -130,16 +139,65 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchUserData = async (userId: string) => {
     try {
-      const { role, profile, customer } = await resolveUserType(supabase, userId);
+      let resolvedRole: AppRole | null = null;
+      let resolvedCustomer: AuthContextType["customer"] = null;
+      let resolvedNeedsOnboarding = false;
 
-      // Allow users without a customer record to remain authenticated
-      // so they can complete the onboarding flow. ProtectedRoute will
-      // redirect them to /onboarding if they try to access protected areas.
+      // Preferred path: canonical DB resolver for deterministic auth outcomes.
+      try {
+        const resolverCall: any = (supabase as any).rpc("resolve_user_identity", { p_user_id: userId });
+        let resolverData: any = null;
+        let resolverError: any = null;
 
-      setProfile(profile);
-      setCustomer(customer);
+        if (resolverCall?.single) {
+          const result = await resolverCall.single();
+          resolverData = result.data;
+          resolverError = result.error;
+        } else {
+          const result = await resolverCall;
+          resolverData = Array.isArray(result.data) ? result.data[0] : result.data;
+          resolverError = result.error;
+        }
+
+        if (resolverError) throw resolverError;
+
+        resolvedRole = normalizeRole(resolverData?.role ?? null);
+        resolvedNeedsOnboarding = !!resolverData?.onboarding_required;
+
+        if (resolverData?.has_customer) {
+          const { data: customerData } = await supabase
+            .from("customers")
+            .select("id, user_id, name, phone, email")
+            .eq("user_id", userId)
+            .maybeSingle();
+          resolvedCustomer = customerData ?? null;
+        }
+
+        const { data: profileData, error: profileError } = await supabase
+          .from("profiles")
+          .select("full_name, email, avatar_url, is_active")
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        if (profileError) throw profileError;
+        if (profileData && !profileData.is_active) {
+          throw new Error("USER_DISABLED");
+        }
+
+        setProfile(profileData ?? null);
+      } catch (resolverError) {
+        logError("Resolver RPC failed, falling back to legacy user resolution", resolverError);
+        const { role, profile, customer } = await resolveUserType(supabase, userId);
+        resolvedRole = role;
+        resolvedCustomer = customer;
+        resolvedNeedsOnboarding = role === "customer" && !customer;
+        setProfile(profile);
+      }
+
+      setCustomer(resolvedCustomer);
+      setRole(resolvedRole);
+      setNeedsOnboarding(resolvedNeedsOnboarding);
       await refreshWarehouses(userId);
-      setRole(role);
     } catch (error: any) {
       logError("Error fetching user data", error);
       if (error?.message === "USER_DISABLED") {
@@ -148,10 +206,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(null);
         setRole(null);
         setProfile(null);
+        setCustomer(null);
+        setNeedsOnboarding(false);
         return;
       }
-      // On error, keep whatever was resolved before the error
-      // rather than defaulting to customer+null which triggers /onboarding
+      setNeedsOnboarding(false);
     }
   };
 
@@ -182,6 +241,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setRole(null);
           setProfile(null);
           setCustomer(null);
+          setNeedsOnboarding(false);
           setWarehouses([]);
           if (mounted) setLoading(false);
         }
@@ -222,6 +282,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRole(null);
     setProfile(null);
     setCustomer(null);
+    setNeedsOnboarding(false);
     setWarehouses([]);
     setWarehouseState(null);
   };
@@ -231,7 +292,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, session, role, profile, customer, warehouses, warehouse, loading, signOut, refreshWarehouses, setWarehouse }}>
+    <AuthContext.Provider value={{ user, session, role, profile, customer, needsOnboarding, warehouses, warehouse, loading, signOut, refreshWarehouses, setWarehouse }}>
       {children}
     </AuthContext.Provider>
   );

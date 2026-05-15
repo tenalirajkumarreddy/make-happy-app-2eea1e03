@@ -11,7 +11,7 @@ import { RoleGuard } from "@/components/auth/RoleGuard";
 import * as Sentry from "@sentry/react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
-import { logError } from "@/lib/logger";
+import { logDebug, logError } from "@/lib/logger";
 import { Loader2 } from "lucide-react";
 import { isNativeApp } from "@/lib/capacitorUtils";
 import { MobileApp } from "@/mobile/MobileApp";
@@ -126,9 +126,27 @@ function DashboardRouter() {
 const App = () => {
   const isMobile = isNativeApp();
 
+  // Early debug logging (dev-only, use logcat for production APK debugging)
+  logDebug("[APP] Starting Aqua Prime");
+  logDebug("[APP] isMobile", { isMobile });
+  logDebug("[APP] Capacitor platform", { platform: window.Capacitor?.platform });
+  logDebug("[APP] Location origin", { origin: window.location?.origin });
+
+  // Catch early initialization errors
+  try {
+    const _envOk = import.meta.env.VITE_SUPABASE_URL;
+    logDebug("[APP] Env vars loaded OK");
+  } catch (e) {
+    console.error("[APP] ENV ERROR:", e);
+  }
+
   return (
     <Sentry.ErrorBoundary fallback={({ error, resetError }: { error: any, resetError: () => void }) => {
-      console.error("APP CRASH ERROR:", error);
+      console.error("========== APP CRASH ERROR ==========");
+      console.error("Error:", error);
+      console.error("Error message:", error?.message);
+      console.error("Error stack:", error?.stack);
+      console.error("======================================");
       return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4 text-center">
         <h1 className="mb-2 text-2xl font-bold text-foreground">Something went wrong</h1>
@@ -234,8 +252,9 @@ const App = () => {
                  <Route path="expense-access" element={<AdminExpenseAccess />} />
                  <Route path="cost-history" element={<AdminCostHistory />} />
                  <Route path="vehicles" element={<AdminVehicles />} />
-                 <Route path="delivery-feasibility" element={<DeliveryFeasibility />} />
-                 <Route path="production-log" element={<ProductionLogPage />} />
+                <Route path="delivery-feasibility" element={<DeliveryFeasibility />} />
+                  <Route path="production-log" element={<ProductionLogPage />} />
+
                  <Route path="settings" element={<Settings />} />
                  <Route path="map" element={<MapPage />} />
                </Route>

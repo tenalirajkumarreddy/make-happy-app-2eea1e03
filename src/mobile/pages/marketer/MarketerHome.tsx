@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { ClipboardList, Loader2, Smartphone, Users, Wallet, MapPin, Store, Navigation2, ShoppingCart, CheckCircle2 } from "lucide-react";
+import { ClipboardList, Loader2, Smartphone, Users, Wallet, MapPin, Store, Navigation2, ShoppingCart, CheckCircle2, ArrowRightLeft, Contact } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -15,6 +15,9 @@ interface Props {
   onOpenStore?: (store: StoreOption) => void;
   onGoRecord?: (store: StoreOption, action: "sale" | "payment") => void;
   onGoSale?: (store: StoreOption) => void;
+  onGoCustomers?: () => void;
+  onGoStockTransfers?: () => void;
+  onGoMap?: () => void;
 }
 
 interface PendingOrderRow {
@@ -39,7 +42,7 @@ interface RouteStore {
   routes: { name: string } | null;
 }
 
-export function MarketerHome({ onOpenOrders, onOpenRecord, onOpenStores, onOpenAddEntity, onOpenStore, onGoRecord, onGoSale }: Props) {
+export function MarketerHome({ onOpenOrders, onOpenRecord, onOpenStores, onOpenAddEntity, onOpenStore, onGoRecord, onGoSale, onGoCustomers, onGoStockTransfers, onGoMap }: Props) {
   const { user, profile } = useAuth();
 
   const { data: stats, isLoading } = useQuery({
@@ -178,6 +181,42 @@ export function MarketerHome({ onOpenOrders, onOpenRecord, onOpenStores, onOpenA
                 <Users className="h-4 w-4 text-white" />
               </div>
               <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200 text-center">Stores</span>
+            </button>
+            <button
+              onClick={onGoCustomers}
+              className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95 transition-all shadow-sm"
+            >
+              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center">
+                <Contact className="h-4 w-4 text-white" />
+              </div>
+              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200 text-center">Customers</span>
+            </button>
+            <button
+              onClick={onGoStockTransfers}
+              className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95 transition-all shadow-sm"
+            >
+              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center">
+                <ArrowRightLeft className="h-4 w-4 text-white" />
+              </div>
+              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200 text-center">Stock Transfers</span>
+            </button>
+            <button
+              onClick={() => onGoMap?.()}
+              className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95 transition-all shadow-sm"
+            >
+              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center">
+                <MapPin className="h-4 w-4 text-white" />
+              </div>
+              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200 text-center">Map View</span>
+            </button>
+            <button
+              onClick={onOpenAddEntity}
+              className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95 transition-all shadow-sm"
+            >
+              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-rose-500 to-pink-600 flex items-center justify-center">
+                <Store className="h-4 w-4 text-white" />
+              </div>
+              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200 text-center">Add Store</span>
             </button>
           </div>
         </div>

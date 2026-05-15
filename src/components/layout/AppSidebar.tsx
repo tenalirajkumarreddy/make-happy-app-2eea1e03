@@ -33,6 +33,10 @@ import {
   TrendingUp,
   ClipboardCheck,
   Package,
+  Factory,
+  Undo2,
+  UserCog,
+  Coins,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -107,12 +111,21 @@ const NAV_BY_ROLE: Record<string, { main: NavSection[]; secondary: NavSection[] 
       {
         label: "Operations",
         items: [
+          { label: "Products", path: "/products", icon: Package },
           { label: "Inventory", path: "/inventory", icon: Warehouse },
           { label: "Purchases", path: "/purchases", icon: ShoppingCart },
           { label: "Stock Transfers", path: "/stock-transfers", icon: ArrowRightLeft },
           { label: "Routes", path: "/routes", icon: Route },
           { label: "Attendance", path: "/attendance", icon: Calendar },
           { label: "Map", path: "/map", icon: Map },
+          { label: "Production", path: "/production", icon: Factory },
+        ],
+      },
+      {
+        label: "Manufacturing",
+        items: [
+          { label: "Raw Materials", path: "/inventory/raw-materials", icon: Warehouse },
+          { label: "BOM", path: "/inventory/boms", icon: Package },
         ],
       },
       {
@@ -120,10 +133,13 @@ const NAV_BY_ROLE: Record<string, { main: NavSection[]; secondary: NavSection[] 
         items: [
           { label: "Customers", path: "/customers", icon: Users },
           { label: "Stores", path: "/stores", icon: Store },
+          { label: "Store Types", path: "/store-types", icon: Store },
           { label: "Vendors", path: "/vendors", icon: Building2 },
           { label: "Invoices", path: "/invoices", icon: FileText },
           { label: "Vendor Payments", path: "/vendor-payments", icon: CreditCard },
           { label: "Expenses", path: "/expenses", icon: Wallet },
+          { label: "Sale Returns", path: "/sale-returns", icon: Undo2 },
+          { label: "Purchase Returns", path: "/purchase-returns", icon: Undo2 },
           { label: "Banners", path: "/banners", icon: Image },
         ],
       },
@@ -135,15 +151,24 @@ const NAV_BY_ROLE: Record<string, { main: NavSection[]; secondary: NavSection[] 
           { label: "Reports", path: "/reports", icon: FileText, children: REPORT_CHILDREN },
           { label: "Analytics", path: "/analytics", icon: BarChart3 },
           { label: "Cost Insights", path: "/cost-insights", icon: TrendingUp },
+          { label: "Income", path: "/income", icon: Coins },
           { label: "Activity Log", path: "/activity", icon: History },
+        ],
+      },
+      {
+        label: "HR",
+        items: [
+          { label: "Workers", path: "/hr/staff", icon: UserCog },
+          { label: "Payroll", path: "/hr/payroll", icon: Wallet },
         ],
       },
       {
         label: "Administration",
         items: [
+          { label: "Expense Access", path: "/admin/expense-access", icon: Shield },
           { label: "Access Control", path: "/access-control", icon: Shield },
           { label: "Staff Directory", path: "/staff", icon: Users },
-        { label: "Income", path: "/income", icon: TrendingUp },
+          { label: "Admin Staff", path: "/admin/staff", icon: Users },
           { label: "ERP Setup", path: "/admin/setup", icon: Settings },
           { label: "Cost History", path: "/admin/cost-history", icon: TrendingUp },
           { label: "Vehicles", path: "/admin/vehicles", icon: Truck },

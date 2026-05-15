@@ -37,6 +37,7 @@ import { sendNotification, getAdminUserIds } from "@/lib/notifications";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { BillImages } from "@/mobile/components/BillImageUpload";
+import { SaleReturnDialog } from "@/components/sales/SaleReturnDialog";
 
 type TimelineItem = {
   id: string;
@@ -47,6 +48,10 @@ type TimelineItem = {
   created_at: string;
   display_id: string | null;
   store_name: string | null;
+  _sale_id?: string;
+  _store_id?: string;
+  _customer_id?: string;
+  _outstanding_amount?: number;
 };
 
 type ExpenseClaim = {
@@ -69,7 +74,8 @@ type ExpenseClaim = {
 };
 
 export function AgentHistory() {
-  const { user, profile } = useAuth();
+  const { user, profile, role } = useAuth();
+  const isAdmin = role === "super_admin" || role === "manager";
   const qc = useQueryClient();
   const [view, setView] = useState<"activity" | "handovers" | "claims">("activity");
   const [selectedActivityDate, setSelectedActivityDate] = useState<string | null>(null);
@@ -86,6 +92,9 @@ export function AgentHistory() {
   const [expenseDate, setExpenseDate] = useState("");
   const [expenseDescription, setExpenseDescription] = useState("");
   const [expenseBillUrls, setExpenseBillUrls] = useState<string[]>([]);
+
+  // Sale return state
+  const [returningSale, setReturningSale] = useState<{ id: string; display_id: string; total_amount: number; outstanding_amount: number; store_id: string; customer_id: string; created_at: string } | null>(null);
 
   const todayStart = startOfDay(new Date()).toISOString();
 
@@ -123,7 +132,7 @@ export function AgentHistory() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("sales")
-        .select("id, display_id, total_amount, cash_amount, upi_amount, created_at, stores(name)")
+        .select("id, display_id, total_amount, cash_amount, upi_amount, outstanding_amount, created_at, store_id, customer_id, stores(name)")
         .eq("recorded_by", user!.id)
         .order("created_at", { ascending: false })
         .limit(500);
@@ -290,6 +299,10 @@ export function AgentHistory() {
       created_at: sale.created_at,
       display_id: sale.display_id || null,
       store_name: sale.stores?.name || null,
+      _sale_id: sale.id,
+      _store_id: sale.store_id,
+      _customer_id: sale.customer_id,
+      _outstanding_amount: Number(sale.outstanding_amount || 0),
     }));
 
     const transactions = (transactionsTimeline || []).map((transaction: any) => ({
@@ -663,7 +676,29 @@ export function AgentHistory() {
                       <span>UPI ₹{item.upi.toLocaleString("en-IN")}</span>
                     </div>
                   </div>
-                  <p className="text-base font-bold text-slate-800 dark:text-white">₹{item.amount.toLocaleString("en-IN")}</p>
+                  <div className="flex flex-col items-end gap-1">
+                    <p className="text-base font-bold text-slate-800 dark:text-white">₹{item.amount.toLocaleString("en-IN")}</p>
+                    {item.type === "sale" && item._sale_id && (
+                      (isAdmin || startOfDay(new Date(item.created_at)).getTime() === startOfDay(new Date()).getTime()) ? (
+                        <button
+                          onClick={() => setReturningSale({
+                            id: item._sale_id!,
+                            display_id: item.display_id || "",
+                            total_amount: item.amount,
+                            outstanding_amount: item._outstanding_amount || 0,
+                            store_id: item._store_id || "",
+                            customer_id: item._customer_id || "",
+                            created_at: item.created_at,
+                          })}
+                          className="text-[10px] text-red-500 hover:text-red-600 font-semibold px-2 py-0.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                        >
+                          Return
+                        </button>
+                      ) : (
+                        <span className="text-[10px] text-slate-300 dark:text-slate-600 italic">Past sales cannot be returned</span>
+                      )
+                    )}
+                  </div>
                 </div>
               </div>
             ))
@@ -1171,6 +1206,13 @@ export function AgentHistory() {
           </div>
         </SheetContent>
       </Sheet>
+
+      <SaleReturnDialog
+        open={!!returningSale}
+        onOpenChange={(open) => { if (!open) setReturningSale(null); }}
+        sale={returningSale}
+        onSuccess={() => { setReturningSale(null); qc.invalidateQueries({ queryKey: ["mobile-history-sales-timeline"] }); }}
+      />
     </div>
   );
 }

@@ -189,18 +189,9 @@ export function handleError(
     severity: determineSeverity(error),
   });
 
-  // Log to console in development
-  if (import.meta.env.DEV) {
-    console.error("[AppError]", appError);
-  }
-
-  // Log to server
+  // Log via the shared logger (handles console + Sentry)
   if (logToServer) {
-    logError(error, {
-      component: context?.component,
-      action: context?.action,
-      ...context,
-    });
+    logError(appError.message, error instanceof Error ? error : error, context);
   }
 
   // Show toast notification
@@ -311,5 +302,3 @@ export function showInfo(message: string, description?: string) {
   toast.info(message, description ? { description } : undefined);
 }
 
-// Re-export from errorUtils for backward compatibility
-export { getFriendlyErrorMessage as getErrorMessage, showErrorToast };

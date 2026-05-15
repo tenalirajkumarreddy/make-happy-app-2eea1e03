@@ -34,8 +34,8 @@ const DEFAULT_RULES: ValidationRules = {
   allowZeroTotal: false,
 };
 
-// POS-specific rules
-const POS_RULES: ValidationRules = {
+// Operator-specific rules (full payment required)
+const OPERATOR_RULES: ValidationRules = {
   ...DEFAULT_RULES,
   requireFullPayment: true,
   allowZeroTotal: false,
@@ -45,8 +45,8 @@ const POS_RULES: ValidationRules = {
  * Get validation rules based on user role
  */
 export function getValidationRules(role?: string): ValidationRules {
-  if (role === "pos") {
-    return POS_RULES;
+  if (role === "operator") {
+    return OPERATOR_RULES;
   }
   return DEFAULT_RULES;
 }

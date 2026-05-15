@@ -106,6 +106,7 @@ export function StockTransferModal({
   const { data: warehouses = [] } = useQuery({
     queryKey: ["warehouses-transfer", currentUserId],
     queryFn: async () => {
+      // eslint-disable-next-line no-console
       console.log("[StockTransfer] Fetching warehouses for:", currentUserId);
       // First get user's direct warehouse assignment
       const { data: userRoles, error: rolesError } = await supabase
@@ -149,6 +150,7 @@ export function StockTransferModal({
 
       const { data, error } = await query.order("name");
       if (error) throw error;
+      // eslint-disable-next-line no-console
       console.log("[StockTransfer] Warehouses found:", data?.length || 0);
       return data ?? [];
     },
@@ -210,6 +212,7 @@ export function StockTransferModal({
   const { data: sourceStock = [], isLoading: isLoadingStock } = useQuery({
     queryKey: ["source-stock-transfer", transferType, fromId],
     queryFn: async () => {
+      // eslint-disable-next-line no-console
       console.log("[StockTransfer] Fetching stock for:", { transferType, fromId });
       let physicalStock: any[] = [];
       const pendingOutgoing: Record<string, number> = {};
@@ -271,6 +274,7 @@ export function StockTransferModal({
         };
       }).filter(r => r.quantity > 0 || r.pending_out > 0);
 
+      // eslint-disable-next-line no-console
       console.log("[StockTransfer] Stock fetched:", physicalStock.length, "rows → ", result.length, "usable items");
       return result;
     },
@@ -297,6 +301,7 @@ export function StockTransferModal({
     
     setSelectedProducts([]);
     setNotes("");
+    // eslint-disable-next-line no-console
     console.log("[StockTransfer] Reset state:", { defaultType, defaultWhId });
   }, [isOpen, currentUserId, warehouses, currentWarehouse]);
 

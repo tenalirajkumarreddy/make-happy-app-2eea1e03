@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  ClipboardList,
   List,
   Loader2,
   MapPin,
@@ -12,12 +13,14 @@ import {
   Phone,
   ShoppingBag,
   Store,
+  XCircle,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { RouteSessionPanel } from "@/components/routes/RouteSessionPanel";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useRouteAccess } from "@/hooks/useRouteAccess";
 import { getCurrentPosition } from "@/lib/capacitorUtils";
@@ -64,6 +67,7 @@ const formatDistance = (meters: number) => {
 
 export function AgentRoutes() {
   const { user, role } = useAuth();
+  const qc = useQueryClient();
   const [view, setView] = useState<"routes" | "orders">("routes");
   const [expandedRouteId, setExpandedRouteId] = useState<string | null>(null);
   const [agentPos, setAgentPos] = useState<{ lat: number; lng: number } | null>(null);
@@ -130,20 +134,25 @@ export function AgentRoutes() {
     enabled: allStoreIds.length > 0,
   });
 
-  // "ALL ORDERS" view: fetch all pending/active orders with store details
+  // Orders: assigned to agent, created by agent, or for stores on their routes
   const { data: allOrders, isLoading: loadingOrders } = useQuery({
-    queryKey: ["mobile-agent-all-orders", allStoreIds],
+    queryKey: ["mobile-agent-all-orders", user?.id, allStoreIds],
     queryFn: async () => {
-      if (allStoreIds.length === 0) return [];
-      const { data, error } = await supabase
+      let query = supabase
         .from("orders")
-        .select("id, store_id, status, stores(id, name, display_id, address, phone, lat, lng, route_id, routes(name))")
-        .in("store_id", allStoreIds)
-        .in("status", ["pending", "active"]);
+        .select("id, display_id, store_id, status, order_type, created_at, requirement_note, stores(id, name, display_id)")
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (allStoreIds.length > 0) {
+        query = query.in("store_id", allStoreIds);
+      } else {
+        query = query.or(`assigned_to.eq.${user!.id},created_by.eq.${user!.id}`);
+      }
+      const { data, error } = await query;
       if (error) throw error;
       return (data as unknown as OrderRow[]) || [];
     },
-    enabled: view === "orders" && allStoreIds.length > 0,
+    enabled: view === "orders" && !!user,
   });
 
   const { data: visitedStoresByRoute } = useQuery({
@@ -254,7 +263,7 @@ export function AgentRoutes() {
           </button>
           <button
             type="button"
-            onClick={handleSwitchToOrders}
+            onClick={() => setView("orders")}
             className={cn(
               "flex-1 py-2 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors",
               view === "orders"
@@ -613,6 +622,62 @@ export function AgentRoutes() {
                   );
                 })}
               </div>
+            )}
+          </div>
+        )}
+
+        {/* ── ORDERS VIEW ── */}
+        {view === "orders" && (
+          <div className="space-y-3">
+            {loadingOrders ? (
+              <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+            ) : allOrders.length === 0 ? (
+              <div className="text-center py-8">
+                <ClipboardList className="h-10 w-10 mx-auto text-muted-foreground/40 mb-2" />
+                <p className="text-sm text-muted-foreground">No orders found</p>
+              </div>
+            ) : (
+              allOrders.map((order: any) => (
+                <div key={order.id} className="rounded-2xl bg-card border border-border p-4">
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <p className="text-sm font-bold text-foreground">{order.display_id}</p>
+                      <p className="text-xs text-muted-foreground">{order.stores?.name || "—"}</p>
+                    </div>
+                    <Badge variant="outline" className={cn(
+                      "text-[10px]",
+                      order.status === "pending" && "border-amber-200 text-amber-600",
+                      order.status === "delivered" && "border-emerald-200 text-emerald-600",
+                      order.status === "cancelled" && "border-red-200 text-red-600",
+                    )}>
+                      {order.status}
+                    </Badge>
+                  </div>
+                  {order.requirement_note && (
+                    <p className="text-xs text-muted-foreground mb-2">{order.requirement_note}</p>
+                  )}
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-muted-foreground">{new Date(order.created_at).toLocaleDateString()}</span>
+                    <div className="flex gap-1.5">
+                      {order.status === "pending" && (
+                        <button
+                          onClick={async () => {
+                            const { error } = await supabase
+                              .from("orders")
+                              .update({ status: "cancelled", cancelled_by: user?.id, cancelled_at: new Date().toISOString() })
+                              .eq("id", order.id);
+                            if (error) { toast.error(error.message); return; }
+                            qc.invalidateQueries({ queryKey: ["mobile-agent-all-orders"] });
+                          }}
+                          className="text-[10px] text-red-500 font-semibold px-2 py-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20"
+                        >
+                          <XCircle className="h-3 w-3 inline mr-0.5" />Cancel
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))
             )}
           </div>
         )}

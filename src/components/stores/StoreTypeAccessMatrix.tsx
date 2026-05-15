@@ -6,8 +6,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useState, useCallback } from "react";
 
-import type { Database } from "@/integrations/supabase/types";
-type AppRole = Database["public"]["Enums"]["app_role"];
+import type { AppRole } from "@/types/roles";
 const STAFF_ROLES: AppRole[] = ["manager", "agent", "marketer", "operator"];
 
 const ROLE_BADGE: Record<string, string> = {

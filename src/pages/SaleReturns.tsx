@@ -38,10 +38,15 @@ const SaleReturns = () => {
 
   // Form state
   const [saleId, setSaleId] = useState("");
+  const [saleSearchQuery, setSaleSearchQuery] = useState("");
   const [reason, setReason] = useState("");
   const [notes, setNotes] = useState("");
+  const [isDamaged, setIsDamaged] = useState(false);
   const [returnItems, setReturnItems] = useState<Array<{ sale_item_id: string; quantity: number; max_qty: number; product_name: string; unit_price: number; selected: boolean }>>([]);
   const [saving, setSaving] = useState(false);
+
+  // Staff can only return same-day sales, manager/admin can return any
+  const canReturnAnyDay = ["super_admin", "manager"].includes(role || "");
 
   // Auto-open create dialog with sale_id from URL
   useEffect(() => {
@@ -52,16 +57,7 @@ const SaleReturns = () => {
     }
   }, [searchParams, showCreate]);
 
-  // Auto-select sale when saleId is set from URL
-  useEffect(() => {
-    if (saleId && returnItems.length === 0 && sales.length > 0) {
-      const sale = sales.find((s: any) => s.id === saleId);
-      if (sale) {
-        handleSaleSelect(saleId);
-      }
-    }
-  }, [saleId, sales, returnItems.length]);
-
+  
   // Fetch returns
   const { data: returns = [], isLoading } = useQuery({
     queryKey: ["sale-returns"],
@@ -81,18 +77,53 @@ const SaleReturns = () => {
     },
   });
 
-  // Fetch sales for dropdown
-  const { data: sales = [] } = useQuery({
-    queryKey: ["sales-for-return"],
+  // Sale search by display_id
+  const { data: searchedSales = [] } = useQuery({
+    queryKey: ["sales-search-id", saleSearchQuery],
     queryFn: async () => {
+      if (!saleSearchQuery || saleSearchQuery.length < 2) return [];
       const { data } = await supabase
+        .from("sales")
+        .select("id, display_id, created_at, total_amount, stores(name)")
+        .ilike("display_id", `%${saleSearchQuery}%`)
+        .order("created_at", { ascending: false })
+        .limit(10);
+      return data || [];
+    },
+    enabled: saleSearchQuery.length >= 2,
+  });
+
+  // Fetch sales for dropdown - filter by same day for non-manager/non-admin
+  const { data: sales = [] } = useQuery({
+    queryKey: ["sales-for-return", canReturnAnyDay],
+    queryFn: async () => {
+      let query = supabase
         .from("sales")
         .select("id, display_id, created_at, total_amount, store_id, customer_id, stores(name, customers(name))")
         .order("created_at", { ascending: false })
         .limit(100);
+
+      // Staff can only return same-day sales
+      if (!canReturnAnyDay) {
+        const today = new Date().toISOString().split("T")[0];
+        query = query.gte("created_at", `${today}T00:00:00`);
+      }
+
+      const { data } = await query;
       return data || [];
     },
+    enabled: canReturnAnyDay !== undefined,
   });
+
+  // Auto-select sale when saleId is set from URL (after sales query is defined)
+  useEffect(() => {
+    if (saleId && returnItems.length === 0 && sales && sales.length > 0) {
+      const sale = sales.find((s: any) => s.id === saleId);
+      if (sale) {
+        handleSaleSelect(saleId);
+      }
+    }
+  }, [saleId, sales, returnItems.length]);
 
   // Fetch sale items when sale is selected
   const { data: saleItems = [] } = useQuery({
@@ -101,7 +132,7 @@ const SaleReturns = () => {
       if (!saleId) return [];
       const { data } = await supabase
         .from("sale_items")
-        .select("id, product_id, quantity, unit_price, total, products(name)")
+        .select("id, product_id, quantity, unit_price, total_price, products(name)")
         .eq("sale_id", saleId);
       return data || [];
     },
@@ -139,6 +170,7 @@ const SaleReturns = () => {
     setSaleId("");
     setReason("");
     setNotes("");
+    setIsDamaged(false);
     setReturnItems([]);
   };
 
@@ -212,7 +244,8 @@ const SaleReturns = () => {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    if (saving) return;
+
     const itemsToReturn = returnItems.filter((i) => i.quantity > 0);
     if (itemsToReturn.length === 0) {
       toast.error("Please select at least one item to return");
@@ -223,18 +256,31 @@ const SaleReturns = () => {
       return;
     }
 
+    // Duplicate check: existing return for this sale
+    const { data: existingReturn } = await supabase
+      .from("sale_returns")
+      .select("id, status")
+      .eq("sale_id", saleId)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    if (existingReturn && existingReturn.length > 0) {
+      toast.error(`Return already exists for this sale (${existingReturn[0].status}). Cannot create duplicate.`);
+      return;
+    }
+
     setSaving(true);
     try {
-      // Get sale details
-      const sale = sales.find((s: any) => s.id === saleId);
+      // Get sale details (from dropdown or search results)
+      const sale = sales.find((s: any) => s.id === saleId) || searchedSales.find((s: any) => s.id === saleId);
       
       // Generate display ID
       const { data: displayId } = await supabase.rpc("generate_sale_return_display_id");
+      if (!displayId) { throw new Error("Failed to generate return ID"); }
       
       // Calculate total
       const totalAmount = calculateTotal();
 
-      // Create return
+      // Create return (auto-complete if admin/manager)
       const { data: newReturn, error: returnError } = await supabase
         .from("sale_returns")
         .insert({
@@ -246,7 +292,10 @@ const SaleReturns = () => {
           total_amount: totalAmount,
           reason,
           notes,
-          status: "pending",
+          is_damaged: isDamaged,
+          status: canApprove ? "processed" : "pending",
+          approved_by: canApprove ? user?.id : null,
+          approved_at: canApprove ? new Date().toISOString() : null,
           created_by: user?.id,
         })
         .select("id")
@@ -270,10 +319,13 @@ const SaleReturns = () => {
 
       if (itemsError) throw itemsError;
 
-      toast.success("Sale return created successfully");
+      // Auto-process stock for admin/manager returns
+      toast.success(canApprove ? "Sale return processed successfully" : "Sale return created successfully");
       setShowCreate(false);
       resetForm();
       qc.invalidateQueries({ queryKey: ["sale-returns"] });
+      qc.invalidateQueries({ queryKey: ["sales"] });
+      qc.invalidateQueries({ queryKey: ["stores"] });
     } catch (err: any) {
       toast.error(err.message || "Failed to create return");
     } finally {
@@ -281,7 +333,7 @@ const SaleReturns = () => {
     }
   };
 
-  const handleStatusUpdate = async (id: string, newStatus: "approved" | "rejected" | "completed") => {
+  const handleStatusUpdate = async (id: string, newStatus: "approved" | "rejected" | "processed") => {
     try {
       const updates: any = { status: newStatus };
       if (newStatus === "approved" || newStatus === "rejected") {
@@ -289,7 +341,7 @@ const SaleReturns = () => {
         updates.approved_at = new Date().toISOString();
       }
 
-      if (newStatus === "completed") {
+      if (newStatus === "processed") {
         const { data: result, error: processError } = await supabase.rpc("process_completed_sale_return", {
           p_return_id: id,
         });
@@ -325,8 +377,8 @@ const SaleReturns = () => {
         return <Badge variant="secondary" className="bg-yellow-100 text-yellow-800"><Clock className="h-3 w-3 mr-1" />Pending</Badge>;
       case "approved":
         return <Badge variant="secondary" className="bg-blue-100 text-blue-800"><CheckCircle className="h-3 w-3 mr-1" />Approved</Badge>;
-      case "completed":
-        return <Badge variant="default" className="bg-green-100 text-green-800"><CheckCircle className="h-3 w-3 mr-1" />Completed</Badge>;
+      case "processed":
+        return <Badge variant="default" className="bg-green-100 text-green-800"><CheckCircle className="h-3 w-3 mr-1" />Processed</Badge>;
       case "rejected":
         return <Badge variant="destructive"><XCircle className="h-3 w-3 mr-1" />Rejected</Badge>;
       default:
@@ -386,7 +438,7 @@ const SaleReturns = () => {
               <SelectItem value="all">All Status</SelectItem>
               <SelectItem value="pending">Pending</SelectItem>
               <SelectItem value="approved">Approved</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
+              <SelectItem value="processed">Processed</SelectItem>
               <SelectItem value="rejected">Rejected</SelectItem>
             </SelectContent>
           </Select>
@@ -439,7 +491,30 @@ const SaleReturns = () => {
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-4">
             <div>
-              <Label>Select Sale *</Label>
+              <Label>Search Sale by ID</Label>
+              <Input
+                placeholder="Type sale ID to search..."
+                value={saleSearchQuery}
+                onChange={(e) => setSaleSearchQuery(e.target.value)}
+                className="mt-1 mb-2"
+              />
+              {saleSearchQuery.length >= 2 && searchedSales.length > 0 && (
+                <div className="border rounded-lg divide-y mb-3 max-h-32 overflow-y-auto">
+                  {searchedSales.map((s: any) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => { handleSaleSelect(s.id); setSaleSearchQuery(""); }}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors"
+                    >
+                      <span className="font-mono">{s.display_id}</span>
+                      <span className="text-muted-foreground ml-2">{s.stores?.name}</span>
+                      <span className="float-right font-semibold">₹{Number(s.total_amount).toLocaleString()}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <Label>Or Select Sale *</Label>
               <Select value={saleId} onValueChange={handleSaleSelect}>
                 <SelectTrigger className="mt-1">
                   <SelectValue placeholder="Select a sale to return" />
@@ -541,6 +616,17 @@ const SaleReturns = () => {
                   <SelectItem value="other">Other</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="is-damaged"
+                checked={isDamaged}
+                onCheckedChange={(checked) => setIsDamaged(checked === true)}
+              />
+              <Label htmlFor="is-damaged" className="text-sm font-medium cursor-pointer">
+                Items are damaged (stock will go to wastage, not added to inventory)
+              </Label>
             </div>
 
             <div>
@@ -659,7 +745,7 @@ const SaleReturns = () => {
                 <div className="pt-4 border-t">
                   <Button 
                     className="w-full"
-                    onClick={() => handleStatusUpdate(returnDetail.id, "completed")}
+                    onClick={() => handleStatusUpdate(returnDetail.id, "processed")}
                   >
                     <CheckCircle className="h-4 w-4 mr-2" />
                     Mark as Completed (Process Refund)

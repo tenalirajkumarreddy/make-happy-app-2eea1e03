@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -12,6 +13,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { supabase } from "@/integrations/supabase/client";
+import { ProformaView } from "@/components/orders/ProformaView";
 import { 
   Package, 
   Store, 
@@ -27,7 +30,6 @@ import {
   CheckCircle2,
   AlertCircle
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { Loader2 } from "lucide-react";
 
@@ -107,6 +109,16 @@ export function OrderViewDialog({
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("details");
+
+  const { data: proforma } = useQuery({
+    queryKey: ["order-proforma", order?.id],
+    queryFn: async () => {
+      if (!order?.id) return null;
+      const { data } = await supabase.from("proforma_invoices").select("*").eq("order_id", order.id).maybeSingle();
+      return data as any;
+    },
+    enabled: !!order?.id,
+  });
 
   useEffect(() => {
     if (open && orderId) {
@@ -225,11 +237,12 @@ export function OrderViewDialog({
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="details">Details</TabsTrigger>
             <TabsTrigger value="items">
               Items ({order.order_items?.length || 0})
             </TabsTrigger>
+            <TabsTrigger value="proforma">Proforma</TabsTrigger>
             <TabsTrigger value="timeline">Timeline</TabsTrigger>
           </TabsList>
 
@@ -423,6 +436,44 @@ export function OrderViewDialog({
                   <p>No items in this order</p>
                 </CardContent>
               </Card>
+            )}
+          </TabsContent>
+
+          <TabsContent value="proforma" className="space-y-4 mt-4">
+            {proforma ? (
+              <div className="space-y-3">
+                {order?.status === "delivered" && order?.fulfilled_by_sale_id && (
+                  <div className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded-xl px-4 py-2.5">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300 flex-1">
+                      Order fulfilled — sale recorded
+                    </span>
+                    <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => window.open(`/sales`, "_blank")}>
+                      View Sale
+                    </Button>
+                  </div>
+                )}
+                {proforma.status === "cancelled" && (
+                  <div className="flex items-center gap-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-xl px-4 py-2.5">
+                    <AlertCircle className="h-4 w-4 text-red-500 shrink-0" />
+                    <span className="text-xs font-semibold text-red-600">Order was cancelled — proforma voided</span>
+                  </div>
+                )}
+                <ProformaView proforma={{
+                  id: proforma.id,
+                  display_id: proforma.display_id,
+                  order_id: proforma.order_id,
+                  store_name: order?.stores?.name || "—",
+                  customer_name: order?.customers?.name || "—",
+                  customer_phone: (order as any)?.customers?.phone || "—",
+                  items: proforma.items || [],
+                  total_amount: Number(proforma.total_amount) || 0,
+                  status: proforma.status,
+                  created_at: proforma.created_at,
+                }} />
+              </div>
+            ) : (
+              <div className="text-center py-8 text-sm text-muted-foreground">No proforma invoice found for this order.</div>
             )}
           </TabsContent>
 

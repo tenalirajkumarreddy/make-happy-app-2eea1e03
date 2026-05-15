@@ -9,11 +9,11 @@ import { logActivity } from "@/lib/activityLogger";
 import { sanitizeString } from "@/lib/sanitization";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { addToQueue, generateBusinessKey } from "@/lib/offlineQueue";
-import { createSaleSchema } from "@/lib/validation/schemas";
+import { createSaleSchema, validateSaleData } from "@/lib/validation/schemas";
 import { resolveCreditLimit } from "@/lib/creditLimit";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
-import { Loader2, Plus, Trash2, Download, IndianRupee, CreditCard, Banknote, Clock, UserCircle, Store as StoreIcon, Package, X, CalendarIcon, Receipt, FileText, RotateCcw, ShoppingCart, ChevronRight, Eye, ClipboardList, Wallet, QrCode, Minus, MapPin, Phone, Mail } from "lucide-react";
+import { Loader2, Plus, Trash2, Download, IndianRupee, CreditCard, Banknote, Clock, UserCircle, Store as StoreIcon, Package, X, CalendarIcon, Receipt, FileText, RotateCcw, ShoppingCart, ChevronRight, Eye, ClipboardList, Wallet, QrCode, Minus, MapPin, Phone, Mail, AlertCircle } from "lucide-react";
 import { QrStoreSelector } from "@/components/shared/QrStoreSelector";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { SaleReceipt } from "@/components/shared/SaleReceipt";
@@ -96,7 +96,6 @@ interface CsvColumn {
   key: string;
 }
 
-const POS_STORE_ID = "00000000-0000-0000-0000-000000000001";
 const PAGE_SIZE = 100;
 
 // Type for order fulfillment
@@ -170,9 +169,8 @@ const Sales = () => {
   // Operator users are locked to the POS store
   const isAdmin = role === "super_admin" || role === "manager";
   const [searchParams, setSearchParams] = useSearchParams();
-  const [storeId, setStoreId] = useState(isPosUser ? POS_STORE_ID : (searchParams.get("store") ?? ""));
+  const [storeId, setStoreId] = useState(searchParams.get("store") ?? "");
 
-  // When navigated with ?store=<id>, auto-open the add dialog
   useEffect(() => {
     const storeParam = searchParams.get("store");
     if (storeParam && !isPosUser) {
@@ -181,6 +179,7 @@ const Sales = () => {
       setSearchParams({}, { replace: true });
     }
   }, [searchParams, isPosUser, setSearchParams]);
+
   const [cashAmount, setCashAmount] = useState("");
   const [upiAmount, setUpiAmount] = useState("");
   const [recordedFor, setRecordedFor] = useState("");
@@ -283,6 +282,13 @@ let query = supabase
        return data || [];
      },
    });
+
+  // Operator: auto-select first store from their warehouse (the POS store)
+  useEffect(() => {
+    if (isPosUser && stores && stores.length > 0 && !storeId) {
+      setStoreId(stores[0].id);
+    }
+  }, [isPosUser, stores, storeId]);
 
   // Fetch store types for credit limits
   // Fetch store types for filters and credit limits
@@ -537,7 +543,7 @@ let query = supabase
   });
 
   const resetForm = () => {
-    setStoreId(isPosUser ? POS_STORE_ID : ""); setCashAmount(""); setUpiAmount(""); setRecordedFor(""); setSaleDate("");
+    setStoreId(isPosUser && stores && stores.length > 0 ? stores[0].id : ""); setCashAmount(""); setUpiAmount(""); setRecordedFor(""); setSaleDate("");
     setItems([{ product_id: "", quantity: 1, unit_price: 0 }]);
   };
 
@@ -993,7 +999,6 @@ let query = supabase
       <span className="text-xs text-muted-foreground">{format(new Date(row.created_at), "dd MMM yy, hh:mm a")}</span>
     ), className: "hidden sm:table-cell" },
   { header: "Actions", accessor: (row: any) => (
-    <TooltipProvider>
       <div className="flex items-center gap-1">
         {/* View Receipt */}
         <Tooltip>
@@ -1046,6 +1051,23 @@ let query = supabase
                 </Tooltip>
               )}
 
+        {/* Return Button */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-orange-600 hover:bg-orange-50 hover:text-orange-700"
+              onClick={(e) => { e.stopPropagation(); setReturnSale(row); }}
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Return Sale</p>
+          </TooltipContent>
+        </Tooltip>
+
         {/* View Associated Order - if sale was created from order fulfillment */}
         {row.fulfilled_order_id && (
           <Tooltip>
@@ -1065,7 +1087,6 @@ let query = supabase
           </Tooltip>
         )}
       </div>
-    </TooltipProvider>
   ), className: "hidden sm:table-cell" },
   ];
 
@@ -1080,6 +1101,7 @@ let query = supabase
   };
 
   return (
+    <TooltipProvider>
     <div className="space-y-6 animate-fade-in">
       <PageHeader
         title="Sales"
@@ -1202,48 +1224,57 @@ let query = supabase
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6 text-primary hover:bg-primary/10"
+                className="h-9 w-9 text-primary hover:bg-primary/10"
                 onClick={(e) => { e.stopPropagation(); setReceiptSaleId(row.id); }}
-                title="View Receipt"
+                aria-label="View Receipt"
               >
-                <Receipt className="h-3 w-3" />
+                <Receipt className="h-4 w-4" />
               </Button>
               {isAdmin && (
                 row.invoice_sales?.length > 0 ? (
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-6 w-6 text-green-600 hover:bg-green-50 hover:text-green-700"
+                    className="h-9 w-9 text-green-600 hover:bg-green-50 hover:text-green-700"
                     onClick={(e) => { 
                       e.stopPropagation(); 
                       const invoiceId = row.invoice_sales[0]?.invoice_id;
                       if (invoiceId) navigate(`/invoices/${invoiceId}`);
                     }}
-                    title="View Invoice"
+                    aria-label="View Invoice"
                   >
-                    <FileText className="h-3 w-3" />
+                    <FileText className="h-4 w-4" />
                   </Button>
                 ) : (
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-6 w-6 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                    className="h-9 w-9 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
                     onClick={(e) => { e.stopPropagation(); navigate("/invoices/new", { state: { saleIds: [row.id] } }); }}
-                    title="Generate Invoice"
+                    aria-label="Generate Invoice"
                   >
-                    <FileText className="h-3 w-3" />
+                    <FileText className="h-4 w-4" />
                   </Button>
                 )
               )}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 text-orange-600 hover:bg-orange-50 hover:text-orange-700"
+                onClick={(e) => { e.stopPropagation(); setReturnSale(row); }}
+                aria-label="Return Sale"
+              >
+                <RotateCcw className="h-4 w-4" />
+              </Button>
 {row.fulfilled_order_id && (
             <Button
               variant="ghost"
               size="icon"
-              className="h-6 w-6 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+              className="h-9 w-9 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
               onClick={(e) => { e.stopPropagation(); navigate(`/orders?highlight=${row.fulfilled_order_id}`); }}
-              title="View Source Order"
+              aria-label="View Source Order"
             >
-              <ClipboardList className="h-3 w-3" />
+              <ClipboardList className="h-4 w-4" />
             </Button>
           )}
         </div>
@@ -1706,6 +1737,8 @@ let query = supabase
                   <span className="font-semibold">New Outstanding</span>
                   <span className={`text-lg font-bold ${newOutstanding > 0 ? 'text-red-600' : newOutstanding < 0 ? 'text-green-600' : 'text-muted-foreground'}`}>
                     ₹{newOutstanding.toLocaleString()}
+                    {newOutstanding > 0 && <span className="ml-1 text-xs font-normal text-red-500">(due)</span>}
+                    {newOutstanding < 0 && <span className="ml-1 text-xs font-normal text-green-500">(credit)</span>}
                   </span>
                 </div>
                 {creditLimitInfo && creditLimitInfo.limit > 0 && (
@@ -1796,6 +1829,7 @@ let query = supabase
         </DialogContent>
       </Dialog>
     </div>
+    </TooltipProvider>
   );
 };
 

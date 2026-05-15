@@ -165,8 +165,8 @@ Deno.serve(async (req) => {
 
   const { email, phone, full_name, role, avatar_url } = body;
 
-  // Normalize legacy 'operator' role to canonical 'pos'
-  const normalizedRole = role === "operator" ? "pos" : role;
+  // Normalize legacy 'pos' role to canonical 'operator'
+  const normalizedRole = role === "pos" ? "operator" : role;
 
   // Enhanced full_name validation
   if (!full_name || typeof full_name !== "string" || full_name.trim().length === 0) {
@@ -189,7 +189,7 @@ Deno.serve(async (req) => {
     throw new Error("Missing required field: role");
   }
 
-  const validRoles = ["super_admin", "manager", "agent", "marketer", "pos"];
+  const validRoles = ["super_admin", "manager", "agent", "marketer", "operator"];
   if (!validRoles.includes(normalizedRole)) {
     throw new Error(`Invalid role: ${role}. Must be one of: ${validRoles.join(", ")}`);
   }

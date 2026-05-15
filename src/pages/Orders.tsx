@@ -4,13 +4,14 @@ import { DataTable } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
+import { addToQueue } from "@/lib/offlineQueue";
 import { logActivity } from "@/lib/activityLogger";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
 import { useRouteAccess } from "@/hooks/useRouteAccess";
 import { usePermission } from "@/hooks/usePermission";
-import { Loader2, Plus, Trash2, XCircle, Package, Download, X, CalendarIcon, ArrowRightLeft, FileText, Edit, MoreHorizontal, Printer, Eye, CheckCircle2, ShoppingCart, RotateCcw, Store as StoreIcon, UserCircle, MapPin, Phone, Mail } from "lucide-react";
+import { Loader2, Plus, Minus, Trash2, XCircle, Package, Download, X, CalendarIcon, ArrowRightLeft, FileText, Edit, MoreHorizontal, Printer, Eye, CheckCircle2, ShoppingCart, RotateCcw, Store as StoreIcon, UserCircle, MapPin, Phone, Mail, Shield } from "lucide-react";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
@@ -18,6 +19,8 @@ import { OrderFulfillmentDialog } from "@/components/orders/OrderFulfillmentDial
 import { TransferOrderDialog } from "@/components/orders/TransferOrderDialog";
 import { InvoiceDialog } from "@/components/orders/InvoiceDialog";
 import { OrderViewDialog } from "@/components/orders/OrderViewDialog";
+import { OrderAccessMatrix } from "@/components/orders/OrderAccessMatrix";
+import { ProformaView } from "@/components/orders/ProformaView";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -208,6 +211,31 @@ const Orders = () => {
   const [showView, setShowView] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
   const [showInvoice, setShowInvoice] = useState(false);
+  const [showOrderAccess, setShowOrderAccess] = useState(false);
+  const [viewProformaId, setViewProformaId] = useState<string | null>(null);
+
+  const { data: viewProforma } = useQuery({
+    queryKey: ["view-proforma", viewProformaId],
+    queryFn: async () => {
+      if (!viewProformaId) return null;
+      const order = (orders as any[])?.find((o: any) => o.id === viewProformaId);
+      const { data: pf } = await supabase.from("proforma_invoices").select("*").eq("order_id", viewProformaId).maybeSingle();
+      if (!pf) return null;
+      return {
+        id: pf.id,
+        display_id: pf.display_id,
+        order_id: pf.order_id,
+        store_name: order?.stores?.name || "—",
+        customer_name: order?.customers?.name || "—",
+        customer_phone: (order as any)?.customers?.phone || "—",
+        items: pf.items || [],
+        total_amount: Number(pf.total_amount) || 0,
+        status: pf.status,
+        created_at: pf.created_at,
+      };
+    },
+    enabled: !!viewProformaId,
+  });
   const [invoiceMode, setInvoiceMode] = useState<"create" | "edit" | "view">("create");
   const [saving, setSaving] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
@@ -241,13 +269,26 @@ const Orders = () => {
   // Form state for create
   const [customerId, setCustomerId] = useState("");
   const [storeId, setStoreId] = useState("");
+  const [storeSearch, setStoreSearch] = useState("");
   const [orderType, setOrderType] = useState("simple");
   const [requirementNote, setRequirementNote] = useState("");
   const [orderItems, setOrderItems] = useState<OrderItem[]>([{ product_id: "", quantity: 1 }]);
   const [assignedTo, setAssignedTo] = useState("");
 
+  // Fetch user's order access level
+  const { data: orderAccess } = useQuery({
+    queryKey: ["my-order-access", user?.id],
+    queryFn: async () => {
+      if (!user?.id) return "all";
+      const { data } = await supabase.from("user_order_access").select("access_level").eq("user_id", user.id).maybeSingle();
+      return (data as any)?.access_level || "all";
+    },
+    enabled: !!user?.id,
+    staleTime: 60_000,
+  });
+
   const { data: orders, isLoading, isFetching } = useQuery({
-    queryKey: ["orders", currentWarehouse?.id, statusFilter, filterFrom, filterTo, filterCustomer, filterStore, filterStoreType, filterRoute, filterAssignedTo, loadedPages, user?.id, role],
+    queryKey: ["orders", currentWarehouse?.id, statusFilter, filterFrom, filterTo, filterCustomer, filterStore, filterStoreType, filterRoute, filterAssignedTo, loadedPages, user?.id, role, orderAccess],
     queryFn: async () => {
       let query = supabase
         .from("orders")
@@ -255,6 +296,21 @@ const Orders = () => {
         .order("created_at", { ascending: false });
 
       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+
+      // Order access control
+      if (orderAccess !== "all") {
+        const { data: userAccess } = await supabase
+          .from("user_order_access")
+          .select("route_ids")
+          .eq("user_id", user!.id)
+          .maybeSingle();
+        const routeIds = ((userAccess as any)?.route_ids || []) as string[];
+        const orParts = [`assigned_to.eq.${user!.id}`, `created_by.eq.${user!.id}`];
+        if (routeIds.length > 0) {
+          orParts.push(`stores.route_id.in.(${routeIds.join(",")})`);
+        }
+        query = query.or(orParts.join(","));
+      }
 
       // Server-side filters
       if (statusFilter !== "all") query = query.eq("status", statusFilter);
@@ -356,11 +412,10 @@ const Orders = () => {
 
   // Fetch stores based on permissions
   const { data: stores } = useQuery({
-    queryKey: ["stores-for-order", currentWarehouse?.id, customerId, role, user?.id],
+    queryKey: ["stores-for-order", currentWarehouse?.id, role, user?.id],
     queryFn: async () => {
       let q = supabase.from("stores").select("id, name, display_id, store_type_id, customer_id, route_id").eq("is_active", true);
       if (currentWarehouse?.id) q = q.eq("warehouse_id", currentWarehouse.id);
-      if (customerId) q = q.eq("customer_id", customerId);
 
       // Agents only see stores on their routes
       if (role === "agent" && user?.id && !canViewOrders) {
@@ -440,11 +495,27 @@ const Orders = () => {
   };
 
   const addItem = () => setOrderItems([...orderItems, { product_id: "", quantity: 1 }]);
+  const addOrderItem = (productId: string) => {
+    const exists = orderItems.find((i) => i.product_id === productId);
+    if (exists) {
+      setOrderItems(orderItems.map((i) => i.product_id === productId ? { ...i, quantity: i.quantity + 1 } : i));
+    } else {
+      setOrderItems([...orderItems, { product_id: productId, quantity: 1 }]);
+    }
+  };
+  const updateItemQuantity = (productId: string, newQty: number) => {
+    if (newQty <= 0) {
+      setOrderItems(orderItems.filter((i) => i.product_id !== productId));
+    } else {
+      setOrderItems(orderItems.map((i) => i.product_id === productId ? { ...i, quantity: newQty } : i));
+    }
+  };
   const removeItem = (idx: number) => setOrderItems(orderItems.filter((_, i) => i !== idx));
 
   const resetForm = () => {
-    setCustomerId(""); setStoreId(""); setOrderType("simple"); setRequirementNote(""); setAssignedTo("");
-    setOrderItems([{ product_id: "", quantity: 1 }]);
+    setCustomerId(""); setStoreId(""); setStoreSearch("");
+    setOrderType("simple"); setRequirementNote("");
+    setOrderItems([{ product_id: "", quantity: 1 }]); setAssignedTo("");
   };
 
   const handleAdd = async (e: React.FormEvent) => {
@@ -452,6 +523,43 @@ const Orders = () => {
     if (!storeId) { toast.error("Please select a store"); return; }
     if (orderType === "simple" && !requirementNote.trim()) { toast.error("Please describe the requirement"); return; }
     if (orderType === "detailed" && !orderItems.some((i) => i.product_id)) { toast.error("Please add at least one product"); return; }
+
+    // Duplicate check: store can have only one active (pending) order
+    const { data: existingOrders } = await supabase
+      .from("orders")
+      .select("id, display_id")
+      .eq("store_id", storeId)
+      .eq("status", "pending")
+      .limit(1);
+    if (existingOrders && existingOrders.length > 0) {
+      toast.warning(`Store already has a pending order (${existingOrders[0].display_id}). Edit it instead.`);
+      setShowAdd(false);
+      resetForm();
+      setTimeout(() => handleOpenEdit(existingOrders[0].id), 300);
+      return;
+    }
+
+    // Offline: queue order and return
+    if (!navigator.onLine) {
+      await addToQueue({
+        id: crypto.randomUUID(),
+        type: "order",
+        payload: {
+          store_id: storeId,
+          customer_id: customerId,
+          order_type: orderType,
+          requirement_note: requirementNote,
+          order_items: orderItems.filter((i) => i.product_id),
+          assigned_to: assignedTo,
+        },
+        createdAt: new Date().toISOString(),
+      });
+      qc.invalidateQueries({ queryKey: ["orders"] });
+      setShowAdd(false);
+      toast.warning("Offline — order queued and will sync automatically");
+      setSaving(false);
+      return;
+    }
 
     setSaving(true);
 
@@ -524,6 +632,32 @@ const Orders = () => {
         );
       }
     }
+
+    // Auto-create proforma invoice
+    const { count: pfCount } = await supabase.from("proforma_invoices").select("id", { count: "exact", head: true });
+    const pfDisplayId = `PF-${new Date().toISOString().slice(0,10).replace(/-/g,"")}-${String((pfCount || 0) + 1).padStart(4, "0")}`;
+    const pfNote = requirementNote || "";
+    const productsList = (products as any[]) || [];
+    const proformaItems = orderType === "detailed" ? (orderItems.filter((i) => i.product_id).map((i) => {
+      const found = productsList.find((p: any) => p.id === i.product_id);
+      return {
+        product_name: (found && found.name) || "Product",
+        quantity: i.quantity,
+        unit_price: canModifyPrices ? (i.unit_price || getProductPrice(i.product_id)) : getProductPrice(i.product_id),
+      };
+    })) : [{ product_name: pfNote.slice(0, 50) || "Simple order", quantity: 1, unit_price: 0 }];
+    (async () => {
+      const { error: pfError } = await supabase.from("proforma_invoices").insert({
+        display_id: pfDisplayId,
+        order_id: order.id,
+        store_id: storeId,
+        customer_id: customerId,
+        total_amount: proformaItems.reduce((s, i) => s + (i.unit_price * i.quantity), 0),
+        items: proformaItems,
+        created_by: user?.id,
+      });
+      if (pfError) console.error("Proforma creation failed:", pfError);
+    })();
 
   logActivity(user!.id, "Created order", "order", displayId, order.id);
   toast.success("Order created");
@@ -900,6 +1034,9 @@ const exportCSV = () => {
         });
       }
     }
+
+    // Soft-delete associated proforma
+    await supabase.from("proforma_invoices").update({ status: "cancelled", deleted_at: new Date().toISOString() }).eq("order_id", cancelOrderId);
 
     toast.success("Order cancelled");
     setCancelOrderId(null);
@@ -1397,7 +1534,8 @@ const columns = [
         subtitle="Manage customer orders and fulfillment" 
         primaryAction={canCreateOrders ? { label: "Create Order", onClick: () => setShowAdd(true) } : undefined}
         actions={[
-          { label: "Export CSV", icon: Download, onClick: exportCSV, variant: "outline" as const }
+          { label: "Export CSV", icon: Download, onClick: exportCSV, variant: "outline" as const },
+          ...(role === "super_admin" ? [{ label: "Order Access", icon: Shield, onClick: () => setShowOrderAccess(true), variant: "outline" as const }] : []),
         ]} 
       />
 
@@ -1581,84 +1719,111 @@ const columns = [
       {/* Create Order Dialog */}
       {canCreateOrders && (
         <Dialog open={showAdd} onOpenChange={(v) => { setShowAdd(v); if (!v) resetForm(); }}>
-          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-lg h-[80vh] overflow-hidden flex flex-col">
             <DialogHeader><DialogTitle>Create Order</DialogTitle></DialogHeader>
-            <form onSubmit={handleAdd} className="space-y-4">
-              <div>
-                <Label>Customer</Label>
-                <Select value={customerId} onValueChange={(v) => { setCustomerId(v); setStoreId(""); }}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="Select customer" /></SelectTrigger>
-                  <SelectContent>{customers?.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
+            <form onSubmit={handleAdd} className="flex-1 overflow-y-auto space-y-4 pr-1">
+            {/* Store search */}
             <div>
               <Label>Store</Label>
-              <Select value={storeId} onValueChange={setStoreId} disabled={!customerId}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Select store" /></SelectTrigger>
-                <SelectContent>{stores?.map((s) => <SelectItem key={s.id} value={s.id}>{s.name} ({s.display_id})</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            {(role === "admin" || role === "manager" || role === "marketer") && (
-              <div>
-                <Label>Assign To Agent (Optional)</Label>
-                <Select value={assignedTo} onValueChange={setAssignedTo}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="Select agent" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">Unassigned</SelectItem>
-                    {agents?.map((a) => <SelectItem key={a.id} value={a.id}>{a.full_name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            <div>
-              <Label>Order Type</Label>
-                <Select value={orderType} onValueChange={setOrderType}>
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="simple">Simple (Note only)</SelectItem>
-                    <SelectItem value="detailed">Detailed (Products + Qty)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label>Requirement Note</Label>
-                <Textarea value={requirementNote} onChange={(e) => setRequirementNote(e.target.value)} className="mt-1" placeholder="e.g., Need water bottles urgently" />
-              </div>
-
-              {orderType === "detailed" && (
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <Label>Products</Label>
-                    <Button type="button" variant="outline" size="sm" onClick={addItem}><Plus className="h-3 w-3 mr-1" />Add</Button>
-                  </div>
-                  <div className="space-y-2">
-                    {orderItems.map((item, idx) => (
-                      <div key={idx} className="flex items-center gap-2">
-                        <Select value={item.product_id} onValueChange={(v) => { const u = [...orderItems]; u[idx].product_id = v; setOrderItems(u); }}>
-                          <SelectTrigger className="flex-1"><SelectValue placeholder="Product" /></SelectTrigger>
-                          <SelectContent>{products?.map((p) => <SelectItem key={p.id} value={p.id}>{p.name} ({p.sku})</SelectItem>)}</SelectContent>
-                        </Select>
-                        <Input type="number" min={1} value={item.quantity} onChange={(e) => { const u = [...orderItems]; u[idx].quantity = Number(e.target.value); setOrderItems(u); }} className="w-20" placeholder="Qty" />
-                        {canModifyPrices && (
-                          <Input 
-                            type="number" 
-                            min={0} 
-                            step="0.01"
-                            value={item.unit_price || getProductPrice(item.product_id)} 
-                            onChange={(e) => { const u = [...orderItems]; u[idx].unit_price = Number(e.target.value); setOrderItems(u); }} 
-                            className="w-24" 
-                            placeholder="Price" 
-                          />
-                        )}
-                        {orderItems.length > 1 && (
-                          <Button type="button" variant="ghost" size="icon" onClick={() => removeItem(idx)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                        )}
-                      </div>
+              <Input
+                placeholder="Search stores by name or ID..."
+                value={storeSearch}
+                onChange={(e) => setStoreSearch(e.target.value)}
+                className="mt-1"
+              />
+              {storeSearch && (
+                <div className="mt-1 h-36 overflow-y-auto border rounded-lg divide-y">
+                  {(stores || [])
+                    .filter((s: any) => s.name.toLowerCase().includes(storeSearch.toLowerCase()) || s.display_id.toLowerCase().includes(storeSearch.toLowerCase()))
+                    .map((s: any) => (
+                      <button key={s.id} type="button"
+                        onClick={() => { setStoreId(s.id); setCustomerId(s.customer_id || ""); setStoreSearch(""); }}
+                        className={`w-full text-left px-3 py-2.5 text-sm transition-colors hover:bg-accent ${storeId === s.id ? "bg-primary/10 font-semibold text-primary" : "text-foreground"}`}
+                      >
+                        <span className="font-mono text-xs">{s.display_id}</span>
+                        <span className="ml-2">{s.name}</span>
+                      </button>
                     ))}
-                  </div>
                 </div>
               )}
+              {storeId && (
+                <div className="mt-1.5 rounded-xl bg-primary/5 border border-primary/20 px-3 py-2 flex items-center justify-between">
+                  <span className="text-sm font-medium text-foreground">{(stores as any[])?.find((s: any) => s.id === storeId)?.name || "Store selected"}</span>
+                  <button type="button" onClick={() => { setStoreId(""); setCustomerId(""); }} className="text-xs text-muted-foreground hover:text-foreground">Change</button>
+                </div>
+              )}
+            </div>
+
+            {storeId && (
+              <>
+                {/* Order Type + Assign row */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Type</Label>
+                    <div className="flex mt-1 rounded-xl border overflow-hidden">
+                      <button type="button" onClick={() => setOrderType("simple")}
+                        className={`flex-1 py-2 text-xs font-semibold transition-colors ${orderType === "simple" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>Note</button>
+                      <button type="button" onClick={() => setOrderType("detailed")}
+                        className={`flex-1 py-2 text-xs font-semibold transition-colors ${orderType === "detailed" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>Products</button>
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Assign To</Label>
+                    <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)}
+                      className="mt-1 w-full h-9 rounded-xl border border-border bg-background px-3 text-xs"
+                    >
+                      <option value="">Unassigned</option>
+                      {agents?.map((a: any) => <option key={a.id} value={a.id}>{a.full_name}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Simple: note */}
+                {orderType === "simple" && (
+                  <div>
+                    <Label>Note</Label>
+                    <textarea value={requirementNote} onChange={(e) => setRequirementNote(e.target.value)}
+                      className="mt-1 w-full h-20 rounded-xl border border-border bg-background px-3 py-2 text-xs resize-none"
+                      placeholder="e.g., Need water bottles urgently" />
+                  </div>
+                )}
+
+                {/* Detailed: products with +/- */}
+                {orderType === "detailed" && (
+                  <div className="h-48 overflow-y-auto space-y-1.5 border rounded-xl p-2">
+                    {((products as any[]) || []).map((p: any) => {
+                      const inCart = orderItems.find((i) => i.product_id === p.id);
+                      return (
+                        <div key={p.id} className="flex items-center justify-between rounded-xl border border-border px-3 py-2.5">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-medium text-foreground truncate">{p.name}</p>
+                            <p className="text-[10px] text-muted-foreground">₹{Number(p.base_price).toLocaleString("en-IN")}</p>
+                          </div>
+                          {inCart ? (
+                            <div className="flex items-center gap-2">
+                              <button type="button" onClick={() => updateItemQuantity(p.id, inCart.quantity - 1)}
+                                className="h-8 w-8 rounded-lg border-2 border-border flex items-center justify-center hover:bg-muted active:scale-90 transition-all">
+                                <Minus className="h-3.5 w-3.5" />
+                              </button>
+                              <span className="text-sm font-bold text-foreground w-6 text-center">{inCart.quantity}</span>
+                              <button type="button" onClick={() => updateItemQuantity(p.id, inCart.quantity + 1)}
+                                className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center hover:bg-primary/90 active:scale-90 transition-all">
+                                <Plus className="h-3.5 w-3.5 text-primary-foreground" />
+                              </button>
+                            </div>
+                          ) : (
+                            <button type="button" onClick={() => addOrderItem(p.id)}
+                              className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center hover:bg-primary/90 active:scale-90 transition-all">
+                              <Plus className="h-3.5 w-3.5 text-primary-foreground" />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            )}
 
               <Button type="submit" className="w-full" disabled={saving}>
                 {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -1793,6 +1958,26 @@ const columns = [
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Order Access Dialog */}
+      <Dialog open={showOrderAccess} onOpenChange={setShowOrderAccess}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Order Access Control</DialogTitle>
+          </DialogHeader>
+          <OrderAccessMatrix />
+        </DialogContent>
+      </Dialog>
+
+      {/* Proforma View Dialog */}
+      <Dialog open={!!viewProformaId && !!viewProforma} onOpenChange={(o) => { if (!o) setViewProformaId(null); }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Proforma Invoice</DialogTitle>
+          </DialogHeader>
+          {viewProforma && <ProformaView proforma={viewProforma} />}
         </DialogContent>
       </Dialog>
 

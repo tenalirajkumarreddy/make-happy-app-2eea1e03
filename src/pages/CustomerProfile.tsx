@@ -108,15 +108,14 @@ const CustomerProfile = () => {
           </CardContent>
         </Card>
       </div>
-
-      {/* Google Account Link */}
-      <GoogleAccountLink />
-
       {/* Call Agent */}
       {settings?.value && (
         <Card>
           <CardContent className="flex items-center justify-between py-4">
             <div>
+
+            {/* Google Account Link */}
+            <GoogleAccountLink />
               <p className="text-sm font-medium">Need Help?</p>
               <p className="text-xs text-muted-foreground">Contact customer care</p>
             </div>

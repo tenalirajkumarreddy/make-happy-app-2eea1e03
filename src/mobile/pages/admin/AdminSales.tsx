@@ -2,15 +2,19 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
-import { Loader2, Plus, Eye, Wallet, ChevronRight, Receipt, RotateCcw, ShoppingCart, Printer } from "lucide-react";
-import { useState, useMemo } from "react";
+import { Loader2, Plus, Eye, Wallet, Receipt, RotateCcw, ShoppingCart, Printer, Calendar, Filter } from "lucide-react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { format } from "date-fns";
+import { format, subDays, startOfWeek, startOfMonth } from "date-fns";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { fmtINR } from "@/lib/utils";
+import { usePullToRefresh } from "@/mobile/hooks/usePullToRefresh";
+import { PullRefreshIndicator } from "@/mobile/components/PullRefreshIndicator";
+import { CardSkeletonList } from "@/mobile/components/CardSkeleton";
 
 interface SaleItem {
   id: string;
@@ -51,34 +55,95 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
   const qc = useQueryClient();
 
   const [paymentFilter, setPaymentFilter] = useState("all");
+  const [dateFilter, setDateFilter] = useState("all");
+  const [customDateFrom, setCustomDateFrom] = useState("");
+  const [customDateTo, setCustomDateTo] = useState("");
+  const [storeFilter, setStoreFilter] = useState("all");
+  const [customerFilter, setCustomerFilter] = useState("all");
+  const [agentFilter, setAgentFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
+  const [page, setPage] = useState(1);
   const [showDetailModal, setShowDetailModal] = useState(false);
 
-  // Fetch sales with complete item details
-  const { data: sales, isLoading } = useQuery({
-    queryKey: ["mobile-sales", currentWarehouse?.id, paymentFilter],
+  const getDateRange = useCallback((filter: string) => {
+    const now = new Date();
+    if (filter === "today") return { from: format(now, "yyyy-MM-dd") + "T00:00:00", to: format(now, "yyyy-MM-dd") + "T23:59:59" };
+    if (filter === "week") return { from: format(startOfWeek(now, { weekStartsOn: 1 }), "yyyy-MM-dd") + "T00:00:00", to: null };
+    if (filter === "month") return { from: format(startOfMonth(now), "yyyy-MM-dd") + "T00:00:00", to: null };
+    return { from: null, to: null };
+  }, []);
+
+  const PAGE_SIZE = 20;
+
+  const { data: sales, isLoading, refetch } = useQuery({
+    queryKey: ["mobile-sales", currentWarehouse?.id, paymentFilter, dateFilter, customDateFrom, customDateTo, storeFilter, customerFilter, agentFilter, page],
     queryFn: async () => {
+      const range = getDateRange(dateFilter);
+      const from = 0;
+      const to = page * PAGE_SIZE - 1;
       let query = supabase
         .from("sales")
         .select(`
-          *, 
-          stores(name, display_id), 
+          *,
+          stores(name, display_id),
           customers(name, display_id),
           sale_items(id, product_id, quantity, unit_price, total_price, products(name, sku))
-        `)
+        `, { count: "exact" })
         .order("created_at", { ascending: false })
-        .limit(100);
+        .range(from, to);
 
       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
       if (paymentFilter === "cash") query = query.gt("cash_amount", 0).eq("upi_amount", 0);
       if (paymentFilter === "upi") query = query.gt("upi_amount", 0).eq("cash_amount", 0);
       if (paymentFilter === "outstanding") query = query.gt("outstanding_amount", 0);
+      if (dateFilter === "custom" && customDateFrom) query = query.gte("created_at", `${customDateFrom}T00:00:00`);
+      if (dateFilter === "custom" && customDateTo) query = query.lte("created_at", `${customDateTo}T23:59:59`);
+      if (range.from && dateFilter !== "custom") query = query.gte("created_at", range.from);
+      if (range.to && dateFilter !== "custom") query = query.lte("created_at", range.to);
+      if (storeFilter !== "all") query = query.eq("store_id", storeFilter);
+      if (customerFilter !== "all") query = query.eq("customer_id", customerFilter);
+      if (agentFilter !== "all") query = query.eq("recorded_by", agentFilter);
 
-      const { data, error } = await query;
+      const { data, error, count } = await query;
       if (error) throw error;
-      return (data || []) as Sale[];
+      return { sales: (data || []) as Sale[], total: count || 0 };
     },
+  });
+
+  // Filter options
+  const { data: stores = [] } = useQuery({
+    queryKey: ["mobile-sales-stores", currentWarehouse?.id],
+    queryFn: async () => {
+      const { data } = await supabase.from("stores").select("id, name").order("name").limit(100);
+      return data || [];
+    },
+    enabled: !!currentWarehouse,
+  });
+
+  const { data: customers = [] } = useQuery({
+    queryKey: ["mobile-sales-customers", currentWarehouse?.id],
+    queryFn: async () => {
+      const { data } = await supabase.from("customers").select("id, name").order("name").limit(100);
+      return data || [];
+    },
+    enabled: !!currentWarehouse,
+  });
+
+  const { data: agents = [] } = useQuery({
+    queryKey: ["mobile-sales-agents"],
+    queryFn: async () => {
+      const { data } = await supabase.from("profiles").select("user_id, full_name").order("full_name").limit(100);
+      return data || [];
+    },
+  });
+
+  const allSales = sales?.sales || [];
+  const totalSales = sales?.total || 0;
+  const hasMore = allSales.length < totalSales;
+
+  const { handlers: pullHandlers, isPulling, isRefreshing, pullDistance, threshold } = usePullToRefresh({
+    onRefresh: async () => { setPage(1); await refetch(); },
   });
 
   // Fetch profiles for recorder names
@@ -94,13 +159,20 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
     },
   });
 
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [paymentFilter, dateFilter, customDateFrom, customDateTo, storeFilter, customerFilter, agentFilter]);
+
   // Filter by search term
   const filteredSales = useMemo(() => {
-    return (sales || []).filter((sale) =>
+    return allSales.filter((sale) =>
       sale.display_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
       sale.stores?.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
-  }, [sales, searchTerm]);
+  }, [allSales, searchTerm]);
+
+  const loadMore = () => setPage((p) => p + 1);
 
   const getRecorderName = (userId: string) => {
     return profileMap[userId]?.full_name || "Unknown";
@@ -110,9 +182,7 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
     return profileMap[userId]?.avatar_url || null;
   };
 
-  const formatAmount = (amount: number) => {
-    return `Rs ${Math.round(amount).toLocaleString('en-IN')}`;
-  };
+  // Use shared fmtINR for ₹ symbol consistency
 
   return (
     <div className="pb-6">
@@ -130,30 +200,133 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
       </div>
 
       {/* Search & Filter */}
-      <div className="px-4 -mt-3 space-y-2 mb-4">
+      <div className="px-4 -mt-3 space-y-2 mb-3">
         <Input placeholder="Search sale ID or store..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="text-sm h-10 rounded-xl bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm" />
+
+        {/* Payment Filter */}
         <Select value={paymentFilter} onValueChange={setPaymentFilter}>
           <SelectTrigger className="h-10 text-sm rounded-xl bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All sales</SelectItem>
+            <SelectItem value="all">All payments</SelectItem>
             <SelectItem value="cash">Cash only</SelectItem>
             <SelectItem value="upi">UPI only</SelectItem>
             <SelectItem value="outstanding">Has outstanding</SelectItem>
           </SelectContent>
         </Select>
+
+        {/* Date range chips */}
+        <div className="flex gap-2 overflow-x-auto pb-0.5 no-scrollbar">
+          {(["all", "today", "week", "month", "custom"] as const).map((d) => (
+            <button
+              key={d}
+              onClick={() => setDateFilter(d)}
+              className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                dateFilter === d
+                  ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                  : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
+              }`}
+            >
+              {d === "all" ? "All time" : d === "today" ? "Today" : d === "week" ? "Week" : d === "month" ? "Month" : "Custom"}
+            </button>
+          ))}
+        </div>
+
+        {/* Custom Date Range */}
+        {dateFilter === "custom" && (
+          <div className="grid grid-cols-2 gap-2">
+            <div className="relative">
+              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                type="date"
+                value={customDateFrom}
+                onChange={(e) => setCustomDateFrom(e.target.value)}
+                className="pl-9 text-sm h-10 rounded-xl bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+              />
+            </div>
+            <div className="relative">
+              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                type="date"
+                value={customDateTo}
+                onChange={(e) => setCustomDateTo(e.target.value)}
+                className="pl-9 text-sm h-10 rounded-xl bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Additional Filters */}
+        <div className="grid grid-cols-2 gap-2">
+          <Select value={storeFilter} onValueChange={setStoreFilter}>
+            <SelectTrigger className="h-10 text-sm rounded-xl bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"><SelectValue placeholder="Store" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Stores</SelectItem>
+              {stores.map((s) => (
+                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={customerFilter} onValueChange={setCustomerFilter}>
+            <SelectTrigger className="h-10 text-sm rounded-xl bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"><SelectValue placeholder="Customer" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Customers</SelectItem>
+              {customers.map((c) => (
+                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <Select value={agentFilter} onValueChange={setAgentFilter}>
+          <SelectTrigger className="h-10 text-sm rounded-xl bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"><SelectValue placeholder="Recorded by (Agent)" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Agents</SelectItem>
+            {agents.map((a) => (
+              <SelectItem key={a.user_id} value={a.user_id}>{a.full_name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {/* Clear Filters */}
+        {(paymentFilter !== "all" || dateFilter !== "all" || storeFilter !== "all" || customerFilter !== "all" || agentFilter !== "all") && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full h-8 text-xs text-muted-foreground"
+            onClick={() => {
+              setPaymentFilter("all");
+              setDateFilter("all");
+              setCustomDateFrom("");
+              setCustomDateTo("");
+              setStoreFilter("all");
+              setCustomerFilter("all");
+              setAgentFilter("all");
+            }}
+          >
+            <Filter className="h-3 w-3 mr-1" /> Clear Filters
+          </Button>
+        )}
       </div>
 
-      {/* Sales List */}
-      {isLoading ? (
-        <div className="flex justify-center py-8">
-          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      {/* List with pull-to-refresh */}
+      <div {...pullHandlers} className="overflow-y-auto">
+        <PullRefreshIndicator isRefreshing={isRefreshing} isPulling={isPulling} pullDistance={pullDistance} threshold={threshold} />
+        {/* Sales List */}
+        {isLoading ? (
+          <CardSkeletonList count={4} />
+        ) : filteredSales.length === 0 ? (
+        <div className="px-4 py-10 text-center">
+          <div className="h-14 w-14 rounded-2xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center mx-auto mb-3">
+            <ShoppingCart className="h-7 w-7 text-slate-400" />
+          </div>
+          <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">No sales found</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {paymentFilter !== "all" || storeFilter !== "all" || customerFilter !== "all" || agentFilter !== "all"
+              ? "Try adjusting your filters above"
+              : "No sales match your current criteria"}
+          </p>
         </div>
-      ) : filteredSales.length === 0 ? (
-        <div className="px-4 py-8 text-center">
-          <Wallet className="h-12 w-12 text-muted-foreground mx-auto mb-2 opacity-50" />
-          <p className="text-sm text-muted-foreground">No sales found</p>
-        </div>
-      ) : (
+        ) : (
         <div className="px-4 space-y-3">
           {filteredSales.map((sale) => {
             const itemCount = sale.sale_items?.length || 0;
@@ -174,11 +347,11 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-mono font-semibold text-primary">{sale.display_id}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
+                      <p className="text-xs text-muted-foreground mt-1">
                         {sale.stores?.name || "Unknown Store"}
                       </p>
                     </div>
-                    <p className="text-sm font-bold tabular-nums text-primary">{formatAmount(sale.total_amount)}</p>
+                    <p className="text-sm font-bold tabular-nums text-primary">{fmtINR(sale.total_amount)}</p>
                   </div>
 
                   {/* Sale Items Preview */}
@@ -190,7 +363,7 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
                             {item.products?.name} × {item.quantity}
                           </span>
                           <span className="font-medium tabular-nums ml-2">
-                            {formatAmount(item.total_price)}
+                            {fmtINR(item.total_price)}
                           </span>
                         </div>
                       ))}
@@ -206,17 +379,17 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
                   <div className="flex items-center gap-1.5 mb-2">
                     {sale.cash_amount > 0 && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">
-                        Cash {formatAmount(sale.cash_amount)}
+                        Cash {fmtINR(sale.cash_amount)}
                       </span>
                     )}
                     {sale.upi_amount > 0 && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">
-                        UPI {formatAmount(sale.upi_amount)}
+                        UPI {fmtINR(sale.upi_amount)}
                       </span>
                     )}
                     {sale.outstanding_amount > 0 && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 font-medium">
-                        Due {formatAmount(sale.outstanding_amount)}
+                        Due {fmtINR(sale.outstanding_amount)}
                       </span>
                     )}
                   </div>
@@ -243,26 +416,26 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
                 {/* Action Buttons Row */}
                 <div className="flex border-t border-border/50">
                   <button
-                    onClick={() => onNavigate(`/sales?receipt=${sale.id}`)}
-                    className="flex-1 py-2.5 flex items-center justify-center gap-1.5 text-xs font-medium text-muted-foreground hover:bg-muted active:bg-muted/80 transition-colors border-r border-border/50"
+                    onClick={() => { setShowDetailModal(false); onNavigate(`/sales?receipt=${sale.id}`); }}
+                    className="flex-1 py-2.5 min-w-0 flex items-center justify-center gap-1 text-xs font-medium text-muted-foreground hover:bg-muted active:bg-muted/80 transition-colors border-r border-border/50"
                   >
-                    <Printer className="h-3.5 w-3.5" />
-                    Receipt
+                    <Printer className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">Receipt</span>
                   </button>
                   <button
-                    onClick={() => onNavigate(`/sales?highlight=${sale.id}`)}
-                    className="flex-1 py-2.5 flex items-center justify-center gap-1.5 text-xs font-medium text-muted-foreground hover:bg-muted active:bg-muted/80 transition-colors border-r border-border/50"
+                    onClick={() => { setSelectedSale(sale); setShowDetailModal(true); }}
+                    className="flex-1 py-2.5 min-w-0 flex items-center justify-center gap-1 text-xs font-medium text-muted-foreground hover:bg-muted active:bg-muted/80 transition-colors border-r border-border/50"
                   >
-                    <Eye className="h-3.5 w-3.5" />
-                    View
+                    <Eye className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">View</span>
                   </button>
                   {sale.outstanding_amount > 0 && (
                     <button
-                      onClick={() => onNavigate(`/sale-returns?sale_id=${sale.id}`)}
-                      className="flex-1 py-2.5 flex items-center justify-center gap-1.5 text-xs font-medium text-primary hover:bg-primary/5 active:bg-primary/10 transition-colors"
+                      onClick={() => { setSelectedSale(sale); setShowDetailModal(true); }}
+                      className="flex-1 py-2.5 min-w-0 flex items-center justify-center gap-1 text-xs font-medium text-primary hover:bg-primary/5 active:bg-primary/10 transition-colors"
                     >
-                      <RotateCcw className="h-3.5 w-3.5" />
-                      Return
+                      <RotateCcw className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">Return</span>
                     </button>
                   )}
                 </div>
@@ -270,7 +443,29 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
             );
           })}
         </div>
-      )}
+        )}
+
+        {/* Load More */}
+        {hasMore && (
+          <div className="px-4 py-4">
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={loadMore}
+              disabled={isLoading && page > 1}
+            >
+              {isLoading && page > 1 ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Loading...
+                </>
+              ) : (
+                `Load More (${allSales.length} of ${totalSales})`
+              )}
+            </Button>
+          </div>
+        )}
+      </div>{/* end pull-to-refresh wrapper */}
 
       {/* Detail Modal */}
       <Dialog open={showDetailModal} onOpenChange={setShowDetailModal}>
@@ -308,11 +503,11 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
                       <div key={idx} className="px-3 py-2.5">
                         <div className="flex justify-between items-start mb-1">
                           <span className="text-sm font-medium">{item.products?.name}</span>
-                          <span className="text-sm font-semibold tabular-nums">{formatAmount(item.total_price)}</span>
+                          <span className="text-sm font-semibold tabular-nums">{fmtINR(item.total_price)}</span>
                         </div>
                         <div className="flex justify-between text-xs text-muted-foreground">
                           <span>SKU: {item.products?.sku || item.product_id.slice(0, 8)}</span>
-                          <span>Qty: {item.quantity} × {formatAmount(item.unit_price)}</span>
+                          <span>Qty: {item.quantity} × {fmtINR(item.unit_price)}</span>
                         </div>
                       </div>
                     ))}
@@ -324,24 +519,24 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
               <div className="rounded-lg border bg-card p-3 space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-muted-foreground">Total Amount</span>
-                  <span className="font-semibold text-primary">{formatAmount(selectedSale.total_amount)}</span>
+                  <span className="font-semibold text-primary">{fmtINR(selectedSale.total_amount)}</span>
                 </div>
                 {selectedSale.cash_amount > 0 && (
                   <div className="flex justify-between items-center">
                     <span className="text-xs text-green-700">Cash</span>
-                    <span className="text-sm">{formatAmount(selectedSale.cash_amount)}</span>
+                    <span className="text-sm">{fmtINR(selectedSale.cash_amount)}</span>
                   </div>
                 )}
                 {selectedSale.upi_amount > 0 && (
                   <div className="flex justify-between items-center">
                     <span className="text-xs text-purple-700">UPI</span>
-                    <span className="text-sm">{formatAmount(selectedSale.upi_amount)}</span>
+                    <span className="text-sm">{fmtINR(selectedSale.upi_amount)}</span>
                   </div>
                 )}
                 {selectedSale.outstanding_amount > 0 && (
                   <div className="flex justify-between items-center pt-1 border-t">
                     <span className="text-xs text-red-700 font-medium">Outstanding</span>
-                    <span className="text-sm font-semibold text-red-700">{formatAmount(selectedSale.outstanding_amount)}</span>
+                    <span className="text-sm font-semibold text-red-700">{fmtINR(selectedSale.outstanding_amount)}</span>
                   </div>
                 )}
               </div>

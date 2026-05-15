@@ -42,6 +42,11 @@ const STAFF_ROLES = [
   { value: "operator", label: "Operator" },
 ];
 
+const MANAGER_TYPES = [
+  { value: "normal", label: "Normal" },
+  { value: "finalizer", label: "Finalizer" },
+];
+
 const PERM_HEADERS: { key: PermissionKey; label: string }[] = [
   { key: "price_override", label: "Price Override" },
   { key: "record_behalf", label: "Record On Behalf" },
@@ -205,6 +210,7 @@ const AccessControl = () => {
                   <TableRow className="bg-muted/50 hover:bg-muted/50">
                     <TableHead className="min-w-[160px]">Staff Member</TableHead>
                     <TableHead className="min-w-[120px]">Role</TableHead>
+                    <TableHead className="min-w-[100px]">Manager Type</TableHead>
                     <TableHead className="min-w-[80px]">Status</TableHead>
                     {PERM_HEADERS.map((p) => (
                       <TableHead key={p.key} className="text-center min-w-[90px] text-xs">{p.label}</TableHead>
@@ -238,6 +244,22 @@ const AccessControl = () => {
                             </Select>
                           ) : (
                             <Badge variant="default" className="uppercase text-[10px]">{userRole.replace("_", " ")}</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {isAdmin && userRole === "manager" ? (
+                            <Select value={userPerms.find((p: any) => p.permission === "finalizer")?.enabled ? "finalizer" : "normal"} onValueChange={(v) => handleToggle(row.user_id, "finalizer", v === "normal")}>
+                              <SelectTrigger className="h-8 w-24 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {MANAGER_TYPES.map((m) => (
+                                  <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
                           )}
                         </TableCell>
                         <TableCell>
@@ -302,12 +324,23 @@ const AccessControl = () => {
                     ) : (
                       <Badge variant="default" className="uppercase text-[10px]">{userRole.replace("_", " ")}</Badge>
                     )}
-                    {isAdmin && !isSA && (
+                  </div>
+                  {isAdmin && userRole === "manager" && (
+                    <div className="flex items-center justify-between pt-2 border-t">
+                      <span className="text-xs text-muted-foreground">Manager Type</span>
+                      <Select value={userPerms.find((p: any) => p.permission === "finalizer")?.enabled ? "finalizer" : "normal"} onValueChange={(v) => handleToggle(row.user_id, "finalizer", v === "normal")}>
+                        <SelectTrigger className="h-7 w-24 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>{MANAGER_TYPES.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  {isAdmin && !isSA && (
+                    <div className="flex justify-end">
                       <Button variant={row.is_active ? "destructive" : "default"} size="sm" className="h-7 text-xs" onClick={() => row.is_active ? setConfirmBan({ userId: row.user_id, name: row.full_name }) : handleToggleActive(row.user_id, row.is_active)}>
                         {row.is_active ? "Disable" : "Enable"}
                       </Button>
-                    )}
-                  </div>
+                    </div>
+                  )}
                   {/* Permissions grid */}
                   <div className="grid grid-cols-3 gap-2 pt-2 border-t">
                     {PERM_HEADERS.map((p) => {

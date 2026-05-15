@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/PageHeader";
-import type { AppRole } from "@/lib/permissions";
+import type { AppRole } from "@/types/roles";
 
 interface Category {
   id: string;
@@ -32,7 +32,7 @@ interface User {
   role: AppRole;
 }
 
-const ALL_ROLES: AppRole[] = ["agent", "marketer", "operator", "pos", "manager"];
+const ALL_ROLES: AppRole[] = ["agent", "marketer", "operator", "manager"];
 
 export default function AdminExpenseAccess() {
   const queryClient = useQueryClient();

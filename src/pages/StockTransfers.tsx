@@ -140,6 +140,7 @@ export default function StockTransfers() {
   }, [isSuperAdmin, isManager, isOperator, isAgent]);
 
   useEffect(() => {
+    // eslint-disable-next-line no-console
     console.log("StockTransfers: role:", role, "warehouse:", currentWarehouse?.id, "user:", user?.id);
   }, [role, currentWarehouse, user]);
 
@@ -165,7 +166,6 @@ export default function StockTransfers() {
   } = useQuery({
     queryKey: ["stock-transfers", currentWarehouse?.id, role],
     queryFn: async () => {
-       console.log("Loading transfers for role:", role, "warehouse:", currentWarehouse?.id);
       const { data, error } = await supabase
         .from("stock_transfers")
         .select("id, created_at, product_id, quantity, description, status, from_warehouse_id, from_user_id, to_warehouse_id, to_user_id, requested_by, approved_by, approved_at, rejection_reason")
@@ -176,7 +176,6 @@ export default function StockTransfers() {
         console.error("Transfers error:", error);
         throw error;
       }
-      console.log("Transfers loaded:", data?.length || 0);
       return (data ?? []) as TransferRow[];
     },
   });

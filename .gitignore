@@ -6,7 +6,9 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+*.txt
 
+# Build output
 node_modules
 dist
 dist-ssr
@@ -43,3 +45,19 @@ replit.nix
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+
+# Temp / generated files
+*.ts.timestamp-*.mjs
+*.vsix
+*.exe
+*.tar.gz
+*.bat
+vite.pid
+
+# Agent planning artifacts
+.planning/
+
+# Old audit / lint artifacts
+lint_*.txt
+eslint_*.json
+eslint_*.txt
