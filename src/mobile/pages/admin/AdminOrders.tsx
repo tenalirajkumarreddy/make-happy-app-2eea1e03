@@ -2,15 +2,31 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
-import { Loader2, Plus, Eye, Package, ChevronRight, AlertCircle, X, CheckCircle2, Ban, Edit } from "lucide-react";
-import { useState, useMemo } from "react";
+import { usePermission } from "@/hooks/usePermission";
+import { Loader2, Plus, Eye, Package, AlertCircle, X, CheckCircle2, Ban, Edit, User, ArrowRightLeft, Calendar, Filter, Printer } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { fmtINR } from "@/lib/utils";
+import { usePullToRefresh } from "@/mobile/hooks/usePullToRefresh";
+import { ProformaView } from "@/components/orders/ProformaView";
+import { PullRefreshIndicator } from "@/mobile/components/PullRefreshIndicator";
+import { CardSkeletonList } from "@/mobile/components/CardSkeleton";
 
 interface OrderItem {
   id: string;
@@ -36,6 +52,7 @@ interface Order {
   customers?: { name: string; display_id: string };
   order_items?: OrderItem[];
   assigned_to?: string | null;
+  assigned_user?: { full_name: string } | null;
   fulfilled_by_sale_id?: string | null;
 }
 
@@ -46,96 +63,286 @@ interface Profile {
 }
 
 export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void }) {
-  const { user, role } = useAuth();
+  const { user } = useAuth();
   const { currentWarehouse } = useWarehouse();
   const qc = useQueryClient();
+  const { allowed: canFulfillOrders } = usePermission("fulfill_orders");
+  const { allowed: canCancelOrders } = usePermission("cancel_orders");
+  const { allowed: canTransferOrders } = usePermission("transfer_orders");
 
   const [statusFilter, setStatusFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
+  const [dateFrom, setDateFrom] = useState<string>("");
+  const [dateTo, setDateTo] = useState<string>("");
+  const [customerFilter, setCustomerFilter] = useState("all");
+  const [storeFilter, setStoreFilter] = useState("all");
+  const [assignedToFilter, setAssignedToFilter] = useState("all");
+  const [page, setPage] = useState(1);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [fulfillConfirmOrder, setFulfillConfirmOrder] = useState<Order | null>(null);
+  const [cancelConfirmOrder, setCancelConfirmOrder] = useState<Order | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [transferOrder, setTransferOrder] = useState<Order | null>(null);
+  const [transferToUser, setTransferToUser] = useState("");
+  const [isActioning, setIsActioning] = useState(false);
+  const [fulfillCash, setFulfillCash] = useState("");
+  const [fulfillUpi, setFulfillUpi] = useState("");
+  const [viewProformaId, setViewProformaId] = useState<string | null>(null);
 
-  // Fetch orders with complete item details
-  const { data: orders, isLoading } = useQuery({
-    queryKey: ["mobile-orders", currentWarehouse?.id, statusFilter],
+  // Order access level
+  const { data: orderAccess } = useQuery({
+    queryKey: ["my-order-access-mobile", user?.id],
     queryFn: async () => {
+      if (!user?.id) return "all";
+      const { data } = await supabase.from("user_order_access").select("access_level").eq("user_id", user.id).maybeSingle();
+      return (data as any)?.access_level || "all";
+    },
+    enabled: !!user?.id,
+    staleTime: 60_000,
+  });
+
+  const { data: viewProforma } = useQuery({
+    queryKey: ["mobile-view-proforma", viewProformaId],
+    queryFn: async () => {
+      if (!viewProformaId) return null;
+      const order = (orders?.orders || []).find((o: any) => o.id === viewProformaId);
+      const { data: pf } = await supabase.from("proforma_invoices").select("*").eq("order_id", viewProformaId).maybeSingle();
+      if (!pf) return null;
+      return {
+        id: pf.id,
+        display_id: pf.display_id,
+        order_id: pf.order_id,
+        store_name: order?.stores?.name || "—",
+        customer_name: order?.customers?.name || "—",
+        customer_phone: (order as any)?.customers?.phone || "—",
+        items: pf.items || [],
+        total_amount: Number(pf.total_amount) || 0,
+        status: pf.status,
+        created_at: pf.created_at,
+      };
+    },
+    enabled: !!viewProformaId,
+  });
+
+  const PAGE_SIZE = 20;
+
+  const { data: orders, isLoading, refetch } = useQuery({
+    queryKey: ["mobile-orders", currentWarehouse?.id, statusFilter, dateFrom, dateTo, customerFilter, storeFilter, assignedToFilter, page, user?.id, orderAccess],
+    queryFn: async () => {
+      const from = 0;
+      const to = page * PAGE_SIZE - 1;
       let query = supabase
         .from("orders")
         .select(`
-          *, 
-          stores(name, display_id), 
-          customers(name, display_id), 
+          *,
+          stores(name, display_id),
+          customers(name, display_id),
           order_items(id, product_id, quantity, products(name, sku, base_price))
-        `)
+        `, { count: "exact" })
         .order("created_at", { ascending: false })
-        .limit(100);
+        .range(from, to);
 
       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
-      if (statusFilter !== "all") query = query.eq("status", statusFilter);
 
-      const { data, error } = await query;
+      // Order access control (with route-level support)
+      if (orderAccess !== "all") {
+        const { data: ua } = await supabase.from("user_order_access").select("route_ids").eq("user_id", user!.id).maybeSingle();
+        const routeIds = ((ua as any)?.route_ids || []) as string[];
+        const orParts = [`assigned_to.eq.${user!.id}`, `created_by.eq.${user!.id}`];
+        if (routeIds.length > 0) {
+          orParts.push(`stores.route_id.in.(${routeIds.join(",")})`);
+        }
+        query = query.or(orParts.join(","));
+      }
+
+      if (statusFilter !== "all") query = query.eq("status", statusFilter);
+      if (dateFrom) query = query.gte("created_at", `${dateFrom}T00:00:00`);
+      if (dateTo) query = query.lte("created_at", `${dateTo}T23:59:59`);
+      if (customerFilter !== "all") query = query.eq("customer_id", customerFilter);
+      if (storeFilter !== "all") query = query.eq("store_id", storeFilter);
+      if (assignedToFilter !== "all") query = query.eq("assigned_to", assignedToFilter);
+
+      const { data, error, count } = await query;
       if (error) throw error;
-      return (data || []) as Order[];
+      return { orders: (data || []) as Order[], total: count || 0 };
     },
   });
 
-  // Filter by search term
+  const allOrders = orders?.orders || [];
+  const totalOrders = orders?.total || 0;
+  const hasMore = allOrders.length < totalOrders;
+
+  // Filter options data
+  const { data: customers = [] } = useQuery({
+    queryKey: ["mobile-orders-customers", currentWarehouse?.id],
+    queryFn: async () => {
+      const { data } = await supabase.from("customers").select("id, name").order("name").limit(100);
+      return data || [];
+    },
+    enabled: !!currentWarehouse,
+  });
+
+  const { data: stores = [] } = useQuery({
+    queryKey: ["mobile-orders-stores", currentWarehouse?.id],
+    queryFn: async () => {
+      const { data } = await supabase.from("stores").select("id, name, display_id").order("name").limit(100);
+      return data || [];
+    },
+    enabled: !!currentWarehouse,
+  });
+
+  const { data: assignedStaff = [] } = useQuery({
+    queryKey: ["mobile-orders-staff"],
+    queryFn: async () => {
+      const { data } = await supabase.from("profiles").select("user_id, full_name").order("full_name").limit(100);
+      return data || [];
+    },
+  });
+
+  const { handlers: pullHandlers, isPulling, isRefreshing, pullDistance, threshold } = usePullToRefresh({
+    onRefresh: async () => { setPage(1); await refetch(); },
+  });
+
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, dateFrom, dateTo, customerFilter, storeFilter, assignedToFilter]);
+
   const filteredOrders = useMemo(() => {
-    return (orders || []).filter((order) =>
+    return allOrders.filter((order) =>
       order.display_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
       order.stores?.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
-  }, [orders, searchTerm]);
+  }, [allOrders, searchTerm]);
+
+  const loadMore = () => setPage((p) => p + 1);
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "pending":
-        return "bg-yellow-100 text-yellow-800 border-yellow-200";
-      case "confirmed":
-        return "bg-blue-100 text-blue-800 border-blue-200";
-      case "delivered":
-        return "bg-green-100 text-green-800 border-green-200";
-      case "cancelled":
-        return "bg-red-100 text-red-800 border-red-200";
-      default:
-        return "bg-gray-100 text-gray-800 border-gray-200";
+      case "pending":   return "bg-yellow-100 text-yellow-800 border-yellow-200";
+      case "confirmed": return "bg-blue-100 text-blue-800 border-blue-200";
+      case "delivered": return "bg-green-100 text-green-800 border-green-200";
+      case "cancelled": return "bg-red-100 text-red-800 border-red-200";
+      default:          return "bg-gray-100 text-gray-800 border-gray-200";
     }
   };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case "pending":
-        return <AlertCircle className="h-3 w-3" />;
-      case "confirmed":
-        return <CheckCircle2 className="h-3 w-3" />;
-      case "delivered":
-        return <Package className="h-3 w-3" />;
-      case "cancelled":
-        return <Ban className="h-3 w-3" />;
-      default:
-        return null;
+      case "pending":   return <AlertCircle className="h-3 w-3" />;
+      case "confirmed": return <CheckCircle2 className="h-3 w-3" />;
+      case "delivered": return <Package className="h-3 w-3" />;
+      case "cancelled": return <Ban className="h-3 w-3" />;
+      default:          return null;
     }
   };
 
-  const formatAmount = (amount: number) => {
-    return `Rs ${Math.round(amount).toLocaleString('en-IN')}`;
-  };
-
-  // Calculate order total from order_items using product base_price
   const calculateOrderTotal = (order: Order) => {
     if (order.order_items && order.order_items.length > 0) {
       return order.order_items.reduce((sum, item) => {
-        const unitPrice = item.products?.base_price || 0;
-        return sum + (item.quantity * unitPrice);
+        return sum + (item.quantity * (item.products?.base_price || 0));
       }, 0);
     }
     return order.total_amount || 0;
   };
 
-  // Calculate item total
-  const calculateItemTotal = (item: OrderItem) => {
-    const unitPrice = item.products?.base_price || 0;
-    return item.quantity * unitPrice;
+  const calculateItemTotal = (item: OrderItem) =>
+    item.quantity * (item.products?.base_price || 0);
+
+  const handleFulfill = async (order: Order) => {
+    if (!order.store_id) { toast.error("Order has no store"); return; }
+    const cash = Number(fulfillCash) || 0;
+    const upi = Number(fulfillUpi) || 0;
+    const total = cash + upi;
+    if (total <= 0) { toast.error("Enter cash or UPI amount"); return; }
+
+    setIsActioning(true);
+    try {
+      const { data: displayId } = await (supabase as any).rpc("generate_display_id", { prefix: "SALE", seq_name: "sale_display_seq" });
+      if (!displayId) throw new Error("Failed to generate sale ID");
+
+      const saleItems = (order.order_items || []).map((item: any) => ({
+        product_id: item.product_id,
+        quantity: item.quantity,
+        unit_price: item.products?.base_price || 0,
+      }));
+
+      const { error: saleError } = await (supabase as any).rpc("record_sale", {
+        p_display_id: displayId,
+        p_store_id: order.store_id,
+        p_customer_id: (order as any).customer_id || order.store_id,
+        p_recorded_by: user!.id,
+        p_logged_by: null,
+        p_total_amount: total,
+        p_cash_amount: cash,
+        p_upi_amount: upi,
+        p_outstanding_amount: 0,
+        p_sale_items: saleItems,
+        p_created_at: null,
+      });
+      if (saleError) throw saleError;
+
+      toast.success(`Order ${order.display_id} fulfilled (${displayId})`);
+      setFulfillConfirmOrder(null);
+      setFulfillCash("");
+      setFulfillUpi("");
+      setShowDetailModal(false);
+      qc.invalidateQueries({ queryKey: ["mobile-orders"] });
+      qc.invalidateQueries({ queryKey: ["sales"] });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to fulfill order");
+    } finally {
+      setIsActioning(false);
+    }
+  };
+
+  const handleCancel = async (order: Order) => {
+    setIsActioning(true);
+    try {
+      const updates: Record<string, any> = { status: "cancelled" };
+      if (cancelReason.trim()) {
+        updates.cancel_reason = cancelReason.trim();
+      }
+      const { error } = await supabase
+        .from("orders")
+        .update(updates)
+        .eq("id", order.id);
+      if (error) throw error;
+      toast.success(`Order ${order.display_id} cancelled`);
+      qc.invalidateQueries({ queryKey: ["mobile-orders"] });
+      setCancelConfirmOrder(null);
+      setCancelReason("");
+      setShowDetailModal(false);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to cancel order");
+    } finally {
+      setIsActioning(false);
+    }
+  };
+
+  const handleTransfer = async (order: Order) => {
+    if (!transferToUser) {
+      toast.error("Please select a staff member");
+      return;
+    }
+    setIsActioning(true);
+    try {
+      const { error } = await supabase
+        .from("orders")
+        .update({ assigned_to: transferToUser })
+        .eq("id", order.id);
+      if (error) throw error;
+      toast.success(`Order ${order.display_id} transferred`);
+      qc.invalidateQueries({ queryKey: ["mobile-orders"] });
+      setTransferOrder(null);
+      setTransferToUser("");
+      setShowDetailModal(false);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to transfer order");
+    } finally {
+      setIsActioning(false);
+    }
   };
 
   return (
@@ -156,45 +363,135 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
       {/* Search & Filter */}
       <div className="px-4 -mt-3 space-y-2 mb-4">
         <Input placeholder="Search order ID or store..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="text-sm h-10 rounded-xl bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm" />
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="h-10 text-sm rounded-xl bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 shadow-sm"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All orders</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="confirmed">Confirmed</SelectItem>
-            <SelectItem value="delivered">Delivered</SelectItem>
-            <SelectItem value="cancelled">Cancelled</SelectItem>
-          </SelectContent>
-        </Select>
+
+        {/* Date Range */}
+        <div className="grid grid-cols-2 gap-2">
+          <div className="relative">
+            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="pl-9 text-sm h-10 rounded-xl bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+            />
+          </div>
+          <div className="relative">
+            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="pl-9 text-sm h-10 rounded-xl bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+            />
+          </div>
+        </div>
+
+        {/* Filters Row */}
+        <div className="grid grid-cols-2 gap-2">
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="h-10 text-sm rounded-xl bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"><SelectValue placeholder="Status" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="confirmed">Confirmed</SelectItem>
+              <SelectItem value="delivered">Delivered</SelectItem>
+              <SelectItem value="cancelled">Cancelled</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={customerFilter} onValueChange={setCustomerFilter}>
+            <SelectTrigger className="h-10 text-sm rounded-xl bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"><SelectValue placeholder="Customer" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Customers</SelectItem>
+              {customers.map((c) => (
+                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <Select value={storeFilter} onValueChange={setStoreFilter}>
+            <SelectTrigger className="h-10 text-sm rounded-xl bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"><SelectValue placeholder="Store" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Stores</SelectItem>
+              {stores.map((s) => (
+                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={assignedToFilter} onValueChange={setAssignedToFilter}>
+            <SelectTrigger className="h-10 text-sm rounded-xl bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"><SelectValue placeholder="Assigned To" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Staff</SelectItem>
+              {assignedStaff.map((s) => (
+                <SelectItem key={s.user_id} value={s.user_id}>{s.full_name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Clear Filters */}
+        {(statusFilter !== "all" || dateFrom || dateTo || customerFilter !== "all" || storeFilter !== "all" || assignedToFilter !== "all") && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full h-8 text-xs text-muted-foreground"
+            onClick={() => {
+              setStatusFilter("all");
+              setDateFrom("");
+              setDateTo("");
+              setCustomerFilter("all");
+              setStoreFilter("all");
+              setAssignedToFilter("all");
+            }}
+          >
+            <Filter className="h-3 w-3 mr-1" /> Clear Filters
+          </Button>
+        )}
       </div>
 
       {/* Orders List */}
-      {isLoading ? (
-        <div className="flex justify-center py-8">
-          <Loader2 className="h-6 w-6 animate-spin text-primary" />
-        </div>
+      <div
+        onTouchStart={pullHandlers.onTouchStart}
+        onTouchMove={pullHandlers.onTouchMove}
+        onTouchEnd={pullHandlers.onTouchEnd}
+        className="overflow-y-auto"
+      >
+        <PullRefreshIndicator isRefreshing={isRefreshing} isPulling={isPulling} pullDistance={pullDistance} threshold={threshold} />
+        {isLoading ? (
+          <CardSkeletonList count={4} />
       ) : filteredOrders.length === 0 ? (
-        <div className="px-4 py-8 text-center">
-          <Package className="h-12 w-12 text-muted-foreground mx-auto mb-2 opacity-50" />
-          <p className="text-sm text-muted-foreground">No orders found</p>
+        <div className="px-4 py-10 text-center">
+          <div className="h-14 w-14 rounded-2xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center mx-auto mb-3">
+            <Package className="h-7 w-7 text-slate-400" />
+          </div>
+          <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">No orders found</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {statusFilter !== "all" || customerFilter !== "all" || storeFilter !== "all" || assignedToFilter !== "all"
+              ? "Try adjusting your filters above"
+              : "No orders match your current criteria"}
+          </p>
         </div>
       ) : (
         <div className="px-4 space-y-3">
           {filteredOrders.map((order) => {
             const orderTotal = calculateOrderTotal(order);
             const itemCount = order.order_items?.length || 0;
-            
+
             return (
               <div
                 key={order.id}
                 className="rounded-2xl border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden"
               >
-                {/* Card Header */}
-                <div 
-                  onClick={() => {
-                    setSelectedOrder(order);
-                    setShowDetailModal(true);
-                  }}
+                {/* Status bar */}
+                <div className={`h-1 ${
+                  order.status === "pending" ? "bg-amber-400" :
+                  order.status === "delivered" ? "bg-emerald-400" :
+                  order.status === "cancelled" ? "bg-red-400" : "bg-slate-300"
+                }`} />
+                {/* Card Body — tappable to open modal */}
+                <div
+                  onClick={() => { setSelectedOrder(order); setShowDetailModal(true); }}
                   className="p-3 active:bg-muted transition-colors cursor-pointer"
                 >
                   <div className="flex items-start justify-between gap-2 mb-2">
@@ -204,13 +501,12 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
                         {order.stores?.name || "Unknown Store"}
                       </p>
                     </div>
-                    <span className={`text-[11px] font-semibold px-2 py-1 rounded-full whitespace-nowrap flex items-center gap-1 border ${getStatusColor(order.status)}`}>
+                    <span className={`text-xs font-semibold px-2 py-1 rounded-full whitespace-nowrap flex items-center gap-1 border ${getStatusColor(order.status)}`}>
                       {getStatusIcon(order.status)}
                       {order.status}
                     </span>
                   </div>
 
-                  {/* Order Items Preview */}
                   {order.order_type === "detailed" && order.order_items && order.order_items.length > 0 && (
                     <div className="space-y-1.5 mb-2">
                       {order.order_items.slice(0, 2).map((item, idx) => (
@@ -219,7 +515,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
                             {item.products?.name} × {item.quantity}
                           </span>
                           <span className="font-medium tabular-nums ml-2">
-                            {formatAmount(calculateItemTotal(item))}
+                            {fmtINR(calculateItemTotal(item))}
                           </span>
                         </div>
                       ))}
@@ -237,7 +533,6 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
                     </p>
                   )}
 
-                  {/* Total Amount */}
                   <div className="flex items-center justify-between pt-2 border-t border-border/50">
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] text-muted-foreground">
@@ -248,42 +543,85 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
                       </span>
                     </div>
                     <p className="text-sm font-bold tabular-nums text-primary">
-                      {formatAmount(orderTotal)}
+                      {fmtINR(orderTotal)}
                     </p>
                   </div>
                 </div>
 
-                {/* Action Buttons Row */}
+                {/* Action Buttons Row — each does a distinct real action */}
                 <div className="flex border-t border-border/50">
                   <button
-                    onClick={() => onNavigate(`/orders?highlight=${order.id}`)}
-                    className="flex-1 py-2.5 flex items-center justify-center gap-1.5 text-xs font-medium text-muted-foreground hover:bg-muted active:bg-muted/80 transition-colors border-r border-border/50"
+                    onClick={() => { setSelectedOrder(order); setShowDetailModal(true); }}
+                    disabled={isActioning}
+                    className="flex-1 py-2.5 min-w-0 flex items-center justify-center gap-1 text-xs font-medium text-muted-foreground hover:bg-muted active:bg-muted/80 transition-colors border-r border-border/50 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <Eye className="h-3.5 w-3.5" />
-                    View
+                    <Eye className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">View</span>
                   </button>
-                  {order.status === "pending" && (
+                  <button
+                    onClick={() => setViewProformaId(order.id)}
+                    className="flex-1 py-2.5 min-w-0 flex items-center justify-center gap-1 text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors border-r border-border/50"
+                  >
+                    <Printer className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">Proforma</span>
+                  </button>
+                  {order.status === "pending" && canFulfillOrders && (
                     <button
-                      onClick={() => onNavigate(`/orders?fulfill=${order.id}`)}
-                      className="flex-1 py-2.5 flex items-center justify-center gap-1.5 text-xs font-medium text-primary hover:bg-primary/5 active:bg-primary/10 transition-colors border-r border-border/50"
+                      onClick={() => setFulfillConfirmOrder(order)}
+                      disabled={isActioning}
+                      className="flex-1 py-2.5 min-w-0 flex items-center justify-center gap-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 active:bg-emerald-100 transition-colors border-r border-border/50 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <Package className="h-3.5 w-3.5" />
-                      Fulfill
+                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">Deliver</span>
                     </button>
                   )}
-                  <button
-                    onClick={() => onNavigate(`/orders?edit=${order.id}`)}
-                    className="flex-1 py-2.5 flex items-center justify-center gap-1.5 text-xs font-medium text-muted-foreground hover:bg-muted active:bg-muted/80 transition-colors"
-                  >
-                    <Edit className="h-3.5 w-3.5" />
-                    Edit
-                  </button>
+                  {(order.status === "pending" || order.status === "confirmed") && canCancelOrders && (
+                    <button
+                      onClick={() => setCancelConfirmOrder(order)}
+                      disabled={isActioning}
+                      className="flex-1 py-2.5 min-w-0 flex items-center justify-center gap-1 text-xs font-medium text-red-600 hover:bg-red-50 active:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <X className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">Cancel</span>
+                    </button>
+                  )}
+                  {order.status !== "pending" && order.status !== "confirmed" && (
+                    <button
+                      onClick={() => onNavigate(`/orders?highlight=${order.id}`)}
+                      className="flex-1 py-2.5 min-w-0 flex items-center justify-center gap-1 text-xs font-medium text-muted-foreground hover:bg-muted active:bg-muted/80 transition-colors"
+                    >
+                      <Edit className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">Details</span>
+                    </button>
+                  )}
                 </div>
               </div>
             );
           })}
         </div>
-      )}
+        )}
+
+        {/* Load More */}
+        {hasMore && (
+          <div className="px-4 py-4">
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={loadMore}
+              disabled={isLoading && page > 1}
+            >
+              {isLoading && page > 1 ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Loading...
+                </>
+              ) : (
+                `Load More (${allOrders.length} of ${totalOrders})`
+              )}
+            </Button>
+          </div>
+        )}
+      </div>{/* end pull-to-refresh wrapper */}
 
       {/* Detail Modal */}
       <Dialog open={showDetailModal} onOpenChange={setShowDetailModal}>
@@ -294,7 +632,6 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
 
           {selectedOrder && (
             <div className="space-y-4">
-              {/* Order Info Header */}
               <div className="rounded-lg bg-muted/50 p-3 space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-muted-foreground">Order ID</span>
@@ -321,7 +658,6 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
                 </div>
               </div>
 
-              {/* Order Items */}
               {selectedOrder.order_type === "detailed" && selectedOrder.order_items && selectedOrder.order_items.length > 0 ? (
                 <div className="rounded-lg border bg-card overflow-hidden">
                   <div className="bg-muted/30 px-3 py-2 border-b">
@@ -331,16 +667,15 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
                     {selectedOrder.order_items.map((item, idx) => {
                       const unitPrice = item.products?.base_price || 0;
                       const totalPrice = calculateItemTotal(item);
-                      
                       return (
                         <div key={idx} className="px-3 py-2.5">
                           <div className="flex justify-between items-start mb-1">
                             <span className="text-sm font-medium">{item.products?.name}</span>
-                            <span className="text-sm font-semibold tabular-nums">{formatAmount(totalPrice)}</span>
+                            <span className="text-sm font-semibold tabular-nums">{fmtINR(totalPrice)}</span>
                           </div>
                           <div className="flex justify-between text-xs text-muted-foreground">
                             <span>SKU: {item.products?.sku || item.product_id.slice(0, 8)}</span>
-                            <span>Qty: {item.quantity} × {formatAmount(unitPrice)}</span>
+                            <span>Qty: {item.quantity} × {fmtINR(unitPrice)}</span>
                           </div>
                         </div>
                       );
@@ -349,7 +684,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
                   <div className="px-3 py-2.5 border-t bg-muted/20">
                     <div className="flex justify-between items-center">
                       <span className="text-xs font-semibold text-muted-foreground">Total Amount</span>
-                      <span className="text-base font-bold text-primary tabular-nums">{formatAmount(calculateOrderTotal(selectedOrder))}</span>
+                      <span className="text-base font-bold text-primary tabular-nums">{fmtINR(calculateOrderTotal(selectedOrder))}</span>
                     </div>
                   </div>
                 </div>
@@ -361,35 +696,168 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
               ) : null}
 
               {/* Action Buttons */}
-              <div className="grid grid-cols-2 gap-2 pt-2">
+              <div className="grid grid-cols-3 gap-2 pt-2">
                 <Button
                   variant="outline"
                   size="sm"
                   className="text-xs"
-                  onClick={() => {
-                    setShowDetailModal(false);
-                    onNavigate(`/orders?highlight=${selectedOrder.id}`);
-                  }}
+                  onClick={() => { setShowDetailModal(false); onNavigate(`/orders?highlight=${selectedOrder.id}`); }}
                 >
-                  <Eye className="h-3 w-3 mr-1" />
-                  View Full
+                  <Eye className="h-3 w-3 mr-1" /> View
                 </Button>
-                {selectedOrder.status === "pending" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs"
+                  disabled={isActioning}
+                  onClick={() => { setShowDetailModal(false); setTransferOrder(selectedOrder); }}
+                >
+                  <ArrowRightLeft className="h-3 w-3 mr-1" /> Transfer
+                </Button>
+                {selectedOrder.status === "pending" && canFulfillOrders && (
                   <Button
                     size="sm"
-                    className="text-xs"
-                    onClick={() => {
-                      setShowDetailModal(false);
-                      onNavigate(`/orders?fulfill=${selectedOrder.id}`);
-                    }}
+                    className="text-xs bg-emerald-600 hover:bg-emerald-700"
+                    disabled={isActioning}
+                    onClick={() => { setShowDetailModal(false); setFulfillConfirmOrder(selectedOrder); }}
                   >
-                    <Package className="h-3 w-3 mr-1" />
-                    Fulfill
+                    <CheckCircle2 className="h-3 w-3 mr-1" /> Deliver
+                  </Button>
+                )}
+                {(selectedOrder.status === "pending" || selectedOrder.status === "confirmed") && canCancelOrders && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs text-red-600 border-red-200 hover:bg-red-50"
+                    disabled={isActioning}
+                    onClick={() => { setShowDetailModal(false); setCancelConfirmOrder(selectedOrder); }}
+                  >
+                    <X className="h-3 w-3 mr-1" /> Cancel
                   </Button>
                 )}
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Proforma Dialog */}
+      <Dialog open={!!viewProformaId && !!viewProforma} onOpenChange={(o) => { if (!o) setViewProformaId(null); }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Proforma Invoice</DialogTitle></DialogHeader>
+          {viewProforma && <ProformaView proforma={viewProforma} />}
+        </DialogContent>
+      </Dialog>
+
+      {/* Fulfill Payment Dialog */}
+      <Dialog open={!!fulfillConfirmOrder} onOpenChange={(o) => { if (!o) { setFulfillConfirmOrder(null); setFulfillCash(""); setFulfillUpi(""); } }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Fulfill Order</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <p className="text-sm font-bold">{fulfillConfirmOrder?.display_id}</p>
+              <p className="text-xs text-muted-foreground">{fulfillConfirmOrder?.stores?.name}</p>
+            </div>
+            {(fulfillConfirmOrder?.order_items || []).length > 0 && (
+              <div className="border rounded-lg divide-y text-xs">
+                {fulfillConfirmOrder?.order_items?.map((item: any) => (
+                  <div key={item.id} className="flex justify-between px-3 py-2">
+                    <span>{item.products?.name || "Product"} × {item.quantity}</span>
+                    <span className="font-medium">₹{(Number(item.products?.base_price || 0) * item.quantity).toLocaleString("en-IN")}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Cash Received</label>
+                <Input type="number" min="0" placeholder="0" value={fulfillCash} onChange={(e) => setFulfillCash(e.target.value)} />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">UPI Received</label>
+                <Input type="number" min="0" placeholder="0" value={fulfillUpi} onChange={(e) => setFulfillUpi(e.target.value)} />
+              </div>
+            </div>
+            <div className="flex justify-between text-sm font-bold pt-2 border-t">
+              <span>Total</span>
+              <span>₹{((Number(fulfillCash) || 0) + (Number(fulfillUpi) || 0)).toLocaleString("en-IN")}</span>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { setFulfillConfirmOrder(null); setFulfillCash(""); setFulfillUpi(""); }}>Cancel</Button>
+              <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700" disabled={isActioning} onClick={() => fulfillConfirmOrder && handleFulfill(fulfillConfirmOrder)}>
+                {isActioning ? <Loader2 className="h-4 w-4 animate-spin" /> : "Record Sale & Deliver"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel Confirmation */}
+      <AlertDialog open={!!cancelConfirmOrder} onOpenChange={(o) => { if (!o) setCancelReason(""); setCancelConfirmOrder(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel Order?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Order <strong>{cancelConfirmOrder?.display_id}</strong> will be cancelled.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-2">
+            <label className="text-xs text-muted-foreground mb-1 block">Reason (optional)</label>
+            <Input
+              placeholder="Enter cancellation reason..."
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              className="text-sm"
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep Order</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => cancelConfirmOrder && handleCancel(cancelConfirmOrder)}
+            >
+              {isActioning ? <Loader2 className="h-4 w-4 animate-spin" /> : "Cancel Order"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Transfer Order Dialog */}
+      <Dialog open={!!transferOrder} onOpenChange={(o) => { if (!o) setTransferToUser(""); setTransferOrder(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base">Transfer Order</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Reassign order <strong>{transferOrder?.display_id}</strong> to another staff member.
+            </p>
+            <Select value={transferToUser} onValueChange={setTransferToUser}>
+              <SelectTrigger className="h-10">
+                <SelectValue placeholder="Select staff member" />
+              </SelectTrigger>
+              <SelectContent>
+                {assignedStaff.filter(s => s.user_id !== transferOrder?.assigned_to).map((s) => (
+                  <SelectItem key={s.user_id} value={s.user_id}>{s.full_name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex gap-2 pt-2">
+            <Button variant="outline" className="flex-1" onClick={() => { setTransferOrder(null); setTransferToUser(""); }}>
+              Cancel
+            </Button>
+            <Button
+              className="flex-1 bg-blue-600 hover:bg-blue-700"
+              disabled={!transferToUser || isActioning}
+              onClick={() => transferOrder && handleTransfer(transferOrder)}
+            >
+              {isActioning ? <Loader2 className="h-4 w-4 animate-spin" /> : "Transfer"}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

@@ -5,7 +5,7 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist", "android", "mobile-redesign", "node_modules", "*.js", "Open-SMS", "opensms-gateway", "WASTE", "vite.config.ts.timestamp-*.mjs"] },
+  { ignores: ["dist", "android", "mobile-redesign", "node_modules", "*.js", "scripts", "Open-SMS", "opensms-gateway", "WASTE", "vite.config.ts.timestamp-*.mjs"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
@@ -20,10 +20,22 @@ export default tseslint.config(
     rules: {
       ...reactHooks.configs.recommended.rules,
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
-      "@typescript-eslint/no-unused-vars": "off",
+      "@typescript-eslint/no-unused-vars": ["warn", {
+        argsIgnorePattern: "^_",
+        varsIgnorePattern: "^_",
+        ignoreRestSiblings: true,
+      }],
       "@typescript-eslint/no-explicit-any": "warn",
       "@typescript-eslint/no-require-imports": "off",
+      "prefer-const": "warn",
       "no-empty": ["error", { "allowEmptyCatch": true }],
+      "no-console": ["error", { "allow": ["warn", "error"] }],
+    },
+  },
+  {
+    files: ["src/lib/logger.ts", "src/test/**/*.{ts,tsx}", "tests/**/*.{ts,tsx}"],
+    rules: {
+      "no-console": "off",
     },
   },
 );

@@ -6,13 +6,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 
-const STAFF_ROLES = ["manager", "agent", "marketer", "pos"] as const;
+const STAFF_ROLES = ["manager", "agent", "marketer", "operator"] as const;
 
 const ROLE_BADGE: Record<string, string> = {
   manager: "bg-purple-500/15 text-purple-600 dark:text-purple-400",
   agent: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
   marketer: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-  pos: "bg-orange-500/15 text-orange-600 dark:text-orange-400",
+  operator: "bg-orange-500/15 text-orange-600 dark:text-orange-400",
 };
 
 export function RouteAccessMatrix() {

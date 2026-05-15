@@ -42,10 +42,10 @@ export const TEST_ACCOUNTS = {
     name: 'Veeranji',
     description: 'Sales with order creation',
   },
-  operator: {
+  pos: {
     phone: '+918888888888',
     otp: '000000', // Universal test OTP
-    role: 'operator',
+    role: 'pos',
     name: 'Test Operator',
     description: 'POS terminal + inventory + attendance',
   },
@@ -108,7 +108,7 @@ export const ROLE_ACCESS_MATRIX = {
     canManageUsers: false,
     canAccessAllWarehouses: false,
   },
-  operator: {
+  pos: {
     allowedPages: [
       '/', '/dashboard', '/inventory', '/sales', '/attendance',
       '/hr/staff', '/invoices', '/profile',

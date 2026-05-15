@@ -199,14 +199,14 @@ export default function Receipts() {
     }
   };
 
-  const handleDelete = async (receiptId: string) => {
-    try {
-      const { error } = await supabase
-        .from("receipts")
-        .delete()
-        .eq("id", receiptId);
+const handleDelete = async (receiptId: string) => {
+  try {
+    const { error } = await supabase
+      .from("receipts")
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("id", receiptId);
 
-      if (error) throw error;
+    if (error) throw error;
 
       toast.success("Receipt deleted");
       setIsDeleteDialogOpen(false);

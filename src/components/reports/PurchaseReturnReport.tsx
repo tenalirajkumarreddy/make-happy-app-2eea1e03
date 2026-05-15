@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { formatCurrency } from '@/lib/currency';
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -178,11 +179,10 @@ export default function PurchaseReturnReport() {
     return Object.entries(byStatus).map(([status, count]) => ({ status, count }));
   }, [purchaseReturns]);
 
-  const summaryCards = [
-    { label: "Total Purchases", value: `₹${(summary.total_purchases / 1000).toFixed(0)}K`, icon: ShoppingBag, iconColor: "blue" },
-    { label: "Total Returns", value: `₹${(summary.total_returns / 1000).toFixed(0)}K`, icon: RotateCcw, iconColor: "red" },
-    { label: "Net Purchases", value: `₹${(summary.net_purchases / 1000).toFixed(0)}K`, icon: DollarSign, iconColor: "green" },
-    { label: "Return Rate", value: `${summary.return_rate.toFixed(1)}%`, icon: AlertCircle, iconColor: "yellow" },
+const summaryCards = [
+    { label: "Total Purchases", value: `${formatCurrency(summary.total_purchases / 1000)}K`, icon: ShoppingBag, iconColor: "blue" },
+    { label: "Total Returns", value: `${formatCurrency(summary.total_returns / 1000)}K`, icon: RotateCcw, iconColor: "purple" },
+    { label: "Net Purchases", value: `${formatCurrency(summary.net_purchases / 1000)}K`, icon: DollarSign, iconColor: "green" },
   ];
 
   const statusColors: Record<string, string> = {
@@ -533,3 +533,4 @@ export default function PurchaseReturnReport() {
     </ReportContainer>
   );
 }
+

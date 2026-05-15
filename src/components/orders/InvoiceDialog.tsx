@@ -395,8 +395,8 @@ export function InvoiceDialog({
         
         if (error) throw error;
         
-        // Delete old items and insert new ones
-        await supabase.from("invoice_items").delete().eq("invoice_id", invoice.id);
+// Soft delete old items and insert new ones
+  await supabase.from("invoice_items").update({ deleted_at: new Date().toISOString() }).eq("invoice_id", invoice.id);
         
         if (items.length > 0) {
           const invoiceItems = items.map((item) => ({

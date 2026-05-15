@@ -4,12 +4,16 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/contexts/AuthContext";
+import { useWarehouse } from "@/contexts/WarehouseContext";
 import { Label } from "@/components/ui/label";
+import { sendNotificationToMany, getApproverUserIds } from "@/lib/notifications";
 import {
   Select,
   SelectContent,
@@ -33,7 +37,7 @@ export interface StockTransferModalProps {
   warehouseId?: string;
   defaultProductId?: string;
   /** Optional pre-fetched staff list — if omitted we fetch internally */
-  staffMembers?: { user_id: string; full_name?: string; role?: string }[];
+  staffMembers?: { user_id: string; full_name?: string; role?: string; warehouse_id?: string }[];
   allowedTransferTypes?: TransferType[];
   currentUserId?: string;
 }
@@ -62,38 +66,92 @@ export function StockTransferModal({
   warehouseId,
   defaultProductId,
   staffMembers,
-  allowedTransferTypes = ["warehouse_to_staff", "staff_to_warehouse", "staff_to_staff"],
-  currentUserId,
+  allowedTransferTypes: initialAllowedTypes,
+  currentUserId: propCurrentUserId,
 }: StockTransferModalProps) {
+  const { user, role } = useAuth();
+  const { currentWarehouse } = useWarehouse();
+  const currentUserId = propCurrentUserId || user?.id;
   const queryClient = useQueryClient();
 
+  const isSuperAdmin = role === "super_admin";
+  const isManager = role === "manager";
+  const isAdmin = isSuperAdmin || isManager;
+  const isOperator = role === "operator";
+  const isAgent = role === "agent" || role === "marketer";
+
+  const allowedTransferTypes = useMemo(() => {
+    if (initialAllowedTypes) return initialAllowedTypes;
+    // Admin: full access
+    if (isSuperAdmin) return ["warehouse_to_staff", "staff_to_warehouse", "staff_to_staff", "warehouse_to_warehouse"] as TransferType[];
+    // Manager: all transfers including wh→wh
+    if (isManager) return ["warehouse_to_staff", "staff_to_warehouse", "staff_to_staff", "warehouse_to_warehouse"] as TransferType[];
+    // Operator: dispatch from their WH to staff, or staff-to-staff within their WH
+    if (isOperator) return ["warehouse_to_staff", "staff_to_staff"] as TransferType[];
+    // Agent/Marketer: only from own stock — never from warehouse
+    if (isAgent) return ["staff_to_warehouse", "staff_to_staff"] as TransferType[];
+    // Unknown role: no transfers allowed
+    return [] as TransferType[];
+  }, [isSuperAdmin, isManager, isOperator, isAgent, initialAllowedTypes]);
+
   const [transferType, setTransferType] = useState<TransferType>(
-    (allowedTransferTypes[0] as TransferType) || "warehouse_to_staff"
+    (allowedTransferTypes[0] as TransferType) || "staff_to_staff"
   );
   const [fromId, setFromId] = useState<string>("");
   const [toId, setToId] = useState<string>("");
   const [selectedProducts, setSelectedProducts] = useState<SelectedProduct[]>([]);
   const [notes, setNotes] = useState<string>("");
 
-  // ── Reset on open ──────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!isOpen) return;
-    setTransferType("warehouse_to_staff");
-    setFromId(warehouseId ?? "");
-    setToId("");
-    setSelectedProducts([]);
-    setNotes("");
-  }, [isOpen, warehouseId]);
-
   // ── Warehouses ─────────────────────────────────────────────────────────────
   const { data: warehouses = [] } = useQuery({
-    queryKey: ["warehouses-transfer"],
+    queryKey: ["warehouses-transfer", currentUserId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // eslint-disable-next-line no-console
+      console.log("[StockTransfer] Fetching warehouses for:", currentUserId);
+      // First get user's direct warehouse assignment
+      const { data: userRoles, error: rolesError } = await supabase
+        .from("user_roles")
+        .select("warehouse_id")
+        .eq("user_id", currentUserId)
+        .not("warehouse_id", "is", null);
+
+      const assignedWarehouseIds = (userRoles ?? [])
+        .map((r) => r.warehouse_id)
+        .filter(Boolean);
+
+      // Get warehouses where user has stock (they can transfer TO those)
+      const { data: userStock } = await supabase
+        .from("staff_stock")
+        .select("warehouse_id")
+        .eq("user_id", currentUserId)
+        .gt("quantity", 0);
+
+      const stockWarehouseIds = (userStock ?? [])
+        .map((s) => s.warehouse_id)
+        .filter(Boolean);
+
+      // Combine: assigned + where user has stock
+      const accessibleWhIds = [...new Set([...assignedWarehouseIds, ...stockWarehouseIds])];
+
+      // Build query
+      let query = supabase
         .from("warehouses")
         .select("id, name")
         .eq("is_active", true);
+
+      // If not admin, restrict to assigned or stock-holding warehouses
+      if (!isAdmin) {
+        if (accessibleWhIds.length > 0) {
+          query = query.in("id", accessibleWhIds);
+        } else if (currentWarehouse?.id) {
+          query = query.eq("id", currentWarehouse.id);
+        }
+      }
+
+      const { data, error } = await query.order("name");
       if (error) throw error;
+      // eslint-disable-next-line no-console
+      console.log("[StockTransfer] Warehouses found:", data?.length || 0);
       return data ?? [];
     },
     staleTime: 60_000,
@@ -105,7 +163,7 @@ export function StockTransferModal({
     queryFn: async () => {
       const { data: rolesData, error: rolesError } = await supabase
         .from("user_roles")
-        .select("user_id, role")
+        .select("user_id, role, warehouse_id")
         .in("role", ALLOWED_STAFF_ROLES);
 
       if (rolesError) throw rolesError;
@@ -123,18 +181,19 @@ export function StockTransferModal({
         (profilesData ?? []).map((p) => [p.user_id, p])
       );
 
-return rolesData
-    .map((r) => ({
-      user_id: r.user_id,
-      role: r.role,
-      full_name: profileMap.get(r.user_id)?.full_name ?? "Unknown",
-      avatar_url: profileMap.get(r.user_id)?.avatar_url ?? null,
-    }))
-    .filter(
-      (s) =>
-        s.full_name &&
-        s.full_name !== "Unknown"
-    );
+      return rolesData
+        .map((r) => ({
+          user_id: r.user_id,
+          role: r.role,
+          warehouse_id: r.warehouse_id,
+          full_name: profileMap.get(r.user_id)?.full_name ?? "Unknown",
+          avatar_url: profileMap.get(r.user_id)?.avatar_url ?? null,
+        }))
+        .filter(
+          (s) =>
+            s.full_name &&
+            s.full_name !== "Unknown"
+        );
     },
     enabled: !staffMembers || staffMembers.length === 0,
     staleTime: 60_000,
@@ -142,48 +201,124 @@ return rolesData
 
   // Prefer prop list, fall back to fetched list
   const displayStaff = useMemo(() => {
-    if (staffMembers && staffMembers.length > 0) return staffMembers;
-    return fetchedStaff;
+    const list = staffMembers && staffMembers.length > 0 ? staffMembers : fetchedStaff;
+    
+    // If agent, they can only select themselves as recipient/source in most cases
+    // but here we filter based on transfer type in the render section
+    return list;
   }, [staffMembers, fetchedStaff]);
 
   // ── Source stock ───────────────────────────────────────────────────────────
-  const { data: sourceStock = [] } = useQuery({
+  const { data: sourceStock = [], isLoading: isLoadingStock } = useQuery({
     queryKey: ["source-stock-transfer", transferType, fromId],
     queryFn: async () => {
+      // eslint-disable-next-line no-console
+      console.log("[StockTransfer] Fetching stock for:", { transferType, fromId });
+      let physicalStock: any[] = [];
+      const pendingOutgoing: Record<string, number> = {};
+
       if (!fromId) return [];
 
       if (transferType === "warehouse_to_staff" || transferType === "warehouse_to_warehouse") {
         // Fetch from warehouse stock
         const { data, error } = await supabase
           .from("product_stock")
-          .select(
-            "product_id, quantity, product:products(id, name, sku, unit, base_price)"
-          )
+          .select("product_id, quantity, product:products(id, name, sku, unit, base_price)")
           .eq("warehouse_id", fromId)
           .gt("quantity", 0);
         if (error) throw error;
-        return (data ?? []).map((r) => ({
-          ...r,
-          product: Array.isArray(r.product) ? r.product[0] : r.product,
-        }));
+        physicalStock = data ?? [];
+
+        // Fetch pending outgoing from this warehouse
+        const { data: pending } = await supabase
+          .from("stock_transfers")
+          .select("product_id, quantity")
+          .eq("from_warehouse_id", fromId)
+          .in("status", ["pending", "awaiting_acceptance"]);
+        
+        pending?.forEach(p => {
+          pendingOutgoing[p.product_id] = (pendingOutgoing[p.product_id] || 0) + Number(p.quantity);
+        });
       } else {
-        // staff_to_warehouse or staff_to_staff - fetch from staff stock
+        // staff_to_warehouse or staff_to_staff — fetch from selected user's stock
+        // NOTE: Do NOT filter quantity > 0 here; we need rows with pending transfers too.
         const { data, error } = await supabase
           .from("staff_stock")
-          .select(
-            "product_id, quantity, warehouse_id, product:products(id, name, sku, unit, base_price)"
-          )
+          .select("product_id, quantity, warehouse_id, product:products(id, name, sku, unit, base_price)")
           .eq("user_id", fromId)
-          .gt("quantity", 0);
+          .gte("quantity", 0); // include zero-quantity rows to detect fully-pending stock
         if (error) throw error;
-        return (data ?? []).map((r) => ({
-          ...r,
-          product: Array.isArray(r.product) ? r.product[0] : r.product,
-        }));
+        physicalStock = data ?? [];
+
+        // Fetch pending outgoing from this staff
+        const { data: pending } = await supabase
+          .from("stock_transfers")
+          .select("product_id, quantity")
+          .eq("from_user_id", fromId)
+          .in("status", ["pending", "awaiting_acceptance"]);
+        
+        pending?.forEach(p => {
+          pendingOutgoing[p.product_id] = (pendingOutgoing[p.product_id] || 0) + Number(p.quantity);
+        });
       }
+
+      const result = physicalStock.map((r) => {
+        const product = Array.isArray(r.product) ? r.product[0] : r.product;
+        const pending = pendingOutgoing[r.product_id] || 0;
+        return {
+          ...r,
+          product,
+          physical_quantity: r.quantity,
+          quantity: Math.max(0, r.quantity - pending), // "Truly Available" after pending
+          pending_out: pending
+        };
+      }).filter(r => r.quantity > 0 || r.pending_out > 0);
+
+      // eslint-disable-next-line no-console
+      console.log("[StockTransfer] Stock fetched:", physicalStock.length, "rows → ", result.length, "usable items");
+      return result;
     },
-    enabled: !!fromId,
+    enabled: !!currentUserId && !!fromId,
   });
+
+  // ── Reset on open ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!isOpen || !currentUserId) return;
+    // Use the first allowed transfer type as default; safe fallback is staff_to_staff
+    const defaultType = (allowedTransferTypes?.[0] as TransferType) || "staff_to_staff";
+    setTransferType(defaultType);
+    
+    const defaultWhId = warehouseId || currentWarehouse?.id || warehouses[0]?.id || "";
+    
+    // Staff transfers: from current user; warehouse transfers: from warehouse
+    if (["warehouse_to_staff", "warehouse_to_warehouse"].includes(defaultType)) {
+      setFromId(defaultWhId);
+      setToId("");
+    } else {
+      setFromId(currentUserId);
+      setToId(defaultType === "staff_to_warehouse" ? defaultWhId : "");
+    }
+    
+    setSelectedProducts([]);
+    setNotes("");
+    // eslint-disable-next-line no-console
+    console.log("[StockTransfer] Reset state:", { defaultType, defaultWhId });
+  }, [isOpen, currentUserId, warehouses, currentWarehouse]);
+
+
+  // ── Update fromId when transferType changes ─────────────────────────────────
+  useEffect(() => {
+    if (!isOpen || !currentUserId) return;
+    if (!["warehouse_to_staff", "warehouse_to_warehouse"].includes(transferType)) {
+      setFromId(currentUserId);
+      setSelectedProducts([]);
+    }
+  }, [transferType, isOpen, currentUserId]);
+
+  // Default warehouse for current user
+  const defaultWarehouseId = useMemo(() => {
+    return warehouses[0]?.id ?? warehouseId;
+  }, [warehouses, warehouseId]);
 
   // ── Pre-select defaultProductId ────────────────────────────────────────────
   useEffect(() => {
@@ -254,82 +389,64 @@ return rolesData
         );
       }
 
-      const {
+const {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      // ── Build batch transfers array ─────────────────────────────────────────
-      const transfers = selectedProducts.map((item) => {
-        const qty = parseFloat(item.quantity);
-        
-        // Determine warehouse/user IDs based on transfer type
-        let fromWarehouseId = null;
-        let toWarehouseId = null;
-        let fromUserId = null;
-        let toUserId = null;
+      // Determine IDs based on transfer type - convert empty strings to null
+      let fromWarehouseId: string | null = null;
+      let toWarehouseId: string | null = null;
+      let fromUserId: string | null = null;
+      let toUserId: string | null = null;
 
-        if (transferType === "warehouse_to_staff") {
-          fromWarehouseId = fromId;
-          toUserId = toId;
-          // toWarehouse is the same as fromWarehouse for warehouse_to_staff
-          toWarehouseId = fromId;
-        } else if (transferType === "staff_to_warehouse") {
-          fromUserId = fromId;
-          toWarehouseId = toId;
-          // Get source warehouse from staff_stock
-          const sourceRow = sourceStock.find((s) => s.product_id === item.product_id);
-          if (sourceRow && "warehouse_id" in sourceRow) {
-            fromWarehouseId = (sourceRow as any).warehouse_id;
-          }
-        } else if (transferType === "warehouse_to_warehouse") {
-          fromWarehouseId = fromId;
-          toWarehouseId = toId;
-        } else {
-          // staff_to_staff
-          fromUserId = fromId;
-          toUserId = toId;
-          // Get warehouse from staff_stock
-          const sourceRow = sourceStock.find((s) => s.product_id === item.product_id);
-          if (sourceRow && "warehouse_id" in sourceRow) {
-            fromWarehouseId = (sourceRow as any).warehouse_id;
-            toWarehouseId = (sourceRow as any).warehouse_id; // Same warehouse
-          }
-        }
+      const emptyToNull = (v: string) => (!v || v === 'undefined' ? null : v);
 
-        return {
-          product_id: item.product_id,
-          quantity: qty,
-          transfer_type: transferType,
-          from_warehouse_id: fromWarehouseId,
-          to_warehouse_id: toWarehouseId,
-          from_user_id: fromUserId,
-          to_user_id: toUserId,
-          description: notes || null,
-        };
-      });
-
-    // ── Call batch transfer RPC (atomic - all or nothing) ──────────────────
-    const { data: result, error } = await supabase.rpc(
-      "batch_stock_transfer",
-      {
-        p_transfers: transfers,
-      }
-    );
-
-      if (error) {
-        throw new Error(error.message || "Transfer failed");
+      if (transferType === "warehouse_to_staff") {
+        fromWarehouseId = emptyToNull(fromId);
+        toUserId = emptyToNull(toId);
+      } else if (transferType === "staff_to_warehouse") {
+        fromUserId = emptyToNull(fromId);
+        toWarehouseId = emptyToNull(toId);
+      } else if (transferType === "warehouse_to_warehouse") {
+        fromWarehouseId = emptyToNull(fromId);
+        toWarehouseId = emptyToNull(toId);
+      } else {
+        fromUserId = emptyToNull(fromId);
+        toUserId = emptyToNull(toId);
       }
 
-      // Check if RPC returned an error
-      if (result && !result.success) {
-        throw new Error(result.error || "Batch transfer failed");
-      }
+      const isSender = 
+        (fromUserId === currentUserId) || 
+        (fromWarehouseId && fromWarehouseId === currentWarehouse?.id);
 
-      return result;
+      const results = [];
+      for (const p of selectedProducts) {
+        const { data, error } = await supabase.rpc("record_stock_transfer", {
+          p_transfer_type: transferType,
+          p_from_warehouse_id: fromWarehouseId,
+          p_from_user_id: fromUserId,
+          p_to_warehouse_id: toWarehouseId,
+          p_to_user_id: toUserId,
+          p_product_id: p.product_id,
+          p_quantity: parseFloat(p.quantity),
+          p_description: notes || null,
+        });
+
+        if (error) throw new Error(error.message || `Transfer failed for ${p.product_name}`);
+        results.push(data);
+      }
+      
+      return {
+        isSender,
+        fromWarehouseId,
+        toWarehouseId,
+        toUserId,
+        firstTransferId: results?.[0]?.transfer_id || results?.[0]?.id,
+        firstTransferStatus: results?.[0]?.status
+      };
     },
-    onSuccess: (result) => {
-      // Invalidate all relevant query keys
+    onSuccess: async (data) => {
       queryClient.invalidateQueries({ queryKey: ["product-stock"] });
       queryClient.invalidateQueries({ queryKey: ["warehouse-stock"] });
       queryClient.invalidateQueries({ queryKey: ["warehouse-products"] });
@@ -340,7 +457,43 @@ return rolesData
       queryClient.invalidateQueries({ queryKey: ["inventory-pending-returns"] });
       queryClient.invalidateQueries({ queryKey: ["source-stock-transfer"] });
 
-      toast.success(result?.message || `Transferred ${totalItems} product(s) successfully`);
+      if (data) {
+        const { isSender, toUserId, firstTransferId } = data;
+        const transferTypeLabel = transferType === "staff_to_warehouse" ? "Staff → Warehouse" : 
+          transferType === "warehouse_to_staff" ? "Warehouse → Staff" : 
+          transferType === "warehouse_to_warehouse" ? "Warehouse → Warehouse" : "Staff → Staff";
+        const notificationMessage = isSender ? 
+          `New ${transferTypeLabel} transfer awaiting your acceptance` : 
+          `New ${transferTypeLabel} request awaiting approval`;
+
+        // Notify all approvers (super_admin, manager, operator)
+        getApproverUserIds().then((approverIds) => {
+          const notifyIds = [...approverIds];
+          
+          // If sending to a specific user, notify them too
+          if (toUserId && isSender) {
+            notifyIds.push(toUserId);
+          }
+          
+          if (notifyIds.length > 0) {
+            sendNotificationToMany(notifyIds, {
+              title: "New Transfer Request",
+              message: notificationMessage,
+              type: "stock_transfer",
+              entityType: "stock_transfers",
+              entityId: firstTransferId,
+            });
+          }
+        }).catch(console.error);
+      }
+
+      const finalStatus = data?.firstTransferStatus || "pending";
+      const statusMessage = 
+        finalStatus === "completed" ? "Transfer completed successfully" :
+        finalStatus === "awaiting_acceptance" ? "Transfer sent - awaiting recipient acceptance" :
+        "Transfer request submitted - awaiting approval";
+
+      toast.success(statusMessage);
       onClose();
     },
     onError: (error: Error) => {
@@ -352,18 +505,20 @@ return rolesData
   const changeTransferType = (type: TransferType) => {
     setTransferType(type);
     setSelectedProducts([]);
+    const defaultWhId = warehouseId || currentWarehouse?.id || warehouses[0]?.id || "";
+    
     if (type === "warehouse_to_staff") {
-      setFromId(warehouseId ?? warehouses[0]?.id ?? "");
-      setToId("");
+      setFromId(defaultWhId);
+      setToId(isAgent ? currentUserId : "");
     } else if (type === "staff_to_warehouse") {
-      setFromId("");
-      setToId(warehouseId ?? warehouses[0]?.id ?? "");
+      setFromId(currentUserId);
+      setToId(defaultWhId);
     } else if (type === "warehouse_to_warehouse") {
-      setFromId(warehouseId ?? warehouses[0]?.id ?? "");
+      setFromId(defaultWhId);
       setToId("");
     } else {
       // staff_to_staff
-      setFromId("");
+      setFromId(currentUserId);
       setToId("");
     }
   };
@@ -374,6 +529,7 @@ return rolesData
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>Transfer Stock</DialogTitle>
+          <DialogDescription>Move inventory between warehouses and staff</DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col flex-1 overflow-hidden space-y-4">
@@ -402,30 +558,52 @@ return rolesData
 
           {/* ── From / To selects ── */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>From</Label>
-              <Select value={fromId} onValueChange={(v) => { setFromId(v); setSelectedProducts([]); }}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select Source" />
-                </SelectTrigger>
-            <SelectContent>
-              {(transferType === "warehouse_to_staff" ||
-                transferType === "warehouse_to_warehouse") &&
-                warehouses.map((w) => (
-                  <SelectItem key={w.id} value={w.id}>
-                    {w.name}
-                  </SelectItem>
-                ))}
-              {(transferType === "staff_to_warehouse" ||
-                transferType === "staff_to_staff") &&
-                displayStaff.map((s) => (
-                  <SelectItem key={s.user_id} value={s.user_id}>
-                    {s.full_name}
-                  </SelectItem>
-                ))}
-            </SelectContent>
-              </Select>
-            </div>
+            {/* From Select */}
+            {["warehouse_to_staff", "warehouse_to_warehouse"].includes(transferType) ? (
+              <div className="space-y-2">
+                <Label>From Warehouse</Label>
+                <Select value={fromId} onValueChange={(v) => { setFromId(v); setSelectedProducts([]); }}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select Source Warehouse" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {warehouses.map((w) => (
+                      <SelectItem key={w.id} value={w.id}>
+                        {w.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              // staff_to_warehouse or staff_to_staff
+              <div className="space-y-2">
+                <Label>From Staff</Label>
+                {isAdmin || isOperator ? (
+                  <Select value={fromId} onValueChange={(v) => { setFromId(v); setSelectedProducts([]); }}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select Source Staff" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {displayStaff
+                        .filter(s => {
+                          if (isOperator) return s.warehouse_id === currentWarehouse?.id;
+                          return true;
+                        })
+                        .map((s) => (
+                          <SelectItem key={s.user_id} value={s.user_id}>
+                            {s.user_id === currentUserId ? `You (${s.full_name})` : `${s.full_name} (${s.role})`}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="h-10 px-3 py-2 rounded-md border bg-muted/50 text-sm flex items-center">
+                    You ({displayStaff.find(s => s.user_id === currentUserId)?.full_name || 'Your Stock'})
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label>To</Label>
@@ -433,26 +611,41 @@ return rolesData
                 <SelectTrigger>
                   <SelectValue placeholder="Select Destination" />
                 </SelectTrigger>
-            <SelectContent>
-              {(transferType === "warehouse_to_staff" ||
-                transferType === "staff_to_staff") &&
-                displayStaff
-                  .filter((s) => s.user_id !== fromId)
-                  .map((s) => (
-                    <SelectItem key={s.user_id} value={s.user_id}>
-                      {s.full_name}
-                    </SelectItem>
-                  ))}
-              {(transferType === "staff_to_warehouse" ||
-                transferType === "warehouse_to_warehouse") &&
-                warehouses
-                  .filter((w) => w.id !== fromId)
-                  .map((w) => (
-                    <SelectItem key={w.id} value={w.id}>
-                      {w.name}
-                    </SelectItem>
-                  ))}
-            </SelectContent>
+                <SelectContent>
+{(transferType === "warehouse_to_staff" ||
+                      transferType === "staff_to_staff") &&
+                      displayStaff
+                        .filter((s) => {
+                          if (s.user_id === fromId) return false;
+                          
+                          // For staff_to_staff, exclude self
+                          
+                          // For warehouse_to_staff, admins can select ANY staff (they manage stock in their warehouse)
+                          // Just allow all staff - the admin chooses who gets stock in their warehouse
+                          if (transferType === "warehouse_to_staff") {
+                            return true;
+                          }
+
+                          // Operator restriction: only staff in their warehouse
+                          if (isOperator && transferType === "staff_to_staff") {
+                            return s.warehouse_id === currentWarehouse?.id;
+                          }
+                          
+                          return true;
+                        })
+                      .map((s) => (
+                        <SelectItem key={s.user_id} value={s.user_id}>
+                          {s.full_name} ({s.role})
+                        </SelectItem>
+                      ))}
+                  {(transferType === "staff_to_warehouse" ||
+                    transferType === "warehouse_to_warehouse") &&
+                    warehouses.map((w) => (
+                      <SelectItem key={w.id} value={w.id}>
+                        {w.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
               </Select>
             </div>
           </div>
@@ -461,7 +654,12 @@ return rolesData
           <div className="space-y-2 flex-1 overflow-hidden">
             <Label>Products ({selectedProducts.length} selected)</Label>
             <ScrollArea className="h-[250px] border rounded-md p-2">
-              {sourceStock.length > 0 ? (
+              {isLoadingStock ? (
+                <div className="flex flex-col items-center justify-center h-full text-muted-foreground py-8">
+                  <Loader2 className="h-8 w-8 animate-spin mb-2" />
+                  <p className="text-sm">Loading products...</p>
+                </div>
+              ) : sourceStock.length > 0 ? (
                 <div className="space-y-2">
                   {sourceStock.map((item) => {
                     const sel = isSelected(item.product_id);
@@ -471,15 +669,17 @@ return rolesData
                     return (
                       <div
                         key={item.product_id}
-                        className={`flex items-start gap-3 p-2 rounded-md border transition-colors ${
+                        className={`flex items-start gap-3 p-2 rounded-md border transition-colors cursor-pointer ${
                           sel
                             ? "bg-muted/50 border-primary"
                             : "hover:bg-muted/30"
                         }`}
+                        onClick={() => toggleProduct(item)}
                       >
                         <Checkbox
                           checked={sel}
                           onCheckedChange={() => toggleProduct(item)}
+                          onClick={(e) => e.stopPropagation()}
                           className="mt-1"
                         />
                         <div className="flex-1 min-w-0">
@@ -492,7 +692,7 @@ return rolesData
                           </div>
                         </div>
                         {sel && (
-                          <div className="w-24">
+                          <div className="w-24" onClick={(e) => e.stopPropagation()}>
                             <Input
                               type="number"
                               placeholder="Qty"
@@ -500,24 +700,34 @@ return rolesData
                               onChange={(e) =>
                                 updateQuantity(item.product_id, e.target.value)
                               }
+                              onClick={(e) => e.stopPropagation()}
                               min={1}
                               max={item.quantity}
                               className="h-8 text-sm"
+                              autoFocus
                             />
                           </div>
                         )}
                       </div>
+
                     );
                   })}
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground py-8">
                   <Package className="h-12 w-12 mb-2 opacity-30" />
-                  <p className="text-sm">
-                    {fromId
-                      ? "No products available from this source"
-                      : "Select a source first"}
+                  <p className="text-sm font-medium">
+                    {!fromId
+                      ? "Select a source first"
+                      : ["staff_to_warehouse", "staff_to_staff"].includes(transferType)
+                        ? "No stock assigned to this staff member yet"
+                        : "No stock available in this warehouse"}
                   </p>
+                  {fromId && ["staff_to_warehouse", "staff_to_staff"].includes(transferType) && (
+                    <p className="text-xs mt-1 text-center px-4">
+                      Stock is assigned when a manager or operator completes a warehouse → staff transfer.
+                    </p>
+                  )}
                 </div>
               )}
             </ScrollArea>

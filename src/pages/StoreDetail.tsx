@@ -289,9 +289,9 @@ const StoreDetail = () => {
     qc.invalidateQueries({ queryKey: ["store-qr-codes", id] });
   };
 
-  const handleDeleteQr = async (qrId: string) => {
-    const { error } = await supabase.from("store_qr_codes").delete().eq("id", qrId);
-    if (error) { toast.error(error.message); return; }
+const handleDeleteQr = async (qrId: string) => {
+  const { error } = await supabase.from("store_qr_codes").update({ deleted_at: new Date().toISOString() }).eq("id", qrId);
+  if (error) { toast.error(error.message); return; }
     toast.success("QR code removed");
     qc.invalidateQueries({ queryKey: ["store-qr-codes", id] });
   };

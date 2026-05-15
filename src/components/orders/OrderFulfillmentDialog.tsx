@@ -697,7 +697,7 @@ const handleSubmit = async () => {
                               }`}>
                                 Stock: {productStock.get(item.product_id) || 0} available
                                 {(productStock.get(item.product_id) || 0) < item.quantity && (
-                                  <span className="ml-1">⚠️ Insufficient</span>
+                                  <span className="ml-1">ΓÜá∩╕Å Insufficient</span>
                                 )}
                               </div>
                             )}
@@ -740,7 +740,7 @@ const handleSubmit = async () => {
 
                           {/* Total */}
                           <div className="w-20 text-right font-medium">
-                            ₹{item.total.toFixed(2)}
+                            Γé╣{item.total.toFixed(2)}
                           </div>
 
                           {/* Remove */}
@@ -764,7 +764,7 @@ const handleSubmit = async () => {
               {/* Subtotal */}
               <div className="flex justify-between items-center text-lg font-semibold">
                 <span>Subtotal</span>
-                <span>₹{subtotal.toFixed(2)}</span>
+                <span>Γé╣{subtotal.toFixed(2)}</span>
               </div>
 
               {/* Payment Section */}
@@ -821,17 +821,17 @@ const handleSubmit = async () => {
                 <div className="bg-muted p-3 rounded-lg space-y-1 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Previous Outstanding</span>
-                    <span>₹{oldOutstanding.toFixed(2)}</span>
+                    <span>Γé╣{oldOutstanding.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">This Order Outstanding</span>
-                    <span>₹{outstandingAmount.toFixed(2)}</span>
+                    <span>Γé╣{outstandingAmount.toFixed(2)}</span>
                   </div>
                   <Separator className="my-2" />
                   <div className="flex justify-between font-medium">
                     <span>New Total Outstanding</span>
                     <span className={newOutstanding > 0 ? "text-orange-600" : "text-green-600"}>
-                      ₹{newOutstanding.toFixed(2)}
+                      Γé╣{newOutstanding.toFixed(2)}
                     </span>
                   </div>
                 </div>

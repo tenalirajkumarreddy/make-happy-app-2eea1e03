@@ -15,6 +15,7 @@ export type AppRole =
 export function normalizeRole(rawRole: string | null | undefined): AppRole {
   if (!rawRole) return "customer";
   if (rawRole === "admin") return "super_admin";
+  // Map legacy or alternate role names to canonical AppRole
   if (
     rawRole === "super_admin" ||
     rawRole === "manager" ||

@@ -84,45 +84,37 @@ export function ProductAccessMatrix({ onBack }: ProductAccessMatrixProps) {
     }
   };
 
-  const handleSave = async () => {
-    setSaving(true);
+const handleSave = async () => {
+  setSaving(true);
 
-    // Rebuild all access rows
-    await supabase.from("store_type_products").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-    const accessInserts: { store_type_id: string; product_id: string }[] = [];
+  try {
+    // Build payload arrays for the RPC
+    const accessPayload: { product_id: string; store_type_id: string }[] = [];
+    const pricingPayload: { product_id: string; store_type_id: string; price: number }[] = [];
+
     for (const p of products || []) {
       for (const st of storeTypes || []) {
         if (isChecked(p.id, st.id)) {
-          accessInserts.push({ store_type_id: st.id, product_id: p.id });
-        }
-      }
-    }
-    if (accessInserts.length > 0) {
-      for (let i = 0; i < accessInserts.length; i += 100) {
-        await supabase.from("store_type_products").insert(accessInserts.slice(i, i + 100));
-      }
-    }
+          // Add to access payload
+          accessPayload.push({ product_id: p.id, store_type_id: st.id });
 
-    // Rebuild pricing - only save if price differs from base_price
-    await supabase.from("store_type_pricing").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-    const pricingInserts: { store_type_id: string; product_id: string; price: number }[] = [];
-    for (const p of products || []) {
-      for (const st of storeTypes || []) {
-        if (isChecked(p.id, st.id)) {
+          // Add to pricing payload if price is set
           const val = getPrice(p.id, st.id);
           const numVal = Number(val);
-          // Always save the type-level price (even if same as base, so the hierarchy is explicit)
           if (val !== "" && numVal > 0) {
-            pricingInserts.push({ store_type_id: st.id, product_id: p.id, price: numVal });
+            pricingPayload.push({ product_id: p.id, store_type_id: st.id, price: numVal });
           }
         }
       }
     }
-    if (pricingInserts.length > 0) {
-      for (let i = 0; i < pricingInserts.length; i += 100) {
-        await supabase.from("store_type_pricing").insert(pricingInserts.slice(i, i + 100));
-      }
-    }
+
+    // Call RPC for atomic synchronization
+    const { error } = await supabase.rpc("sync_product_access_matrix", {
+      p_access_payload: accessPayload,
+      p_pricing_payload: pricingPayload
+    });
+
+    if (error) throw error;
 
     setSaving(false);
     toast.success("Product access & pricing saved");
@@ -132,7 +124,11 @@ export function ProductAccessMatrix({ onBack }: ProductAccessMatrixProps) {
     qc.invalidateQueries({ queryKey: ["store-type-pricing"] });
     setAccessMap({});
     setPriceMap({});
-  };
+  } catch (error: any) {
+    setSaving(false);
+    toast.error(error.message || "Failed to save product access");
+  }
+};
 
   const loading = loadingProducts || loadingTypes || loadingAccess || loadingPricing;
 

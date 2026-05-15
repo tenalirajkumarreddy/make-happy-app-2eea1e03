@@ -31,7 +31,7 @@ export interface PageDefinition {
 export const SALES_PAGE_ACTIONS: PageDefinition = {
   path: '/sales',
   title: 'Sales',
-  allowedRoles: ['super_admin', 'manager', 'agent', 'operator'],
+  allowedRoles: ['super_admin', 'manager', 'agent', 'pos'],
   blockedRoles: ['marketer', 'customer'],
   actions: [
     {
@@ -40,7 +40,7 @@ export const SALES_PAGE_ACTIONS: PageDefinition = {
       description: 'Click button to open sale creation form',
       selector: 'button:has-text("New Sale"), button:has-text("Create Sale")',
       actionType: 'click',
-      affectedRoles: ['super_admin', 'manager', 'agent', 'operator'],
+      affectedRoles: ['super_admin', 'manager', 'agent', 'pos'],
     },
     {
       id: 'SALE-002',
@@ -48,7 +48,7 @@ export const SALES_PAGE_ACTIONS: PageDefinition = {
       description: 'Choose store for the sale',
       selector: 'select[name="store"], [data-testid="store-select"]',
       actionType: 'select',
-      validationRules: ['operator: locked to POS store'],
+      validationRules: ['pos: locked to POS store'],
       affectedRoles: ['agent', 'manager', 'super_admin'],
     },
     {
@@ -65,7 +65,7 @@ export const SALES_PAGE_ACTIONS: PageDefinition = {
       description: 'Choose cash, UPI, or credit',
       selector: 'select[name="payment_type"], [data-testid="payment-type"]',
       actionType: 'select',
-      validationRules: ['operator: must be full payment (no credit)'],
+      validationRules: ['pos: must be full payment (no credit)'],
     },
     {
       id: 'SALE-005',
@@ -90,7 +90,7 @@ export const SALES_PAGE_ACTIONS: PageDefinition = {
       description: 'Filter sales by warehouse',
       selector: 'select[name="warehouse"], [data-testid="warehouse-filter"]',
       actionType: 'select',
-      validationRules: ['operator: only sees POS warehouse'],
+      validationRules: ['pos: only sees POS warehouse'],
     },
     {
       id: 'SALE-008',
@@ -133,7 +133,7 @@ export const SALES_PAGE_ACTIONS: PageDefinition = {
 export const INVENTORY_PAGE_ACTIONS: PageDefinition = {
   path: '/inventory',
   title: 'Inventory',
-  allowedRoles: ['super_admin', 'manager', 'operator'],
+  allowedRoles: ['super_admin', 'manager', 'pos'],
   blockedRoles: ['agent', 'marketer', 'customer'],
   actions: [
     {
@@ -150,7 +150,7 @@ export const INVENTORY_PAGE_ACTIONS: PageDefinition = {
       description: 'Filter inventory by warehouse',
       selector: 'select[name="warehouse"], [data-testid="warehouse-filter"]',
       actionType: 'select',
-      validationRules: ['operator: locked to POS warehouse'],
+      validationRules: ['pos: locked to POS warehouse'],
     },
     {
       id: 'INV-003',
@@ -210,7 +210,7 @@ export const ORDERS_PAGE_ACTIONS: PageDefinition = {
   path: '/orders',
   title: 'Orders',
   allowedRoles: ['super_admin', 'manager', 'agent', 'marketer'],
-  blockedRoles: ['operator', 'customer'],
+  blockedRoles: ['pos', 'customer'],
   actions: [
     {
       id: 'ORD-001',
@@ -286,7 +286,7 @@ export const ORDERS_PAGE_ACTIONS: PageDefinition = {
 export const ATTENDANCE_PAGE_ACTIONS: PageDefinition = {
   path: '/attendance',
   title: 'Attendance',
-  allowedRoles: ['super_admin', 'manager', 'operator'],
+  allowedRoles: ['super_admin', 'manager', 'pos'],
   blockedRoles: ['agent', 'marketer', 'customer'],
   actions: [
     {
@@ -295,7 +295,7 @@ export const ATTENDANCE_PAGE_ACTIONS: PageDefinition = {
       description: 'Record own attendance',
       selector: 'button:has-text("Check In"), [data-testid="check-in"]',
       actionType: 'click',
-      affectedRoles: ['operator'],
+      affectedRoles: ['pos'],
       databaseTables: ['attendance'],
     },
     {
@@ -304,7 +304,7 @@ export const ATTENDANCE_PAGE_ACTIONS: PageDefinition = {
       description: 'Record departure',
       selector: 'button:has-text("Check Out"), [data-testid="check-out"]',
       actionType: 'click',
-      affectedRoles: ['operator'],
+      affectedRoles: ['pos'],
       databaseTables: ['attendance'],
     },
     {
@@ -313,7 +313,7 @@ export const ATTENDANCE_PAGE_ACTIONS: PageDefinition = {
       description: 'See personal records',
       selector: '[data-testid="my-attendance"], button:has-text("My Records")',
       actionType: 'click',
-      affectedRoles: ['operator'],
+      affectedRoles: ['pos'],
     },
     {
       id: 'ATT-004',
@@ -364,7 +364,7 @@ export const ATTENDANCE_PAGE_ACTIONS: PageDefinition = {
 export const HR_STAFF_PAGE_ACTIONS: PageDefinition = {
   path: '/hr/staff',
   title: 'HR Staff Directory',
-  allowedRoles: ['super_admin', 'manager', 'operator'],
+  allowedRoles: ['super_admin', 'manager', 'pos'],
   blockedRoles: ['agent', 'marketer', 'customer'],
   actions: [
     {
@@ -373,7 +373,7 @@ export const HR_STAFF_PAGE_ACTIONS: PageDefinition = {
       description: 'Display all staff',
       selector: 'table, [data-testid="staff-list"]',
       actionType: 'verify',
-      affectedRoles: ['operator', 'manager', 'super_admin'],
+      affectedRoles: ['pos', 'manager', 'super_admin'],
     },
     {
       id: 'HR-002',
@@ -398,7 +398,7 @@ export const HR_STAFF_PAGE_ACTIONS: PageDefinition = {
       selector: 'button:has-text("Edit"), [data-testid="edit-staff"]',
       actionType: 'click',
       affectedRoles: ['super_admin', 'manager'],
-      validationRules: ['operator: cannot modify staff'],
+      validationRules: ['pos: cannot modify staff'],
     },
     {
       id: 'HR-005',
@@ -407,7 +407,7 @@ export const HR_STAFF_PAGE_ACTIONS: PageDefinition = {
       selector: 'select[name="role"], [data-testid="role-select"]',
       actionType: 'select',
       affectedRoles: ['super_admin', 'manager'],
-      validationRules: ['operator: cannot change roles'],
+      validationRules: ['pos: cannot change roles'],
       databaseTables: ['user_roles', 'staff_directory'],
     },
     {
@@ -443,7 +443,7 @@ export const CUSTOMERS_PAGE_ACTIONS: PageDefinition = {
   path: '/customers',
   title: 'Customers',
   allowedRoles: ['super_admin', 'manager', 'agent'],
-  blockedRoles: ['marketer', 'operator', 'customer'],
+  blockedRoles: ['marketer', 'pos', 'customer'],
   actions: [
     {
       id: 'CUST-001',

@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { formatDate } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable } from "@/components/shared/DataTable";
@@ -17,10 +18,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
 import { useFixedCostReminders } from "@/hooks/useFixedCostReminders";
-import { 
-  Loader2, Receipt, Calendar, TrendingUp, AlertCircle, 
+import {
+  Loader2, Receipt, Calendar, TrendingUp, AlertCircle,
   Users, Truck, Zap, Car, Megaphone, Briefcase, Wrench, MoreHorizontal,
-  CheckCircle2, CreditCard, FolderOpen, Tag, Plus
+  CheckCircle2, CreditCard, FolderOpen, Tag, Plus, Shield
 } from "lucide-react";
 import { toast } from "sonner";
 import { logActivity } from "@/lib/activityLogger";
@@ -43,6 +44,7 @@ const Expenses = () => {
   const { user, role } = useAuth();
   const { currentWarehouse } = useWarehouse();
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const isAdmin = role === "super_admin" || role === "manager";
 
   useEffect(() => { document.title = "Expenses"; }, []);
@@ -660,6 +662,13 @@ const Expenses = () => {
           onClick: () => setShowAddExpense(true),
         }}
         actions={isAdmin ? [
+          {
+            label: "Expense Access",
+            icon: Shield,
+            onClick: () => navigate("/admin/expense-access"),
+            variant: "outline",
+            priority: 1,
+          },
           {
             label: "Create Category",
             icon: Tag,

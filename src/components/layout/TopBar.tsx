@@ -109,6 +109,9 @@ export function TopBar() {
     else if (n.entity_type === "sale" && n.entity_id) navigate("/sales");
     else if (n.entity_type === "transaction" && n.entity_id) navigate("/transactions");
     else if (n.entity_type === "handover" && n.entity_id) navigate("/handovers");
+    else if (n.entity_type === "expense_claim" && n.entity_id) navigate(`/handovers?highlight=${n.entity_id}`);
+    else if (n.entity_type === "expense_request" && n.entity_id) navigate(`/handovers?highlight=${n.entity_id}`);
+    else if (n.entity_type === "stock_transfer" && n.entity_id) navigate(`/stock-transfers?id=${n.entity_id}`);
     else if (n.entity_type === "customer" && n.entity_id) navigate(`/customers/${n.entity_id}`);
     setOpen(false);
   };

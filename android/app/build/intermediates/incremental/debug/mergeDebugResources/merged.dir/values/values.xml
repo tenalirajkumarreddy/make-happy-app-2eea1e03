@@ -2498,6 +2498,7 @@
     <string name="exposed_dropdown_menu_content_description">Show dropdown menu</string>
     <string name="fab_transformation_scrim_behavior" translatable="false">com.google.android.material.transformation.FabTransformationScrimBehavior</string>
     <string name="fab_transformation_sheet_behavior" translatable="false">com.google.android.material.transformation.FabTransformationSheetBehavior</string>
+    <string name="fcm_fallback_notification_channel_label">Miscellaneous</string>
     <string name="gcm_defaultSenderId" translatable="false">648044405229</string>
     <string name="google_api_key" translatable="false">AIzaSyCngbWt92ZlOXNeAk3DHLXncWOjwZ_Xu7Y</string>
     <string name="google_app_id" translatable="false">1:648044405229:android:54c85efd0913280284c7e4</string>

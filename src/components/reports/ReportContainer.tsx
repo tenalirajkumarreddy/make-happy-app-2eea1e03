@@ -344,3 +344,4 @@ export function ReportSection({ title, subtitle, children, className = "" }: Rep
     </section>
   );
 }
+

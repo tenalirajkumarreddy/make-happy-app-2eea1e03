@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { formatCurrency } from '@/lib/currency';
 import { formatDate } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -649,3 +650,4 @@ export default function DailyReport() {
     </ReportContainer>
   );
 }
+

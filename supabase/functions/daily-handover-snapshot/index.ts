@@ -97,7 +97,31 @@ Deno.serve(async (req) => {
 
     if (upsertError) throw upsertError;
 
-    return new Response(JSON.stringify({ success: true, users: salesAggregates.length }), {
+    // Step 2: Trigger daily reset for all finalizers
+    const { data: finalizers } = await supabase
+      .from("user_permissions")
+      .select("user_id")
+      .eq("permission", "finalizer")
+      .eq("enabled", true);
+
+    const resetResults: { user_id: string; success: boolean; error?: string }[] = [];
+    for (const f of finalizers ?? []) {
+      try {
+        const { error: resetError } = await supabase.rpc("finalizer_daily_reset", {
+          p_finalizer_id: f.user_id,
+        });
+        resetResults.push({ user_id: f.user_id, success: !resetError, error: resetError?.message });
+      } catch (e: any) {
+        resetResults.push({ user_id: f.user_id, success: false, error: e.message });
+      }
+    }
+
+    return new Response(JSON.stringify({
+      success: true,
+      users: salesAggregates.length,
+      finalizersReset: resetResults.length,
+      resetResults,
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error: any) {

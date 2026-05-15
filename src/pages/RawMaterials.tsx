@@ -229,11 +229,11 @@ const RawMaterials = () => {
     setShowAdd(true);
   };
 
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("raw_materials").delete().eq("id", id);
-      if (error) throw error;
-    },
+const deleteMutation = useMutation({
+  mutationFn: async (id: string) => {
+    const { error } = await supabase.from("raw_materials").update({ deleted_at: new Date().toISOString() }).eq("id", id);
+    if (error) throw error;
+  },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["raw-materials"] });
       toast.success("Raw material deleted");
@@ -267,11 +267,11 @@ const RawMaterials = () => {
     },
   });
 
-  const unlinkVendorMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("vendor_raw_materials").delete().eq("id", id);
-      if (error) throw error;
-    },
+const unlinkVendorMutation = useMutation({
+  mutationFn: async (id: string) => {
+    const { error } = await supabase.from("vendor_raw_materials").update({ deleted_at: new Date().toISOString() }).eq("id", id);
+    if (error) throw error;
+  },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["vendor-raw-materials"] });
       toast.success("Vendor unlinked");

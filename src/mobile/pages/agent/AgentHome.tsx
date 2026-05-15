@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   MapPin, Phone, Navigation2, TrendingUp,
   Store, ShoppingCart, Loader2, Banknote, Wallet, ArrowRight, CheckCircle2, Eye, Package,
+  ArrowRightLeft, Boxes,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +20,8 @@ interface Props {
   onGoRecord: (store: StoreOption, action: "sale" | "payment") => void;
   onGoProducts?: () => void;
   onOpenAddEntity?: () => void;
+  onOpenStockTransfer?: () => void;
+  onGoMap?: () => void;
 }
 
 interface RouteStoreLite {
@@ -69,7 +72,7 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEntity }: Props) {
+export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEntity, onOpenStockTransfer, onGoMap }: Props) {
   const { user, profile } = useAuth();
   const today = new Date().toISOString().split("T")[0];
   const [currentPosition, setCurrentPosition] = useState<{ lat: number; lng: number } | null>(null);
@@ -165,11 +168,31 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
     refetchInterval: 60_000,
   });
 
+  // Stock holdings
+  const { data: stockItems = [] } = useQuery({
+    queryKey: ["mobile-agent-stock-holdings", user?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("staff_stock")
+        .select(`id, product_id, quantity, amount_value, product:products(name, sku, unit, base_price)`)
+        .eq("user_id", user!.id)
+        .gt("quantity", 0);
+      return (data || []).map((item: any) => ({
+        ...item,
+        product: Array.isArray(item.product) ? item.product[0] : item.product,
+      }));
+    },
+    enabled: !!user,
+  });
+
   const totalSales = salesData?.reduce((sum, row) => sum + (row.total_amount ?? 0), 0) ?? 0;
   const cashSales = salesData?.reduce((sum, row) => sum + (row.cash_amount ?? 0), 0) ?? 0;
   const upiSales = salesData?.reduce((sum, row) => sum + (row.upi_amount ?? 0), 0) ?? 0;
   const cashCollected = txData?.reduce((sum, row) => sum + (row.cash_amount ?? 0), 0) ?? 0;
   const upiCollected = txData?.reduce((sum, row) => sum + (row.upi_amount ?? 0), 0) ?? 0;
+
+  const stockValue = stockItems.reduce((sum, item) => sum + (item.amount_value || 0), 0);
+  const stockUnits = stockItems.reduce((sum, item) => sum + item.quantity, 0);
 
   const routeStores: RouteStoreLite[] = activeSession?.routes?.stores ?? [];
   const sortedStores = [...routeStores].sort((left, right) => (left.store_order ?? 0) - (right.store_order ?? 0));
@@ -301,6 +324,45 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
           </div>
         </div>
 
+        {/* Stock Holdings Card */}
+        {stockItems.length > 0 && (
+          <div className="rounded-2xl bg-white dark:bg-slate-800 border border-amber-100 dark:border-amber-900 shadow-sm p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <div className="h-6 w-6 rounded-md bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center">
+                  <Boxes className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                </div>
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">My Stock</p>
+              </div>
+              <button
+                onClick={onOpenStockTransfer}
+                className="h-7 px-2.5 rounded-lg bg-amber-50 dark:bg-amber-900/30 flex items-center gap-1 text-[10px] font-semibold text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/50 active:scale-95 transition-all"
+              >
+                <ArrowRightLeft className="h-3 w-3" />
+                Transfer
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-xl border border-slate-100 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/30 p-3 text-center">
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Products</p>
+                <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5">{stockItems.length}</p>
+              </div>
+              <div className="rounded-xl border border-slate-100 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/30 p-3 text-center">
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Units</p>
+                <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5">{stockUnits}</p>
+              </div>
+              <div className="rounded-xl border border-slate-100 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/30 p-3 text-center">
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Value</p>
+                <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5">₹{stockValue >= 1000 ? `${(stockValue/1000).toFixed(1)}k` : stockValue.toLocaleString()}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/*
+        // Holding balance moved to History page
+        */}
+
         <div className="grid grid-cols-3 gap-2">
           <MiniStat label="Sales" value={`₹${totalSales >= 1000 ? `${(totalSales / 1000).toFixed(1)}k` : totalSales.toLocaleString()}`} color="from-blue-500 to-blue-600" icon={TrendingUp} />
           <MiniStat label="Cash" value={`₹${(cashSales + cashCollected) >= 1000 ? `${((cashSales + cashCollected) / 1000).toFixed(1)}k` : (cashSales + cashCollected).toLocaleString()}`} color="from-emerald-500 to-green-600" icon={Banknote} />
@@ -422,6 +484,16 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
             <Store className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
           </div>
           <span className="text-xs font-medium">Add Customer/Store</span>
+        </Button>
+        <Button
+          variant="outline"
+          className="h-20 flex flex-col items-center justify-center gap-2 border-slate-200 dark:border-slate-800 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-900"
+          onClick={() => onGoMap?.()}
+        >
+          <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center">
+            <MapPin className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+          </div>
+          <span className="text-xs font-medium">Map View</span>
         </Button>
       </div>
 

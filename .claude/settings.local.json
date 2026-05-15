@@ -1,9 +1,12 @@
 {
   "env": {
-    "ANTHROPIC_BASE_URL": "https://integrate.api.nvidia.com/v1",
-    "ANTHROPIC_AUTH_TOKEN": "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",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "nvidia/llama-3.1-nemotron-70b-instruct",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "nvidia/llama-3.1-nemotron-70b-instruct",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "nvidia/llama-3.1-nemotron-70b-instruct"
-  }
+    "ANTHROPIC_BASE_URL": "https://opencode.ai/zen",
+    "ANTHROPIC_MODEL": "minimax-m2.5-free",
+    "ANTHROPIC_API_KEY": "sk-KuOhs7KuVp0c5PMgqadMICL12DVWSJ4LwtVezLbJ4DleBnXvy5fdFqBQDx6fEEOw",
+    "ENABLE_TOOL_SEARCH": "true"
+  },
+  "enabledMcpjsonServers": [
+    "code-review-graph",
+    "supabase"
+  ]
 }

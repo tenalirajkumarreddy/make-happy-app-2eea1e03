@@ -290,6 +290,7 @@
 /* ───────────────── Animation & Transitions ───────────────── */
 .mobile-page-wrapper * {
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 .mobile-page-wrapper button:active,

@@ -1,6 +1,6 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { LucideIcon, Plus, MoreVertical } from "lucide-react";
+import { LucideIcon, Plus, MoreVertical, ChevronDown } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,6 +18,12 @@ export interface PageAction {
   priority?: number;
 }
 
+export interface PageActionOption {
+  label: string;
+  onClick: () => void;
+  icon?: LucideIcon;
+}
+
 interface PageHeaderProps {
   title: string;
   subtitle?: string;
@@ -26,6 +32,8 @@ interface PageHeaderProps {
     label: string;
     icon?: LucideIcon;
     onClick: () => void;
+    /** Optional: if provided, shows a dropdown menu for multiple options */
+    options?: PageActionOption[];
   };
   /** Secondary actions — shown in overflow menu on small screens, revealed as screen grows */
   actions?: PageAction[];
@@ -36,6 +44,8 @@ interface PageHeaderProps {
 export function PageHeader({ title, subtitle, primaryAction, actions = [], filterNode }: PageHeaderProps) {
   // Sort by priority (lower = more important)
   const sorted = [...actions].sort((a, b) => (a.priority ?? 10) - (b.priority ?? 10));
+
+  const hasOptions = primaryAction?.options && primaryAction.options.length > 0;
 
   return (
     <div className="flex items-center justify-between gap-3 pb-4 mb-2">
@@ -74,11 +84,46 @@ export function PageHeader({ title, subtitle, primaryAction, actions = [], filte
         {filterNode}
 
         {/* Primary action — always visible */}
-        {primaryAction && (
+        {primaryAction && !hasOptions && (
           <Button onClick={primaryAction.onClick} size="sm" className="gap-1.5">
             {primaryAction.icon ? <primaryAction.icon className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
             <span className="hidden sm:inline">{primaryAction.label}</span>
           </Button>
+        )}
+
+        {/* Primary action with dropdown options */}
+        {primaryAction && hasOptions && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" className="gap-1.5">
+                {primaryAction.icon ? <primaryAction.icon className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                <span className="hidden sm:inline">{primaryAction.label}</span>
+                <ChevronDown className="h-3 w-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[180px]">
+              <DropdownMenuItem
+                onClick={primaryAction.onClick}
+                className="gap-2"
+              >
+                {primaryAction.icon && <primaryAction.icon className="h-4 w-4" />}
+                {primaryAction.label}
+              </DropdownMenuItem>
+              {primaryAction.options?.map((opt, i) => {
+                const Icon = opt.icon || primaryAction.icon;
+                return (
+                  <DropdownMenuItem
+                    key={i}
+                    onClick={opt.onClick}
+                    className="gap-2"
+                  >
+                    {Icon && <Icon className="h-4 w-4" />}
+                    {opt.label}
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
 
         {/* Three-dot overflow menu — visible when actions are hidden */}

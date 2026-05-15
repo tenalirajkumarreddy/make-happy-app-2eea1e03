@@ -91,7 +91,7 @@ const Transactions = () => {
   // Reset to page 1 whenever any filter changes
   useEffect(() => {
     setLoadedPages(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [filterFrom, filterTo, filterStore, filterStoreType, filterRoute, filterUser, filterCustomer, filterPayment]);
 
    const { data: transactions, isLoading, isError, error: txnError, isFetching } = useQuery({
@@ -175,9 +175,9 @@ const Transactions = () => {
       return data || [];
     },
   });
-  const profileMap = new Map((allProfiles || []).map((p: any) => [p.user_id, p]));
-  const getRecorderName = (id: string) => (profileMap.get(id) as any)?.full_name || "Unknown";
-  const getRecorderAvatar = (id: string) => (profileMap.get(id) as any)?.avatar_url || null;
+  const profileMap = new Map((allProfiles || []).map((p: ProfileRecord) => [p.user_id, p]));
+  const getRecorderName = (id: string) => (profileMap.get(id) )?.full_name || "Unknown";
+  const getRecorderAvatar = (id: string) => (profileMap.get(id) )?.avatar_url || null;
 
   // Fetch staff users for "record on behalf" selector
   const { data: staffUsers } = useQuery({
@@ -197,7 +197,7 @@ const Transactions = () => {
     queryFn: async () => {
       const { data } = await supabase.from("company_settings").select("key, value");
       const map: Record<string, string> = {};
-      data?.forEach((s: any) => { map[s.key] = s.value; });
+      data?.forEach((s: settingsData) => { map[s.key] = s.value; });
       return map;
     },
   });
@@ -374,14 +374,14 @@ const Transactions = () => {
 
   const columns = [
     { header: "Payment ID", accessor: "display_id" as const, className: "font-mono text-xs" },
-    { header: "Store", accessor: (row: any) => row.stores?.name || "—", className: "font-medium" },
-    { header: "Total", accessor: (row: any) => `₹${Number(row.total_amount || 0).toLocaleString()}`, className: "font-semibold" },
-    { header: "Cash", accessor: (row: any) => `₹${Number(row.cash_amount || 0).toLocaleString()}`, className: "text-sm hidden md:table-cell" },
-    { header: "UPI", accessor: (row: any) => `₹${Number(row.upi_amount || 0).toLocaleString()}`, className: "text-sm hidden md:table-cell" },
-    { header: "Old Bal.", accessor: (row: any) => `₹${Number(row.old_outstanding || 0).toLocaleString()}`, className: "text-muted-foreground text-sm hidden lg:table-cell" },
-    { header: "New Bal.", accessor: (row: any) => `₹${Number(row.new_outstanding || 0).toLocaleString()}`, className: "text-sm hidden lg:table-cell" },
-    { header: "Date", accessor: (row: any) => new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }), className: "text-muted-foreground text-xs hidden sm:table-cell" },
-    { header: "Actions", accessor: (row: any) => (
+    { header: "Store", accessor: (row: TransactionRecord) => row.stores?.name || "—", className: "font-medium" },
+    { header: "Total", accessor: (row: TransactionRecord) => `₹${Number(row.total_amount || 0).toLocaleString()}`, className: "font-semibold" },
+    { header: "Cash", accessor: (row: TransactionRecord) => `₹${Number(row.cash_amount || 0).toLocaleString()}`, className: "text-sm hidden md:table-cell" },
+    { header: "UPI", accessor: (row: TransactionRecord) => `₹${Number(row.upi_amount || 0).toLocaleString()}`, className: "text-sm hidden md:table-cell" },
+    { header: "Old Bal.", accessor: (row: TransactionRecord) => `₹${Number(row.old_outstanding || 0).toLocaleString()}`, className: "text-muted-foreground text-sm hidden lg:table-cell" },
+    { header: "New Bal.", accessor: (row: TransactionRecord) => `₹${Number(row.new_outstanding || 0).toLocaleString()}`, className: "text-sm hidden lg:table-cell" },
+    { header: "Date", accessor: (row: TransactionRecord) => new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }), className: "text-muted-foreground text-xs hidden sm:table-cell" },
+    { header: "Actions", accessor: (row: TransactionRecord) => (
       <TooltipProvider>
         <div className="flex items-center gap-1">
           {/* View Receipt */}
@@ -419,7 +419,7 @@ const Transactions = () => {
   ];
 
   // Store Hover Card component
-  const StoreHoverCard = ({ store, children }: { store: any; children: React.ReactNode }) => {
+  const StoreHoverCard = ({ store, children }: { store: StoreData; children: React.ReactNode }) => {
     if (!store) return <span>{children}</span>;
     return (
       <HoverCard>
@@ -459,7 +459,7 @@ const Transactions = () => {
   // Update columns to use hover cards
   const columnsWithHover = [
     { header: "Payment ID", accessor: "display_id" as const, className: "font-mono text-xs" },
-    { header: "Store", accessor: (row: any) => (
+    { header: "Store", accessor: (row: TransactionRecord) => (
       <div className="flex items-center gap-2">
         <StoreIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
         <StoreHoverCard store={row.stores}>
@@ -467,12 +467,12 @@ const Transactions = () => {
         </StoreHoverCard>
       </div>
     ), className: "font-medium" },
-    { header: "Total", accessor: (row: any) => `₹${Number(row.total_amount || 0).toLocaleString()}`, className: "font-semibold" },
-    { header: "Cash", accessor: (row: any) => `₹${Number(row.cash_amount || 0).toLocaleString()}`, className: "text-sm hidden md:table-cell" },
-    { header: "UPI", accessor: (row: any) => `₹${Number(row.upi_amount || 0).toLocaleString()}`, className: "text-sm hidden md:table-cell" },
-    { header: "Old Bal.", accessor: (row: any) => `₹${Number(row.old_outstanding || 0).toLocaleString()}`, className: "text-muted-foreground text-sm hidden lg:table-cell" },
-    { header: "New Bal.", accessor: (row: any) => `₹${Number(row.new_outstanding || 0).toLocaleString()}`, className: "text-sm hidden lg:table-cell" },
-    { header: "Date", accessor: (row: any) => new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }), className: "text-muted-foreground text-xs hidden sm:table-cell" },
+    { header: "Total", accessor: (row: TransactionRecord) => `₹${Number(row.total_amount || 0).toLocaleString()}`, className: "font-semibold" },
+    { header: "Cash", accessor: (row: TransactionRecord) => `₹${Number(row.cash_amount || 0).toLocaleString()}`, className: "text-sm hidden md:table-cell" },
+    { header: "UPI", accessor: (row: TransactionRecord) => `₹${Number(row.upi_amount || 0).toLocaleString()}`, className: "text-sm hidden md:table-cell" },
+    { header: "Old Bal.", accessor: (row: TransactionRecord) => `₹${Number(row.old_outstanding || 0).toLocaleString()}`, className: "text-muted-foreground text-sm hidden lg:table-cell" },
+    { header: "New Bal.", accessor: (row: TransactionRecord) => `₹${Number(row.new_outstanding || 0).toLocaleString()}`, className: "text-sm hidden lg:table-cell" },
+    { header: "Date", accessor: (row: TransactionRecord) => new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }), className: "text-muted-foreground text-xs hidden sm:table-cell" },
     columns[8], // Keep the actions column
   ];
 
@@ -484,7 +484,7 @@ const Transactions = () => {
     return (
       <div className="rounded-xl border bg-destructive/10 p-6 text-center text-destructive">
         <p className="font-semibold">Failed to load transactions</p>
-        <p className="text-xs mt-1">{(txnError as any)?.message || "Unknown error"}</p>
+        <p className="text-xs mt-1">{(txnError )?.message || "Unknown error"}</p>
       </div>
     );
   }
@@ -526,35 +526,35 @@ const Transactions = () => {
         <SelectTrigger className="h-8 text-xs flex-1 min-w-[120px] sm:flex-none sm:w-40"><SelectValue placeholder="All stores" /></SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All stores</SelectItem>
-          {stores?.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+          {stores?.map((s: StoreData) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
         </SelectContent>
       </Select>
       <Select value={filterStoreType} onValueChange={setFilterStoreType}>
         <SelectTrigger className="h-8 text-xs flex-1 min-w-[120px] sm:flex-none sm:w-40"><SelectValue placeholder="All store types" /></SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All store types</SelectItem>
-          {storeTypes?.map((st: any) => <SelectItem key={st.id} value={st.id}>{st.name}</SelectItem>)}
+          {storeTypes?.map((st: StoreTypeData) => <SelectItem key={st.id} value={st.id}>{st.name}</SelectItem>)}
         </SelectContent>
       </Select>
       <Select value={filterRoute} onValueChange={setFilterRoute}>
         <SelectTrigger className="h-8 text-xs flex-1 min-w-[120px] sm:flex-none sm:w-40"><SelectValue placeholder="All routes" /></SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All routes</SelectItem>
-          {routes?.map((r: any) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+          {routes?.map((r: RouteData) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
         </SelectContent>
       </Select>
       <Select value={filterCustomer} onValueChange={setFilterCustomer}>
         <SelectTrigger className="h-8 text-xs flex-1 min-w-[120px] sm:flex-none sm:w-40"><SelectValue placeholder="All customers" /></SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All customers</SelectItem>
-          {customersForFilter?.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+          {customersForFilter?.map((c: CustomerData) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
         </SelectContent>
       </Select>
       <Select value={filterUser} onValueChange={setFilterUser}>
         <SelectTrigger className="h-8 text-xs flex-1 min-w-[120px] sm:flex-none sm:w-40"><SelectValue placeholder="All users" /></SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All users</SelectItem>
-          {allProfiles?.map((p: any) => <SelectItem key={p.user_id} value={p.user_id}>{p.full_name}</SelectItem>)}
+          {allProfiles?.map((p: ProfileRecord) => <SelectItem key={p.user_id} value={p.user_id}>{p.full_name}</SelectItem>)}
         </SelectContent>
       </Select>
       <Select value={filterPayment} onValueChange={setFilterPayment}>
@@ -579,7 +579,7 @@ const Transactions = () => {
         searchKey="display_id"
         searchPlaceholder="Search by payment ID..."
         emptyMessage="No transactions recorded yet."
-        renderMobileCard={(row: any) => (
+        renderMobileCard={(row: TransactionRecord) => (
           <div className="rounded-lg border bg-card p-3">
             {/* Header row: ID + Date */}
             <div className="flex items-center justify-between mb-1.5">
@@ -661,8 +661,8 @@ const Transactions = () => {
                 <Select value={storeId} onValueChange={setStoreId}>
                   <SelectTrigger className="flex-1"><SelectValue placeholder="Select store" /></SelectTrigger>
                   <SelectContent>{stores?.map((s) => (
-                      <SelectItem key={s.id} value={s.id} disabled={!(s as any).is_active}>
-                        {s.name} ({s.display_id}){!(s as any).is_active ? " — Inactive" : ""}
+                      <SelectItem key={s.id} value={s.id} disabled={!(s ).is_active}>
+                        {s.name} ({s.display_id}){!(s ).is_active ? " — Inactive" : ""}
                       </SelectItem>
                     ))}</SelectContent>
                 </Select>
@@ -839,7 +839,7 @@ const Transactions = () => {
                 toast.error("Please enter a valid return amount");
                 return;
               }
-              const txn = transactions?.find((t: any) => t.id === returnTxnId);
+              const txn = transactions?.find((t: TransactionRecord) => t.id === returnTxnId);
               if (!txn) {
                 toast.error("Transaction not found");
                 return;
@@ -873,7 +873,7 @@ const Transactions = () => {
             className="space-y-4"
           >
             {(() => {
-              const txn = transactions?.find((t: any) => t.id === returnTxnId);
+              const txn = transactions?.find((t: TransactionRecord) => t.id === returnTxnId);
               if (!txn) return null;
               const originalAmount = Number(txn.cash_amount) + Number(txn.upi_amount);
               return (

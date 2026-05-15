@@ -9,6 +9,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { fmtINR } from "@/lib/utils";
+import { usePullToRefresh } from "@/mobile/hooks/usePullToRefresh";
+import { PullRefreshIndicator } from "@/mobile/components/PullRefreshIndicator";
+import { CardSkeletonList } from "@/mobile/components/CardSkeleton";
 
 interface StockItem {
   id: string;
@@ -35,7 +39,7 @@ export function AdminInventory({ onNavigate }: { onNavigate: (path: string) => v
   const [showDetailModal, setShowDetailModal] = useState(false);
 
   // Fetch stock
-  const { data: stock, isLoading } = useQuery({
+  const { data: stock, isLoading, refetch } = useQuery({
     queryKey: ["mobile-inventory", currentWarehouse?.id, stockFilter],
     queryFn: async () => {
       let query = supabase
@@ -82,9 +86,7 @@ export function AdminInventory({ onNavigate }: { onNavigate: (path: string) => v
     return { color: "bg-green-100 text-green-800 border-green-200", label: "In Stock", icon: Package };
   };
 
-  const formatAmount = (amount: number) => {
-    return `Rs ${Math.round(amount).toLocaleString('en-IN')}`;
-  };
+  // fmtINR from @/lib/utils handles ₹ formatting
 
   return (
     <div className="pb-6">
@@ -104,24 +106,33 @@ export function AdminInventory({ onNavigate }: { onNavigate: (path: string) => v
       <div className="px-4 -mt-3 space-y-3 mb-4">
         {/* Stats Summary */}
         <div className="grid grid-cols-3 gap-2">
-          <div className="rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-2.5 text-center">
+          <button
+            onClick={() => setStockFilter("all")}
+            className={`rounded-xl border shadow-sm p-2.5 text-center transition-all active:scale-95 ${stockFilter === "all" ? "bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800" : "bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700"}`}
+          >
             <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{totalItems}</p>
             <p className="text-[10px] text-slate-500">Total Items</p>
-          </div>
-          <div className="rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-2.5 text-center">
+          </button>
+          <button
+            onClick={() => setStockFilter("low")}
+            className={`rounded-xl border shadow-sm p-2.5 text-center transition-all active:scale-95 ${stockFilter === "low" ? "bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800" : "bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700"}`}
+          >
             <p className="text-lg font-bold text-amber-600 dark:text-amber-400">{lowStockCount}</p>
             <p className="text-[10px] text-slate-500">Low Stock</p>
-          </div>
-          <div className="rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-2.5 text-center">
+          </button>
+          <button
+            onClick={() => setStockFilter("out")}
+            className={`rounded-xl border shadow-sm p-2.5 text-center transition-all active:scale-95 ${stockFilter === "out" ? "bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800" : "bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700"}`}
+          >
             <p className="text-lg font-bold text-red-600 dark:text-red-400">{outOfStockCount}</p>
             <p className="text-[10px] text-slate-500">Out of Stock</p>
-          </div>
+          </button>
         </div>
 
         {/* Total Value */}
         <div className="rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-2.5 flex justify-between items-center">
           <span className="text-xs text-slate-500 dark:text-slate-400">Total Inventory Value</span>
-          <span className="text-sm font-bold text-slate-800 dark:text-white">{formatAmount(totalValue)}</span>
+          <span className="text-sm font-bold text-slate-800 dark:text-white">{fmtINR(totalValue)}</span>
         </div>
 
         {/* Search & Filter */}
@@ -139,13 +150,16 @@ export function AdminInventory({ onNavigate }: { onNavigate: (path: string) => v
 
       {/* Stock List */}
       {isLoading ? (
-        <div className="flex justify-center py-8">
-          <Loader2 className="h-6 w-6 animate-spin text-primary" />
-        </div>
+        <CardSkeletonList count={4} />
       ) : filteredStock.length === 0 ? (
         <div className="px-4 py-8 text-center">
           <Boxes className="h-12 w-12 text-muted-foreground mx-auto mb-2 opacity-50" />
           <p className="text-sm text-muted-foreground">No items found</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {stockFilter !== "all"
+              ? `No items match "${stockFilter === 'low' ? 'Low Stock' : stockFilter === 'out' ? 'Out of Stock' : 'High Stock'}" filter`
+              : "No products in inventory"}
+          </p>
         </div>
       ) : (
         <div className="px-4 space-y-3">
@@ -187,11 +201,11 @@ export function AdminInventory({ onNavigate }: { onNavigate: (path: string) => v
                   <div className="grid grid-cols-2 gap-2 mb-2">
                     <div className="bg-muted/30 rounded px-2 py-1">
                       <p className="text-[10px] text-muted-foreground">Unit Price</p>
-                      <p className="text-xs font-medium">{formatAmount(item.products?.price || 0)}</p>
+                      <p className="text-xs font-medium">{fmtINR(item.products?.price || 0)}</p>
                     </div>
                     <div className="bg-muted/30 rounded px-2 py-1">
                       <p className="text-[10px] text-muted-foreground">Stock Value</p>
-                      <p className="text-xs font-medium">{formatAmount(stockValue)}</p>
+                      <p className="text-xs font-medium">{fmtINR(stockValue)}</p>
                     </div>
                   </div>
 
@@ -210,25 +224,25 @@ export function AdminInventory({ onNavigate }: { onNavigate: (path: string) => v
                 {/* Action Buttons Row */}
                 <div className="flex border-t border-border/50">
                   <button
-                    onClick={() => onNavigate(`/inventory?highlight=${item.product_id}`)}
-                    className="flex-1 py-2.5 flex items-center justify-center gap-1.5 text-xs font-medium text-muted-foreground hover:bg-muted active:bg-muted/80 transition-colors border-r border-border/50"
+                    onClick={() => { setSelectedItem(item); setShowDetailModal(true); }}
+                    className="flex-1 py-2.5 min-w-0 flex items-center justify-center gap-1 text-xs font-medium text-muted-foreground hover:bg-muted active:bg-muted/80 transition-colors border-r border-border/50"
                   >
-                    <Eye className="h-3.5 w-3.5" />
-                    View
+                    <Eye className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">View</span>
                   </button>
                   <button
-                    onClick={() => onNavigate(`/purchases?product=${item.product_id}`)}
-                    className="flex-1 py-2.5 flex items-center justify-center gap-1.5 text-xs font-medium text-primary hover:bg-primary/5 active:bg-primary/10 transition-colors border-r border-border/50"
+                    onClick={() => { setSelectedItem(item); setShowDetailModal(true); }}
+                    className="flex-1 py-2.5 min-w-0 flex items-center justify-center gap-1 text-xs font-medium text-primary hover:bg-primary/5 active:bg-primary/10 transition-colors border-r border-border/50"
                   >
-                    <ShoppingCart className="h-3.5 w-3.5" />
-                    Purchase
+                    <ShoppingCart className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">Purchase</span>
                   </button>
                   <button
-                    onClick={() => onNavigate(`/inventory?adjust=${item.product_id}`)}
-                    className="flex-1 py-2.5 flex items-center justify-center gap-1.5 text-xs font-medium text-muted-foreground hover:bg-muted active:bg-muted/80 transition-colors"
+                    onClick={() => { setSelectedItem(item); setShowDetailModal(true); }}
+                    className="flex-1 py-2.5 min-w-0 flex items-center justify-center gap-1 text-xs font-medium text-muted-foreground hover:bg-muted active:bg-muted/80 transition-colors"
                   >
-                    <ArrowUpDown className="h-3.5 w-3.5" />
-                    Adjust
+                    <ArrowUpDown className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">Adjust</span>
                   </button>
                 </div>
               </div>
@@ -278,7 +292,7 @@ export function AdminInventory({ onNavigate }: { onNavigate: (path: string) => v
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-muted-foreground">Unit Price</span>
-                  <span className="text-sm font-semibold">{formatAmount(selectedItem.products?.price || 0)}</span>
+                  <span className="text-sm font-semibold">{fmtINR(selectedItem.products?.price || 0)}</span>
                 </div>
               </div>
 
@@ -295,17 +309,13 @@ export function AdminInventory({ onNavigate }: { onNavigate: (path: string) => v
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-muted-foreground">Stock Value</span>
                   <span className="text-sm font-semibold text-primary">
-                    {formatAmount(selectedItem.quantity * (selectedItem.products?.price || 0))}
+                    {fmtINR(selectedItem.quantity * (selectedItem.products?.price || 0))}
                   </span>
                 </div>
-                {selectedItem.quantity > 0 && (
+                {selectedItem.quantity > 0 && selectedItem.quantity <= selectedItem.reorder_level && (
                   <div className="flex justify-between items-center pt-1 border-t">
-                    <span className="text-xs text-muted-foreground">Days to Reorder</span>
-                    <span className="text-sm">
-                      {selectedItem.quantity <= selectedItem.reorder_level 
-                        ? "Immediate" 
-                        : `~${Math.floor((selectedItem.quantity - selectedItem.reorder_level) / 10)} days`}
-                    </span>
+                    <span className="text-xs text-muted-foreground">Reorder Status</span>
+                    <span className="text-xs font-semibold text-orange-600">Reorder Now</span>
                   </div>
                 )}
               </div>

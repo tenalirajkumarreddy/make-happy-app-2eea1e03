@@ -66,7 +66,7 @@ test.describe('Role Debug', () => {
   });
 
   test('Compare all roles on transactions page', async () => {
-    const roles = ['super_admin', 'manager', 'agent', 'marketer', 'operator'];
+    const roles = ['super_admin', 'manager', 'agent', 'marketer', 'pos'];
     const agents = roles.map(role => ({
       role,
       actions: [
@@ -84,7 +84,7 @@ test.describe('Role Debug', () => {
         {
           type: 'data_sync',
           fromAgent: 'super_admin',
-          toAgent: 'operator',
+          toAgent: 'pos',
           description: 'All roles transactions access',
           validate: async (agentsMap) => {
             console.log('\n========================================');

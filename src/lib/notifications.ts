@@ -43,13 +43,18 @@ export async function sendNotificationToMany(
   if (error) logError("Bulk notification error", error);
 }
 
-/** Get admin/manager user IDs for broadcasting alerts */
-export async function getAdminUserIds(): Promise<string[]> {
+/** Get approver user IDs (super_admin, manager, operator) for broadcasting alerts */
+export async function getApproverUserIds(): Promise<string[]> {
   const { data } = await supabase
     .from("user_roles")
     .select("user_id")
-    .in("role", ["super_admin", "manager"]);
+    .in("role", ["super_admin", "manager", "operator"]);
   return (data || []).map((r) => r.user_id);
+}
+
+/** @deprecated Use getApproverUserIds() instead */
+export async function getAdminUserIds(): Promise<string[]> {
+  return getApproverUserIds();
 }
 
 /** Get user IDs by specific roles */

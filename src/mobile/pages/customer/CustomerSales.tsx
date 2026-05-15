@@ -17,7 +17,7 @@ interface SaleItemRow {
   id: string;
   quantity: number;
   unit_price: number;
-  line_total: number;
+  total_price: number;
   products: { name: string; unit: string | null } | null;
 }
 
@@ -48,7 +48,7 @@ export function CustomerSales({ selectedStoreId }: Props) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("sales")
-        .select("id, display_id, created_at, total_amount, cash_amount, upi_amount, outstanding_amount, store_id, stores(name), sale_items(id, quantity, unit_price, line_total, products(name, unit))")
+        .select("id, display_id, created_at, total_amount, cash_amount, upi_amount, outstanding_amount, store_id, stores(name), sale_items(id, quantity, unit_price, total_price, products(name, unit))")
         .eq("customer_id", customer!.id)
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -87,7 +87,7 @@ export function CustomerSales({ selectedStoreId }: Props) {
               {(sale.sale_items || []).map((item) => (
                 <div key={item.id} className="text-xs text-slate-600 dark:text-slate-300 flex items-center justify-between gap-2">
                   <span className="truncate">{item.products?.name || "Item"} × {item.quantity}</span>
-                  <span>₹{Number(item.line_total).toLocaleString("en-IN")}</span>
+                  <span>₹{Number(item.total_price).toLocaleString("en-IN")}</span>
                 </div>
               ))}
             </div>

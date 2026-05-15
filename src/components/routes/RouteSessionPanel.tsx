@@ -116,7 +116,7 @@ export function RouteSessionPanel() {
     };
 
     locationWatchRef.current = navigator.geolocation.watchPosition(
-      (pos) => pushLocation(pos.coords.latitude, pos.coords.longitude),
+      (operator) => pushLocation(operator.coords.latitude, operator.coords.longitude),
       () => {},
       { enableHighAccuracy: true, maximumAge: 30000, timeout: 10000 }
     );
@@ -354,9 +354,21 @@ export function RouteSessionPanel() {
           </div>
         </div>
       ) : (
-        <Button onClick={() => setShowStart(true)}>
-          <Play className="mr-2 h-4 w-4" />Start Route Session
-        </Button>
+        <div className="p-4">
+          <div className="flex flex-col items-center text-center py-2">
+            <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center mb-3 shadow-lg shadow-blue-500/25">
+              <MapPin className="h-7 w-7 text-white" />
+            </div>
+            <p className="text-sm font-semibold text-slate-800 dark:text-white">No Active Session</p>
+            <p className="text-xs text-slate-400 mt-1">Start a route session to begin visiting stores</p>
+          </div>
+          <Button
+            onClick={() => setShowStart(true)}
+            className="w-full mt-4 h-12 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold shadow-lg shadow-blue-500/25 active:scale-[0.98] transition-all"
+          >
+            <Play className="mr-2 h-5 w-5" />Start Route Session
+          </Button>
+        </div>
       )}
 
       <Dialog open={showEndConfirm} onOpenChange={setShowEndConfirm}>

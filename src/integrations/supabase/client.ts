@@ -5,6 +5,31 @@ import { env } from '@/lib/env';
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
+// Safe storage adapter that works in both browser and native contexts
+const safeStorage = {
+  getItem: (key: string): string | null => {
+    try {
+      return localStorage?.getItem(key) ?? null;
+    } catch {
+      return null;
+    }
+  },
+  setItem: (key: string, value: string): void => {
+    try {
+      localStorage?.setItem(key, value);
+    } catch {
+      // Ignore storage errors in native context
+    }
+  },
+  removeItem: (key: string): void => {
+    try {
+      localStorage?.removeItem(key);
+    } catch {
+      // Ignore storage errors in native context
+    }
+  },
+};
+
 // Create a custom fetch with timeout
 const createFetchWithTimeout = (timeoutMs: number = 30000) => {
   return (url: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
@@ -36,7 +61,7 @@ export const supabase = createClient<Database>(
   env.VITE_SUPABASE_PUBLISHABLE_KEY,
   {
     auth: {
-      storage: localStorage,
+      storage: safeStorage,
       persistSession: true,
       autoRefreshToken: true,
     },

@@ -1,14 +1,20 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
 import {
   ShoppingCart, ClipboardList, TrendingUp, TrendingDown, Wallet,
   Users, Store, Package, ArrowRight, AlertCircle, Receipt, Loader2,
-  BarChart3, Warehouse, Settings,
+  BarChart3, Warehouse, Settings, CheckCircle2, XCircle,
 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface DashboardStats {
   totalOrders: number;
@@ -27,7 +33,7 @@ export function AdminHome({
   role: "super_admin" | "manager";
   onNavigate: (path: string) => void;
 }) {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const { currentWarehouse } = useWarehouse();
 
   const { data: stats, isLoading: statsLoading } = useQuery({
@@ -68,6 +74,66 @@ export function AdminHome({
     },
   });
 
+  const { data: pendingExpenses = [] } = useQuery({
+    queryKey: ["mobile-pending-expense-widget", currentWarehouse?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("expense_claims")
+        .select("id, display_id, amount, description, status, created_at, bill_urls, expense_categories(name, color), profiles(full_name)")
+        .eq("status", "pending")
+        .order("created_at", { ascending: false })
+        .limit(5);
+      return data || [];
+    },
+    refetchInterval: 30_000,
+  });
+
+  const qc = useQueryClient();
+
+  // Expense confirmation state
+  const [pendingExpenseAction, setPendingExpenseAction] = useState<{
+    id: string; amount: number; name: string; action: "approve" | "reject";
+  } | null>(null);
+  const [isProcessingExpense, setIsProcessingExpense] = useState(false);
+
+  const handleApproveExpense = async (claimId: string) => {
+    setIsProcessingExpense(true);
+    try {
+      const { error } = await supabase
+        .from("expense_claims")
+        .update({ status: "approved", reviewed_by: user?.id, reviewed_at: new Date().toISOString(), approved_amount: null })
+        .eq("id", claimId);
+      if (error) throw error;
+      toast.success("Expense approved");
+      qc.invalidateQueries({ queryKey: ["mobile-pending-expense-widget"] });
+      qc.invalidateQueries({ queryKey: ["mobile-pending-expense-claims"] });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to approve");
+    } finally {
+      setIsProcessingExpense(false);
+      setPendingExpenseAction(null);
+    }
+  };
+
+  const handleRejectExpense = async (claimId: string) => {
+    setIsProcessingExpense(true);
+    try {
+      const { error } = await supabase
+        .from("expense_claims")
+        .update({ status: "rejected", reviewed_by: user?.id, reviewed_at: new Date().toISOString() })
+        .eq("id", claimId);
+      if (error) throw error;
+      toast.success("Expense rejected");
+      qc.invalidateQueries({ queryKey: ["mobile-pending-expense-widget"] });
+      qc.invalidateQueries({ queryKey: ["mobile-pending-expense-claims"] });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to reject");
+    } finally {
+      setIsProcessingExpense(false);
+      setPendingExpenseAction(null);
+    }
+  };
+
   const greeting = () => {
     const h = new Date().getHours();
     return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
@@ -105,7 +171,7 @@ export function AdminHome({
             <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Today's Revenue</p>
             <div className="flex items-center gap-1.5 bg-blue-50 dark:bg-blue-900/40 px-2 py-1 rounded-full">
               <ShoppingCart className="h-3 w-3 text-blue-500" />
-              <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400">
+              <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">
                 {statsLoading ? "…" : `${stats?.salesCount ?? 0} sales`}
               </span>
             </div>
@@ -141,11 +207,11 @@ export function AdminHome({
             const Icon = a.icon;
             return (
               <button key={a.label} onClick={() => onNavigate(a.path)}
-                className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95 transition-all">
-                <div className={cn("h-9 w-9 rounded-xl bg-gradient-to-br flex items-center justify-center", a.color)}>
-                  <Icon className="h-4 w-4 text-white" />
+                className="flex flex-col items-center gap-1.5 p-2.5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95 transition-all min-h-[80px]">
+                <div className={cn("h-8 w-8 rounded-lg bg-gradient-to-br flex items-center justify-center shrink-0", a.color)}>
+                  <Icon className="h-3.5 w-3.5 text-white" />
                 </div>
-                <span className="text-[10px] font-semibold text-slate-700 dark:text-slate-200 text-center leading-tight">{a.label}</span>
+                <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 text-center leading-tight truncate w-full">{a.label}</span>
               </button>
             );
           })}
@@ -189,16 +255,116 @@ export function AdminHome({
         )}
       </div>
 
-      {/* More Navigation */}
+      {/* Pending Expenses Widget */}
+      {pendingExpenses.length > 0 && (
+        <div className="px-4 mt-5">
+          <div className="flex items-center justify-between mb-2.5">
+            <SectionLabel className="mb-0 flex items-center gap-2">
+              <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
+              Pending Expenses
+            </SectionLabel>
+            <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-2 py-0.5 rounded-full">
+              {pendingExpenses.length}
+            </span>
+          </div>
+          <div className="space-y-2">
+            {pendingExpenses.map((exp) => (
+              <div key={exp.id} className="rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-3.5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      {exp.expense_categories && (
+                        <div className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: exp.expense_categories.color || "#6366f1" }} />
+                      )}
+                      <p className="text-sm font-bold text-slate-800 dark:text-white truncate">
+                        ₹{Number(exp.amount).toLocaleString("en-IN")}
+                      </p>
+                      <span className="text-[10px] text-slate-400 truncate">
+                        {exp.expense_categories?.name || "Unknown"}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                      {exp.profiles?.full_name || "Unknown"} · {format(new Date(exp.created_at), "dd MMM hh:mm a")}
+                    </p>
+                    {exp.description && (
+                      <p className="text-[11px] text-slate-400 mt-0.5 truncate">{exp.description}</p>
+                    )}
+                    {exp.bill_urls && exp.bill_urls.length > 0 && (
+                      <p className="text-[10px] text-blue-500 mt-0.5">📎 {exp.bill_urls.length} attachment(s)</p>
+                    )}
+                  </div>
+                  <div className="flex gap-1.5 shrink-0">
+                    <button
+                      onClick={() => setPendingExpenseAction({ id: exp.id, amount: exp.amount, name: exp.profiles?.full_name ?? "Staff", action: "approve" })}
+                      disabled={isProcessingExpense}
+                      className="h-8 w-8 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center hover:bg-emerald-100 dark:hover:bg-emerald-900/50 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+                    >
+                      {isProcessingExpense && pendingExpenseAction?.id === exp.id ? (
+                        <Loader2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                      )}
+                    </button>
+                    <button
+                      onClick={() => setPendingExpenseAction({ id: exp.id, amount: exp.amount, name: exp.profiles?.full_name ?? "Staff", action: "reject" })}
+                      disabled={isProcessingExpense}
+                      className="h-8 w-8 rounded-lg bg-red-50 dark:bg-red-900/30 flex items-center justify-center hover:bg-red-100 dark:hover:bg-red-900/50 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+                    >
+                      {isProcessingExpense && pendingExpenseAction?.id === exp.id ? (
+                        <Loader2 className="h-4 w-4 text-red-600 dark:text-red-400 animate-spin" />
+                      ) : (
+                        <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Tools — Analytics & Settings only (Customers/Stores/Inventory etc. already in Quick Actions) */}
       <div className="px-4 mt-5">
-        <SectionLabel>More</SectionLabel>
+        <SectionLabel>Tools</SectionLabel>
         <div className="grid grid-cols-2 gap-3">
-          <ActionCard label="Customers" sub="View all" icon={Users} color="bg-blue-100 dark:bg-blue-900/30" iconColor="text-blue-600 dark:text-blue-400" onClick={() => onNavigate("/customers")} />
-          <ActionCard label="Stores" sub="View all" icon={Store} color="bg-emerald-100 dark:bg-emerald-900/30" iconColor="text-emerald-600 dark:text-emerald-400" onClick={() => onNavigate("/stores")} />
           <ActionCard label="Analytics" sub="Reports & data" icon={TrendingUp} color="bg-violet-100 dark:bg-violet-900/30" iconColor="text-violet-600 dark:text-violet-400" onClick={() => onNavigate("/analytics")} />
           <ActionCard label="Settings" sub="App config" icon={Settings} color="bg-slate-100 dark:bg-slate-700" iconColor="text-slate-600 dark:text-slate-400" onClick={() => onNavigate("/settings")} />
         </div>
       </div>
+
+      {/* Expense Confirm Dialog */}
+      <AlertDialog open={!!pendingExpenseAction} onOpenChange={(o) => !o && setPendingExpenseAction(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingExpenseAction?.action === "approve" ? "Approve Expense?" : "Reject Expense?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingExpenseAction?.action === "approve"
+                ? `Approve ₹${Math.round(pendingExpenseAction?.amount ?? 0).toLocaleString("en-IN")} expense from ${pendingExpenseAction?.name}?`
+                : `Reject expense from ${pendingExpenseAction?.name}? This cannot be undone.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isProcessingExpense}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isProcessingExpense}
+              className={pendingExpenseAction?.action === "approve" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-red-600 hover:bg-red-700"}
+              onClick={() => {
+                if (!pendingExpenseAction) return;
+                pendingExpenseAction.action === "approve"
+                  ? handleApproveExpense(pendingExpenseAction.id)
+                  : handleRejectExpense(pendingExpenseAction.id);
+              }}
+            >
+              {isProcessingExpense
+                ? <Loader2 className="h-4 w-4 animate-spin" />
+                : pendingExpenseAction?.action === "approve" ? "Approve" : "Reject"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

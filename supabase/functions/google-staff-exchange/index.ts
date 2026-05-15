@@ -20,9 +20,6 @@ Deno.serve(async (req) => {
       throw new Error("Supabase env secrets are not configured");
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // AUTHENTICATION: Extract user_id from JWT, NOT from request body
-    // ─────────────────────────────────────────────────────────────────────────
     const authHeader = req.headers.get("Authorization");
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return new Response(
@@ -42,7 +39,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Extract user_id and email from VALIDATED token, not request body
     const user_id = user.id;
     const email = user.email;
 
@@ -55,7 +51,6 @@ Deno.serve(async (req) => {
 
     const normalizedEmail = email.toLowerCase().trim();
 
-    // PRIMARY lookup: Check staff_directory by email (direct Google validation)
     const { data: staffByEmail, error: staffByEmailError } = await supabaseAdmin
       .from("staff_directory")
       .select("id, phone, email, full_name, avatar_url, role, is_active, user_id")
@@ -67,7 +62,6 @@ Deno.serve(async (req) => {
       console.error("Error checking staff_directory by email:", staffByEmailError);
     }
 
-    // SECONDARY lookup: Check staff_invitations (email-based staff records)
     const { data: invitationRows, error: invitationError } = await supabaseAdmin
       .from("staff_invitations")
       .select("id, email, full_name, role, created_at")
@@ -81,7 +75,6 @@ Deno.serve(async (req) => {
 
     const staffInvitation = invitationRows && invitationRows.length > 0 ? invitationRows[0] : null;
 
-    // TERTIARY lookup: Check staff_directory by linked user_id
     const { data: staffByUser, error: staffByUserError } = await supabaseAdmin
       .from("staff_directory")
       .select("id, phone, email, full_name, avatar_url, role, is_active, user_id")
@@ -96,20 +89,17 @@ Deno.serve(async (req) => {
     let staffRole = null;
     let staffData = null;
 
-    // If found in invitations (email-based), use that role
     if (staffByEmail) {
       staffData = staffByEmail;
       staffRole = staffData.role;
     } else if (staffInvitation) {
       staffRole = staffInvitation.role;
     } else if (staffByUser) {
-      // Otherwise if already linked in staff_directory, use that
       staffData = staffByUser;
       staffRole = staffData.role;
     }
 
     if (!staffRole) {
-      // Not a staff member, return empty response (customer flow will handle)
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -125,9 +115,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    // User is a staff member, assign role and create profile
-    
-    // Delete any existing roles and add staff role
     const { error: roleDeleteError } = await supabaseAdmin
       .from("user_roles")
       .delete()
@@ -139,7 +126,6 @@ Deno.serve(async (req) => {
       .insert({ user_id, role: staffRole });
     if (roleInsertError) throw roleInsertError;
 
-    // Link staff_directory if we found a direct match
     if (staffData) {
       const { error: staffLinkError } = await supabaseAdmin
         .from("staff_directory")
@@ -148,7 +134,6 @@ Deno.serve(async (req) => {
       if (staffLinkError) throw staffLinkError;
     }
 
-    // Create or update profile with best-available data
     const fullName = staffData?.full_name || staffInvitation?.full_name || email.split("@")[0];
     const avatarUrl = staffData?.avatar_url || null;
 
@@ -163,7 +148,6 @@ Deno.serve(async (req) => {
       }, { onConflict: "user_id" });
     if (profileError) throw profileError;
 
-    // For invitation-only staff, ensure staff_directory has an email row for future direct validation.
     if (staffInvitation && !staffData) {
       const { data: existingDirByEmail, error: existingDirByEmailError } = await supabaseAdmin
         .from("staff_directory")

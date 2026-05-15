@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { formatCurrency } from '@/lib/currency';
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -297,3 +298,4 @@ export function ReportFilters({
     </Card>
   );
 }
+

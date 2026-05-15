@@ -165,6 +165,9 @@ Deno.serve(async (req) => {
 
   const { email, phone, full_name, role, avatar_url } = body;
 
+  // Normalize legacy 'pos' role to canonical 'operator'
+  const normalizedRole = role === "pos" ? "operator" : role;
+
   // Enhanced full_name validation
   if (!full_name || typeof full_name !== "string" || full_name.trim().length === 0) {
     throw new Error("Missing required field: full_name");
@@ -187,7 +190,7 @@ Deno.serve(async (req) => {
   }
 
   const validRoles = ["super_admin", "manager", "agent", "marketer", "operator"];
-  if (!validRoles.includes(role)) {
+  if (!validRoles.includes(normalizedRole)) {
     throw new Error(`Invalid role: ${role}. Must be one of: ${validRoles.join(", ")}`);
   }
 
@@ -232,7 +235,7 @@ Deno.serve(async (req) => {
           .from("staff_directory")
           .update({
             full_name: full_name.trim(),
-            role,
+            role: normalizedRole,
             avatar_url: avatar_url || null,
             phone,
             is_active: true,
@@ -247,7 +250,7 @@ Deno.serve(async (req) => {
           .insert({
             phone,
             full_name: full_name.trim(),
-            role,
+            role: normalizedRole,
             avatar_url: avatar_url || null,
             is_active: true,
             email: normalizedEmail,
@@ -283,7 +286,7 @@ Deno.serve(async (req) => {
     // Assign role
     await supabaseAdmin
       .from("user_roles")
-      .update({ role })
+      .update({ role: normalizedRole })
       .eq("user_id", newUser.user.id);
 
     // Link staff directory (indexed lookups instead of full-table scan)
@@ -305,7 +308,7 @@ Deno.serve(async (req) => {
           .update({
             user_id: newUser.user.id,
             full_name: full_name.trim(),
-            role,
+            role: normalizedRole,
             avatar_url: avatar_url || null,
             is_active: true,
             updated_at: new Date().toISOString(),
@@ -319,7 +322,7 @@ Deno.serve(async (req) => {
             email: normalizedEmail,
             phone: null,
             full_name: full_name.trim(),
-            role,
+            role: normalizedRole,
             avatar_url: avatar_url || null,
             is_active: true,
           });
@@ -332,7 +335,7 @@ Deno.serve(async (req) => {
       email: normalizedEmail,
       phone: phone ? String(phone).trim() : null,
       full_name: full_name.trim(),
-      role,
+      role: normalizedRole,
       invited_by: caller.id,
       status: "accepted",
       accepted_at: new Date().toISOString(),

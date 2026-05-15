@@ -83,9 +83,13 @@ const Inventory = () => {
   const canSeeStaffHoldings = isSuperAdmin || isManager;
 
   const allowedTransferTypes = useMemo(() => {
+    // Admin: full access to all transfer types
     if (isSuperAdmin) return ["warehouse_to_staff", "staff_to_warehouse", "staff_to_staff", "warehouse_to_warehouse"];
-    if (isManager) return ["warehouse_to_staff", "staff_to_warehouse", "staff_to_staff"];
+    // Manager: all transfers including wh→wh (request/accept flow)
+    if (isManager) return ["warehouse_to_staff", "staff_to_warehouse", "staff_to_staff", "warehouse_to_warehouse"];
+    // Operator: dispatch from their WH to staff, or move stock between staff in their WH
     if (isPos) return ["warehouse_to_staff", "staff_to_staff"];
+    // Agent/Marketer: can only transfer FROM their own stock — never from warehouse
     if (isAgent || isMarketer) return ["staff_to_warehouse", "staff_to_staff"];
     return [] as string[];
   }, [isSuperAdmin, isManager, isPos, isAgent, isMarketer]);
@@ -188,12 +192,12 @@ const Inventory = () => {
       const fallback =
         (isSuperAdmin
           ? allWarehouses[0]?.id
-          : assignedWarehouseId ?? currentWarehouse?.id) ?? "";
+          : assignedWarehouseId ?? currentWarehouse?.id ?? allWarehouses[0]?.id) ?? "";
       if (fallback) setSelectedWarehouseId(fallback);
     }, 100);
     return () => clearTimeout(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isInventoryViewer, selectedWarehouseId, isSuperAdmin, assignedWarehouseId, currentWarehouse?.id]);
+   
+  }, [isInventoryViewer, selectedWarehouseId, isSuperAdmin, assignedWarehouseId, currentWarehouse?.id, allWarehouses]);
 
   // Build staff holdings by product map
   const staffHoldingsByProduct = useMemo(() => {
@@ -296,7 +300,7 @@ const Inventory = () => {
         <Alert>
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            You don&apos;t have permission to view inventory. Contact your administrator.
+            You don&aoperator;t have permission to view inventory. Contact your administrator.
           </AlertDescription>
         </Alert>
       </div>
@@ -495,6 +499,7 @@ const Inventory = () => {
             staffStock={staffGroups}
             isLoading={isLoadingStaffStock}
             onViewDetails={(staff) => {
+              // eslint-disable-next-line no-console
               console.log("View staff details:", staff);
             }}
             onTransfer={(staff) => {
@@ -512,6 +517,7 @@ const Inventory = () => {
               isLoading={isLoadingRawMaterials}
               canAdjust={canAdjustStock}
               onAdjust={(material) => {
+                // eslint-disable-next-line no-console
                 console.log("Adjust raw material:", material);
               }}
             />

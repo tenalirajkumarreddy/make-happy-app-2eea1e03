@@ -55,6 +55,15 @@ export function formatDateTime(
 }
 
 /**
+ * Format a number as a compact Indian Rupee amount for mobile UIs.
+ * Uses the ₹ symbol (not "Rs"), rounded to whole rupees.
+ * e.g. fmtINR(12345.67) → "₹12,346"
+ */
+export function fmtINR(amount: number): string {
+  return `₹${Math.round(amount).toLocaleString("en-IN")}`;
+}
+
+/**
  * Format a date for display in a friendly form (e.g. headers, greetings).
  * Returns format like "Monday, 8 April" for UI greeting contexts.
  */

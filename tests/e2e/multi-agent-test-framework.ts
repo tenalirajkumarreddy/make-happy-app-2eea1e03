@@ -449,7 +449,7 @@ export const CROSS_ROLE_SCENARIOS: CrossRoleTestScenario[] = [
   },
   {
     name: 'Stock_Transfer_Visibility',
-    description: 'Manager transfers stock, Operator sees updated inventory',
+    description: 'Manager transfers stock, POS sees updated inventory',
     agents: [
       {
         role: 'manager',
@@ -485,7 +485,7 @@ export const CROSS_ROLE_SCENARIOS: CrossRoleTestScenario[] = [
         ],
       },
       {
-        role: 'operator',
+        role: 'pos',
         actions: [
           { type: 'navigate', target: '/inventory' },
           { type: 'wait', delay: 3000 },
@@ -501,11 +501,11 @@ export const CROSS_ROLE_SCENARIOS: CrossRoleTestScenario[] = [
       {
         type: 'realtime_update',
         fromAgent: 'manager',
-        toAgent: 'operator',
-        description: 'Operator inventory updates after manager transfer',
+        toAgent: 'pos',
+        description: 'POS inventory updates after manager transfer',
         validate: async (agents) => {
           // Verify inventory table exists
-          const operator = Array.from(agents.values()).find(a => a.role === 'operator');
+          const operator = Array.from(agents.values()).find(a => a.role === 'pos');
           if (!operator) return false;
           const hasInventory = await operator.page.$('table tbody tr');
           return !!hasInventory;
@@ -515,10 +515,10 @@ export const CROSS_ROLE_SCENARIOS: CrossRoleTestScenario[] = [
   },
   {
     name: 'Permission_Boundary_Test',
-    description: 'Verify operator cannot access orders',
+    description: 'Verify pos cannot access orders',
     agents: [
       {
-        role: 'operator',
+        role: 'pos',
         actions: [
           { type: 'navigate', target: '/orders' },
           { type: 'wait', delay: 3000 },
@@ -537,11 +537,11 @@ export const CROSS_ROLE_SCENARIOS: CrossRoleTestScenario[] = [
     validations: [
       {
         type: 'permission_boundary',
-        fromAgent: 'operator',
+        fromAgent: 'pos',
         toAgent: 'marketer',
-        description: 'Operator blocked from orders, Marketer allowed',
+        description: 'POS blocked from orders, Marketer allowed',
         validate: async (agents) => {
-          const operator = Array.from(agents.values()).find(a => a.role === 'operator');
+          const operator = Array.from(agents.values()).find(a => a.role === 'pos');
           const marketer = Array.from(agents.values()).find(a => a.role === 'marketer');
 
           if (!operator || !marketer) return false;

@@ -3,6 +3,9 @@ import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { VitePWA } from "vite-plugin-pwa";
 
+const SUPABASE_CACHE_DAYS = 1;
+const AUTH_CACHE_HOURS = 1;
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   server: {
@@ -17,35 +20,72 @@ export default defineConfig(({ mode }) => ({
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["favicon.ico", "placeholder.svg"],
-      manifest: false,
+      includeAssets: [
+        "icons/*.png",
+        "favicon.ico",
+        "favicon.png",
+        "logo.png",
+        "placeholder.svg",
+      ],
+      manifest: {
+        name: "Aqua Prime",
+        short_name: "Aqua Prime",
+        description: "Business Management System - Sales, Inventory & Customer Management",
+        theme_color: "#1a1a2e",
+        background_color: "#1a1a2e",
+        display: "standalone",
+        orientation: "portrait",
+        id: "/",
+        start_url: "/",
+        scope: "/",
+        categories: ["business", "productivity"],
+        lang: "en",
+        icons: [
+          { src: "/icons/icon-72x72.png", sizes: "72x72", type: "image/png" },
+          { src: "/icons/icon-96x96.png", sizes: "96x96", type: "image/png" },
+          { src: "/icons/icon-128x128.png", sizes: "128x128", type: "image/png" },
+          { src: "/icons/icon-144x144.png", sizes: "144x144", type: "image/png" },
+          { src: "/icons/icon-152x152.png", sizes: "152x152", type: "image/png" },
+          { src: "/icons/icon-192x192.png", sizes: "192x192", type: "image/png", purpose: "any maskable" },
+          { src: "/icons/icon-384x384.png", sizes: "384x384", type: "image/png" },
+          { src: "/icons/icon-512x512.png", sizes: "512x512", type: "image/png", purpose: "any maskable" },
+        ],
+      },
       workbox: {
-        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2,woff,ttf}"],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         runtimeCaching: [
           {
-            // Only cache Supabase Storage (public images/files), NOT REST API or auth
-            urlPattern: /^https:\/\/.*\.supabase\.co\/storage\/.*/i,
-            handler: "CacheFirst",
+            urlPattern: /^https?:\/\/.*\.supabase\.co\/rest\/v1\/.*/i,
+            handler: "NetworkFirst",
             options: {
-              cacheName: "supabase-storage",
-              expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 7 },
-              cacheableResponse: { statuses: [0, 200] },
+              cacheName: "supabase-api-cache",
+              expiration: {
+                maxEntries: 200,
+                maxAgeSeconds: 60 * 60 * 24 * SUPABASE_CACHE_DAYS,
+              },
+              networkTimeoutSeconds: 10,
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
             },
           },
           {
-            // Cache Google Fonts
-            urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/i,
-            handler: "CacheFirst",
+            urlPattern: /^https?:\/\/.*\.supabase\.co\/auth\/v1\/.*/i,
+            handler: "NetworkFirst",
             options: {
-              cacheName: "google-fonts",
-              expiration: { maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 * 365 },
-              cacheableResponse: { statuses: [0, 200] },
+              cacheName: "supabase-auth-cache",
+              expiration: {
+                maxEntries: 50,
+                maxAgeSeconds: 60 * 60 * AUTH_CACHE_HOURS,
+              },
+              networkTimeoutSeconds: 10,
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
             },
           },
         ],
-        // Never cache auth callback or OAuth redirect URLs
-        navigateFallbackDenylist: [/^\/(~oauth|auth\/callback|auth\/confirm)/],
       },
     }),
   ].filter(Boolean),

@@ -10,6 +10,7 @@ import { Loader2, MapPin, Navigation } from "lucide-react";
 import { generateDisplayId } from "@/lib/displayId";
 import { useQuery } from "@tanstack/react-query";
 import { getCurrentPosition, getOAuthRedirectUrl } from "@/lib/capacitorUtils";
+import { useAuth } from "@/contexts/AuthContext";
 
 type Step = "phone" | "register" | "add-store";
 
@@ -66,16 +67,35 @@ function OnboardingProgress({ step }: { step: Step }) {
 
 
 async function hasStaffOrCustomerAccess(userId: string): Promise<boolean> {
-  const [{ data: roleData }, { data: customerData }] = await Promise.all([
-    supabase.from("user_roles").select("role").eq("user_id", userId).maybeSingle(),
-    supabase.from("customers").select("id").eq("user_id", userId).maybeSingle(),
-  ]);
+  try {
+    const resolverCall: any = (supabase as any).rpc("resolve_user_identity", { p_user_id: userId });
+    let resolverData: any = null;
+    let resolverError: any = null;
 
-  if (roleData?.role && roleData.role !== "customer") {
-    return true;
+    if (resolverCall?.single) {
+      const result = await resolverCall.single();
+      resolverData = result.data;
+      resolverError = result.error;
+    } else {
+      const result = await resolverCall;
+      resolverData = Array.isArray(result.data) ? result.data[0] : result.data;
+      resolverError = result.error;
+    }
+
+    if (resolverError) throw resolverError;
+    return !resolverData?.onboarding_required;
+  } catch {
+    const [{ data: roleData }, { data: customerData }] = await Promise.all([
+      supabase.from("user_roles").select("role").eq("user_id", userId).maybeSingle(),
+      supabase.from("customers").select("id").eq("user_id", userId).maybeSingle(),
+    ]);
+
+    if (roleData?.role && roleData.role !== "customer") {
+      return true;
+    }
+
+    return !!customerData;
   }
-
-  return !!customerData;
 }
 
 const Auth = () => {
@@ -114,69 +134,47 @@ const Auth = () => {
     },
   });
 
+  // Central auth state
 
+
+
+  // Use central AuthContext to avoid racing the resolver/role sync performed
+  // during login (this prevents a transient redirect to onboarding).
+  // We prefer the AuthProvider's resolved `needsOnboarding` value.
+  const auth = useAuth();
 
   useEffect(() => {
-    const resolveExistingSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session?.user) {
-        setLoading(false);
-        setSessionChecked(true);
-        return;
-      }
-      
-      setLoading(true);
-      
-      try {
-        // Check if user already has staff or customer access (including pending staff invitations)
-        if (await hasStaffOrCustomerAccess(session.user.id)) {
-          navigate("/", { replace: true });
-          return;
-        }
-        
-        // No access found — check if phone exists in staff_invitations (pending staff)
-        const pendingByPhone = session.user.phone
-          ? await supabase
-              .from("staff_invitations")
-              .select("id, role, full_name")
-              .eq("phone", session.user.phone)
-              .eq("status", "pending")
-              .maybeSingle()
-          : { data: null };
-        const pendingByEmail = session.user.email
-          ? await supabase
-              .from("staff_invitations")
-              .select("id, role, full_name")
-              .eq("email", session.user.email)
-              .eq("status", "pending")
-              .maybeSingle()
-          : { data: null };
-        const pendingStaff = pendingByPhone.data || pendingByEmail.data;
-        
-        if (pendingStaff) {
-          // Pending staff — don't allow to onboard as customer, redirect to login with message
-          // They need to be accepted by admin first
-          setVerifiedPhone(session.user.phone || "");
-          setStep("register");
-          return;
-        }
-        
-        // Send to registration
-        setVerifiedPhone(session.user.phone || "");
-        setStep("register");
-      } catch (error) {
-        console.error("Session resolution failed", error);
-        setVerifiedPhone(session.user.phone || "");
-        setStep("register");
-      } finally {
-        setLoading(false);
-        setSessionChecked(true);
-      }
-    };
+    let cancelled = false;
 
-    resolveExistingSession();
-  }, [navigate]);
+    if (auth.loading) return;
+
+    if (!auth.user) {
+      if (!cancelled) {
+        setLoading(false);
+        setSessionChecked(true);
+      }
+      return;
+    }
+
+    if (!auth.needsOnboarding) {
+      if (!cancelled) {
+        setLoading(false);
+        setSessionChecked(true);
+        navigate("/", { replace: true });
+      }
+      return;
+    }
+
+    // Needs onboarding: prefill phone and show register step
+    if (!cancelled) {
+      setVerifiedPhone(auth.user.phone || "");
+      setStep("register");
+      setLoading(false);
+      setSessionChecked(true);
+    }
+
+    return () => { cancelled = true; };
+  }, [auth.loading, auth.user, auth.needsOnboarding, navigate]);
 
   // ── Handlers ──
 
@@ -340,37 +338,15 @@ const Auth = () => {
         access_token: data.access_token,
         refresh_token: data.refresh_token,
       });
-      
+
       if (sessionError) throw sessionError;
-      
+
       setVerifiedPhone(data.user.phone);
+      setSessionChecked(false);
 
-      // The backend now performs full identity resolution:
-      // staff_invitations → staff_directory → customers → onboarding
-      const resolution = data.resolution;
-
-      if (resolution?.type === "staff") {
-        toast.success(`Logged in as ${resolution.role}`);
-        navigate("/", { replace: true });
-        return;
-      }
-
-      if (resolution?.type === "existing_customer") {
-        toast.success("Login successful!");
-        navigate("/", { replace: true });
-        return;
-      }
-
-      // Fallback: check client-side in case resolution didn't run
-      if (await hasStaffOrCustomerAccess(data.user.id)) {
-        toast.success("Login successful!");
-        navigate("/", { replace: true });
-        return;
-      }
-      
-      // New user — needs to register as customer
-      setStep("register");
-      toast.success("Phone verified! Please complete registration.");
+      // Let the shared AuthContext finish resolving the account before we
+      // decide whether to stay on onboarding or go straight to the dashboard.
+      toast.success("Phone verified! Checking your account...");
     } catch (error: any) {
       toast.error(error.message || "Invalid OTP code");
     } finally {
@@ -639,6 +615,7 @@ const Auth = () => {
             </svg>
             Continue with Google
           </Button>
+
         </div>
       </div>
     </div>

@@ -9,6 +9,7 @@ import "./index.css";
 import { env } from "@/lib/env";
 import { logDebug, logError } from "@/lib/logger";
 import { supabase } from "@/integrations/supabase/client";
+import { PushNotifications } from "@capacitor/push-notifications";
 
 if (env.VITE_SENTRY_DSN && import.meta.env.PROD) {
   Sentry.init({
@@ -88,24 +89,77 @@ async function initCapacitor() {
     } catch (e) {
       logDebug("SplashScreen plugin not available");
     }
+
+    // Initialize push notifications (FCM)
+    initPushNotifications();
   }
 }
 
-// Register service worker for offline support and push notifications
-async function registerServiceWorker() {
-  if ("serviceWorker" in navigator && import.meta.env.PROD) {
-    try {
-      const reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
-      logDebug("[SW] Registered", { scope: reg.scope });
-    } catch (err) {
-      logError("[SW] Registration failed", err);
+async function initPushNotifications() {
+  try {
+    const permResult = await PushNotifications.requestPermissions();
+    if (permResult.receive !== "granted") {
+      logDebug("Push notification permission not granted");
+      return;
     }
+
+    // Register with FCM
+    await PushNotifications.register();
+
+    // Get FCM token and save to backend
+    PushNotifications.addListener("registration", async (token) => {
+      logDebug("FCM token:", token.value);
+      await saveFCMToken(token.value);
+    });
+
+    // Handle incoming push notification (app in background or foreground)
+    PushNotifications.addListener("pushNotificationReceived", (notification) => {
+      logDebug("Push notification received:", notification.title);
+    });
+
+    // Handle notification tap
+    PushNotifications.addListener(
+      "pushNotificationActionPerformed",
+      (response) => {
+        const entityId = (response.notification as any).data?.entity_id;
+        const entityType = (response.notification as any).data?.entity_type;
+        if (entityId) {
+          window.dispatchEvent(
+            new CustomEvent("push-notification-tap", {
+              detail: { entityId, entityType, title: response.notification.title },
+            })
+          );
+        }
+      }
+    );
+
+    // Token refresh
+    PushNotifications.addListener("tokenRefresh", async (token) => {
+      logDebug("FCM token refreshed:", token.value);
+      await saveFCMToken(token.value);
+    });
+  } catch (e) {
+    logDebug("PushNotifications plugin not available:", e);
+  }
+}
+
+async function saveFCMToken(token: string) {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    await supabase.from("fcm_tokens").upsert(
+      { user_id: user.id, token, platform: "android", updated_at: new Date().toISOString() },
+      { onConflict: "user_id,token" }
+    );
+    logDebug("FCM token saved to backend");
+  } catch (e) {
+    logError("Failed to save FCM token", e);
   }
 }
 
 // Render app first, then initialize native features
 createRoot(document.getElementById("root")!).render(<App />);
 
-// Initialize Capacitor and service worker after render
+// Initialize Capacitor after render
 initCapacitor();
-registerServiceWorker();

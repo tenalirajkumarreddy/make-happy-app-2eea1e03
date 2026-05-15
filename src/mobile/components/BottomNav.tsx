@@ -1,13 +1,14 @@
-import { Home, Map, ScanLine, History, Users, ClipboardList, ReceiptIndianRupee, Plus, HandCoins } from "lucide-react";
+import { Home, Map, ScanLine, History, Users, ClipboardList, ReceiptIndianRupee, Plus, HandCoins, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type MobileTab = "home" | "routes" | "scan" | "history" | "customers" | "orders" | "record" | "sales" | "transactions" | "profile" | "products" | "handovers";
+export type MobileTab = "home" | "routes" | "scan" | "history" | "customers" | "orders" | "record" | "sales" | "transactions" | "profile" | "products" | "handovers" | "inventory" | "staff";
 
-interface MobileTabItem {
+export interface MobileTabItem {
   id: MobileTab;
   label: string;
   icon: typeof Home;
   centerAction?: boolean;
+  badge?: number;
 }
 
 interface Props {
@@ -42,8 +43,8 @@ export const CUSTOMER_TABS: MobileTabItem[] = [
 
 export const POS_TABS: MobileTabItem[] = [
   { id: "home", label: "Home", icon: Home },
-  { id: "record", label: "Sale", icon: ScanLine, centerAction: true },
-  { id: "handovers", label: "Handover", icon: HandCoins },
+  { id: "inventory", label: "Inventory", icon: Package, centerAction: true },
+  { id: "staff", label: "Staff", icon: Users },
   { id: "history", label: "History", icon: History },
 ];
 
@@ -104,6 +105,10 @@ export function BottomNav({ tab, onChange, tabs = AGENT_TABS }: Props) {
                 className="flex-1 flex flex-col items-center justify-center h-full gap-1 relative transition-all"
                 onClick={() => onChange(t.id)}
               >
+                {/* Red dot badge */}
+                {(t.badge ?? 0) > 0 && (
+                  <span className="absolute -top-0.5 left-1/2 -translate-x-1/2 h-2 w-2 rounded-full bg-destructive animate-pulse z-50" />
+                )}
                 {/* Active pill indicator */}
                 {isActive && (
                   <span className="absolute top-0 left-1/2 -translate-x-1/2 h-0.5 w-8 bg-blue-600 dark:bg-blue-400 rounded-b-full" />

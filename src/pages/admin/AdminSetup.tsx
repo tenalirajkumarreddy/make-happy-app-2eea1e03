@@ -116,11 +116,11 @@ export default function AdminSetup() {
     },
   });
 
-  const deleteCatMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("raw_material_categories").delete().eq("id", id);
-      if (error) throw error;
-    },
+const deleteCatMutation = useMutation({
+  mutationFn: async (id: string) => {
+    const { error } = await supabase.from("raw_material_categories").update({ deleted_at: new Date().toISOString() }).eq("id", id);
+    if (error) throw error;
+  },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["raw_material_categories"] });
       toast.success("Category deleted");
@@ -158,11 +158,11 @@ export default function AdminSetup() {
     },
   });
 
-  const deleteConvMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("unit_conversions").delete().eq("id", id);
-      if (error) throw error;
-    },
+const deleteConvMutation = useMutation({
+  mutationFn: async (id: string) => {
+    const { error } = await supabase.from("unit_conversions").update({ deleted_at: new Date().toISOString() }).eq("id", id);
+    if (error) throw error;
+  },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["unit_conversions"] });
       toast.success("Conversion deleted");

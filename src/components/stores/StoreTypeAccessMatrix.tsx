@@ -6,15 +6,14 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useState, useCallback } from "react";
 
-import type { Database } from "@/integrations/supabase/types";
-type AppRole = Database["public"]["Enums"]["app_role"];
-const STAFF_ROLES: AppRole[] = ["manager", "agent", "marketer", "pos"];
+import type { AppRole } from "@/types/roles";
+const STAFF_ROLES: AppRole[] = ["manager", "agent", "marketer", "operator"];
 
 const ROLE_BADGE: Record<string, string> = {
   manager: "bg-purple-500/15 text-purple-600 dark:text-purple-400",
   agent: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
   marketer: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-  pos: "bg-orange-500/15 text-orange-600 dark:text-orange-400",
+  operator: "bg-orange-500/15 text-orange-600 dark:text-orange-400",
 };
 
 function useStoreTypeAccessMatrix() {

@@ -42,6 +42,7 @@ interface OrderRow {
   customer_id: string;
   stores: { name: string } | null;
   customers: { name: string } | null;
+  order_items?: Array<{ id: string; product_id: string; quantity: number; products?: { name: string; base_price: number } | null }>;
 }
 
 interface CustomerItem {
@@ -89,6 +90,9 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
   const [cancelReason, setCancelReason] = useState("");
   const [cancelling, setCancelling] = useState(false);
   const [deliveringId, setDeliveringId] = useState<string | null>(null);
+  const [fulfillOrder, setFulfillOrder] = useState<OrderRow | null>(null);
+  const [deliverCash, setDeliverCash] = useState("");
+  const [deliverUpi, setDeliverUpi] = useState("");
 
   useEffect(() => {
     if (!preselectStore) return;
@@ -103,7 +107,7 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
     queryFn: async () => {
       let query = supabase
         .from("orders")
-        .select("id, display_id, status, order_type, requirement_note, cancellation_reason, created_at, store_id, customer_id, stores(name), customers(name)")
+        .select("id, display_id, status, order_type, requirement_note, cancellation_reason, created_at, store_id, customer_id, stores(name), customers(name), order_items(id, product_id, quantity, products(name, base_price))")
         .eq("created_by", user!.id)
         .order("created_at", { ascending: false });
 
@@ -273,20 +277,46 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
     }
   };
 
-  const handleDeliverOrder = async (orderId: string) => {
-    setDeliveringId(orderId);
-    try {
-      const { error } = await supabase
-        .from("orders")
-        .update({ status: "delivered", delivered_at: new Date().toISOString() })
-        .eq("id", orderId)
-        .eq("status", "pending");
-      if (error) throw error;
+  const handleFulfillOrder = async () => {
+    if (!fulfillOrder) return;
+    const cash = Number(deliverCash) || 0;
+    const upi = Number(deliverUpi) || 0;
+    const total = cash + upi;
+    if (total <= 0) { toast.error("Enter cash or UPI amount"); return; }
 
-      toast.success("Order marked delivered");
+    setDeliveringId(fulfillOrder.id);
+    try {
+      const { data: displayId } = await (supabase as any).rpc("generate_display_id", { prefix: "SALE", seq_name: "sale_display_seq" });
+      if (!displayId) throw new Error("Failed to generate sale ID");
+
+      const saleItems = (fulfillOrder.order_items || []).map((item) => ({
+        product_id: item.product_id,
+        quantity: item.quantity,
+        unit_price: item.products?.base_price || 0,
+      }));
+
+      const { error: saleError } = await (supabase as any).rpc("record_sale", {
+        p_display_id: displayId,
+        p_store_id: fulfillOrder.store_id,
+        p_customer_id: fulfillOrder.customer_id,
+        p_recorded_by: user!.id,
+        p_logged_by: null,
+        p_total_amount: total,
+        p_cash_amount: cash,
+        p_upi_amount: upi,
+        p_outstanding_amount: 0,
+        p_sale_items: saleItems.length > 0 ? saleItems : [{ product_id: "00000000-0000-0000-0000-000000000000", quantity: 1, unit_price: total }],
+        p_created_at: null,
+      });
+      if (saleError) throw saleError;
+
+      toast.success(`Order ${fulfillOrder.display_id} fulfilled (${displayId})`);
+      setFulfillOrder(null);
+      setDeliverCash("");
+      setDeliverUpi("");
       qc.invalidateQueries({ queryKey: ["mobile-marketer-orders"] });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to mark delivered";
+      const message = error instanceof Error ? error.message : "Failed to fulfill order";
       toast.error(message);
     } finally {
       setDeliveringId(null);
@@ -338,51 +368,44 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
         ) : (
           <div className="space-y-2">
             {(orders || []).map((order) => (
-              <div key={order.id} className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-3 shadow-sm">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-bold text-slate-800 dark:text-white">{order.display_id}</span>
-                      <Badge
-                        variant="outline"
-                        className={`text-[10px] font-semibold ${
-                          order.status === "pending"
-                            ? "border-amber-200 text-amber-600 dark:border-amber-700 dark:text-amber-400"
-                            : order.status === "delivered"
-                            ? "border-emerald-200 text-emerald-600 dark:border-emerald-700 dark:text-emerald-400"
-                            : "border-red-200 text-red-600 dark:border-red-700 dark:text-red-400"
-                        }`}
-                      >
-                        {order.status}
-                      </Badge>
+              <div key={order.id} className="rounded-2xl bg-card border border-border shadow-sm overflow-hidden">
+                <div className={`h-1 ${
+                  order.status === "pending" ? "bg-amber-400" :
+                  order.status === "delivered" ? "bg-emerald-400" :
+                  order.status === "cancelled" ? "bg-red-400" : "bg-slate-300"
+                }`} />
+                <div className="p-3.5 space-y-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-primary font-mono">{order.display_id}</span>
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                          order.status === "pending" ? "bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-700" :
+                          order.status === "delivered" ? "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-700" :
+                          "bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-700"
+                        }`}>{order.status}</span>
+                      </div>
+                      <p className="text-sm font-semibold text-foreground mt-1">{order.stores?.name || "Store"}</p>
+                      <p className="text-[11px] text-muted-foreground">{order.order_type} • {new Date(order.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}</p>
                     </div>
-                    <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">{order.stores?.name || "Store"}</p>
-                    <div className="flex items-center gap-2 mt-1 text-[11px] text-slate-400">
-                      <span>{order.order_type}</span>
-                      <span>•</span>
-                      <span>{new Date(order.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}</span>
-                    </div>
-                    {order.requirement_note && (
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 line-clamp-2">{order.requirement_note}</p>
-                    )}
-                    {order.status === "cancelled" && order.cancellation_reason && (
-                      <p className="text-xs text-red-500 mt-2">Reason: {order.cancellation_reason}</p>
-                    )}
                   </div>
+                  {order.requirement_note && (
+                    <p className="text-xs text-muted-foreground bg-muted/30 rounded-xl px-3 py-2 italic">"{order.requirement_note}"</p>
+                  )}
+                  {order.status === "cancelled" && order.cancellation_reason && (
+                    <p className="text-xs text-red-500">Reason: {order.cancellation_reason}</p>
+                  )}
+                  {order.status === "pending" && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button size="sm" className="h-9 rounded-xl" onClick={() => { setFulfillOrder(order); setDeliverCash(""); setDeliverUpi(""); }}>
+                        <CheckCircle2 className="h-4 w-4 mr-1.5" /> Deliver
+                      </Button>
+                      <Button size="sm" variant="outline" className="h-9 rounded-xl" onClick={() => setCancelOrderId(order.id)}>
+                        <XCircle className="h-4 w-4 mr-1.5" /> Cancel
+                      </Button>
+                    </div>
+                  )}
                 </div>
-
-                {order.status === "pending" && (
-                  <div className="grid grid-cols-2 gap-2 mt-3">
-                    <Button size="sm" className="h-9 rounded-xl" onClick={() => handleDeliverOrder(order.id)} disabled={deliveringId === order.id}>
-                      {deliveringId === order.id ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-1.5" />}
-                      Deliver
-                    </Button>
-                    <Button size="sm" variant="outline" className="h-9 rounded-xl" onClick={() => setCancelOrderId(order.id)}>
-                      <XCircle className="h-4 w-4 mr-1.5" />
-                      Cancel
-                    </Button>
-                  </div>
-                )}
               </div>
             ))}
           </div>
@@ -513,6 +536,51 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
               >
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><ShoppingCart className="h-4 w-4" />Create Order</>}
               </button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Fulfillment Sheet */}
+      <Sheet open={!!fulfillOrder} onOpenChange={(open) => { if (!open) { setFulfillOrder(null); setDeliverCash(""); setDeliverUpi(""); } }}>
+        <SheetContent side="bottom" className="rounded-t-3xl pb-10 px-0">
+          <div className="px-4 space-y-4">
+            <SheetHeader className="text-left">
+              <SheetTitle className="text-lg font-bold">Fulfill Order</SheetTitle>
+            </SheetHeader>
+            <div>
+              <p className="text-sm font-bold">{fulfillOrder?.display_id}</p>
+              <p className="text-xs text-muted-foreground">{fulfillOrder?.stores?.name}</p>
+            </div>
+            {fulfillOrder?.order_items && fulfillOrder.order_items.length > 0 && (
+              <div className="border rounded-lg divide-y text-xs">
+                {fulfillOrder.order_items.map((item: any) => (
+                  <div key={item.id} className="flex justify-between px-3 py-2">
+                    <span>{item.products?.name || "Product"} × {item.quantity}</span>
+                    <span className="font-medium">₹{(Number(item.products?.base_price || 0) * item.quantity).toLocaleString("en-IN")}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Cash Received</label>
+                <Input type="number" min="0" placeholder="0" value={deliverCash} onChange={(e) => setDeliverCash(e.target.value)} />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">UPI Received</label>
+                <Input type="number" min="0" placeholder="0" value={deliverUpi} onChange={(e) => setDeliverUpi(e.target.value)} />
+              </div>
+            </div>
+            <div className="flex justify-between text-sm font-bold pt-2 border-t">
+              <span>Total</span>
+              <span>₹{((Number(deliverCash) || 0) + (Number(deliverUpi) || 0)).toLocaleString("en-IN")}</span>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { setFulfillOrder(null); setDeliverCash(""); setDeliverUpi(""); }}>Cancel</Button>
+              <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700" disabled={deliveringId === fulfillOrder?.id} onClick={handleFulfillOrder}>
+                {deliveringId === fulfillOrder?.id ? <Loader2 className="h-4 w-4 animate-spin" /> : "Record Sale & Deliver"}
+              </Button>
             </div>
           </div>
         </SheetContent>

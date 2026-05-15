@@ -86,11 +86,11 @@ export default function AdminVehicles() {
     },
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("vehicles").delete().eq("id", id);
-      if (error) throw error;
-    },
+const deleteMutation = useMutation({
+  mutationFn: async (id: string) => {
+    const { error } = await supabase.from("vehicles").update({ deleted_at: new Date().toISOString() }).eq("id", id);
+    if (error) throw error;
+  },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["vehicles"] });
       toast.success("Vehicle deleted");

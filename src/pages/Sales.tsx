@@ -9,10 +9,11 @@ import { logActivity } from "@/lib/activityLogger";
 import { sanitizeString } from "@/lib/sanitization";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { addToQueue, generateBusinessKey } from "@/lib/offlineQueue";
+import { createSaleSchema, validateSaleData } from "@/lib/validation/schemas";
 import { resolveCreditLimit } from "@/lib/creditLimit";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
-import { Loader2, Plus, Trash2, Download, IndianRupee, CreditCard, Banknote, Clock, UserCircle, Store as StoreIcon, Package, X, CalendarIcon, Receipt, FileText, RotateCcw, ShoppingCart, ChevronRight, Eye, ClipboardList, Wallet, QrCode, Minus, MapPin, Phone, Mail } from "lucide-react";
+import { Loader2, Plus, Trash2, Download, IndianRupee, CreditCard, Banknote, Clock, UserCircle, Store as StoreIcon, Package, X, CalendarIcon, Receipt, FileText, RotateCcw, ShoppingCart, ChevronRight, Eye, ClipboardList, Wallet, QrCode, Minus, MapPin, Phone, Mail, AlertCircle } from "lucide-react";
 import { QrStoreSelector } from "@/components/shared/QrStoreSelector";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { SaleReceipt } from "@/components/shared/SaleReceipt";
@@ -47,35 +48,54 @@ HoverCardTrigger,
 import { toast } from "sonner";
 import { format } from "date-fns";
 
-function exportCSV(data: any[], columns: { header: string; key: string }[], filename: string) {
-  const header = columns.map((c) => c.header).join(",");
-  const rows = data.map((row) =>
-    columns.map((c) => {
-      const val = c.key.includes(".") ? c.key.split(".").reduce((o: any, k) => o?.[k], row) : row[c.key];
-      // Sanitize value to prevent XSS in CSV
-      const sanitized = sanitizeString(String(val ?? ""));
-      const str = sanitized.replace(/"/g, '""');
-      return `"${str}"`;
-    }).join(",")
-  );
-  const csv = [header, ...rows].join("\n");
-  const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-  toast.success(`Exported ${data.length} rows`);
-}
-
 interface SaleItem {
   product_id: string;
   quantity: number;
   unit_price: number;
 }
 
-const POS_STORE_ID = "00000000-0000-0000-0000-000000000001";
+interface Customer {
+  id: string;
+  name: string;
+}
+
+interface Store {
+  id: string;
+  name: string;
+  store_type_id: string | null;
+  customer_id: string | null;
+  route_id?: string | null;
+}
+
+interface SaleRecord {
+  id: string;
+  display_id: string;
+  store_id: string;
+  customer_id: string | null;
+  recorded_by: string;
+  recorded_at: string;
+  total_amount: number;
+  total_quantity: number;
+  payment_mode: string;
+  payment_ref: string | null;
+  payment_status: string;
+  notes: string | null;
+  status: string;
+  sale_type: string;
+  is_imported: boolean;
+  approved_by: string | null;
+  approved_at: string | null;
+  created_at: string;
+  updated_at: string;
+  stores?: Store | null;
+  customers?: Customer | null;
+}
+
+interface CsvColumn {
+  header: string;
+  key: string;
+}
+
 const PAGE_SIZE = 100;
 
 // Type for order fulfillment
@@ -108,6 +128,28 @@ interface FulfillOrder {
   };
 }
 
+function exportCSV<T extends Record<string, any>>(data: T[], columns: CsvColumn[], filename: string) {
+  const header = columns.map((c) => c.header).join(",");
+  const rows = data.map((row) =>
+    columns.map((c) => {
+      const val = c.key.includes(".") ? c.key.split(".").reduce((o: Record<string, any>, k: string) => o?.[k], row) : row[c.key];
+      // Sanitize value to prevent XSS in CSV
+      const sanitized = sanitizeString(String(val ?? ""));
+      const str = sanitized.replace(/"/g, '""');
+      return `"${str}"`;
+    }).join(",")
+  );
+  const csv = [header, ...rows].join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast.success(`Exported ${data.length} rows`);
+}
+
 const Sales = () => {
   const { user, role } = useAuth();
   const { currentWarehouse } = useWarehouse();
@@ -120,16 +162,15 @@ const Sales = () => {
   const [saving, setSaving] = useState(false);
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
   const [receiptSaleId, setReceiptSaleId] = useState<string | null>(null);
-  const [returnSale, setReturnSale] = useState<any | null>(null);
+  const [returnSale, setReturnSale] = useState<SaleRecord | null>(null);
   const [fulfillOrder, setFulfillOrder] = useState<FulfillOrder | null>(null);
   const [loadingOrderId, setLoadingOrderId] = useState<string | null>(null);
 
   // Operator users are locked to the POS store
   const isAdmin = role === "super_admin" || role === "manager";
   const [searchParams, setSearchParams] = useSearchParams();
-  const [storeId, setStoreId] = useState(isPosUser ? POS_STORE_ID : (searchParams.get("store") ?? ""));
+  const [storeId, setStoreId] = useState(searchParams.get("store") ?? "");
 
-  // When navigated with ?store=<id>, auto-open the add dialog
   useEffect(() => {
     const storeParam = searchParams.get("store");
     if (storeParam && !isPosUser) {
@@ -138,6 +179,7 @@ const Sales = () => {
       setSearchParams({}, { replace: true });
     }
   }, [searchParams, isPosUser, setSearchParams]);
+
   const [cashAmount, setCashAmount] = useState("");
   const [upiAmount, setUpiAmount] = useState("");
   const [recordedFor, setRecordedFor] = useState("");
@@ -159,7 +201,7 @@ const Sales = () => {
   // Reset to page 1 whenever any filter changes
   useEffect(() => {
     setLoadedPages(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [filterFrom, filterTo, filterStore, filterStoreType, filterRoute, filterUser, filterPayment]);
 
   useEffect(() => {
@@ -177,7 +219,7 @@ let query = supabase
    .select("*, stores(id, name, display_id, store_type_id, route_id, address, outstanding), customers(id, name, display_id, phone, email), fulfilled_order_id, invoice_sales(invoice_id)")
        .order("created_at", { ascending: false });
        if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
-       // Non-admin roles (agents, pos, marketer) only see their own records
+       // Non-admin roles (agents, operator, marketer) only see their own records
        if (!isAdmin) query = query.eq("recorded_by", user!.id);
        // Server-side filters
        if (filterFrom) query = query.gte("created_at", filterFrom + "T00:00:00");
@@ -241,6 +283,13 @@ let query = supabase
      },
    });
 
+  // Operator: auto-select first store from their warehouse (the POS store)
+  useEffect(() => {
+    if (isPosUser && stores && stores.length > 0 && !storeId) {
+      setStoreId(stores[0].id);
+    }
+  }, [isPosUser, stores, storeId]);
+
   // Fetch store types for credit limits
   // Fetch store types for filters and credit limits
   const { data: storeTypes } = useQuery({
@@ -276,18 +325,38 @@ let query = supabase
 
   // Fetch all products for adding non-associated items
    const { data: allProducts } = useQuery({
-     queryKey: ["all-products-for-sale", currentWarehouse?.id],
+     queryKey: ["all-products-for-sale", currentWarehouse?.id, user?.id, recordedFor],
      queryFn: async () => {
        let query = supabase.from("products").select("id, name, base_price, sku, image_url").eq("is_active", true);
        if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
        const { data } = await query;
-       return data || [];
+       
+       if (!data) return [];
+
+       // Fetch stock availability
+       const { data: stockInfo } = await supabase.rpc("check_stock_availability", {
+         p_user_id: user!.id,
+         p_recorded_for: recordedFor || null,
+         p_items: data.map(p => ({ product_id: p.id, quantity: 0 }))
+       });
+
+       const stockMap: Record<string, any> = {};
+       (stockInfo as any[])?.forEach(s => {
+         stockMap[s.out_product_id] = s;
+       });
+
+       return data.map(p => ({
+         ...p,
+         stock: stockMap[p.id]?.out_available_qty || 0,
+         pending_out: stockMap[p.id]?.out_pending_outgoing || 0
+       }));
      },
+     enabled: !!user?.id,
    });
 
   // Fetch store-associated products with pricing
   const { data: storeProducts } = useQuery({
-    queryKey: ["store-products-for-sale", selectedStoreTypeId, storeId],
+    queryKey: ["store-products-for-sale", selectedStoreTypeId, storeId, user?.id, recordedFor],
     queryFn: async () => {
       if (!selectedStoreTypeId || !storeId) return [];
       
@@ -301,6 +370,8 @@ let query = supabase
       if (accessData && accessData.length > 0) {
         productList = accessData.map((a: any) => a.products).filter(Boolean);
       }
+
+      if (productList.length === 0) return [];
 
       // Get pricing
       const { data: typePricing } = await supabase
@@ -317,14 +388,31 @@ let query = supabase
       const storePriceMap: Record<string, number> = {};
       storePricing?.forEach((p) => { storePriceMap[p.product_id] = Number(p.price); });
 
+      // Fetch stock availability
+      const { data: stockInfo } = await supabase.rpc("check_stock_availability", {
+        p_user_id: user!.id,
+        p_recorded_for: recordedFor || null,
+        p_items: productList.map(p => ({ product_id: p.id, quantity: 0 }))
+      });
+
+      const stockMap: Record<string, any> = {};
+      (stockInfo as any[])?.forEach(s => {
+        stockMap[s.out_product_id] = s;
+      });
+
       return productList.map((p) => {
         let effectivePrice = Number(p.base_price);
         if (typePriceMap[p.id]) effectivePrice = typePriceMap[p.id];
         if (storePriceMap[p.id]) effectivePrice = storePriceMap[p.id];
-        return { ...p, effectivePrice };
+        return { 
+          ...p, 
+          effectivePrice,
+          stock: stockMap[p.id]?.out_available_qty || 0,
+          pending_out: stockMap[p.id]?.out_pending_outgoing || 0
+        };
       });
     },
-    enabled: !!storeId && !!selectedStoreTypeId,
+    enabled: !!storeId && !!selectedStoreTypeId && !!user?.id,
   });
 
   // Initialize items when store products load
@@ -455,7 +543,7 @@ let query = supabase
   });
 
   const resetForm = () => {
-    setStoreId(isPosUser ? POS_STORE_ID : ""); setCashAmount(""); setUpiAmount(""); setRecordedFor(""); setSaleDate("");
+    setStoreId(isPosUser && stores && stores.length > 0 ? stores[0].id : ""); setCashAmount(""); setUpiAmount(""); setRecordedFor(""); setSaleDate("");
     setItems([{ product_id: "", quantity: 1, unit_price: 0 }]);
   };
 
@@ -491,42 +579,24 @@ let query = supabase
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!storeId || items.some((i) => !i.product_id)) {
-      toast.error("Please fill all required fields");
-      return;
-    }
-    if (items.some((i) => i.quantity <= 0)) {
-      toast.error("All item quantities must be greater than zero");
-      return;
-    }
-    if (totalAmount === 0) {
-      toast.error("Sale total cannot be zero");
-      return;
-    }
-    // POS users: payment must equal total (no outstanding allowed)
-    if (isPosUser && (cash + upi) !== totalAmount) {
-      toast.error("POS sales require full payment. Cash + UPI must equal Total.");
+    
+    // Validate using type-safe schema
+    const validation = validateSaleData({
+      store_id: storeId,
+      items: items.filter(i => i.product_id), // Only non-empty items
+      cash_amount: cash,
+      upi_amount: upi,
+      total_amount: totalAmount,
+      isPosUser,
+      sale_date: saleDate || null,
+    });
+
+    if (!validation.valid) {
+      toast.error(validation.errors[0] || "Validation failed");
       return;
     }
 
-    // Validate sale date if provided
-    if (saleDate) {
-      const saleDateObj = new Date(saleDate);
-      const now = new Date();
-      const maxPast = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000); // 30 days ago
-      const maxFuture = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 1 day in the future
-
-      if (saleDateObj > maxFuture) {
-        toast.error("Sale date cannot be more than 1 day in the future");
-        return;
-      }
-      if (saleDateObj < maxPast) {
-        toast.error("Sale date cannot be more than 30 days in the past");
-        return;
-      }
-    }
-
-  setSaving(true);
+    setSaving(true);
 
   // Proximity check for agents (only if geofencing is enabled)
   if (role === "agent" && selectedStore) {
@@ -929,7 +999,6 @@ let query = supabase
       <span className="text-xs text-muted-foreground">{format(new Date(row.created_at), "dd MMM yy, hh:mm a")}</span>
     ), className: "hidden sm:table-cell" },
   { header: "Actions", accessor: (row: any) => (
-    <TooltipProvider>
       <div className="flex items-center gap-1">
         {/* View Receipt */}
         <Tooltip>
@@ -982,6 +1051,23 @@ let query = supabase
                 </Tooltip>
               )}
 
+        {/* Return Button */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-orange-600 hover:bg-orange-50 hover:text-orange-700"
+              onClick={(e) => { e.stopPropagation(); setReturnSale(row); }}
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Return Sale</p>
+          </TooltipContent>
+        </Tooltip>
+
         {/* View Associated Order - if sale was created from order fulfillment */}
         {row.fulfilled_order_id && (
           <Tooltip>
@@ -1001,7 +1087,6 @@ let query = supabase
           </Tooltip>
         )}
       </div>
-    </TooltipProvider>
   ), className: "hidden sm:table-cell" },
   ];
 
@@ -1016,6 +1101,7 @@ let query = supabase
   };
 
   return (
+    <TooltipProvider>
     <div className="space-y-6 animate-fade-in">
       <PageHeader
         title="Sales"
@@ -1124,11 +1210,11 @@ let query = supabase
       <DataTable
         columns={columns}
         data={filteredSales}
-        searchKey="display_id"
-        searchPlaceholder="Search by sale ID..."
-        emptyMessage="No sales recorded yet."
-        onRowClick={(row: any) => setSelectedSaleId(row.id)}
-      renderMobileCard={(row: any) => (
+          searchKey="display_id"
+          searchPlaceholder="Search by sale ID..."
+          emptyMessage="No sales recorded yet."
+          onRowClick={(row: SaleRecord) => setSelectedSaleId(row.id)}
+          renderMobileCard={(row: SaleRecord) => (
         <div className="rounded-lg border bg-card p-3">
           {/* Header row: ID + Date + Actions */}
           <div className="flex items-center justify-between mb-1.5">
@@ -1138,48 +1224,57 @@ let query = supabase
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6 text-primary hover:bg-primary/10"
+                className="h-9 w-9 text-primary hover:bg-primary/10"
                 onClick={(e) => { e.stopPropagation(); setReceiptSaleId(row.id); }}
-                title="View Receipt"
+                aria-label="View Receipt"
               >
-                <Receipt className="h-3 w-3" />
+                <Receipt className="h-4 w-4" />
               </Button>
               {isAdmin && (
                 row.invoice_sales?.length > 0 ? (
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-6 w-6 text-green-600 hover:bg-green-50 hover:text-green-700"
+                    className="h-9 w-9 text-green-600 hover:bg-green-50 hover:text-green-700"
                     onClick={(e) => { 
                       e.stopPropagation(); 
                       const invoiceId = row.invoice_sales[0]?.invoice_id;
                       if (invoiceId) navigate(`/invoices/${invoiceId}`);
                     }}
-                    title="View Invoice"
+                    aria-label="View Invoice"
                   >
-                    <FileText className="h-3 w-3" />
+                    <FileText className="h-4 w-4" />
                   </Button>
                 ) : (
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-6 w-6 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                    className="h-9 w-9 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
                     onClick={(e) => { e.stopPropagation(); navigate("/invoices/new", { state: { saleIds: [row.id] } }); }}
-                    title="Generate Invoice"
+                    aria-label="Generate Invoice"
                   >
-                    <FileText className="h-3 w-3" />
+                    <FileText className="h-4 w-4" />
                   </Button>
                 )
               )}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 text-orange-600 hover:bg-orange-50 hover:text-orange-700"
+                onClick={(e) => { e.stopPropagation(); setReturnSale(row); }}
+                aria-label="Return Sale"
+              >
+                <RotateCcw className="h-4 w-4" />
+              </Button>
 {row.fulfilled_order_id && (
             <Button
               variant="ghost"
               size="icon"
-              className="h-6 w-6 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+              className="h-9 w-9 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
               onClick={(e) => { e.stopPropagation(); navigate(`/orders?highlight=${row.fulfilled_order_id}`); }}
-              title="View Source Order"
+              aria-label="View Source Order"
             >
-              <ClipboardList className="h-3 w-3" />
+              <ClipboardList className="h-4 w-4" />
             </Button>
           )}
         </div>
@@ -1511,9 +1606,21 @@ let query = supabase
                       {/* Product Info */}
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sm truncate">{product?.name || item.product_name || "Select Product"}</p>
-                        <p className="text-xs text-muted-foreground">
-                          ₹{item.unit_price.toLocaleString()} × {item.quantity} = ₹{(item.quantity * item.unit_price).toLocaleString()}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs text-muted-foreground">
+                            ₹{item.unit_price.toLocaleString()} × {item.quantity} = ₹{(item.quantity * item.unit_price).toLocaleString()}
+                          </p>
+                          {(product as any)?.stock !== undefined && (
+                            <Badge variant="outline" className="text-[10px] px-1 h-4 font-normal">
+                              Stock: {(product as any).stock}
+                            </Badge>
+                          )}
+                          {(product as any)?.pending_out > 0 && (
+                            <span className="text-[10px] text-amber-500 font-medium">
+                              ({(product as any).pending_out} pending)
+                            </span>
+                          )}
+                        </div>
                       </div>
                       
                       {/* Quantity Controls */}
@@ -1630,6 +1737,8 @@ let query = supabase
                   <span className="font-semibold">New Outstanding</span>
                   <span className={`text-lg font-bold ${newOutstanding > 0 ? 'text-red-600' : newOutstanding < 0 ? 'text-green-600' : 'text-muted-foreground'}`}>
                     ₹{newOutstanding.toLocaleString()}
+                    {newOutstanding > 0 && <span className="ml-1 text-xs font-normal text-red-500">(due)</span>}
+                    {newOutstanding < 0 && <span className="ml-1 text-xs font-normal text-green-500">(credit)</span>}
                   </span>
                 </div>
                 {creditLimitInfo && creditLimitInfo.limit > 0 && (
@@ -1720,6 +1829,7 @@ let query = supabase
         </DialogContent>
       </Dialog>
     </div>
+    </TooltipProvider>
   );
 };
 

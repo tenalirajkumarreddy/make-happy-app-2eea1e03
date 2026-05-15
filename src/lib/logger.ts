@@ -1,8 +1,4 @@
-/**
- * Production-ready logging utility
- * - Development: Logs to console
- * - Production: Can be extended to send to logging service (Sentry, LogRocket, etc.)
- */
+import * as Sentry from "@sentry/react";
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
@@ -15,63 +11,48 @@ class Logger {
   private isTest = import.meta.env.MODE === 'test';
 
   private shouldLog(level: LogLevel): boolean {
-    // Don't log in tests unless explicitly needed
     if (this.isTest) return false;
-    
-    // In production, only log warnings and errors
     if (!this.isDevelopment && (level === 'debug' || level === 'info')) {
       return false;
     }
-    
     return true;
   }
 
   private formatMessage(level: LogLevel, message: string, context?: LogContext): string {
     const timestamp = new Date().toISOString();
     const prefix = `[${timestamp}] [${level.toUpperCase()}]`;
-    
     if (context && Object.keys(context).length > 0) {
       return `${prefix} ${message} ${JSON.stringify(context)}`;
     }
-    
     return `${prefix} ${message}`;
   }
 
   debug(message: string, context?: LogContext) {
     if (!this.shouldLog('debug')) return;
-    
-    if (this.isDevelopment) {
-      console.debug(this.formatMessage('debug', message, context));
-    }
+    console.debug(this.formatMessage('debug', message, context));
   }
 
   info(message: string, context?: LogContext) {
     if (!this.shouldLog('info')) return;
-    
-    if (this.isDevelopment) {
-      console.info(this.formatMessage('info', message, context));
-    }
+    console.info(this.formatMessage('info', message, context));
   }
 
   warn(message: string, context?: LogContext) {
     if (!this.shouldLog('warn')) return;
-    
     console.warn(this.formatMessage('warn', message, context));
-    
-    // In production, send to monitoring service
     if (!this.isDevelopment) {
-      this.sendToMonitoring('warn', message, context);
+      Sentry.captureMessage(message, { level: 'warning', extra: context });
     }
   }
 
-  error(message: string, error?: Error | unknown, context?: LogContext) {
+  error(message: string, error?: unknown, context?: LogContext) {
     if (!this.shouldLog('error')) return;
-    
-    const isError = error != null && typeof error === 'object' && 'message' in error;
-    
+
+    const isErrorObj = error != null && typeof error === 'object' && 'message' in error;
+
     const errorContext = {
       ...context,
-      error: isError ? {
+      error: isErrorObj ? {
         message: (error as Error).message,
         stack: (error as Error).stack,
         name: (error as Error).name,
@@ -79,55 +60,18 @@ class Logger {
     };
 
     console.error(this.formatMessage('error', message, errorContext));
-    
-    // In production, send to monitoring service
-    if (!this.isDevelopment) {
-      this.sendToMonitoring('error', message, errorContext);
-    }
-  }
 
-  private sendToMonitoring(level: LogLevel, message: string, context?: LogContext) {
-    if (typeof window !== 'undefined' && (window as any).Sentry) {
-      const sentry = (window as any).Sentry;
-      
-      if (level === 'error') {
-        const hasErrorProps = context?.error && typeof context.error === 'object' && 'message' in context.error;
-        const error = hasErrorProps
-          ? new Error((context.error as any).message) 
-          : new Error(message);
-        
-        sentry.captureException(error, {
-          level: 'error',
-          extra: context,
-        });
-      } else if (level === 'warn') {
-        sentry.captureMessage(message, {
-          level: 'warning',
-          extra: context,
-        });
-      }
-    }
-    
-    // Fallback/Legacy storage
-    if (level === 'error' && !this.isDevelopment) {
-      try {
-        const errors = JSON.parse(localStorage.getItem('app_errors') || '[]');
-        errors.push({
-          timestamp: new Date().toISOString(),
-          message,
-          context,
-        });
-        localStorage.setItem('app_errors', JSON.stringify(errors.slice(-50)));
-      } catch {
-        // Silently fail if localStorage is unavailable
-      }
+    if (!this.isDevelopment) {
+      const sentryError = isErrorObj
+        ? (error as Error)
+        : new Error(message);
+      Sentry.captureException(sentryError, { extra: errorContext });
     }
   }
 }
 
 export const logger = new Logger();
 
-// Convenience exports for common patterns
 export const log = logger.info.bind(logger);
 export const logError = logger.error.bind(logger);
 export const logWarn = logger.warn.bind(logger);

@@ -9,6 +9,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format } from "date-fns";
+import { fmtINR } from "@/lib/utils";
+import { usePullToRefresh } from "@/mobile/hooks/usePullToRefresh";
+import { PullRefreshIndicator } from "@/mobile/components/PullRefreshIndicator";
+import { CardSkeletonList } from "@/mobile/components/CardSkeleton";
 
 interface PurchaseItem {
   id: string;
@@ -110,9 +114,7 @@ export function AdminPurchases({ onNavigate }: { onNavigate: (path: string) => v
     }
   };
 
-  const formatAmount = (amount: number) => {
-    return `Rs ${Math.round(amount).toLocaleString('en-IN')}`;
-  };
+  // fmtINR from @/lib/utils handles ₹ formatting
 
   return (
     <div className="pb-6">
@@ -146,13 +148,16 @@ export function AdminPurchases({ onNavigate }: { onNavigate: (path: string) => v
 
       {/* Purchases List */}
       {isLoading ? (
-        <div className="flex justify-center py-8">
-          <Loader2 className="h-6 w-6 animate-spin text-primary" />
-        </div>
+        <CardSkeletonList count={4} />
       ) : filteredPurchases.length === 0 ? (
         <div className="px-4 py-8 text-center">
           <ShoppingCart className="h-12 w-12 text-muted-foreground mx-auto mb-2 opacity-50" />
           <p className="text-sm text-muted-foreground">No purchases found</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {statusFilter !== "all"
+              ? `No purchases with "${statusFilter}" status`
+              : "No purchase orders in the system"}
+          </p>
         </div>
       ) : (
         <div className="px-4 space-y-3">
@@ -179,7 +184,7 @@ export function AdminPurchases({ onNavigate }: { onNavigate: (path: string) => v
                         {purchase.vendors?.name || "Unknown Vendor"}
                       </p>
                     </div>
-                    <span className={`text-[11px] font-semibold px-2 py-1 rounded-full whitespace-nowrap flex items-center gap-1 border ${getStatusColor(purchase.status)}`}>
+                    <span className={`text-xs font-semibold px-2 py-1 rounded-full whitespace-nowrap flex items-center gap-1 border ${getStatusColor(purchase.status)}`}>
                       {getStatusIcon(purchase.status)}
                       {purchase.status}
                     </span>
@@ -194,7 +199,7 @@ export function AdminPurchases({ onNavigate }: { onNavigate: (path: string) => v
                             {item.products?.name} × {item.quantity}
                           </span>
                           <span className="font-medium tabular-nums ml-2">
-                            {formatAmount(item.total_cost)}
+                            {fmtINR(item.total_cost)}
                           </span>
                         </div>
                       ))}
@@ -216,35 +221,35 @@ export function AdminPurchases({ onNavigate }: { onNavigate: (path: string) => v
                         {format(new Date(purchase.created_at), "dd MMM, hh:mm a")}
                       </span>
                     </div>
-                    <p className="text-sm font-bold tabular-nums text-primary">{formatAmount(purchase.total_amount)}</p>
+                    <p className="text-sm font-bold tabular-nums text-primary">{fmtINR(purchase.total_amount)}</p>
                   </div>
                 </div>
 
                 {/* Action Buttons Row */}
                 <div className="flex border-t border-border/50">
                   <button
-                    onClick={() => onNavigate(`/purchases?highlight=${purchase.id}`)}
-                    className="flex-1 py-2.5 flex items-center justify-center gap-1.5 text-xs font-medium text-muted-foreground hover:bg-muted active:bg-muted/80 transition-colors border-r border-border/50"
+                    onClick={() => { setSelectedPurchase(purchase); setShowDetailModal(true); }}
+                    className="flex-1 py-2.5 min-w-0 flex items-center justify-center gap-1 text-xs font-medium text-muted-foreground hover:bg-muted active:bg-muted/80 transition-colors border-r border-border/50"
                   >
-                    <Eye className="h-3.5 w-3.5" />
-                    View
+                    <Eye className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">View</span>
                   </button>
                   {purchase.status === "pending" && (
                     <button
-                      onClick={() => onNavigate(`/purchases?confirm=${purchase.id}`)}
-                      className="flex-1 py-2.5 flex items-center justify-center gap-1.5 text-xs font-medium text-primary hover:bg-primary/5 active:bg-primary/10 transition-colors border-r border-border/50"
+                      onClick={() => { setSelectedPurchase(purchase); setShowDetailModal(true); }}
+                      className="flex-1 py-2.5 min-w-0 flex items-center justify-center gap-1 text-xs font-medium text-primary hover:bg-primary/5 active:bg-primary/10 transition-colors border-r border-border/50"
                     >
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                      Confirm
+                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">Confirm</span>
                     </button>
                   )}
                   {purchase.status === "confirmed" && (
                     <button
-                      onClick={() => onNavigate(`/purchases?receive=${purchase.id}`)}
-                      className="flex-1 py-2.5 flex items-center justify-center gap-1.5 text-xs font-medium text-green-700 hover:bg-green-50 active:bg-green-100 transition-colors border-r border-border/50"
+                      onClick={() => { setSelectedPurchase(purchase); setShowDetailModal(true); }}
+                      className="flex-1 py-2.5 min-w-0 flex items-center justify-center gap-1 text-xs font-medium text-green-700 hover:bg-green-50 active:bg-green-100 transition-colors border-r border-border/50"
                     >
-                      <Truck className="h-3.5 w-3.5" />
-                      Receive
+                      <Truck className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">Receive</span>
                     </button>
                   )}
                 </div>
@@ -297,11 +302,11 @@ export function AdminPurchases({ onNavigate }: { onNavigate: (path: string) => v
                       <div key={idx} className="px-3 py-2.5">
                         <div className="flex justify-between items-start mb-1">
                           <span className="text-sm font-medium">{item.products?.name}</span>
-                          <span className="text-sm font-semibold tabular-nums">{formatAmount(item.total_cost)}</span>
+                          <span className="text-sm font-semibold tabular-nums">{fmtINR(item.total_cost)}</span>
                         </div>
                         <div className="flex justify-between text-xs text-muted-foreground">
                           <span>SKU: {item.products?.sku || item.product_id.slice(0, 8)}</span>
-                          <span>Qty: {item.quantity} × {formatAmount(item.unit_cost)}</span>
+                          <span>Qty: {item.quantity} × {fmtINR(item.unit_cost)}</span>
                         </div>
                         {(item.batch_number || item.expiry_date) && (
                           <div className="flex gap-2 mt-1 text-[10px] text-muted-foreground">
@@ -315,7 +320,7 @@ export function AdminPurchases({ onNavigate }: { onNavigate: (path: string) => v
                   <div className="px-3 py-2.5 border-t bg-muted/20">
                     <div className="flex justify-between items-center">
                       <span className="text-xs font-semibold text-muted-foreground">Total Amount</span>
-                      <span className="text-base font-bold text-primary tabular-nums">{formatAmount(selectedPurchase.total_amount)}</span>
+                      <span className="text-base font-bold text-primary tabular-nums">{fmtINR(selectedPurchase.total_amount)}</span>
                     </div>
                   </div>
                 </div>

@@ -221,11 +221,11 @@ const VendorDetail = () => {
     },
   });
 
-  const deleteMaterialMutation = useMutation({
-    mutationFn: async (materialId: string) => {
-      const { error } = await supabase.from("raw_materials").delete().eq("id", materialId);
-      if (error) throw error;
-    },
+const deleteMaterialMutation = useMutation({
+  mutationFn: async (materialId: string) => {
+    const { error } = await supabase.from("raw_materials").update({ deleted_at: new Date().toISOString() }).eq("id", materialId);
+    if (error) throw error;
+  },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["vendor-raw-materials", id] });
       toast.success("Material deleted");

@@ -52,7 +52,11 @@ export function PermissionSetup({ onComplete }: Props) {
     if (step < PERMISSIONS.length - 1) {
       setStep((s) => s + 1);
     } else {
-      localStorage.setItem("mobile_permissions_done", "1");
+      try {
+        localStorage?.setItem("mobile_permissions_done", "1");
+      } catch {
+        // Ignore storage errors in native context
+      }
       onComplete();
     }
   };

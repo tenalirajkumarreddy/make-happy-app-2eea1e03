@@ -362,7 +362,7 @@ export default function CostInsights() {
                         metrics.latestWacMove >= 0 ? "text-green-600" : "text-red-600"
                       )}>
                         {metrics.latestWacMove >= 0 ? "+" : ""}
-                        ₹{Math.abs(metrics.latestWacMove).toFixed(2)}
+                        {formatCurrency($1)}
                       </p>
                       {metrics.latestWacMove >= 0 ? (
                         <ArrowUpRight className="h-4 w-4 text-green-600" />
@@ -399,7 +399,7 @@ export default function CostInsights() {
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
-                  Avg cost: ₹{metrics.avgBomCost.toFixed(2)}
+                  Avg cost: {formatCurrency($1)}
                 </p>
               </CardContent>
             </Card>
@@ -534,17 +534,17 @@ export default function CostInsights() {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                     <div className="space-y-2">
                       <p className="text-sm text-muted-foreground">Avg WAC Change</p>
-                      <p className="text-xl font-bold">₹{metrics.avgWacChange.toFixed(2)}</p>
+                      <p className="text-xl font-bold">{formatCurrency($1)}</p>
                       <Badge variant="outline" className="text-xs">Per adjustment</Badge>
                     </div>
                     <div className="space-y-2">
                       <p className="text-sm text-muted-foreground">Avg BOM Cost</p>
-                      <p className="text-xl font-bold">₹{metrics.avgBomCost.toFixed(2)}</p>
+                      <p className="text-xl font-bold">{formatCurrency($1)}</p>
                       <Badge variant="outline" className="text-xs">Per product</Badge>
                     </div>
                     <div className="space-y-2">
                       <p className="text-sm text-muted-foreground">Price Variance</p>
-                      <p className="text-xl font-bold">₹{metrics.priceVariance.toFixed(0)}</p>
+                      <p className="text-xl font-bold">{formatCurrency($1)}</p>
                       <Badge variant="outline" className="text-xs">Estimated ±5%</Badge>
                     </div>
                     <div className="space-y-2">
@@ -615,7 +615,7 @@ export default function CostInsights() {
                                         "text-sm font-medium",
                                         Number(data.change) >= 0 ? "text-green-600" : "text-red-600"
                                       )}>
-                                        Change: {Number(data.change) >= 0 ? "+" : ""}₹{Math.abs(data.change).toFixed(2)} ({data.variance}%)
+                                        Change: {Number(data.change) >= 0 ? "+" : ""}{formatCurrency($1)} ({data.variance}%)
                                       </p>
                                     </div>
                                   </div>
@@ -683,10 +683,10 @@ export default function CostInsights() {
                               {h.raw_materials?.name}
                             </TableCell>
                             <TableCell className="text-right">
-                              ₹{(h.old_cost || 0).toFixed(2)}
+                              {formatCurrency($1)}
                             </TableCell>
                             <TableCell className="text-right font-semibold">
-                              ₹{(h.new_cost || 0).toFixed(2)}
+                              {formatCurrency($1)}
                             </TableCell>
                             <TableCell className={cn(
                               "text-right font-medium",
@@ -783,19 +783,19 @@ export default function CostInsights() {
                           <TableRow key={product.id}>
                             <TableCell className="font-medium">{product.name}</TableCell>
                             <TableCell className="text-right">
-                              ₹{product.bomCost.toFixed(2)}
+                              {formatCurrency($1)}
                             </TableCell>
                             <TableCell className="text-right">
                               <Badge variant="secondary">{product.materialCount}</Badge>
                             </TableCell>
                             <TableCell className="text-right">
-                              ₹{product.sellingPrice.toFixed(2)}
+                              {formatCurrency($1)}
                             </TableCell>
                             <TableCell className={cn(
                               "text-right font-semibold",
                               isProfitable ? "text-green-600" : "text-red-600"
                             )}>
-                              {isProfitable ? "+" : ""}₹{margin.toFixed(2)}
+                              {isProfitable ? "+" : ""}{formatCurrency($1)}
                             </TableCell>
                             <TableCell className="text-right">
                               <Badge 
@@ -895,7 +895,7 @@ export default function CostInsights() {
                             <TableCell className="font-medium">{m.name}</TableCell>
                             <TableCell>{m.unit}</TableCell>
                             <TableCell className="text-right">
-                              ₹{(m.unit_cost || 0).toFixed(2)}
+                              {formatCurrency($1)}
                             </TableCell>
                             <TableCell className="text-right">
                               {(m.current_stock || 0).toLocaleString('en-IN')}
@@ -924,3 +924,6 @@ export default function CostInsights() {
     </div>
   );
 }
+
+
+
