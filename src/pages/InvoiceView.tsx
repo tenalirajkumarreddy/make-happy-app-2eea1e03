@@ -40,11 +40,6 @@ const InvoiceView = () => {
   const { id } = useParams();
   const printRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (invoice) {
-      document.title = `Invoice ${invoice.invoice_number}`;
-    }
-  }, [invoice]);
 
   // Fetch invoice
   const { data: invoice, isLoading } = useQuery({
@@ -87,6 +82,12 @@ const InvoiceView = () => {
       return data;
     },
   });
+
+  useEffect(() => {
+    if (invoice) {
+      document.title = `Invoice ${invoice.invoice_number}`;
+    }
+  }, [invoice]);
 
   const handlePrint = () => {
     window.print();
@@ -489,9 +490,41 @@ const InvoiceView = () => {
       <style>{`
         @media print {
           @page { margin: 12mm; }
-          body { background: white !important; }
-          .print\\:hidden { display: none !important; }
-          .print\\:block { display: block !important; }
+          body { background: white !important; color: black !important; }
+
+          /* Hide all non-print elements */
+          .print\\:hidden,
+          .animate-fade-in > div:first-child,
+          header,
+          nav,
+          aside {
+            display: none !important;
+          }
+
+          /* Show print template */
+          .print\\:block,
+          .hidden.print\\:block {
+            display: block !important;
+          }
+
+          /* Print-specific styles */
+          section {
+            page-break-inside: avoid;
+          }
+
+          table {
+            border-collapse: collapse;
+            width: 100%;
+          }
+
+          th, td {
+            border: 1px solid #000 !important;
+            padding: 6px 8px;
+          }
+
+          th {
+            background: #f5f5f5 !important;
+          }
         }
       `}</style>
     </div>
