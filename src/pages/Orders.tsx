@@ -124,6 +124,9 @@ interface OrderRecord {
   cancelled_by?: string;
   cancelled_at?: string;
   fulfilled_by_sale_id?: string;
+  creator_profile?: { full_name: string } | null;
+  updater_profile?: { full_name: string } | null;
+  fulfiller_profile?: { full_name: string } | null;
 }
 
 interface OrderItemData {
@@ -275,7 +278,7 @@ const Orders = () => {
     queryFn: async () => {
       let query = supabase
         .from("orders")
-        .select("*, stores(id, name, display_id, route_id, store_type_id, address, outstanding), customers(id, name, display_id, phone, email), assigned_to, fulfilled_by_sale_id")
+        .select("*, stores(id, name, display_id, route_id, store_type_id, address, outstanding), customers(id, name, display_id, phone, email), assigned_to, fulfilled_by_sale_id, creator_profile:profiles!orders_created_by_fkey(full_name), updater_profile:profiles!orders_updated_by_fkey(full_name), fulfiller_profile:profiles!orders_fulfilled_by_fkey(full_name)")
         .order("created_at", { ascending: false });
 
       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
@@ -1696,6 +1699,23 @@ const columns = [
                 <span className="text-xs text-muted-foreground italic truncate max-w-[180px]">{row.cancellation_reason}</span>
               )}
             </div>
+            {(row.creator_profile || row.updater_profile || row.fulfiller_profile) && (
+              <div className="flex items-center gap-1 text-[10px] text-muted-foreground flex-wrap mt-2 pt-2 border-t border-border/50">
+                {row.creator_profile && <span>Created by {row.creator_profile.full_name}</span>}
+                {row.updater_profile && row.updater_profile.full_name !== row.creator_profile?.full_name && (
+                  <>
+                    <span className="text-muted-foreground/40">•</span>
+                    <span>Edited by {row.updater_profile.full_name}</span>
+                  </>
+                )}
+                {row.fulfiller_profile && (
+                  <>
+                    <span className="text-muted-foreground/40">•</span>
+                    <span>Fulfilled by {row.fulfiller_profile.full_name}</span>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         )}
       />
