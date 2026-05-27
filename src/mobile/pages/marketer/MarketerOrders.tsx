@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Plus, XCircle, CheckCircle2, Package, ShoppingCart } from "lucide-react";
+import { Loader2, Plus, XCircle, CheckCircle2, Package, ShoppingCart, Edit, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -9,6 +9,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { CANCEL_REASONS } from "@/lib/constants";
+import { OrderStockSummary } from "@/components/orders/OrderStockSummary";
+import { ProformaView } from "@/components/orders/ProformaView";
+import { EditOrderSheet } from "@/components/orders/EditOrderSheet";
 import {
   Select,
   SelectContent,
@@ -22,6 +26,12 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useRouteAccess } from "@/hooks/useRouteAccess";
 import type { StoreOption } from "@/mobile/components/StorePickerSheet";
 
@@ -40,8 +50,11 @@ interface OrderRow {
   created_at: string;
   store_id: string;
   customer_id: string;
-  stores: { name: string } | null;
+  stores: { name: string; store_type_id: string | null; store_types: { name: string } | null; routes: { name: string } | null } | null;
   customers: { name: string } | null;
+  creator_profile?: { full_name: string } | null;
+  updater_profile?: { full_name: string } | null;
+  fulfiller_profile?: { full_name: string } | null;
   order_items?: Array<{ id: string; product_id: string; quantity: number; products?: { name: string; base_price: number } | null }>;
 }
 
@@ -77,6 +90,9 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
   const { canAccessRoute } = useRouteAccess(user?.id, role);
 
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "delivered" | "cancelled">("all");
+  const [filterStoreType, setFilterStoreType] = useState("all");
+  const [filterRoute, setFilterRoute] = useState("all");
+  const [showFilters, setShowFilters] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -93,6 +109,8 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
   const [fulfillOrder, setFulfillOrder] = useState<OrderRow | null>(null);
   const [deliverCash, setDeliverCash] = useState("");
   const [deliverUpi, setDeliverUpi] = useState("");
+  const [viewProformaId, setViewProformaId] = useState<string | null>(null);
+  const [editOrder, setEditOrder] = useState<OrderRow | null>(null);
 
   useEffect(() => {
     if (!preselectStore) return;
@@ -107,7 +125,7 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
     queryFn: async () => {
       let query = supabase
         .from("orders")
-        .select("id, display_id, status, order_type, requirement_note, cancellation_reason, created_at, store_id, customer_id, stores(name), customers(name), order_items(id, product_id, quantity, products(name, base_price))")
+        .select("id, display_id, status, order_type, requirement_note, cancellation_reason, created_at, creator_profile:profiles!orders_created_by_fkey(full_name), updater_profile:profiles!orders_updated_by_fkey(full_name), fulfiller_profile:profiles!orders_fulfilled_by_fkey(full_name), store_id, customer_id, stores(name, store_type_id, store_types(name), routes(name)), customers(name), order_items(id, product_id, quantity, products(name, base_price))")
         .eq("created_by", user!.id)
         .order("created_at", { ascending: false });
 
@@ -122,6 +140,35 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
     enabled: !!user,
     refetchInterval: 60_000,
   });
+
+  const storeTypeOptions = useMemo(() => {
+    const set = new Set<string>();
+    (orders ?? []).forEach((o) => {
+      const n = o.stores?.store_types?.name;
+      if (n) set.add(n);
+    });
+    return Array.from(set).sort();
+  }, [orders]);
+
+  const routeOptions = useMemo(() => {
+    const set = new Set<string>();
+    (orders ?? []).forEach((o) => {
+      const n = o.stores?.routes?.name;
+      if (n) set.add(n);
+    });
+    return Array.from(set).sort();
+  }, [orders]);
+
+  const filteredOrders = useMemo(() => {
+    let list = orders ?? [];
+    if (filterStoreType !== "all") {
+      list = list.filter((o) => o.stores?.store_types?.name === filterStoreType);
+    }
+    if (filterRoute !== "all") {
+      list = list.filter((o) => o.stores?.routes?.name === filterRoute);
+    }
+    return list;
+  }, [orders, filterStoreType, filterRoute]);
 
   const { data: customers } = useQuery({
     queryKey: ["mobile-marketer-order-customers"],
@@ -168,6 +215,25 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
   });
 
   const pendingCount = useMemo(() => (orders || []).filter((order) => order.status === "pending").length, [orders]);
+
+  const { data: viewProforma } = useQuery({
+    queryKey: ["marketer-view-proforma", viewProformaId],
+    queryFn: async () => {
+      if (!viewProformaId) return null;
+      const order = (orders ?? []).find((o: any) => o.id === viewProformaId);
+      const { data: pf } = await supabase.from("proforma_invoices").select("*").eq("order_id", viewProformaId).maybeSingle();
+      if (!pf) return null;
+      return {
+        id: pf.id, display_id: pf.display_id, order_id: pf.order_id,
+        store_name: order?.stores?.name || "—",
+        customer_name: order?.customers?.name || "—",
+        customer_phone: (order as any)?.customers?.phone || "—",
+        items: pf.items || [], total_amount: Number(pf.total_amount) || 0,
+        status: pf.status, created_at: pf.created_at,
+      };
+    },
+    enabled: !!viewProformaId,
+  });
 
   const addItem = () => setOrderItems((prev) => [...prev, { product_id: "", quantity: 1 }]);
   const removeItem = (index: number) => setOrderItems((prev) => prev.filter((_, idx) => idx !== index));
@@ -262,8 +328,13 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
           cancelled_at: new Date().toISOString(),
         })
         .eq("id", cancelOrderId)
-        .eq("status", "pending");
+        .in("status", ["pending", "confirmed"]);
       if (error) throw error;
+
+      await supabase
+        .from("proforma_invoices")
+        .update({ status: "cancelled", deleted_at: new Date().toISOString() })
+        .eq("order_id", cancelOrderId);
 
       toast.success("Order cancelled");
       setCancelOrderId(null);
@@ -356,18 +427,60 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
           ))}
         </div>
 
+        {(storeTypeOptions.length > 0 || routeOptions.length > 0) && (
+          <button
+            className="text-xs text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-1"
+            onClick={() => setShowFilters(!showFilters)}
+          >
+            {showFilters ? "Hide filters" : "Filter by store type / route"}
+          </button>
+        )}
+
+        {showFilters && (
+          <div className="flex gap-2">
+            {storeTypeOptions.length > 0 && (
+              <Select value={filterStoreType} onValueChange={setFilterStoreType}>
+                <SelectTrigger className="flex-1 h-9 text-xs">
+                  <SelectValue placeholder="Store type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All types</SelectItem>
+                  {storeTypeOptions.map((t) => (
+                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            {routeOptions.length > 0 && (
+              <Select value={filterRoute} onValueChange={setFilterRoute}>
+                <SelectTrigger className="flex-1 h-9 text-xs">
+                  <SelectValue placeholder="Route" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All routes</SelectItem>
+                  {routeOptions.map((r) => (
+                    <SelectItem key={r} value={r}>{r}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+        )}
+
+        <OrderStockSummary orders={orders ?? []} />
+
         {isLoading ? (
           <div className="flex justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
           </div>
-        ) : (orders?.length || 0) === 0 ? (
+        ) : filteredOrders.length === 0 ? (
           <div className="rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 p-8 text-center bg-slate-50/50 dark:bg-slate-800/30">
             <Package className="h-7 w-7 text-slate-400 mx-auto mb-2" />
             <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">No orders found</p>
           </div>
         ) : (
           <div className="space-y-2">
-            {(orders || []).map((order) => (
+            {filteredOrders.map((order) => (
               <div key={order.id} className="rounded-2xl bg-card border border-border shadow-sm overflow-hidden">
                 <div className={`h-1 ${
                   order.status === "pending" ? "bg-amber-400" :
@@ -395,16 +508,43 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
                   {order.status === "cancelled" && order.cancellation_reason && (
                     <p className="text-xs text-red-500">Reason: {order.cancellation_reason}</p>
                   )}
-                  {order.status === "pending" && (
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button size="sm" className="h-9 rounded-xl" onClick={() => { setFulfillOrder(order); setDeliverCash(""); setDeliverUpi(""); }}>
-                        <CheckCircle2 className="h-4 w-4 mr-1.5" /> Deliver
-                      </Button>
-                      <Button size="sm" variant="outline" className="h-9 rounded-xl" onClick={() => setCancelOrderId(order.id)}>
-                        <XCircle className="h-4 w-4 mr-1.5" /> Cancel
-                      </Button>
+                  {(order.creator_profile || order.updater_profile || order.fulfiller_profile) && (
+                    <div className="border-t border-border/50 pt-2 mt-2">
+                      <div className="flex items-center gap-1 text-[10px] text-muted-foreground flex-wrap">
+                        {order.creator_profile && <span>Created by {order.creator_profile.full_name}</span>}
+                        {order.updater_profile && order.updater_profile.full_name !== order.creator_profile?.full_name && (
+                          <>
+                            <span className="text-muted-foreground/40">•</span>
+                            <span>Edited by {order.updater_profile.full_name}</span>
+                          </>
+                        )}
+                        {order.fulfiller_profile && (
+                          <>
+                            <span className="text-muted-foreground/40">•</span>
+                            <span>Fulfilled by {order.fulfiller_profile.full_name}</span>
+                          </>
+                        )}
+                      </div>
                     </div>
                   )}
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <Button size="sm" variant="outline" className="h-9 rounded-xl flex-1 min-w-[120px]" onClick={() => { setViewProformaId(order.id); }}>
+                      <FileText className="h-4 w-4 mr-1.5" /> Proforma
+                    </Button>
+                    {order.status === "pending" && (
+                      <>
+                        <Button size="sm" variant="outline" className="h-9 rounded-xl flex-1 min-w-[80px]" onClick={() => { setEditOrder(order); }}>
+                          <Edit className="h-4 w-4 mr-1.5" /> Edit
+                        </Button>
+                        <Button size="sm" className="h-9 rounded-xl flex-1 min-w-[90px]" onClick={() => { setFulfillOrder(order); setDeliverCash(""); setDeliverUpi(""); }}>
+                          <CheckCircle2 className="h-4 w-4 mr-1.5" /> Deliver
+                        </Button>
+                        <Button size="sm" variant="outline" className="h-9 rounded-xl flex-1 min-w-[90px]" onClick={() => setCancelOrderId(order.id)}>
+                          <XCircle className="h-4 w-4 mr-1.5" /> Cancel
+                        </Button>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
@@ -586,7 +726,7 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
         </SheetContent>
       </Sheet>
 
-      <Sheet open={!!cancelOrderId} onOpenChange={(open) => !open && setCancelOrderId(null)}>
+      <Sheet open={!!cancelOrderId} onOpenChange={(open) => { if (!open) { setCancelOrderId(null); setCancelReason(""); } }}>
         <SheetContent side="bottom" className="rounded-t-3xl pb-10 px-0">
           <div className="px-6">
             <SheetHeader className="mb-5 text-left">
@@ -595,13 +735,23 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
 
             <div className="space-y-3">
               <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Reason</Label>
-              <Textarea
-                value={cancelReason}
-                onChange={(event) => setCancelReason(event.target.value)}
-                placeholder="Why are you cancelling this order?"
-                rows={3}
-                className="rounded-xl resize-none border-slate-200 dark:border-slate-600"
-              />
+              <Select value={cancelReason} onValueChange={setCancelReason}>
+                <SelectTrigger className="rounded-xl h-11"><SelectValue placeholder="Select reason" /></SelectTrigger>
+                <SelectContent>
+                  {CANCEL_REASONS.map((r) => (
+                    <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {cancelReason === "Other" && (
+                <Textarea
+                  placeholder="Type the cancellation reason..."
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  rows={3}
+                  className="rounded-xl resize-none border-slate-200 dark:border-slate-600"
+                />
+              )}
               <button
                 className={`w-full h-11 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all ${
                   cancelling
@@ -609,7 +759,7 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
                     : "bg-red-500 hover:bg-red-600 text-white"
                 }`}
                 onClick={handleCancelOrder}
-                disabled={cancelling}
+                disabled={cancelling || !cancelReason}
               >
                 {cancelling ? <Loader2 className="h-4 w-4 animate-spin" /> : <><XCircle className="h-4 w-4" />Cancel Order</>}
               </button>
@@ -617,6 +767,20 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
           </div>
         </SheetContent>
       </Sheet>
+
+      <Dialog open={!!viewProformaId && !!viewProforma} onOpenChange={(o) => { if (!o) setViewProformaId(null); }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Proforma Invoice</DialogTitle></DialogHeader>
+          {viewProforma && <ProformaView proforma={viewProforma} />}
+        </DialogContent>
+      </Dialog>
+
+      <EditOrderSheet
+        order={editOrder}
+        open={!!editOrder}
+        onOpenChange={(o) => { if (!o) setEditOrder(null); }}
+        onSaved={() => qc.invalidateQueries({ queryKey: ["mobile-marketer-orders"] })}
+      />
     </div>
   );
 }
