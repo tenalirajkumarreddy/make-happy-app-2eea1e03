@@ -1,22 +1,45 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { startOfDay } from "date-fns";
+import { startOfDay, format } from "date-fns";
 import {
+  AlertCircle,
+  Ban,
   CheckCircle2,
   ChevronDown,
-  ChevronUp,
-  ClipboardList,
+  Edit,
+  Eye,
   List,
   Loader2,
   MapPin,
   Navigation2,
+  Package,
   Phone,
+  Plus,
+  QrCode,
   ShoppingBag,
+  ShoppingCart,
   Store,
+  X,
   XCircle,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
 import { RouteSessionPanel } from "@/components/routes/RouteSessionPanel";
 import { supabase } from "@/integrations/supabase/client";
@@ -24,7 +47,25 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useRouteAccess } from "@/hooks/useRouteAccess";
 import { getCurrentPosition } from "@/lib/capacitorUtils";
-import { getDistanceMeters } from "@/lib/proximity";
+import { CANCEL_REASONS } from "@/lib/constants";
+import { OrderStockSummary } from "@/components/orders/OrderStockSummary";
+import { EditOrderSheet } from "@/components/orders/EditOrderSheet";
+import { ProformaView } from "@/components/orders/ProformaView";
+import { QrStoreSelector } from "@/components/shared/QrStoreSelector";
+import { usePermission } from "@/hooks/usePermission";
+import type { StoreOption } from "@/mobile/components/StorePickerSheet";
+
+interface CustomerItem { id: string; name: string; }
+interface StoreItem { id: string; name: string; route_id: string | null; }
+interface ProductItem { id: string; name: string; }
+interface OrderItemInput { product_id: string; quantity: number; }
+interface SupabaseRpcClient {
+  rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: string | null; error: Error | null }>;
+}
+
+export interface AgentRoutesProps {
+  onOpenStore?: (store: StoreOption) => void;
+}
 
 interface RouteStore {
   id: string;
@@ -53,25 +94,42 @@ interface VisitRow {
   route_sessions: { route_id: string } | { route_id: string }[] | null;
 }
 
-interface OrderRow {
+interface OrderItemRow {
   id: string;
-  store_id: string;
-  status: string;
-  stores: { id: string; name: string; display_id: string; address: string | null; phone: string | null; lat: number | null; lng: number | null; route_id: string | null; routes: { name: string } | null } | null;
+  product_id: string;
+  quantity: number;
+  products?: { name: string; sku: string; base_price: number };
 }
 
-const formatDistance = (meters: number) => {
-  if (meters < 1000) return `${Math.round(meters)}m`;
-  return `${(meters / 1000).toFixed(1)}km`;
-};
+interface OrderRow {
+  id: string;
+  display_id: string;
+  store_id: string;
+  status: string;
+  order_type: "simple" | "detailed";
+  requirement_note: string | null;
+  total_amount: number;
+  created_at: string;
+  stores: { id: string; name: string; display_id: string; address: string | null; phone: string | null; lat: number | null; lng: number | null; route_id: string | null; store_type_id: string | null; routes: { name: string } | null; store_types: { name: string } | null } | null;
+  customers?: { name: string; display_id: string } | null;
+  order_items?: OrderItemRow[];
+  creator_profile?: { full_name: string } | null;
+  updater_profile?: { full_name: string } | null;
+  fulfiller_profile?: { full_name: string } | null;
+}
 
-export function AgentRoutes() {
+export function AgentRoutes({ onOpenStore }: AgentRoutesProps = {}) {
   const { user, role } = useAuth();
   const qc = useQueryClient();
+  const { allowed: canFulfillOrders } = usePermission("fulfill_orders");
   const [view, setView] = useState<"routes" | "orders">("routes");
   const [expandedRouteId, setExpandedRouteId] = useState<string | null>(null);
   const [agentPos, setAgentPos] = useState<{ lat: number; lng: number } | null>(null);
   const [fetchingPos, setFetchingPos] = useState(false);
+  const [filterStoreType, setFilterStoreType] = useState("all");
+  const [filterRoute, setFilterRoute] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [showFilters, setShowFilters] = useState(false);
   const todayStart = startOfDay(new Date()).toISOString();
   const { canAccessRoute, loading: loadingRouteAccess } = useRouteAccess(user?.id, role);
 
@@ -140,11 +198,11 @@ export function AgentRoutes() {
     queryFn: async () => {
       let query = supabase
         .from("orders")
-        .select("id, display_id, store_id, status, order_type, created_at, requirement_note, stores(id, name, display_id)")
+        .select("*, stores(id, name, display_id, address, phone, lat, lng, route_id, store_type_id, routes(name), store_types(name)), customers(name, display_id), order_items(id, product_id, quantity, products(name, sku, base_price)), creator_profile:profiles!orders_created_by_fkey(full_name), updater_profile:profiles!orders_updated_by_fkey(full_name), fulfiller_profile:profiles!orders_fulfilled_by_fkey(full_name)")
         .order("created_at", { ascending: false })
         .limit(50);
       if (allStoreIds.length > 0) {
-        query = query.in("store_id", allStoreIds);
+        query = query.or(`store_id.in.(${allStoreIds.join(",")}),assigned_to.eq.${user!.id}`);
       } else {
         query = query.or(`assigned_to.eq.${user!.id},created_by.eq.${user!.id}`);
       }
@@ -154,6 +212,38 @@ export function AgentRoutes() {
     },
     enabled: view === "orders" && !!user,
   });
+
+  const storeTypeOptions = useMemo(() => {
+    const set = new Set<string>();
+    (allOrders ?? []).forEach((o) => {
+      const n = o.stores?.store_types?.name;
+      if (n) set.add(n);
+    });
+    return Array.from(set).sort();
+  }, [allOrders]);
+
+  const routeOptions = useMemo(() => {
+    const set = new Set<string>();
+    (allOrders ?? []).forEach((o) => {
+      const n = o.stores?.routes?.name;
+      if (n) set.add(n);
+    });
+    return Array.from(set).sort();
+  }, [allOrders]);
+
+  const filteredOrders = useMemo(() => {
+    let list = allOrders ?? [];
+    if (filterStoreType !== "all") {
+      list = list.filter((o) => o.stores?.store_types?.name === filterStoreType);
+    }
+    if (filterRoute !== "all") {
+      list = list.filter((o) => o.stores?.routes?.name === filterRoute);
+    }
+    if (filterStatus !== "all") {
+      list = list.filter((o) => o.status === filterStatus);
+    }
+    return list;
+  }, [allOrders, filterStoreType, filterRoute, filterStatus]);
 
   const { data: visitedStoresByRoute } = useQuery({
     queryKey: ["store-visits", user?.id, "mobile-routes", todayStart],
@@ -181,48 +271,298 @@ export function AgentRoutes() {
     enabled: !!user,
   });
 
-  // Aggregate orders by store for the "ALL ORDERS" view
-  const ordersView = useMemo(() => {
-    if (!allOrders) return [];
+  const [selectedOrder, setSelectedOrder] = useState<OrderRow | null>(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [cancelOrderId, setCancelOrderId] = useState<string | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelling, setCancelling] = useState(false);
+  const [fulfillOrder, setFulfillOrder] = useState<OrderRow | null>(null);
+  const [fulfillCash, setFulfillCash] = useState("");
+  const [fulfillUpi, setFulfillUpi] = useState("");
+  const [isFulfilling, setIsFulfilling] = useState(false);
+  const [viewProformaId, setViewProformaId] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [createSaving, setCreateSaving] = useState(false);
+  const [createStoreSearch, setCreateStoreSearch] = useState("");
+  const [createStoreId, setCreateStoreId] = useState("");
+  const [createSelectedStoreName, setCreateSelectedStoreName] = useState("");
+  const [createSelectedStoreTypeId, setCreateSelectedStoreTypeId] = useState<string | null>(null);
+  const [showQrScanner, setShowQrScanner] = useState(false);
+  const [createOrderType, setCreateOrderType] = useState<"simple" | "detailed">("simple");
+  const [createRequirementNote, setCreateRequirementNote] = useState("");
+  const [createOrderItems, setCreateOrderItems] = useState<OrderItemInput[]>([{ product_id: "", quantity: 1 }]);
+  const [editOrder, setEditOrder] = useState<OrderRow | null>(null);
 
-    // Group by store
-    const storeMap = new Map<string, { store: NonNullable<OrderRow["stores"]>; orderCount: number; statuses: string[] }>();
-    allOrders.forEach((order) => {
-      if (!order.stores) return;
-      const existing = storeMap.get(order.store_id);
-      if (existing) {
-        existing.orderCount++;
-        existing.statuses.push(order.status);
-      } else {
-        storeMap.set(order.store_id, { store: order.stores, orderCount: 1, statuses: [order.status] });
-      }
-    });
+  const { data: createAllStores } = useQuery({
+    queryKey: ["mobile-agent-create-all-stores", allStoreIds],
+    queryFn: async () => {
+      if (allStoreIds.length === 0) return [];
+      const { data, error } = await supabase
+        .from("stores")
+        .select("id, name, display_id, store_type_id")
+        .in("id", allStoreIds)
+        .eq("is_active", true)
+        .order("name");
+      if (error) throw error;
+      return (data as any[]) || [];
+    },
+    enabled: allStoreIds.length > 0,
+  });
 
-    const entries = Array.from(storeMap.values());
+  const { data: createStoreProducts } = useQuery({
+    queryKey: ["mobile-agent-create-store-products", createSelectedStoreTypeId, createStoreId],
+    queryFn: async () => {
+      if (!createSelectedStoreTypeId) return [];
+      const { data: typeProducts } = await supabase
+        .from("store_type_products")
+        .select("product_id")
+        .eq("store_type_id", createSelectedStoreTypeId);
+      const productIds = (typeProducts || []).map((tp: any) => tp.product_id);
+      if (productIds.length === 0) return [];
+      const { data: products } = await supabase
+        .from("products")
+        .select("id, name, base_price")
+        .in("id", productIds)
+        .eq("is_active", true)
+        .order("name");
+      const { data: storePrices } = await supabase
+        .from("store_pricing")
+        .select("product_id, price")
+        .eq("store_id", createStoreId);
+      const storePriceMap = new Map((storePrices || []).map((sp: any) => [sp.product_id, sp.price]));
+      const { data: typePrices } = await supabase
+        .from("store_type_pricing")
+        .select("product_id, price")
+        .eq("store_type_id", createSelectedStoreTypeId);
+      const typePriceMap = new Map((typePrices || []).map((tp: any) => [tp.product_id, tp.price]));
+      return ((products || []) as any[]).map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        effective_price: storePriceMap.get(p.id) ?? typePriceMap.get(p.id) ?? Number(p.base_price) ?? 0,
+      }));
+    },
+    enabled: !!createSelectedStoreTypeId && !!createStoreId,
+  });
 
-    // Sort by distance from agent if GPS available
-    if (agentPos) {
-      entries.sort((a, b) => {
-        const distA = a.store.lat != null && a.store.lng != null
-          ? getDistanceMeters(agentPos.lat, agentPos.lng, a.store.lat, a.store.lng)
-          : Infinity;
-        const distB = b.store.lat != null && b.store.lng != null
-          ? getDistanceMeters(agentPos.lat, agentPos.lng, b.store.lat, b.store.lng)
-          : Infinity;
-        return distA - distB;
-      });
+  const handleCancelOrder = async () => {
+    if (!cancelOrderId || !cancelReason.trim()) {
+      toast.error("Select or type a cancellation reason");
+      return;
     }
+    setCancelling(true);
+    try {
+      const { error } = await supabase
+        .from("orders")
+        .update({
+          status: "cancelled",
+          cancellation_reason: cancelReason,
+          cancelled_by: user!.id,
+          cancelled_at: new Date().toISOString(),
+        })
+        .eq("id", cancelOrderId)
+        .in("status", ["pending", "confirmed"]);
+      if (error) throw error;
 
-    return entries;
-  }, [allOrders, agentPos]);
+      await supabase
+        .from("proforma_invoices")
+        .update({ status: "cancelled", deleted_at: new Date().toISOString() })
+        .eq("order_id", cancelOrderId);
 
-  const handleSwitchToOrders = async () => {
-    setView("orders");
-    if (!agentPos) {
-      setFetchingPos(true);
-      const pos = await getCurrentPosition();
-      if (pos) setAgentPos({ lat: pos.lat, lng: pos.lng });
-      setFetchingPos(false);
+      toast.success("Order cancelled");
+      setCancelOrderId(null);
+      setCancelReason("");
+      qc.invalidateQueries({ queryKey: ["mobile-agent-all-orders"] });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to cancel order");
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  const handleFulfill = async () => {
+    if (!fulfillOrder) return;
+    const cash = Number(fulfillCash) || 0;
+    const upi = Number(fulfillUpi) || 0;
+    const total = cash + upi;
+    if (total <= 0) { toast.error("Enter cash or UPI amount"); return; }
+    setIsFulfilling(true);
+    try {
+      const { data: displayId } = await (supabase as any).rpc("generate_display_id", { prefix: "SALE", seq_name: "sale_display_seq" });
+      if (!displayId) throw new Error("Failed to generate sale ID");
+      const saleItems = (fulfillOrder.order_items || []).map((item: any) => ({
+        product_id: item.product_id,
+        quantity: item.quantity,
+        unit_price: item.products?.base_price || 0,
+      }));
+      const { error: saleError } = await (supabase as any).rpc("record_sale", {
+        p_display_id: displayId,
+        p_store_id: fulfillOrder.store_id,
+        p_customer_id: (fulfillOrder as any).customer_id || fulfillOrder.store_id,
+        p_recorded_by: user!.id,
+        p_logged_by: null,
+        p_total_amount: total,
+        p_cash_amount: cash,
+        p_upi_amount: upi,
+        p_outstanding_amount: 0,
+        p_sale_items: saleItems,
+        p_created_at: null,
+      });
+      if (saleError) throw saleError;
+      toast.success(`Order ${fulfillOrder.display_id} fulfilled (${displayId})`);
+      setFulfillOrder(null);
+      setFulfillCash("");
+      setFulfillUpi("");
+      qc.invalidateQueries({ queryKey: ["mobile-agent-all-orders"] });
+      qc.invalidateQueries({ queryKey: ["sales"] });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to fulfill order");
+    } finally {
+      setIsFulfilling(false);
+    }
+  };
+
+  const createAddItem = () => setCreateOrderItems((prev) => [...prev, { product_id: "", quantity: 1 }]);
+  const createRemoveItem = (index: number) => setCreateOrderItems((prev) => prev.filter((_, i) => i !== index));
+
+  const handleStoreFromQr = async (storeId: string) => {
+    const { data: store } = await supabase
+      .from("stores")
+      .select("id, name, store_type_id")
+      .eq("id", storeId)
+      .single();
+    if (store) {
+      setCreateStoreId(store.id);
+      setCreateSelectedStoreName(store.name);
+      setCreateSelectedStoreTypeId(store.store_type_id);
+      setShowQrScanner(false);
+      toast.success("Store selected via QR");
+    }
+  };
+
+  const resetCreateForm = () => {
+    setCreateStoreSearch("");
+    setCreateStoreId("");
+    setCreateSelectedStoreName("");
+    setCreateSelectedStoreTypeId(null);
+    setCreateOrderType("simple");
+    setCreateRequirementNote("");
+    setCreateOrderItems([{ product_id: "", quantity: 1 }]);
+  };
+
+  const handleCreateOrder = async () => {
+    if (!createStoreId) {
+      toast.error("Select a store");
+      return;
+    }
+    if (createOrderType === "simple" && !createRequirementNote.trim()) {
+      toast.error("Enter requirement note");
+      return;
+    }
+    if (createOrderType === "detailed" && !createOrderItems.some((item) => item.product_id)) {
+      toast.error("Add at least one product");
+      return;
+    }
+    setCreateSaving(true);
+    try {
+      const rpcClient = supabase as unknown as SupabaseRpcClient;
+      const { data: displayId, error: displayError } = await rpcClient.rpc("generate_display_id", {
+        prefix: "ORD",
+        seq_name: "ord_display_seq",
+      });
+      if (displayError) throw displayError;
+      if (!displayId) throw new Error("Failed to generate order ID");
+
+      const { data: orderRow, error: orderError } = await supabase
+        .from("orders")
+        .insert({
+          display_id: displayId,
+          store_id: createStoreId,
+          order_type: createOrderType,
+          source: "manual",
+          created_by: user!.id,
+          requirement_note: createOrderType === "simple" ? createRequirementNote : null,
+        })
+        .select("id")
+        .single();
+
+      if (orderError) throw orderError;
+
+      if (createOrderType === "detailed") {
+        const validItems = createOrderItems.filter((item) => item.product_id);
+        if (validItems.length > 0) {
+          const { error: itemError } = await supabase.from("order_items").insert(
+            validItems.map((item) => ({
+              order_id: orderRow.id,
+              product_id: item.product_id,
+              quantity: item.quantity,
+            }))
+          );
+          if (itemError) throw itemError;
+        }
+      }
+
+      toast.success("Order created");
+      setShowCreate(false);
+      resetCreateForm();
+      qc.invalidateQueries({ queryKey: ["mobile-agent-all-orders"] });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to create order";
+      toast.error(message);
+    } finally {
+      setCreateSaving(false);
+    }
+  };
+
+  const { data: viewProforma } = useQuery({
+    queryKey: ["agent-view-proforma", viewProformaId],
+    queryFn: async () => {
+      if (!viewProformaId) return null;
+      const order = allOrders?.find((o: any) => o.id === viewProformaId);
+      const { data: pf } = await supabase.from("proforma_invoices").select("*").eq("order_id", viewProformaId).maybeSingle();
+      if (!pf) return null;
+      return {
+        id: pf.id,
+        display_id: pf.display_id,
+        order_id: pf.order_id,
+        store_name: order?.stores?.name || "—",
+        customer_name: order?.customers?.name || "—",
+        customer_phone: (order as any)?.customers?.phone || "—",
+        items: pf.items || [],
+        total_amount: Number(pf.total_amount) || 0,
+        status: pf.status,
+        created_at: pf.created_at,
+      };
+    },
+    enabled: !!viewProformaId,
+  });
+
+  const calculateItemTotal = (item: OrderItemRow) =>
+    item.quantity * (item.products?.base_price || 0);
+
+  const calculateOrderTotal = (order: OrderRow) => {
+    if (order.order_items && order.order_items.length > 0) {
+      return order.order_items.reduce((sum, item) => sum + calculateItemTotal(item), 0);
+    }
+    return order.total_amount || 0;
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "pending":   return "bg-yellow-100 text-yellow-800 border-yellow-200";
+      case "confirmed": return "bg-blue-100 text-blue-800 border-blue-200";
+      case "delivered": return "bg-green-100 text-green-800 border-green-200";
+      case "cancelled": return "bg-red-100 text-red-800 border-red-200";
+      default:          return "bg-gray-100 text-gray-800 border-gray-200";
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "pending":   return <AlertCircle className="h-3 w-3" />;
+      case "confirmed": return <CheckCircle2 className="h-3 w-3" />;
+      case "delivered": return <Package className="h-3 w-3" />;
+      case "cancelled": return <Ban className="h-3 w-3" />;
+      default:          return null;
     }
   };
 
@@ -306,7 +646,7 @@ export function AgentRoutes() {
                   <p className="text-xs text-slate-400 mt-1">Contact your manager to assign routes</p>
                 </div>
               ) : (
-                <div className="space-y-2.5">
+                <div className="space-y-3">
                   {routeList.map((route, idx) => {
                     const storeCount = route.stores.length;
                     const routeVisitSet = visitedStoresByRoute?.get(route.id) || new Set<string>();
@@ -321,13 +661,13 @@ export function AgentRoutes() {
                     });
                     const isExpanded = expandedRouteId === route.id;
 
-                    const gradients = [
-                      "from-blue-500 to-indigo-600",
-                      "from-emerald-500 to-teal-600",
-                      "from-violet-500 to-purple-600",
-                      "from-amber-500 to-orange-600",
+                    const accentColors = [
+                      "bg-blue-500",
+                      "bg-emerald-500",
+                      "bg-violet-500",
+                      "bg-amber-500",
                     ];
-                    const gradient = gradients[idx % gradients.length];
+                    const accentColor = accentColors[idx % accentColors.length];
 
                     return (
                       <div
@@ -339,79 +679,71 @@ export function AgentRoutes() {
                           className="w-full text-left"
                           onClick={() => setExpandedRouteId(isExpanded ? null : route.id)}
                         >
-                          <div className="flex items-center gap-0">
-                            <div className={`w-1.5 self-stretch bg-gradient-to-b ${gradient} rounded-l-none`} />
-                            <div className="flex-1 flex items-center gap-3 p-4">
-                              <div className={`h-11 w-11 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center shrink-0 shadow-sm`}>
+                          <div className="flex items-stretch">
+                            <div className={`w-1 self-stretch ${accentColor} shrink-0`} />
+                            <div className="flex-1 flex items-start gap-3 p-4">
+                              <div className={`h-10 w-10 rounded-lg ${accentColor} bg-opacity-10 dark:bg-opacity-20 flex items-center justify-center shrink-0`}>
                                 <MapPin className="h-5 w-5 text-white" />
                               </div>
 
                               <div className="flex-1 min-w-0">
-                                <p className="font-semibold text-slate-800 dark:text-white text-base leading-tight truncate">
+                                <p className="font-semibold text-slate-900 dark:text-white text-[15px] leading-snug truncate">
                                   {route.name}
                                 </p>
-                                <div className="flex items-center gap-3 mt-1 flex-wrap">
-                                  <span className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
-                                    <Store className="h-3 w-3" />
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
+                                  <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                                    <Store className="h-3 w-3 inline mr-0.5 align-middle" />
                                     {storeCount} {storeCount === 1 ? "store" : "stores"}
                                   </span>
-                                  <span className="text-xs text-slate-500 dark:text-slate-400">
-                                    Outstanding: <span className="font-semibold text-slate-700 dark:text-slate-200">₹{totalOutstanding.toLocaleString("en-IN")}</span>
+                                  <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                                    <span className="font-medium text-slate-700 dark:text-slate-300">₹{totalOutstanding.toLocaleString("en-IN")}</span> outstanding
                                   </span>
                                   {pendingOrders > 0 && (
-                                    <span className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
-                                      <ShoppingBag className="h-3 w-3" />
-                                      {pendingOrders} active orders
+                                    <span className="text-[11px] text-amber-600 dark:text-amber-400">
+                                      <ShoppingBag className="h-3 w-3 inline mr-0.5 align-middle" />
+                                      {pendingOrders} active
                                     </span>
                                   )}
                                 </div>
 
-                                <div className="flex gap-2 mt-3 flex-wrap">
+                                <div className="flex items-center gap-2 mt-2.5">
+                                  <span className="text-[10px] font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded-full">
+                                    {visitedCount}/{storeCount} visited
+                                  </span>
                                   {route.store_types?.name && (
-                                    <Badge variant="outline" className="text-[10px] font-semibold">
+                                    <span className="text-[10px] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-full">
                                       {route.store_types.name}
-                                    </Badge>
+                                    </span>
                                   )}
-                                  <Badge variant="outline" className="text-[10px] font-semibold border-blue-200 dark:border-blue-700 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20">
-                                    {visitedCount}/{storeCount} visited today
-                                  </Badge>
                                   {activeSession?.route_id === route.id && (
-                                    <Badge className="text-[10px] font-semibold bg-emerald-500 text-white">
-                                      Active session
-                                    </Badge>
+                                    <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                      Active
+                                    </span>
                                   )}
                                 </div>
                               </div>
 
-                              <div className="flex items-center gap-2 shrink-0">
+                              <div className="flex items-center gap-1.5 shrink-0 mt-1">
                                 {pendingOrders > 0 && (
-                                  <Badge className="bg-amber-500 text-white text-[10px] font-bold h-5 px-1.5">
+                                  <span className="h-5 min-w-[20px] px-1 rounded-md bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center">
                                     {pendingOrders}
-                                  </Badge>
+                                  </span>
                                 )}
-                                <Badge variant="outline" className="text-[10px] font-semibold border-emerald-200 dark:border-emerald-700 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20">
-                                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 mr-1 inline-block animate-pulse" />
-                                  Active
-                                </Badge>
-                                {isExpanded ? (
-                                  <ChevronUp className="h-4 w-4 text-slate-300 dark:text-slate-600" />
-                                ) : (
-                                  <ChevronDown className="h-4 w-4 text-slate-300 dark:text-slate-600" />
-                                )}
+                                <ChevronDown className={cn("h-4 w-4 text-slate-300 dark:text-slate-500 transition-transform duration-200", isExpanded && "rotate-180")} />
                               </div>
                             </div>
                           </div>
                         </button>
 
                         {isExpanded && (
-                          <div className="border-t border-slate-100 dark:border-slate-700 px-4 py-4 bg-slate-50/60 dark:bg-slate-900/30">
+                          <div className="border-t border-slate-100 dark:border-slate-700 px-4 py-4 bg-slate-50/40 dark:bg-slate-900/20">
                             {sortedStores.length === 0 ? (
-                              <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 p-5 text-center">
-                                <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">No stores assigned</p>
-                                <p className="text-xs text-slate-400 mt-1">This route has no stores yet.</p>
+                              <div className="rounded-xl border border-dashed border-slate-200 dark:border-slate-700 p-4 text-center">
+                                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">No stores assigned</p>
                               </div>
                             ) : (
-                              <div className="space-y-3">
+                              <div className="space-y-2.5">
                                 {sortedStores.map((store) => {
                                   const visited = (visitedStoresByRoute?.get(route.id) || new Set<string>()).has(store.id);
                                   const canNavigate = (store.lat != null && store.lng != null) || !!store.address;
@@ -419,76 +751,74 @@ export function AgentRoutes() {
                                   return (
                                     <div
                                       key={store.id}
-                                      className={cn(
-                                        "rounded-2xl border p-3 bg-white dark:bg-slate-800 shadow-sm",
-                                        visited
-                                          ? "border-emerald-100 dark:border-emerald-800/40"
-                                          : "border-slate-100 dark:border-slate-700"
-                                      )}
+                                      className="rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 overflow-hidden"
                                     >
-                                      <div className="flex items-start justify-between gap-3">
-                                        <div className="min-w-0 flex-1">
-                                          <div className="flex items-center gap-2 flex-wrap">
-                                            <p className="text-sm font-bold text-slate-800 dark:text-white truncate">{store.name}</p>
-                                            <span className="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded-md font-mono">
-                                              {store.display_id}
-                                            </span>
+                                      <div className="flex items-stretch">
+                                        <div className={cn("w-1 shrink-0", visited ? "bg-emerald-400" : "bg-slate-200 dark:bg-slate-600")} />
+                                        <div className="flex-1 p-3">
+                                          <div className="flex items-start justify-between gap-2">
+                                            <div className="min-w-0 flex-1">
+                                              <div className="flex items-center gap-2">
+                                                <span className="text-[10px] font-mono text-slate-400 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded shrink-0">
+                                                  {store.display_id}
+                                                </span>
+                                                <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">
+                                                  {store.name}
+                                                </p>
+                                              </div>
+
+                                              {store.customers?.name && (
+                                                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">{store.customers.name}</p>
+                                              )}
+
+                                              {store.address && (
+                                                <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">{store.address}</p>
+                                              )}
+
+                                              <div className="flex items-center gap-2 mt-2 flex-wrap">
+                                                <span className={cn(
+                                                  "text-[10px] font-medium px-2 py-0.5 rounded-full",
+                                                  visited
+                                                    ? "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30"
+                                                    : "text-slate-400 bg-slate-100 dark:bg-slate-700"
+                                                )}>
+                                                  {visited ? "Visited" : "Pending"}
+                                                </span>
+                                                <span className="text-[10px] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-full">
+                                                  O/s ₹{Number(store.outstanding || 0).toLocaleString("en-IN")}
+                                                </span>
+                                                {pendingOrderStoreIds?.has(store.id) && (
+                                                  <span className="text-[10px] font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-2 py-0.5 rounded-full">
+                                                    Order pending
+                                                  </span>
+                                                )}
+                                              </div>
+                                            </div>
                                           </div>
 
-                                          {store.customers?.name && (
-                                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{store.customers.name}</p>
-                                          )}
-
-                                          {store.address && (
-                                            <p className="text-xs text-slate-400 mt-1 line-clamp-2">{store.address}</p>
-                                          )}
-
-                                          <div className="flex items-center gap-2 flex-wrap mt-2">
-                                            <Badge
+                                          <div className="flex items-center gap-2 mt-2.5 pt-2.5 border-t border-slate-50 dark:border-slate-700/50">
+                                            <Button
                                               variant="outline"
-                                              className={cn(
-                                                "text-[10px] font-semibold",
-                                                visited
-                                                  ? "border-emerald-200 dark:border-emerald-700 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20"
-                                                  : "border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400"
-                                              )}
+                                              size="sm"
+                                              className="h-8 flex-1 rounded-lg text-[11px] font-medium border-slate-200 dark:border-slate-600"
+                                              onClick={() => handleCall(store.phone || "")}
+                                              disabled={!store.phone}
                                             >
-                                              {visited ? <CheckCircle2 className="h-3 w-3 mr-1" /> : <span className="h-2 w-2 rounded-full bg-slate-300 dark:bg-slate-600 mr-1 inline-block" />}
-                                              {visited ? "Visited today" : "Pending visit"}
-                                            </Badge>
-                                            {pendingOrderStoreIds?.has(store.id) && (
-                                              <Badge className="text-[10px] font-semibold bg-amber-500 text-white">
-                                                Pending order
-                                              </Badge>
-                                            )}
-                                            <Badge variant="outline" className="text-[10px] font-semibold border-slate-200 dark:border-slate-700">
-                                              Outstanding ₹{Number(store.outstanding || 0).toLocaleString("en-IN")}
-                                            </Badge>
+                                              <Phone className="h-3 w-3 mr-1" />
+                                              Call
+                                            </Button>
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              className="h-8 flex-1 rounded-lg text-[11px] font-medium border-slate-200 dark:border-slate-600"
+                                              onClick={() => openDirections(store)}
+                                              disabled={!canNavigate}
+                                            >
+                                              <Navigation2 className="h-3 w-3 mr-1" />
+                                              Navigate
+                                            </Button>
                                           </div>
                                         </div>
-                                      </div>
-
-                                      <div className="grid grid-cols-2 gap-2 mt-3">
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          className="h-9 rounded-xl text-xs"
-                                          onClick={() => handleCall(store.phone || "")}
-                                          disabled={!store.phone}
-                                        >
-                                          <Phone className="h-3.5 w-3.5 mr-1.5" />
-                                          Call
-                                        </Button>
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          className="h-9 rounded-xl text-xs"
-                                          onClick={() => openDirections(store)}
-                                          disabled={!canNavigate}
-                                        >
-                                          <Navigation2 className="h-3.5 w-3.5 mr-1.5" />
-                                          Navigate
-                                        </Button>
                                       </div>
                                     </div>
                                   );
@@ -511,9 +841,26 @@ export function AgentRoutes() {
           <div>
             <div className="flex items-center justify-between mb-2.5">
               <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
-                Pending Orders {agentPos ? "· Nearest First" : ""}
+                All Orders ({filteredOrders.length})
               </p>
-              {!agentPos && !fetchingPos && (
+              <div className="flex items-center gap-2">
+                {(storeTypeOptions.length > 0 || routeOptions.length > 0) && (
+                  <button
+                    type="button"
+                    className="text-xs text-blue-600 dark:text-blue-400 font-semibold"
+                    onClick={() => setShowFilters(!showFilters)}
+                  >
+                    {showFilters ? "Hide" : "Filter"}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="text-xs bg-blue-600 text-white font-semibold flex items-center gap-1 px-2 py-1 rounded-lg"
+                  onClick={() => setShowCreate(true)}
+                >
+                  <Plus className="h-3 w-3" />
+                  Create
+                </button>
                 <button
                   type="button"
                   className="text-xs text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-1"
@@ -525,9 +872,61 @@ export function AgentRoutes() {
                   }}
                 >
                   {fetchingPos ? <Loader2 className="h-3 w-3 animate-spin" /> : <MapPin className="h-3 w-3" />}
-                  Use GPS
+                  GPS
                 </button>
-              )}
+              </div>
+            </div>
+
+            {/* Status filter chips */}
+            <div className="flex gap-1.5 overflow-x-auto pb-1 mb-2">
+              {(["all", "pending", "delivered", "cancelled"] as const).map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setFilterStatus(s)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
+                    filterStatus === s
+                      ? "bg-blue-600 text-white shadow-sm"
+                      : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600"
+                  }`}
+                >
+                  {s === "all" ? "All" : s.charAt(0).toUpperCase() + s.slice(1)}
+                </button>
+              ))}
+            </div>
+
+            {showFilters && (
+              <div className="flex gap-2 mb-3">
+                {storeTypeOptions.length > 0 && (
+                  <Select value={filterStoreType} onValueChange={setFilterStoreType}>
+                    <SelectTrigger className="flex-1 h-9 text-xs">
+                      <SelectValue placeholder="Store type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All types</SelectItem>
+                      {storeTypeOptions.map((t) => (
+                        <SelectItem key={t} value={t}>{t}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                {routeOptions.length > 0 && (
+                  <Select value={filterRoute} onValueChange={setFilterRoute}>
+                    <SelectTrigger className="flex-1 h-9 text-xs">
+                      <SelectValue placeholder="Route" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All routes</SelectItem>
+                      {routeOptions.map((r) => (
+                        <SelectItem key={r} value={r}>{r}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            )}
+
+            <div className="mb-3">
+              <OrderStockSummary orders={allOrders} />
             </div>
 
             {loadingOrders || isLoading ? (
@@ -537,86 +936,185 @@ export function AgentRoutes() {
                   <p className="text-sm text-slate-400">Loading orders...</p>
                 </div>
               </div>
-            ) : ordersView.length === 0 ? (
+            ) : filteredOrders.length === 0 ? (
               <div className="rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 p-8 text-center bg-slate-50/50 dark:bg-slate-800/30">
                 <div className="h-12 w-12 rounded-2xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center mx-auto mb-3">
                   <ShoppingBag className="h-6 w-6 text-slate-400" />
                 </div>
-                <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">No Pending Orders</p>
-                <p className="text-xs text-slate-400 mt-1">All orders are fulfilled for now</p>
+                <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">No Orders Found</p>
+                <p className="text-xs text-slate-400 mt-1">Orders for your stores will appear here</p>
               </div>
             ) : (
-              <div className="space-y-2.5">
-                {ordersView.map(({ store, orderCount }, idx) => {
-                  const distMeters = agentPos && store.lat != null && store.lng != null
-                    ? getDistanceMeters(agentPos.lat, agentPos.lng, store.lat, store.lng)
-                    : null;
-                  const canNavigate = (store.lat != null && store.lng != null) || !!store.address;
+              <div className="space-y-3">
+                {filteredOrders.map((order) => {
+                  const orderTotal = calculateOrderTotal(order);
+                  const itemCount = order.order_items?.length || 0;
 
                   return (
                     <div
-                      key={store.id}
-                      className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-4"
+                      key={order.id}
+                      className="rounded-2xl border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden"
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="h-5 w-5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 text-[10px] font-bold flex items-center justify-center shrink-0">
-                              {idx + 1}
-                            </span>
-                            <p className="text-sm font-bold text-slate-800 dark:text-white truncate">{store.name}</p>
-                            <span className="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded-md font-mono">
-                              {store.display_id}
-                            </span>
+                      <div className={`h-1 ${
+                        order.status === "pending" ? "bg-amber-400" :
+                        order.status === "delivered" ? "bg-emerald-400" :
+                        order.status === "cancelled" ? "bg-red-400" : "bg-slate-300"
+                      }`} />
+                      <div
+                        onClick={() => { setSelectedOrder(order); setShowDetailModal(true); }}
+                        className="p-3 active:bg-slate-50 dark:active:bg-slate-700/50 transition-colors cursor-pointer"
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-mono font-semibold text-slate-800 dark:text-white">{order.display_id}</p>
+                            <button
+                              type="button"
+                              className="text-xs text-blue-600 dark:text-blue-400 mt-0.5 truncate max-w-full text-left hover:underline disabled:no-underline disabled:text-slate-500"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (onOpenStore && order.stores) {
+                                  onOpenStore({
+                                    id: order.stores.id,
+                                    name: order.stores.name,
+                                    display_id: order.stores.display_id,
+                                    outstanding: 0,
+                                    store_type_id: order.stores.store_type_id,
+                                    customer_id: null,
+                                    lat: order.stores.lat,
+                                    lng: order.stores.lng,
+                                    address: order.stores.address,
+                                    phone: order.stores.phone,
+                                    route_id: order.stores.route_id,
+                                    is_active: true,
+                                    customers: order.customers || null,
+                                    store_types: order.stores.store_types,
+                                    routes: order.stores.routes,
+                                  } as StoreOption);
+                                }
+                              }}
+                              disabled={!onOpenStore || !order.stores}
+                            >
+                              {order.stores?.name || "Unknown Store"}
+                            </button>
                           </div>
+                          <span className={`text-xs font-semibold px-2 py-1 rounded-full whitespace-nowrap flex items-center gap-1 border ${getStatusColor(order.status)}`}>
+                            {getStatusIcon(order.status)}
+                            {order.status}
+                          </span>
+                        </div>
 
-                          {store.routes?.name && (
-                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
-                              <MapPin className="h-3 w-3" />
-                              {store.routes.name}
-                            </p>
-                          )}
-
-                          {store.address && (
-                            <p className="text-xs text-slate-400 mt-1 line-clamp-1">{store.address}</p>
-                          )}
-
-                          <div className="flex items-center gap-2 flex-wrap mt-2">
-                            <Badge className="text-[10px] font-semibold bg-amber-500 text-white">
-                              <ShoppingBag className="h-3 w-3 mr-1" />
-                              {orderCount} {orderCount === 1 ? "order" : "orders"} pending
-                            </Badge>
-                            {distMeters != null && (
-                              <Badge variant="outline" className="text-[10px] font-semibold border-blue-200 dark:border-blue-700 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20">
-                                <Navigation2 className="h-3 w-3 mr-1" />
-                                {formatDistance(distMeters)}
-                              </Badge>
+                        {order.order_type === "detailed" && order.order_items && order.order_items.length > 0 && (
+                          <div className="space-y-1 mb-2">
+                            {order.order_items.slice(0, 2).map((item, idx) => (
+                              <div key={idx} className="flex justify-between text-xs">
+                                <span className="text-slate-500 dark:text-slate-400 truncate flex-1">
+                                  {item.products?.name} × {item.quantity}
+                                </span>
+                                <span className="font-medium tabular-nums text-slate-700 dark:text-slate-200 ml-2">
+                                  ₹{calculateItemTotal(item).toLocaleString("en-IN")}
+                                </span>
+                              </div>
+                            ))}
+                            {order.order_items.length > 2 && (
+                              <p className="text-[10px] text-slate-400">
+                                +{order.order_items.length - 2} more items
+                              </p>
                             )}
                           </div>
+                        )}
+
+                        {order.order_type === "simple" && order.requirement_note && (
+                          <p className="text-xs text-slate-500 dark:text-slate-400 truncate mb-2">
+                            Note: {order.requirement_note}
+                          </p>
+                        )}
+
+                        <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-700">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-slate-400">
+                              {itemCount > 0 ? `${itemCount} items` : order.order_type}
+                            </span>
+                            <span className="text-[10px] text-slate-400">
+                              {format(new Date(order.created_at), "dd MMM, hh:mm a")}
+                            </span>
+                          </div>
+                          <p className="text-sm font-bold tabular-nums text-slate-800 dark:text-white">
+                            ₹{orderTotal.toLocaleString("en-IN")}
+                          </p>
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2 mt-3">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-9 rounded-xl text-xs"
-                          onClick={() => handleCall(store.phone || "")}
-                          disabled={!store.phone}
+                      {(order.creator_profile || order.updater_profile || order.fulfiller_profile) && (
+                        <div className="border-t border-slate-100 dark:border-slate-700 px-3 py-1.5">
+                          <div className="flex items-center gap-1 text-[10px] text-slate-500 flex-wrap">
+                            {order.creator_profile && <span>Created by {order.creator_profile.full_name}</span>}
+                            {order.updater_profile && order.updater_profile.full_name !== order.creator_profile?.full_name && (
+                              <>
+                                <span className="text-slate-300">•</span>
+                                <span>Edited by {order.updater_profile.full_name}</span>
+                              </>
+                            )}
+                            {order.fulfiller_profile && (
+                              <>
+                                <span className="text-slate-300">•</span>
+                                <span>Fulfilled by {order.fulfiller_profile.full_name}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex border-t border-slate-100 dark:border-slate-700">
+                        <button
+                          onClick={() => { setSelectedOrder(order); setShowDetailModal(true); }}
+                          className="flex-1 py-2.5 flex items-center justify-center gap-1 text-xs font-medium text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors border-r border-slate-100 dark:border-slate-700"
                         >
-                          <Phone className="h-3.5 w-3.5 mr-1.5" />
-                          Call
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-9 rounded-xl text-xs"
-                          onClick={() => openDirections(store)}
-                          disabled={!canNavigate}
+                          <Eye className="h-3.5 w-3.5" />
+                          View
+                        </button>
+                        <button
+                          onClick={() => { setViewProformaId(order.id); }}
+                          className="flex-1 py-2.5 flex items-center justify-center gap-1 text-xs font-medium text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors border-r border-slate-100 dark:border-slate-700"
                         >
-                          <Navigation2 className="h-3.5 w-3.5 mr-1.5" />
-                          Navigate
-                        </Button>
+                          <Package className="h-3.5 w-3.5" />
+                          Proforma
+                        </button>
+                        {(order.status === "pending" || order.status === "confirmed") && (
+                          <button
+                            onClick={() => { setEditOrder(order); }}
+                            className="flex-1 py-2.5 flex items-center justify-center gap-1 text-xs font-medium text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors border-r border-slate-100 dark:border-slate-700"
+                          >
+                            <Edit className="h-3.5 w-3.5" />
+                            Edit
+                          </button>
+                        )}
+                        {order.status === "pending" && (
+                          <>
+                            <button
+                              onClick={() => { setFulfillOrder(order); setFulfillCash(""); setFulfillUpi(""); }}
+                              className="flex-1 py-2.5 flex items-center justify-center gap-1 text-xs font-medium text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors border-r border-slate-100 dark:border-slate-700"
+                            >
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              Fulfill
+                            </button>
+                            <button
+                              onClick={() => { setCancelOrderId(order.id); setCancelReason(""); }}
+                              className="flex-1 py-2.5 flex items-center justify-center gap-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                              Cancel
+                            </button>
+                          </>
+                        )}
+                        {order.status !== "pending" && (
+                          <button
+                            onClick={() => { setSelectedOrder(order); setShowDetailModal(true); }}
+                            className="flex-1 py-2.5 flex items-center justify-center gap-1 text-xs font-medium text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                            Details
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -626,61 +1124,406 @@ export function AgentRoutes() {
           </div>
         )}
 
-        {/* ── ORDERS VIEW ── */}
-        {view === "orders" && (
-          <div className="space-y-3">
-            {loadingOrders ? (
-              <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
-            ) : allOrders.length === 0 ? (
-              <div className="text-center py-8">
-                <ClipboardList className="h-10 w-10 mx-auto text-muted-foreground/40 mb-2" />
-                <p className="text-sm text-muted-foreground">No orders found</p>
-              </div>
-            ) : (
-              allOrders.map((order: any) => (
-                <div key={order.id} className="rounded-2xl bg-card border border-border p-4">
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <p className="text-sm font-bold text-foreground">{order.display_id}</p>
-                      <p className="text-xs text-muted-foreground">{order.stores?.name || "—"}</p>
-                    </div>
-                    <Badge variant="outline" className={cn(
-                      "text-[10px]",
-                      order.status === "pending" && "border-amber-200 text-amber-600",
-                      order.status === "delivered" && "border-emerald-200 text-emerald-600",
-                      order.status === "cancelled" && "border-red-200 text-red-600",
-                    )}>
-                      {order.status}
-                    </Badge>
+        {/* Order Detail Modal */}
+        <Dialog open={showDetailModal} onOpenChange={setShowDetailModal}>
+          <DialogContent className="max-w-sm max-h-[90vh] overflow-y-auto rounded-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-base">Order Details</DialogTitle>
+            </DialogHeader>
+
+            {selectedOrder && (
+              <div className="space-y-4">
+                <div className="rounded-xl bg-slate-50 dark:bg-slate-900/50 p-3 space-y-2 border border-slate-100 dark:border-slate-700">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-slate-500">Order ID</span>
+                    <span className="font-mono text-sm font-semibold text-slate-800 dark:text-white">{selectedOrder.display_id}</span>
                   </div>
-                  {order.requirement_note && (
-                    <p className="text-xs text-muted-foreground mb-2">{order.requirement_note}</p>
-                  )}
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] text-muted-foreground">{new Date(order.created_at).toLocaleDateString()}</span>
-                    <div className="flex gap-1.5">
-                      {order.status === "pending" && (
-                        <button
-                          onClick={async () => {
-                            const { error } = await supabase
-                              .from("orders")
-                              .update({ status: "cancelled", cancelled_by: user?.id, cancelled_at: new Date().toISOString() })
-                              .eq("id", order.id);
-                            if (error) { toast.error(error.message); return; }
-                            qc.invalidateQueries({ queryKey: ["mobile-agent-all-orders"] });
-                          }}
-                          className="text-[10px] text-red-500 font-semibold px-2 py-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20"
-                        >
-                          <XCircle className="h-3 w-3 inline mr-0.5" />Cancel
-                        </button>
-                      )}
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-slate-500">Store</span>
+                    <span className="text-sm font-medium text-right max-w-[150px] truncate text-slate-800 dark:text-slate-200">{selectedOrder.stores?.name || "—"}</span>
+                  </div>
+                  {selectedOrder.customers?.name && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-slate-500">Customer</span>
+                      <span className="text-sm font-medium text-slate-800 dark:text-slate-200">{selectedOrder.customers.name}</span>
                     </div>
+                  )}
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-slate-500">Type</span>
+                    <span className="text-sm capitalize text-slate-800 dark:text-slate-200">{selectedOrder.order_type}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-slate-500">Status</span>
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex items-center gap-1 ${getStatusColor(selectedOrder.status)}`}>
+                      {getStatusIcon(selectedOrder.status)}
+                      {selectedOrder.status}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-slate-500">Date</span>
+                    <span className="text-xs text-slate-600 dark:text-slate-400">{format(new Date(selectedOrder.created_at), "dd MMM yy, hh:mm a")}</span>
                   </div>
                 </div>
-              ))
+
+                {selectedOrder.order_type === "detailed" && selectedOrder.order_items && selectedOrder.order_items.length > 0 ? (
+                  <div className="rounded-xl border border-slate-100 dark:border-slate-700 overflow-hidden">
+                    <div className="bg-slate-50 dark:bg-slate-900/30 px-3 py-2 border-b border-slate-100 dark:border-slate-700">
+                      <p className="text-xs font-semibold text-slate-500">Items ({selectedOrder.order_items.length})</p>
+                    </div>
+                    <div className="divide-y divide-slate-100 dark:divide-slate-700">
+                      {selectedOrder.order_items.map((item, idx) => {
+                        const unitPrice = item.products?.base_price || 0;
+                        const totalPrice = calculateItemTotal(item);
+                        return (
+                          <div key={idx} className="px-3 py-2.5">
+                            <div className="flex justify-between items-start mb-1">
+                              <span className="text-sm font-medium text-slate-800 dark:text-white">{item.products?.name || "Product"}</span>
+                              <span className="text-sm font-semibold tabular-nums text-slate-800 dark:text-white">₹{totalPrice.toLocaleString("en-IN")}</span>
+                            </div>
+                            <div className="flex justify-between text-xs text-slate-400">
+                              <span>SKU: {item.products?.sku || item.product_id.slice(0, 8)}</span>
+                              <span>Qty: {item.quantity} × ₹{unitPrice.toLocaleString("en-IN")}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="px-3 py-2.5 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/30">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-semibold text-slate-500">Total</span>
+                        <span className="text-base font-bold text-slate-800 dark:text-white tabular-nums">₹{calculateOrderTotal(selectedOrder).toLocaleString("en-IN")}</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : selectedOrder.requirement_note ? (
+                  <div className="rounded-xl border border-slate-100 dark:border-slate-700 p-3">
+                    <p className="text-xs font-semibold text-slate-500 mb-1">Requirement</p>
+                    <p className="text-sm text-slate-800 dark:text-slate-200">{selectedOrder.requirement_note}</p>
+                  </div>
+                ) : null}
+              </div>
             )}
-          </div>
-        )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Cancel Order Dialog */}
+        <Dialog open={!!cancelOrderId} onOpenChange={(v) => { if (!v) { setCancelOrderId(null); setCancelReason(""); } }}>
+          <DialogContent className="max-w-sm rounded-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-base">Cancel Order</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Are you sure you want to cancel this order?
+              </p>
+              <div>
+                <Label className="text-xs font-medium text-muted-foreground mb-1 block">
+                  Reason
+                </Label>
+                <Select value={cancelReason} onValueChange={setCancelReason}>
+                  <SelectTrigger><SelectValue placeholder="Select reason" /></SelectTrigger>
+                  <SelectContent>
+                    {CANCEL_REASONS.map((r) => (
+                      <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {cancelReason === "Other" && (
+                <Textarea
+                  placeholder="Type the cancellation reason..."
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  rows={3}
+                  className="mt-1"
+                />
+              )}
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => { setCancelOrderId(null); setCancelReason(""); }}
+                >
+                  Keep Order
+                </Button>
+                <Button
+                  variant="destructive"
+                  className="flex-1"
+                  disabled={cancelling || !cancelReason}
+                  onClick={handleCancelOrder}
+                >
+                  {cancelling ? <Loader2 className="h-4 w-4 animate-spin" /> : "Cancel Order"}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Create Order Sheet */}
+        <Sheet open={showCreate} onOpenChange={(open) => { if (!open) resetCreateForm(); setShowCreate(open); }}>
+          <SheetContent side="bottom" className="rounded-t-3xl pb-10 px-0 max-h-[90vh] overflow-y-auto">
+            <div className="px-6">
+              <SheetHeader className="mb-5 text-left">
+                <SheetTitle className="text-lg font-bold">Create Order</SheetTitle>
+              </SheetHeader>
+
+              <div className="space-y-4">
+                {/* Store search + QR */}
+                {!createStoreId ? (
+                  <div>
+                    <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 block">Store</Label>
+                    <div className="flex gap-2">
+                      <div className="flex-1 relative">
+                        <Input
+                          placeholder="Search stores by name or ID..."
+                          value={createStoreSearch}
+                          onChange={(e) => setCreateStoreSearch(e.target.value)}
+                          className="rounded-xl h-11 border-slate-200 dark:border-slate-600"
+                        />
+                        {createStoreSearch && (
+                          <div className="absolute z-10 mt-1 w-full max-h-36 overflow-y-auto border rounded-xl bg-white dark:bg-slate-900 divide-y shadow-lg">
+                            {(createAllStores || [])
+                              .filter((s: any) =>
+                                s.name.toLowerCase().includes(createStoreSearch.toLowerCase()) ||
+                                (s.display_id && s.display_id.toLowerCase().includes(createStoreSearch.toLowerCase()))
+                              )
+                              .slice(0, 20)
+                              .map((s: any) => (
+                                <button
+                                  key={s.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setCreateStoreId(s.id);
+                                    setCreateSelectedStoreName(s.name);
+                                    setCreateSelectedStoreTypeId(s.store_type_id);
+                                    setCreateStoreSearch("");
+                                  }}
+                                  className="w-full text-left px-3 py-2.5 text-sm transition-colors hover:bg-accent"
+                                >
+                                  <span className="font-mono text-xs text-muted-foreground">{s.display_id}</span>
+                                  <span className="ml-2">{s.name}</span>
+                                </button>
+                              ))}
+                            {((createAllStores || []).filter((s: any) =>
+                              s.name.toLowerCase().includes(createStoreSearch.toLowerCase()) ||
+                              (s.display_id && s.display_id.toLowerCase().includes(createStoreSearch.toLowerCase()))
+                            ).length === 0) && (
+                              <div className="px-3 py-4 text-sm text-muted-foreground text-center">No stores found</div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-11 w-11 rounded-xl flex-shrink-0"
+                        onClick={() => setShowQrScanner(true)}
+                      >
+                        <QrCode className="h-5 w-5" />
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 block">Store</Label>
+                    <div className="rounded-xl bg-primary/5 border border-primary/20 px-3 py-2.5 flex items-center justify-between">
+                      <div>
+                        <span className="text-sm font-medium">{createSelectedStoreName}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => { setCreateStoreId(""); setCreateSelectedStoreName(""); setCreateSelectedStoreTypeId(null); }}
+                        className="text-xs text-muted-foreground hover:text-foreground font-medium"
+                      >
+                        Change
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Order Type */}
+                <div>
+                  <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 block">Order Type</Label>
+                  <Select value={createOrderType} onValueChange={(value) => setCreateOrderType(value as "simple" | "detailed")}>
+                    <SelectTrigger className="rounded-xl h-11 border-slate-200 dark:border-slate-600">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="simple">Simple (requirement note)</SelectItem>
+                      <SelectItem value="detailed">Detailed (products + qty)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {createOrderType === "simple" ? (
+                  <div>
+                    <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 block">Requirement</Label>
+                    <Textarea
+                      value={createRequirementNote}
+                      onChange={(event) => setCreateRequirementNote(event.target.value)}
+                      placeholder="What does the store need?"
+                      rows={3}
+                      className="rounded-xl resize-none border-slate-200 dark:border-slate-600"
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Products</Label>
+                      {createStoreId && (
+                        <Button size="sm" variant="outline" className="h-8 rounded-lg text-xs" onClick={createAddItem}>
+                          <Plus className="h-3.5 w-3.5 mr-1" />Add
+                        </Button>
+                      )}
+                    </div>
+                    {!createStoreId ? (
+                      <p className="text-sm text-muted-foreground">Select a store first</p>
+                    ) : !createStoreProducts || createStoreProducts.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No products available for this store</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {createOrderItems.map((item, index) => (
+                          <div key={`${index}-${item.product_id}`} className="grid grid-cols-[1fr_90px_36px] gap-2">
+                            <Select
+                              value={item.product_id}
+                              onValueChange={(value) => {
+                                setCreateOrderItems((prev) => prev.map((row, rowIndex) => rowIndex === index ? { ...row, product_id: value } : row));
+                              }}
+                            >
+                              <SelectTrigger className="rounded-xl h-10 border-slate-200 dark:border-slate-600">
+                                <SelectValue placeholder="Select product" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {(createStoreProducts || []).map((product: any) => (
+                                  <SelectItem key={product.id} value={product.id}>
+                                    {product.name} — ₹{product.effective_price}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+
+                            <Input
+                              type="number"
+                              min={1}
+                              value={item.quantity}
+                              onChange={(event) => {
+                                const quantity = Math.max(1, Number(event.target.value || 1));
+                                setCreateOrderItems((prev) => prev.map((row, rowIndex) => rowIndex === index ? { ...row, quantity } : row));
+                              }}
+                              className="h-10 rounded-xl"
+                            />
+
+                            <Button
+                              size="icon"
+                              variant="outline"
+                              className="h-10 w-9 rounded-xl"
+                              onClick={() => createRemoveItem(index)}
+                              disabled={createOrderItems.length === 1}
+                            >
+                              <XCircle className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <button
+                  className={`w-full h-11 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all ${
+                    !createStoreId || createSaving
+                      ? "bg-blue-400 text-white cursor-not-allowed"
+                      : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-sm"
+                  }`}
+                  onClick={handleCreateOrder}
+                  disabled={!createStoreId || createSaving}
+                >
+                  {createSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><ShoppingCart className="h-4 w-4" />Create Order</>}
+                </button>
+              </div>
+            </div>
+          </SheetContent>
+        </Sheet>
+
+        {/* QR Scanner for store selection */}
+        <Dialog open={showQrScanner} onOpenChange={setShowQrScanner}>
+          <DialogContent className="sm:max-w-sm rounded-2xl">
+            <DialogHeader>
+              <DialogTitle>Scan Store QR</DialogTitle>
+            </DialogHeader>
+            <QrStoreSelector onStoreSelected={handleStoreFromQr} />
+          </DialogContent>
+        </Dialog>
+
+        {/* Proforma Dialog */}
+        <Dialog open={!!viewProformaId && !!viewProforma} onOpenChange={(o) => { if (!o) setViewProformaId(null); }}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl">
+            <DialogHeader><DialogTitle>Proforma Invoice</DialogTitle></DialogHeader>
+            {viewProforma && <ProformaView proforma={viewProforma} />}
+          </DialogContent>
+        </Dialog>
+
+        {/* Fulfill Payment Dialog */}
+        <Dialog open={!!fulfillOrder} onOpenChange={(o) => { if (!o) { setFulfillOrder(null); setFulfillCash(""); setFulfillUpi(""); } }}>
+          <DialogContent className="sm:max-w-sm rounded-2xl">
+            <DialogHeader>
+              <DialogTitle>Fulfill Order</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div>
+                <p className="text-sm font-bold">{fulfillOrder?.display_id}</p>
+                <p className="text-xs text-muted-foreground">{fulfillOrder?.stores?.name}</p>
+              </div>
+              {fulfillOrder?.order_items && fulfillOrder.order_items.length > 0 && (
+                <div className="space-y-1.5">
+                  {fulfillOrder.order_items.map((item: any, idx: number) => (
+                    <div key={idx} className="flex justify-between text-xs">
+                      <span className="text-muted-foreground truncate flex-1">{item.products?.name} × {item.quantity}</span>
+                      <span className="font-medium tabular-nums">₹{((item.products?.base_price || 0) * item.quantity).toLocaleString("en-IN")}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-xs text-muted-foreground">Cash (₹)</Label>
+                  <Input
+                    type="number"
+                    value={fulfillCash}
+                    onChange={(e) => setFulfillCash(e.target.value)}
+                    placeholder="0"
+                    className="text-sm h-10"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">UPI (₹)</Label>
+                  <Input
+                    type="number"
+                    value={fulfillUpi}
+                    onChange={(e) => setFulfillUpi(e.target.value)}
+                    placeholder="0"
+                    className="text-sm h-10"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2 pt-2">
+                <Button variant="outline" className="flex-1" onClick={() => { setFulfillOrder(null); setFulfillCash(""); setFulfillUpi(""); }}>
+                  Cancel
+                </Button>
+                <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700" disabled={isFulfilling || (!fulfillCash && !fulfillUpi)} onClick={handleFulfill}>
+                  {isFulfilling ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm"}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <EditOrderSheet
+          order={editOrder}
+          open={!!editOrder}
+          onOpenChange={(o) => { if (!o) setEditOrder(null); }}
+          onSaved={() => qc.invalidateQueries({ queryKey: ["mobile-agent-all-orders"] })}
+        />
       </div>
     </div>
   );
