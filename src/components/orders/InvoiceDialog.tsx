@@ -349,7 +349,7 @@ export function InvoiceDialog({
 
       if (mode === "create") {
         // Generate invoice number
-        const { data: invoiceNum } = await supabase.rpc("generate_invoice_number");
+        const { data: invoiceNum } = await supabase.rpc("generate_invoice_number") as any;
         invoiceData.display_id = invoiceNum;
         invoiceData.order_ref = order?.id || null;
         invoiceData.status = "draft";
@@ -379,7 +379,7 @@ export function InvoiceDialog({
             total_amount: calculateItemTotal(item),
           }));
           
-          await supabase.from("invoice_items").insert(invoiceItems);
+          await (supabase as any).from("invoice_items").insert(invoiceItems);
         }
         
         return data;
@@ -413,7 +413,7 @@ export function InvoiceDialog({
             total_amount: calculateItemTotal(item),
           }));
           
-          await supabase.from("invoice_items").insert(invoiceItems);
+          await (supabase as any).from("invoice_items").insert(invoiceItems);
         }
         
         return { id: invoice.id };
@@ -443,9 +443,9 @@ export function InvoiceDialog({
       .from("invoices")
       .update({ 
         status: "issued",
-        updated_by: user?.id,
+        updated_by: user?.id as string,
         updated_at: new Date().toISOString(),
-      })
+      } as any)
       .eq("id", invoice.id);
     
     if (error) {
@@ -465,9 +465,9 @@ export function InvoiceDialog({
       .from("invoices")
       .update({ 
         status: "cancelled",
-        cancelled_by: user?.id,
+        cancelled_by: user?.id as string,
         updated_at: new Date().toISOString(),
-      })
+      } as any)
       .eq("id", invoice.id);
     
     if (error) {
@@ -488,8 +488,8 @@ export function InvoiceDialog({
       .from("invoices")
       .update({ 
         deleted_at: new Date().toISOString(),
-        updated_by: user?.id,
-      })
+        updated_by: user?.id as string,
+      } as any)
       .eq("id", invoice.id);
     
     if (error) {
@@ -518,7 +518,7 @@ export function InvoiceDialog({
                   invoice.status === "paid" ? "success" :
                   invoice.status === "issued" ? "info" :
                   invoice.status === "cancelled" ? "destructive" :
-                  "secondary"
+                  "secondary" as any
                 }
               >
                 {invoice.status}

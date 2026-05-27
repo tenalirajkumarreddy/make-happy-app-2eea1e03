@@ -55,8 +55,8 @@ export function MarketerHome({ onOpenOrders, onOpenRecord, onOpenStores, onOpenA
           .eq("recorded_by", user!.id).gte("created_at", `${today}T00:00:00`),
         supabase.from("customers").select("id").eq("is_active", true),
       ]);
-      const orders = ordersRes.data || [];
-      const todayTxns = txnRes.data || [];
+      const orders: any[] = ordersRes.data || [];
+      const todayTxns: any[] = txnRes.data || [];
       return {
         totalOrders: orders.length,
         pendingOrders: orders.filter(o => o.status === "pending").length,

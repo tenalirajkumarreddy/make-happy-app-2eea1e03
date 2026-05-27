@@ -51,11 +51,11 @@ export default function ReceivablesAgingReport() {
         supabase.from("store_types").select("id, name"),
       ]);
 
-      const stores = storesRes.data || [];
-      const txns = txnRes.data || [];
-      const sales = salesRes.data || [];
-      const customers = customersRes.data || [];
-      const storeTypes = storeTypesRes.data || [];
+      const stores: any[] = storesRes.data || [];
+      const txns: any[] = txnRes.data || [];
+      const sales: any[] = salesRes.data || [];
+      const customers: any[] = customersRes.data || [];
+      const storeTypes: any[] = storeTypesRes.data || [];
 
       const customerMap = Object.fromEntries(customers.map(c => [c.id, c.name]));
       const storeTypeMap = Object.fromEntries(storeTypes.map(t => [t.id, t.name]));
@@ -151,12 +151,12 @@ export default function ReceivablesAgingReport() {
   };
 
   return (
-    <ReportContainer title="Receivables Aging" loading={isLoading}>
+    <ReportContainer title="Receivables Aging" isLoading={isLoading}>
       <div className="space-y-6">
         <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
-          <ReportKPICard label="Total Outstanding" value={fmt(totals.total)} icon={DollarSign} className="lg:col-span-2" />
-          <ReportKPICard label="Current (0-30d)" value={fmt(totals.current)} icon={CheckCircle2} iconClass="text-green-600" className="lg:col-span-2" />
-          <ReportKPICard label="90+ Days Overdue" value={fmt(totals.d90p)} icon={AlertTriangle} iconClass="text-red-600" className="lg:col-span-2" />
+          <ReportKPICard label="Total Outstanding" value={fmt(totals.total)} icon={DollarSign} />
+          <ReportKPICard label="Current (0-30d)" value={fmt(totals.current)} icon={CheckCircle2} />
+          <ReportKPICard label="90+ Days Overdue" value={fmt(totals.d90p)} icon={AlertTriangle} />
         </div>
 
         <div className="grid lg:grid-cols-2 gap-6">

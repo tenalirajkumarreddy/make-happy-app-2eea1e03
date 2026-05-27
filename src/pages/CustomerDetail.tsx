@@ -112,7 +112,7 @@ const CustomerDetail = () => {
       .from("customers")
       .update({
         name: form.name,
-        phone: form.phone || null,
+        phone: form.phone || null as any,
         email: form.email || null,
         address: form.address || null,
         gst_number: form.gst_number || null,

@@ -5,7 +5,7 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist", "android", "mobile-redesign", "node_modules", "*.js", "scripts", "Open-SMS", "opensms-gateway", "WASTE", "vite.config.ts.timestamp-*.mjs"] },
+  { ignores: ["archive", "dist", "android", "mobile-redesign", "node_modules", "*.js", "scripts", "Open-SMS", "opensms-gateway", "WASTE", "vite.config.ts.timestamp-*.mjs"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
@@ -33,7 +33,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["src/lib/logger.ts", "src/test/**/*.{ts,tsx}", "tests/**/*.{ts,tsx}"],
+    files: ["src/lib/logger.ts", "src/test/**/*.{ts,tsx}", "tests/**/*.{ts,tsx}", "supabase/functions/**/*.ts"],
     rules: {
       "no-console": "off",
     },

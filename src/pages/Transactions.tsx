@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { logActivity } from "@/lib/activityLogger";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
-import { addToQueue } from "@/lib/offlineQueue";
+import { addToQueue, generateBusinessKey } from "@/lib/offlineQueue";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
 import { Loader2, X, CalendarIcon, Store as StoreIcon, Banknote, CreditCard, RotateCcw, Scale, AlertCircle, Receipt, Printer, Share2, UserCircle, MapPin, Phone, Mail } from "lucide-react";
@@ -97,7 +97,7 @@ const Transactions = () => {
    const { data: transactions, isLoading, isError, error: txnError, isFetching } = useQuery({
       queryKey: ["transactions", currentWarehouse?.id, isAdmin ? "all" : user?.id, filterFrom, filterTo, filterStore, filterStoreType, filterRoute, filterUser, filterCustomer, filterPayment, loadedPages],
       queryFn: async () => {
-       let query = supabase
+       let query: any = supabase
        .from("transactions")
        .select("*, stores(name, display_id, store_type_id, route_id, outstanding, customer_id), customers(id, name, display_id)")
        .order("created_at", { ascending: false });
@@ -132,10 +132,10 @@ const Transactions = () => {
    const { data: stores } = useQuery({
      queryKey: ["stores-for-txn", currentWarehouse?.id],
      queryFn: async () => {
-       let query = supabase.from("stores").select("id, name, outstanding, display_id, customer_id, is_active").order("is_active", { ascending: false }).order("name");
+       let query: any = supabase.from("stores").select("id, name, outstanding, display_id, customer_id, is_active").order("is_active", { ascending: false }).order("name");
        if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
        const { data } = await query;
-       return data || [];
+       return (data ?? []) as any[];
      },
    });
 
@@ -143,8 +143,8 @@ const Transactions = () => {
   const { data: storeTypes = [] } = useQuery({
     queryKey: ["store-types-for-txn", currentWarehouse?.id],
     queryFn: async () => {
-      const { data } = await supabase.from("store_types").select("id, name").eq("is_active", true);
-      return data || [];
+      const { data } = await (supabase.from("store_types").select("id, name") as any).eq("is_active", true);
+      return (data ?? []) as any[];
     },
   });
 
@@ -152,8 +152,8 @@ const Transactions = () => {
   const { data: routes = [] } = useQuery({
     queryKey: ["routes-for-txn", currentWarehouse?.id],
     queryFn: async () => {
-      const { data } = await supabase.from("routes").select("id, name").eq("is_active", true);
-      return data || [];
+      const { data } = await (supabase.from("routes").select("id, name") as any).eq("is_active", true);
+      return (data ?? []) as any[];
     },
   });
 
@@ -161,32 +161,32 @@ const Transactions = () => {
   const { data: customersForFilter = [] } = useQuery({
     queryKey: ["customers-for-txn-filter", currentWarehouse?.id],
     queryFn: async () => {
-      let query = supabase.from("customers").select("id, name").eq("is_active", true).order("name");
+      let query: any = supabase.from("customers").select("id, name").eq("is_active", true).order("name");
       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
       const { data } = await query;
-      return data || [];
+      return (data ?? []) as any[];
     },
   });
 
   const { data: allProfiles } = useQuery({
     queryKey: ["profiles-for-txn"],
     queryFn: async () => {
-      const { data } = await supabase.from("profiles").select("user_id, full_name, avatar_url");
-      return data || [];
+      const { data } = await (supabase.from("profiles").select("user_id, full_name, avatar_url") as any);
+      return (data ?? []) as any[];
     },
   });
-  const profileMap = new Map((allProfiles || []).map((p: ProfileRecord) => [p.user_id, p]));
-  const getRecorderName = (id: string) => (profileMap.get(id) )?.full_name || "Unknown";
-  const getRecorderAvatar = (id: string) => (profileMap.get(id) )?.avatar_url || null;
+  const profileMap = new Map((allProfiles || []).map((p: any) => [p.user_id, p]));
+  const getRecorderName = (id: string): string => (profileMap.get(id) as any)?.full_name || "Unknown";
+  const getRecorderAvatar = (id: string): string | null => (profileMap.get(id) as any)?.avatar_url || null;
 
   // Fetch staff users for "record on behalf" selector
   const { data: staffUsers } = useQuery({
     queryKey: ["staff-for-behalf-txn"],
     queryFn: async () => {
-      const { data: roles } = await supabase.from("user_roles").select("user_id, role").neq("role", "customer");
-      const staffIds = roles?.map((r) => r.user_id) || [];
-      const { data: profs } = await supabase.from("profiles").select("user_id, full_name").in("user_id", staffIds);
-      return profs?.filter((p) => p.user_id !== user?.id) || [];
+      const { data: roles } = await (supabase.from("user_roles").select("user_id, role") as any).neq("role", "customer");
+      const staffIds = (roles ?? []).map((r: any) => r.user_id);
+      const { data: profs } = await (supabase.from("profiles").select("user_id, full_name") as any).in("user_id", staffIds);
+      return ((profs ?? []).filter((p: any) => p.user_id !== user?.id) as any[]);
     },
     enabled: canRecordBehalf,
   });
@@ -195,9 +195,9 @@ const Transactions = () => {
   const { data: settings = {} } = useQuery({
     queryKey: ["company-settings-txn"],
     queryFn: async () => {
-      const { data } = await supabase.from("company_settings").select("key, value");
+      const { data } = await (supabase.from("company_settings").select("key, value") as any);
       const map: Record<string, string> = {};
-      data?.forEach((s: settingsData) => { map[s.key] = s.value; });
+      (data ?? []).forEach((s: any) => { map[s.key] = s.value; });
       return map;
     },
   });
@@ -254,13 +254,19 @@ const Transactions = () => {
     setSaving(true);
 
     // Generate random display ID
-    const { data: displayId } = await supabase.rpc("generate_random_display_id", { p_prefix: "PAY", p_table_name: "transactions" });
+    const { data: displayId } = await supabase.rpc("generate_random_display_id", { p_prefix: "PAY", p_table_name: "transactions" }) as any;
 
     const effectiveRecordedBy = recordedFor || user!.id;
     const loggedBy = recordedFor ? user!.id : null;
 
     // Queue transaction for offline sync if no network connection
     if (!navigator.onLine) {
+      const bizKey = generateBusinessKey('transaction', {
+        storeId: storeId,
+        customerId: customerId,
+        amount: totalPayment,
+        timestamp: txnDate || new Date().toISOString(),
+      });
       await addToQueue({
         id: crypto.randomUUID(),
         type: "transaction",
@@ -278,6 +284,7 @@ const Transactions = () => {
           created_at: txnDate ? new Date(txnDate).toISOString() : new Date().toISOString(),
         },
         createdAt: new Date().toISOString(),
+        businessKey: bizKey,
       });
       toast.warning("You're offline — transaction queued and will sync automatically when back online");
       setSaving(false);
@@ -288,7 +295,7 @@ const Transactions = () => {
 
     // Use atomic RPC for online transactions
     // Note: p_total_amount is calculated internally by the function (cash + upi)
-    const { data: txnResult, error: txnError } = await supabase.rpc("record_transaction", {
+    const { data: txnResult, error: txnError } = await (supabase as any).rpc("record_transaction", {
       p_display_id: displayId,
       p_store_id: storeId,
       p_customer_id: customerId,
@@ -336,7 +343,7 @@ const Transactions = () => {
   };
 
   // Filtering is now done server-side; local array mirrors the fetched page(s)
-  const filteredTransactions = transactions || [];
+  const filteredTransactions: any[] = transactions || [];
 
   const activeTxnFilterCount = [
     filterStore !== "all",
@@ -371,17 +378,22 @@ const Transactions = () => {
   const [returnReason, setReturnReason] = useState("");
   const [returnNotes, setReturnNotes] = useState("");
   const [returnLoading, setReturnLoading] = useState(false);
+  const [correctionStoreId, setCorrectionStoreId] = useState("");
+  const [correctionType, setCorrectionType] = useState("adjustment");
+  const [correctionAmount, setCorrectionAmount] = useState("");
+  const [correctionReason, setCorrectionReason] = useState("");
+  const [correctionDescription, setCorrectionDescription] = useState("");
 
   const columns = [
     { header: "Payment ID", accessor: "display_id" as const, className: "font-mono text-xs" },
-    { header: "Store", accessor: (row: TransactionRecord) => row.stores?.name || "—", className: "font-medium" },
-    { header: "Total", accessor: (row: TransactionRecord) => `₹${Number(row.total_amount || 0).toLocaleString()}`, className: "font-semibold" },
-    { header: "Cash", accessor: (row: TransactionRecord) => `₹${Number(row.cash_amount || 0).toLocaleString()}`, className: "text-sm hidden md:table-cell" },
-    { header: "UPI", accessor: (row: TransactionRecord) => `₹${Number(row.upi_amount || 0).toLocaleString()}`, className: "text-sm hidden md:table-cell" },
-    { header: "Old Bal.", accessor: (row: TransactionRecord) => `₹${Number(row.old_outstanding || 0).toLocaleString()}`, className: "text-muted-foreground text-sm hidden lg:table-cell" },
-    { header: "New Bal.", accessor: (row: TransactionRecord) => `₹${Number(row.new_outstanding || 0).toLocaleString()}`, className: "text-sm hidden lg:table-cell" },
-    { header: "Date", accessor: (row: TransactionRecord) => new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }), className: "text-muted-foreground text-xs hidden sm:table-cell" },
-    { header: "Actions", accessor: (row: TransactionRecord) => (
+    { header: "Store", accessor: (row: any) => row.stores?.name || "—", className: "font-medium" },
+    { header: "Total", accessor: (row: any) => `₹${Number(row.total_amount || 0).toLocaleString()}`, className: "font-semibold" },
+    { header: "Cash", accessor: (row: any) => `₹${Number(row.cash_amount || 0).toLocaleString()}`, className: "text-sm hidden md:table-cell" },
+    { header: "UPI", accessor: (row: any) => `₹${Number(row.upi_amount || 0).toLocaleString()}`, className: "text-sm hidden md:table-cell" },
+    { header: "Old Bal.", accessor: (row: any) => `₹${Number(row.old_outstanding || 0).toLocaleString()}`, className: "text-muted-foreground text-sm hidden lg:table-cell" },
+    { header: "New Bal.", accessor: (row: any) => `₹${Number(row.new_outstanding || 0).toLocaleString()}`, className: "text-sm hidden lg:table-cell" },
+    { header: "Date", accessor: (row: any) => new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }), className: "text-muted-foreground text-xs hidden sm:table-cell" },
+    { header: "Actions", accessor: (row: any) => (
       <TooltipProvider>
         <div className="flex items-center gap-1">
           {/* View Receipt */}
@@ -419,7 +431,7 @@ const Transactions = () => {
   ];
 
   // Store Hover Card component
-  const StoreHoverCard = ({ store, children }: { store: StoreData; children: React.ReactNode }) => {
+  const StoreHoverCard = ({ store, children }: { store: any; children: React.ReactNode }) => {
     if (!store) return <span>{children}</span>;
     return (
       <HoverCard>
@@ -459,7 +471,7 @@ const Transactions = () => {
   // Update columns to use hover cards
   const columnsWithHover = [
     { header: "Payment ID", accessor: "display_id" as const, className: "font-mono text-xs" },
-    { header: "Store", accessor: (row: TransactionRecord) => (
+    { header: "Store", accessor: (row: any) => (
       <div className="flex items-center gap-2">
         <StoreIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
         <StoreHoverCard store={row.stores}>
@@ -467,12 +479,12 @@ const Transactions = () => {
         </StoreHoverCard>
       </div>
     ), className: "font-medium" },
-    { header: "Total", accessor: (row: TransactionRecord) => `₹${Number(row.total_amount || 0).toLocaleString()}`, className: "font-semibold" },
-    { header: "Cash", accessor: (row: TransactionRecord) => `₹${Number(row.cash_amount || 0).toLocaleString()}`, className: "text-sm hidden md:table-cell" },
-    { header: "UPI", accessor: (row: TransactionRecord) => `₹${Number(row.upi_amount || 0).toLocaleString()}`, className: "text-sm hidden md:table-cell" },
-    { header: "Old Bal.", accessor: (row: TransactionRecord) => `₹${Number(row.old_outstanding || 0).toLocaleString()}`, className: "text-muted-foreground text-sm hidden lg:table-cell" },
-    { header: "New Bal.", accessor: (row: TransactionRecord) => `₹${Number(row.new_outstanding || 0).toLocaleString()}`, className: "text-sm hidden lg:table-cell" },
-    { header: "Date", accessor: (row: TransactionRecord) => new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }), className: "text-muted-foreground text-xs hidden sm:table-cell" },
+    { header: "Total", accessor: (row: any) => `₹${Number(row.total_amount || 0).toLocaleString()}`, className: "font-semibold" },
+    { header: "Cash", accessor: (row: any) => `₹${Number(row.cash_amount || 0).toLocaleString()}`, className: "text-sm hidden md:table-cell" },
+    { header: "UPI", accessor: (row: any) => `₹${Number(row.upi_amount || 0).toLocaleString()}`, className: "text-sm hidden md:table-cell" },
+    { header: "Old Bal.", accessor: (row: any) => `₹${Number(row.old_outstanding || 0).toLocaleString()}`, className: "text-muted-foreground text-sm hidden lg:table-cell" },
+    { header: "New Bal.", accessor: (row: any) => `₹${Number(row.new_outstanding || 0).toLocaleString()}`, className: "text-sm hidden lg:table-cell" },
+    { header: "Date", accessor: (row: any) => new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }), className: "text-muted-foreground text-xs hidden sm:table-cell" },
     columns[8], // Keep the actions column
   ];
 
@@ -526,35 +538,35 @@ const Transactions = () => {
         <SelectTrigger className="h-8 text-xs flex-1 min-w-[120px] sm:flex-none sm:w-40"><SelectValue placeholder="All stores" /></SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All stores</SelectItem>
-          {stores?.map((s: StoreData) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+          {stores?.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
         </SelectContent>
       </Select>
       <Select value={filterStoreType} onValueChange={setFilterStoreType}>
         <SelectTrigger className="h-8 text-xs flex-1 min-w-[120px] sm:flex-none sm:w-40"><SelectValue placeholder="All store types" /></SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All store types</SelectItem>
-          {storeTypes?.map((st: StoreTypeData) => <SelectItem key={st.id} value={st.id}>{st.name}</SelectItem>)}
+          {storeTypes?.map((st: any) => <SelectItem key={st.id} value={st.id}>{st.name}</SelectItem>)}
         </SelectContent>
       </Select>
       <Select value={filterRoute} onValueChange={setFilterRoute}>
         <SelectTrigger className="h-8 text-xs flex-1 min-w-[120px] sm:flex-none sm:w-40"><SelectValue placeholder="All routes" /></SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All routes</SelectItem>
-          {routes?.map((r: RouteData) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+          {routes?.map((r: any) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
         </SelectContent>
       </Select>
       <Select value={filterCustomer} onValueChange={setFilterCustomer}>
         <SelectTrigger className="h-8 text-xs flex-1 min-w-[120px] sm:flex-none sm:w-40"><SelectValue placeholder="All customers" /></SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All customers</SelectItem>
-          {customersForFilter?.map((c: CustomerData) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+          {customersForFilter?.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
         </SelectContent>
       </Select>
       <Select value={filterUser} onValueChange={setFilterUser}>
         <SelectTrigger className="h-8 text-xs flex-1 min-w-[120px] sm:flex-none sm:w-40"><SelectValue placeholder="All users" /></SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All users</SelectItem>
-          {allProfiles?.map((p: ProfileRecord) => <SelectItem key={p.user_id} value={p.user_id}>{p.full_name}</SelectItem>)}
+          {allProfiles?.map((p: any) => <SelectItem key={p.user_id} value={p.user_id}>{p.full_name}</SelectItem>)}
         </SelectContent>
       </Select>
       <Select value={filterPayment} onValueChange={setFilterPayment}>
@@ -579,7 +591,7 @@ const Transactions = () => {
         searchKey="display_id"
         searchPlaceholder="Search by payment ID..."
         emptyMessage="No transactions recorded yet."
-        renderMobileCard={(row: TransactionRecord) => (
+        renderMobileCard={(row: any) => (
           <div className="rounded-lg border bg-card p-3">
             {/* Header row: ID + Date */}
             <div className="flex items-center justify-between mb-1.5">
@@ -839,7 +851,7 @@ const Transactions = () => {
                 toast.error("Please enter a valid return amount");
                 return;
               }
-              const txn = transactions?.find((t: TransactionRecord) => t.id === returnTxnId);
+              const txn = transactions?.find((t: any) => t.id === returnTxnId);
               if (!txn) {
                 toast.error("Transaction not found");
                 return;
@@ -850,7 +862,7 @@ const Transactions = () => {
                 return;
               }
                setReturnLoading(true);
-               const { error } = await supabase.rpc("record_payment_return", {
+               const { error } = await (supabase as any).rpc("record_payment_return", {
                 p_original_transaction_id: returnTxnId,
                 p_store_id: txn.store_id,
                 p_customer_id: txn.customer_id,
@@ -873,7 +885,7 @@ const Transactions = () => {
             className="space-y-4"
           >
             {(() => {
-              const txn = transactions?.find((t: TransactionRecord) => t.id === returnTxnId);
+              const txn = transactions?.find((t: any) => t.id === returnTxnId);
               if (!txn) return null;
               const originalAmount = Number(txn.cash_amount) + Number(txn.upi_amount);
               return (

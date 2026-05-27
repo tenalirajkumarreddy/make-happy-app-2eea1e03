@@ -36,7 +36,7 @@ export const workerColumns = (onEdit: (worker: Worker) => void): ColumnDef<Worke
   {
     accessorKey: "role_name",
     header: "Role",
-    cell: ({ row }) => <Badge>{row.original.role_name}</Badge>,
+    cell: ({ row }: { row: any }) => <Badge>{row.original.role_name}</Badge>,
   },
   {
     accessorKey: "phone",
@@ -49,7 +49,7 @@ export const workerColumns = (onEdit: (worker: Worker) => void): ColumnDef<Worke
   {
     accessorKey: "is_active",
     header: "Status",
-    cell: ({ row }) =>
+    cell: ({ row }: { row: any }) =>
       row.original.is_active ? (
         <span className="flex items-center text-green-600"><CheckCircle className="mr-1 h-4 w-4" /> Active</span>
       ) : (
@@ -59,11 +59,11 @@ export const workerColumns = (onEdit: (worker: Worker) => void): ColumnDef<Worke
   {
     accessorKey: "joining_date",
     header: "Joining Date",
-    cell: ({ row }) => row.original.joining_date ? new Date(row.original.joining_date).toLocaleDateString() : 'N/A',
+    cell: ({ row }: { row: any }) => row.original.joining_date ? new Date(row.original.joining_date).toLocaleDateString() : 'N/A',
   },
   {
     id: "actions",
-    cell: ({ row }) => {
+    cell: ({ row }: { row: any }) => {
       const worker = row.original;
       return (
         <DropdownMenu>

@@ -132,12 +132,12 @@ export function BannerManagement() {
     let bannerId: string;
 
     if (editId) {
-      const { error } = await supabase.from("promotional_banners").update(payload).eq("id", editId);
+      const { error } = await (supabase as any).from("promotional_banners").update(payload).eq("id", editId);
       if (error) { toast.error(error.message); setSaving(false); return; }
       bannerId = editId;
       toast.success("Banner updated");
     } else {
-      const { data: inserted, error } = await supabase.from("promotional_banners").insert(payload).select("id").single();
+      const { data: inserted, error } = await (supabase as any).from("promotional_banners").insert(payload).select("id").single();
       if (error) { toast.error(error.message); setSaving(false); return; }
       bannerId = inserted.id;
       toast.success("Banner created");
@@ -160,7 +160,7 @@ export function BannerManagement() {
   };
 
 const handleDelete = async (id: string) => {
-  const { error } = await supabase.from("promotional_banners").update({ deleted_at: new Date().toISOString() }).eq("id", id);
+  const { error } = await (supabase as any).from("promotional_banners").update({ deleted_at: new Date().toISOString() }).eq("id", id);
   if (error) toast.error(error.message);
     else { toast.success("Banner deleted"); qc.invalidateQueries({ queryKey: ["banners-admin"] }); }
   };

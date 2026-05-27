@@ -1,6 +1,6 @@
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable } from "@/components/shared/DataTable";
-import { StatusBadge } from "@/components/shared/StatusBadge";
+
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -9,11 +9,11 @@ import { logActivity } from "@/lib/activityLogger";
 import { sanitizeString } from "@/lib/sanitization";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { addToQueue, generateBusinessKey } from "@/lib/offlineQueue";
-import { createSaleSchema, validateSaleData } from "@/lib/validation/schemas";
+import { validateSaleData } from "@/lib/validation/schemas";
 import { resolveCreditLimit } from "@/lib/creditLimit";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
-import { Loader2, Plus, Trash2, Download, IndianRupee, CreditCard, Banknote, Clock, UserCircle, Store as StoreIcon, Package, X, CalendarIcon, Receipt, FileText, RotateCcw, ShoppingCart, ChevronRight, Eye, ClipboardList, Wallet, QrCode, Minus, MapPin, Phone, Mail, AlertCircle } from "lucide-react";
+import { Loader2, Plus, Download, Banknote, UserCircle, Store as StoreIcon, Package, X, CalendarIcon, Receipt, FileText, RotateCcw, ShoppingCart, ChevronRight, ClipboardList, Wallet, QrCode, Minus, MapPin, Phone, Mail, AlertCircle } from "lucide-react";
 import { QrStoreSelector } from "@/components/shared/QrStoreSelector";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { SaleReceipt } from "@/components/shared/SaleReceipt";
@@ -52,6 +52,9 @@ interface SaleItem {
   product_id: string;
   quantity: number;
   unit_price: number;
+  product_name?: string;
+  product_image?: string | null;
+  effectivePrice?: number;
 }
 
 interface Customer {
@@ -87,6 +90,12 @@ interface SaleRecord {
   approved_at: string | null;
   created_at: string;
   updated_at: string;
+  cash_amount?: number;
+  upi_amount?: number;
+  outstanding_amount?: number;
+  invoice_sales?: Array<{ invoice_id: string }>;
+  fulfilled_order_id?: string;
+  logged_by?: string | null;
   stores?: Store | null;
   customers?: Customer | null;
 }
@@ -155,7 +164,7 @@ const Sales = () => {
   const { currentWarehouse } = useWarehouse();
   const navigate = useNavigate();
   const isPosUser = role === "operator";
-  const { allowed: canOverridePrice } = usePermission("price_override");
+  const { allowed: _canOverridePrice } = usePermission("price_override");
   const { allowed: canRecordBehalf } = usePermission("record_behalf");
   const qc = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
@@ -251,7 +260,7 @@ let query = supabase
 
   // Client-side filtering for store type and route (server-side for others)
   const filteredSales = useMemo(() => {
-    let data = sales || [];
+    let data: any[] = sales || [];
     if (filterStoreType !== "all") {
       data = data.filter((s: any) => s.stores?.store_type_id === filterStoreType);
     }
@@ -334,11 +343,11 @@ let query = supabase
        if (!data) return [];
 
        // Fetch stock availability
-       const { data: stockInfo } = await supabase.rpc("check_stock_availability", {
-         p_user_id: user!.id,
-         p_recorded_for: recordedFor || null,
-         p_items: data.map(p => ({ product_id: p.id, quantity: 0 }))
-       });
+        const { data: stockInfo } = await supabase.rpc("check_stock_availability", {
+          p_user_id: user!.id,
+          p_recorded_for: recordedFor || null,
+          p_items: data.map(p => ({ product_id: p.id, quantity: 0 }))
+        } as any) as any;
 
        const stockMap: Record<string, any> = {};
        (stockInfo as any[])?.forEach(s => {
@@ -393,7 +402,7 @@ let query = supabase
         p_user_id: user!.id,
         p_recorded_for: recordedFor || null,
         p_items: productList.map(p => ({ product_id: p.id, quantity: 0 }))
-      });
+      } as any) as any;
 
       const stockMap: Record<string, any> = {};
       (stockInfo as any[])?.forEach(s => {
@@ -431,7 +440,7 @@ let query = supabase
   }, [storeProducts]);
 
   // Fetch pending orders for the selected store (shown in record sale dialog)
-  const { data: pendingOrders, isLoading: loadingPendingOrders } = useQuery({
+  const { data: pendingOrders, isLoading: _loadingPendingOrders } = useQuery({
     queryKey: ["pending-orders-for-store", storeId],
     queryFn: async () => {
       const { data } = await supabase
@@ -522,7 +531,7 @@ let query = supabase
     if (field === "product_id") {
       const p = allProducts?.find((pr: any) => pr.id === value);
       if (p) {
-        updated[idx].unit_price = p.effectivePrice || p.base_price;
+        updated[idx].unit_price = (p as any).effectivePrice || p.base_price;
         updated[idx].product_name = p.name;
         updated[idx].product_image = p.image_url;
       }
@@ -638,13 +647,13 @@ let query = supabase
       quantity: i.quantity,
     }));
     
-      const effectiveRecordedFor = recordedFor || null; // null if recording for self
+      const effectiveRecordedFor = recordedFor || null;
        const { data: stockCheck, error: stockError } = await supabase
          .rpc("check_stock_availability", {
            p_user_id: user!.id,
            p_recorded_for: effectiveRecordedFor,
            p_items: saleItemsForStockCheck,
-         });
+         } as any);
     
     if (stockError) {
       console.error("Stock check failed:", stockError);
@@ -654,7 +663,7 @@ let query = supabase
       return;
     }
 
-      const stockRows = Array.isArray(stockCheck) ? stockCheck : [];
+      const stockRows: any[] = Array.isArray(stockCheck) ? stockCheck : [];
       const insufficient = stockRows.filter((s: any) => !s.out_available);
       if (insufficient.length > 0) {
         const productNames = insufficient.map((i: any) => i.out_product_name).join(", ");
@@ -731,7 +740,7 @@ let query = supabase
           creditLimitSource: creditCheck.limitSource,
           currentOutstanding: creditCheck.currentOutstanding,
           cached: creditCheck.cached,
-        },
+        } as any,
       });
       toast.warning("You're offline — sale queued and will sync automatically when back online");
       setSaving(false);
@@ -740,7 +749,7 @@ let query = supabase
       return;
     }
 
-    const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "SALE", seq_name: "sale_display_seq" });
+    const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "SALE", seq_name: "sale_display_seq" }) as any;
 
     const effectiveRecordedBy = recordedFor || user!.id;
     const loggedBy = recordedFor ? user!.id : null;
@@ -770,7 +779,7 @@ let query = supabase
       p_outstanding_amount: outstandingFromSale,
       p_sale_items: saleItems,
       p_created_at: saleDate ? new Date(saleDate).toISOString() : null,
-    });
+    } as any) as any;
 
   if (error) {
     if (error.message.includes("credit_limit_exceeded")) {
@@ -1094,12 +1103,6 @@ let query = supabase
     return <TableSkeleton columns={7} />;
   }
 
-  const getPriceLabel = (product: any) => {
-    if (product.priceSource === "store") return "(store price)";
-    if (product.priceSource === "type") return "(type price)";
-    return "(base price)";
-  };
-
   return (
     <TooltipProvider>
     <div className="space-y-6 animate-fade-in">
@@ -1214,7 +1217,7 @@ let query = supabase
           searchPlaceholder="Search by sale ID..."
           emptyMessage="No sales recorded yet."
           onRowClick={(row: SaleRecord) => setSelectedSaleId(row.id)}
-          renderMobileCard={(row: SaleRecord) => (
+          renderMobileCard={(row: any) => (
         <div className="rounded-lg border bg-card p-3">
           {/* Header row: ID + Date + Actions */}
           <div className="flex items-center justify-between mb-1.5">
@@ -1412,7 +1415,7 @@ let query = supabase
                 variant="outline"
                 className="w-full"
                 onClick={() => {
-                  setReturnSale(selectedSale);
+                  setReturnSale(selectedSale as any);
                   setSelectedSaleId(null);
                 }}
               >
@@ -1429,7 +1432,7 @@ let query = supabase
   <SaleReturnDialog
     open={!!returnSale}
     onOpenChange={(v) => { if (!v) setReturnSale(null); }}
-    sale={returnSale}
+    sale={returnSale as any}
     onSuccess={() => {
       qc.invalidateQueries({ queryKey: ['sales'] });
       qc.invalidateQueries({ queryKey: ['stores'] });

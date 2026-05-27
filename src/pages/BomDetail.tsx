@@ -49,7 +49,7 @@ const BomDetailPage = () => {
   const { data: categories } = useQuery({
     queryKey: ['raw_material_categories', warehouse?.id],
     queryFn: async () => {
-        const { data, error } = await supabase.from('raw_material_categories').select('id, name, base_unit').eq('warehouse_id', warehouse?.id);
+        const { data, error } = await (supabase as any).from('raw_material_categories').select('id, name, base_unit').eq('warehouse_id', warehouse?.id);
         if (error) throw error;
         return data;
     },
@@ -60,7 +60,7 @@ const BomDetailPage = () => {
   const { data: rawMaterials } = useQuery({
     queryKey: ['raw_materials', warehouse?.id],
     queryFn: async () => {
-        const { data, error } = await supabase.from('raw_materials')
+        const { data, error } = await (supabase as any).from('raw_materials')
             .select('id, name, unit, unit_cost, piece_weight_grams, category_id')
             .eq('warehouse_id', warehouse?.id)
             .eq('is_active', true);
@@ -73,7 +73,7 @@ const BomDetailPage = () => {
   const { data: bomData, isLoading } = useQuery({
     queryKey: ['bom_details', bomId],
     queryFn: async () => {
-        const { data, error } = await supabase.from('bill_of_materials').select('*').eq('finished_product_id', bomId);
+        const { data, error } = await (supabase as any).from('bill_of_materials').select('*').eq('finished_product_id', bomId);
         if (error) throw error;
         return data;
     },
@@ -97,7 +97,7 @@ const BomDetailPage = () => {
     if (bomData && !isNew) {
         form.reset({
             finished_product_id: bomId,
-            items: bomData.map(item => ({ 
+            items: bomData.map((item: any) => ({ 
                 id_prefix: item.raw_material_category_id ? `cat_${item.raw_material_category_id}` : `mat_${item.raw_material_id}`,
                 quantity: item.quantity,
                 quantity_unit: item.quantity_unit as any
@@ -114,15 +114,15 @@ const BomDetailPage = () => {
     const wacMap: Record<string, number> = {};
     const avgPieceWeightMap: Record<string, number> = {};
 
-    categories.forEach(cat => {
-      const materials = rawMaterials.filter(rm => rm.category_id === cat.id);
+    categories.forEach((cat: any) => {
+      const materials = rawMaterials.filter((rm: any) => rm.category_id === cat.id);
       if (materials.length > 0) {
-        const total = materials.reduce((sum, rm) => sum + (rm.unit_cost || 0), 0);
+        const total = materials.reduce((sum: number, rm: any) => sum + (rm.unit_cost || 0), 0);
         wacMap[cat.id] = total / materials.length; // Blended avg
         
-        const pieceWeights = materials.filter(rm => rm.piece_weight_grams > 0);
+        const pieceWeights = materials.filter((rm: any) => (rm.piece_weight_grams ?? 0) > 0);
         if (pieceWeights.length > 0) {
-           avgPieceWeightMap[cat.id] = pieceWeights.reduce((s, rm) => s + rm.piece_weight_grams, 0) / pieceWeights.length;
+           avgPieceWeightMap[cat.id] = pieceWeights.reduce((s: number, rm: any) => s + (rm.piece_weight_grams ?? 0), 0) / pieceWeights.length;
         }
       } else {
         wacMap[cat.id] = 0;
@@ -133,7 +133,7 @@ const BomDetailPage = () => {
 
   // Helper for real-time cost calculation
   const getLineCost = (item: BomFormData['items'][0]) => {
-    if (!item.id_prefix || !item.quantity) return { cost: 0, preview: null };
+    if (!item.id_prefix || !item.quantity) return { cost: 0, preview: null as any };
     
     const isCat = item.id_prefix.startsWith('cat_');
     const actualId = item.id_prefix.replace(/^(cat_|mat_)/, '');
@@ -145,7 +145,7 @@ const BomDetailPage = () => {
       unitCost = categoryWac.wacMap?.[actualId] || 0;
       pieceWeight = categoryWac.avgPieceWeightMap?.[actualId] || 0;
     } else {
-      const rm = rawMaterials?.find(r => r.id === actualId);
+      const rm = rawMaterials?.find((r: any) => r.id === actualId);
       unitCost = rm?.unit_cost || 0;
       pieceWeight = rm?.piece_weight_grams || 0;
     }
@@ -190,11 +190,11 @@ const BomDetailPage = () => {
             };
         });
 
-        const { error } = await supabase.rpc('upsert_bom', {
+        const { error } = await (supabase.rpc('upsert_bom', {
             p_finished_product_id: formData.finished_product_id,
             p_items: formattedItems as any,
             p_warehouse_id: warehouse?.id,
-        });
+        } as any));
         if (error) throw error;
     },
     onSuccess: () => {
@@ -219,7 +219,6 @@ const BomDetailPage = () => {
       <div className="flex items-center justify-between">
         <PageHeader
           title={isNew ? "Create Bill of Materials" : "Edit Bill of Materials"}
-          description="Define the raw materials or categories required to produce one unit of a finished product."
         />
         <div className="text-right">
           <p className="text-sm text-muted-foreground">Estimated Total BOM Cost</p>
@@ -288,7 +287,7 @@ const BomDetailPage = () => {
                                               <SelectContent>
                                                   <SelectGroup>
                                                     <SelectLabel className="text-blue-600 font-bold">Categories (Interchangeable)</SelectLabel>
-                                                    {categories?.map(c => (
+                                                    {categories?.map((c: any) => (
                                                       <SelectItem key={`cat_${c.id}`} value={`cat_${c.id}`}>
                                                         📦 {c.name}
                                                       </SelectItem>
@@ -296,7 +295,7 @@ const BomDetailPage = () => {
                                                   </SelectGroup>
                                                   <SelectGroup>
                                                     <SelectLabel className="text-orange-600 font-bold mt-2">Specific Materials</SelectLabel>
-                                                    {rawMaterials?.map(m => (
+                                                    {rawMaterials?.map((m: any) => (
                                                       <SelectItem key={`mat_${m.id}`} value={`mat_${m.id}`}>
                                                         • {m.name}
                                                       </SelectItem>

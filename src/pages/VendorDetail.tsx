@@ -76,26 +76,26 @@ const VendorDetail = () => {
        let query = supabase
          .from("vendors")
          .select("*")
-         .eq("id", id);
+          .eq("id", id!);
 
-       if (currentWarehouse?.id) {
-         query = query.eq("warehouse_id", currentWarehouse.id);
-       }
+        if (currentWarehouse?.id) {
+          query = query.eq("warehouse_id", currentWarehouse.id);
+        }
 
-       const { data, error } = await query.single();
+        const { data, error } = await query.single();
        if (error) throw error;
        return data;
      },
    });
 
-   const { data: purchases = [] } = useQuery({
+   const { data: purchases = [] as any[] } = useQuery({
      queryKey: ["vendor-purchases", id, currentWarehouse?.id],
      queryFn: async () => {
        let query = supabase
          .from("purchases")
          .select("*, purchase_items(*, products(name))")
-         .eq("vendor_id", id)
-         .order("purchase_date", { ascending: false });
+          .eq("vendor_id", id!)
+          .order("purchase_date", { ascending: false });
 
        if (currentWarehouse?.id) {
          query = query.eq("warehouse_id", currentWarehouse.id);
@@ -107,47 +107,32 @@ const VendorDetail = () => {
      },
    });
 
-  const { data: payments = [] } = useQuery({
-    queryKey: ["vendor-payments", id],
+  const { data: payments = [] as any[] } = useQuery({
+    queryKey: ["vendor-payments", id, currentWarehouse?.id],
     queryFn: async () => {
-      const { data, error} = await supabase
+      let query = supabase
         .from("vendor_payments")
         .select("*")
-        .eq("vendor_id", id)
-        .order("payment_date", { ascending: false });
-      if (error) throw error;
-      return data;
-    },
-  });
-
-   const { data: rawMaterials = [] } = useQuery({
-     queryKey: ["vendor-raw-materials", id, currentWarehouse?.id],
-     queryFn: async () => {
-       let query = supabase
-         .from("raw_materials")
-         .select("*")
-         .eq("vendor_id", id)
-         .order("name");
+        .eq("vendor_id", id!);
 
       if (currentWarehouse?.id) {
         query = query.eq("warehouse_id", currentWarehouse.id);
       }
 
-      const { data, error } = await query;
+      const { data, error} = await query.order("payment_date", { ascending: false });
       if (error) throw error;
       return data;
     },
   });
 
-  // Query for unlinked raw materials (no vendor assigned)
-   const { data: unlinkedMaterials = [] } = useQuery({
-     queryKey: ["unlinked-raw-materials", currentWarehouse?.id],
+   const { data: rawMaterials = [] as any[] } = useQuery({
+     queryKey: ["vendor-raw-materials", id, currentWarehouse?.id],
      queryFn: async () => {
        let query = supabase
          .from("raw_materials")
          .select("*")
-         .eq("vendor_id", id)
-         .order("name");
+         .eq("vendor_id", id!)
+          .order("name");
 
        if (currentWarehouse?.id) {
          query = query.eq("warehouse_id", currentWarehouse.id);
@@ -158,6 +143,26 @@ const VendorDetail = () => {
        return data;
      },
    });
+
+   // Query for unlinked raw materials (no vendor assigned)
+    const { data: unlinkedMaterials = [] as any[] } = useQuery({
+      queryKey: ["unlinked-raw-materials", currentWarehouse?.id],
+      queryFn: async () => {
+        let query = supabase
+          .from("raw_materials")
+          .select("*")
+          .eq("vendor_id", id!)
+          .order("name");
+
+        if (currentWarehouse?.id) {
+          query = query.eq("warehouse_id", currentWarehouse.id);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+        return data;
+      },
+    });
 
   // Raw Material mutations
   const saveMaterialMutation = useMutation({
@@ -190,7 +195,7 @@ const VendorDetail = () => {
         const { data: idData } = await supabase.rpc("generate_display_id", {
           prefix: "RM",
           seq_name: "raw_materials_display_id_seq"
-        });
+        }) as any;
 
         const { error } = await supabase.from("raw_materials").insert({
           display_id: idData,

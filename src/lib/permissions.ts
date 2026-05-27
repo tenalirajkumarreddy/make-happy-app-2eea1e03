@@ -3,7 +3,7 @@
  * Single source of truth — all components/hooks must import from here.
  */
 import { type AppRole } from "@/types/roles";
-import { PermissionKey } from "@/components/access/UserPermissionsPanel";
+import type { PermissionKey } from "@/components/access/UserPermissionsPanel";
 
 // Re-export so consumers don't need two imports
 export { type PermissionKey } from "@/components/access/UserPermissionsPanel";

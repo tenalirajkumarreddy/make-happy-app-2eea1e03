@@ -420,6 +420,7 @@ export function AgentHistory() {
     }
 
     setSubmitting(true);
+    const { data: handoverRole } = await supabase.from("user_roles").select("warehouse_id").eq("user_id", user!.id).maybeSingle();
     const { error } = await supabase.from("handovers").insert({
       user_id: user!.id,
       handed_to: toUserId,
@@ -427,6 +428,7 @@ export function AgentHistory() {
       upi_amount: 0,
       status: "awaiting_confirmation",
       notes: handoverNotes || null,
+      warehouse_id: (handoverRole as any)?.warehouse_id || null,
     });
     setSubmitting(false);
 
@@ -466,7 +468,9 @@ export function AgentHistory() {
       const { data: displayId } = await supabase.rpc("generate_display_id", {
         prefix: "EXC",
         seq_name: "expenses_display_id_seq",
-      });
+      }) as any;
+
+      const { data: myRole } = await supabase.from("user_roles").select("warehouse_id").eq("user_id", user!.id).maybeSingle();
 
       const claimData: Record<string, unknown> = {
         display_id: displayId || `EXC-${Date.now()}`,
@@ -477,13 +481,14 @@ export function AgentHistory() {
         expense_date: expenseDate ? new Date(expenseDate).toISOString().split("T")[0] : new Date().toISOString().split("T")[0],
         description: expenseDescription.trim() || null,
         status: "pending",
+        warehouse_id: (myRole as any)?.warehouse_id || null,
       };
 
       if (expenseBillUrls.length > 0) {
         claimData.bill_urls = expenseBillUrls;
       }
 
-      const { error } = await supabase.from("expense_claims").insert(claimData);
+      const { error } = await (supabase as any).from("expense_claims").insert(claimData);
       if (error) throw error;
 
       toast.success("Expense claim submitted");
@@ -493,7 +498,7 @@ export function AgentHistory() {
       setExpenseDate("");
       setExpenseDescription("");
       setExpenseBillUrls([]);
-      qc.invalidateQueries({ queryKey: ["handovers"] });
+      qc.invalidateQueries({ queryKey: ["mobile-expense-claims", user?.id] });
     } catch (error: any) {
       toast.error(error.message || "Failed to submit expense");
     } finally {
@@ -1199,7 +1204,7 @@ export function AgentHistory() {
                 {submitting ? (
                   <Loader2 className="h-5 w-5 animate-spin" />
                 ) : (
-                  <><ReceiptIndianRupee className="h-4 w-4" />Submit {"expense" ? "Expense" : "Payment"}</>
+                  <><ReceiptIndianRupee className="h-4 w-4" />Submit Expense</>
                 )}
               </button>
             </div>

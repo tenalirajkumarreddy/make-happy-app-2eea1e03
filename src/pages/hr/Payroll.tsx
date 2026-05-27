@@ -56,12 +56,13 @@ const PayrollPage = () => {
           <PlusCircle className="mr-2 h-4 w-4" /> Create Payroll Run
         </Button>
       </div>
-      <DataTable
-        columns={columns}
-        data={payrolls || []}
-        isLoading={isLoading}
-        filterColumn="display_id"
-        filterPlaceholder="Filter by Payroll ID..."
+      <DataTable {...{
+        columns: columns as any,
+        data: payrolls || [],
+        isLoading,
+        filterColumn: "display_id",
+        filterPlaceholder: "Filter by Payroll ID...",
+      } as any}
       />
       <PayrollForm
         isOpen={isFormOpen}

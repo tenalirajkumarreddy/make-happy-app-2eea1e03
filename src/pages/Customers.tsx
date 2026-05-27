@@ -16,7 +16,7 @@ import { validatePhone, validateEmail, normalizePhone } from "@/lib/validation";
 import { sanitizeString, sanitizeObject } from "@/lib/sanitization";
 import { Loader2, User, Upload, AlertCircle, Phone, Mail, Store as StoreIcon } from "lucide-react";
 import { usePermission } from "@/hooks/usePermission";
-import { addToQueue } from "@/lib/offlineQueue";
+import { addToQueue, generateBusinessKey } from "@/lib/offlineQueue";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -91,7 +91,7 @@ const Customers = () => {
     queryKey: ["customers", currentWarehouse?.id, user?.id, role],
     queryFn: async ({ pageParam = 0 }) => {
       // Use database function that handles route access filtering
-      const { data, error } = await supabase.rpc("get_accessible_customers", {
+      const { data, error } = await (supabase as any).rpc("get_accessible_customers", {
         p_user_id: user?.id,
         p_warehouse_id: currentWarehouse?.id || null,
         p_limit: PAGE_SIZE,
@@ -122,7 +122,7 @@ const Customers = () => {
   useEffect(() => {
     if (!phone.trim() || phone.trim().length < 6) { setDuplicateCustomer(null); return; }
     const timer = setTimeout(async () => {
-      const { data, error } = await supabase.rpc("check_duplicate_customer_phone", {
+      const { data, error } = await (supabase as any).rpc("check_duplicate_customer_phone", {
         p_phone: phone.trim(),
         p_exclude_id: null,
       });
@@ -171,6 +171,10 @@ const Customers = () => {
 
     if (!isOnline) {
       const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const bizKey = generateBusinessKey('customer', {
+        phone: normalizedPhone || undefined,
+        timestamp: new Date().toISOString(),
+      });
       await addToQueue({
         id: crypto.randomUUID(),
         type: "customer",
@@ -186,6 +190,7 @@ const Customers = () => {
           }
         },
         createdAt: new Date().toISOString(),
+        businessKey: bizKey,
       });
       toast.warning("You're offline — customer queued and will sync automatically when back online");
       setSaving(false);
@@ -198,15 +203,15 @@ const Customers = () => {
 
     const displayId = generateDisplayId("CUST");
 
-     const { error } = await supabase.from("customers").insert({
-       display_id: displayId,
-       warehouse_id: currentWarehouse?.id || null,
-       name,
-       phone: normalizedPhone || null,
-       email: email?.trim().toLowerCase() || null,
-       address: address || null,
-       photo_url: photoUrl || null,
-     });
+     const { error } = await (supabase as any).from("customers").insert({
+        display_id: displayId,
+        warehouse_id: currentWarehouse?.id || null,
+        name,
+        phone: normalizedPhone || null,
+        email: email?.trim().toLowerCase() || null,
+        address: address || null,
+        photo_url: photoUrl || null,
+      });
     setSaving(false);
     if (error) {
       toast.error(error.message);
@@ -253,7 +258,7 @@ const Customers = () => {
       }
 
       const displayId = generateDisplayId("CUST");
-       const { error } = await supabase.from("customers").insert({
+       const { error } = await (supabase as any).from("customers").insert({
          display_id: displayId,
          warehouse_id: currentWarehouse?.id || null,
          name: row.name.trim(),
@@ -348,7 +353,7 @@ const Customers = () => {
     
     const { data: results, error } = await supabase.rpc("bulk_update_customers", {
       p_updates: updates,
-    });
+    }) as any;
     
     setBulkSaving(false);
     

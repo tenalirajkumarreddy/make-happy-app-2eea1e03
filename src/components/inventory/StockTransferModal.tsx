@@ -109,42 +109,42 @@ export function StockTransferModal({
       // eslint-disable-next-line no-console
       console.log("[StockTransfer] Fetching warehouses for:", currentUserId);
       // First get user's direct warehouse assignment
-      const { data: userRoles, error: rolesError } = await supabase
+      const { data: userRoles, error: rolesError } = await (supabase
         .from("user_roles")
-        .select("warehouse_id")
-        .eq("user_id", currentUserId)
-        .not("warehouse_id", "is", null);
+        .select("warehouse_id" as any)
+        .eq("user_id", currentUserId as any)
+        .not("warehouse_id", "is", null)) as any;
 
       const assignedWarehouseIds = (userRoles ?? [])
-        .map((r) => r.warehouse_id)
+        .map((r: any) => r.warehouse_id)
         .filter(Boolean);
 
       // Get warehouses where user has stock (they can transfer TO those)
-      const { data: userStock } = await supabase
+      const { data: userStock } = await (supabase as any)
         .from("staff_stock")
         .select("warehouse_id")
         .eq("user_id", currentUserId)
         .gt("quantity", 0);
 
       const stockWarehouseIds = (userStock ?? [])
-        .map((s) => s.warehouse_id)
+        .map((s: any) => s.warehouse_id)
         .filter(Boolean);
 
       // Combine: assigned + where user has stock
       const accessibleWhIds = [...new Set([...assignedWarehouseIds, ...stockWarehouseIds])];
 
       // Build query
-      let query = supabase
+      let query: any = supabase
         .from("warehouses")
         .select("id, name")
-        .eq("is_active", true);
+        .eq("is_active", true as any);
 
       // If not admin, restrict to assigned or stock-holding warehouses
       if (!isAdmin) {
         if (accessibleWhIds.length > 0) {
-          query = query.in("id", accessibleWhIds);
+          query = query.in("id", accessibleWhIds as any);
         } else if (currentWarehouse?.id) {
-          query = query.eq("id", currentWarehouse.id);
+          query = query.eq("id", currentWarehouse.id as any);
         }
       }
 
@@ -163,14 +163,14 @@ export function StockTransferModal({
     queryFn: async () => {
       const { data: rolesData, error: rolesError } = await supabase
         .from("user_roles")
-        .select("user_id, role, warehouse_id")
-        .in("role", ALLOWED_STAFF_ROLES);
+        .select("user_id, role, warehouse_id" as any)
+        .in("role", ALLOWED_STAFF_ROLES as any);
 
       if (rolesError) throw rolesError;
       if (!rolesData?.length) return [];
 
-      const userIds = rolesData.map((r) => r.user_id);
-      const { data: profilesData, error: profilesError } = await supabase
+      const userIds = rolesData.map((r: any) => r.user_id);
+      const { data: profilesData, error: profilesError } = await (supabase as any)
         .from("profiles")
         .select("user_id, full_name, avatar_url")
         .in("user_id", userIds);
@@ -178,19 +178,19 @@ export function StockTransferModal({
       if (profilesError) throw profilesError;
 
       const profileMap = new Map(
-        (profilesData ?? []).map((p) => [p.user_id, p])
+        (profilesData ?? []).map((p: any) => [p.user_id, p])
       );
 
-      return rolesData
-        .map((r) => ({
+      return (rolesData as any[])
+        .map((r: any) => ({
           user_id: r.user_id,
           role: r.role,
           warehouse_id: r.warehouse_id,
-          full_name: profileMap.get(r.user_id)?.full_name ?? "Unknown",
-          avatar_url: profileMap.get(r.user_id)?.avatar_url ?? null,
+          full_name: (profileMap.get(r.user_id) as any)?.full_name ?? "Unknown",
+          avatar_url: (profileMap.get(r.user_id) as any)?.avatar_url ?? null,
         }))
         .filter(
-          (s) =>
+          (s: any) =>
             s.full_name &&
             s.full_name !== "Unknown"
         );
@@ -221,11 +221,11 @@ export function StockTransferModal({
 
       if (transferType === "warehouse_to_staff" || transferType === "warehouse_to_warehouse") {
         // Fetch from warehouse stock
-        const { data, error } = await supabase
+        const { data, error } = await (supabase
           .from("product_stock")
-          .select("product_id, quantity, product:products(id, name, sku, unit, base_price)")
-          .eq("warehouse_id", fromId)
-          .gt("quantity", 0);
+          .select("product_id, quantity, product:products(id, name, sku, unit, base_price)" as any)
+          .eq("warehouse_id", fromId as any)
+          .gt("quantity", 0)) as any;
         if (error) throw error;
         physicalStock = data ?? [];
 
@@ -233,20 +233,20 @@ export function StockTransferModal({
         const { data: pending } = await supabase
           .from("stock_transfers")
           .select("product_id, quantity")
-          .eq("from_warehouse_id", fromId)
-          .in("status", ["pending", "awaiting_acceptance"]);
+          .eq("from_warehouse_id", fromId as any)
+          .in("status", ["pending", "awaiting_acceptance"] as any);
         
-        pending?.forEach(p => {
+        pending?.forEach((p: any) => {
           pendingOutgoing[p.product_id] = (pendingOutgoing[p.product_id] || 0) + Number(p.quantity);
         });
       } else {
         // staff_to_warehouse or staff_to_staff — fetch from selected user's stock
         // NOTE: Do NOT filter quantity > 0 here; we need rows with pending transfers too.
-        const { data, error } = await supabase
+        const { data, error } = await (supabase
           .from("staff_stock")
-          .select("product_id, quantity, warehouse_id, product:products(id, name, sku, unit, base_price)")
-          .eq("user_id", fromId)
-          .gte("quantity", 0); // include zero-quantity rows to detect fully-pending stock
+          .select("product_id, quantity, warehouse_id, product:products(id, name, sku, unit, base_price)" as any)
+          .eq("user_id", fromId as any)
+          .gte("quantity", 0)) as any; // include zero-quantity rows to detect fully-pending stock
         if (error) throw error;
         physicalStock = data ?? [];
 
@@ -254,15 +254,15 @@ export function StockTransferModal({
         const { data: pending } = await supabase
           .from("stock_transfers")
           .select("product_id, quantity")
-          .eq("from_user_id", fromId)
-          .in("status", ["pending", "awaiting_acceptance"]);
+          .eq("from_user_id", fromId as any)
+          .in("status", ["pending", "awaiting_acceptance"] as any);
         
-        pending?.forEach(p => {
+        pending?.forEach((p: any) => {
           pendingOutgoing[p.product_id] = (pendingOutgoing[p.product_id] || 0) + Number(p.quantity);
         });
       }
 
-      const result = physicalStock.map((r) => {
+      const result = physicalStock.map((r: any) => {
         const product = Array.isArray(r.product) ? r.product[0] : r.product;
         const pending = pendingOutgoing[r.product_id] || 0;
         return {
@@ -295,7 +295,7 @@ export function StockTransferModal({
       setFromId(defaultWhId);
       setToId("");
     } else {
-      setFromId(currentUserId);
+      setFromId(currentUserId ?? "");
       setToId(defaultType === "staff_to_warehouse" ? defaultWhId : "");
     }
     
@@ -310,7 +310,7 @@ export function StockTransferModal({
   useEffect(() => {
     if (!isOpen || !currentUserId) return;
     if (!["warehouse_to_staff", "warehouse_to_warehouse"].includes(transferType)) {
-      setFromId(currentUserId);
+      setFromId(currentUserId ?? "");
       setSelectedProducts([]);
     }
   }, [transferType, isOpen, currentUserId]);
@@ -323,7 +323,7 @@ export function StockTransferModal({
   // ── Pre-select defaultProductId ────────────────────────────────────────────
   useEffect(() => {
     if (!defaultProductId || !sourceStock.length || selectedProducts.length > 0) return;
-    const match = sourceStock.find((s) => s.product_id === defaultProductId);
+    const match = sourceStock.find((s: any) => s.product_id === defaultProductId);
     if (match) {
       setSelectedProducts([
         {
@@ -337,7 +337,7 @@ export function StockTransferModal({
   }, [defaultProductId, sourceStock, selectedProducts.length]);
 
   // ── Product selection helpers ──────────────────────────────────────────────
-  const toggleProduct = (item: (typeof sourceStock)[0]) => {
+  const toggleProduct = (item: any) => {
     const id = item.product_id;
     setSelectedProducts((prev) => {
       const exists = prev.some((p) => p.product_id === id);
@@ -422,12 +422,12 @@ const {
 
       const results = [];
       for (const p of selectedProducts) {
-        const { data, error } = await supabase.rpc("record_stock_transfer", {
+        const { data, error } = await (supabase as any).rpc("record_stock_transfer", {
           p_transfer_type: transferType,
-          p_from_warehouse_id: fromWarehouseId,
-          p_from_user_id: fromUserId,
-          p_to_warehouse_id: toWarehouseId,
-          p_to_user_id: toUserId,
+          p_from_warehouse_id: fromWarehouseId ?? undefined,
+          p_from_user_id: fromUserId ?? undefined,
+          p_to_warehouse_id: toWarehouseId ?? undefined,
+          p_to_user_id: toUserId ?? undefined,
           p_product_id: p.product_id,
           p_quantity: parseFloat(p.quantity),
           p_description: notes || null,
@@ -509,16 +509,16 @@ const {
     
     if (type === "warehouse_to_staff") {
       setFromId(defaultWhId);
-      setToId(isAgent ? currentUserId : "");
+      setToId(isAgent && currentUserId ? currentUserId : "");
     } else if (type === "staff_to_warehouse") {
-      setFromId(currentUserId);
+      setFromId(currentUserId ?? "");
       setToId(defaultWhId);
     } else if (type === "warehouse_to_warehouse") {
       setFromId(defaultWhId);
       setToId("");
     } else {
       // staff_to_staff
-      setFromId(currentUserId);
+      setFromId(currentUserId ?? "");
       setToId("");
     }
   };
@@ -566,8 +566,8 @@ const {
                   <SelectTrigger>
                     <SelectValue placeholder="Select Source Warehouse" />
                   </SelectTrigger>
-                  <SelectContent>
-                    {warehouses.map((w) => (
+                    <SelectContent>
+                    {warehouses.map((w: any) => (
                       <SelectItem key={w.id} value={w.id}>
                         {w.name}
                       </SelectItem>
@@ -586,11 +586,11 @@ const {
                     </SelectTrigger>
                     <SelectContent>
                       {displayStaff
-                        .filter(s => {
+                        .filter((s: any) => {
                           if (isOperator) return s.warehouse_id === currentWarehouse?.id;
                           return true;
                         })
-                        .map((s) => (
+                        .map((s: any) => (
                           <SelectItem key={s.user_id} value={s.user_id}>
                             {s.user_id === currentUserId ? `You (${s.full_name})` : `${s.full_name} (${s.role})`}
                           </SelectItem>
@@ -599,7 +599,7 @@ const {
                   </Select>
                 ) : (
                   <div className="h-10 px-3 py-2 rounded-md border bg-muted/50 text-sm flex items-center">
-                    You ({displayStaff.find(s => s.user_id === currentUserId)?.full_name || 'Your Stock'})
+                    You ({(displayStaff.find((s: any) => s.user_id === currentUserId) as any)?.full_name || 'Your Stock'})
                   </div>
                 )}
               </div>
@@ -615,7 +615,7 @@ const {
 {(transferType === "warehouse_to_staff" ||
                       transferType === "staff_to_staff") &&
                       displayStaff
-                        .filter((s) => {
+                        .filter((s: any) => {
                           if (s.user_id === fromId) return false;
                           
                           // For staff_to_staff, exclude self
@@ -633,14 +633,14 @@ const {
                           
                           return true;
                         })
-                      .map((s) => (
+                      .map((s: any) => (
                         <SelectItem key={s.user_id} value={s.user_id}>
                           {s.full_name} ({s.role})
                         </SelectItem>
                       ))}
                   {(transferType === "staff_to_warehouse" ||
                     transferType === "warehouse_to_warehouse") &&
-                    warehouses.map((w) => (
+                    warehouses.map((w: any) => (
                       <SelectItem key={w.id} value={w.id}>
                         {w.name}
                       </SelectItem>
@@ -661,7 +661,7 @@ const {
                 </div>
               ) : sourceStock.length > 0 ? (
                 <div className="space-y-2">
-                  {sourceStock.map((item) => {
+                  {sourceStock.map((item: any) => {
                     const sel = isSelected(item.product_id);
                     const selItem = selectedProducts.find(
                       (p) => p.product_id === item.product_id

@@ -29,10 +29,9 @@ import { toast } from "sonner";
 import {
   InlinePermissionCheckbox,
   useUserPermissions,
-  PERMISSION_KEYS,
-  ROLE_DEFAULTS,
-  type PermissionKey,
 } from "@/components/access/UserPermissionsPanel";
+import { ROLE_DEFAULTS, ALL_PERMISSION_KEYS as PERMISSION_KEYS } from "@/lib/permissions";
+import type { PermissionKey } from "@/components/access/UserPermissionsPanel";
 import { Fragment } from "react";
 
 const STAFF_ROLES = [
@@ -345,7 +344,7 @@ const AccessControl = () => {
                   <div className="grid grid-cols-3 gap-2 pt-2 border-t">
                     {PERM_HEADERS.map((p) => {
                       const dbPerm = userPerms.find((up: any) => up.permission === p.key);
-                      const isDefault = ROLE_DEFAULTS[userRole]?.includes(p.key) ?? false;
+                      const isDefault = (ROLE_DEFAULTS as any)[userRole]?.includes(p.key) ?? false;
                       const isEnabled = dbPerm ? dbPerm.enabled : isDefault;
                       const isSaving = permSaving === `${row.user_id}-${p.key}`;
                       return (

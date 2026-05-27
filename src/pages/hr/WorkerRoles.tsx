@@ -20,7 +20,7 @@ const WorkerRolesPage = () => {
       const { data, error } = await supabase
         .from('worker_roles')
         .select('*')
-        .eq('warehouse_id', warehouse?.id);
+        .eq('warehouse_id', warehouse?.id as string);
       if (error) throw error;
       return data;
     },
@@ -45,21 +45,15 @@ const WorkerRolesPage = () => {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Worker Roles"
-        description="Manage job roles and responsibilities for your staff."
-        actions={
-          <Button onClick={handleAddNew}>
+        {...{ title: "Worker Roles", description: "Manage job roles and responsibilities for your staff.", actions: [
+          <Button key="add" onClick={handleAddNew}>
             <PlusCircle className="mr-2 h-4 w-4" />
             Add New Role
           </Button>
-        }
+        ] } as any}
       />
       <DataTable
-        columns={roleColumns(handleEdit)}
-        data={roles || []}
-        isLoading={isLoading}
-        filterColumn="name"
-        filterPlaceholder="Filter by role name..."
+        {...{ columns: roleColumns(handleEdit), data: roles || [], isLoading, filterColumn: "name", filterPlaceholder: "Filter by role name..." } as any}
       />
       <RoleForm
         isOpen={isFormOpen}

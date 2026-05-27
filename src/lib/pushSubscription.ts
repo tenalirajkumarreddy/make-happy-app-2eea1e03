@@ -23,7 +23,7 @@ export async function registerPushSubscription(userId: string): Promise<void> {
 
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY) as any,
     });
 
     const { endpoint, keys } = subscription.toJSON() as {

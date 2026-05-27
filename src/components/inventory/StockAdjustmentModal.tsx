@@ -124,7 +124,7 @@ export function StockAdjustmentModal({ isOpen, onClose, warehouseId, defaultProd
       p_adjustment_type: adjustmentTypeForRpc,
       p_reason: reason || adjustmentType,
       p_created_by: user.id
-    });
+    }) as any;
 
       if (rpcError) {
         throw new Error(rpcError.message || 'Failed to adjust stock');

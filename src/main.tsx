@@ -108,13 +108,13 @@ async function initPushNotifications() {
 
     // Get FCM token and save to backend
     PushNotifications.addListener("registration", async (token) => {
-      logDebug("FCM token:", token.value);
+      logDebug("FCM token received", { token: token.value });
       await saveFCMToken(token.value);
     });
 
     // Handle incoming push notification (app in background or foreground)
-    PushNotifications.addListener("pushNotificationReceived", (notification) => {
-      logDebug("Push notification received:", notification.title);
+    PushNotifications.addListener("pushNotificationReceived", (notification: any) => {
+      logDebug("Push notification received", { title: notification.title });
     });
 
     // Handle notification tap
@@ -134,12 +134,12 @@ async function initPushNotifications() {
     );
 
     // Token refresh
-    PushNotifications.addListener("tokenRefresh", async (token) => {
-      logDebug("FCM token refreshed:", token.value);
+    PushNotifications.addListener("tokenRefresh" as any, async (token: any) => {
+      logDebug("FCM token refreshed", { token: token.value });
       await saveFCMToken(token.value);
     });
   } catch (e) {
-    logDebug("PushNotifications plugin not available:", e);
+    logDebug("PushNotifications plugin not available", { error: e });
   }
 }
 

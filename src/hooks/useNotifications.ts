@@ -30,7 +30,7 @@ export function useNotifications() {
     if (!Capacitor.isNativePlatform()) return;
 
     LocalNotifications.requestPermissions().then((result) => {
-      if (result.granted) {
+      if ((result as any).granted) {
         setNativeNotificationsReady(true);
         logDebug("Native notifications permission granted");
       } else {
@@ -137,7 +137,7 @@ export function useNotifications() {
     return () => {
       mounted = false;
       try {
-        PushNotifications.removeListener("pushNotificationReceived", handleForegroundPush);
+        (PushNotifications as any).removeListener("pushNotificationReceived", handleForegroundPush);
       } catch {
         // ignore
       }

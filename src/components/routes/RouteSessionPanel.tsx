@@ -75,7 +75,7 @@ export function RouteSessionPanel() {
       const { data, error } = await supabase.from("routes").select("id, name").eq("is_active", true);
       if (error) throw error;
 
-      const allRoutes = data || [];
+      const allRoutes: any[] = data || [];
       if (!user?.id || !isScopedStaff) return allRoutes;
 
       const { data: accessRows, error: accessError } = await supabase

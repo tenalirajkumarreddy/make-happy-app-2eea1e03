@@ -20,7 +20,9 @@ import {
   Check,
   X,
   Clock,
+  Filter,
 } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -79,40 +81,54 @@ type TransferRow = {
 
 export default function StockTransfers() {
   const { user, role } = useAuth();
-  const { currentWarehouse } = useWarehouse();
+  const { currentWarehouse, allWarehouses, assignedWarehouseId } = useWarehouse();
   const qc = useQueryClient();
+
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState("");
+
+  const warehouseOptions = useMemo(() => {
+    if (role === "super_admin") return allWarehouses;
+    if (currentWarehouse) return [currentWarehouse];
+    return [];
+  }, [role, allWarehouses, currentWarehouse]);
+
+  useEffect(() => {
+    if (selectedWarehouseId) return;
+    const fallback = currentWarehouse?.id ?? assignedWarehouseId ?? allWarehouses[0]?.id ?? "";
+    if (fallback) setSelectedWarehouseId(fallback);
+  }, [selectedWarehouseId, currentWarehouse?.id, assignedWarehouseId, allWarehouses]);
 
   // ── Lookup Data ────────────────────────────────────────────────────────
   const { data: productsMap = {} } = useQuery({
     queryKey: ["lookup-products"],
     queryFn: async () => {
-      const { data } = await supabase.from("products").select("id, name");
-      return (data || []).reduce((acc: any, p) => {
+      const { data } = await (supabase.from("products").select("id, name") as any);
+      return ((data ?? []).reduce((acc: any, p: any) => {
         acc[p.id] = p.name;
         return acc;
-      }, {});
+      }, {}));
     },
   });
 
   const { data: warehousesMap = {} } = useQuery({
     queryKey: ["lookup-warehouses"],
     queryFn: async () => {
-      const { data } = await supabase.from("warehouses").select("id, name");
-      return (data || []).reduce((acc: any, w) => {
+      const { data } = await (supabase.from("warehouses").select("id, name") as any);
+      return ((data ?? []).reduce((acc: any, w: any) => {
         acc[w.id] = w.name;
         return acc;
-      }, {});
+      }, {}));
     },
   });
 
   const { data: profilesMap = {} } = useQuery({
     queryKey: ["lookup-profiles"],
     queryFn: async () => {
-      const { data } = await supabase.from("profiles").select("user_id, full_name");
-      return (data || []).reduce((acc: any, p) => {
+      const { data } = await (supabase.from("profiles").select("user_id, full_name") as any);
+      return ((data ?? []).reduce((acc: any, p: any) => {
         acc[p.user_id] = p.full_name;
         return acc;
-      }, {});
+      }, {}));
     },
   });
   const [searchParams] = useSearchParams();
@@ -164,13 +180,19 @@ export default function StockTransfers() {
     error,
     refetch,
   } = useQuery({
-    queryKey: ["stock-transfers", currentWarehouse?.id, role],
+    queryKey: ["stock-transfers", selectedWarehouseId, role],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = (supabase as any)
         .from("stock_transfers")
         .select("id, created_at, product_id, quantity, description, status, from_warehouse_id, from_user_id, to_warehouse_id, to_user_id, requested_by, approved_by, approved_at, rejection_reason")
-        .order("created_at", { ascending: false })
+        .order("created_at", { ascending: false } as any)
         .limit(200);
+
+      if (selectedWarehouseId) {
+        query = query.or(`from_warehouse_id.eq.${selectedWarehouseId},to_warehouse_id.eq.${selectedWarehouseId}`);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         console.error("Transfers error:", error);
@@ -183,11 +205,11 @@ export default function StockTransfers() {
   // ── Approve Mutation ─────────────────────────────────────────────
   const { mutate: approveTransfer, isPending: isApproving } = useMutation({
     mutationFn: async (transferId: string) => {
-      const { error } = await supabase.rpc("approve_stock_transfer", {
+      const { error } = await (supabase.rpc("approve_stock_transfer", {
         p_transfer_id: transferId,
         p_approved_by: user?.id ?? null,
         p_rejection_reason: null,
-      });
+      } as any));
       if (error) throw error;
     },
     onSuccess: () => {
@@ -207,12 +229,12 @@ export default function StockTransfers() {
   const { mutate: rejectTransfer, isPending: isRejecting } = useMutation({
     mutationFn: async ({ transferId, reason }: { transferId: string; reason?: string }) => {
       // Pre-flight check
-      const current = transfers.find(t => t.id === transferId);
+      const current = transfers.find((t: any) => t.id === transferId);
       if (current && !["pending", "awaiting_acceptance"].includes(current.status)) {
         throw new Error(`Transfer is already ${current.status}`);
       }
 
-      const { error } = await supabase.rpc("approve_stock_transfer", {
+      const { error } = await (supabase as any).rpc("approve_stock_transfer", {
         p_transfer_id: transferId,
         p_approved_by: user?.id ?? null,
         p_rejection_reason: reason ?? "Rejected",
@@ -239,12 +261,12 @@ export default function StockTransfers() {
   const { mutate: acceptTransfer, isPending: isAccepting } = useMutation({
     mutationFn: async (transferId: string) => {
       // Pre-flight check
-      const current = transfers.find(t => t.id === transferId);
+      const current = transfers.find((t: any) => t.id === transferId);
       if (current && current.status !== "awaiting_acceptance") {
         throw new Error(`Transfer is already ${current.status}`);
       }
 
-      const { error } = await supabase.rpc("accept_stock_transfer", {
+      const { error } = await (supabase as any).rpc("accept_stock_transfer", {
         p_transfer_id: transferId,
         p_accepted_by: user?.id ?? null
       });
@@ -269,7 +291,7 @@ export default function StockTransfers() {
       const { data, error } = await supabase.rpc("cancel_stock_transfer", {
         p_transfer_id: transferId,
         p_cancelled_by: user?.id,
-      });
+      }) as any;
       
       if (error) throw error;
       if (data && !data.success) throw new Error(data.error || "Failed to cancel transfer");
@@ -359,12 +381,7 @@ export default function StockTransfers() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Stock Transfers</h1>
           <p className="text-sm text-muted-foreground">
-            {transfers.length} transfers loaded
-            {currentWarehouse && (
-              <span className="ml-1 font-medium text-foreground">
-                · {currentWarehouse.name}
-              </span>
-            )}
+            {transfers.length} transfer{transfers.length !== 1 ? "s" : ""} loaded
           </p>
         </div>
         <div className="flex gap-2">
@@ -378,15 +395,33 @@ export default function StockTransfers() {
         </div>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search transfers…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-9"
-        />
+      {/* Filters */}
+      <div className="flex items-center gap-3">
+        {warehouseOptions.length > 0 && (
+          <div className="flex items-center gap-2">
+            <Filter className="h-4 w-4 text-muted-foreground shrink-0" />
+            <Select value={selectedWarehouseId} onValueChange={setSelectedWarehouseId}>
+              <SelectTrigger className="w-[200px] h-10">
+                <Warehouse className="h-4 w-4 mr-2 text-muted-foreground" />
+                <SelectValue placeholder="Select warehouse" />
+              </SelectTrigger>
+              <SelectContent>
+                {warehouseOptions.map((w: any) => (
+                  <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search transfers…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
       </div>
 
       {/* Table */}
@@ -420,7 +455,7 @@ export default function StockTransfers() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.map((t) => {
+                  {filtered.map((t: any) => {
                     const from = formatParty(t, "from");
                     const to = formatParty(t, "to");
 

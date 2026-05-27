@@ -35,7 +35,7 @@ CREATE TYPE public.app_role AS ENUM (
   'manager', 
   'agent',
   'marketer',
-  'pos',
+  'operator',
   'customer'
 );
 
@@ -936,7 +936,7 @@ CREATE POLICY "Staff can view all customers"
     EXISTS (
       SELECT 1 FROM public.user_roles
       WHERE user_id = auth.uid()
-        AND role IN ('super_admin', 'manager', 'agent', 'marketer', 'pos')
+        AND role IN ('super_admin', 'manager', 'agent', 'marketer', 'operator')
     )
   );
 
@@ -964,7 +964,7 @@ CREATE POLICY "Staff can view all stores"
     EXISTS (
       SELECT 1 FROM public.user_roles
       WHERE user_id = auth.uid()
-        AND role IN ('super_admin', 'manager', 'agent', 'marketer', 'pos')
+        AND role IN ('super_admin', 'manager', 'agent', 'marketer', 'operator')
     )
   );
 
@@ -1004,18 +1004,18 @@ CREATE POLICY "Staff can view all sales"
     EXISTS (
       SELECT 1 FROM public.user_roles
       WHERE user_id = auth.uid()
-        AND role IN ('super_admin', 'manager', 'agent', 'pos')
+        AND role IN ('super_admin', 'manager', 'agent', 'operator')
     )
   );
 
-CREATE POLICY "Agents/POS can create sales"
+CREATE POLICY "Agents/Operators can create sales"
   ON public.sales FOR INSERT
   WITH CHECK (
     auth.uid() = recorded_by
     AND EXISTS (
       SELECT 1 FROM public.user_roles
       WHERE user_id = auth.uid()
-        AND role IN ('agent', 'pos', 'super_admin', 'manager')
+        AND role IN ('agent', 'operator', 'super_admin', 'manager')
     )
   );
 
@@ -1025,7 +1025,7 @@ CREATE POLICY "Staff can view sale items"
     EXISTS (
       SELECT 1 FROM public.user_roles
       WHERE user_id = auth.uid()
-        AND role IN ('super_admin', 'manager', 'agent', 'pos')
+        AND role IN ('super_admin', 'manager', 'agent', 'operator')
     )
   );
 
@@ -1035,7 +1035,7 @@ CREATE POLICY "Staff can insert sale items"
     EXISTS (
       SELECT 1 FROM public.user_roles
       WHERE user_id = auth.uid()
-        AND role IN ('super_admin', 'manager', 'agent', 'pos')
+        AND role IN ('super_admin', 'manager', 'agent', 'operator')
     )
   );
 
@@ -1048,18 +1048,18 @@ CREATE POLICY "Staff can view all transactions"
     EXISTS (
       SELECT 1 FROM public.user_roles
       WHERE user_id = auth.uid()
-        AND role IN ('super_admin', 'manager', 'agent', 'pos')
+        AND role IN ('super_admin', 'manager', 'agent', 'operator')
     )
   );
 
-CREATE POLICY "Agents/POS can create transactions"
+CREATE POLICY "Agents/Operators can create transactions"
   ON public.transactions FOR INSERT
   WITH CHECK (
     auth.uid() = recorded_by
     AND EXISTS (
       SELECT 1 FROM public.user_roles
       WHERE user_id = auth.uid()
-        AND role IN ('agent', 'pos', 'super_admin', 'manager')
+        AND role IN ('agent', 'operator', 'super_admin', 'manager')
     )
   );
 
@@ -1314,3 +1314,64 @@ GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO authenticated;
 --    then update their role in user_roles table
 -- 
 -- ============================================================
+
+-- 20260527000003_record_production_with_stock.sql
+-- Atomic production recording RPC that increases finished goods stock
+-- Does NOT deduct raw materials (consumption is calculated at end-of-day closing stock)
+
+CREATE OR REPLACE FUNCTION public.record_production_with_stock(
+  p_warehouse_id UUID,
+  p_product_id UUID,
+  p_quantity_produced INTEGER,
+  p_wastage_quantity INTEGER DEFAULT 0,
+  p_production_date DATE DEFAULT CURRENT_DATE,
+  p_notes TEXT DEFAULT NULL,
+  p_created_by UUID DEFAULT NULL
+)
+RETURNS TABLE(success BOOLEAN, production_log_id UUID, error TEXT)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_log_id UUID;
+  v_rows_affected INTEGER;
+BEGIN
+  IF p_quantity_produced <= 0 THEN
+    RETURN QUERY SELECT false, NULL::UUID, 'Quantity must be positive'::TEXT;
+    RETURN;
+  END IF;
+  IF p_wastage_quantity < 0 THEN
+    RETURN QUERY SELECT false, NULL::UUID, 'Wastage cannot be negative'::TEXT;
+    RETURN;
+  END IF;
+  INSERT INTO public.production_log (
+    warehouse_id, product_id, quantity_produced,
+    production_date, wastage_quantity, notes, created_by
+  ) VALUES (
+    p_warehouse_id, p_product_id, p_quantity_produced,
+    p_production_date, p_wastage_quantity, p_notes, p_created_by
+  )
+  RETURNING id INTO v_log_id;
+  UPDATE public.product_stock
+  SET quantity = quantity + p_quantity_produced,
+      updated_at = now()
+  WHERE warehouse_id = p_warehouse_id
+    AND product_id = p_product_id;
+  GET DIAGNOSTICS v_rows_affected = ROW_COUNT;
+  IF v_rows_affected = 0 THEN
+    INSERT INTO public.product_stock (product_id, warehouse_id, quantity, updated_at)
+    VALUES (p_product_id, p_warehouse_id, p_quantity_produced, now());
+  END IF;
+  INSERT INTO public.stock_movements (
+    product_id, warehouse_id, quantity, type,
+    reference_id, reason, created_by, created_at
+  ) VALUES (
+    p_product_id, p_warehouse_id, p_quantity_produced, 'production',
+    v_log_id::text, 'Production batch', p_created_by, now()
+  );
+  RETURN QUERY SELECT true, v_log_id, NULL::TEXT;
+EXCEPTION WHEN OTHERS THEN
+  RETURN QUERY SELECT false, NULL::UUID, SQLERRM;
+END;
+$$;

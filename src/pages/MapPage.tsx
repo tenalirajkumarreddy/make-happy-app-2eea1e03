@@ -55,15 +55,15 @@ const MapPage = () => {
   const { data: stores, isLoading } = useQuery({
     queryKey: ["stores-with-location", filterType, currentWarehouse?.id],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("get_stores_for_map", {
+      const { data, error } = await (supabase.rpc("get_stores_for_map", {
         p_warehouse_id: currentWarehouse?.id || null,
         p_store_type_id: filterType || null,
         p_route_id: selectedRoute || null,
         p_limit: 500,
-      });
+      } as any));
       if (error) throw error;
       // Transform to match expected format
-      return (data || []).map((s: any) => ({
+      return (data ?? []).map((s: any) => ({
         ...s,
         store_types: s.store_type_name ? { name: s.store_type_name } : null,
         routes: s.route_name ? { name: s.route_name } : null,
@@ -75,9 +75,9 @@ const MapPage = () => {
   const { data: activeSessions, isLoading: isLoadingSessions } = useQuery({
     queryKey: ["active-sessions-map", currentWarehouse?.id],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("get_active_agent_locations", {
+      const { data, error } = await (supabase.rpc("get_active_agent_locations", {
         p_warehouse_id: currentWarehouse?.id || null,
-      });
+      } as any));
       if (error) throw error;
       // Transform to match expected format
       return (data || []).map((s: any) => ({
@@ -96,23 +96,23 @@ const MapPage = () => {
   });
 
   // Get visited store IDs from active sessions
-  const activeSessionIds = activeSessions?.map((s) => s.id) || [];
+  const activeSessionIds = (activeSessions ?? []).map((s: any) => s.id);
   const { data: visitedStoreIds } = useQuery({
     queryKey: ["visited-stores-map", activeSessionIds],
     queryFn: async () => {
       if (activeSessionIds.length === 0) return new Set<string>();
-      const { data, error } = await supabase.rpc("get_visited_store_count", {
+      const { data, error } = await (supabase.rpc("get_visited_store_count", {
         p_session_ids: activeSessionIds,
-      });
+      } as any));
       if (error) throw error;
       // We only get a count from this function, so we need to fetch the actual store_ids
       // Keep original query for now as getting distinct store_ids requires a different approach
-      const { data: visits } = await supabase
+      const { data: visits } = await (supabase as any)
         .from("store_visits")
         .select("store_id")
         .in("session_id", activeSessionIds)
         .not("visited_at", "is", null);
-      return new Set((visits || []).map((v) => v.store_id));
+      return new Set((visits ?? []).map((v: any) => v.store_id));
     },
     enabled: activeSessionIds.length > 0,
     refetchInterval: 30000, // Increased to 30s
@@ -123,11 +123,11 @@ const MapPage = () => {
   const { data: pendingOrderStoreIds } = useQuery({
     queryKey: ["pending-orders-map", currentWarehouse?.id],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("get_pending_order_stores", {
+      const { data, error } = await (supabase.rpc("get_pending_order_stores", {
         p_warehouse_id: currentWarehouse?.id || null,
-      });
+      } as any));
       if (error) throw error;
-      return new Set((data || []).map((o) => o.store_id));
+      return new Set((data ?? []).map((o: any) => o.store_id));
     },
   });
 
@@ -305,7 +305,7 @@ const MapPage = () => {
         .addTo(map)
       .bindPopup(`
         <div style="font-family:system-ui;min-width:180px;">
-          <strong style="font-size:14px;">${escapeHtml(companySettings?.company_name) || "Company"}</strong>
+          <strong style="font-size:14px;">${escapeHtml(companySettings?.company_name ?? "") || "Company"}</strong>
           <div style="color:#7c3aed;font-size:12px;font-weight:600;">${escapeHtml(label)}</div>
           ${companySettings?.address ? `<div style="margin-top:4px;font-size:12px;color:#666;">${escapeHtml(companySettings.address)}</div>` : ""}
           ${companySettings?.customer_care_number ? `<div style="font-size:11px;color:#888;">${escapeHtml(companySettings.customer_care_number)}</div>` : ""}

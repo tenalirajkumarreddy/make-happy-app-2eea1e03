@@ -699,7 +699,7 @@ function AgentApp() {
             />
           )}
           {tab === "products" && <AgentProducts />}
-          {tab === "routes" && <AgentRoutes />}
+          {tab === "routes" && <AgentRoutes onOpenStore={(store) => handleOpenStoreProfile(store, "routes")} />}
           {tab === "scan" && !recordAction && (
             <AgentScan
               onGoRecord={handleGoRecord}

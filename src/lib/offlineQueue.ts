@@ -87,7 +87,7 @@ function openDB(): Promise<IDBDatabase> {
         store.createIndex("businessKey", "businessKey", { unique: false }); // Index for O(1) dedup lookups
       } else {
         // Ensure businessKey index exists on existing store (v4 upgrade)
-        const store = tx.objectStore(STORE_NAME);
+        const store = (req.transaction)!.objectStore(STORE_NAME);
         if (!store.indexNames.contains("businessKey")) {
           store.createIndex("businessKey", "businessKey", { unique: false });
         }
@@ -145,42 +145,78 @@ export async function isBusinessKeyQueued(businessKey: string): Promise<boolean>
 
 /**
  * Generate business key for deduplication
- * Uses millisecond precision with salt to prevent collisions
+ * Uses type-specific meaningful identifiers so identical actions
+ * produce the same key and are deduplicated at queue time.
+ * Timestamps are rounded to minute precision.
  */
 export function generateBusinessKey(
   type: PendingAction['type'],
   params: {
     storeId?: string;
     customerId?: string;
+    userId?: string;
     amount?: number;
     timestamp?: string | number;
     products?: Array<{ product_id: string; quantity: number }>;
+    phone?: string;
+    name?: string;
+    orderType?: string;
   }
 ): string {
   const parts: string[] = [type];
 
-  if (params.storeId) parts.push(params.storeId);
-  if (params.customerId) parts.push(params.customerId);
-  if (params.amount !== undefined) parts.push(String(Math.round(params.amount * 100) / 100));
+  switch (type) {
+    case 'sale':
+      if (params.storeId) parts.push(params.storeId);
+      if (params.customerId) parts.push(params.customerId);
+      if (params.amount !== undefined) parts.push(String(Math.round(params.amount * 100) / 100));
+      if (params.products?.length) {
+        const sig = params.products
+          .map(p => `${p.product_id}:${p.quantity}`)
+          .sort()
+          .join(',');
+        parts.push(sig);
+      }
+      break;
 
-  // For sales, include product signature
-  if (type === 'sale' && params.products?.length) {
-    const productSig = params.products
-      .map(p => `${p.product_id}:${p.quantity}`)
-      .sort()
-      .join(',');
-    parts.push(productSig);
+    case 'transaction':
+      if (params.storeId) parts.push(params.storeId);
+      if (params.customerId) parts.push(params.customerId);
+      if (params.amount !== undefined) parts.push(String(Math.round(params.amount * 100) / 100));
+      break;
+
+    case 'visit':
+      if (params.userId) parts.push(params.userId);
+      if (params.storeId) parts.push(params.storeId);
+      break;
+
+    case 'customer':
+      if (params.phone) parts.push(params.phone);
+      break;
+
+    case 'store':
+      if (params.name) parts.push(params.name);
+      if (params.customerId) parts.push(params.customerId);
+      break;
+
+    case 'order':
+      if (params.storeId) parts.push(params.storeId);
+      if (params.orderType) parts.push(params.orderType);
+      break;
+
+    default:
+      if (params.storeId) parts.push(params.storeId);
+      if (params.customerId) parts.push(params.customerId);
+      break;
   }
 
-  // Use millisecond precision with random salt to prevent collisions
+  // Round to minute precision so same-minute actions produce the same key
   const ts = params.timestamp || Date.now();
   const timestampMs = typeof ts === 'string'
     ? new Date(ts).getTime()
     : ts;
-
-  // Add random salt for uniqueness (2 random hex characters)
-  const salt = Math.floor(Math.random() * 256).toString(16).padStart(2, '0');
-  parts.push(`${timestampMs}-${salt}`);
+  const minuteKey = Math.floor(timestampMs / 60000);
+  parts.push(String(minuteKey));
 
   return parts.join(':');
 }

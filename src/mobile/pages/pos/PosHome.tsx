@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, ShoppingCart, TrendingUp, ArrowRightLeft, ClipboardList, Store, Banknote, Smartphone, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
+import { Loader2, ShoppingCart, TrendingUp, ArrowRightLeft, ClipboardList, Store, Banknote, Smartphone, ArrowDownToLine, ArrowUpFromLine, Factory, Package } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -8,11 +8,12 @@ import { useOperatorWarehouse } from "@/mobile/hooks/useOperatorWarehouse";
 type Props = {
   onOpenRecord: () => void;
   onOpenHistory: () => void;
+  onOpenInventory: () => void;
 };
 
 export function PosHome({ onOpenRecord, onOpenHistory }: Props) {
   const { user, profile } = useAuth();
-  const { warehouse, posStore, isLoading: warehouseLoading } = useOperatorWarehouse(user?.id);
+  const { warehouse, posStore, isLoading: warehouseLoading } = useOperatorWarehouse(user?.id) as any;
 
   // Today's sales stats for the POS store
   const { data: salesStats, isLoading: salesLoading } = useQuery({
@@ -25,7 +26,7 @@ export function PosHome({ onOpenRecord, onOpenHistory }: Props) {
         .select("total_amount, cash_amount, upi_amount")
         .eq("store_id", posStore!.id)
         .gte("created_at", `${today}T00:00:00`);
-      const sales = data || [];
+      const sales: any[] = data || [];
       return {
         total: sales.reduce((s, r) => s + Number(r.total_amount || 0), 0),
         cash: sales.reduce((s, r) => s + Number(r.cash_amount || 0), 0),
@@ -41,7 +42,7 @@ export function PosHome({ onOpenRecord, onOpenHistory }: Props) {
   const { data: ordersData, isLoading: ordersLoading } = useQuery({
     queryKey: ["mobile-pos-orders", warehouse?.id],
     queryFn: async () => {
-      if (!warehouse) return { pending: [], recent: [] };
+      if (!warehouse) return { pending: [] as any[], recent: [] as any[] };
 
       // Get all stores linked to this warehouse
       const { data: stores } = await supabase
@@ -50,7 +51,7 @@ export function PosHome({ onOpenRecord, onOpenHistory }: Props) {
         .eq("warehouse_id", warehouse!.id);
 
       const storeIds = (stores || []).map(s => s.id);
-      if (storeIds.length === 0) return { pending: [], recent: [] };
+      if (storeIds.length === 0) return { pending: [] as any[], recent: [] as any[] };
 
       const today = new Date().toISOString().split("T")[0];
 
@@ -190,6 +191,24 @@ export function PosHome({ onOpenRecord, onOpenHistory }: Props) {
                 <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
               </div>
               <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200">View History</span>
+            </button>
+            <button
+              onClick={() => window.location.href = "/production"}
+              className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm active:scale-95 transition-all"
+            >
+              <div className="h-8 w-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center">
+                <Factory className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+              </div>
+              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200">Production</span>
+            </button>
+            <button
+              onClick={() => onOpenInventory()}
+              className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm active:scale-95 transition-all"
+            >
+              <div className="h-8 w-8 rounded-lg bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center">
+                <Package className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              </div>
+              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200">Inventory</span>
             </button>
           </div>
         )}

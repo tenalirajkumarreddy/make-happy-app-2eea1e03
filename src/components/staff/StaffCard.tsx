@@ -208,12 +208,12 @@ const getStatusColor = () => {
               ₹{totalAmount.toLocaleString("en-IN")}
             </p>
             <div className="flex gap-1 mt-1 text-xs text-muted-foreground">
-              {staff.cash_amount > 0 && (
+              {(staff.cash_amount ?? 0) > 0 && (
                 <span className="text-green-600 dark:text-green-400">
                   ₹{staff.cash_amount?.toLocaleString("en-IN")} C
                 </span>
               )}
-              {staff.upi_amount > 0 && (
+              {(staff.upi_amount ?? 0) > 0 && (
                 <span className="text-blue-600 dark:text-blue-400">
                   ₹{staff.upi_amount?.toLocaleString("en-IN")} U
                 </span>

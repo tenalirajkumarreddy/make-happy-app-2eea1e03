@@ -129,7 +129,7 @@ const App = () => {
   // Early debug logging (dev-only, use logcat for production APK debugging)
   logDebug("[APP] Starting Aqua Prime");
   logDebug("[APP] isMobile", { isMobile });
-  logDebug("[APP] Capacitor platform", { platform: window.Capacitor?.platform });
+  logDebug("[APP] Capacitor platform", { platform: (window as any).Capacitor?.platform });
   logDebug("[APP] Location origin", { origin: window.location?.origin });
 
   // Catch early initialization errors
@@ -204,7 +204,7 @@ const App = () => {
                <Route path="/inventory/raw-materials" element={<RoleGuard allowed={["super_admin", "manager"]}><RawMaterialsPage /></RoleGuard>} />
                <Route path="/inventory/boms" element={<RoleGuard allowed={["super_admin", "manager"]}><BillOfMaterialsPage /></RoleGuard>} />
                <Route path="/inventory/boms/:bomId" element={<RoleGuard allowed={["super_admin", "manager"]}><BomDetailPage /></RoleGuard>} />
-               <Route path="/production" element={<RoleGuard allowed={["super_admin", "manager"]}><ProductionPage /></RoleGuard>} />
+               <Route path="/production" element={<RoleGuard allowed={["super_admin", "manager", "operator"]}><ProductionPage /></RoleGuard>} />
                <Route path="/customers" element={<RoleGuard allowed={["super_admin", "manager", "agent"]}><Customers /></RoleGuard>} />
                <Route path="/customers/:id" element={<RoleGuard allowed={["super_admin", "manager", "agent"]}><CustomerDetail /></RoleGuard>} />
                <Route path="/stores" element={<RoleGuard allowed={["super_admin", "manager", "agent"]}><Stores /></RoleGuard>} />

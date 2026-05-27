@@ -37,15 +37,19 @@ const VendorPayments = () => {
   const [paymentReference, setPaymentReference] = useState("");
   const [notes, setNotes] = useState("");
 
-   const { data: payments = [], isLoading } = useQuery({
-     queryKey: ["vendor_payments", currentWarehouse?.id],
-    queryFn: async () => {
-      const query = supabase
-        .from("vendor_payments")
-        .select("*, vendors(name, display_id)")
-        .order("payment_date", { ascending: false });
+   const { data: payments = [] as any[], isLoading } = useQuery({
+      queryKey: ["vendor_payments", currentWarehouse?.id],
+     queryFn: async () => {
+       const query = supabase
+         .from("vendor_payments")
+         .select("*, vendors(name, display_id)")
+         .order("payment_date", { ascending: false });
 
-      const { data, error } = await query;
+       if (currentWarehouse?.id) {
+         query = query.eq("warehouse_id", currentWarehouse.id);
+       }
+
+       const { data, error } = await query;
       if (error) throw error;
       return data;
     },
@@ -96,7 +100,7 @@ const VendorPayments = () => {
       const { data: idData } = await supabase.rpc("generate_display_id", {
         prefix: "VPY",
         seq_name: "vendor_payments_display_id_seq"
-      });
+      }) as any;
 
       // Create payment
       const { error } = await supabase
@@ -110,7 +114,8 @@ const VendorPayments = () => {
           payment_reference: paymentReference.trim() || null,
           notes: notes.trim() || null,
           status: "completed",
-          created_by: user!.id
+          created_by: user!.id,
+          warehouse_id: currentWarehouse?.id || null
         });
 
       if (error) throw error;
@@ -219,7 +224,7 @@ const VendorPayments = () => {
                   ))}
                 </SelectContent>
               </Select>
-              {selectedVendor && selectedVendor.outstanding > 0 && (
+              {selectedVendor && selectedVendor!.outstanding! > 0 && (
                 <p className="text-xs text-muted-foreground mt-2">
                   Current outstanding balance: <span className="font-semibold text-red-600">₹{Number(selectedVendor.outstanding).toLocaleString()}</span>
                 </p>
@@ -292,8 +297,8 @@ const VendorPayments = () => {
                   </div>
                   <div className="flex justify-between pt-2 border-t border-green-300">
                     <span className="font-semibold text-green-900">New Outstanding:</span>
-                    <span className={`font-bold ${(selectedVendor.outstanding - parseFloat(amount)) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                      ₹{(selectedVendor.outstanding - parseFloat(amount)).toLocaleString()}
+                    <span className={`font-bold ${(selectedVendor!.outstanding! - parseFloat(amount)) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      ₹{(selectedVendor!.outstanding! - parseFloat(amount)).toLocaleString()}
                     </span>
                   </div>
                 </div>

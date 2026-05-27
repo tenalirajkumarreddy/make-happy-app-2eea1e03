@@ -75,7 +75,7 @@ export const PurchaseOrderForm = () => {
       const { data, error } = await supabase
         .from('vendors')
         .select('id, name')
-        .eq('warehouse_id', currentWarehouse?.id)
+        .eq('warehouse_id', currentWarehouse?.id ?? '')
         .eq('is_active', true)
         .order('name');
       if (error) throw error;
@@ -90,7 +90,7 @@ export const PurchaseOrderForm = () => {
       const { data, error } = await supabase
         .from('raw_materials')
         .select('id, name, unit')
-        .eq('warehouse_id', currentWarehouse?.id)
+        .eq('warehouse_id', currentWarehouse?.id ?? '')
         .eq('is_active', true)
         .order('name');
       if (error) throw error;

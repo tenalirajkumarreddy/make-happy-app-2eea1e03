@@ -88,7 +88,7 @@ export default function AdminVehicles() {
 
 const deleteMutation = useMutation({
   mutationFn: async (id: string) => {
-    const { error } = await supabase.from("vehicles").update({ deleted_at: new Date().toISOString() }).eq("id", id);
+    const { error } = await supabase.from("vehicles").update({ deleted_at: new Date().toISOString() } as any).eq("id", id);
     if (error) throw error;
   },
     onSuccess: () => {

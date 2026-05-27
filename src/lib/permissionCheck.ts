@@ -6,7 +6,7 @@
 
 import { type AppRole } from "@/types/roles";
 import { supabase } from "@/integrations/supabase/client";
-import { PermissionKey, hasRoleDefaultPermission } from "@/lib/permissions";
+import { PermissionKey } from "@/lib/permissions";
 
 /**
  * Check if a user has a specific permission
@@ -69,7 +69,7 @@ export async function canRecordSale(userId: string): Promise<boolean> {
   const salePermissions: PermissionKey[] = [
     "record_sale",
     "view_sales",
-    "view_stores",
+    "view_stores" as any,
   ];
 
   // Check any of the sale-related permissions
@@ -85,28 +85,28 @@ export async function canRecordSale(userId: string): Promise<boolean> {
  * Check if a user has permission to record transactions (payments)
  */
 export async function canRecordTransaction(userId: string): Promise<boolean> {
-  return checkUserPermission(userId, "record_transaction");
+  return checkUserPermission(userId, "record_transaction" as any);
 }
 
 /**
  * Check if a user has permission to record store visits
  */
 export async function canRecordVisit(userId: string): Promise<boolean> {
-  return checkUserPermission(userId, "record_visit");
+  return checkUserPermission(userId, "record_visit" as any);
 }
 
 /**
  * Check if a user has permission to create customers
  */
 export async function canCreateCustomer(userId: string): Promise<boolean> {
-  return checkUserPermission(userId, "create_customer");
+  return checkUserPermission(userId, "create_customer" as any);
 }
 
 /**
  * Check if a user has permission to create stores
  */
 export async function canCreateStore(userId: string): Promise<boolean> {
-  return checkUserPermission(userId, "create_store");
+  return checkUserPermission(userId, "create_store" as any);
 }
 
 /**
@@ -210,37 +210,37 @@ export async function validateActionPermission(
 // KEPT HERE for backward compat with callers that pass non-canonical permission keys
 const ROLE_DEFAULT_PERMISSIONS: Record<AppRole, PermissionKey[]> = {
   super_admin: [
-    "view_dashboard", "view_sales", "view_stores", "view_inventory",
+    "view_dashboard", "view_sales", "view_stores" as any, "view_inventory",
     "view_collections", "view_reports", "manage_users", "manage_roles",
     "record_sale", "record_transaction", "record_visit",
-    "create_customer", "create_store", "edit_store", "delete_store",
+    "create_customer" as any, "create_store" as any, "edit_store", "delete_store",
     "view_all_warehouses", "switch_warehouse",
-    "view_routes", "assign_routes", "manage_inventory",
+    "view_routes", "assign_routes", "manage_inventory" as any,
     "approve_expenses", "view_expenses",
     "export_data", "import_data", "view_settings", "manage_settings",
   ],
   manager: [
-    "view_dashboard", "view_sales", "view_stores", "view_inventory",
+    "view_dashboard", "view_sales", "view_stores" as any, "view_inventory",
     "view_collections", "view_reports",
     "record_sale", "record_transaction", "record_visit",
-    "create_customer", "create_store", "edit_store",
+    "create_customer" as any, "create_store" as any, "edit_store",
     "view_routes", "assign_routes",
     "view_expenses", "approve_expenses",
     "export_data",
   ],
   agent: [
-    "view_dashboard", "view_sales", "view_stores",
+    "view_dashboard", "view_sales", "view_stores" as any,
     "record_sale", "record_transaction", "record_visit",
-    "create_customer", "view_routes", "view_collections",
+    "create_customer" as any, "view_routes", "view_collections",
   ],
   marketer: [
-    "view_dashboard", "view_stores", "create_customer", "record_visit", "view_routes",
+    "view_dashboard", "view_stores" as any, "create_customer" as any, "record_visit", "view_routes",
   ],
   operator: [
-    "view_dashboard", "view_sales", "record_sale", "record_transaction", "view_stores",
+    "view_dashboard", "view_sales", "record_sale", "record_transaction", "view_stores" as any,
   ],
   customer: [
-    "view_dashboard", "view_orders", "place_order", "view_store",
+    "view_dashboard" as any, "view_orders", "place_order" as any, "view_store" as any,
   ],
 };
 

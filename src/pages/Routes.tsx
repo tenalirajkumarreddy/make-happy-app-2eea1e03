@@ -52,7 +52,7 @@ const Routes = () => {
        const { data, error } = await query;
        if (error) throw error;
 
-      const allRoutes = data || [];
+      const allRoutes: any[] = data || [];
       if (!isScopedStaff || !user?.id) return allRoutes;
 
       const { data: accessRows, error: accessError } = await supabase

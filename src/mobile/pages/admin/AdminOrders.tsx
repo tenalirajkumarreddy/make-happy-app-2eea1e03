@@ -383,7 +383,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
     try {
       const { error } = await supabase
         .from("orders")
-        .update({ assigned_to: transferToUser })
+        .update({ assigned_to: transferToUser, updated_by: user.id })
         .eq("id", order.id);
       if (error) throw error;
       toast.success(`Order ${order.display_id} transferred`);

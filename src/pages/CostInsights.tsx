@@ -63,7 +63,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 
 const COLORS = [
   '#3b82f6', '#10b981', '#f59e0b', '#ef4444', 
@@ -163,7 +163,7 @@ export default function CostInsights() {
       
       // Calculate costs
       const summary = products?.map(product => {
-        const productBoms = boms?.filter(b => b.finished_product_id === product.id) || [];
+        const productBoms: any[] = boms?.filter(b => b.finished_product_id === product.id) || [];
         const bomCost = productBoms.reduce((sum, b) => {
           const raw = rawMaterialMap.get((b as any).raw_material_id);
           const cost = (b.quantity || 0) * (raw?.unit_cost || 0);
@@ -190,14 +190,14 @@ export default function CostInsights() {
     // WAC metrics
     const wacChanges = wacHistory?.length || 0;
     const latestWac = wacHistory?.[wacHistory.length - 1];
-    const avgWacChange = wacHistory?.reduce((sum, h) => {
+    const avgWacChange = (wacHistory ?? []).reduce((sum: number, h: any) => {
       const change = Math.abs((h.new_cost || 0) - (h.old_cost || 0));
       return sum + change;
     }, 0) / (wacChanges || 1);
     
     // BOM metrics
     const totalBoms = bomSummary?.length || 0;
-    const avgBomCost = bomSummary?.reduce((sum, b) => sum + b.bomCost, 0) / (totalBoms || 1);
+    const avgBomCost = (bomSummary ?? []).reduce((sum: number, b: any) => sum + b.bomCost, 0) / (totalBoms || 1);
     
     // Material price variance
     const priceVariance = rawMaterials?.reduce((sum, m) => {
@@ -362,7 +362,7 @@ export default function CostInsights() {
                         metrics.latestWacMove >= 0 ? "text-green-600" : "text-red-600"
                       )}>
                         {metrics.latestWacMove >= 0 ? "+" : ""}
-                        {formatCurrency($1)}
+                        {formatCurrency(metrics.latestWacMove)}
                       </p>
                       {metrics.latestWacMove >= 0 ? (
                         <ArrowUpRight className="h-4 w-4 text-green-600" />
@@ -399,7 +399,7 @@ export default function CostInsights() {
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
-                  Avg cost: {formatCurrency($1)}
+                   Avg cost: {formatCurrency(metrics.avgBomCost)}
                 </p>
               </CardContent>
             </Card>
@@ -534,17 +534,17 @@ export default function CostInsights() {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                     <div className="space-y-2">
                       <p className="text-sm text-muted-foreground">Avg WAC Change</p>
-                      <p className="text-xl font-bold">{formatCurrency($1)}</p>
+                      <p className="text-xl font-bold">{formatCurrency(metrics.avgWacChange)}</p>
                       <Badge variant="outline" className="text-xs">Per adjustment</Badge>
                     </div>
                     <div className="space-y-2">
                       <p className="text-sm text-muted-foreground">Avg BOM Cost</p>
-                      <p className="text-xl font-bold">{formatCurrency($1)}</p>
+                      <p className="text-xl font-bold">{formatCurrency(metrics.avgBomCost)}</p>
                       <Badge variant="outline" className="text-xs">Per product</Badge>
                     </div>
                     <div className="space-y-2">
                       <p className="text-sm text-muted-foreground">Price Variance</p>
-                      <p className="text-xl font-bold">{formatCurrency($1)}</p>
+                      <p className="text-xl font-bold">{formatCurrency(metrics.priceVariance)}</p>
                       <Badge variant="outline" className="text-xs">Estimated ±5%</Badge>
                     </div>
                     <div className="space-y-2">
@@ -615,7 +615,7 @@ export default function CostInsights() {
                                         "text-sm font-medium",
                                         Number(data.change) >= 0 ? "text-green-600" : "text-red-600"
                                       )}>
-                                        Change: {Number(data.change) >= 0 ? "+" : ""}{formatCurrency($1)} ({data.variance}%)
+                                        Change: {Number(data.change) >= 0 ? "+" : ""}{formatCurrency(data.change)} ({data.variance}%)
                                       </p>
                                     </div>
                                   </div>
@@ -683,10 +683,10 @@ export default function CostInsights() {
                               {h.raw_materials?.name}
                             </TableCell>
                             <TableCell className="text-right">
-                              {formatCurrency($1)}
+                              {formatCurrency(h.old_cost)}
                             </TableCell>
                             <TableCell className="text-right font-semibold">
-                              {formatCurrency($1)}
+                              {formatCurrency(h.new_cost)}
                             </TableCell>
                             <TableCell className={cn(
                               "text-right font-medium",
@@ -783,19 +783,19 @@ export default function CostInsights() {
                           <TableRow key={product.id}>
                             <TableCell className="font-medium">{product.name}</TableCell>
                             <TableCell className="text-right">
-                              {formatCurrency($1)}
+                              {formatCurrency(product.bomCost)}
                             </TableCell>
                             <TableCell className="text-right">
                               <Badge variant="secondary">{product.materialCount}</Badge>
                             </TableCell>
                             <TableCell className="text-right">
-                              {formatCurrency($1)}
+                              {formatCurrency(product.sellingPrice)}
                             </TableCell>
                             <TableCell className={cn(
                               "text-right font-semibold",
                               isProfitable ? "text-green-600" : "text-red-600"
                             )}>
-                              {isProfitable ? "+" : ""}{formatCurrency($1)}
+                              {isProfitable ? "+" : ""}{formatCurrency(margin)}
                             </TableCell>
                             <TableCell className="text-right">
                               <Badge 
@@ -895,7 +895,7 @@ export default function CostInsights() {
                             <TableCell className="font-medium">{m.name}</TableCell>
                             <TableCell>{m.unit}</TableCell>
                             <TableCell className="text-right">
-                              {formatCurrency($1)}
+                              {formatCurrency(m.unit_cost)}
                             </TableCell>
                             <TableCell className="text-right">
                               {(m.current_stock || 0).toLocaleString('en-IN')}

@@ -67,12 +67,12 @@ export function useRouteSession(agentId?: string) {
       if (!agentId) return null;
       const today = new Date().toISOString().split("T")[0];
       
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("route_sessions")
         .select("*")
         .eq("agent_id", agentId)
         .eq("date", today)
-        .order("created_at", { ascending: false })
+        .order("created_at", { ascending: false } as any)
         .limit(1)
         .maybeSingle();
 
@@ -99,7 +99,7 @@ export function useRouteSession(agentId?: string) {
     queryFn: async () => {
       if (!activeSession?.optimized_order?.length) return [];
 
-      const { data: stores, error } = await supabase
+      const { data: stores, error } = await (supabase as any)
         .from("stores")
         .select("id, name, address, latitude, longitude, visit_priority, avg_visit_duration, outstanding_balance, is_active")
         .in("id", activeSession.optimized_order);
@@ -110,10 +110,10 @@ export function useRouteSession(agentId?: string) {
       }
 
       // Sort by optimized order
-      const storeMap = new Map(stores?.map(s => [s.id, s]) || []);
+      const storeMap = new Map((stores ?? []).map((s: any) => [s.id, s]));
       return activeSession.optimized_order
         .map(id => storeMap.get(id))
-        .filter((s): s is RouteStore => !!s);
+        .filter((s): s is RouteStore => !!s as any);
     },
     enabled: !!activeSession?.optimized_order?.length,
   });
@@ -124,7 +124,7 @@ export function useRouteSession(agentId?: string) {
     queryFn: async () => {
       if (!activeSession?.id) return [];
       
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("store_visits")
         .select(`
           *,
@@ -165,7 +165,7 @@ export function useRouteSession(agentId?: string) {
       storeIds: string[];
       startingLocation?: { lat: number; lng: number };
     }) => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("route_sessions")
         .insert({
           agent_id: params.agentId,
@@ -205,7 +205,7 @@ export function useRouteSession(agentId?: string) {
         updates.actual_duration = calculateActualDuration(storeVisits);
       }
 
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("route_sessions")
         .update(updates)
         .eq("id", sessionId)
@@ -242,7 +242,7 @@ export function useRouteSession(agentId?: string) {
       orderCompleted?: boolean;
       paymentCollected?: number;
     }) => {
-      const { data: existingVisit } = await supabase
+      const { data: existingVisit } = await (supabase as any)
         .from("store_visits")
         .select("id")
         .eq("session_id", sessionId)
@@ -252,7 +252,7 @@ export function useRouteSession(agentId?: string) {
       let result;
       if (existingVisit?.id) {
         // Update existing visit
-        result = await supabase
+        result = await (supabase as any)
           .from("store_visits")
           .update({
             visited_at: new Date().toISOString(),
@@ -267,7 +267,7 @@ export function useRouteSession(agentId?: string) {
           .single();
       } else {
         // Create new visit
-        result = await supabase
+        result = await (supabase as any)
           .from("store_visits")
           .insert({
             session_id: sessionId,
@@ -305,7 +305,7 @@ export function useRouteSession(agentId?: string) {
       sessionId: string;
       newOrder: string[];
     }) => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("route_sessions")
         .update({ optimized_order: newOrder })
         .eq("id", sessionId)

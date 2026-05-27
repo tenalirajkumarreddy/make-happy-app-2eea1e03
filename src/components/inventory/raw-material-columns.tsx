@@ -28,7 +28,7 @@ export const rawMaterialColumns: ColumnDef<RawMaterial>[] = [
   {
     accessorKey: "name",
     header: "Material Name",
-    cell: ({ row }) => {
+    cell: ({ row }: { row: any }) => {
         return <span className="font-medium">{row.original.name}</span>
     }
   },
@@ -39,7 +39,7 @@ export const rawMaterialColumns: ColumnDef<RawMaterial>[] = [
   {
     accessorKey: "current_stock",
     header: "Current Stock",
-    cell: ({ row }) => {
+    cell: ({ row }: { row: any }) => {
         const { current_stock, unit, reorder_level } = row.original;
         const isLowStock = reorder_level && current_stock < reorder_level;
         return (
@@ -53,14 +53,14 @@ export const rawMaterialColumns: ColumnDef<RawMaterial>[] = [
   {
     accessorKey: "reorder_level",
     header: "Re-order Level",
-    cell: ({ row }) => {
+    cell: ({ row }: { row: any }) => {
         const { reorder_level, unit } = row.original;
         return <span>{`${reorder_level || 'N/A'} ${unit || ''}`}</span>
     }
   },
   {
     id: "actions",
-    cell: ({ row }) => {
+    cell: ({ row }: { row: any }) => {
       const material = row.original;
 
       return (

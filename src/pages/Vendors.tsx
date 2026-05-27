@@ -109,7 +109,7 @@ const Vendors = () => {
       const { data: idData } = await supabase.rpc("generate_display_id", {
         prefix: "VEN",
         seq_name: "vendors_display_id_seq"
-      });
+      }) as any;
 
     const vendorData = {
       display_id: idData,

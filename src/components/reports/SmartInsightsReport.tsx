@@ -53,7 +53,7 @@ const SmartInsightsReport = () => {
 
       // --- Process Risk 1: Debt at Risk (Zombie Debt) ---
       // Outstanding > 0 AND No payment in 45 days
-      const storesWithDebt = stores || [];
+      const storesWithDebt: any[] = stores || [];
       const debtAtRisk = storesWithDebt.filter(s => {
         if (!s.last_payment_date) return true; // Never paid!
         return new Date(s.last_payment_date) < fortyFiveDaysAgo;

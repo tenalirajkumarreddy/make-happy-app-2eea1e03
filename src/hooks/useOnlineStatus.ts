@@ -39,7 +39,7 @@ export function useOnlineStatus() {
         setPendingCount(actionCount + fileCount);
         setConflictCount(conflictedActions.length);
       } catch (err) {
-        logError(err, { context: "useOnlineStatus.handleQueueChanged" });
+        logError(String(err), { context: "useOnlineStatus.handleQueueChanged" });
       }
     };
     window.addEventListener("online", handleOnline);
@@ -124,7 +124,7 @@ export function useOnlineStatus() {
         logError(err, { context: "useOnlineStatus.syncFileUploads", fileId: file.id, fileType: file.type });
         const shouldRetry = await markFileUploadFailed(file.id, err.message || "Unknown error");
         if (!shouldRetry) {
-          logError(new Error(`File upload ${file.id} exceeded max retries`), { 
+          logError(`File upload ${file.id} exceeded max retries`, { 
             context: "useOnlineStatus.syncFileUploads.maxRetries" 
           });
         }
@@ -181,7 +181,7 @@ export function useOnlineStatus() {
 
         // Validate permission before proceeding
         if (userIdToCheck) {
-          const permissionCheck = await validateActionPermission(userIdToCheck, action.type);
+          const permissionCheck = await validateActionPermission(userIdToCheck, action.type as any);
           if (!permissionCheck.allowed) {
             throw new Error(`Permission denied: ${permissionCheck.reason}`);
           }
@@ -189,7 +189,7 @@ export function useOnlineStatus() {
 
         if (action.type === "sale") {
           const { saleData, saleItems } = action.payload as any;
-          const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "SALE", seq_name: "sale_display_seq" });
+          const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "SALE", seq_name: "sale_display_seq" }) as any;
           const { error } = await supabase.rpc("record_sale", {
             p_display_id: displayId,
             p_store_id: saleData.store_id,
@@ -202,11 +202,11 @@ export function useOnlineStatus() {
             p_outstanding_amount: saleData.outstanding_amount,
             p_sale_items: saleItems,
             p_created_at: saleData.created_at ?? null,
-          });
+          }) as any;
           if (error) throw error;
         } else if (action.type === "transaction") {
           const { txData } = action.payload as any;
-          const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "PAY", seq_name: "pay_display_seq" });
+          const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "PAY", seq_name: "pay_display_seq" }) as any;
            // Use atomic RPC — server computes outstanding, locks store row
            const { error } = await supabase.rpc("record_transaction", {
             p_display_id: displayId,
@@ -218,7 +218,7 @@ export function useOnlineStatus() {
             p_upi_amount: txData.upi_amount,
             p_notes: txData.notes ?? null,
             p_created_at: txData.created_at ?? null,
-          });
+          }) as any;
           if (error) throw error;
         } else if (action.type === "visit") {
           const { userId, storeId, lat, lng } = action.payload as any;
@@ -246,21 +246,23 @@ export function useOnlineStatus() {
               email?: string | null;
               address?: string | null;
               photo_url?: string | null;
+              warehouse_id?: string | null;
             };
           };
           const { data: displayId } = await supabase.rpc("generate_display_id", {
             prefix: "CUST",
             seq_name: "customer_display_seq",
-          });
+          }) as any;
 
-          const { error } = await supabase.from("customers").insert({
+          const { error } = await (supabase.from("customers").insert({
             display_id: String(displayId),
             name: customerData.name,
             phone: customerData.phone ?? null,
             email: customerData.email ?? null,
             address: customerData.address ?? null,
             photo_url: customerData.photo_url ?? null,
-          });
+            warehouse_id: customerData.warehouse_id ?? null,
+          } as any));
           if (error) throw error;
         } else if (action.type === "store") {
           const { storeData } = action.payload as {
@@ -276,24 +278,26 @@ export function useOnlineStatus() {
               lng?: number | null;
               created_at?: string;
               is_active?: boolean;
+              warehouse_id?: string | null;
             };
           };
 
           const { data: displayId } = await supabase.rpc("generate_display_id", {
             prefix: "STR",
             seq_name: "str_display_seq",
-          });
+          }) as any;
 
-           const { error } = await supabase.from("stores").insert({
+           const { error } = await (supabase as any).from("stores").insert({
              ...storeData,
              display_id: String(displayId),
+             warehouse_id: storeData.warehouse_id ?? null,
            });
           if (error) throw error;
         }
       await removeFromQueue(action.id);
       totalSynced++;
       } catch (err: any) {
-        logError(err, { context: "useOnlineStatus.syncQueue", actionType: action.type, actionId: action.id });
+        logError("Sync queue error", err, { context: "useOnlineStatus.syncQueue", actionType: action.type, actionId: action.id });
 
         // Check if this is a permission error
         const errorMessage = err?.message || "";
@@ -305,8 +309,8 @@ export function useOnlineStatus() {
         if (isPermissionError) {
           // Permission errors should be treated as non-retryable failures
           // Remove from queue and log the failure
-          await markActionFailed(action.id, errorMessage);
-          logError(new Error(`Permission denied for action ${action.id}: ${errorMessage}`), {
+           await markActionFailed(action.id, errorMessage);
+          logError("Permission denied for action " + action.id, new Error(errorMessage), {
             context: "useOnlineStatus.syncQueue.permissionDenied",
             actionType: action.type,
           });
@@ -337,7 +341,7 @@ export function useOnlineStatus() {
                   queuedValue: conflict.queuedState.storeOutstandingAtQueueTime,
                   detectedAt: new Date().toISOString(),
                   resolved: false,
-                });
+                } as any);
               }
               totalConflicts++;
               toast.warning(`Conflict detected for ${action.type}: ${conflicts[0].reason}`);

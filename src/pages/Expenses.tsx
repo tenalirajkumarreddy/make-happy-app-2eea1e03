@@ -112,7 +112,7 @@ const Expenses = () => {
   const [dateRange, setDateRange] = useState("month");
 
   // Fetch categories
-  const { data: categories = [] } = useQuery({
+  const { data: categories = [] as any[] } = useQuery({
     queryKey: ["expense-categories"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -127,7 +127,7 @@ const Expenses = () => {
   });
 
    // Fetch expenses
-   const { data: expenses = [], isLoading: loadingExpenses } = useQuery({
+   const { data: expenses = [] as any[], isLoading: loadingExpenses } = useQuery({
      queryKey: ["expenses", dateRange, currentWarehouse?.id],
      queryFn: async () => {
        let query = supabase
@@ -159,7 +159,7 @@ const Expenses = () => {
   });
 
    // Fetch fixed costs
-   const { data: fixedCosts = [], isLoading: loadingFixedCosts } = useQuery({
+   const { data: fixedCosts = [] as any[], isLoading: loadingFixedCosts } = useQuery({
      queryKey: ["fixed-costs", currentWarehouse?.id],
     queryFn: async () => {
       const query = supabase
@@ -301,8 +301,8 @@ const Expenses = () => {
         if (error) throw error;
         toast.success("Category updated");
       } else {
-        const { error } = await supabase.from("expense_categories").insert({
-          name: catName.trim(),
+        const { error } = await (supabase as any).from("expense_categories").insert({
+          name: catName.trim() as any,
           description: catDescription.trim() || null,
           color: catColor,
           is_manufacturing_overhead: catIsOverhead,
@@ -337,7 +337,7 @@ const Expenses = () => {
       const { data: idData } = await supabase.rpc("generate_display_id", {
         prefix: "FC",
         seq_name: "fixed_costs_display_id_seq"
-      });
+      }) as any;
 
       // Calculate initial next due date
       const today = new Date();
@@ -403,7 +403,7 @@ const Expenses = () => {
       const { data: idData } = await supabase.rpc("generate_display_id", {
         prefix: "FCP",
         seq_name: "fixed_cost_payments_display_id_seq"
-      });
+      }) as any;
 
       const { error } = await supabase.from("fixed_cost_payments").insert({
         display_id: idData,

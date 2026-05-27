@@ -101,7 +101,7 @@ const StoreTypes = () => {
 const handleDelete = async () => {
   if (!deletingType) return;
   setDeleting(true);
-  const { error } = await supabase.from("store_types").update({ deleted_at: new Date().toISOString() }).eq("id", deletingType.id);
+  const { error } = await supabase.from("store_types").update({ deleted_at: new Date().toISOString() } as any).eq("id", deletingType.id);
   setDeleting(false);
     if (error) {
       if (error.message.includes("violates foreign key")) {

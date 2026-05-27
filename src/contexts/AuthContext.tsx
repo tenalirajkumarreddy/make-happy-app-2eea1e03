@@ -184,7 +184,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           throw new Error("USER_DISABLED");
         }
 
-        setProfile(profileData ?? null);
+        setProfile((profileData ?? null) as any);
       } catch (resolverError) {
         logError("Resolver RPC failed, falling back to legacy user resolution", resolverError);
         const { role, profile, customer } = await resolveUserType(supabase, userId);

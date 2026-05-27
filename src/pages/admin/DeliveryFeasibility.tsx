@@ -120,7 +120,7 @@ export default function DeliveryFeasibility() {
           const { data: bomCost, error: bomErr } = await supabase.rpc('calculate_bom_cost', {
             p_product_id: selectedProduct,
             p_warehouse_id: warehouse.id,
-          });
+          }) as any;
           if (!bomErr && bomCost !== null) {
             setBomCostPerUnit(Number(bomCost));
           } else {
@@ -134,7 +134,7 @@ export default function DeliveryFeasibility() {
         try {
           const { data: overhead, error: ohErr } = await supabase.rpc('calculate_overhead_per_unit', {
             p_warehouse_id: warehouse.id,
-          });
+          }) as any;
           if (!ohErr && overhead !== null) {
             setManufacturingOverhead(0); // Not needed since we use per-unit
             setExpectedMonthlyVolume(1); // Neutralize the manual division

@@ -65,41 +65,41 @@ export function StaffDirectory() {
     queryKey: ["staff-directory-enriched", roleFilter, warehouseFilter, statusFilter],
     queryFn: async () => {
       // Get all staff users
-      let query = supabase
-.from("user_roles")
-      .select(`
-        user_id,
-        role,
-        warehouse_id,
-        warehouses(name)
-      `)
-        .in("role", ["super_admin", "manager", "agent", "marketer", "operator"]);
+      let query: any = (supabase
+        .from("user_roles")
+        .select(`
+          user_id,
+          role,
+          warehouse_id,
+          warehouses(name)
+        ` as any) as any)
+        .in("role", ["super_admin", "manager", "agent", "marketer", "operator"] as any);
 
       if (roleFilter !== "all") {
-        query = query.eq("role", roleFilter);
+        query = query.eq("role", roleFilter as any);
       }
 
       if (warehouseFilter === "assigned") {
         query = query.not("warehouse_id", "is", null);
       } else if (warehouseFilter === "unassigned") {
-        query = query.is("warehouse_id", null);
+        query = query.is("warehouse_id", null as any);
       }
 
       const { data: userRoles, error: rolesError } = await query;
       if (rolesError) throw rolesError;
 
       // Get user profiles
-      const userIds = userRoles?.map((ur) => ur.user_id) || [];
-      const { data: profiles, error: profilesError } = await supabase
+      const userIds = (userRoles ?? []).map((ur: any) => ur.user_id);
+      const { data: profiles, error: profilesError } = await ((supabase as any)
         .from("profiles")
         .select("user_id, full_name, email, phone, avatar_url, is_active, created_at")
         .in("user_id", userIds)
-        .eq("is_active", statusFilter === "active" ? true : statusFilter === "inactive" ? false : true);
+        .eq("is_active", (statusFilter === "active" ? true : statusFilter === "inactive" ? false : true))) as any;
 
       if (profilesError) throw profilesError;
 
       // Get cash holdings
-      const { data: cashAccounts, error: cashError } = await supabase
+      const { data: cashAccounts, error: cashError } = await (supabase as any)
         .from("staff_cash_accounts")
         .select("user_id, cash_amount, upi_amount")
         .in("user_id", userIds);
@@ -107,7 +107,7 @@ export function StaffDirectory() {
       if (cashError) throw cashError;
 
       // Get stock counts
-      const { data: stockData, error: stockError } = await supabase
+      const { data: stockData, error: stockError } = await (supabase as any)
         .from("staff_stock")
         .select("user_id, quantity")
         .in("user_id", userIds);
@@ -116,7 +116,7 @@ export function StaffDirectory() {
 
       // Get today's activity
       const today = new Date();
-      const { data: todaySales, error: salesError } = await supabase
+      const { data: todaySales, error: salesError } = await (supabase as any)
         .from("sales")
         .select("recorded_by, id")
         .gte("created_at", startOfDay(today).toISOString())
@@ -125,7 +125,7 @@ export function StaffDirectory() {
 
       if (salesError) throw salesError;
 
-      const { data: todayTx, error: txError } = await supabase
+      const { data: todayTx, error: txError } = await (supabase as any)
         .from("transactions")
         .select("recorded_by, id, total_amount")
         .gte("created_at", startOfDay(today).toISOString())
@@ -136,7 +136,7 @@ export function StaffDirectory() {
 
       // Aggregate data
       const cashMap = new Map();
-      cashAccounts?.forEach((c) => {
+      (cashAccounts ?? []).forEach((c: any) => {
         cashMap.set(c.user_id, {
           cash_amount: c.cash_amount || 0,
           upi_amount: c.upi_amount || 0,
@@ -144,27 +144,27 @@ export function StaffDirectory() {
       });
 
       const stockMap = new Map();
-      stockData?.forEach((s) => {
+      (stockData ?? []).forEach((s: any) => {
         const current = stockMap.get(s.user_id) || 0;
         stockMap.set(s.user_id, current + (s.quantity || 0));
       });
 
       const salesCountMap = new Map();
-      todaySales?.forEach((s) => {
+      (todaySales ?? []).forEach((s: any) => {
         const current = salesCountMap.get(s.recorded_by) || 0;
         salesCountMap.set(s.recorded_by, current + 1);
       });
 
       const collectionsMap = new Map();
-      todayTx?.forEach((t) => {
+      (todayTx ?? []).forEach((t: any) => {
         const current = collectionsMap.get(t.recorded_by) || 0;
         collectionsMap.set(t.recorded_by, current + (t.total_amount || 0));
       });
 
       // Merge data
-      const enrichedStaff = userRoles
-        ?.map((ur) => {
-          const profile = profiles?.find((p) => p.user_id === ur.user_id);
+      const enrichedStaff = (userRoles ?? [])
+        .map((ur: any) => {
+          const profile = (profiles ?? []).find((p: any) => p.user_id === ur.user_id);
           if (!profile) return null;
 
           const cash = cashMap.get(ur.user_id) || { cash_amount: 0, upi_amount: 0 };
@@ -188,14 +188,14 @@ export function StaffDirectory() {
             today_collections: collectionsMap.get(ur.user_id) || 0,
           };
         })
-        .filter(Boolean);
+        .filter((x: any): x is NonNullable<typeof x> => !!x);
 
       return enrichedStaff || [];
     },
   });
 
   // Filter by search
-  const filteredStaff = staff?.filter((s) => {
+  const filteredStaff = (staff ?? []).filter((s: any) => {
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
     return (
@@ -208,17 +208,17 @@ export function StaffDirectory() {
   // Stats
   const stats = {
     total: staff?.length || 0,
-    active: staff?.filter((s) => s.is_active).length || 0,
-    withHoldings: staff?.filter((s) => (s.cash_amount || 0) + (s.upi_amount || 0) > 0).length || 0,
-    totalCash: staff?.reduce((sum, s) => sum + (s.cash_amount || 0) + (s.upi_amount || 0), 0) || 0,
+    active: (staff ?? []).filter((s: any) => s.is_active).length || 0,
+    withHoldings: (staff ?? []).filter((s: any) => (s.cash_amount || 0) + (s.upi_amount || 0) > 0).length || 0,
+    totalCash: (staff ?? []).reduce((sum: any, s: any) => sum + (s.cash_amount || 0) + (s.upi_amount || 0), 0) || 0,
   };
 
   const handleToggleActive = async (userId: string, active: boolean) => {
     try {
       const { error } = await supabase
         .from("profiles")
-        .update({ is_active: active })
-        .eq("user_id", userId);
+        .update({ is_active: active } as any)
+        .eq("user_id", userId as any);
 
       if (error) throw error;
 
@@ -302,7 +302,7 @@ export function StaffDirectory() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {ROLES.map((r) => (
+              {ROLES.map((r: any) => (
                 <SelectItem key={r.value} value={r.value}>
                   {r.label}
                 </SelectItem>
@@ -353,7 +353,7 @@ export function StaffDirectory() {
 
       {/* Staff Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {filteredStaff?.map((s) => (
+        {(filteredStaff ?? []).map((s: any) => (
           <StaffCard
             key={s.user_id}
             staff={s}

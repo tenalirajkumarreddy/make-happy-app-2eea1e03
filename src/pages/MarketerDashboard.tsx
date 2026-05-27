@@ -28,9 +28,9 @@ const MarketerDashboard = () => {
         supabase.from("transactions").select("id, total_amount, created_at, stores(name)").eq("recorded_by", user!.id).order("created_at", { ascending: false }).limit(5),
       ]);
 
-      const orders = ordersRes.data || [];
-      const todayTxns = txnRes.data || [];
-      const handovers = handoversRes.data || [];
+      const orders: any[] = ordersRes.data || [];
+      const todayTxns: any[] = txnRes.data || [];
+      const handovers: any[] = handoversRes.data || [];
       const pendingHandover = handovers
         .filter((handover) => handover.status === "pending" || handover.status === "awaiting_confirmation")
         .reduce((sum, handover) => sum + Number(handover.cash_amount) + Number(handover.upi_amount), 0);
@@ -132,7 +132,7 @@ const MarketerDashboard = () => {
               {s.recentHandover ? (
                 <>
                   <p className="mt-2 font-medium">{formatDate(s.recentHandover.handover_date)}</p>
-                  <p className="text-sm text-muted-foreground mt-1 capitalize">{String(s.recentHandover.status).replaceAll("_", " ")}</p>
+                  <p className="text-sm text-muted-foreground mt-1 capitalize">{String(s.recentHandover.status).split("_").join(" ")}</p>
                 </>
               ) : (
                 <p className="mt-2 text-sm text-muted-foreground">No handovers yet.</p>

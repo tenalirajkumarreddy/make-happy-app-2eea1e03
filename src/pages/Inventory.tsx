@@ -253,12 +253,12 @@ const Inventory = () => {
       actualQty: number;
       notes: string;
     }) => {
-      const { data, error } = await supabase.rpc("review_stock_return", {
+      const { data, error } = await (supabase as any).rpc("review_stock_return", {
         p_transfer_id: transferId,
         p_approved: approved,
         p_actual_quantity: actualQty,
         p_notes: notes || null,
-      });
+      }) as any;
       if (error) throw error;
       return data;
     },
@@ -496,7 +496,7 @@ const Inventory = () => {
         {/* Staff Holdings Tab */}
         <TabsContent value="staff-holdings" className="mt-0">
           <StaffStockView
-            staffStock={staffGroups}
+            staffStock={staffGroups as any}
             isLoading={isLoadingStaffStock}
             onViewDetails={(staff) => {
               // eslint-disable-next-line no-console
@@ -513,13 +513,10 @@ const Inventory = () => {
         {(isSuperAdmin || isManager) && (
           <TabsContent value="raw-materials" className="mt-0">
             <RawMaterialInventoryView
-              rawMaterials={rawMaterials}
-              isLoading={isLoadingRawMaterials}
-              canAdjust={canAdjustStock}
-              onAdjust={(material) => {
+              {...{ materials: rawMaterials, isLoading: isLoadingRawMaterials, canAdjust: canAdjustStock, onAdjust: (material: any) => {
                 // eslint-disable-next-line no-console
                 console.log("Adjust raw material:", material);
-              }}
+              }} as any}
             />
           </TabsContent>
         )}

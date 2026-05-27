@@ -35,7 +35,7 @@ export default function OrderReport() {
         supabase.from("stores").select("id, name, store_type_id"),
         supabase.from("store_types").select("id, name"),
       ]);
-      const orders = ordersRes.data || [];
+      const orders: any[] = ordersRes.data || [];
       const storeTypeMap = Object.fromEntries((storeTypesRes.data || []).map(t => [t.id, t.name]));
       const storeMap = Object.fromEntries((storesRes.data || []).map(s => [s.id, s]));
 

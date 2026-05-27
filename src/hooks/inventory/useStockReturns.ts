@@ -49,7 +49,7 @@ export function useMyReturns(status?: string) {
     queryFn: async () => {
       if (!user?.id) return [];
 
-      const { data, error } = await supabase.rpc("get_my_return_requests", {
+      const { data, error } = await (supabase as any).rpc("get_my_return_requests", {
         p_staff_id: user.id,
         p_status: status || null,
         p_limit: 50,
@@ -68,10 +68,10 @@ export function usePendingReturns(warehouseId?: string) {
   const { data: pendingReturns, isLoading } = useQuery({
     queryKey: ["pending-returns", warehouseId],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("get_pending_returns", {
+      const { data, error } = await (supabase as any).rpc("get_pending_returns", {
         p_warehouse_id: warehouseId || null,
         p_limit: 50,
-      });
+      }) as any;
 
       if (error) throw error;
       return (data || []) as any[];
@@ -87,7 +87,7 @@ export function useReturnDetails(returnId?: string) {
     queryFn: async () => {
       if (!returnId) return null;
 
-      const { data: request, error: reqError } = await supabase
+      const { data: request, error: reqError } = await (supabase as any)
         .from("stock_return_requests")
         .select(`
           *,
@@ -100,14 +100,14 @@ export function useReturnDetails(returnId?: string) {
 
       if (reqError) throw reqError;
 
-      const { data: items, error: itemsError } = await supabase
+      const { data: items, error: itemsError } = await (supabase as any)
         .from("stock_return_items")
         .select("*, product:products(id, name, sku)")
         .eq("return_request_id", returnId);
 
       if (itemsError) throw itemsError;
 
-      const { data: approvals, error: appError } = await supabase
+      const { data: approvals, error: appError } = await (supabase as any)
         .from("stock_return_approvals")
         .select("*, approver:auth.users(id, raw_user_meta_data->>'full_name')")
         .eq("return_request_id", returnId)
@@ -117,8 +117,8 @@ export function useReturnDetails(returnId?: string) {
 
       return {
         request,
-        items: items || [],
-        approvals: approvals || [],
+        items: (items || []) as any[],
+        approvals: (approvals || []) as any[],
       };
     },
     enabled: !!returnId,
@@ -145,13 +145,13 @@ export function useSubmitReturn() {
     }) => {
       if (!user?.id) throw new Error("Not authenticated");
 
-      const { data, error } = await supabase.rpc("submit_stock_return", {
+      const { data, error } = await (supabase as any).rpc("submit_stock_return", {
         p_staff_id: user.id,
         p_warehouse_id: warehouseId,
         p_return_reason: reason,
         p_custom_reason: customReason,
         p_items: items,
-      });
+      }) as any;
 
       if (error) throw error;
       return data;
@@ -190,13 +190,13 @@ export function useReviewReturn() {
     }) => {
       if (!user?.id) throw new Error("Not authenticated");
 
-      const { data, error } = await supabase.rpc("review_stock_return", {
+      const { data, error } = await (supabase as any).rpc("review_stock_return", {
         p_return_id: returnId,
         p_reviewer_id: user.id,
         p_action: action,
         p_item_decisions: itemDecisions,
         p_overall_notes: overallNotes,
-      });
+      }) as any;
 
       if (error) throw error;
       return data;
@@ -221,10 +221,10 @@ export function useCancelReturn() {
     mutationFn: async (returnId: string) => {
       if (!user?.id) throw new Error("Not authenticated");
 
-      const { data, error } = await supabase.rpc("cancel_stock_return", {
+      const { data, error } = await (supabase as any).rpc("cancel_stock_return", {
         p_return_id: returnId,
         p_staff_id: user.id,
-      });
+      }) as any;
 
       if (error) throw error;
       return data;
@@ -242,7 +242,7 @@ export function useReturnStats(warehouseId?: string) {
   const { data: stats, isLoading } = useQuery({
     queryKey: ["return-stats", warehouseId],
     queryFn: async () => {
-      let query = supabase
+      let query: any = (supabase as any)
         .from("stock_return_requests")
         .select("status, total_requested_value, total_approved_value", { count: "exact" });
 

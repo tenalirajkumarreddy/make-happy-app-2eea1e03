@@ -49,11 +49,11 @@ export default function SalesReport() {
         supabase.from("store_types").select("id, name"),
       ]);
 
-      const sales = salesRes.data || [];
-      const saleItems = saleItemsRes.data || [];
-      const profiles = profilesRes.data || [];
-      const stores = storesRes.data || [];
-      const storeTypes = storeTypesRes.data || [];
+      const sales: any[] = salesRes.data || [];
+      const saleItems: any[] = saleItemsRes.data || [];
+      const profiles: any[] = profilesRes.data || [];
+      const stores: any[] = storesRes.data || [];
+      const storeTypes: any[] = storeTypesRes.data || [];
 
       const profileMap = Object.fromEntries(profiles.map(p => [p.user_id, p.full_name]));
       const storeTypeMap = Object.fromEntries(storeTypes.map(t => [t.id, t.name]));

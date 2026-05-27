@@ -61,7 +61,7 @@ export function InventorySummaryCards({ summary, isLoading, warehouseName }: Inv
       color: summary?.lowStockProducts ? "text-amber-600" : "text-slate-400",
       bgColor: summary?.lowStockProducts ? "bg-amber-50" : "bg-slate-50",
       subtitle: "Need attention",
-      alert: summary?.lowStockProducts > 0,
+      alert: (summary?.lowStockProducts ?? 0) > 0,
     },
     {
       title: "Staff Holding",

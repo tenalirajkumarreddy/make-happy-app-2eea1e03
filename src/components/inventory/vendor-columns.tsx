@@ -28,7 +28,7 @@ export const columns: ColumnDef<Vendor>[] = [
   {
     accessorKey: "name",
     header: "Name",
-    cell: ({ row }) => {
+    cell: ({ row }: { row: any }) => {
       const vendor = row.original;
       return (
         <Link to={`/inventory/vendors/${vendor.id}`} className="font-medium text-blue-600 hover:underline">
@@ -52,11 +52,11 @@ export const columns: ColumnDef<Vendor>[] = [
   {
     accessorKey: "created_at",
     header: "Created On",
-    cell: ({ row }) => new Date(row.original.created_at).toLocaleDateString(),
+    cell: ({ row }: { row: any }) => new Date(row.original.created_at).toLocaleDateString(),
   },
   {
     id: "actions",
-    cell: ({ row }) => {
+    cell: ({ row }: { row: any }) => {
       const vendor = row.original;
 
       return (

@@ -19,8 +19,8 @@ const PosDashboard = () => {
         supabase.from("handovers").select("cash_amount, upi_amount, status").eq("user_id", user!.id),
       ]);
 
-      const todaySales = salesRes.data || [];
-      const handovers = handoversRes.data || [];
+      const todaySales: any[] = salesRes.data || [];
+      const handovers: any[] = handoversRes.data || [];
       const pendingHandover = handovers.filter((h) => h.status === "pending" || h.status === "awaiting_confirmation")
         .reduce((s, h) => s + Number(h.cash_amount) + Number(h.upi_amount), 0);
 

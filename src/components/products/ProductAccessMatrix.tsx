@@ -109,10 +109,10 @@ const handleSave = async () => {
     }
 
     // Call RPC for atomic synchronization
-    const { error } = await supabase.rpc("sync_product_access_matrix", {
+    const { error } = await supabase            .rpc("sync_product_access_matrix" as any, {
       p_access_payload: accessPayload,
       p_pricing_payload: pricingPayload
-    });
+    }) as any;
 
     if (error) throw error;
 

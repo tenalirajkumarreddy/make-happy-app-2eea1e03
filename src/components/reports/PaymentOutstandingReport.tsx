@@ -37,12 +37,12 @@ export default function PaymentOutstandingReport() {
         supabase.from("orders").select("store_id, created_at").order("created_at", { ascending: false }),
       ]);
 
-      const stores = storesRes.data || [];
-      const txns = txnRes.data || [];
-      const allSales = salesRes.data || [];
-      const storeTypes = storeTypesRes.data || [];
-      const customers = customersRes.data || [];
-      const allOrders = ordersRes.data || [];
+      const stores: any[] = storesRes.data || [];
+      const txns: any[] = txnRes.data || [];
+      const allSales: any[] = salesRes.data || [];
+      const storeTypes: any[] = storeTypesRes.data || [];
+      const customers: any[] = customersRes.data || [];
+      const allOrders: any[] = ordersRes.data || [];
 
       const storeTypeMap = Object.fromEntries(storeTypes.map(t => [t.id, { name: t.name, creditKyc: Number(t.credit_limit_kyc), creditNoKyc: Number(t.credit_limit_no_kyc) }]));
       const customerMap = Object.fromEntries(customers.map(c => [c.id, c]));

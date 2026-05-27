@@ -62,7 +62,7 @@ const SaleReturns = () => {
   const { data: returns = [], isLoading } = useQuery({
     queryKey: ["sale-returns"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase
         .from("sale_returns")
         .select(`
           *,
@@ -70,8 +70,8 @@ const SaleReturns = () => {
           stores(name, customers(name)),
           profiles:created_by(full_name),
           approver:approved_by(full_name)
-        `)
-        .order("created_at", { ascending: false });
+        ` as any)
+        .order("created_at", { ascending: false })) as any;
       if (error) throw error;
       return data || [];
     },
@@ -97,9 +97,9 @@ const SaleReturns = () => {
   const { data: sales = [] } = useQuery({
     queryKey: ["sales-for-return", canReturnAnyDay],
     queryFn: async () => {
-      let query = supabase
+      let query: any = supabase
         .from("sales")
-        .select("id, display_id, created_at, total_amount, store_id, customer_id, stores(name, customers(name))")
+        .select("id, display_id, created_at, total_amount, store_id, customer_id, stores(name, customers(name))" as any)
         .order("created_at", { ascending: false })
         .limit(100);
 
@@ -130,10 +130,10 @@ const SaleReturns = () => {
     queryKey: ["sale-items-for-return", saleId],
     queryFn: async () => {
       if (!saleId) return [];
-      const { data } = await supabase
+      const { data } = await (supabase
         .from("sale_items")
-        .select("id, product_id, quantity, unit_price, total_price, products(name)")
-        .eq("sale_id", saleId);
+        .select("id, product_id, quantity, unit_price, total_price, products(name)" as any)
+        .eq("sale_id", saleId as any)) as any;
       return data || [];
     },
     enabled: !!saleId,
@@ -144,7 +144,7 @@ const SaleReturns = () => {
     queryKey: ["sale-return-detail", showDetail],
     queryFn: async () => {
       if (!showDetail) return null;
-      const { data: ret } = await supabase
+      const { data: ret } = await (supabase
         .from("sale_returns")
         .select(`
           *,
@@ -152,14 +152,14 @@ const SaleReturns = () => {
           stores(name, customers(name)),
           profiles:created_by(full_name),
           approver:approved_by(full_name)
-        `)
-        .eq("id", showDetail)
-        .single();
+        ` as any)
+        .eq("id", showDetail as any)
+        .single()) as any;
       
-      const { data: items } = await supabase
+      const { data: items } = await (supabase
         .from("sale_return_items")
-        .select("*, products(name)")
-        .eq("return_id", showDetail);
+        .select("*, products(name)" as any)
+        .eq("return_id", showDetail as any)) as any;
       
       return { ...ret, items: items || [] };
     },
@@ -260,7 +260,7 @@ const SaleReturns = () => {
     const { data: existingReturn } = await supabase
       .from("sale_returns")
       .select("id, status")
-      .eq("sale_id", saleId)
+      .eq("sale_id", saleId as any)
       .order("created_at", { ascending: false })
       .limit(1);
     if (existingReturn && existingReturn.length > 0) {
@@ -274,7 +274,7 @@ const SaleReturns = () => {
       const sale = sales.find((s: any) => s.id === saleId) || searchedSales.find((s: any) => s.id === saleId);
       
       // Generate display ID
-      const { data: displayId } = await supabase.rpc("generate_sale_return_display_id");
+      const { data: displayId } = await supabase.rpc("generate_sale_return_display_id") as any;
       if (!displayId) { throw new Error("Failed to generate return ID"); }
       
       // Calculate total
@@ -297,7 +297,7 @@ const SaleReturns = () => {
           approved_by: canApprove ? user?.id : null,
           approved_at: canApprove ? new Date().toISOString() : null,
           created_by: user?.id,
-        })
+        } as any)
         .select("id")
         .single();
 
@@ -315,7 +315,7 @@ const SaleReturns = () => {
 
       const { error: itemsError } = await supabase
         .from("sale_return_items")
-        .insert(returnItemsData);
+        .insert(returnItemsData as any);
 
       if (itemsError) throw itemsError;
 
@@ -344,7 +344,7 @@ const SaleReturns = () => {
       if (newStatus === "processed") {
         const { data: result, error: processError } = await supabase.rpc("process_completed_sale_return", {
           p_return_id: id,
-        });
+        }) as any;
         if (processError) throw processError;
         const resultRow = Array.isArray(result) ? result[0] : result;
         if (resultRow && !resultRow.success) {
@@ -354,9 +354,9 @@ const SaleReturns = () => {
       } else {
         const { error } = await supabase
           .from("sale_returns")
-          .update(updates)
-          .eq("id", id)
-          .eq("status", "approved");
+          .update(updates as any)
+          .eq("id", id as any)
+          .eq("status", "approved" as any);
 
         if (error) throw error;
         toast.success(`Return ${newStatus}`);
@@ -459,6 +459,7 @@ const SaleReturns = () => {
       ) : isMobile ? (
         <ResponsiveDataView
           data={filteredReturns}
+          columns={[]}
           renderMobileCard={(r: any) => (
             <Card key={r.id} className="entity-card-mobile" onClick={() => setShowDetail(r.id)}>
               <CardContent className="p-4">

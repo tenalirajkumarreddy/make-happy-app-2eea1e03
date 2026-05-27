@@ -105,7 +105,7 @@ export function CustomerStatement({ customerId: propCustomerId, customerName: pr
       const { data } = await supabase
         .from("customers")
         .select("*, stores(id, name, display_id, opening_balance, outstanding)")
-        .eq("id", effectiveCustomerId)
+        .eq("id", effectiveCustomerId!)
         .single();
       return data;
     },
@@ -362,7 +362,7 @@ export function CustomerStatement({ customerId: propCustomerId, customerName: pr
       title: "Customer Statement",
       dateRange: `${format(dateRange.from, "MMM d, yyyy")} — ${format(dateRange.to, "MMM d, yyyy")}`,
       metadata: { "Customer": name, "Debit": fmt(totals.totalDebit), "Credit": fmt(totals.totalCredit), "Closing": `${fmt(totals.closingBalance)} ${totals.closingBalance >= 0 ? 'Due' : 'Adv'}` },
-      companyInfo: info,
+      companyInfo: info as any,
       htmlContent,
     });
     const win = window.open("", "_blank");

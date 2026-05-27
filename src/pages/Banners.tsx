@@ -154,7 +154,7 @@ const Banners = () => {
       let bannerId: string;
 
       if (editingBanner) {
-        const { error } = await supabase
+        const { error } = await (supabase as any)
           .from("promotional_banners")
           .update(basePayload)
           .eq("id", editingBanner.id);
@@ -162,7 +162,7 @@ const Banners = () => {
         bannerId = editingBanner.id;
         toast.success("Banner updated");
       } else {
-        const { data: inserted, error } = await supabase
+        const { data: inserted, error } = await (supabase as any)
           .from("promotional_banners")
           .insert({ ...basePayload, created_by: user?.id })
           .select("id")
@@ -202,7 +202,7 @@ const Banners = () => {
 const handleDelete = async (id: string) => {
   if (!confirm("Are you sure you want to delete this banner?")) return;
 
-  const { error } = await supabase.from("promotional_banners").update({ deleted_at: new Date().toISOString() }).eq("id", id);
+  const { error } = await (supabase as any).from("promotional_banners").update({ deleted_at: new Date().toISOString() }).eq("id", id);
   if (error) {
       toast.error(error.message);
     } else {

@@ -122,6 +122,7 @@ export function CustomerOrders({ selectedStoreId, onStoreChange }: Props) {
       if (displayError) throw displayError;
       if (!displayId) throw new Error("Failed to generate order ID");
 
+      const { data: store } = await supabase.from("stores").select("warehouse_id").eq("id", orderStoreId).single();
       const { error } = await supabase.from("orders").insert({
         display_id: displayId,
         store_id: orderStoreId,
@@ -130,6 +131,7 @@ export function CustomerOrders({ selectedStoreId, onStoreChange }: Props) {
         source: "manual",
         created_by: user!.id,
         requirement_note: orderNote.trim() || null,
+        warehouse_id: (store as any)?.warehouse_id || null,
       });
       if (error) throw error;
 

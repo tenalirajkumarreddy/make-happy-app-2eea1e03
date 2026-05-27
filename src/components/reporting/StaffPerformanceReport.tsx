@@ -10,13 +10,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 const StaffPerformanceReport: React.FC = () => {
   const { profile } = useAuth();
-  const warehouseId = profile?.default_warehouse_id;
+  const warehouseId = (profile as any)?.default_warehouse_id;
 
   const { data: logs, isLoading, error } = useQuery({
     queryKey: ['staff-performance-logs', warehouseId],
     queryFn: async () => {
       if (!warehouseId) return [];
-      const { data, error } = await supabase.rpc('get_staff_performance_logs', { p_warehouse_id: warehouseId });
+      const { data, error } = await (supabase as any).rpc('get_staff_performance_logs', { p_warehouse_id: warehouseId });
       if (error) throw new Error(error.message);
       return data;
     },
@@ -83,7 +83,7 @@ const StaffPerformanceReport: React.FC = () => {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {logs.map((log) => (
+          {logs.map((log: any) => (
             <TableRow key={log.id}>
               <TableCell>{format(new Date(log.created_at), 'dd MMM yyyy, HH:mm')}</TableCell>
               <TableCell>{log.staff_name}</TableCell>

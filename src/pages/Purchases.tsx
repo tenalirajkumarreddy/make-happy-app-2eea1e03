@@ -78,12 +78,10 @@ const PurchasesPage = () => {
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title="Purchase Orders"
-        description="Manage your raw material purchases and track their status."
-      >
+      <div className="flex items-start justify-between">
+        <PageHeader title="Purchase Orders" />
         <PurchaseOrderForm />
-      </PageHeader>
+      </div>
 
       {error ? (
         <div className="p-8 text-center">
@@ -93,7 +91,7 @@ const PurchasesPage = () => {
       ) : isLoading ? (
         <TableSkeleton />
       ) : purchaseOrders && purchaseOrders.length > 0 ? (
-        <DataTable columns={purchaseOrderColumns} data={purchaseOrders} />
+        <DataTable columns={purchaseOrderColumns as any} data={purchaseOrders} />
       ) : (
         <div className="flex flex-col items-center justify-center p-12 border rounded-lg bg-muted/50">
           <p className="text-lg font-medium mb-2">No Purchase Orders</p>

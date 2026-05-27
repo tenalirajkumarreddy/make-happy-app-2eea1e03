@@ -51,7 +51,7 @@ export function CustomerKyc() {
       const { data } = await supabase
         .from("customers")
         .select("id, name, kyc_status, kyc_selfie_url, kyc_aadhar_front_url, kyc_aadhar_back_url, kyc_rejection_reason, kyc_submitted_at")
-        .eq("linked_user_id", user!.id)
+        .eq("linked_user_id" as any, user!.id)
         .maybeSingle();
       return (data as CustomerKycData) || null;
     },
@@ -94,7 +94,7 @@ export function CustomerKyc() {
       updated.kyc_submitted_at = new Date().toISOString();
     }
 
-    const { error: dbErr } = await supabase.from("customers").update(updated).eq("id", customer.id);
+    const { error: dbErr } = await supabase.from("customers").update(updated as any).eq("id", customer.id);
     setUploading(null);
 
     if (dbErr) { toast.error("Failed to save: " + dbErr.message); return; }

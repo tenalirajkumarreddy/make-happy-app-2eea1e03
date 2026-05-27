@@ -71,7 +71,7 @@ export default function CustomerReport() {
       const { data } = await supabase
         .from("transactions")
         .select("id, customer_id, amount, created_at")
-        .eq("type", "payment")
+        .eq("type" as any, "payment")
         .gte("created_at", format(dateRange.from, "yyyy-MM-dd"))
         .lte("created_at", format(dateRange.to, "yyyy-MM-dd") + "T23:59:59");
       return data || [];

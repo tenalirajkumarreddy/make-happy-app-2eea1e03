@@ -69,7 +69,8 @@ const CustomerOrders = () => {
     }
 
     setSaving(true);
-    const { data: displayId } = await supabase.rpc("generate_random_display_id", { p_prefix: "ORD", p_table_name: "orders" });
+    const { data: displayId } = await supabase.rpc("generate_random_display_id", { p_prefix: "ORD", p_table_name: "orders" }) as any;
+    const { data: store } = await supabase.from("stores").select("warehouse_id").eq("id", orderStoreId).single();
     const { error } = await supabase.from("orders").insert({
       display_id: displayId,
       store_id: orderStoreId,
@@ -78,6 +79,7 @@ const CustomerOrders = () => {
       source: "manual",
       created_by: user!.id,
       requirement_note: orderNote || null,
+      warehouse_id: (store as any)?.warehouse_id || null,
     });
     setSaving(false);
     if (error) toast.error(error.message);

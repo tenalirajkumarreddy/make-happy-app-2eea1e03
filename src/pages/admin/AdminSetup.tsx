@@ -118,7 +118,7 @@ export default function AdminSetup() {
 
 const deleteCatMutation = useMutation({
   mutationFn: async (id: string) => {
-    const { error } = await supabase.from("raw_material_categories").update({ deleted_at: new Date().toISOString() }).eq("id", id);
+    const { error } = await supabase.from("raw_material_categories").update({ deleted_at: new Date().toISOString() } as any).eq("id", id);
     if (error) throw error;
   },
     onSuccess: () => {
@@ -160,7 +160,7 @@ const deleteCatMutation = useMutation({
 
 const deleteConvMutation = useMutation({
   mutationFn: async (id: string) => {
-    const { error } = await supabase.from("unit_conversions").update({ deleted_at: new Date().toISOString() }).eq("id", id);
+    const { error } = await supabase.from("unit_conversions").update({ deleted_at: new Date().toISOString() } as any).eq("id", id);
     if (error) throw error;
   },
     onSuccess: () => {

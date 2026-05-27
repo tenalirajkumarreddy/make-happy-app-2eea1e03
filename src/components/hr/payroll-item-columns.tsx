@@ -31,13 +31,13 @@ export const payrollItemColumns = ({ onEdit }: PayrollItemColumnsProps): ColumnD
   return [
     {
       accessorKey: "worker_name",
-      header: ({ column }) => (
+      header: ({ column }: { column: any }) => (
         <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
           Worker
           <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
       ),
-      cell: ({ row }) => (
+      cell: ({ row }: { row: any }) => (
         <div>
             <div className="font-medium">{row.original.worker_name}</div>
             <div className="text-sm text-muted-foreground">{row.original.worker_role}</div>
@@ -47,7 +47,7 @@ export const payrollItemColumns = ({ onEdit }: PayrollItemColumnsProps): ColumnD
     {
       accessorKey: "item_type",
       header: "Type",
-      cell: ({ row }) => {
+      cell: ({ row }: { row: any }) => {
         const type = row.getValue("item_type") as string;
         const variant: "default" | "secondary" | "destructive" = 
           type === 'salary' ? 'default' :
@@ -57,7 +57,7 @@ export const payrollItemColumns = ({ onEdit }: PayrollItemColumnsProps): ColumnD
     },
     {
         accessorKey: "amount",
-        header: ({ column }) => (
+        header: ({ column }: { column: any }) => (
             <div className="text-right">
                 <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
                     Amount
@@ -65,7 +65,7 @@ export const payrollItemColumns = ({ onEdit }: PayrollItemColumnsProps): ColumnD
                 </Button>
             </div>
         ),
-        cell: ({ row }) => {
+        cell: ({ row }: { row: any }) => {
             const amount = parseFloat(row.getValue("amount") || "0");
             const isDeduction = row.original.item_type === 'deduction';
             const formatted = new Intl.NumberFormat("en-IN", {
@@ -81,7 +81,7 @@ export const payrollItemColumns = ({ onEdit }: PayrollItemColumnsProps): ColumnD
     },
     {
       id: "actions",
-      cell: ({ row }) => {
+      cell: ({ row }: { row: any }) => {
         const item = row.original;
 
         return (

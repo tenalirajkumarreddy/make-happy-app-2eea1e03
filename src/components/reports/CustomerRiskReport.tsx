@@ -47,7 +47,7 @@ const CustomerRiskReport = () => {
   const { data: riskData, isLoading, error } = useQuery({
     queryKey: ["customer-risk-report"],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("get_customer_risk_report");
+      const { data, error } = await supabase.rpc("get_customer_risk_report") as any;
       if (error) throw error;
       return (data || []) as RiskReportRow[];
     }

@@ -87,25 +87,26 @@ const Stores = () => {
 
       // Scope all users to selected warehouse context.
       if (currentWarehouse?.id) {
-        query = query.eq("warehouse_id", currentWarehouse.id);
+        query = query.eq("warehouse_id", currentWarehouse.id as any);
       }
 
       // Apply search and advanced filters
-      if (filters.search) {
-        query = query.or(`name.ilike.%${filters.search}%,display_id.ilike.%${filters.search}%`);
+      const f = filters as any;
+      if (f.search) {
+        query = query.or(`name.ilike.%${f.search}%,display_id.ilike.%${f.search}%`);
       }
-      if (filters.route && filters.route !== "all") {
-        query = query.eq("route_id", filters.route);
+      if (f.route && f.route !== "all") {
+        query = query.eq("route_id", f.route);
       }
-      if (filters.type && filters.type !== "all") {
-        query = query.eq("store_type_id", filters.type);
+      if (f.type && f.type !== "all") {
+        query = query.eq("store_type_id", f.type);
       }
-      if (filters.customer && filters.customer !== "all") {
-        query = query.eq("customer_id", filters.customer);
+      if (f.customer && f.customer !== "all") {
+        query = query.eq("customer_id", f.customer);
       }
-      if (filters.status === "active") query = query.eq("is_active", true);
-      if (filters.status === "inactive") query = query.eq("is_active", false);
-      if (filters.status === "with_outstanding") query = query.gt("outstanding", 0);
+      if (f.status === "active") query = query.eq("is_active", true);
+      if (f.status === "inactive") query = query.eq("is_active", false);
+      if (f.status === "with_outstanding") query = query.gt("outstanding", 0);
 
       const { data, error } = await query
         .order("created_at", { ascending: false })
@@ -125,8 +126,8 @@ const Stores = () => {
    const { data: allRoutes } = useQuery({
      queryKey: ["all-routes", currentWarehouse?.id],
      queryFn: async () => {
-       let query = supabase.from("routes").select("id, name").eq("is_active", true);
-       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+        let query = supabase.from("routes").select("id, name").eq("is_active", true as any);
+       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id as any);
        const { data } = await query;
        return data || [];
      },
@@ -135,7 +136,7 @@ const Stores = () => {
   const { data: storeTypes } = useQuery({
     queryKey: ["store-types-list"],
     queryFn: async () => {
-      const { data } = await supabase.from("store_types").select("id, name").eq("is_active", true);
+       const { data } = await supabase.from("store_types").select("id, name").eq("is_active", true as any);
       return data || [];
     },
   });
@@ -143,8 +144,8 @@ const Stores = () => {
    const { data: customersList } = useQuery({
      queryKey: ["customers-list", currentWarehouse?.id],
      queryFn: async () => {
-       let query = supabase.from("customers").select("id, name, display_id").eq("is_active", true);
-       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+        let query = supabase.from("customers").select("id, name, display_id").eq("is_active", true as any);
+       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id as any);
        const { data } = await query;
        return data || [];
      },
@@ -184,7 +185,7 @@ const Stores = () => {
 
     const { data: results, error } = await supabase.rpc("bulk_update_stores", {
       p_updates: updates,
-    });
+    }) as any;
 
     setBulkSaving(false);
 
@@ -222,7 +223,7 @@ const Stores = () => {
 
       // Match customer by name or display_id
       const customer = customersList?.find(
-        (c) => c.name.toLowerCase() === row.customer?.toLowerCase() || c.display_id === row.customer
+        (c) => (c.name || "").toLowerCase() === (row.customer || "").toLowerCase() || c.display_id === row.customer
       );
       if (!customer) {
         errors.push(`Row ${i + 2}: Customer "${row.customer}" not found`);
@@ -230,7 +231,7 @@ const Stores = () => {
       }
 
       // Match store type by name
-      const storeType = storeTypes?.find((t) => t.name.toLowerCase() === row.store_type?.toLowerCase());
+      const storeType = storeTypes?.find((t) => (t.name || "").toLowerCase() === (row.store_type || "").toLowerCase());
       if (!storeType) {
         errors.push(`Row ${i + 2}: Store type "${row.store_type}" not found`);
         continue;
@@ -239,7 +240,7 @@ const Stores = () => {
       // Optionally match route
       let routeId: string | null = null;
       if (row.route) {
-        const route = allRoutes?.find((r) => r.name.toLowerCase() === row.route?.toLowerCase());
+        const route = allRoutes?.find((r) => (r.name || "").toLowerCase() === (row.route || "").toLowerCase());
         if (!route) {
           errors.push(`Row ${i + 2}: Route "${row.route}" not found`);
           continue;
@@ -248,7 +249,7 @@ const Stores = () => {
       }
 
       // Use database function to generate display_id
-      const { data: newStore, error } = await supabase.rpc("create_store_with_display_id", {
+      const { data: newStore, error } = await (supabase as any).rpc("create_store_with_display_id", {
         p_name: row.name,
         p_customer_id: customer.id,
         p_store_type_id: storeType.id,
@@ -256,7 +257,7 @@ const Stores = () => {
         p_phone: row.phone || null,
         p_address: row.address || null,
         p_warehouse_id: currentWarehouse?.id || null,
-      });
+      }) as any;
 
       if (error) {
         errors.push(`Row ${i + 2}: ${error.message}`);
@@ -291,7 +292,7 @@ const Stores = () => {
   const handleBulkStatus = async (active: boolean) => {
     if (selected.size === 0) return;
     const ids = Array.from(selected);
-    const { error } = await supabase.from("stores").update({ is_active: active }).in("id", ids);
+    const { error } = await supabase.from("stores").update({ is_active: active } as any).in("id", ids as any);
     if (error) { toast.error(error.message); return; }
     toast.success(`${ids.length} stores ${active ? "activated" : "deactivated"}`);
     setSelected(new Set());
@@ -301,7 +302,7 @@ const Stores = () => {
   const handleBulkRoute = async () => {
     if (selected.size === 0 || !bulkRoute) return;
     const ids = Array.from(selected);
-    const { error } = await supabase.from("stores").update({ route_id: bulkRoute }).in("id", ids);
+    const { error } = await supabase.from("stores").update({ route_id: bulkRoute } as any).in("id", ids as any);
     if (error) { toast.error(error.message); return; }
     toast.success(`Route assigned to ${ids.length} stores`);
     setSelected(new Set());

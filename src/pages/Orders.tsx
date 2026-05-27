@@ -4,14 +4,15 @@ import { DataTable } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { addToQueue } from "@/lib/offlineQueue";
+import { addToQueue, generateBusinessKey } from "@/lib/offlineQueue";
 import { logActivity } from "@/lib/activityLogger";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
+import { CANCEL_REASONS } from "@/lib/constants";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
 import { useRouteAccess } from "@/hooks/useRouteAccess";
 import { usePermission } from "@/hooks/usePermission";
-import { Loader2, Plus, Minus, Trash2, XCircle, Package, Download, X, CalendarIcon, ArrowRightLeft, FileText, Edit, MoreHorizontal, Printer, Eye, CheckCircle2, ShoppingCart, RotateCcw, Store as StoreIcon, UserCircle, MapPin, Phone, Mail, Shield } from "lucide-react";
+import { Loader2, Plus, Minus, Trash2, XCircle, Package, Download, X, CalendarIcon, ArrowRightLeft, FileText, Edit, Eye, ShoppingCart, RotateCcw, Store as StoreIcon, UserCircle, MapPin, Phone, Mail, Shield } from "lucide-react";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
@@ -19,6 +20,7 @@ import { OrderFulfillmentDialog } from "@/components/orders/OrderFulfillmentDial
 import { TransferOrderDialog } from "@/components/orders/TransferOrderDialog";
 import { InvoiceDialog } from "@/components/orders/InvoiceDialog";
 import { OrderViewDialog } from "@/components/orders/OrderViewDialog";
+import { OrderStockSummary } from "@/components/orders/OrderStockSummary";
 import { OrderAccessMatrix } from "@/components/orders/OrderAccessMatrix";
 import { ProformaView } from "@/components/orders/ProformaView";
 import {
@@ -85,12 +87,6 @@ interface FulfillOrder {
   };
 }
 
-// Extended order interfaces for type safety
-interface Agent {
-  user_id: string;
-  full_name: string;
-}
-
 interface InsertOrder {
   display_id: string;
   store_id: string;
@@ -122,6 +118,12 @@ interface OrderRecord {
   created_by: string;
   created_at: string;
   updated_at: string;
+  stores?: StoreData;
+  customers?: CustomerData;
+  cancellation_reason?: string;
+  cancelled_by?: string;
+  cancelled_at?: string;
+  fulfilled_by_sale_id?: string;
 }
 
 interface OrderItemData {
@@ -130,17 +132,10 @@ interface OrderItemData {
   unit_price: number | null;
 }
 
-interface ProductItem {
-  id: string;
-  name: string;
-  sku: string;
-  base_price: number;
-  image_url?: string;
-}
-
 interface CustomerData {
   id: string;
   name: string;
+  display_id: string;
   kyc_status?: string;
   phone?: string | null;
   email?: string | null;
@@ -159,6 +154,10 @@ interface StoreData {
     id: string;
     name: string;
   } | null;
+  routes?: {
+    id: string;
+    name: string;
+  } | null;
   store_types?: {
     name: string;
   } | null;
@@ -166,20 +165,7 @@ interface StoreData {
   lng?: number | null;
   address?: string | null;
   outstanding?: number;
-}
-
-interface InvoiceData {
-  id: string;
-  display_id?: string;
-  order_id?: string;
-  customer_id?: string | null;
-  invoice_items?: Array<{
-    id: string;
-    product_id: string;
-    quantity: number;
-    unit_price: number;
-  }>;
-  total_amount?: number;
+  image_url?: string;
 }
 
 const Orders = () => {
@@ -194,12 +180,9 @@ const Orders = () => {
   const { allowed: canModifyOrders } = usePermission("modify_orders");
   const { allowed: canModifyPrices } = usePermission("modify_order_item_prices");
   const { allowed: canTransferOrders } = usePermission("transfer_orders");
-  const { allowed: canDeleteOrders } = usePermission("delete_orders");
   const { allowed: canFulfillOrders } = usePermission("fulfill_orders");
   const { allowed: canCancelOrders } = usePermission("cancel_orders");
   const { allowed: canViewInvoices } = usePermission("view_invoices");
-  const { allowed: canCreateInvoices } = usePermission("create_invoices");
-  const { allowed: canEditInvoices } = usePermission("edit_invoices");
   const { allowed: canCreateSaleReturns } = usePermission("create_sale_returns");
   
   // Check if user can see orders at all
@@ -232,7 +215,7 @@ const Orders = () => {
         total_amount: Number(pf.total_amount) || 0,
         status: pf.status,
         created_at: pf.created_at,
-      };
+      } as any;
     },
     enabled: !!viewProformaId,
   });
@@ -445,8 +428,8 @@ const Orders = () => {
         .select("user_id, full_name")
         .eq("role", "agent")
         .eq("is_active", true);
-  return (data || []).map((r: { user_id: string; full_name: string | null }) => ({
-    id: r.user_id,
+  return (data || []).map((r: { user_id: string | null; full_name: string }) => ({
+    id: r.user_id ?? "",
     full_name: r.full_name || "Agent"
   }));
     },
@@ -541,18 +524,24 @@ const Orders = () => {
 
     // Offline: queue order and return
     if (!navigator.onLine) {
+      const bizKey = generateBusinessKey('order', {
+        storeId: storeId,
+        orderType: orderType,
+        timestamp: new Date().toISOString(),
+      });
       await addToQueue({
         id: crypto.randomUUID(),
         type: "order",
         payload: {
           store_id: storeId,
           customer_id: customerId,
-          order_type: orderType,
+      order_type: orderType as "simple" | "detailed",
           requirement_note: requirementNote,
           order_items: orderItems.filter((i) => i.product_id),
           assigned_to: assignedTo,
         },
         createdAt: new Date().toISOString(),
+        businessKey: bizKey,
       });
       qc.invalidateQueries({ queryKey: ["orders"] });
       setShowAdd(false);
@@ -580,7 +569,7 @@ const Orders = () => {
         if (creditError) {
           console.error("Credit check failed:", creditError);
         } else if (creditCheck && !creditCheck[0]?.can_create) {
-          const check = creditCheck[0];
+          const check = creditCheck[0] as any;
           toast.error(
             `Credit limit warning: Current outstanding ₹${Number(check.current_outstanding).toLocaleString()} + ` +
             `Order ₹${estimatedOrderValue.toLocaleString()} = ` +
@@ -589,22 +578,23 @@ const Orders = () => {
           );
           setSaving(false);
           return;
-        } else if (creditCheck?.[0]?.utilization_percent > 80) {
+        } else if ((creditCheck as any)?.[0]?.utilization_percent > 80) {
+          const check = creditCheck[0] as any;
           toast.warning(
-            `Credit utilization is ${creditCheck[0].utilization_percent}%. ` +
-            `Available credit: ₹${Number(creditCheck[0].available_credit).toLocaleString()}`
+            `Credit utilization is ${check.utilization_percent}%. ` +
+            `Available credit: ₹${Number(check.available_credit).toLocaleString()}`
           );
         }
       }
     }
 
-    const { data: displayId } = await supabase.rpc("generate_random_display_id", { p_prefix: "ORD", p_table_name: "orders" });
+    const { data: displayId } = await supabase.rpc("generate_random_display_id", { p_prefix: "ORD", p_table_name: "orders" }) as any;
 
     const insertData: InsertOrder = {
       display_id: displayId,
       store_id: storeId,
       customer_id: customerId || null,
-      order_type: orderType,
+      order_type: orderType as "simple" | "detailed",
       source: "manual",
       created_by: user!.id,
       requirement_note: requirementNote || null,
@@ -615,7 +605,7 @@ const Orders = () => {
       insertData.assigned_to = assignedTo;
     }
 
-    const { data: order, error } = await supabase.from("orders").insert(insertData).select("id").single();
+    const { data: order, error } = await supabase.from("orders").insert(insertData as any).select("id").single();
 
     if (error) { toast.error(error.message); setSaving(false); return; }
 
@@ -710,6 +700,7 @@ const Orders = () => {
 
   const updateData: UpdateOrder = {
     requirement_note: requirementNote || null,
+    updated_by: user!.id,
     updated_at: new Date().toISOString(),
   };
 
@@ -791,7 +782,7 @@ if (orderType === "detailed" && canModifyPrices) {
         setOrderItems(orderData.order_items.map((item: OrderItemData) => ({
           product_id: item.product_id,
           quantity: item.quantity,
-          unit_price: item.unit_price
+          unit_price: item.unit_price ?? undefined
         })));
       } else {
         setOrderItems([{ product_id: "", quantity: 1 }]);
@@ -831,7 +822,7 @@ if (orderType === "detailed" && canModifyPrices) {
         setOrderItems(orderData.order_items.map((item: OrderItemData) => ({
           product_id: item.product_id,
           quantity: item.quantity,
-          unit_price: item.unit_price
+          unit_price: item.unit_price ?? undefined
         })));
       } else {
         setOrderItems([{ product_id: "", quantity: 1 }]);
@@ -882,7 +873,7 @@ if (orderType === "detailed" && canModifyPrices) {
       return;
     }
     
-    const order = orders?.find((o: OrderRecord) => o.id === orderId);
+    const order = orders?.find((o) => o.id === orderId);
     if (!order) return;
     
     setTransferOrder(order as unknown as FulfillOrder);
@@ -893,7 +884,7 @@ if (orderType === "detailed" && canModifyPrices) {
   const handleTransferComplete = async (orderId: string, newAssigneeId: string) => {
     const { error } = await supabase
       .from("orders")
-      .update({ assigned_to: newAssigneeId, updated_at: new Date().toISOString() })
+      .update({ assigned_to: newAssigneeId, updated_by: user!.id, updated_at: new Date().toISOString() })
       .eq("id", orderId);
 
     if (error) {
@@ -901,7 +892,7 @@ if (orderType === "detailed" && canModifyPrices) {
       return;
     }
 
-    const order = orders?.find((o: OrderRecord) => o.id === orderId);
+    const order = orders?.find((o) => o.id === orderId);
     
     // Notify the assigned agent
     sendNotificationToMany([newAssigneeId], {
@@ -920,7 +911,7 @@ if (orderType === "detailed" && canModifyPrices) {
   };
 
   // Handle invoice button click
-const handleInvoiceAction = async (orderId: string, status: string) => {
+const handleInvoiceAction = async (orderId: string, _status: string) => {
   if (!canViewInvoices) {
     toast.error("You don't have permission to view invoices");
     return;
@@ -1018,7 +1009,7 @@ const exportCSV = () => {
     setCancelling(false);
     if (error) { toast.error(error.message); return; }
 
-    const order = orders?.find((o: OrderRecord) => o.id === cancelOrderId);
+    const order = orders?.find((o) => o.id === cancelOrderId);
     logActivity(user!.id, "Cancelled order", "order", order?.display_id || "", cancelOrderId, { reason: cancelReason });
 
     // Notify customer if linked
@@ -1046,7 +1037,7 @@ const exportCSV = () => {
 
   // Filtering with matrix restrictions
   const filteredOrders = useMemo(() => {
-    let data = orders || [];
+    let data: any[] = orders || [];
     if (hasMatrixRestrictions || hasStoreTypeRestrictions) {
       data = data.filter((o: OrderRecord) =>
         o.stores && canAccessStore(o.stores.route_id, o.stores.store_type_id)
@@ -1368,7 +1359,7 @@ const buildActions = (row: OrderRecord) => {
 };
 
   // Store Hover Card component
-  const StoreHoverCard = ({ store, children }: { store: StoreData; children: React.ReactNode }) => {
+  const StoreHoverCard = ({ store, children }: { store?: StoreData | null; children: React.ReactNode }) => {
     if (!store) return <span>{children}</span>;
     return (
       <HoverCard>
@@ -1440,7 +1431,7 @@ const buildActions = (row: OrderRecord) => {
   };
 
   // Customer Hover Card component
-  const CustomerHoverCard = ({ customer, children }: { customer: CustomerData; children: React.ReactNode }) => {
+  const CustomerHoverCard = ({ customer, children }: { customer?: CustomerData | null; children: React.ReactNode }) => {
     if (!customer) return <span>{children}</span>;
     return (
       <HoverCard>
@@ -1577,7 +1568,7 @@ const columns = [
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All stores</SelectItem>
-          {storesForFilter?.map((s: StoreData) => <SelectItem key={s.id} value={s.id}>{s.name} ({s.display_id})</SelectItem>)}
+          {storesForFilter?.map((s) => <SelectItem key={s.id} value={s.id}>{s.name} ({s.display_id})</SelectItem>)}
         </SelectContent>
       </Select>
       <Select value={filterStoreType} onValueChange={setFilterStoreType}>
@@ -1586,7 +1577,7 @@ const columns = [
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All store types</SelectItem>
-          {storeTypes?.map((st: StoreData) => <SelectItem key={st.id} value={st.id}>{st.name}</SelectItem>)}
+          {storeTypes?.map((st) => <SelectItem key={st.id} value={st.id}>{st.name}</SelectItem>)}
         </SelectContent>
       </Select>
       <Select value={filterRoute} onValueChange={setFilterRoute}>
@@ -1595,7 +1586,7 @@ const columns = [
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All routes</SelectItem>
-          {routes?.map((r: RouteData) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+          {routes?.map((r: any) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
         </SelectContent>
       </Select>
       <Select value={filterCustomer} onValueChange={setFilterCustomer}>
@@ -1624,6 +1615,8 @@ const columns = [
       )}
       <span className="ml-auto text-xs text-muted-foreground">{filteredOrders.length}{hasMoreOrders ? "+" : ""} result{filteredOrders.length !== 1 ? "s" : ""}</span>
     </div>
+
+    <OrderStockSummary orders={orders || []} />
 
 <DataTable
       columns={columns}
@@ -1845,7 +1838,7 @@ const columns = [
             <Textarea value={requirementNote} onChange={(e) => setRequirementNote(e.target.value)} className="mt-1" />
           </div>
           
-          {(role === "admin" || role === "manager" || role === "marketer") && (
+          {((role as string) === "admin" || role === "manager" || role === "marketer") && (
             <div>
               <Label>Assign To Agent</Label>
               <Select value={assignedTo} onValueChange={setAssignedTo}>
@@ -1936,20 +1929,28 @@ const columns = [
           <DialogHeader><DialogTitle>Cancel Order</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Are you sure you want to cancel order <span className="font-mono font-medium text-foreground">{orders?.find((o: OrderRecord) => o.id === cancelOrderId)?.display_id}</span>?
+              Are you sure you want to cancel order <span className="font-mono font-medium text-foreground">{orders?.find((o) => o.id === cancelOrderId)?.display_id}</span>?
             </p>
             <div>
               <Label>Reason for cancellation</Label>
               <Select value={cancelReason} onValueChange={setCancelReason}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Select reason" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="By Mistake">By Mistake</SelectItem>
-                  <SelectItem value="Stock Available">Stock Available</SelectItem>
-                  <SelectItem value="Other Brands">Other Brands</SelectItem>
-                  <SelectItem value="Other">Other</SelectItem>
+                  {CANCEL_REASONS.map((r) => (
+                    <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
+            {cancelReason === "Other" && (
+              <Textarea
+                placeholder="Type the cancellation reason..."
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                rows={3}
+                className="mt-1"
+              />
+            )}
             <div className="flex gap-2 justify-end">
               <Button variant="outline" onClick={() => { setCancelOrderId(null); setCancelReason(""); }}>Back</Button>
               <Button variant="destructive" onClick={handleCancel} disabled={cancelling || !cancelReason}>

@@ -27,6 +27,11 @@ export interface PageActionOption {
 interface PageHeaderProps {
   title: string;
   subtitle?: string;
+  /** Back button — rendered as the first element, left-aligned */
+  backButton?: {
+    label: string;
+    onClick: () => void;
+  };
   /** Primary action — always visible as a button */
   primaryAction?: {
     label: string;
@@ -41,7 +46,7 @@ interface PageHeaderProps {
   filterNode?: React.ReactNode;
 }
 
-export function PageHeader({ title, subtitle, primaryAction, actions = [], filterNode }: PageHeaderProps) {
+export function PageHeader({ title, subtitle, backButton, primaryAction, actions = [], filterNode }: PageHeaderProps) {
   // Sort by priority (lower = more important)
   const sorted = [...actions].sort((a, b) => (a.priority ?? 10) - (b.priority ?? 10));
 
@@ -49,9 +54,16 @@ export function PageHeader({ title, subtitle, primaryAction, actions = [], filte
 
   return (
     <div className="flex items-center justify-between gap-3 pb-4 mb-2">
-      <div className="min-w-0">
-        <h1 className="page-header">{title}</h1>
-        {subtitle && <p className="page-subtitle mt-0.5 hidden sm:block">{subtitle}</p>}
+      <div className="flex items-center gap-3 min-w-0">
+        {backButton && (
+          <button onClick={backButton.onClick} className="text-muted-foreground hover:text-foreground shrink-0">
+            ← {backButton.label}
+          </button>
+        )}
+        <div>
+          <h1 className="page-header">{title}</h1>
+          {subtitle && <p className="page-subtitle mt-0.5 hidden sm:block">{subtitle}</p>}
+        </div>
       </div>
 
       <div className="flex items-center gap-2 shrink-0">

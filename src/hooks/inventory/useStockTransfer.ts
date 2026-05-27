@@ -105,7 +105,7 @@ export function useStockTransfer(options: UseStockTransferOptions = {}) {
 
         const { data, error } = await query;
         if (!error) {
-          return (data || []) as StockTransfer[];
+          return (data || []) as unknown as StockTransfer[];
         }
         lastError = error;
       }

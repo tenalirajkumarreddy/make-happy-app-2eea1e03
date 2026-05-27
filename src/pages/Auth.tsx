@@ -370,8 +370,9 @@ const Auth = () => {
       const defaultStoreTypeId = appSettings?.default_store_type_id || '76efecec-3e6b-4142-beaa-885c06f41ba2'; // Fallback to Retail
       
       const displayId = generateDisplayId("STR");
+      const { data: defaultWarehouse } = await supabase.from("warehouses").select("id").limit(1).single();
       const { error } = await supabase.from("stores").insert({
-        customer_id: newCustomerId,
+        customer_id: newCustomerId as any,
         store_type_id: defaultStoreTypeId,
         display_id: displayId,
         name: storeName.trim(),
@@ -380,6 +381,7 @@ const Auth = () => {
         lat: storeLat,
         lng: storeLng,
         phone: verifiedPhone || null,
+        warehouse_id: (defaultWarehouse as any)?.id || null,
       });
       if (error) throw error;
       toast.success("Account set up successfully! Welcome.");

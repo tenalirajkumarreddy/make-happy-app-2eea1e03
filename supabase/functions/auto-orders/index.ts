@@ -73,7 +73,7 @@ Deno.serve(async (req: Request) => {
     // Get active stores for these types
     const { data: stores, error: storesErr } = await supabase
       .from("stores")
-      .select("id, customer_id, store_type_id, name")
+      .select("id, customer_id, store_type_id, name, warehouse_id")
       .eq("is_active", true)
       .in("store_type_id", typeIds);
 
@@ -89,8 +89,9 @@ Deno.serve(async (req: Request) => {
         customer_id: store.customer_id,
         order_type: "simple",
         source: "auto",
-        created_by: "00000000-0000-0000-0000-000000000000", // system
+        created_by: "00000000-0000-0000-0000-000000000000",
         requirement_note: "Auto-generated order",
+        warehouse_id: (store as any).warehouse_id || null,
       });
     }
 

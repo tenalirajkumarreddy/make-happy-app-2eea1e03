@@ -54,9 +54,9 @@ export const RawMaterialForm = ({ isEditing = false, defaultValues = {} }) => {
         created_by: user?.id,
         is_raw_material: true, // Crucial flag
         // If editing, we need the product ID
-        ...(isEditing && { id: defaultValues.id }),
+        ...(isEditing && { id: (defaultValues as any).id }),
       };
-      const { error } = await supabase.from('products').upsert(record);
+      const { error } = await supabase.from('products').upsert(record as any);
       if (error) throw error;
     },
     onSuccess: () => {

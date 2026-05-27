@@ -8,7 +8,7 @@
  * - Tenant/organization settings
  */
 
-import { PermissionKey } from "@/components/access/UserPermissionsPanel";
+import type { PermissionKey } from "@/components/access/UserPermissionsPanel";
 import type { AppRole } from "@/types/roles";
 
 // ============================================================================
@@ -388,7 +388,7 @@ export function useInventoryFeatures() {
         const { data } = await supabase
           .from("user_permissions")
           .select("permission, enabled")
-          .eq("user_id", profile.user_id);
+          .eq("user_id", (profile as any).user_id);
         
         const enabledPermissions = (data || [])
           .filter((p: any) => p.enabled)
@@ -407,7 +407,7 @@ export function useInventoryFeatures() {
   }, [profile]);
   
   if (loading) {
-    return { tabs: [], transfers: [], loading: true };
+    return { tabs: [] as any[], transfers: [] as any[], loading: true };
   }
   
   const options = { role: role as AppRole, permissions };

@@ -184,7 +184,7 @@ const RawMaterials = () => {
         const { data: idData } = await supabase.rpc("generate_display_id", {
           prefix: "RM",
           seq_name: "raw_materials_display_id_seq"
-        });
+        }) as any;
 
         const { error } = await supabase.from("raw_materials").insert({
           display_id: idData,
@@ -269,7 +269,7 @@ const deleteMutation = useMutation({
 
 const unlinkVendorMutation = useMutation({
   mutationFn: async (id: string) => {
-    const { error } = await supabase.from("vendor_raw_materials").update({ deleted_at: new Date().toISOString() }).eq("id", id);
+    const { error } = await (supabase as any).from("vendor_raw_materials").update({ deleted_at: new Date().toISOString() }).eq("id", id);
     if (error) throw error;
   },
     onSuccess: () => {
@@ -355,9 +355,9 @@ const unlinkVendorMutation = useMutation({
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
                     {row.raw_material_categories?.name || row.category || "Uncategorized"}
                   </span>
-                  {row.vendors?.name && (
+                  {(row as any).vendors?.name && (
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">
-                      {row.vendors.name}
+                      {(row as any).vendors.name}
                     </span>
                   )}
                 </div>

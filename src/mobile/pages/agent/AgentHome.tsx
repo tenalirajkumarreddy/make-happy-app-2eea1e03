@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { StoreOption } from "@/mobile/components/StorePickerSheet";
 import { getCurrentPosition } from "@/lib/capacitorUtils";
-import { addToQueue } from "@/lib/offlineQueue";
+import { addToQueue, generateBusinessKey } from "@/lib/offlineQueue";
 
 interface Props {
   onOpenStore: (store: StoreOption) => void;
@@ -261,6 +261,11 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
       }
 
       if (!navigator.onLine) {
+        const bizKey = generateBusinessKey('visit', {
+          userId: user.id,
+          storeId: nextStore.id,
+          timestamp: new Date().toISOString(),
+        });
         await addToQueue({
           id: crypto.randomUUID(),
           type: "visit",
@@ -271,6 +276,7 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
             lng,
           },
           createdAt: new Date().toISOString(),
+          businessKey: bizKey,
         });
         toast.warning(`Offline — visit queued for ${nextStore.name}`);
         return;
@@ -355,6 +361,21 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Value</p>
                 <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5">₹{stockValue >= 1000 ? `${(stockValue/1000).toFixed(1)}k` : stockValue.toLocaleString()}</p>
               </div>
+            </div>
+
+            <div className="mt-3 pt-3 border-t border-amber-100 dark:border-amber-800/40 space-y-1.5 max-h-48 overflow-y-auto">
+              {stockItems.map((item: any) => (
+                <div key={item.id} className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-amber-50/50 dark:hover:bg-amber-900/10 transition-colors">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium text-slate-800 dark:text-white truncate">{item.product?.name || "Unknown"}</p>
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">{item.product?.sku || ""}{item.product?.unit ? ` · ${item.product.unit}` : ""}</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs font-bold text-slate-800 dark:text-white">{item.quantity}</span>
+                    <span className="text-[10px] text-slate-400 font-medium">₹{Number(item.amount_value || 0).toLocaleString("en-IN")}</span>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}

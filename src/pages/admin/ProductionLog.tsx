@@ -74,7 +74,7 @@ export default function ProductionLog() {
           *,
           products(name, unit)
         `)
-        .eq('warehouse_id', warehouse?.id)
+        .eq('warehouse_id', warehouse.id)
         .gte('production_date', rangeStart.toISOString())
         .order('production_date', { ascending: false });
       if (error) throw error;
@@ -136,10 +136,10 @@ export default function ProductionLog() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Production Log"
-        description="Record daily production output and wastage for overhead cost absorption."
-      />
+      <div>
+        <PageHeader title="Production Log" />
+        <p className="text-sm text-muted-foreground">Record daily production output and wastage for overhead cost absorption.</p>
+      </div>
 
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">

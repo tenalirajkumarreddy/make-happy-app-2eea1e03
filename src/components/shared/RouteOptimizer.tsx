@@ -2,22 +2,15 @@ import { useState, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import {
   MapPin,
-  Navigation,
   Clock,
   Route,
   CheckCircle,
-  Circle,
-  GripVertical,
   Play,
-  Pause,
-  RotateCcw,
   Target,
   TrendingUp,
-  AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRouteSession, RouteSession, RouteStore, StoreVisit, RouteProgress } from "@/hooks/useRouteSession";
@@ -56,14 +49,14 @@ interface RouteStatsProps {
 export function RouteOptimizer({
   agentId,
   initialStores,
-  showMap = true,
+  showMap: _showMap = true,
   onSessionChange,
   className,
 }: RouteOptimizerProps) {
   const {
     session,
     stores,
-    visits,
+    visits: _visits,
     progress,
     isLoading,
     createSession,
@@ -156,7 +149,7 @@ export function RouteOptimizer({
     
     await optimize.mutateAsync({
       agentId,
-      storeIds: stores.map(s => s.id),
+      storeIds: (stores as unknown as RouteStore[]).map(s => s.id),
     });
     
     refetchSession();
@@ -166,7 +159,7 @@ export function RouteOptimizer({
   const handleReorder = useCallback((dragIndex: number, hoverIndex: number) => {
     if (!session || !stores) return;
     
-    const newOrder = [...stores.map(s => s.id)];
+    const newOrder = [...(stores as unknown as RouteStore[]).map(s => s.id)];
     const [draggedItem] = newOrder.splice(dragIndex, 1);
     newOrder.splice(hoverIndex, 0, draggedItem);
     
@@ -179,7 +172,6 @@ export function RouteOptimizer({
   // Get current status
   const nextStore = getNextStore();
   const isActive = session?.status === "active";
-  const isCompleted = session?.status === "completed";
 
   if (isLoading) {
     return (
@@ -214,7 +206,7 @@ export function RouteOptimizer({
               </div>
             </div>
             <div className="flex gap-2">
-              {!session && initialStores?.length > 0 && (
+              {!session && (initialStores?.length ?? 0) > 0 && (
                 <Button onClick={() => setShowStartDialog(true)}>
                   <Play className="h-4 w-4 mr-2" />
                   Start Route
@@ -289,7 +281,7 @@ export function RouteOptimizer({
           </CardHeader>
           <CardContent className="p-0">
             <div className="divide-y">
-              {stores.map((store, index) => {
+              {(stores as unknown as RouteStore[]).map((store, index) => {
                 const visited = isStoreVisited(store.id);
                 const visit = getStoreVisit(store.id);
                 const isNext = nextStore?.id === store.id;

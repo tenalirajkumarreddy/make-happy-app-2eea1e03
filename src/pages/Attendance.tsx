@@ -2,9 +2,9 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useWarehouse } from "@/contexts/WarehouseContext";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable } from "@/components/shared/DataTable";
-import { StatusBadge } from "@/components/shared/StatusBadge";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,24 +16,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 import { logActivity } from "@/lib/activityLogger";
 import {
   Calendar,
-  Clock,
   Users,
-  UserPlus,
-  DollarSign,
-  Calculator,
   Pencil,
   Trash2,
   Loader2,
-  CheckCircle,
-  XCircle,
-  Banknote,
-  ArrowUpRight,
-  ArrowDownRight,
   Download,
   FileSpreadsheet,
   Briefcase,
@@ -223,14 +215,14 @@ function calculateWorkerPay(
 
 export default function Attendance() {
   const { user, role } = useAuth();
+  const { currentWarehouse } = useWarehouse();
   const qc = useQueryClient();
 
   const isSuperAdmin = role === "super_admin";
   const isManager = role === "manager";
   const isOperator = role === "operator";
   const canAddWorkers = isSuperAdmin || isManager || isOperator;
-  const canEditWorkers = isSuperAdmin || isManager;
-  const canViewBalances = isSuperAdmin || isManager || isOperator;
+
 
   useEffect(() => { document.title = "Attendance"; }, []);
 
@@ -304,11 +296,11 @@ export default function Attendance() {
     loadReportData();
   }, [reportMonth]);
 
-  const [activeTab, setActiveTab] = useState("records");
+  const [_activeTab, _setActiveTab] = useState("records");
   
   // Workers state
   const [showWorkerDialog, setShowWorkerDialog] = useState(false);
-  const [selectedWorkerProfile, setSelectedWorkerProfile] = useState<Worker | null>(null);
+  const [selectedWorkerProfile, _setSelectedWorkerProfile] = useState<Worker | null>(null);
   const [showWorkerProfileDialog, setShowWorkerProfileDialog] = useState(false);
   const [editingWorker, setEditingWorker] = useState<Worker | null>(null);
   const [workerName, setWorkerName] = useState("");
@@ -364,14 +356,14 @@ export default function Attendance() {
   const [paymentNotes, setPaymentNotes] = useState("");
   
   // Edit attendance state
-  const [editingRecord, setEditingRecord] = useState<AttendanceRecord | null>(null);
+  const [editingRecord, _setEditingRecord] = useState<AttendanceRecord | null>(null);
   const [showEditEntriesDialog, setShowEditEntriesDialog] = useState(false);
   const [editEntries, setEditEntries] = useState<AttendanceEntry[]>([]);
   
-  const [saving, setSaving] = useState(false);
+  const [_saving, _setSaving] = useState(false);
 
   // Queries
-  const { data: shiftRates = [] } = useQuery({
+  const { data: shiftRates = [] as any[] } = useQuery({
     queryKey: ["shift-rates"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -385,24 +377,28 @@ export default function Attendance() {
   });
 
   const { data: workers = [], isLoading: loadingWorkers } = useQuery({
-    queryKey: ["workers"],
+    queryKey: ["workers", currentWarehouse?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("workers")
-        .select("*")
-        .order("name");
+        .select("*");
+      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+      query = query.order("name");
+      const { data, error } = await query;
       if (error) throw error;
       return data as Worker[];
     },
   });
 
   const { data: workerBalances = [] } = useQuery({
-    queryKey: ["worker-balances"],
+    queryKey: ["worker-balances", currentWarehouse?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("worker_balances")
-        .select("*")
-        .order("outstanding_balance", { ascending: false });
+        .select("*");
+      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+      query = query.order("outstanding_balance", { ascending: false });
+      const { data, error } = await query;
       if (error) throw error;
       return data as WorkerBalance[];
     },
@@ -471,9 +467,9 @@ export default function Attendance() {
   });
 
   const PAGE_SIZE = 100;
-  const [loadedPages, setLoadedPages] = useState(1);
+  const [loadedPages, _setLoadedPages] = useState(1);
 
-  const { data: attendanceRecords = [], isLoading: loadingRecords, isFetching: fetchingRecords } = useQuery({
+  const { data: _attendanceRecords = [], isLoading: loadingRecords } = useQuery({
     queryKey: ["attendance-records", loadedPages],
     queryFn: async () => {
       let query = supabase
@@ -494,9 +490,7 @@ export default function Attendance() {
     },
   });
 
-  const hasMoreRecords = attendanceRecords.length >= loadedPages * PAGE_SIZE;
-
-  const { data: balances = [], isLoading: loadingBalances } = useQuery({
+  const { data: _balances = [] } = useQuery({
     queryKey: ["worker-balances"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -563,7 +557,7 @@ export default function Attendance() {
         const { data: idData } = await supabase.rpc("generate_display_id", {
           prefix: "WRK",
           seq_name: "workers_display_id_seq"
-        });
+        }) as any;
         
         const { error } = await supabase.from("workers").insert({
           display_id: idData,
@@ -574,6 +568,7 @@ export default function Attendance() {
           monthly_salary: workerWageType === 'monthly' ? parseFloat(workerMonthlySalary) || 0 : null,
           paid_leaves_allowed: workerWageType === 'monthly' ? parseInt(workerPaidLeaves) || 0 : 0,
           is_active: true,
+          warehouse_id: currentWarehouse?.id || null,
         });
         if (error) throw error;
       }
@@ -650,7 +645,7 @@ export default function Attendance() {
         const { data: idData } = await supabase.rpc("generate_display_id", {
           prefix: "SR",
           seq_name: "shift_rates_display_id_seq"
-        });
+        }) as any;
         
         const { error } = await supabase.from("shift_rates").insert({
           display_id: idData,
@@ -741,7 +736,7 @@ export default function Attendance() {
       const { data: idData } = await supabase.rpc("generate_display_id", {
         prefix: "ATT",
         seq_name: "attendance_display_id_seq"
-      });
+      }) as any;
 
       // Create attendance record
       const { data: record, error: recordError } = await supabase
@@ -767,18 +762,13 @@ export default function Attendance() {
         const entries = attendanceEntries
         .filter(e => e.is_present)
         .map(e => {
-          // Calculate hours worked
-          const checkIn = new Date(`2000-01-01T${e.check_in}:00`);
-          const checkOut = new Date(`2000-01-01T${e.check_out}:00`);
-          const hoursWorked = (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60);
-          
           // Get worker data for proper pay calculation
           const worker = e.person_type === "worker" 
             ? workers.find(w => w.id === e.person_id)
             : undefined;
           
           // Calculate pay based on worker type (monthly/daily/shift)
-          const { rate, amount } = calculateWorkerPay(
+          const { rate } = calculateWorkerPay(
             worker,
             e.check_in,
             e.check_out,
@@ -823,7 +813,7 @@ export default function Attendance() {
       const { data: idData } = await supabase.rpc("generate_display_id", {
         prefix: "WPY",
         seq_name: "worker_payments_display_id_seq"
-      });
+      }) as any;
 
       const { error } = await supabase.from("worker_payments").insert({
         display_id: idData,
@@ -840,14 +830,14 @@ export default function Attendance() {
       const { data: expenseIdData } = await supabase.rpc("generate_display_id", {
         prefix: "EXP",
         seq_name: "expenses_display_id_seq"
-      });
+      }) as any;
 
       // Get person name for reference
       const personName = paymentPersonType === "worker"
         ? workers.find(w => w.id === paymentPersonId)?.name
         : staffUsers.find(s => s.user_id === paymentPersonId)?.profiles?.full_name || "Unknown";
 
-      const { error: expenseError } = await supabase.from("expenses").insert({
+      const { error: expenseError } = await supabase.from("expenses" as any).insert({
         display_id: expenseIdData,
         amount: parseFloat(paymentAmount),
         expense_category_id: "8792d094-d08b-48fc-a487-cb0d0986ff5f",
@@ -855,7 +845,7 @@ export default function Attendance() {
         notes: `Worker/Staff payment: ${personName} - ${paymentNotes || "Wages"}`,
         expense_date: new Date().toISOString().split("T")[0],
         created_by: user!.id,
-      });
+      } as any);
       if (expenseError) {
         console.error("Failed to record expense:", expenseError);
       }
@@ -872,92 +862,6 @@ export default function Attendance() {
     onError: (e: Error) => toast.error(`Failed: ${e.message}`),
   });
 
-  // Edit entries for a record
-  const loadEntriesForEdit = async (record: AttendanceRecord) => {
-    // Operator can only edit today's attendance
-    if (isOperator) {
-      const today = new Date().toISOString().split("T")[0];
-      if (record.attendance_date !== today) {
-        toast.error("You can only edit today's attendance");
-        return;
-      }
-    }
-    
-    const { data, error } = await supabase
-      .from("attendance_entries")
-      .select(`
-        *,
-        worker:workers(name, display_id, wage_type, daily_wage, monthly_salary, paid_leaves_allowed)
-      `)
-      .eq("attendance_id", record.id);
-    
-    if (error) {
-      toast.error("Failed to load entries");
-      return;
-    }
-    
-    if (!data || data.length === 0) {
-      setEditingRecord(record);
-      setEditEntries([]);
-      setShowEditEntriesDialog(true);
-      return;
-    }
-    
-    // Get profiles for staff users (user_id)
-    const userIds = data.filter(d => d.user_id).map(d => d.user_id!);
-    const profilesMap: Record<string, { full_name: string }> = {};
-    
-    if (userIds.length > 0) {
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("user_id, full_name")
-        .in("user_id", userIds);
-      
-      profiles?.forEach(p => { profilesMap[p.user_id] = { full_name: p.full_name }; });
-    }
-    
-    const entriesWithProfiles = data.map(e => ({
-      ...e,
-      profile: e.user_id ? profilesMap[e.user_id] || null : null
-    }));
-    
-    setEditingRecord(record);
-    setEditEntries(entriesWithProfiles as AttendanceEntry[]);
-    setShowEditEntriesDialog(true);
-  };
-
-  const updateEntryMutation = useMutation({
-    mutationFn: async (entry: AttendanceEntry) => {
-      // Operator can only edit today's attendance (checked on open, but double-check here)
-      if (isOperator && editingRecord) {
-        const today = new Date().toISOString().split("T")[0];
-        if (editingRecord.attendance_date !== today) {
-          throw new Error("You can only edit today's attendance");
-        }
-      }
-      
-      const { error } = await supabase
-        .from("attendance_entries")
-        .update({
-          check_in_time: entry.check_in_time,
-          check_out_time: entry.check_out_time,
-          hourly_rate: entry.hourly_rate,
-          adjustment_amount: entry.adjustment_amount,
-          adjustment_reason: entry.adjustment_reason,
-          notes: entry.notes,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", entry.id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["attendance-records"] });
-      qc.invalidateQueries({ queryKey: ["worker-balances"] });
-      toast.success("Entry updated");
-    },
-    onError: (e: Error) => toast.error(`Failed: ${e.message}`),
-  });
-
   // Save all entries mutation
   const saveAllEntriesMutation = useMutation({
     mutationFn: async (entries: AttendanceEntry[]) => {
@@ -965,7 +869,7 @@ export default function Attendance() {
         // Force recalculate before save to get correct hourly_rate
         let hourlyRate = entry.hourly_rate || 0;
         if (entry.is_present && entry.check_in_time && entry.check_out_time) {
-          const pay = calculateWorkerPay(entry.worker, entry.check_in_time, entry.check_out_time, shiftRates);
+          const pay = calculateWorkerPay(entry.worker as any, entry.check_in_time, entry.check_out_time, shiftRates);
           hourlyRate = pay.rate;
         }
         
@@ -1000,34 +904,6 @@ export default function Attendance() {
     onError: (e: Error) => toast.error(`Failed: ${e.message}`),
   });
 
-  // Finalize mutation - manager/admin can finalize attendance
-  const finalizeMutation = useMutation({
-    mutationFn: async (record: AttendanceRecord) => {
-      const { error } = await supabase
-        .from("attendance_records")
-        .update({ is_finalized: true })
-        .eq("id", record.id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["attendance-records"] });
-      toast.success("Attendance finalized");
-    },
-    onError: (e: Error) => toast.error(`Failed: ${e.message}`),
-  });
-
-  const handleEditWorker = (w: Worker) => {
-    setEditingWorker(w);
-    setWorkerName(w.name);
-    setWorkerPhone(w.phone || "");
-    setWorkerWageType(w.wage_type || "daily");
-    setWorkerDailyWage(w.daily_wage?.toString() || "");
-    setWorkerMonthlySalary(w.monthly_salary?.toString() || "");
-    setWorkerPaidLeaves(w.paid_leaves_allowed?.toString() || "0");
-    setWorkerActive(w.is_active ?? true);
-    setShowWorkerDialog(true);
-  };
-
   const calculateHours = (checkIn: string, checkOut: string) => {
     if (!checkIn || !checkOut) return 0;
     const [inH, inM] = checkIn.split(":").map(Number);
@@ -1041,8 +917,7 @@ export default function Attendance() {
     setAttendanceEntries(updated);
   };
 
-const totalOwed = balances.reduce((sum, b) => sum + Math.max(0, Number(b.outstanding_balance)), 0);
-  const totalAdvance = balances.reduce((sum, b) => sum + Math.max(0, -Number(b.outstanding_balance)), 0);
+
 
   if (loadingRecords && loadingWorkers) {
     return <TableSkeleton columns={6} />;
@@ -1591,20 +1466,20 @@ const totalOwed = balances.reduce((sum, b) => sum + Math.max(0, Number(b.outstan
               <div key={entry.id} className="p-4 border rounded-lg">
                 <div className="grid grid-cols-12 gap-4 items-center">
                   {/* Present toggle - 1 col */}
-                  <div className="col-span-1">
-                    <Switch 
-                      checked={entry.is_present ?? true}
-                      onCheckedChange={(checked) => {
-                        const updated = [...editEntries];
-                        updated[index] = { ...updated[index], is_present: checked };
-                        // Calculate pay based on worker type (monthly vs daily vs shift)
-                        const pay = calculateWorkerPay(
-                          entry.worker,
-                          entry.check_in_time,
-                          entry.check_out_time,
-                          shiftRates,
-                          updated[index].is_on_leave
-                        );
+                    <div className="col-span-1">
+                      <Switch 
+                        checked={entry.is_present ?? true}
+                        onCheckedChange={(checked) => {
+                          const updated = [...editEntries];
+                          updated[index] = { ...updated[index], is_present: checked };
+                          // Calculate pay based on worker type (monthly vs daily vs shift)
+                          const pay = calculateWorkerPay(
+                            entry.worker as any,
+                            entry.check_in_time,
+                            entry.check_out_time,
+                            shiftRates,
+                            updated[index].is_on_leave
+                          );
                         updated[index].hourly_rate = pay.rate;
                         updated[index].amount_earned = pay.amount;
                         setEditEntries(updated);
@@ -1626,7 +1501,7 @@ const totalOwed = balances.reduce((sum, b) => sum + Math.max(0, Number(b.outstan
                                 updated[index] = { ...updated[index], is_on_leave: checked };
                                 // On leave = get full daily rate regardless of time
                                 const pay = calculateWorkerPay(
-                                  entry.worker,
+                                  entry.worker as any,
                                   entry.check_in_time,
                                   entry.check_out_time,
                                   shiftRates,
@@ -1667,7 +1542,7 @@ const totalOwed = balances.reduce((sum, b) => sum + Math.max(0, Number(b.outstan
                           const updated = [...editEntries];
                           updated[index] = { ...updated[index], check_in_time: e.target.value };
                           if (entry.is_present && e.target.value && entry.check_out_time) {
-                            const pay = calculateWorkerPay(entry.worker, e.target.value, entry.check_out_time, shiftRates);
+                            const pay = calculateWorkerPay(entry.worker as any, e.target.value, entry.check_out_time, shiftRates);
                             updated[index].hourly_rate = pay.rate;
                             updated[index].amount_earned = pay.amount;
                           }
@@ -1688,7 +1563,7 @@ const totalOwed = balances.reduce((sum, b) => sum + Math.max(0, Number(b.outstan
                           const updated = [...editEntries];
                           updated[index] = { ...updated[index], check_out_time: e.target.value };
                           if (entry.is_present && entry.check_in_time && e.target.value) {
-                            const pay = calculateWorkerPay(entry.worker, entry.check_in_time, e.target.value, shiftRates);
+                            const pay = calculateWorkerPay(entry.worker as any, entry.check_in_time, e.target.value, shiftRates);
                             updated[index].hourly_rate = pay.rate;
                             updated[index].amount_earned = pay.amount;
                           }
@@ -1724,7 +1599,7 @@ const totalOwed = balances.reduce((sum, b) => sum + Math.max(0, Number(b.outstan
                       {entry.is_present 
                         ? `₹${(
                           calculateWorkerPay(
-                            entry.worker,
+                            entry.worker as any,
                             entry.check_in_time,
                             entry.check_out_time,
                             shiftRates

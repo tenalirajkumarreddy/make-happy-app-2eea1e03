@@ -8,7 +8,7 @@ import {
   Phone,
   Store,
   Wallet,
-  ShoppingCart,
+
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -20,7 +20,6 @@ interface Props {
   onBack: () => void;
   onGoRecord: (store: StoreOption) => void;
   onGoOrders?: (store: StoreOption) => void;
-  onGoSale?: (store: StoreOption) => void;
 }
 
 interface StoreProfileRow {
@@ -155,15 +154,7 @@ export function MarketerStoreProfile({ store, onBack, onGoRecord, onGoOrders }: 
               <ClipboardList className="h-5 w-5 text-white" />
               <span className="text-[10px] font-bold text-white text-center">Create Order</span>
             </button>
-            {onGoSale && (
-              <button
-                onClick={() => onGoSale(currentStore)}
-                className="flex flex-col items-center gap-1.5 p-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 transition-all shadow-sm"
-              >
-                <ShoppingCart className="h-5 w-5 text-white" />
-                <span className="text-[10px] font-bold text-white text-center">Record Sale</span>
-              </button>
-            )}
+
             <button
               onClick={() => onGoRecord(currentStore)}
               className="flex flex-col items-center gap-1.5 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95 transition-all shadow-sm"

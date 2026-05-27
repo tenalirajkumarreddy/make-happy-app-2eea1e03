@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useRef, useEffect } from "react";
 import { formatDate } from "@/lib/utils";
 import { useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, Printer, Download, ArrowLeft, Share2 } from "lucide-react";
+import { Loader2, Printer, Share2 } from "lucide-react";
 import { toast } from "sonner";
 
 // Number to words converter
@@ -55,7 +55,7 @@ const InvoiceView = () => {
           invoice_items(*),
           invoice_sales(sale_id, sales(display_id))
         `)
-        .eq("id", id)
+        .eq("id", id!)
         .single();
       if (error) throw error;
       return data;
@@ -79,7 +79,7 @@ const InvoiceView = () => {
     queryKey: ["business-info-invoice"],
     queryFn: async () => {
       const { data } = await supabase.from("business_info").select("*").single();
-      return data;
+      return data as any;
     },
   });
 

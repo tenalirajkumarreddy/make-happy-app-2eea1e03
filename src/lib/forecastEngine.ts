@@ -50,7 +50,7 @@ export function calculateSalesForecast(salesTrend: SalesPoint[], rangeDays: stri
       const nextDate = addDays(new Date(lastDateStr), i + 1);
       return {
         date: format(nextDate, "MM-dd"),
-        actual: null,
+        actual: null as any,
         forecast: Math.round(avgAmount),
         fullDate: nextDate,
       };
@@ -64,7 +64,7 @@ export function calculateSalesForecast(salesTrend: SalesPoint[], rangeDays: stri
   // 1. Generate trend line for historical data
   const history = salesTrend.map((s, i) => ({
       date: s.date,
-      actual: s.amount,
+      actual: s.amount as any,
       forecast: Math.round(slope * i + intercept), // Trend line point
       fullDate: new Date(rangeDays[i]),
   }));
@@ -77,8 +77,8 @@ export function calculateSalesForecast(salesTrend: SalesPoint[], rangeDays: stri
       const predicted = Math.max(0, slope * nextX + intercept); // Prevent negative sales forecast
       return {
           date: format(nextDate, "MM-dd"),
-          actual: null,
-          forecast: Math.round(predicted),
+      actual: null as any,
+      forecast: Math.round(predicted),
           fullDate: nextDate,
       };
   });

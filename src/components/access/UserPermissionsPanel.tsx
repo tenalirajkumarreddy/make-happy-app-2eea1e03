@@ -5,22 +5,22 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-// Canonical source — import everything from the single source of truth
-export {
-  type PermissionKey,
-  type AppRole,
-  ROLE_DEFAULTS,
-  ALL_PERMISSION_KEYS,
-  PERMISSION_GROUPS,
-  PERMISSION_LABELS,
-  hasRoleDefaultPermission,
-} from "@/lib/permissions";
-
-import type { PermissionKey } from "@/lib/permissions";
 import { ROLE_DEFAULTS, PERMISSION_GROUPS, ALL_PERMISSION_KEYS } from "@/lib/permissions";
 
-/** @deprecated Use ALL_PERMISSION_KEYS from @/lib/permissions */
-export const PERMISSION_KEYS = ALL_PERMISSION_KEYS;
+export type PermissionKey =
+  | "price_override" | "record_behalf" | "create_customers" | "create_stores"
+  | "edit_balance" | "opening_balance" | "finalizer" | "see_handover_balance"
+  | "submit_expenses" | "manage_expense_access" | "approve_expenses"
+  | "modify_handovers" | "cancel_any_handover" | "adjust_holding_balance"
+  | "record_sale"
+  | "view_vendors" | "manage_vendors" | "view_purchases" | "manage_purchases"
+  | "view_vendor_payments" | "manage_vendor_payments"
+  | "view_raw_materials" | "manage_raw_materials"
+  | "view_attendance" | "manage_attendance"
+  | "view_orders" | "create_orders" | "modify_orders" | "modify_order_item_prices"
+  | "transfer_orders" | "delete_orders" | "fulfill_orders" | "cancel_orders"
+  | "create_sale_returns" | "view_assigned_orders" | "accept_order_transfers"
+  | "view_invoices" | "create_invoices" | "edit_invoices" | "delete_invoices" | "download_invoices";
 
 interface InlinePermissionCheckboxProps {
   userId: string;

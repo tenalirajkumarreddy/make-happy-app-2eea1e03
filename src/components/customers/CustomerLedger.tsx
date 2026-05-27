@@ -61,8 +61,8 @@ export const CustomerLedger = memo(({ customerId, customerName }: CustomerLedger
       const { data, error } = await supabase
         .rpc("generate_customer_statement", {
           p_customer_id: customerId,
-          p_from_date: null,
-          p_to_date: null,
+          p_from_date: null as any,
+          p_to_date: null as any,
         });
 
       if (error) throw error;

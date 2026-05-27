@@ -504,7 +504,7 @@ function buildChannel(role: string | null) {
         retryAttempt = 0;
         if (import.meta.env.DEV) console.log(`[Realtime] Batch ${idx} subscribed to ${batch.length} tables`); // eslint-disable-line no-console
       } else if (status === "CHANNEL_ERROR") {
-        logError(new Error(`[Realtime] Channel error batch ${idx}`), { context: "useRealtimeSync" });
+        logError(`[Realtime] Channel error batch ${idx}`, { context: "useRealtimeSync" });
         scheduleReconnect(role);
       } else if (status === "CLOSED" || status === "TIMED_OUT") {
         if (import.meta.env.DEV) console.warn(`[Realtime] Batch ${idx} connection`, status, "— reconnecting…");
@@ -519,7 +519,7 @@ function buildChannel(role: string | null) {
 function scheduleReconnect(role: string | null) {
   if (retryTimer) clearTimeout(retryTimer);
   if (retryAttempt >= RETRY.maxRetries) {
-    logError(new Error("[Realtime] Max retries reached"), { context: "useRealtimeSync" });
+    logError("[Realtime] Max retries reached", { context: "useRealtimeSync" });
     return;
   }
   const delay = Math.min(RETRY.baseDelay * 2 ** retryAttempt, RETRY.maxDelay);

@@ -103,7 +103,7 @@ export function SaleReturnDialog({
   // Initialize return items when sale items load
   useEffect(() => {
     if (saleItems.length > 0 && returnItems.length === 0) {
-      const items: ReturnItem[] = saleItems.map((si: SaleItem) => ({
+      const items: ReturnItem[] = saleItems.map((si: any) => ({
         sale_item_id: si.id,
         product_id: si.product_id,
         product_name: si.products?.name || "Unknown Product",
@@ -212,11 +212,11 @@ export function SaleReturnDialog({
       const { data: displayId, error: displayError } = await supabase.rpc("generate_display_id", {
         prefix: "SRET",
         seq_name: "sale_return_display_seq",
-      });
+      }) as any;
       if (displayError) throw displayError;
 
       // Create sale return
-      const { data: newReturn, error: returnError } = await supabase
+      const { data: newReturn, error: returnError } = await (supabase as any)
         .from("sale_returns")
         .insert({
           display_id: displayId,
@@ -237,7 +237,7 @@ export function SaleReturnDialog({
       if (returnError) throw returnError;
 
       // Create return items
-      const { error: itemsError } = await supabase.from("sale_return_items").insert(
+      const { error: itemsError } = await (supabase as any).from("sale_return_items").insert(
         itemsToReturn.map((item) => ({
           return_id: newReturn.id,
           sale_item_id: item.sale_item_id,

@@ -149,7 +149,7 @@ export function RawMaterialInventoryView({
       { total: 0, low: 0, out: 0, value: 0 }
     );
 
-    result.vendorCount = vendors?.length || 0;
+    (result as any).vendorCount = vendors?.length || 0;
 
     return result;
   }, [materials, vendors]);
@@ -220,7 +220,7 @@ export function RawMaterialInventoryView({
           <CardContent className="p-6 flex items-center justify-between">
             <div className="space-y-1">
               <p className="text-sm font-medium text-muted-foreground">Vendors</p>
-              <p className="text-3xl font-bold">{stats.vendorCount}</p>
+              <p className="text-3xl font-bold">{(stats as any).vendorCount}</p>
             </div>
             <div className="h-12 w-12 rounded-full bg-purple-100 flex items-center justify-center">
               <User className="h-6 w-6 text-purple-600" />

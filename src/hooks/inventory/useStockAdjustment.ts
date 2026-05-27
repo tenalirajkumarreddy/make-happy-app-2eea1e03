@@ -93,7 +93,7 @@ export function useStockAdjustment(options: UseStockAdjustmentOptions = {}) {
       const signedQuantity = adjustmentData.quantity * (adjustmentType?.sign || 1);
 
       // Use the warehouse-specific RPC function
-      const { data, error } = await supabase.rpc("record_stock_movement", {
+      const { data, error } = await (supabase as any).rpc("record_stock_movement", {
         p_product_id: adjustmentData.productId,
         p_warehouse_id: adjustmentData.warehouseId,
         p_quantity: signedQuantity,
@@ -128,7 +128,7 @@ export function useStockAdjustment(options: UseStockAdjustmentOptions = {}) {
       quantity: number;
       reason?: string;
     }) => {
-      const { data: result, error } = await supabase.rpc(
+      const { data: result, error } = await (supabase as any).rpc(
         "adjust_staff_stock",
         {
           p_staff_stock_id: staffStockId,
@@ -197,7 +197,7 @@ export function useStockAdjustment(options: UseStockAdjustmentOptions = {}) {
       }
 
       // Record adjustment
-      const { error: adjError } = await supabase
+      const { error: adjError } = await (supabase as any)
         .from("raw_material_adjustments")
         .insert({
           raw_material_id: rawMaterialId,

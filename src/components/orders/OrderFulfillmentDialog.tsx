@@ -156,11 +156,12 @@ const [selectedProduct, setSelectedProduct] = useState<string>("");
       setLoading(true);
       try {
         // Load products
-        const { data: productsData, error: productsError } = await supabase
+        const { data: productsData, error: productsError } = await (supabase
           .from("products")
           .select("id, name, sku, base_price, image_url")
-          .eq("is_active", true)
-          .order("name");
+          .eq("is_active", true as any)
+          .order("name")) as any;
+        const productsDataArr: any[] = productsData ?? [];
 
         if (productsError) throw productsError;
         setProducts(productsData || []);
@@ -168,24 +169,24 @@ const [selectedProduct, setSelectedProduct] = useState<string>("");
         // Load warehouse stock for products
         const { data: { user: currentUser } } = await supabase.auth.getUser();
         if (currentUser) {
-          const { data: userRole } = await supabase
+          const { data: userRole } = await ((supabase as any)
             .from("user_roles")
             .select("warehouse_id, role")
             .eq("user_id", currentUser.id)
-            .single();
+            .single());
           
           if (userRole?.warehouse_id) {
-            const productIds = productsData?.map(p => p.id) || [];
+            const productIds = (productsData as any[])?.map((p: any) => p.id) || [];
             if (productIds.length > 0) {
-              const { data: stockData } = await supabase
+              const { data: stockData } = await ((supabase as any)
                 .from("product_stock")
                 .select("product_id, current_stock")
                 .eq("warehouse_id", userRole.warehouse_id)
-                .in("product_id", productIds);
+                .in("product_id", productIds));
               
               if (stockData) {
                 const stockMap = new Map<string, number>();
-                stockData.forEach(s => stockMap.set(s.product_id, Number(s.current_stock)));
+                (stockData as any[]).forEach((s: any) => stockMap.set(s.product_id, Number(s.current_stock)));
                 setProductStock(stockMap);
               }
             }
@@ -197,11 +198,11 @@ const [selectedProduct, setSelectedProduct] = useState<string>("");
           const { data: storePrices, error: storePricesError } = await supabase
             .from("store_pricing")
             .select("product_id, price")
-            .eq("store_id", order.store_id);
+            .eq("store_id", order.store_id as any);
 
           if (!storePricesError && storePrices) {
             const priceMap = new Map<string, number>();
-            storePrices.forEach((sp) => priceMap.set(sp.product_id, sp.price));
+            (storePrices as any[]).forEach((sp: any) => priceMap.set(sp.product_id, sp.price));
             setStorePricing(priceMap);
           }
 
@@ -210,11 +211,11 @@ const [selectedProduct, setSelectedProduct] = useState<string>("");
             const { data: typePrices, error: typePricesError } = await supabase
               .from("store_type_pricing")
               .select("product_id, price")
-              .eq("store_type_id", order.stores.store_type_id);
+              .eq("store_type_id", order.stores.store_type_id as any);
 
             if (!typePricesError && typePrices) {
               const priceMap = new Map<string, number>();
-              typePrices.forEach((tp) => priceMap.set(tp.product_id, tp.price));
+              (typePrices as any[]).forEach((tp: any) => priceMap.set(tp.product_id, tp.price));
               setStoreTypePricing(priceMap);
             }
           }
@@ -225,7 +226,7 @@ const [selectedProduct, setSelectedProduct] = useState<string>("");
           const { data: storeData, error: storeError } = await supabase
             .from("stores")
             .select("outstanding")
-            .eq("id", order.store_id)
+            .eq("id", order.store_id as any)
             .maybeSingle();
 
           if (!storeError && storeData) {
@@ -235,11 +236,11 @@ const [selectedProduct, setSelectedProduct] = useState<string>("");
 
         // Pre-fill items from order if detailed
         if (order.order_type === "detailed" && order.order_items?.length) {
-          const productMap = new Map(productsData?.map((p) => [p.id, p]) || []);
+          const productMap = new Map(productsData?.map((p: any) => [p.id, p]) ?? []);
           const initialItems: FulfillmentItem[] = [];
 
           for (const item of order.order_items) {
-            const product = productMap.get(item.product_id) || item.products;
+            const product: any = productMap.get(item.product_id) || item.products;
             if (!product) continue;
 
             const basePrice = product.base_price;
@@ -284,7 +285,7 @@ const [selectedProduct, setSelectedProduct] = useState<string>("");
   const handleAddProduct = () => {
     if (!selectedProduct) return;
 
-    const product = products.find((p) => p.id === selectedProduct);
+    const product = products.find((p: any) => p.id === selectedProduct);
     if (!product) return;
 
     // Check if already in items
@@ -329,7 +330,7 @@ const [selectedProduct, setSelectedProduct] = useState<string>("");
             total: newQty * item.unit_price,
           };
         })
-        .filter(Boolean) as FulfillmentItem[]
+        .filter((x): x is FulfillmentItem => !!x)
     );
   };
 
@@ -425,7 +426,7 @@ const handleSubmit = async () => {
       const { data: displayIdData, error: displayIdError } = await supabase.rpc(
         "generate_display_id",
         { prefix: "SALE", seq_name: "sale_display_seq" }
-      );
+      ) as any;
       if (displayIdError) throw displayIdError;
 
       const saleDisplayId = displayIdData as string;
@@ -458,7 +459,7 @@ const handleSubmit = async () => {
     }
 
     // Call record_sale RPC - pass 0 to let it compute from sale_items
-    const { error: saleError } = await supabase.rpc("record_sale", {
+    const { error: saleError } = await (supabase.rpc("record_sale", {
       p_display_id: saleDisplayId,
       p_store_id: order.store_id,
       p_customer_id: customerId,
@@ -470,24 +471,24 @@ const handleSubmit = async () => {
       p_outstanding_amount: outstandingAmount,
       p_sale_items: saleItems,
       p_created_at: null,
-    });
+    } as any));
 
       if (saleError) throw saleError;
 
       // Get the sale we just created to link it to the order
-      const { data: newSale, error: fetchSaleError } = await supabase
+        const { data: newSale, error: fetchSaleError } = await ((supabase as any)
         .from("sales")
         .select("id")
         .eq("display_id", saleDisplayId)
-        .single();
+        .single());
 
       if (fetchSaleError) throw fetchSaleError;
 
       // Update the sale with order_id reference
       const { error: linkError } = await supabase
         .from("sales")
-        .update({ order_id: order.id })
-        .eq("id", newSale.id);
+        .update({ order_id: order.id } as any)
+        .eq("id", newSale.id as any);
 
       if (linkError) throw linkError;
 
@@ -499,14 +500,15 @@ const handleSubmit = async () => {
           fulfilled_by: user.id,
           fulfilled_by_sale_id: newSale.id,
           delivered_at: new Date().toISOString(),
-        })
-        .eq("id", order.id);
+          updated_by: user.id,
+        } as any)
+        .eq("id", order.id as any);
 
       if (orderError) throw orderError;
 
       // Send notification to customer if exists
       if (order.stores?.customer_id) {
-        await supabase.from("notifications").insert({
+        await (supabase.from("notifications") as any).insert({
           user_id: order.stores.customer_id,
           title: "Order Delivered",
           message: `Your order ${order.display_id} has been delivered and recorded as sale ${saleDisplayId}.`,
@@ -549,9 +551,9 @@ const handleSubmit = async () => {
     );
 
     // Notify the assigned agent if different from fulfiller
-    if (order.assigned_to && order.assigned_to !== user.id) {
+    if ((order as any).assigned_to && (order as any).assigned_to !== user.id) {
       notifications.push(
-        sendNotificationToMany([order.assigned_to], {
+        sendNotificationToMany([(order as any).assigned_to], {
           title: "Assigned Order Fulfilled",
           message: `Order ${order.display_id} for ${storeName} (assigned to you) has been fulfilled by another agent. Sale ${saleDisplayId} created.`,
           type: "order",
@@ -564,7 +566,7 @@ const handleSubmit = async () => {
     await Promise.all(notifications);
 
       // Log activity
-      await supabase.from("activity_log").insert({
+      await ((supabase as any).from("activity_log") as any).insert({
         action: "order_fulfilled",
         entity_type: "order",
         entity_id: order.id,

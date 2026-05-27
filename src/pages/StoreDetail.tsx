@@ -290,7 +290,7 @@ const StoreDetail = () => {
   };
 
 const handleDeleteQr = async (qrId: string) => {
-  const { error } = await supabase.from("store_qr_codes").update({ deleted_at: new Date().toISOString() }).eq("id", qrId);
+  const { error } = await supabase.from("store_qr_codes").update({ deleted_at: new Date().toISOString() } as any).eq("id", qrId);
   if (error) { toast.error(error.message); return; }
     toast.success("QR code removed");
     qc.invalidateQueries({ queryKey: ["store-qr-codes", id] });
@@ -366,7 +366,7 @@ const handleDeleteQr = async (qrId: string) => {
         state: form.state || null,
         pincode: form.pincode || null,
         address: address || null,
-        store_type_id: form.store_type_id || null,
+        store_type_id: form.store_type_id || undefined,
         route_id: form.route_id || null,
         photo_url: photoUrl || null,
       })

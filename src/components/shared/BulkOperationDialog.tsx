@@ -297,7 +297,7 @@ export function BulkOperationDialog<T extends { id: string; name?: string; displ
         isOpen={showConfirmation}
         onClose={handleCancel}
         onConfirm={executeOperation}
-        operation={operation}
+        operation={operation as any}
         selectedCount={selectedCount}
         itemLabel={itemLabel}
         itemLabelPlural={itemLabelPlural}
@@ -308,7 +308,7 @@ export function BulkOperationDialog<T extends { id: string; name?: string; displ
         isOpen={showProgress}
         onClose={handleFinalClose}
         progress={progress}
-        operation={operation}
+        operation={operation as any}
         result={result}
         selectedCount={selectedCount}
         onRetry={handleRetry}
@@ -321,7 +321,7 @@ export function BulkOperationDialog<T extends { id: string; name?: string; displ
         isOpen={showResult}
         onClose={handleFinalClose}
         result={result}
-        operation={operation}
+        operation={operation as any}
         onRetry={handleRetry}
         onUndo={handleUndo}
         canUndo={canUndo}
