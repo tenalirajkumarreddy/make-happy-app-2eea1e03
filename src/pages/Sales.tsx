@@ -607,31 +607,6 @@ let query = supabase
 
     setSaving(true);
 
-  // Proximity check for agents (only if geofencing is enabled)
-  if (role === "agent" && selectedStore) {
-    const { data: locSetting } = await supabase.from("company_settings").select("value").eq("key", "location_validation").maybeSingle();
-    if (locSetting?.value === "true") {
-      const { checkProximity } = await import("@/lib/proximity");
-      const result = await checkProximity(
-        selectedStore.lat ?? null,
-        selectedStore.lng ?? null,
-        { noGpsHandling: "require_manager_override", userRole: role }
-      );
-      if (!result.withinRange) {
-        if (result.requiresManagerOverride) {
-          toast.error(result.message + " Please ask a manager to update the store's GPS coordinates.");
-        } else {
-          toast.error(result.message);
-        }
-        setSaving(false);
-        return;
-      }
-      if (result.skippedNoGps) {
-        toast.warning("Store has no GPS coordinates — location check skipped");
-      }
-    }
-  }
-
   const customerId = selectedStore?.customer_id;
   if (!customerId) {
     toast.error("Store has no linked customer");

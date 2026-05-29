@@ -17,7 +17,6 @@ import { logActivity } from "@/lib/activityLogger";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { resolveCreditLimit } from "@/lib/creditLimit";
 import { validateCreditLimitOffline } from "@/lib/offlineCreditValidation";
-import { checkProximity } from "@/lib/proximity";
 import { StorePickerSheet, StoreOption } from "@/mobile/components/StorePickerSheet";
 import { cn } from "@/lib/utils";
 import { SaleReceipt } from "@/components/shared/SaleReceipt";
@@ -247,20 +246,6 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
 
     setSaving(true);
 
-    // Proximity check for agents (mirrors web Sales.tsx)
-    if (role === "agent" && store) {
-      const { data: locSetting } = await supabase.from("company_settings").select("value").eq("key", "location_validation").maybeSingle();
-      if (locSetting?.value === "true") {
-        const result = await checkProximity(store.lat, store.lng, { noGpsHandling: "require_manager_override", userRole: role });
-        if (!result.withinRange) {
-          toast.error(result.requiresManagerOverride ? result.message + " Please ask a manager to update the store's GPS coordinates." : result.message);
-          setSaving(false);
-          return;
-        }
-        if (result.skippedNoGps) toast.warning("Store has no GPS coordinates — location check skipped");
-      }
-    }
-
     const effectiveRecordedBy = recordedFor || user!.id;
     const loggedBy = recordedFor ? user!.id : null;
 
@@ -390,17 +375,17 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
         <p className="text-xs font-bold text-muted-foreground dark:text-muted-foreground uppercase tracking-widest mb-2">Select Store</p>
         <button
           className={cn(
-            "w-full border-2 rounded-2xl p-4 flex items-center gap-3 text-left transition-all",
+            "w-full border-2 rounded-xl p-4 flex items-center gap-3 text-left transition-all",
             store
               ? "border-blue-200 dark:border-blue-700 bg-blue-50/50 dark:bg-blue-900/20"
-              : "border-dashed border-border dark:border-border hover:border-blue-200 dark:hover:border-blue-700 hover:bg-slate-50 dark:hover:bg-slate-800/50"
+              : "border-dashed border-border border hover:border-blue-200 dark:hover:border-blue-700 hover:bg-muted/50"
           )}
           onClick={() => setStorePickerOpen(true)}
           aria-label={store ? `Change store, currently ${store.name}` : "Select a store"}
         >
           <div className={cn(
             "h-10 w-10 rounded-xl flex items-center justify-center shrink-0",
-            store ? "bg-blue-100 dark:bg-blue-900/40" : "bg-slate-100 dark:bg-slate-800"
+            store ? "bg-blue-100 dark:bg-blue-900/40" : "bg-muted"
           )}>
             <StoreIcon className={cn("h-5 w-5", store ? "text-blue-500" : "text-muted-foreground")} />
           </div>
@@ -412,14 +397,14 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
           ) : (
             <span className="text-muted-foreground text-sm flex-1 font-medium">Tap to select store...</span>
           )}
-          <ChevronRight className={cn("h-4 w-4 shrink-0", store ? "text-blue-400" : "text-slate-300")} />
+          <ChevronRight className={cn("h-4 w-4 shrink-0", store ? "text-blue-400" : "text-muted-foreground/40")} />
         </button>
       </div>
 
       {/* Store balance info */}
       {store && (
         <div className="px-4">
-          <div className="rounded-2xl bg-card dark:bg-slate-800 border border-border dark:border-border p-3.5 flex justify-between items-center">
+          <div className="rounded-xl bg-card border border-border border p-3.5 flex justify-between items-center">
             <div>
               <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Current Balance</p>
               <p className={cn("text-xl font-bold mt-0.5", oldOutstanding > 0 ? "text-red-500" : "text-emerald-500")}>
@@ -429,7 +414,7 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
             {store.customers?.name && (
               <div className="text-right">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Customer</p>
-                <p className="text-sm font-bold text-slate-700 dark:text-slate-200 mt-0.5">{store.customers.name}</p>
+                <p className="text-sm font-bold text-foreground mt-0.5">{store.customers.name}</p>
               </div>
             )}
           </div>
@@ -441,7 +426,7 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
         <div className="px-4">
           <button
             onClick={() => setShowOrders(true)}
-            className="w-full rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 p-3.5 flex items-center gap-3 text-left transition-all active:scale-[0.98]"
+            className="w-full rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 p-3.5 flex items-center gap-3 text-left transition-all active:scale-[0.98]"
           >
             <div className="h-9 w-9 rounded-xl bg-amber-100 dark:bg-amber-800/40 flex items-center justify-center shrink-0">
               <ShoppingCart className="h-4.5 w-4.5 text-amber-600 dark:text-amber-400" />
@@ -458,15 +443,15 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
       {/* Pending orders modal */}
       {showOrders && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center" onClick={() => setShowOrders(false)}>
-          <div className="bg-card dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl w-full max-w-md max-h-[70vh] overflow-y-auto p-4" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-card rounded-t-2xl sm:rounded-xl w-full max-w-md max-h-[70vh] overflow-y-auto p-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-bold text-foreground dark:text-white">Pending Orders</h3>
-              <button onClick={() => setShowOrders(false)} className="text-muted-foreground hover:text-slate-600">✕</button>
+              <button onClick={() => setShowOrders(false)} className="text-muted-foreground hover:text-foreground">✕</button>
             </div>
             {pendingOrders.map((order: any) => (
-              <div key={order.id} className="rounded-xl border border-border dark:border-border p-3 mb-2">
+              <div key={order.id} className="rounded-xl border border-border border p-3 mb-2">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-slate-600 dark:text-slate-300">{order.display_id}</span>
+                  <span className="text-xs font-bold text-muted-foreground">{order.display_id}</span>
                   <span className="text-[10px] text-muted-foreground">{new Date(order.created_at).toLocaleDateString()}</span>
                 </div>
                 <div className="space-y-1 mb-2">
@@ -500,14 +485,14 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
 
       {/* Entry options */}
       <div className="px-4">
-        <div className="rounded-2xl bg-card dark:bg-slate-800 border border-border dark:border-border p-3 space-y-2.5">
+        <div className="rounded-xl bg-card border border-border border p-3 space-y-2.5">
           {canRecordBehalf && (
             <div>
               <Label className="text-xs text-muted-foreground dark:text-muted-foreground font-semibold">Record For</Label>
               <select
                 value={recordedFor || "self"}
                 onChange={(e) => setRecordedFor(e.target.value === "self" ? "" : e.target.value)}
-                className="mt-1 w-full h-10 rounded-xl border border-border dark:border-border bg-card dark:bg-slate-900 px-3 text-sm"
+                className="mt-1 w-full h-10 rounded-xl border border-border border bg-card px-3 text-sm"
               >
                 <option value="self">Self</option>
                 {(staffUsers as any[])?.map((member: any) => (
@@ -523,7 +508,7 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
                 type="date"
                 value={saleDate}
                 onChange={(e) => setSaleDate(e.target.value)}
-                className="mt-1 h-10 rounded-xl border-border dark:border-border"
+                className="mt-1 h-10 rounded-xl border-border border"
               />
             </div>
           )}
@@ -547,10 +532,10 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
                   <div
                     key={product.id}
                     className={cn(
-                      "rounded-2xl border-2 transition-all overflow-hidden",
+                      "rounded-xl border-2 transition-all overflow-hidden",
                       inCart
                         ? "border-blue-200 dark:border-blue-700 bg-blue-50/30 dark:bg-blue-900/10"
-                        : "border-border dark:border-border bg-card dark:bg-slate-800"
+                        : "border-border border bg-card"
                     )}
                   >
                     <div className="flex items-center p-3.5 gap-3">
@@ -560,7 +545,7 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
                           <p className="text-xs text-muted-foreground">
                             ₹{product.effectivePrice.toLocaleString("en-IN")}
                           </p>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-muted-foreground font-medium">
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
                             Stock: {product.stock}
                           </span>
                           {product.pending_out > 0 && (
@@ -576,11 +561,11 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
                             ₹{(inCart.quantity * inCart.unit_price).toLocaleString("en-IN")}
                           </span>
                           <button
-                            className="h-10 w-10 rounded-xl border-2 border-border dark:border-border flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors active:scale-90"
+                            className="h-10 w-10 rounded-xl border-2 border-border border flex items-center justify-center hover:bg-muted/80 transition-colors active:scale-90"
                             onClick={() => updateQty(product.id, -1)}
                             aria-label={`Decrease ${product.name} quantity`}
                           >
-                            <Minus className="h-4.5 w-4.5 text-slate-600 dark:text-slate-300" />
+                            <Minus className="h-4.5 w-4.5 text-muted-foreground" />
                           </button>
                           <span className="text-sm font-bold text-foreground dark:text-white w-7 text-center">
                             {inCart.quantity}
@@ -615,7 +600,7 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
       <div className="px-4 mt-2">
         <button
           onClick={() => setShowProductSearch(true)}
-          className="w-full flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border dark:border-border py-3 text-sm text-muted-foreground dark:text-muted-foreground hover:border-blue-400 hover:text-blue-600 transition-colors active:scale-[0.98]"
+          className="w-full flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border border py-3 text-sm text-muted-foreground dark:text-muted-foreground hover:border-blue-400 hover:text-blue-600 transition-colors active:scale-[0.98]"
         >
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
           Add Other Product
@@ -625,10 +610,10 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
       {/* Product search dialog */}
       {showProductSearch && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center" onClick={() => setShowProductSearch(false)}>
-          <div className="bg-card dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl w-full max-w-md max-h-[70vh] overflow-y-auto p-4" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-card rounded-t-2xl sm:rounded-xl w-full max-w-md max-h-[70vh] overflow-y-auto p-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-bold text-foreground dark:text-white">Search Products</h3>
-              <button onClick={() => setShowProductSearch(false)} className="text-muted-foreground hover:text-slate-600">✕</button>
+              <button onClick={() => setShowProductSearch(false)} className="text-muted-foreground hover:text-foreground">✕</button>
             </div>
             {allProducts
               .filter((p: any) => !items.find((i) => i.product_id === p.id))
@@ -636,9 +621,9 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
                 <button
                   key={p.id}
                   onClick={() => { addItem(p.id); setShowProductSearch(false); }}
-                  className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                  className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-muted/50 transition-colors"
                 >
-                  <span className="text-sm text-slate-700 dark:text-slate-300">{p.name}</span>
+                  <span className="text-sm text-foreground">{p.name}</span>
                   <span className="text-xs text-muted-foreground">₹{Number(p.base_price).toLocaleString("en-IN")}</span>
                 </button>
               ))}
@@ -653,7 +638,7 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
       {items.length > 0 && (
         <div className="px-4 space-y-4">
           {/* Cart summary */}
-          <div className="rounded-2xl bg-card dark:bg-slate-800 border border-border dark:border-border p-4">
+          <div className="rounded-xl bg-card border border-border border p-4">
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs font-bold text-muted-foreground dark:text-muted-foreground uppercase tracking-widest">Order Total</p>
               <p className="text-2xl font-bold text-foreground dark:text-white">₹{totalAmount.toLocaleString("en-IN")}</p>
@@ -673,7 +658,7 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
                         className="h-7 w-24 text-xs rounded-lg"
                       />
                     ) : (
-                      <span className="font-semibold text-slate-700 dark:text-slate-300">
+                      <span className="font-semibold text-foreground">
                         ₹{(item.quantity * item.unit_price).toLocaleString("en-IN")}
                       </span>
                     )}
@@ -687,7 +672,7 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
           <div>
             <p className="text-xs font-bold text-muted-foreground dark:text-muted-foreground uppercase tracking-widest mb-2.5">Payment Received</p>
             <div className="grid grid-cols-2 gap-2">
-              <div className="rounded-2xl bg-card dark:bg-slate-800 border border-border dark:border-border p-3">
+              <div className="rounded-xl bg-card border border-border border p-3">
                 <div className="flex items-center gap-1.5 mb-2">
                   <Banknote className="h-3.5 w-3.5 text-emerald-500" />
                   <Label className="text-xs text-muted-foreground dark:text-muted-foreground font-semibold">Cash</Label>
@@ -700,11 +685,11 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
                     value={cashAmount}
                     onChange={(e) => setCashAmount(e.target.value)}
                     placeholder="0"
-                    className="pl-7 h-11 rounded-xl text-base font-semibold border-border dark:border-border"
+                    className="pl-7 h-11 rounded-xl text-base font-semibold border-border border"
                   />
                 </div>
               </div>
-              <div className="rounded-2xl bg-card dark:bg-slate-800 border border-border dark:border-border p-3">
+              <div className="rounded-xl bg-card border border-border border p-3">
                 <div className="flex items-center gap-1.5 mb-2">
                   <CreditCard className="h-3.5 w-3.5 text-violet-500" />
                   <Label className="text-xs text-muted-foreground dark:text-muted-foreground font-semibold">UPI</Label>
@@ -717,7 +702,7 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
                     value={upiAmount}
                     onChange={(e) => setUpiAmount(e.target.value)}
                     placeholder="0"
-                    className="pl-7 h-11 rounded-xl text-base font-semibold border-border dark:border-border"
+                    className="pl-7 h-11 rounded-xl text-base font-semibold border-border border"
                   />
                 </div>
               </div>
@@ -726,7 +711,7 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
 
           {/* Balance summary */}
           <div className={cn(
-            "rounded-2xl p-4 border-2",
+            "rounded-xl p-4 border-2",
             outstandingFromSale > 0
               ? "border-amber-200 dark:border-amber-700/40 bg-amber-50/50 dark:bg-amber-900/10"
               : "border-emerald-200 dark:border-emerald-700/40 bg-emerald-50/50 dark:bg-emerald-900/10"
@@ -742,8 +727,8 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
                   {outstandingFromSale >= 0 ? "+" : ""}₹{outstandingFromSale.toLocaleString("en-IN")}
                 </span>
               </div>
-              <div className="flex justify-between text-sm font-bold border-t border-border dark:border-border pt-2 mt-1">
-                <span className="text-slate-700 dark:text-slate-200">New balance</span>
+              <div className="flex justify-between text-sm font-bold border-t border-border border pt-2 mt-1">
+                <span className="text-foreground">New balance</span>
                 <span className={cn("text-base", newOutstanding > 0 ? "text-red-500" : "text-emerald-500")}>
                   ₹{newOutstanding.toLocaleString("en-IN")}
                 </span>
@@ -752,7 +737,7 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
           </div>
 
           {creditExceeded && (
-            <div className="flex items-center gap-2.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700/40 rounded-2xl px-4 py-3">
+            <div className="flex items-center gap-2.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700/40 rounded-xl px-4 py-3">
               <AlertTriangle className="h-4 w-4 text-red-500 shrink-0" />
               <span className="text-xs font-medium text-red-700 dark:text-red-400">
                 Credit limit exceeded ({creditLimitInfo?.source}). Reduce items or collect more payment.
@@ -761,7 +746,7 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
           )}
 
           {creditWarning && (
-            <div className="flex items-center gap-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/40 rounded-2xl px-4 py-3">
+            <div className="flex items-center gap-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/40 rounded-xl px-4 py-3">
               <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
               <span className="text-xs font-medium text-amber-700 dark:text-amber-400">
                 Approaching credit limit ({creditLimitInfo?.source}).
@@ -772,7 +757,7 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
           {/* Submit */}
           <button
             className={cn(
-              "w-full h-14 rounded-2xl text-white text-base font-bold tracking-wide flex items-center justify-center gap-2 transition-all shadow-lg",
+              "w-full h-14 rounded-xl text-white text-base font-bold tracking-wide flex items-center justify-center gap-2 transition-all shadow-lg",
               saving
                 ? "bg-blue-400 cursor-not-allowed"
                 : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 active:scale-[0.98]"
@@ -886,37 +871,24 @@ function RecordPayment({ preselectStore }: { preselectStore?: StoreOption | null
       return;
     }
 
-    const { data: displayId } = await (supabase as any).rpc("generate_display_id", { prefix: "PAY", seq_name: "pay_display_seq" });
-    const { error } = await supabase.from("transactions").insert({
-      display_id: String(displayId),
-      ...txData,
-    });
+    const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "PAY", seq_name: "pay_display_seq" }) as any;
+
+    const { error } = await supabase.rpc("record_transaction", {
+      p_display_id: String(displayId),
+      p_store_id: store.id,
+      p_customer_id: store.customer_id,
+      p_recorded_by: effectiveRecordedBy,
+      p_logged_by: loggedBy ?? undefined,
+      p_cash_amount: cash,
+      p_upi_amount: upi,
+      p_notes: notes ?? undefined,
+      p_created_at: txnDate ? new Date(txnDate).toISOString() : undefined,
+    }) as any;
 
     if (error) { toast.error(error.message); setSaving(false); return; }
 
-    await supabase.from("stores").update({ outstanding: newOutstanding }).eq("id", store.id);
-
     if (txnDate) {
-      const { data: storeRow } = await supabase.from("stores").select("opening_balance").eq("id", store.id).single();
-      let runBal = Number(storeRow?.opening_balance || 0);
-      const [{ data: allSales }, { data: allTxns }] = await Promise.all([
-        supabase.from("sales").select("id, created_at, total_amount, cash_amount, upi_amount").eq("store_id", store.id).order("created_at", { ascending: true }),
-        supabase.from("transactions").select("id, created_at, total_amount").eq("store_id", store.id).order("created_at", { ascending: true }),
-      ]);
-      const timeline = [
-        ...(allSales || []).map((s: any) => ({ type: "sale", id: s.id, date: s.created_at, delta: Number(s.total_amount) - Number(s.cash_amount) - Number(s.upi_amount) })),
-        ...(allTxns || []).map((t: any) => ({ type: "txn", id: t.id, date: t.created_at, delta: -Number(t.total_amount) })),
-      ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-      for (const entry of timeline) {
-        const oldBal = runBal;
-        runBal += entry.delta;
-        if (entry.type === "sale") {
-          await supabase.from("sales").update({ old_outstanding: oldBal, new_outstanding: runBal }).eq("id", entry.id);
-        } else {
-          await supabase.from("transactions").update({ old_outstanding: oldBal, new_outstanding: runBal }).eq("id", entry.id);
-        }
-      }
-      await supabase.from("stores").update({ outstanding: runBal }).eq("id", store.id);
+      await supabase.rpc("recalc_running_balances", { p_store_id: store.id });
     }
 
     logActivity(user!.id, "Recorded transaction", "transaction", String(displayId), undefined, { total: totalPayment, store: store.id });
@@ -956,16 +928,16 @@ function RecordPayment({ preselectStore }: { preselectStore?: StoreOption | null
         <p className="text-xs font-bold text-muted-foreground dark:text-muted-foreground uppercase tracking-widest mb-2">Select Store</p>
         <button
           className={cn(
-            "w-full border-2 rounded-2xl p-4 flex items-center gap-3 text-left transition-all",
+            "w-full border-2 rounded-xl p-4 flex items-center gap-3 text-left transition-all",
             store
               ? "border-emerald-200 dark:border-emerald-700 bg-emerald-50/50 dark:bg-emerald-900/10"
-              : "border-dashed border-border dark:border-border hover:border-emerald-200 dark:hover:border-emerald-700 hover:bg-slate-50 dark:hover:bg-slate-800/50"
+              : "border-dashed border-border border hover:border-emerald-200 dark:hover:border-emerald-700 hover:bg-muted/50"
           )}
           onClick={() => setStorePickerOpen(true)}
         >
           <div className={cn(
             "h-10 w-10 rounded-xl flex items-center justify-center shrink-0",
-            store ? "bg-emerald-100 dark:bg-emerald-900/40" : "bg-slate-100 dark:bg-slate-800"
+            store ? "bg-emerald-100 dark:bg-emerald-900/40" : "bg-muted"
           )}>
             <StoreIcon className={cn("h-5 w-5", store ? "text-emerald-500" : "text-muted-foreground")} />
           </div>
@@ -977,14 +949,14 @@ function RecordPayment({ preselectStore }: { preselectStore?: StoreOption | null
           ) : (
             <span className="text-muted-foreground text-sm flex-1 font-medium">Tap to select store...</span>
           )}
-          <ChevronRight className={cn("h-4 w-4 shrink-0", store ? "text-emerald-400" : "text-slate-300")} />
+          <ChevronRight className={cn("h-4 w-4 shrink-0", store ? "text-emerald-400" : "text-muted-foreground/40")} />
         </button>
       </div>
 
       {/* Balance info */}
       {store && (
         <div className="px-4">
-          <div className="rounded-2xl bg-card dark:bg-slate-800 border border-border dark:border-border p-3.5 flex justify-between items-center">
+          <div className="rounded-xl bg-card border border-border border p-3.5 flex justify-between items-center">
             <div>
               <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Outstanding Balance</p>
               <p className={cn("text-xl font-bold mt-0.5", oldOutstanding > 0 ? "text-red-500" : "text-emerald-500")}>
@@ -994,7 +966,7 @@ function RecordPayment({ preselectStore }: { preselectStore?: StoreOption | null
             {store.customers?.name && (
               <div className="text-right">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Customer</p>
-                <p className="text-sm font-bold text-slate-700 dark:text-slate-200 mt-0.5">{store.customers.name}</p>
+                <p className="text-sm font-bold text-foreground mt-0.5">{store.customers.name}</p>
               </div>
             )}
           </div>
@@ -1005,7 +977,7 @@ function RecordPayment({ preselectStore }: { preselectStore?: StoreOption | null
       <div className="px-4">
         <p className="text-xs font-bold text-muted-foreground dark:text-muted-foreground uppercase tracking-widest mb-2.5">Payment Amount</p>
         <div className="grid grid-cols-2 gap-2">
-          <div className="rounded-2xl bg-card dark:bg-slate-800 border border-border dark:border-border p-3">
+          <div className="rounded-xl bg-card border border-border border p-3">
             <div className="flex items-center gap-1.5 mb-2">
               <Banknote className="h-3.5 w-3.5 text-emerald-500" />
               <Label className="text-xs text-muted-foreground dark:text-muted-foreground font-semibold">Cash</Label>
@@ -1018,11 +990,11 @@ function RecordPayment({ preselectStore }: { preselectStore?: StoreOption | null
                 value={cashAmount}
                 onChange={(e) => setCashAmount(e.target.value)}
                 placeholder="0"
-                className="pl-7 h-11 rounded-xl text-base font-semibold border-border dark:border-border"
+                className="pl-7 h-11 rounded-xl text-base font-semibold border-border border"
               />
             </div>
           </div>
-          <div className="rounded-2xl bg-card dark:bg-slate-800 border border-border dark:border-border p-3">
+          <div className="rounded-xl bg-card border border-border border p-3">
             <div className="flex items-center gap-1.5 mb-2">
               <CreditCard className="h-3.5 w-3.5 text-violet-500" />
               <Label className="text-xs text-muted-foreground dark:text-muted-foreground font-semibold">UPI</Label>
@@ -1035,14 +1007,14 @@ function RecordPayment({ preselectStore }: { preselectStore?: StoreOption | null
                 value={upiAmount}
                 onChange={(e) => setUpiAmount(e.target.value)}
                 placeholder="0"
-                className="pl-7 h-11 rounded-xl text-base font-semibold border-border dark:border-border"
+                className="pl-7 h-11 rounded-xl text-base font-semibold border-border border"
               />
             </div>
           </div>
         </div>
 
         <div className="mt-2">
-          <div className="rounded-xl bg-card dark:bg-slate-800 border border-border dark:border-border px-3 py-2.5">
+          <div className="rounded-xl bg-card border border-border border px-3 py-2.5">
             <Input
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
@@ -1052,14 +1024,14 @@ function RecordPayment({ preselectStore }: { preselectStore?: StoreOption | null
           </div>
         </div>
 
-        <div className="mt-2 rounded-2xl bg-card dark:bg-slate-800 border border-border dark:border-border p-3 space-y-2.5">
+        <div className="mt-2 rounded-xl bg-card border border-border border p-3 space-y-2.5">
           {canRecordBehalf && (
             <div>
               <Label className="text-xs text-muted-foreground dark:text-muted-foreground font-semibold">Record For</Label>
               <select
                 value={recordedFor || "self"}
                 onChange={(e) => setRecordedFor(e.target.value === "self" ? "" : e.target.value)}
-                className="mt-1 w-full h-10 rounded-xl border border-border dark:border-border bg-card dark:bg-slate-900 px-3 text-sm"
+                className="mt-1 w-full h-10 rounded-xl border border-border border bg-card px-3 text-sm"
               >
                 <option value="self">Self</option>
                 {(staffUsers as any[])?.map((member: any) => (
@@ -1074,7 +1046,7 @@ function RecordPayment({ preselectStore }: { preselectStore?: StoreOption | null
               type="date"
               value={txnDate}
               onChange={(e) => setTxnDate(e.target.value)}
-              className="mt-1 h-10 rounded-xl border-border dark:border-border"
+              className="mt-1 h-10 rounded-xl border-border border"
             />
           </div>
         </div>
@@ -1083,7 +1055,7 @@ function RecordPayment({ preselectStore }: { preselectStore?: StoreOption | null
       {/* Summary + submit */}
       {store && totalPayment > 0 && (
         <div className="px-4 space-y-3">
-          <div className="rounded-2xl bg-emerald-50/50 dark:bg-emerald-900/10 border-2 border-emerald-200 dark:border-emerald-700/40 p-4 space-y-2">
+          <div className="rounded-xl bg-emerald-50/50 dark:bg-emerald-900/10 border-2 border-emerald-200 dark:border-emerald-700/40 p-4 space-y-2">
             <div className="flex justify-between text-xs text-muted-foreground dark:text-muted-foreground">
               <span>Collecting</span>
               <span className="font-bold text-emerald-600 dark:text-emerald-400">₹{totalPayment.toLocaleString("en-IN")}</span>
@@ -1093,7 +1065,7 @@ function RecordPayment({ preselectStore }: { preselectStore?: StoreOption | null
               <span className="font-semibold">₹{oldOutstanding.toLocaleString("en-IN")}</span>
             </div>
             <div className="flex justify-between text-sm font-bold border-t border-emerald-200 dark:border-emerald-700/40 pt-2">
-              <span className="text-slate-700 dark:text-slate-200">New balance</span>
+              <span className="text-foreground">New balance</span>
               <span className={cn("text-base", newOutstanding > 0 ? "text-red-500" : "text-emerald-500")}>
                 ₹{newOutstanding.toLocaleString("en-IN")}
               </span>
@@ -1101,7 +1073,7 @@ function RecordPayment({ preselectStore }: { preselectStore?: StoreOption | null
           </div>
 
           {totalPayment > oldOutstanding && oldOutstanding > 0 && (
-            <div className="flex items-center gap-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/40 rounded-2xl px-4 py-3">
+            <div className="flex items-center gap-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/40 rounded-xl px-4 py-3">
               <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
               <span className="text-xs font-medium text-amber-700 dark:text-amber-400">
                 Payment exceeds outstanding balance
@@ -1111,7 +1083,7 @@ function RecordPayment({ preselectStore }: { preselectStore?: StoreOption | null
 
           <button
             className={cn(
-              "w-full h-14 rounded-2xl text-white text-base font-bold tracking-wide flex items-center justify-center gap-2 transition-all shadow-lg",
+              "w-full h-14 rounded-xl text-white text-base font-bold tracking-wide flex items-center justify-center gap-2 transition-all shadow-lg",
               saving
                 ? "bg-emerald-400 cursor-not-allowed"
                 : "bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 active:scale-[0.98]"
@@ -1130,12 +1102,6 @@ function RecordPayment({ preselectStore }: { preselectStore?: StoreOption | null
           </button>
         </div>
       )}
-
-      <SaleReceipt
-        saleId={lastSaleId || ""}
-        open={!!lastSaleId}
-        onClose={() => setLastSaleId(null)}
-      />
 
       <StorePickerSheet
         open={storePickerOpen}
@@ -1180,7 +1146,7 @@ export function AgentRecord({
       {/* Tab selector header */}
       <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 dark:from-slate-900 dark:via-blue-950 dark:to-indigo-950 px-4 pt-4 pb-6">
         <p className="text-blue-200 text-xs font-medium uppercase tracking-widest mb-3">Action</p>
-        <div className="bg-card/15 backdrop-blur-sm rounded-2xl p-1 flex gap-1">
+        <div className="bg-card/15 backdrop-blur-sm rounded-xl p-1 flex gap-1">
           {allowSale && (
             <button
               onClick={() => setActiveTab("sale")}
