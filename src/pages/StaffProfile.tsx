@@ -104,12 +104,12 @@ const PERMISSION_CATEGORIES = [
     label: "Orders",
     icon: Package,
     permissions: [
-      { key: "create_order", label: "Create Order" },
-      { key: "edit_order", label: "Edit Order" },
-      { key: "fulfill_order", label: "Fulfill Order" },
-      { key: "cancel_order", label: "Cancel Order" },
+      { key: "create_orders", label: "Create Orders" },
+      { key: "modify_orders", label: "Modify Orders" },
+      { key: "fulfill_orders", label: "Fulfill Orders" },
+      { key: "cancel_orders", label: "Cancel Orders" },
       { key: "view_assigned_orders", label: "View Assigned Orders" },
-      { key: "transfer_order", label: "Transfer Order" },
+      { key: "transfer_orders", label: "Transfer Orders" },
     ],
   },
   {

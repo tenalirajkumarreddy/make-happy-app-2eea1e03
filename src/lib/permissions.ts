@@ -51,7 +51,7 @@ export const ROLE_DEFAULTS: Record<AppRole, PermissionKey[]> = {
   agent: [
     "create_customers", "create_stores",
     "price_override", "create_sale_returns",
-    "view_orders", "modify_orders",
+    "view_orders", "create_orders", "modify_orders",
     "view_assigned_orders", "accept_order_transfers",
     "fulfill_orders", "cancel_orders", "record_sale",
     "view_invoices", "download_invoices",
