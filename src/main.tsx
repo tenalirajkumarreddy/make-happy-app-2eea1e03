@@ -103,21 +103,13 @@ async function initPushNotifications() {
       return;
     }
 
-    // Register with FCM
-    await PushNotifications.register();
-
-    // Get FCM token and save to backend
+    // Register listeners BEFORE register() to avoid race condition
     PushNotifications.addListener("registration", async (token) => {
       logDebug("FCM token received", { token: token.value });
+      localStorage.setItem("last_fcm_token", token.value);
       await saveFCMToken(token.value);
     });
 
-    // Handle incoming push notification (app in background or foreground)
-    PushNotifications.addListener("pushNotificationReceived", (notification: any) => {
-      logDebug("Push notification received", { title: notification.title });
-    });
-
-    // Handle notification tap
     PushNotifications.addListener(
       "pushNotificationActionPerformed",
       (response) => {
@@ -133,11 +125,14 @@ async function initPushNotifications() {
       }
     );
 
-    // Token refresh
     PushNotifications.addListener("tokenRefresh" as any, async (token: any) => {
       logDebug("FCM token refreshed", { token: token.value });
+      localStorage.setItem("last_fcm_token", token.value);
       await saveFCMToken(token.value);
     });
+
+    // Register with FCM (listeners are already in place)
+    await PushNotifications.register();
   } catch (e) {
     logDebug("PushNotifications plugin not available", { error: e });
   }
@@ -145,13 +140,27 @@ async function initPushNotifications() {
 
 async function saveFCMToken(token: string) {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    localStorage.setItem("last_fcm_token", token);
 
-    await supabase.from("fcm_tokens").upsert(
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      logDebug("FCM token cached locally, user not logged in yet");
+      return;
+    }
+
+    const lastSaved = localStorage.getItem(`saved_fcm_token_${user.id}`);
+    if (lastSaved === token) {
+      logDebug("FCM token already synchronized for user");
+      return;
+    }
+
+    const { error } = await supabase.from("fcm_tokens").upsert(
       { user_id: user.id, token, platform: "android", updated_at: new Date().toISOString() },
       { onConflict: "user_id,token" }
     );
+    if (error) throw error;
+
+    localStorage.setItem(`saved_fcm_token_${user.id}`, token);
     logDebug("FCM token saved to backend");
   } catch (e) {
     logError("Failed to save FCM token", e);

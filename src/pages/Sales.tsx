@@ -11,9 +11,10 @@ import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { addToQueue, generateBusinessKey } from "@/lib/offlineQueue";
 import { validateSaleData } from "@/lib/validation/schemas";
 import { resolveCreditLimit } from "@/lib/creditLimit";
+import { afterSaleSaved, afterSaleEdited, afterSaleCancelled, afterSaleReturned } from "@/lib/mutationHelpers";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
-import { Loader2, Plus, Download, Banknote, UserCircle, Store as StoreIcon, Package, X, CalendarIcon, Receipt, FileText, RotateCcw, ShoppingCart, ChevronRight, ClipboardList, Wallet, QrCode, Minus, MapPin, Phone, Mail, AlertCircle } from "lucide-react";
+import { Loader2, Plus, Download, Banknote, UserCircle, Store as StoreIcon, Package, X, CalendarIcon, Receipt, FileText, RotateCcw, ShoppingCart, ChevronRight, ClipboardList, Wallet, QrCode, Minus, MapPin, Phone, Mail, AlertCircle, Pencil, XCircle } from "lucide-react";
 import { QrStoreSelector } from "@/components/shared/QrStoreSelector";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { SaleReceipt } from "@/components/shared/SaleReceipt";
@@ -98,6 +99,7 @@ interface SaleRecord {
   logged_by?: string | null;
   stores?: Store | null;
   customers?: Customer | null;
+  is_fully_returned?: boolean;
 }
 
 interface CsvColumn {
@@ -166,14 +168,26 @@ const Sales = () => {
   const isPosUser = role === "operator";
   const { allowed: _canOverridePrice } = usePermission("price_override");
   const { allowed: canRecordBehalf } = usePermission("record_behalf");
+  const { allowed: canCancelSales } = usePermission("cancel_sales");
   const qc = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
   const [saving, setSaving] = useState(false);
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
   const [receiptSaleId, setReceiptSaleId] = useState<string | null>(null);
   const [returnSale, setReturnSale] = useState<SaleRecord | null>(null);
+  const [cancelSale, setCancelSale] = useState<SaleRecord | null>(null);
+  const [cancelRestockTarget, setCancelRestockTarget] = useState<"warehouse" | "agent">("agent");
+  const [cancelSelectedAgentId, setCancelSelectedAgentId] = useState("");
+  const [isCancellingSale, setIsCancellingSale] = useState(false);
   const [fulfillOrder, setFulfillOrder] = useState<FulfillOrder | null>(null);
   const [loadingOrderId, setLoadingOrderId] = useState<string | null>(null);
+
+  // Edit sale state
+  const [editingSaleId, setEditingSaleId] = useState<string | null>(null);
+  const [editCash, setEditCash] = useState("");
+  const [editUpi, setEditUpi] = useState("");
+  const [editingItems, setEditingItems] = useState<any[]>([]);
+  const [submittingEdit, setSubmittingEdit] = useState(false);
 
   // Operator users are locked to the POS store
   const isAdmin = role === "super_admin" || role === "manager";
@@ -224,9 +238,10 @@ const Sales = () => {
       queryKey: ["sales", currentWarehouse?.id, isAdmin ? "all" : user?.id, filterFrom, filterTo, filterStore, filterStoreType, filterRoute, filterUser, filterPayment, loadedPages],
       queryFn: async () => {
 let query = supabase
-       .from("sales")
-   .select("*, stores(id, name, display_id, store_type_id, route_id, address, outstanding), customers(id, name, display_id, phone, email), fulfilled_order_id, invoice_sales(invoice_id)")
-       .order("created_at", { ascending: false });
+        .from("sales")
+    .select("*, is_fully_returned, stores(id, name, display_id, store_type_id, route_id, address, outstanding), customers(id, name, display_id, phone, email), fulfilled_order_id, invoice_sales(invoice_id)")
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false });
        if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
        // Non-admin roles (agents, operator, marketer) only see their own records
        if (!isAdmin) query = query.eq("recorded_by", user!.id);
@@ -257,6 +272,23 @@ let query = supabase
   });
 
   const profileMap = new Map(profiles?.map((p) => [p.user_id, p]) || []);
+
+  const { data: agentProfiles = [] } = useQuery({
+    queryKey: ["agent-profiles"],
+    queryFn: async () => {
+      const { data: agentIds } = await supabase
+        .from("user_roles")
+        .select("user_id")
+        .eq("role", "agent");
+      if (!agentIds?.length) return [];
+      const { data } = await supabase
+        .from("profiles")
+        .select("user_id, full_name, avatar_url")
+        .in("user_id", agentIds.map((a: any) => a.user_id));
+      return data || [];
+    },
+    enabled: canCancelSales,
+  });
 
   // Client-side filtering for store type and route (server-side for others)
   const filteredSales = useMemo(() => {
@@ -472,6 +504,88 @@ let query = supabase
   });
 
   const selectedSale = sales?.find((s) => s.id === selectedSaleId);
+
+  // Fetch items for the editing sale
+  const { data: editSaleItems } = useQuery({
+    queryKey: ["edit-sale-items", editingSaleId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("sale_items")
+        .select("*, products(name, sku)")
+        .eq("sale_id", editingSaleId!);
+      return data || [];
+    },
+    enabled: !!editingSaleId,
+  });
+
+  // Initialize editing items when editSaleItems load
+  useEffect(() => {
+    if (editSaleItems && editSaleItems.length > 0 && editingItems.length === 0 && editingSaleId) {
+      setEditingItems(editSaleItems.map((item: any) => ({
+        product_id: item.product_id,
+        name: item.products?.name || "Product",
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        total_price: item.quantity * item.unit_price,
+      })));
+    }
+  }, [editSaleItems, editingItems.length, editingSaleId]);
+
+  const editingSale = sales?.find((s: any) => s.id === editingSaleId);
+
+  const openEditSale = (row: any) => {
+    setEditCash(String(row.cash_amount || 0));
+    setEditUpi(String(row.upi_amount || 0));
+    setEditingItems([]);
+    setEditingSaleId(row.id);
+  };
+
+  const handleEditSale = async () => {
+    if (!editingSale || !editingSaleId) return;
+    if (editingItems.length === 0) {
+      toast.error("At least one product item is required");
+      return;
+    }
+    setSubmittingEdit(true);
+    try {
+      const editedTotalAmount = editingItems.reduce((sum: number, item: any) => sum + (item.quantity * item.unit_price), 0);
+      const editedOutstanding = Math.max(editedTotalAmount - (Number(editCash) || 0) - (Number(editUpi) || 0), 0);
+
+      const { data: result, error } = await (supabase as any).rpc("edit_sale", {
+        p_original_sale_id: editingSaleId,
+        p_store_id: editingSale.store_id,
+        p_customer_id: editingSale.customer_id,
+        p_display_id: editingSale.display_id,
+        p_total_amount: editedTotalAmount,
+        p_cash_amount: Number(editCash) || 0,
+        p_upi_amount: Number(editUpi) || 0,
+        p_outstanding_amount: editedOutstanding,
+        p_sale_items: editingItems.map((si: any) => ({
+          product_id: si.product_id,
+          quantity: si.quantity,
+          unit_price: si.unit_price,
+          total_price: si.quantity * si.unit_price,
+        })),
+        p_recorded_by: editingSale.recorded_by,
+        p_logged_by: (editingSale as any).logged_by || null,
+        p_created_at: editingSale.created_at,
+        p_expected_outstanding: (editingSale as any).outstanding ?? null,
+      });
+
+      if (error) throw error;
+
+      toast.success("Sale updated successfully");
+      setEditingSaleId(null);
+      setEditCash("");
+      setEditUpi("");
+      setEditingItems([]);
+      afterSaleEdited(qc);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to edit sale");
+    } finally {
+      setSubmittingEdit(false);
+    }
+  };
 
   const totalAmount = items.reduce((s, i) => s + i.quantity * i.unit_price, 0);
   const cash = parseFloat(cashAmount) || 0;
@@ -773,7 +887,6 @@ let query = supabase
 
     if (pendingCount > 0) {
       toast.success(`Sale recorded. ${pendingCount} pending order(s) auto-marked as delivered.`);
-      qc.invalidateQueries({ queryKey: ["orders"] });
     } else {
       toast.success("Sale recorded successfully");
     }
@@ -801,7 +914,7 @@ let query = supabase
     setSaving(false);
     setShowAdd(false);
     resetForm();
-    qc.invalidateQueries({ queryKey: ["sales"] });
+    afterSaleSaved(qc, { storeId });
   };
 
   const getRecorderName = (userId: string) => {
@@ -944,6 +1057,36 @@ let query = supabase
     );
   };
 
+  // Admins can always edit/return; agents are limited to same-day
+  const isPastDate = (created_at: string, updated_at?: string) => {
+    if (isAdmin) return false; // Admins bypass date lock
+    if (!created_at) return false;
+    
+    const today = new Date();
+    const todayYear = today.getFullYear();
+    const todayMonth = today.getMonth();
+    const todayDay = today.getDate();
+
+    const isToday = (dateStr: string) => {
+      const d = new Date(dateStr);
+      return d.getFullYear() === todayYear && d.getMonth() === todayMonth && d.getDate() === todayDay;
+    };
+
+    if (isToday(created_at)) return false;
+    if (updated_at && isToday(updated_at)) return false;
+    
+    const saleDate = new Date(created_at);
+    const saleYear = saleDate.getFullYear();
+    const saleMonth = saleDate.getMonth();
+    const saleDay = saleDate.getDate();
+    
+    if (saleYear < todayYear) return true;
+    if (saleYear > todayYear) return false;
+    if (saleMonth < todayMonth) return true;
+    if (saleMonth > todayMonth) return false;
+    return saleDay < todayDay;
+  };
+
   const columns = [
     { header: "Sale ID", accessor: "display_id" as const, className: "font-mono text-xs", hideOnMobile: true },
     { header: "Store", accessor: (row: any) => (
@@ -1035,22 +1178,68 @@ let query = supabase
                 </Tooltip>
               )}
 
+        {/* Edit Button */}
+        {!row.is_fully_returned && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-blue-600 hover:bg-blue-50 hover:text-blue-700 disabled:opacity-30"
+                  onClick={(e) => { e.stopPropagation(); openEditSale(row); }}
+                  disabled={isPastDate(row.created_at, row.updated_at)}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{isPastDate(row.created_at, row.updated_at) ? "Edits are locked after the day recorded" : "Edit Sale"}</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
+
         {/* Return Button */}
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 text-orange-600 hover:bg-orange-50 hover:text-orange-700"
-              onClick={(e) => { e.stopPropagation(); setReturnSale(row); }}
-            >
-              <RotateCcw className="h-3.5 w-3.5" />
-            </Button>
+            <span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`h-7 w-7 disabled:opacity-30 ${row.is_fully_returned ? 'text-slate-300 cursor-not-allowed' : 'text-orange-600 hover:bg-orange-50 hover:text-orange-700'}`}
+                onClick={(e) => { e.stopPropagation(); if (!row.is_fully_returned) setReturnSale(row); }}
+                disabled={row.is_fully_returned || isPastDate(row.created_at, row.updated_at)}
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+              </Button>
+            </span>
           </TooltipTrigger>
           <TooltipContent>
-            <p>Return Sale</p>
+            <p>{row.is_fully_returned ? "Sale already returned" : isPastDate(row.created_at, row.updated_at) ? "Returns are locked after the day recorded" : "Return Sale"}</p>
           </TooltipContent>
         </Tooltip>
+
+        {/* Cancel Sale Button — admin/manager only */}
+        {canCancelSales && !row.is_fully_returned && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-red-600 hover:bg-red-50 hover:text-red-700"
+                  onClick={(e) => { e.stopPropagation(); setCancelSale(row); }}
+                >
+                  <XCircle className="h-3.5 w-3.5" />
+                </Button>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Cancel Sale</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
 
         {/* View Associated Order - if sale was created from order fulfillment */}
         {row.fulfilled_order_id && (
@@ -1193,10 +1382,17 @@ let query = supabase
           emptyMessage="No sales recorded yet."
           onRowClick={(row: SaleRecord) => setSelectedSaleId(row.id)}
           renderMobileCard={(row: any) => (
-        <div className="rounded-lg border bg-card p-3">
+        <div className={`rounded-lg border bg-card p-3 ${row.is_fully_returned ? 'opacity-70 bg-slate-50 dark:bg-slate-900/40 border-dashed border-red-200 dark:border-red-900/40' : ''}`}>
           {/* Header row: ID + Date + Actions */}
           <div className="flex items-center justify-between mb-1.5">
-            <span className="font-mono text-xs text-primary font-medium">{row.display_id}</span>
+            <div className="flex items-center gap-2">
+              <span className={`font-mono text-xs font-medium ${row.is_fully_returned ? 'text-slate-400 line-through' : 'text-primary'}`}>{row.display_id}</span>
+              {row.is_fully_returned && (
+                <Badge className="text-[9px] px-1 py-0 h-4 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 font-bold">
+                  ↩ RETURNED
+                </Badge>
+              )}
+            </div>
             <div className="flex items-center gap-1">
               <span className="text-[10px] text-muted-foreground mr-1">{format(new Date(row.created_at), "dd MMM yy")}</span>
               <Button
@@ -1235,15 +1431,60 @@ let query = supabase
                   </Button>
                 )
               )}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-9 w-9 text-orange-600 hover:bg-orange-50 hover:text-orange-700"
-                onClick={(e) => { e.stopPropagation(); setReturnSale(row); }}
-                aria-label="Return Sale"
-              >
-                <RotateCcw className="h-4 w-4" />
-              </Button>
+              {/* Edit button for non-returned sales */}
+              {!row.is_fully_returned && !isPastDate(row.created_at, row.updated_at) && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                  onClick={(e) => { e.stopPropagation(); openEditSale(row); }}
+                  aria-label="Edit Sale"
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              )}
+              {/* No return button on already-returned sales */}
+              {!row.is_fully_returned && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 text-orange-600 hover:bg-orange-50 hover:text-orange-700 disabled:opacity-30"
+                        onClick={(e) => { e.stopPropagation(); setReturnSale(row); }}
+                        disabled={isPastDate(row.created_at, row.updated_at)}
+                        aria-label="Return Sale"
+                      >
+                        <RotateCcw className="h-4 w-4" />
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{isPastDate(row.created_at, row.updated_at) ? "Returns are locked after the day recorded" : "Return Sale"}</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              {canCancelSales && !row.is_fully_returned && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 text-red-600 hover:bg-red-50 hover:text-red-700"
+                        onClick={(e) => { e.stopPropagation(); setCancelSale(row); }}
+                        aria-label="Cancel Sale"
+                      >
+                        <XCircle className="h-4 w-4" />
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Cancel Sale</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
 {row.fulfilled_order_id && (
             <Button
               variant="ghost"
@@ -1383,36 +1624,242 @@ let query = supabase
             </div>
           )}
 
-          {/* Return Button - NEW */}
-          {selectedSale && isAdmin && (
-            <div className="pt-2 border-t">
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => {
-                  setReturnSale(selectedSale as any);
-                  setSelectedSaleId(null);
-                }}
-              >
-                <RotateCcw className="mr-2 h-4 w-4" /> Process Return
-              </Button>
-            </div>
-          )}
+           {/* Return Button */}
+           {selectedSale && isAdmin && !(selectedSale as any).is_fully_returned && (
+             <div className="pt-2 border-t">
+               <Button
+                 variant="outline"
+                 className="w-full"
+                 onClick={() => {
+                   setReturnSale(selectedSale as any);
+                   setSelectedSaleId(null);
+                 }}
+               >
+                 <RotateCcw className="mr-2 h-4 w-4" /> Process Return
+               </Button>
+             </div>
+           )}
+
+           {/* Cancel Sale Button */}
+           {selectedSale && canCancelSales && !(selectedSale as any).is_fully_returned && (
+             <div className="pt-2 border-t">
+               <Button
+                 variant="outline"
+                 className="w-full text-red-600 border-red-200 hover:bg-red-50"
+                 onClick={() => {
+                   setCancelSale(selectedSale as any);
+                   setSelectedSaleId(null);
+                 }}
+               >
+                 <XCircle className="mr-2 h-4 w-4" /> Cancel Sale
+               </Button>
+             </div>
+           )}
+
+           {/* Edit Button */}
+           {selectedSale && !(selectedSale as any).is_fully_returned && !isPastDate(selectedSale.created_at, selectedSale.updated_at) && (
+             <div className="pt-2 border-t">
+               <Button
+                 variant="outline"
+                 className="w-full"
+                 onClick={() => {
+                   openEditSale(selectedSale);
+                   setSelectedSaleId(null);
+                 }}
+               >
+                 <Pencil className="mr-2 h-4 w-4" /> Edit Sale
+               </Button>
+             </div>
+           )}
         </div>
       )}
     </DialogContent>
   </Dialog>
   
-  {/* Sale Return Dialog - NEW */}
+  {/* Sale Return Dialog */}
   <SaleReturnDialog
+    key={`return-${returnSale?.id || 'none'}`}
     open={!!returnSale}
     onOpenChange={(v) => { if (!v) setReturnSale(null); }}
     sale={returnSale as any}
     onSuccess={() => {
-      qc.invalidateQueries({ queryKey: ['sales'] });
-      qc.invalidateQueries({ queryKey: ['stores'] });
     }}
   />
+
+  {/* Cancel Sale Dialog */}
+  <Dialog key={`cancel-${cancelSale?.id || 'none'}`} open={!!cancelSale} onOpenChange={(v) => {
+    if (!v) { setCancelSale(null); setCancelRestockTarget("agent"); setCancelSelectedAgentId(""); }
+  }}>
+    <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogHeader>
+        <DialogTitle className="flex items-center gap-2 text-red-600">
+          <XCircle className="h-5 w-5" />
+          Cancel Sale — {cancelSale?.display_id}
+        </DialogTitle>
+      </DialogHeader>
+      {cancelSale && (
+        <CancelSaleContent
+          sale={cancelSale}
+          agentProfiles={agentProfiles}
+          restockTarget={cancelRestockTarget}
+          selectedAgentId={cancelSelectedAgentId}
+          isCancelling={isCancellingSale}
+          onRestockTargetChange={setCancelRestockTarget}
+          onAgentIdChange={setCancelSelectedAgentId}
+          onCancel={() => { setCancelSale(null); setCancelRestockTarget("agent"); setCancelSelectedAgentId(""); }}
+          onConfirm={async () => {
+            if (cancelRestockTarget === "agent" && !cancelSelectedAgentId) {
+              toast.error("Please select an agent to restore stock to");
+              return;
+            }
+            setIsCancellingSale(true);
+            try {
+              const { data, error } = await (supabase as any).rpc("admin_cancel_sale", {
+                p_sale_id: cancelSale.id,
+                p_restock_user_id: cancelRestockTarget === "warehouse" ? null : cancelSelectedAgentId,
+              });
+              if (error) throw error;
+              toast.success(`Sale ${cancelSale.display_id} cancelled. Stock restored to ${cancelRestockTarget === "warehouse" ? "warehouse" : "agent"}.`);
+              setCancelSale(null);
+              setCancelRestockTarget("agent");
+              setCancelSelectedAgentId("");
+              afterSaleCancelled(qc);
+            } catch (err: any) {
+              toast.error(err.message || "Failed to cancel sale");
+            } finally {
+              setIsCancellingSale(false);
+            }
+          }}
+        />
+      )}
+    </DialogContent>
+  </Dialog>
+
+  {/* Edit Sale Dialog */}
+  <Dialog key={`edit-${editingSaleId || 'none'}`} open={!!editingSaleId} onOpenChange={(v) => { if (!v) { setEditingSaleId(null); setEditCash(""); setEditUpi(""); setEditingItems([]); } }}>
+    <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogHeader>
+        <DialogTitle className="flex items-center gap-2">
+          <Pencil className="h-5 w-5 text-blue-500" />
+          Edit Sale — {editingSale?.display_id}
+        </DialogTitle>
+      </DialogHeader>
+      <div className="space-y-4">
+        {/* Product items editing list */}
+        <div className="space-y-2">
+          <Label className="text-sm font-semibold">Products & Quantities</Label>
+          {editingItems.length === 0 ? (
+            <div className="flex justify-center py-4">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
+              {editingItems.map((item: any) => (
+                <div key={item.product_id} className="flex items-center gap-3 p-2.5 rounded-lg border bg-card">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm truncate">{item.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      ₹{item.unit_price.toLocaleString()} × {item.quantity} = ₹{(item.quantity * item.unit_price).toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-muted-foreground">₹</span>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={item.unit_price}
+                        onChange={(e) => {
+                          const v = Number(e.target.value) || 0;
+                          setEditingItems(prev => prev.map(i => i.product_id === item.product_id ? { ...i, unit_price: v, total_price: i.quantity * v } : i));
+                        }}
+                        className="w-16 h-7 text-xs font-semibold px-1"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => setEditingItems(prev => prev.map(i => i.product_id === item.product_id ? { ...i, quantity: Math.max(1, i.quantity - 1), total_price: Math.max(1, i.quantity - 1) * i.unit_price } : i))}
+                    >
+                      <Minus className="h-3 w-3" />
+                    </Button>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={item.quantity}
+                      onChange={(e) => {
+                        const v = Math.max(1, Number(e.target.value) || 1);
+                        setEditingItems(prev => prev.map(i => i.product_id === item.product_id ? { ...i, quantity: v, total_price: v * i.unit_price } : i));
+                      }}
+                      className="w-14 h-7 text-center text-sm px-1"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => setEditingItems(prev => prev.map(i => i.product_id === item.product_id ? { ...i, quantity: i.quantity + 1, total_price: (i.quantity + 1) * i.unit_price } : i))}
+                    >
+                      <Plus className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Totals comparison */}
+        {editingItems.length > 0 && (
+          <div className="rounded-lg border bg-muted/30 p-3 space-y-1.5 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Original Total:</span>
+              <span className="line-through text-muted-foreground">₹{(editingSale?.total_amount || 0).toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between font-bold">
+              <span>New Total:</span>
+              <span className="text-blue-600">₹{editingItems.reduce((sum: number, i: any) => sum + i.quantity * i.unit_price, 0).toLocaleString()}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Cash / UPI */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1">
+            <Label className="text-sm text-muted-foreground flex items-center gap-1"><Banknote className="h-3 w-3" /> Cash</Label>
+            <Input type="number" min={0} value={editCash} onChange={(e) => setEditCash(e.target.value)} className="text-lg font-semibold" placeholder="0" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-sm text-muted-foreground flex items-center gap-1"><QrCode className="h-3 w-3" /> UPI</Label>
+            <Input type="number" min={0} value={editUpi} onChange={(e) => setEditUpi(e.target.value)} className="text-lg font-semibold" placeholder="0" />
+          </div>
+        </div>
+
+        {/* New outstanding */}
+        {editingItems.length > 0 && (
+          <div className="rounded-lg border border-dashed p-3 flex justify-between items-center text-sm">
+            <span className="text-muted-foreground">Calculated Outstanding:</span>
+            {(() => {
+              const newTotal = editingItems.reduce((sum: number, i: any) => sum + i.quantity * i.unit_price, 0);
+              const outstanding = Math.max(newTotal - (Number(editCash) || 0) - (Number(editUpi) || 0), 0);
+              return <span className={`font-bold ${outstanding > 0 ? 'text-destructive' : 'text-green-600'}`}>₹{outstanding.toLocaleString()}</span>;
+            })()}
+          </div>
+        )}
+
+        <Button
+          className="w-full"
+          onClick={handleEditSale}
+          disabled={submittingEdit || editingItems.length === 0}
+        >
+          {submittingEdit ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Pencil className="mr-2 h-4 w-4" />}
+          Save & Update Sale
+        </Button>
+      </div>
+    </DialogContent>
+  </Dialog>
 
       {/* Record Sale Dialog */}
       <Dialog open={showAdd} onOpenChange={(v) => { setShowAdd(v); if (!v) resetForm(); }}>
@@ -1601,8 +2048,20 @@ let query = supabase
                         </div>
                       </div>
                       
-                      {/* Quantity Controls */}
-                      <div className="flex items-center gap-1">
+                      {/* Quantity Controls & Price Override */}
+                      <div className="flex items-center gap-1.5">
+                        {_canOverridePrice && (
+                          <div className="flex items-center gap-1 shrink-0">
+                            <span className="text-[10px] text-muted-foreground">₹</span>
+                            <Input
+                              type="number"
+                              min={0}
+                              value={item.unit_price}
+                              onChange={(e) => updateItem(idx, "unit_price", Math.max(0, Number(e.target.value) || 0))}
+                              className="w-16 h-7 text-xs font-semibold px-1"
+                            />
+                          </div>
+                        )}
                         <Button
                           type="button"
                           variant="outline"
@@ -1658,9 +2117,7 @@ let query = supabase
           </div>
         )}
 
-            <div className="rounded-lg border bg-muted/30 p-3 space-y-1 text-sm">
-              <div className="flex justify-between"><span>Total</span><span className="font-semibold">₹{totalAmount.toLocaleString()}</span></div>
-            </div>
+
 
             <div className="space-y-3">
               <Label className="text-base font-semibold flex items-center gap-2">
@@ -1810,5 +2267,106 @@ let query = supabase
     </TooltipProvider>
   );
 };
+
+function CancelSaleContent({
+  sale, agentProfiles, restockTarget, selectedAgentId, isCancelling,
+  onRestockTargetChange, onAgentIdChange, onCancel, onConfirm,
+}: {
+  sale: SaleRecord;
+  agentProfiles: any[];
+  restockTarget: "warehouse" | "agent";
+  selectedAgentId: string;
+  isCancelling: boolean;
+  onRestockTargetChange: (t: "warehouse" | "agent") => void;
+  onAgentIdChange: (id: string) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const cancelOutstanding = sale.outstanding_amount ?? 0;
+  const cancelTotal = sale.total_amount ?? 0;
+  const itemCount = (sale as any).sale_items?.length ?? 0;
+
+  return (
+    <div className="space-y-4 py-2">
+      <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-800">
+        <p className="font-semibold">This action cannot be undone</p>
+        <p className="text-xs mt-1">The sale will be voided, outstanding reversed, and all items restored to stock.</p>
+      </div>
+
+      <div className="rounded-lg bg-muted p-3 space-y-1.5 text-sm">
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Sale Date</span>
+          <span>{format(new Date(sale.created_at), "dd MMM yyyy")}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Total Amount</span>
+          <span className="font-semibold">₹{cancelTotal.toLocaleString()}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Outstanding</span>
+          <span className="font-semibold text-red-600">₹{cancelOutstanding.toLocaleString()}</span>
+        </div>
+        <div className="flex justify-between text-xs text-muted-foreground border-t pt-1.5">
+          <span>Items: {itemCount}</span>
+          <span>Store: {sale.stores?.name ?? "—"}</span>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <Label className="text-sm font-semibold">Where should the stock go?</Label>
+        <div
+          className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-accent/50"
+          onClick={() => onRestockTargetChange("agent")}
+        >
+          <input type="radio" checked={restockTarget === "agent"} readOnly className="accent-primary" />
+          <div className="flex-1">
+            <p className="text-sm font-medium">Return to an agent</p>
+            <p className="text-xs text-muted-foreground">Stock restored to the selected agent's holding</p>
+          </div>
+        </div>
+
+        {restockTarget === "agent" && (
+          <Select value={selectedAgentId} onValueChange={onAgentIdChange}>
+            <SelectTrigger className="ml-7">
+              <SelectValue placeholder="Select agent..." />
+            </SelectTrigger>
+            <SelectContent>
+              {agentProfiles.map((ap: any) => (
+                <SelectItem key={ap.user_id} value={ap.user_id}>
+                  {ap.full_name || ap.user_id.slice(0, 8)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
+        <div
+          className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-accent/50"
+          onClick={() => { onRestockTargetChange("warehouse"); onAgentIdChange(""); }}
+        >
+          <input type="radio" checked={restockTarget === "warehouse"} readOnly className="accent-primary" />
+          <div className="flex-1">
+            <p className="text-sm font-medium">Return to warehouse</p>
+            <p className="text-xs text-muted-foreground">Stock restored to warehouse product stock</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-2 pt-2 border-t">
+        <Button variant="outline" onClick={onCancel}>
+          Keep Sale
+        </Button>
+        <Button
+          variant="destructive"
+          onClick={onConfirm}
+          disabled={isCancelling || (restockTarget === "agent" && !selectedAgentId)}
+        >
+          {isCancelling ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+          Confirm Cancellation
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 export default Sales;

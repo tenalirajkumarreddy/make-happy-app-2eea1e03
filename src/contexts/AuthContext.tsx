@@ -1,9 +1,11 @@
-import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from "react";
+import { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
 import { logError } from "@/lib/logger";
+import { logDebug } from "@/lib/logger";
 import type { AppRole } from "@/types/roles";
 import { normalizeRole } from "@/types/roles";
+import { cacheAuthState, getCachedAuthState, clearAuthCache } from "@/lib/authCache";
 
 async function resolveUserType(supabaseClient: any, userId: string): Promise<{
   role: AppRole;
@@ -99,6 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [warehouses, setWarehouses] = useState<string[]>([]);
   const [warehouse, setWarehouseState] = useState<AuthContextType["warehouse"]>(null);
   const [loading, setLoading] = useState(true);
+  const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const refreshWarehouses = async (targetUserId?: string) => {
     const effectiveUserId = targetUserId ?? user?.id;
@@ -142,6 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       let resolvedRole: AppRole | null = null;
       let resolvedCustomer: AuthContextType["customer"] = null;
       let resolvedNeedsOnboarding = false;
+      let resolvedProfile: AuthContextType["profile"] = null;
 
       // Preferred path: canonical DB resolver for deterministic auth outcomes.
       try {
@@ -184,13 +188,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           throw new Error("USER_DISABLED");
         }
 
-        setProfile((profileData ?? null) as any);
+        resolvedProfile = (profileData ?? null) as any;
+        setProfile(resolvedProfile);
       } catch (resolverError) {
         logError("Resolver RPC failed, falling back to legacy user resolution", resolverError);
         const { role, profile, customer } = await resolveUserType(supabase, userId);
         resolvedRole = role;
         resolvedCustomer = customer;
         resolvedNeedsOnboarding = role === "customer" && !customer;
+        resolvedProfile = profile;
         setProfile(profile);
       }
 
@@ -198,6 +204,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setRole(resolvedRole);
       setNeedsOnboarding(resolvedNeedsOnboarding);
       await refreshWarehouses(userId);
+
+      try {
+        await cacheAuthState({
+          session: session ? {
+            access_token: session.access_token,
+            refresh_token: session.refresh_token,
+            expires_at: session.expires_at,
+          } : null,
+          role: resolvedRole as string | null,
+          profile: resolvedProfile,
+          customer: resolvedCustomer,
+          needsOnboarding: resolvedNeedsOnboarding,
+          warehouses: [],
+          warehouse: null,
+          cachedAt: new Date().toISOString(),
+        });
+      } catch (e) {
+        logError("Failed to cache auth state", e);
+      }
     } catch (error: any) {
       logError("Error fetching user data", error);
       if (error?.message === "USER_DISABLED") {
@@ -211,11 +236,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
       setNeedsOnboarding(false);
+    } finally {
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+        loadingTimeoutRef.current = null;
+      }
     }
   };
 
   useEffect(() => {
     let mounted = true;
+
+    const fallbackToCache = async () => {
+      if (!mounted) return;
+      try {
+        const cached = await getCachedAuthState();
+        if (cached?.role && mounted) {
+          logDebug("[Auth] Using cached auth state (offline fallback)");
+          setRole(cached.role as any);
+          setProfile(cached.profile as any);
+          setCustomer(cached.customer as any);
+          setNeedsOnboarding(cached.needsOnboarding);
+          setWarehouses(cached.warehouses);
+          if (cached.warehouse) setWarehouseState(cached.warehouse);
+        }
+      } catch (e) {
+        logError("Failed to read auth cache", e);
+      }
+      if (mounted) setLoading(false);
+    };
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
@@ -227,6 +276,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(session);
         setUser(session?.user ?? null);
 
+        // Set a 2-second loading timeout — if auth resolution takes longer,
+        // fall back to cached state so the app doesn't deadlock
+        if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
+        loadingTimeoutRef.current = setTimeout(fallbackToCache, 2000);
+
         if (session?.user) {
           // Defer to avoid Supabase deadlock where DB query waits for Auth headers
           setTimeout(async () => {
@@ -234,6 +288,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             try {
               await fetchUserData(session.user.id);
             } finally {
+              if (loadingTimeoutRef.current) {
+                clearTimeout(loadingTimeoutRef.current);
+                loadingTimeoutRef.current = null;
+              }
               if (mounted) setLoading(false);
             }
           }, 0);
@@ -255,14 +313,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         setSession(session);
         setUser(session?.user ?? null);
-        
+
         if (session?.user) {
           // It's safe to await here since we aren't in the onAuthStateChange lock
-          await fetchUserData(session.user.id);
+          try {
+            await fetchUserData(session.user.id);
+          } catch (fetchError) {
+            logError("Auth fetch failed, trying cached state", fetchError);
+            if (mounted) {
+              const cached = await getCachedAuthState();
+              if (cached?.role) {
+                setRole(cached.role as any);
+                setProfile(cached.profile as any);
+                setCustomer(cached.customer as any);
+                setNeedsOnboarding(cached.needsOnboarding);
+                setWarehouses(cached.warehouses);
+                if (cached.warehouse) setWarehouseState(cached.warehouse);
+              }
+            }
+          }
         }
       } catch (error) {
         logError("Auth context initialization error", error);
+        if (mounted) await fallbackToCache();
+        return;
       } finally {
+        if (loadingTimeoutRef.current) {
+          clearTimeout(loadingTimeoutRef.current);
+          loadingTimeoutRef.current = null;
+        }
         if (mounted) setLoading(false);
       }
     };
@@ -271,12 +350,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => {
       mounted = false;
+      if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
       subscription.unsubscribe();
     };
   }, []);
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    await clearAuthCache();
     setUser(null);
     setSession(null);
     setRole(null);

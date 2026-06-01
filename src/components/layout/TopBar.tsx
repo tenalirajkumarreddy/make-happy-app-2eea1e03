@@ -1,4 +1,4 @@
-import { Bell, ChevronDown, LogOut, Moon, Sun, CheckCheck, User, Building2 } from "lucide-react";
+import { Bell, ChevronDown, LogOut, Moon, Sun, CheckCheck, User, Building2, Settings } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
@@ -105,13 +105,13 @@ export function TopBar() {
   const handleNotificationClick = (n: any) => {
     if (!n.is_read) markAsRead(n.id);
     // Navigate based on entity type
-    if (n.entity_type === "order" && n.entity_id) navigate("/orders");
-    else if (n.entity_type === "sale" && n.entity_id) navigate("/sales");
-    else if (n.entity_type === "transaction" && n.entity_id) navigate("/transactions");
-    else if (n.entity_type === "handover" && n.entity_id) navigate("/handovers");
+    if (n.entity_type === "order" && n.entity_id) navigate(`/orders?highlight=${n.entity_id}`);
+    else if (n.entity_type === "sale" && n.entity_id) navigate(`/sales?highlight=${n.entity_id}`);
+    else if (n.entity_type === "transaction" && n.entity_id) navigate(`/transactions?highlight=${n.entity_id}`);
+    else if (n.entity_type === "handover" && n.entity_id) navigate(`/handovers?highlight=${n.entity_id}`);
     else if (n.entity_type === "expense_claim" && n.entity_id) navigate(`/handovers?highlight=${n.entity_id}`);
     else if (n.entity_type === "expense_request" && n.entity_id) navigate(`/handovers?highlight=${n.entity_id}`);
-    else if (n.entity_type === "stock_transfer" && n.entity_id) navigate(`/stock-transfers?id=${n.entity_id}`);
+    else if (n.entity_type === "stock_transfer" && n.entity_id) navigate(`/stock-transfers?highlight=${n.entity_id}`);
     else if (n.entity_type === "customer" && n.entity_id) navigate(`/customers/${n.entity_id}`);
     setOpen(false);
   };
@@ -246,6 +246,10 @@ export function TopBar() {
             <DropdownMenuItem onClick={() => navigate(role === "customer" ? "/portal/profile" : "/profile")}>
               <User className="mr-2 h-4 w-4" />
               My Profile
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate("/settings")}>
+              <Settings className="mr-2 h-4 w-4" />
+              Settings
             </DropdownMenuItem>
             <DropdownMenuItem onClick={handleSignOut}>
               <LogOut className="mr-2 h-4 w-4" />

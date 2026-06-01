@@ -12,7 +12,7 @@ export type PermissionKey =
   | "edit_balance" | "opening_balance" | "finalizer" | "see_handover_balance"
   | "submit_expenses" | "manage_expense_access" | "approve_expenses"
   | "modify_handovers" | "cancel_any_handover" | "adjust_holding_balance"
-  | "record_sale"
+  | "record_sale" | "backdate"
   | "view_vendors" | "manage_vendors" | "view_purchases" | "manage_purchases"
   | "view_vendor_payments" | "manage_vendor_payments"
   | "view_raw_materials" | "manage_raw_materials"
@@ -20,7 +20,8 @@ export type PermissionKey =
   | "view_orders" | "create_orders" | "modify_orders" | "modify_order_item_prices"
   | "transfer_orders" | "delete_orders" | "fulfill_orders" | "cancel_orders"
   | "create_sale_returns" | "view_assigned_orders" | "accept_order_transfers"
-  | "view_invoices" | "create_invoices" | "edit_invoices" | "delete_invoices" | "download_invoices";
+  | "view_invoices" | "create_invoices" | "edit_invoices" | "delete_invoices" | "download_invoices"
+  | "cancel_sales";
 
 interface InlinePermissionCheckboxProps {
   userId: string;

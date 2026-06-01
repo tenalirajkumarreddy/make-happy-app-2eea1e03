@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Plus, ShoppingCart } from "lucide-react";
+import { Loader2, Plus, ShoppingCart, Package, Minus } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveCustomer } from "@/lib/resolveCustomer";
 import { useAuth } from "@/contexts/AuthContext";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { fmtINR } from "@/lib/utils";
 
 interface Props {
   selectedStoreId: string | null;
@@ -45,9 +46,12 @@ export function CustomerOrders({ selectedStoreId, onStoreChange }: Props) {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [openCreate, setOpenCreate] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [orderStoreId, setOrderStoreId] = useState("");
-  const [orderNote, setOrderNote] = useState("");
+  const [createSaving, setCreateSaving] = useState(false);
+  const [createStoreSearch, setCreateStoreSearch] = useState("");
+  const [createStoreId, setCreateStoreId] = useState("");
+  const [createOrderType, setCreateOrderType] = useState<"simple" | "detailed">("simple");
+  const [createNote, setCreateNote] = useState("");
+  const [createOrderItems, setCreateOrderItems] = useState<{ product_id: string; quantity: number; unit_price: number; products?: { name: string; base_price: number } }[]>([]);
 
   const { data: customer } = useQuery({
     queryKey: ["mobile-customer-orders-self", user?.id],
@@ -63,13 +67,25 @@ export function CustomerOrders({ selectedStoreId, onStoreChange }: Props) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("stores")
-        .select("id, name, is_active")
+        .select("id, name, display_id, is_active, warehouse_id")
         .eq("customer_id", customer!.id)
         .order("name");
       if (error) throw error;
-      return (data as StoreRow[]) || [];
+      return (data as any[]) || [];
     },
     enabled: !!customer,
+  });
+
+  const { data: createProducts } = useQuery({
+    queryKey: ["mobile-customer-create-products"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("products")
+        .select("id, name, base_price")
+        .eq("is_active", true)
+        .order("name");
+      return (data || []) as any[];
+    },
   });
 
   const { data: orders, isLoading } = useQuery({
@@ -89,7 +105,7 @@ export function CustomerOrders({ selectedStoreId, onStoreChange }: Props) {
 
   useEffect(() => {
     if (openCreate) {
-      setOrderStoreId(selectedStoreId || "");
+      setCreateStoreId(selectedStoreId || "");
     }
   }, [openCreate, selectedStoreId]);
 
@@ -98,21 +114,49 @@ export function CustomerOrders({ selectedStoreId, onStoreChange }: Props) {
     return (orders || []).filter((order) => order.store_id === selectedStoreId);
   }, [orders, selectedStoreId]);
 
+  const addCreateItem = (product: any) => {
+    setCreateOrderItems((prev) => {
+      const existing = prev.find((i) => i.product_id === product.id);
+      if (existing) {
+        return prev.map((i) =>
+          i.product_id === product.id ? { ...i, quantity: i.quantity + 1 } : i
+        );
+      }
+      return [
+        ...prev,
+        { product_id: product.id, quantity: 1, unit_price: product.base_price, products: { name: product.name, base_price: product.base_price } },
+      ];
+    });
+  };
+
+  const updateCreateQty = (productId: string, qty: number) => {
+    setCreateOrderItems((prev) =>
+      qty <= 0
+        ? prev.filter((i) => i.product_id !== productId)
+        : prev.map((i) => (i.product_id === productId ? { ...i, quantity: qty } : i))
+    );
+  };
+
   const handleCreateOrder = async () => {
-    if (!orderStoreId) {
+    if (!createStoreId) {
       toast.error("Select a store");
       return;
     }
 
     const activeOrder = (orders || []).find(
-      (order) => order.store_id === orderStoreId && (order.status === "pending" || order.status === "confirmed")
+      (order) => order.store_id === createStoreId && (order.status === "pending" || order.status === "confirmed")
     );
     if (activeOrder) {
       toast.error("An active order already exists for this store");
       return;
     }
 
-    setSaving(true);
+    if (createOrderType === "detailed" && createOrderItems.length === 0) {
+      toast.error("Add at least one item");
+      return;
+    }
+
+    setCreateSaving(true);
     try {
       const rpcClient = supabase as unknown as SupabaseRpcClient;
       const { data: displayId, error: displayError } = await rpcClient.rpc("generate_display_id", {
@@ -122,22 +166,40 @@ export function CustomerOrders({ selectedStoreId, onStoreChange }: Props) {
       if (displayError) throw displayError;
       if (!displayId) throw new Error("Failed to generate order ID");
 
-      const { data: store } = await supabase.from("stores").select("warehouse_id").eq("id", orderStoreId).single();
-      const { error } = await supabase.from("orders").insert({
-        display_id: displayId,
-        store_id: orderStoreId,
-        customer_id: customer!.id,
-        order_type: "simple",
-        source: "manual",
-        created_by: user!.id,
-        requirement_note: orderNote.trim() || null,
-        warehouse_id: (store as any)?.warehouse_id || null,
-      });
-      if (error) throw error;
+      const store = (stores || []).find((s: any) => s.id === createStoreId);
+
+      const { data: orderRow, error: orderError } = await supabase
+        .from("orders")
+        .insert({
+          display_id: displayId,
+          store_id: createStoreId,
+          customer_id: customer!.id,
+          order_type: createOrderType,
+          source: "manual",
+          created_by: user!.id,
+          status: "confirmed",
+          requirement_note: createOrderType === "simple" ? createNote.trim() || null : null,
+          warehouse_id: store?.warehouse_id || null,
+        })
+        .select("id")
+        .single();
+
+      if (orderError) throw orderError;
+
+      if (createOrderType === "detailed" && createOrderItems.length > 0) {
+        const { error: itemError } = await supabase.from("order_items").insert(
+          createOrderItems.map((item) => ({
+            order_id: orderRow.id,
+            product_id: item.product_id,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+          }))
+        );
+        if (itemError) throw itemError;
+      }
 
       toast.success("Order placed");
       
-      // Dispatch notification to admins
       getAdminUserIds().then(admins => {
         if (admins.length > 0) {
           sendNotificationToMany(admins, {
@@ -149,14 +211,18 @@ export function CustomerOrders({ selectedStoreId, onStoreChange }: Props) {
       }).catch(err => console.error("Failed to notify admins", err));
 
       setOpenCreate(false);
-      setOrderNote("");
-      onStoreChange(orderStoreId);
+      setCreateStoreSearch("");
+      setCreateStoreId("");
+      setCreateOrderType("simple");
+      setCreateNote("");
+      setCreateOrderItems([]);
+      onStoreChange(createStoreId);
       qc.invalidateQueries({ queryKey: ["mobile-customer-orders"] });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to place order";
       toast.error(message);
     } finally {
-      setSaving(false);
+      setCreateSaving(false);
     }
   };
 
@@ -208,8 +274,8 @@ export function CustomerOrders({ selectedStoreId, onStoreChange }: Props) {
         )}
       </div>
 
-      <Sheet open={openCreate} onOpenChange={setOpenCreate}>
-        <SheetContent side="bottom" className="rounded-t-3xl pb-10 px-0 max-h-[88vh] overflow-y-auto">
+      <Sheet open={openCreate} onOpenChange={(v) => { if (!v) { setCreateStoreSearch(""); setCreateStoreId(""); setCreateOrderType("simple"); setCreateNote(""); setCreateOrderItems([]); } setOpenCreate(v); }}>
+        <SheetContent side="bottom" className="rounded-t-3xl pb-10 px-0 max-h-[90vh] overflow-y-auto">
           <div className="px-6">
             <SheetHeader className="mb-5 text-left">
               <SheetTitle className="text-lg font-bold">Place Order</SheetTitle>
@@ -217,34 +283,130 @@ export function CustomerOrders({ selectedStoreId, onStoreChange }: Props) {
 
             <div className="space-y-4">
               <div>
-                <Label className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2 block">Store</Label>
-                <Select value={orderStoreId} onValueChange={setOrderStoreId}>
-                  <SelectTrigger className="h-11 rounded-xl">
-                    <SelectValue placeholder="Select store" />
-                  </SelectTrigger>
-                  <SelectContent>
+                <Label className="text-xs font-bold text-muted-foreground mb-2 block">Store</Label>
+                <Input
+                  placeholder="Search stores by name or ID..."
+                  value={createStoreSearch}
+                  onChange={(e) => setCreateStoreSearch(e.target.value)}
+                  className="text-sm h-10 rounded-xl"
+                />
+                {createStoreSearch && (
+                  <div className="mt-1 max-h-36 overflow-y-auto border rounded-xl divide-y bg-background">
                     {(stores || [])
-                      .filter((store) => store.is_active)
-                      .map((store) => (
-                        <SelectItem key={store.id} value={store.id}>{store.name}</SelectItem>
+                      .filter((s: any) => s.is_active)
+                      .filter((s: any) =>
+                        s.name.toLowerCase().includes(createStoreSearch.toLowerCase()) ||
+                        (s.display_id || "").toLowerCase().includes(createStoreSearch.toLowerCase())
+                      )
+                      .map((s: any) => (
+                        <button key={s.id} type="button"
+                          onClick={() => { setCreateStoreId(s.id); setCreateStoreSearch(""); }}
+                          className={`w-full text-left px-3 py-2.5 text-sm transition-colors hover:bg-accent ${createStoreId === s.id ? "bg-primary/10 font-semibold text-primary" : "text-foreground"}`}
+                        >
+                          <span className="font-medium">{s.name}</span>
+                          <span className="ml-2 font-mono text-[10px] text-muted-foreground">{s.display_id}</span>
+                        </button>
                       ))}
-                  </SelectContent>
-                </Select>
+                  </div>
+                )}
+                {createStoreId && !createStoreSearch && (
+                  <div className="rounded-xl bg-primary/5 border border-primary/20 px-3 py-2.5 flex items-center justify-between mt-1">
+                    <span className="text-sm font-medium">{(stores || []).find((s: any) => s.id === createStoreId)?.name || "Store selected"}</span>
+                    <button type="button" onClick={() => { setCreateStoreId(""); }} className="text-xs text-muted-foreground hover:text-foreground font-medium">Change</button>
+                  </div>
+                )}
               </div>
 
               <div>
-                <Label className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2 block">Requirement Note</Label>
-                <Textarea
-                  value={orderNote}
-                  onChange={(event) => setOrderNote(event.target.value)}
-                  className="rounded-xl min-h-24"
-                  placeholder="What do you need?"
-                />
+                <Label className="text-xs font-bold text-muted-foreground mb-2 block">Order Type</Label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setCreateOrderType("simple")}
+                    className={`flex-1 px-4 py-3 rounded-xl text-xs font-medium transition-colors ${
+                      createOrderType === "simple"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    Simple
+                  </button>
+                  <button
+                    onClick={() => setCreateOrderType("detailed")}
+                    className={`flex-1 px-4 py-3 rounded-xl text-xs font-medium transition-colors ${
+                      createOrderType === "detailed"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    Detailed
+                  </button>
+                </div>
               </div>
 
-              <Button className="w-full h-11 rounded-xl" onClick={handleCreateOrder} disabled={saving}>
-                {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Submit Order
+              {createOrderType === "simple" ? (
+                <div>
+                  <Label className="text-xs font-bold text-muted-foreground mb-2 block">Requirement Note</Label>
+                  <textarea
+                    value={createNote}
+                    onChange={(e) => setCreateNote(e.target.value)}
+                    placeholder="What do you need?"
+                    className="w-full min-h-[100px] rounded-xl border border-input bg-background px-3 py-2 text-sm resize-none"
+                  />
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <Label className="text-xs font-bold text-muted-foreground mb-2 block">Products</Label>
+                  <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1">
+                    {(createProducts || []).map((p: any) => {
+                      const inCart = createOrderItems.find((i) => i.product_id === p.id);
+                      return (
+                        <div key={p.id} className="flex items-center gap-3 p-2 rounded-xl border bg-card">
+                          <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                            <Package className="h-5 w-5 text-muted-foreground" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{p.name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {fmtINR(p.base_price)}
+                              {inCart ? ` × ${inCart.quantity} = ${fmtINR(inCart.quantity * inCart.unit_price)}` : ""}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            {inCart ? (
+                              <>
+                                <Button type="button" variant="outline" size="icon" className="h-8 w-8 rounded-lg"
+                                  onClick={() => updateCreateQty(p.id, inCart.quantity - 1)}>
+                                  <Minus className="h-3.5 w-3.5" />
+                                </Button>
+                                <span className="text-sm font-bold w-6 text-center">{inCart.quantity}</span>
+                                <Button type="button" variant="outline" size="icon" className="h-8 w-8 rounded-lg"
+                                  onClick={() => updateCreateQty(p.id, inCart.quantity + 1)}>
+                                  <Plus className="h-3.5 w-3.5" />
+                                </Button>
+                              </>
+                            ) : (
+                              <Button type="button" variant="outline" size="icon" className="h-8 w-8 rounded-lg"
+                                onClick={() => addCreateItem(p)}>
+                                <Plus className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {createOrderItems.length > 0 && (
+                    <div className="flex justify-between items-center p-3 rounded-xl border bg-muted/50">
+                      <span className="text-sm font-medium">Order Total ({createOrderItems.length} items)</span>
+                      <span className="text-base font-bold">{fmtINR(createOrderItems.reduce((s, i) => s + i.quantity * i.unit_price, 0))}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <Button className="w-full h-11 rounded-xl" onClick={handleCreateOrder} disabled={createSaving || !createStoreId}>
+                {createSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                {createSaving ? "Placing..." : "Submit Order"}
               </Button>
             </div>
           </div>

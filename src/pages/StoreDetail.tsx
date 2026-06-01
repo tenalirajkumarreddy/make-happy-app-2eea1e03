@@ -434,7 +434,7 @@ const handleDeleteQr = async (qrId: string) => {
   const renderCompactCard = (type: "sale" | "txn" | "order" | "visit") => (row: any) => {
     const p = type !== "visit" ? getRecorder(row.recorded_by || row.created_by) : null;
     return (
-      <div className="rounded-xl border bg-card px-3 py-2.5 shadow-sm">
+      <div className={`rounded-xl border bg-card px-3 py-2.5 shadow-sm ${type === "sale" && row.is_fully_returned ? "opacity-75 bg-slate-50 dark:bg-slate-900/40 border-dashed border-red-200 dark:border-red-900/40" : ""}`}>
         <div className="flex items-center justify-between">
           <span className="font-mono text-[11px] text-muted-foreground">
             {type === "visit" ? ((row.route_sessions as any)?.routes?.name || "Visit") : row.display_id}
@@ -447,10 +447,16 @@ const handleDeleteQr = async (qrId: string) => {
         {type === "sale" && (
           <>
             <div className="flex items-center justify-between mt-1.5">
-              <span className="text-sm font-bold text-foreground">₹{Number(row.total_amount).toLocaleString()}</span>
-              <span className={`text-xs font-medium ${Number(row.outstanding_amount) > 0 ? "text-destructive" : "text-muted-foreground"}`}>
-                Due: ₹{Number(row.outstanding_amount).toLocaleString()}
+              <span className={`text-sm font-bold ${row.is_fully_returned ? "line-through text-muted-foreground" : "text-foreground"}`}>
+                ₹{Number(row.total_amount).toLocaleString()}
               </span>
+              {row.is_fully_returned ? (
+                <Badge variant="outline" className="text-[10px] border-amber-300 text-amber-600 bg-amber-50 rounded-md">Returned</Badge>
+              ) : (
+                <span className={`text-xs font-medium ${Number(row.outstanding_amount) > 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                  Due: ₹{Number(row.outstanding_amount).toLocaleString()}
+                </span>
+              )}
             </div>
             <div className="flex items-center justify-between mt-1.5 text-[11px] text-muted-foreground">
               <span>Cash ₹{Number(row.cash_amount).toLocaleString()} · UPI ₹{Number(row.upi_amount).toLocaleString()}</span>

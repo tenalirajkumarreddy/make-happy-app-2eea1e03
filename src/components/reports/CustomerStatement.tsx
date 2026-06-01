@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect } from "react";
-import { formatCurrency } from '@/lib/currency';
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -10,12 +9,10 @@ import { format, subMonths, startOfMonth } from "date-fns";
 import { ReportFilters, DateRange } from "./ReportFilters";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { generatePrintHTML } from "@/utils/printUtils";
-import { useAuth } from "@/contexts/AuthContext";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { PageHeader } from "@/components/shared/PageHeader";
 import { useWarehouse } from "@/contexts/WarehouseContext";
 
 interface CustomerStatementProps {
@@ -39,10 +36,10 @@ interface StatementEntry {
   payment_method?: string;
   handled_by?: string;
   notes?: string;
+  is_fully_returned?: boolean;
 }
 
 export function CustomerStatement({ customerId: propCustomerId, customerName: propCustomerName, storeId: propStoreId, storeName: propStoreName, onClose, standalone }: CustomerStatementProps) {
-  const { user } = useAuth();
   const { currentWarehouse } = useWarehouse();
   const [dateRange, setDateRange] = useState<DateRange>({
     from: startOfMonth(subMonths(new Date(), 2)),
@@ -118,7 +115,7 @@ export function CustomerStatement({ customerId: propCustomerId, customerName: pr
     queryFn: async () => {
       let query = supabase
         .from("sales")
-        .select("id, display_id, total_amount, cash_amount, upi_amount, notes, created_at, recorded_by, stores(id, name), profiles:recorded_by(full_name)")
+        .select("id, display_id, total_amount, cash_amount, upi_amount, notes, created_at, recorded_by, is_fully_returned, stores(id, name), profiles:recorded_by(full_name)")
         .gte("created_at", format(dateRange.from, "yyyy-MM-dd"))
         .lte("created_at", format(dateRange.to, "yyyy-MM-dd") + "T23:59:59");
 
@@ -162,33 +159,7 @@ export function CustomerStatement({ customerId: propCustomerId, customerName: pr
     enabled: !!effectiveCustomerId,
   });
 
-  // Fetch sale returns
-  const { data: returns = [], isLoading: returnsLoading } = useQuery({
-    queryKey: ["statement-returns", effectiveCustomerId, effectiveStoreId, dateRange],
-    queryFn: async () => {
-      let query = supabase
-        .from("sale_returns")
-        .select("id, display_id, return_date, total_amount, reason, notes, created_at, stores(id, name)")
-        .eq("status", "completed")
-        .gte("return_date", format(dateRange.from, "yyyy-MM-dd"))
-        .lte("return_date", format(dateRange.to, "yyyy-MM-dd"));
-
-      if (effectiveStoreId) {
-        query = query.eq("store_id", effectiveStoreId);
-      } else if (effectiveCustomerId) {
-        const { data: stores } = await supabase.from("stores").select("id").eq("customer_id", effectiveCustomerId);
-        if (stores && stores.length > 0) {
-          query = query.in("store_id", stores.map(s => s.id));
-        }
-      }
-
-      const { data } = await query.order("return_date", { ascending: true });
-      return data || [];
-    },
-    enabled: !!effectiveCustomerId,
-  });
-
-  const isLoading = salesLoading || txnLoading || returnsLoading;
+  const isLoading = salesLoading || txnLoading;
 
   // Calculate opening balance before the date range
   const openingBalance = useMemo(() => {
@@ -224,12 +195,13 @@ export function CustomerStatement({ customerId: propCustomerId, customerName: pr
         display_id: s.display_id,
         date: format(new Date(s.created_at), "yyyy-MM-dd"),
         description: `Sale ${s.stores?.name ? `at ${s.stores.name}` : ""}`,
-        debit: Number(s.total_amount),
-        credit: 0,
+        debit: s.is_fully_returned ? 0 : Number(s.total_amount),
+        credit: s.is_fully_returned ? 0 : (Number(s.cash_amount || 0) + Number(s.upi_amount || 0)),
         balance: 0,
         payment_method: paymentMethod,
         handled_by: s.profiles?.full_name,
         notes: s.notes,
+        is_fully_returned: s.is_fully_returned || false,
       });
     });
 
@@ -265,21 +237,6 @@ export function CustomerStatement({ customerId: propCustomerId, customerName: pr
       }
     });
 
-    // Add returns (credit - reduces what customer owes)
-    returns.forEach((r: any) => {
-      allEntries.push({
-        id: r.id,
-        type: "return",
-        display_id: r.display_id,
-        date: r.return_date,
-        description: `Sale Return${r.stores?.name ? ` (${r.stores.name})` : ""}`,
-        debit: 0,
-        credit: Number(r.total_amount),
-        balance: 0,
-        notes: r.reason,
-      });
-    });
-
     // Sort by date
     allEntries.sort((a, b) => {
       if (a.type === "opening") return -1;
@@ -295,7 +252,7 @@ export function CustomerStatement({ customerId: propCustomerId, customerName: pr
     });
 
     return allEntries;
-  }, [sales, transactions, returns, openingBalance, dateRange]);
+  }, [sales, transactions, openingBalance, dateRange]);
 
   // Totals
   const totals = useMemo(() => {
@@ -337,11 +294,15 @@ export function CustomerStatement({ customerId: propCustomerId, customerName: pr
         <thead><tr><th>Date</th><th>Type</th><th>ID</th><th>Description</th><th class="text-right">Debit</th><th class="text-right">Credit</th><th class="text-right">Balance</th></tr></thead>
         <tbody>
           ${entries.map(e => `
-            <tr${e.type === 'opening' ? ' style="background:#f1f5f9;"' : ''}>
+            <tr${e.type === 'opening' ? ' style="background:#f1f5f9;"' : e.is_fully_returned ? ' style="opacity:0.5;text-decoration:line-through;background:#fff8f8;"' : ''}>
               <td>${format(new Date(e.date), "dd/MM/yy")}</td>
               <td><span style="text-transform:capitalize;">${e.type}</span></td>
               <td class="font-mono">${e.display_id}</td>
-              <td>${e.description}${e.payment_method ? ` <span style="opacity:0.6;">(${e.payment_method})</span>` : ''}</td>
+              <td>
+                ${e.description}
+                ${e.is_fully_returned ? ' <span style="font-size:10px;padding:2px 6px;background:#fef3c7;color:#d97706;border:1px solid #fde68a;border-radius:4px;font-weight:bold;text-decoration:none;display:inline-block;">Returned</span>' : ''}
+                ${e.payment_method ? ` <span style="opacity:0.6;">(${e.payment_method})</span>` : ''}
+              </td>
               <td class="text-right font-semibold" style="color:#2563eb;">${e.debit > 0 ? fmt(e.debit) : '—'}</td>
               <td class="text-right font-semibold" style="color:#16a34a;">${e.credit > 0 ? fmt(e.credit) : '—'}</td>
               <td class="text-right font-semibold" style="color:${e.balance >= 0 ? '#dc2626' : '#16a34a'};">${fmt(e.balance)}</td>
@@ -498,7 +459,7 @@ export function CustomerStatement({ customerId: propCustomerId, customerName: pr
                     </thead>
                     <tbody className="divide-y">
                       {entries.map((entry) => (
-                        <tr key={`${entry.type}-${entry.id}`} className={entry.type === "opening" ? "bg-muted/30" : "hover:bg-muted/20"}>
+                        <tr key={`${entry.type}-${entry.id}`} className={entry.type === "opening" ? "bg-muted/30" : entry.is_fully_returned ? "opacity-50 bg-red-50/10 dark:bg-red-950/5 hover:bg-red-50/10" : "hover:bg-muted/20"}>
                           <td className="px-4 py-3 text-sm">{format(new Date(entry.date), "dd MMM yyyy")}</td>
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2">
@@ -508,18 +469,21 @@ export function CustomerStatement({ customerId: propCustomerId, customerName: pr
                           </td>
                           <td className="px-4 py-3 text-sm font-mono text-muted-foreground">{entry.display_id}</td>
                           <td className="px-4 py-3 text-sm">
-                            <div>
-                              <span>{entry.description}</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className={entry.is_fully_returned ? "line-through text-muted-foreground" : ""}>{entry.description}</span>
+                              {entry.is_fully_returned && (
+                                <Badge variant="outline" className="text-[9px] border-amber-300 text-amber-600 bg-amber-50 rounded px-1.5 py-0">Returned</Badge>
+                              )}
                               {entry.payment_method && (
-                                <span className="text-xs text-muted-foreground ml-2 capitalize">({entry.payment_method.replace("_", " ")})</span>
+                                <span className="text-xs text-muted-foreground ml-1.5 capitalize">({entry.payment_method.replace("_", " ")})</span>
                               )}
                             </div>
                             {entry.handled_by && <p className="text-xs text-muted-foreground">By: {entry.handled_by}</p>}
                           </td>
-                          <td className="px-4 py-3 text-sm text-right font-medium text-blue-600">
+                          <td className={`px-4 py-3 text-sm text-right font-medium ${entry.is_fully_returned ? "line-through text-muted-foreground" : "text-blue-600"}`}>
                             {(entry.debit || 0) > 0 ? `₹${(entry.debit || 0).toLocaleString()}` : "—"}
                           </td>
-                          <td className="px-4 py-3 text-sm text-right font-medium text-green-600">
+                          <td className={`px-4 py-3 text-sm text-right font-medium ${entry.is_fully_returned ? "line-through text-muted-foreground" : "text-green-600"}`}>
                             {(entry.credit || 0) > 0 ? `₹${(entry.credit || 0).toLocaleString()}` : "—"}
                           </td>
                           <td className="px-4 py-3 text-sm text-right font-bold">

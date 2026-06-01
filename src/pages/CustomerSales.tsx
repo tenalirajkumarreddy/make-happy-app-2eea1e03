@@ -41,12 +41,45 @@ const CustomerSales = () => {
   });
 
   const columns = [
-    { header: "Sale ID", accessor: "display_id" as const, className: "font-mono text-xs" },
+    {
+      header: "Sale ID",
+      accessor: (row: any) => (
+        <div className="flex items-center gap-1.5 font-mono text-xs">
+          <span className={row.is_fully_returned ? "line-through text-muted-foreground" : ""}>
+            {row.display_id}
+          </span>
+          {row.is_fully_returned && (
+            <Badge variant="outline" className="text-[9px] border-amber-300 text-amber-600 bg-amber-50 rounded px-1 py-0">Returned</Badge>
+          )}
+        </div>
+      )
+    },
     { header: "Store", accessor: (row: any) => row.stores?.name || "—" },
     { header: "Items", accessor: (row: any) => <Badge variant="secondary">{row.sale_items?.length || 0} items</Badge> },
-    { header: "Total", accessor: (row: any) => `₹${Number(row.total_amount).toLocaleString()}`, className: "font-semibold" },
-    { header: "Paid", accessor: (row: any) => `₹${(Number(row.cash_amount) + Number(row.upi_amount)).toLocaleString()}` },
-    { header: "Outstanding", accessor: (row: any) => `₹${Number(row.outstanding_amount).toLocaleString()}`, className: "text-warning font-medium" },
+    {
+      header: "Total",
+      accessor: (row: any) => (
+        <span className={row.is_fully_returned ? "line-through text-muted-foreground font-normal" : "font-semibold"}>
+          ₹{Number(row.total_amount).toLocaleString()}
+        </span>
+      )
+    },
+    {
+      header: "Paid",
+      accessor: (row: any) => (
+        <span className={row.is_fully_returned ? "line-through text-muted-foreground" : ""}>
+          ₹{(Number(row.cash_amount) + Number(row.upi_amount)).toLocaleString()}
+        </span>
+      )
+    },
+    {
+      header: "Outstanding",
+      accessor: (row: any) => (
+        <span className={row.is_fully_returned ? "text-muted-foreground line-through font-normal" : "text-warning font-medium"}>
+          ₹{Number(row.outstanding_amount).toLocaleString()}
+        </span>
+      )
+    },
     { header: "Date", accessor: (row: any) => formatDate(row.created_at), className: "text-muted-foreground text-xs" },
   ];
 
@@ -71,6 +104,11 @@ const CustomerSales = () => {
             <DialogTitle>Sale Details ({selectedSale?.display_id})</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
+            {selectedSale?.is_fully_returned && (
+              <div className="rounded-lg border border-amber-300 bg-amber-50/50 p-3 text-amber-800 text-xs font-medium">
+                This sale has been fully returned and cancelled. All balances were reversed.
+              </div>
+            )}
             <div className="flex justify-between items-center text-sm">
               <span className="text-muted-foreground">Store:</span>
               <span className="font-medium">{selectedSale?.stores?.name || "—"}</span>
@@ -94,13 +132,13 @@ const CustomerSales = () => {
                   <div className="space-y-3">
                     {selectedSale?.sale_items?.map((item: any, i: number) => (
                       <div key={i} className="flex justify-between text-sm">
-                        <div>
+                        <div className={selectedSale?.is_fully_returned ? "line-through text-muted-foreground" : ""}>
                           <p className="font-medium text-foreground">{item.products?.name || "Unknown Product"}</p>
                           <p className="text-muted-foreground text-xs">
                             {item.quantity} {item.products?.unit || 'unit'} × ₹{item.unit_price}
                           </p>
                         </div>
-                        <div className="font-semibold">
+                        <div className={`font-semibold ${selectedSale?.is_fully_returned ? "line-through text-muted-foreground" : ""}`}>
                           ₹{(item.quantity * item.unit_price).toLocaleString()}
                         </div>
                       </div>
@@ -115,15 +153,15 @@ const CustomerSales = () => {
             <div className="space-y-1.5">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Total Amount</span>
-                <span className="font-medium">₹{Number(selectedSale?.total_amount || 0).toLocaleString()}</span>
+                <span className={`font-medium ${selectedSale?.is_fully_returned ? "line-through text-muted-foreground" : ""}`}>₹{Number(selectedSale?.total_amount || 0).toLocaleString()}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Amount Paid</span>
-                <span className="text-success font-medium">₹{(Number(selectedSale?.cash_amount || 0) + Number(selectedSale?.upi_amount || 0)).toLocaleString()}</span>
+                <span className={`text-success font-medium ${selectedSale?.is_fully_returned ? "line-through text-muted-foreground" : ""}`}>₹{(Number(selectedSale?.cash_amount || 0) + Number(selectedSale?.upi_amount || 0)).toLocaleString()}</span>
               </div>
               <div className="flex justify-between font-semibold pt-1 border-t">
                 <span>Balance Due</span>
-                <span className={Number(selectedSale?.outstanding_amount || 0) > 0 ? "text-destructive" : "text-foreground"}>
+                <span className={selectedSale?.is_fully_returned ? "line-through text-muted-foreground" : Number(selectedSale?.outstanding_amount || 0) > 0 ? "text-destructive" : "text-foreground"}>
                   ₹{Number(selectedSale?.outstanding_amount || 0).toLocaleString()}
                 </span>
               </div>

@@ -21,7 +21,7 @@
 
 /* ───────────────── Layout & Spacing ───────────────── */
 .mobile-page-wrapper {
-  padding: 0.75rem;
+  padding: 1rem;
   min-height: auto !important;
   overflow-x: hidden;
 }
@@ -50,7 +50,7 @@
 
 .mobile-page-wrapper [class*="shadow-sm"],
 .mobile-page-wrapper [class*="shadow-md"] {
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.06), 0 1px 2px rgb(0 0 0 / 0.04);
 }
 
 /* Card inner padding — slightly tighter for mobile */

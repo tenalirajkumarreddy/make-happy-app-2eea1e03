@@ -3,8 +3,13 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, Printer, Share2 } from "lucide-react";
+import { Loader2, Printer, MessageCircle, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
+import { format } from "date-fns";
+import html2canvas from "html2canvas";
+import { Share } from "@capacitor/share";
+import { Filesystem, Directory } from "@capacitor/filesystem";
+import { isNativeApp } from "@/lib/capacitorUtils";
 
 // Simple HTML escape function to prevent XSS
 const escapeHtml = (str: string): string => {
@@ -221,21 +226,131 @@ ${settings.business_name || ""}
     }
   };
 
+  const fmtDec = (n: number) => `₹${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const fmtInt = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
+
+  const formatWhatsAppText = () => {
+    if (!sale) return "";
+    const div = "─".repeat(24);
+    const previousBalance = Number((sale as any).old_outstanding || 0);
+    const outstanding = Number(sale.outstanding_amount || 0);
+    const paid = Number(sale.cash_amount || 0) + Number(sale.upi_amount || 0);
+    const currBal = previousBalance + outstanding;
+    const recorder = (sale as any).recorded_by?.full_name || "N/A";
+    const date = format(new Date(sale.created_at), "dd MMM yyyy");
+
+    const itemLines = (sale.sale_items || []).map((item: any) => {
+      const name = (item.products?.name || "Item").substring(0, 14);
+      return `${name.padEnd(14)} ${item.quantity}x ${fmtInt(item.unit_price).padStart(6)} = ${fmtInt(item.quantity * item.unit_price)}`;
+    }).join("\n");
+
+    return [
+      `💧 AQUA PRIME ®`,
+      div,
+      `Date       : ${date}`,
+      `Receipt No : ${sale.display_id || ""}`,
+      `Store      : ${sale.stores?.name || "N/A"}`,
+      div,
+      itemLines,
+      `Total${" ".repeat(18)} = ${fmtInt(sale.total_amount)}/-`,
+      div,
+      `Cash  : ${fmtInt(Number(sale.cash_amount || 0))}   UPI : ${fmtInt(Number(sale.upi_amount || 0))}`,
+      `Paid  : ${" ".repeat(7)}${fmtDec(paid)}`,
+      div,
+      `Prev Bal  : ${" ".repeat(5)}${fmtDec(previousBalance)}`,
+      `Curr Bal  : ${" ".repeat(5)}${fmtDec(currBal)}`,
+      div,
+      `Delivered : ${recorder}`,
+      `Thank you • Aqua Prime 💧`,
+    ].join("\n");
+  };
+
+  const handleWhatsAppShare = () => {
+    const text = encodeURIComponent(formatWhatsAppText());
+    const url = `whatsapp://send?text=${text}`;
+    try {
+      window.open(url, isNativeApp() ? "_system" : "_blank");
+    } catch {
+      navigator.clipboard.writeText(formatWhatsAppText());
+      toast.success("Receipt copied to clipboard");
+    }
+  };
+
+  const handleShareImage = async () => {
+    if (!printRef.current) {
+      toast.error("Receipt not yet rendered");
+      return;
+    }
+    const toastId = toast.loading("Capturing receipt…");
+    try {
+      const canvas = await html2canvas(printRef.current, {
+        scale: 2,
+        backgroundColor: "#ffffff",
+      });
+      const dataUrl = canvas.toDataURL("image/png");
+      const base64Data = dataUrl.replace(/^data:image\/\w+;base64,/, "");
+
+      const fileName = `receipt-${sale?.display_id || "sale"}.png`;
+
+      if (isNativeApp()) {
+        // Write to cache then share via file URI (data: URIs don't work with Share plugin)
+        const result = await Filesystem.writeFile({
+          path: fileName,
+          data: base64Data,
+          directory: Directory.Cache,
+        });
+        await Share.share({
+          title: `Receipt ${sale?.display_id || ""}`,
+          files: [result.uri],
+        });
+      } else if (navigator.share) {
+        const blob = await new Promise<Blob>((resolve) => {
+          const bin = atob(base64Data);
+          const buf = new ArrayBuffer(bin.length);
+          const view = new Uint8Array(buf);
+          for (let i = 0; i < bin.length; i++) view[i] = bin.charCodeAt(i);
+          resolve(new Blob([buf], { type: "image/png" }));
+        });
+        const file = new File([blob], fileName, { type: "image/png" });
+        if (navigator.canShare?.({ files: [file] })) {
+          await navigator.share({ files: [file], title: `Receipt ${sale?.display_id || ""}` });
+        } else {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = fileName;
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+      } else {
+        // Desktop fallback - download
+        const blob = await new Promise<Blob>((resolve) => {
+          const bin = atob(base64Data);
+          const buf = new ArrayBuffer(bin.length);
+          const view = new Uint8Array(buf);
+          for (let i = 0; i < bin.length; i++) view[i] = bin.charCodeAt(i);
+          resolve(new Blob([buf], { type: "image/png" }));
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+      toast.dismiss(toastId);
+    } catch (err) {
+      console.error("Share image failed:", err);
+      toast.dismiss(toastId);
+      toast.error("Failed to share receipt image");
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={() => onClose()}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle className="flex items-center justify-between">
-            <span>Receipt</span>
-            <div className="flex gap-2">
-              <Button size="icon" variant="outline" onClick={handlePrint} disabled={isLoading}>
-                <Printer className="h-4 w-4" />
-              </Button>
-              <Button size="icon" variant="outline" onClick={handleShare} disabled={isLoading}>
-                <Share2 className="h-4 w-4" />
-              </Button>
-            </div>
-          </DialogTitle>
+          <DialogTitle>Receipt</DialogTitle>
         </DialogHeader>
 
         {isLoading ? (
@@ -243,6 +358,7 @@ ${settings.business_name || ""}
             <Loader2 className="h-6 w-6 animate-spin" />
           </div>
         ) : sale ? (
+          <>
           <div ref={printRef} className="font-mono text-sm">
             {/* Header */}
             <div className="text-center mb-4">
@@ -350,6 +466,40 @@ ${settings.business_name || ""}
               </p>
             </div>
           </div>
+            {/* Action Buttons */}
+            <div className="flex gap-2 mt-4">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 gap-1.5"
+                onClick={handleShareImage}
+                disabled={isLoading}
+              >
+                <ImageIcon className="h-4 w-4" />
+                Share
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 gap-1.5 text-green-700 border-green-300 hover:bg-green-50"
+                onClick={handleWhatsAppShare}
+                disabled={isLoading}
+              >
+                <MessageCircle className="h-4 w-4" />
+                WhatsApp
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 gap-1.5"
+                onClick={handlePrint}
+                disabled={isLoading}
+              >
+                <Printer className="h-4 w-4" />
+                Print
+              </Button>
+            </div>
+          </>
         ) : (
           <p className="text-center text-muted-foreground py-8">Receipt not found</p>
         )}

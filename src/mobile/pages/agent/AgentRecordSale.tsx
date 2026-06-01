@@ -21,7 +21,9 @@ import { checkProximity } from "@/lib/proximity";
 import {extractErrorCode, ErrorMessages} from "@/lib/errorCodes";
 import { StorePickerSheet, StoreOption } from "@/mobile/components/StorePickerSheet";
 import { cn } from "@/lib/utils";
+import { afterSaleSaved } from "@/lib/mutationHelpers";
 import { SaleReceipt } from "@/components/shared/SaleReceipt";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 
 interface SaleItem {
   product_id: string;
@@ -215,6 +217,13 @@ export function RecordSale({ preselectStore }: { preselectStore?: StoreOption | 
     }).filter((i) => i.quantity > 0));
   };
 
+  const setQtyDirect = (productId: string, value: string) => {
+    const parsed = parseInt(value, 10);
+    if (value === "") { setItems(items.filter((i) => i.product_id !== productId)); return; }
+    if (!Number.isFinite(parsed) || parsed < 0) return;
+    setItems(items.map((i) => i.product_id === productId ? { ...i, quantity: parsed || 1 } : i));
+  };
+
   const updateUnitPrice = (productId: string, value: string) => {
     setItems((prev) => prev.map((i) => i.product_id === productId ? { ...i, unit_price: Number(value) || 0 } : i));
   };
@@ -226,9 +235,12 @@ export function RecordSale({ preselectStore }: { preselectStore?: StoreOption | 
   const oldOutstanding = Number(store?.outstanding || 0);
   const newOutstanding = oldOutstanding + outstandingFromSale;
 
+  const { data: settings } = useCompanySettings();
+  const isCreditCheckEnabled = settings?.credit_limit_check !== "false";
+
   const creditLimitInfo = resolveCreditLimit(store as any, storeTypes as any, customers as any);
-  const creditExceeded = creditLimitInfo ? newOutstanding > creditLimitInfo.limit : false;
-  const creditWarning = creditLimitInfo && !creditExceeded ? newOutstanding > creditLimitInfo.limit * 0.8 : false;
+  const creditExceeded = isCreditCheckEnabled && creditLimitInfo ? newOutstanding > creditLimitInfo.limit : false;
+  const creditWarning = isCreditCheckEnabled && creditLimitInfo && !creditExceeded ? newOutstanding > creditLimitInfo.limit * 0.8 : false;
 
   const handleSubmit = async () => {
     if (!store) { toast.error("Please select a store"); return; }
@@ -244,18 +256,7 @@ export function RecordSale({ preselectStore }: { preselectStore?: StoreOption | 
 
     setSaving(true);
 
-      if (role === "agent" && store) {
-        const { data: locSetting } = await (supabase.from("company_settings") as any).select("value").eq("key", "location_validation").maybeSingle();
-      if (locSetting?.value === "true") {
-        const result = await checkProximity(store.lat, store.lng, { noGpsHandling: "require_manager_override", userRole: role });
-        if (!result.withinRange) {
-          toast.error(result.requiresManagerOverride ? result.message + " Please ask a manager to update the store's GPS coordinates." : result.message);
-          setSaving(false);
-          return;
-        }
-        if (result.skippedNoGps) toast.warning("Store has no GPS coordinates — location check skipped");
-      }
-    }
+    // Proximity geofencing is bypassed for sales per business requirements
 
     const effectiveRecordedBy = recordedFor || user.id;
     const loggedBy = recordedFor ? user.id : null;
@@ -298,16 +299,18 @@ export function RecordSale({ preselectStore }: { preselectStore?: StoreOption | 
     const saleItems = items.map((i) => ({ product_id: i.product_id, quantity: i.quantity, unit_price: i.unit_price }));
 
     if (!navigator.onLine) {
-      const offlineCredit = await validateCreditLimitOffline(store.id, outstandingFromSale, isAdmin);
-      if (!offlineCredit.valid && !isAdmin) {
-        toast.error(offlineCredit.warning || "Credit limit exceeded. Cannot queue sale offline.");
-        setSaving(false);
-        return;
-      }
-      if (offlineCredit.exceeded && !isAdmin) {
-        toast.error("Credit limit exceeded. Cannot queue sale offline.");
-        setSaving(false);
-        return;
+      if (isCreditCheckEnabled) {
+        const offlineCredit = await validateCreditLimitOffline(store.id, outstandingFromSale, isAdmin);
+        if (!offlineCredit.valid && !isAdmin) {
+          toast.error(offlineCredit.warning || "Credit limit exceeded. Cannot queue sale offline.");
+          setSaving(false);
+          return;
+        }
+        if (offlineCredit.exceeded && !isAdmin) {
+          toast.error("Credit limit exceeded. Cannot queue sale offline.");
+          setSaving(false);
+          return;
+        }
       }
       const businessKey = generateBusinessKey('sale', {
         storeId: store.id,
@@ -367,12 +370,12 @@ export function RecordSale({ preselectStore }: { preselectStore?: StoreOption | 
       }
     });
 
+    const recordedStoreId = store?.id;
     toast.success("Sale recorded successfully");
     setSaving(false);
     if (saleRow?.sale_id) setLastSaleId(saleRow.sale_id as string);
     resetSale();
-    qc.invalidateQueries({ queryKey: ["sales"] });
-    qc.invalidateQueries({ queryKey: ["mobile-agent-sales-today"] });
+    afterSaleSaved(qc, { isMobile: true, storeId: recordedStoreId });
   };
 
   const resetSale = () => {
@@ -580,9 +583,15 @@ export function RecordSale({ preselectStore }: { preselectStore?: StoreOption | 
                           >
                             <Minus className="h-4.5 w-4.5 text-slate-600 dark:text-slate-300" />
                           </button>
-                          <span className="text-sm font-bold text-foreground dark:text-white w-7 text-center">
-                            {inCart.quantity}
-                          </span>
+                          <Input
+                            type="number"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            min="1"
+                            value={inCart.quantity}
+                            onChange={(e) => setQtyDirect(product.id, e.target.value)}
+                            className="h-10 w-14 text-sm font-bold text-center rounded-xl border-border dark:border-border"
+                          />
                           <button
                             className="h-10 w-10 rounded-xl bg-blue-600 flex items-center justify-center hover:bg-blue-700 active:scale-90 transition-all"
                             onClick={() => updateQty(product.id, 1)}
@@ -656,21 +665,32 @@ export function RecordSale({ preselectStore }: { preselectStore?: StoreOption | 
               {items.map((item: any) => {
                 const p = availableProducts?.find((pr) => pr.id === item.product_id);
                 return (
-                  <div key={item.product_id} className="flex justify-between items-center gap-2 text-xs text-muted-foreground dark:text-muted-foreground">
-                    <span className="flex-1">{p?.name ?? "Product"} × {item.quantity}</span>
-                    {canOverridePrice ? (
-                      <Input
-                        type="number"
-                        min="0"
-                        value={item.unit_price}
-                        onChange={(e) => updateUnitPrice(item.product_id, e.target.value)}
-                        className="h-7 w-24 text-xs rounded-lg"
-                      />
-                    ) : (
-                      <span className="font-semibold text-slate-700 dark:text-slate-300">
-                        ₹{(item.quantity * item.unit_price).toLocaleString("en-IN")}
-                      </span>
-                    )}
+                  <div key={item.product_id} className="text-xs text-muted-foreground dark:text-muted-foreground">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-xs truncate max-w-[55%]">{p?.name ?? "Product"}</span>
+                      {canOverridePrice ? (
+                        <div className="flex flex-col items-end gap-0.5 shrink-0">
+                          <span className="font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                            = ₹{(item.quantity * item.unit_price).toLocaleString("en-IN")}
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px]">₹</span>
+                            <Input
+                              type="number"
+                              min="0"
+                              value={item.unit_price}
+                              onChange={(e) => updateUnitPrice(item.product_id, e.target.value)}
+                              className="h-6 w-16 text-xs rounded-lg px-1"
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="font-semibold text-slate-700 dark:text-slate-300 shrink-0">
+                          ₹{(item.quantity * item.unit_price).toLocaleString("en-IN")}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">× {item.quantity}</p>
                   </div>
                 );
               })}

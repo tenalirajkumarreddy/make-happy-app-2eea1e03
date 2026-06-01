@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2, Save, Upload, X, Navigation, Trash2, Plus } from "lucide-react";
@@ -17,9 +17,9 @@ import { SmsGatewayTab } from "@/components/settings/SmsGatewayTab";
 import { WarehouseManagement } from "@/components/settings/WarehouseManagement";
 
 const SettingsPage = () => {
-  const { role } = useAuth();
+  const { role, user } = useAuth();
   const qc = useQueryClient();
-  const isAdmin = role === "super_admin";
+  const isAdmin = role === "super_admin" || role === "manager";
 
   // Company settings
   const [settings, setSettings] = useState<Record<string, string>>({});
@@ -41,6 +41,49 @@ const SettingsPage = () => {
     queryFn: async () => {
       const { data } = await supabase.from("store_types").select("id, name").order("name");
       return (data || []) as { id: string; name: string }[];
+    },
+  });
+
+  // Notification Preferences
+  const { data: notifPrefs, isLoading: loadingNotifPrefs } = useQuery({
+    queryKey: ["user-notification-preferences", user?.id],
+    queryFn: async () => {
+      if (!user?.id) return null;
+      const { data, error } = await supabase
+        .from("user_notification_preferences")
+        .select("*")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (error) throw error;
+      
+      return data || {
+        orders_enabled: true,
+        sales_enabled: true,
+        transfers_enabled: true,
+        handovers_enabled: true,
+        system_enabled: true,
+      };
+    },
+    enabled: !!user?.id,
+  });
+
+  const { mutate: updateNotifPref, isPending: updatingNotifPref } = useMutation({
+    mutationFn: async (updated: any) => {
+      const { error } = await supabase
+        .from("user_notification_preferences")
+        .upsert({
+          user_id: user?.id,
+          ...updated,
+          updated_at: new Date().toISOString(),
+        });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Notification preferences updated");
+      qc.invalidateQueries({ queryKey: ["user-notification-preferences", user?.id] });
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to update preferences");
     },
   });
 
@@ -99,19 +142,27 @@ const SettingsPage = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Settings" subtitle="Company settings and system configuration" />
-      <Tabs defaultValue="company">
+      <PageHeader title={isAdmin ? "Settings" : "My Settings"} subtitle={isAdmin ? "Company settings and system configuration" : "Manage your notification preferences"} />
+      <Tabs defaultValue={isAdmin ? "company" : "notifications"}>
         <div className="w-full overflow-x-auto pb-2">
-          <TabsList className="h-auto flex-wrap sm:flex-nowrap w-max min-w-full justify-start md:w-auto">
-            <TabsTrigger value="company">Company</TabsTrigger>
-            <TabsTrigger value="pricing">Pricing</TabsTrigger>
-            {isAdmin && <TabsTrigger value="invoice">Invoice</TabsTrigger>}
-            {isAdmin && <TabsTrigger value="warehouses">Warehouses</TabsTrigger>}
-            <TabsTrigger value="features">Features</TabsTrigger>
-            {isAdmin && <TabsTrigger value="sms_gateway">SMS Gateway</TabsTrigger>}
-          </TabsList>
+          {isAdmin ? (
+            <TabsList className="h-auto flex-wrap sm:flex-nowrap w-max min-w-full justify-start md:w-auto">
+              <TabsTrigger value="company">Company</TabsTrigger>
+              <TabsTrigger value="pricing">Pricing</TabsTrigger>
+              {isAdmin && <TabsTrigger value="invoice">Invoice</TabsTrigger>}
+              {isAdmin && <TabsTrigger value="warehouses">Warehouses</TabsTrigger>}
+              <TabsTrigger value="features">Features</TabsTrigger>
+              <TabsTrigger value="notifications">Notifications</TabsTrigger>
+              {isAdmin && <TabsTrigger value="sms_gateway">SMS Gateway</TabsTrigger>}
+            </TabsList>
+          ) : (
+            <TabsList className="h-auto flex-wrap sm:flex-nowrap w-max min-w-full justify-start md:w-auto">
+              <TabsTrigger value="notifications">Notifications</TabsTrigger>
+            </TabsList>
+          )}
         </div>
 
+        {isAdmin && (
         <TabsContent value="company" className="mt-6 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
             {/* Logo and Primary Info */}
@@ -208,11 +259,12 @@ const SettingsPage = () => {
             </div>
           </div>
         </TabsContent>
-
-
+        )}
+        {isAdmin && (
         <TabsContent value="pricing" className="mt-4">
           <PricingTab isAdmin={isAdmin} />
         </TabsContent>
+        )}
 
         {isAdmin && (
           <TabsContent value="invoice" className="mt-6 space-y-6">
@@ -348,6 +400,7 @@ const SettingsPage = () => {
           </TabsContent>
         )}
 
+        {isAdmin && (
         <TabsContent value="features" className="mt-6 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="rounded-xl border bg-card p-6 shadow-sm space-y-5">
@@ -382,6 +435,7 @@ const SettingsPage = () => {
                   { key: "auto_orders", label: "Smart Auto-Orders", desc: "AI-driven recurring order generation" },
                   { key: "push_notifications", label: "Push Engagement", desc: "Real-time system notifications to staff/customers" },
                   { key: "partial_collections", label: "Collection Flexibility", desc: "Allow staff to record partial payment collections" },
+                  { key: "credit_limit_check", label: "Credit Limit Check", desc: "Enforce credit limits when recording sales. If disabled, sales are allowed even if outstanding exceeds limit." },
                 ].map((item) => (
                   <div key={item.key} className="flex items-start justify-between gap-4">
                     <div className="space-y-0.5">
@@ -424,12 +478,50 @@ const SettingsPage = () => {
             </div>
           </div>
         </TabsContent>
+        )}
 
         {isAdmin && (
           <TabsContent value="sms_gateway" className="mt-4">
             <SmsGatewayTab />
           </TabsContent>
         )}
+
+        <TabsContent value="notifications" className="mt-6 space-y-6">
+          <div className="rounded-xl border bg-card p-6 shadow-sm max-w-2xl space-y-6">
+            <div>
+              <h3 className="text-lg font-bold tracking-tight">Notification Channels</h3>
+              <p className="text-sm text-muted-foreground">Select which notifications you would like to receive on your device</p>
+            </div>
+            
+            <div className="divide-y divide-border/60">
+              {[
+                { key: "orders_enabled", label: "Orders Assigned & Fulfilled", desc: "Alerts when orders are assigned to you or completed" },
+                { key: "sales_enabled", label: "Sales & Payments", desc: "Notifications on new payments logged and daily collections" },
+                { key: "transfers_enabled", label: "Stock Transfers", desc: "Awaiting approval alerts on warehouse or staff stock movements" },
+                { key: "handovers_enabled", label: "Cash Handovers & Expenses", desc: "Confirmations and requests on pending handovers and expense approvals" },
+                { key: "system_enabled", label: "System & Announcements", desc: "General ERP system changes, profile status updates and broad messages" },
+              ].map((item) => (
+                <div key={item.key} className="flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0">
+                  <div className="space-y-0.5">
+                    <p className="text-sm font-semibold">{item.label}</p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">{item.desc}</p>
+                  </div>
+                  <Switch 
+                    checked={notifPrefs ? notifPrefs[item.key as keyof typeof notifPrefs] !== false : true} 
+                    onCheckedChange={(checked) => {
+                      updateNotifPref({
+                        ...notifPrefs,
+                        [item.key]: checked,
+                      });
+                    }}
+                    disabled={updatingNotifPref || loadingNotifPrefs}
+                    className="mt-1" 
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </TabsContent>
       </Tabs>
 
     </div>

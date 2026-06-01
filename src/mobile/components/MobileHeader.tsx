@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Bell, Wifi, WifiOff, LogOut, Moon, Sun, ChevronDown, User } from "lucide-react";
+import { Bell, Wifi, WifiOff, LogOut, Moon, Sun, ChevronDown, User, Settings } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
@@ -178,6 +178,13 @@ export function MobileHeader({ title }: Props) {
                   >
                     <User className="h-4 w-4" />
                     My Profile
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => navigate("/settings")}
+                    className="gap-2 mx-1 rounded-lg"
+                  >
+                    <Settings className="h-4 w-4" />
+                    Settings
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onClick={signOut}

@@ -24,6 +24,8 @@ export const ROLE_DEFAULTS: Record<AppRole, PermissionKey[]> = {
     "view_invoices", "create_invoices", "edit_invoices", "delete_invoices", "download_invoices",
     "view_assigned_orders", "accept_order_transfers",
     "submit_expenses", "manage_expense_access", "approve_expenses",
+    "backdate",
+    "cancel_sales",
   ],
   manager: [
     "price_override", "record_behalf", "create_customers", "create_stores",
@@ -38,6 +40,8 @@ export const ROLE_DEFAULTS: Record<AppRole, PermissionKey[]> = {
     "view_invoices", "create_invoices", "edit_invoices", "delete_invoices", "download_invoices",
     "view_assigned_orders", "accept_order_transfers",
     "submit_expenses", "manage_expense_access", "approve_expenses",
+    "backdate",
+    "cancel_sales",
   ],
   marketer: [
     "create_customers", "create_stores",
@@ -46,21 +50,24 @@ export const ROLE_DEFAULTS: Record<AppRole, PermissionKey[]> = {
   ],
   agent: [
     "create_customers", "create_stores",
+    "price_override", "create_sale_returns",
+    "view_orders", "modify_orders",
     "view_assigned_orders", "accept_order_transfers",
     "fulfill_orders", "cancel_orders", "record_sale",
     "view_invoices", "download_invoices",
     "submit_expenses",
   ],
   operator: [
+    "price_override", "create_sale_returns",
     "view_orders", "create_orders", "modify_orders",
     "fulfill_orders", "cancel_orders", "transfer_orders",
-    "view_invoices", "create_invoices", "edit_invoices", "delete_invoices", "download_invoices",
+    "view_invoices", "download_invoices",
     "view_attendance", "manage_attendance",
     "record_sale", "see_handover_balance",
   ],
 
   customer: [
-    "view_orders", "view_invoices", "download_invoices",
+    "view_orders",
   ],
 };
 
@@ -81,7 +88,7 @@ export const ALL_PERMISSION_KEYS: PermissionKey[] = [
   // Handover
   "modify_handovers", "cancel_any_handover", "adjust_holding_balance",
   // Sales
-  "record_sale",
+  "record_sale", "backdate", "cancel_sales",
   // Vendor & Purchase
   "view_vendors", "manage_vendors",
   "view_purchases", "manage_purchases",
@@ -119,6 +126,8 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   price_override: "Override Product Prices",
   record_behalf: "Record Sales on Behalf",
   record_sale: "Record Sales",
+  backdate: "Backdate Sales",
+  cancel_sales: "Cancel Sales",
   create_customers: "Create Customers",
   create_stores: "Create Stores",
   edit_balance: "Edit Customer Balances",
@@ -154,7 +163,7 @@ export const PERMISSION_GROUPS: Record<string, PermissionKey[]> = {
     "view_invoices", "create_invoices", "edit_invoices", "delete_invoices", "download_invoices",
   ],
   "Sales & Pricing": [
-    "record_sale", "price_override", "record_behalf", "edit_balance",
+    "record_sale", "backdate", "cancel_sales", "price_override", "record_behalf", "edit_balance",
     "opening_balance", "finalizer", "see_handover_balance",
   ],
   "Handovers": [

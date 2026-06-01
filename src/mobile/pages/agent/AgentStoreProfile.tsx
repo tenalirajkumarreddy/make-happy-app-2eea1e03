@@ -253,7 +253,7 @@ export function AgentStoreProfile({ store, onBack, onGoRecord }: Props) {
             )}
 
             <div className="grid grid-cols-2 gap-2 mt-3">
-              <Button variant="outline" size="sm" className="h-9 rounded-xl text-xs" onClick={openDirections} disabled={!canNavigate}>
+              <Button variant="outline" size="sm" className="h-9 rounded-xl text-xs" onClick={handleNavigate} disabled={!canNavigate}>
                 <Navigation2 className="h-3.5 w-3.5 mr-1.5" />
                 Navigate
               </Button>

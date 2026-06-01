@@ -22,7 +22,7 @@ export function OrderStockSummary({ orders }: OrderStockSummaryProps) {
     if (!orders) return [];
     const map = new Map<string, { name: string; totalQty: number }>();
     for (const order of orders) {
-      if (order.status !== "pending") continue;
+      if (order.status !== "pending" && order.status !== "confirmed") continue;
       if (order.order_type !== "detailed" || !order.order_items) continue;
       for (const item of order.order_items) {
         const key = item.product_id;

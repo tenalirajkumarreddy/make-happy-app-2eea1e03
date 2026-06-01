@@ -1,20 +1,26 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermission } from "@/hooks/usePermission";
 import { useWarehouse } from "@/contexts/WarehouseContext";
-import { Loader2, Plus, Eye, Wallet, Receipt, RotateCcw, ShoppingCart, Printer, Calendar, Filter } from "lucide-react";
+import { Loader2, Plus, Eye, Wallet, Receipt, RotateCcw, ShoppingCart, Printer, Calendar, Filter, XCircle, Pencil, FileText } from "lucide-react";
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { format, subDays, startOfWeek, startOfMonth } from "date-fns";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { fmtINR } from "@/lib/utils";
+import { afterSaleCancelled, afterSaleEdited } from "@/lib/mutationHelpers";
+import { SaleReturnDialog } from "@/components/sales/SaleReturnDialog";
+import { InvoiceDialog } from "@/mobile/components/InvoiceDialog";
 import { usePullToRefresh } from "@/mobile/hooks/usePullToRefresh";
 import { PullRefreshIndicator } from "@/mobile/components/PullRefreshIndicator";
 import { CardSkeletonList } from "@/mobile/components/CardSkeleton";
+import { SaleReceipt } from "@/components/shared/SaleReceipt";
 
 interface SaleItem {
   id: string;
@@ -38,6 +44,7 @@ interface Sale {
   outstanding_amount: number;
   created_at: string;
   recorded_by: string;
+  is_fully_returned?: boolean;
   stores?: { name: string; display_id: string };
   customers?: { name: string; display_id: string };
   sale_items?: SaleItem[];
@@ -51,6 +58,7 @@ interface Profile {
 
 export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void }) {
   const { user, role } = useAuth();
+  const { allowed: canCancelSales } = usePermission("cancel_sales");
   const { currentWarehouse } = useWarehouse();
   const qc = useQueryClient();
 
@@ -65,6 +73,31 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [page, setPage] = useState(1);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [cancelRestockTarget, setCancelRestockTarget] = useState<"warehouse" | "agent">("agent");
+  const [cancelSelectedAgentId, setCancelSelectedAgentId] = useState("");
+  const [isCancellingSale, setIsCancellingSale] = useState(false);
+  const [receiptSaleId, setReceiptSaleId] = useState<string | null>(null);
+
+  // Edit state
+  const [editingSaleId, setEditingSaleId] = useState<string | null>(null);
+  const [editingItems, setEditingItems] = useState<any[]>([]);
+  const [editCash, setEditCash] = useState("");
+  const [editUpi, setEditUpi] = useState("");
+  const [submittingEdit, setSubmittingEdit] = useState(false);
+
+  // Return state
+  const [returnSale, setReturnSale] = useState<Sale | null>(null);
+
+  // Invoice state
+  const [invoiceSale, setInvoiceSale] = useState<Sale | null>(null);
+
+  const openEditSale = (sale: Sale) => {
+    setEditCash(String(sale.cash_amount || 0));
+    setEditUpi(String(sale.upi_amount || 0));
+    setEditingItems([]);
+    setEditingSaleId(sale.id);
+  };
 
   const getDateRange = useCallback((filter: string) => {
     const now = new Date();
@@ -127,20 +160,29 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
       const { data } = await supabase.from("customers").select("id, name").order("name").limit(100);
       return data || [];
     },
-    enabled: !!currentWarehouse,
   });
 
-  const { data: agents = [] } = useQuery({
-    queryKey: ["mobile-sales-agents"],
+  const { data: agentProfiles = [] } = useQuery({
+    queryKey: ["mobile-agent-profiles"],
     queryFn: async () => {
-      const { data } = await supabase.from("profiles").select("user_id, full_name").order("full_name").limit(100);
+      const { data: agentIds } = await supabase
+        .from("user_roles")
+        .select("user_id")
+        .eq("role", "agent");
+      if (!agentIds?.length) return [];
+      const { data } = await supabase
+        .from("profiles")
+        .select("user_id, full_name, avatar_url")
+        .in("user_id", agentIds.map((a: any) => a.user_id));
       return data || [];
     },
+    enabled: canCancelSales,
   });
 
   const allSales = sales?.sales || [];
   const totalSales = sales?.total || 0;
   const hasMore = allSales.length < totalSales;
+  const editingSale = useMemo(() => allSales.find((s) => s.id === editingSaleId), [allSales, editingSaleId]);
 
   const { handlers: pullHandlers, isPulling, isRefreshing, pullDistance, threshold } = usePullToRefresh({
     onRefresh: async () => { setPage(1); await refetch(); },
@@ -158,6 +200,72 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
       return map;
     },
   });
+
+  // Fetch items for editing sale
+  const { data: editSaleItems } = useQuery({
+    queryKey: ["edit-sale-items", editingSaleId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("sale_items")
+        .select("*, products(name, sku)")
+        .eq("sale_id", editingSaleId!);
+      return data || [];
+    },
+    enabled: !!editingSaleId,
+  });
+
+  useEffect(() => {
+    if (editSaleItems && editSaleItems.length > 0) {
+      setEditingItems(editSaleItems.map((item: any) => ({
+        product_id: item.product_id,
+        name: item.products?.name || "Product",
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        total_price: item.total_price,
+      })));
+    }
+  }, [editSaleItems]);
+
+  const handleEditSale = async () => {
+    if (!editingSale || !editingSaleId) return;
+    if (editingItems.length === 0) { toast.error("At least one product item is required"); return; }
+    setSubmittingEdit(true);
+    try {
+      const editedTotalAmount = editingItems.reduce((sum: number, item: any) => sum + (item.quantity * item.unit_price), 0);
+      const editedOutstanding = Math.max(editedTotalAmount - (Number(editCash) || 0) - (Number(editUpi) || 0), 0);
+      const { error } = await (supabase as any).rpc("edit_sale", {
+        p_original_sale_id: editingSaleId,
+        p_store_id: editingSale.store_id,
+        p_customer_id: editingSale.customer_id,
+        p_display_id: editingSale.display_id,
+        p_total_amount: editedTotalAmount,
+        p_cash_amount: Number(editCash) || 0,
+        p_upi_amount: Number(editUpi) || 0,
+        p_outstanding_amount: editedOutstanding,
+        p_sale_items: editingItems.map((si: any) => ({
+          product_id: si.product_id,
+          quantity: si.quantity,
+          unit_price: si.unit_price,
+          total_price: si.quantity * si.unit_price,
+        })),
+        p_recorded_by: editingSale.recorded_by,
+        p_logged_by: null,
+        p_created_at: editingSale.created_at,
+        p_expected_outstanding: (editingSale as any).outstanding ?? null,
+      });
+      if (error) throw error;
+      toast.success("Sale updated successfully");
+      setEditingSaleId(null);
+      setEditCash("");
+      setEditUpi("");
+      setEditingItems([]);
+      afterSaleEdited(qc);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to edit sale");
+    } finally {
+      setSubmittingEdit(false);
+    }
+  };
 
   // Reset page when filters change
   useEffect(() => {
@@ -281,7 +389,7 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
           <SelectTrigger className="h-10 text-sm rounded-xl bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"><SelectValue placeholder="Recorded by (Agent)" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Agents</SelectItem>
-            {agents.map((a) => (
+            {agentProfiles.map((a) => (
               <SelectItem key={a.user_id} value={a.user_id}>{a.full_name}</SelectItem>
             ))}
           </SelectContent>
@@ -330,11 +438,12 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
         <div className="px-4 space-y-3">
           {filteredSales.map((sale) => {
             const itemCount = sale.sale_items?.length || 0;
+            const isReturned = sale.is_fully_returned;
             
             return (
               <div
                 key={sale.id}
-                className="rounded-2xl border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden"
+                className={`rounded-2xl border bg-white dark:bg-slate-800 shadow-sm overflow-hidden ${isReturned ? "opacity-70 bg-slate-50 dark:bg-slate-900/40 border-dashed border-red-200 dark:border-red-900/40" : "border-slate-100 dark:border-slate-700"}`}
               >
                 {/* Card Content */}
                 <div
@@ -346,19 +455,26 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
                 >
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-mono font-semibold text-primary">{sale.display_id}</p>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <p className={`text-sm font-mono font-semibold ${isReturned ? "line-through text-slate-400" : "text-primary"}`}>{sale.display_id}</p>
+                        {isReturned && (
+                          <span className="text-[9px] font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800 rounded px-1.5 py-0">
+                            Returned
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-muted-foreground mt-1">
                         {sale.stores?.name || "Unknown Store"}
                       </p>
                     </div>
-                    <p className="text-sm font-bold tabular-nums text-primary">{fmtINR(sale.total_amount)}</p>
+                    <p className={`text-sm font-bold tabular-nums ${isReturned ? "line-through text-slate-400 font-normal" : "text-primary"}`}>{fmtINR(sale.total_amount)}</p>
                   </div>
 
                   {/* Sale Items Preview */}
                   {sale.sale_items && sale.sale_items.length > 0 && (
                     <div className="space-y-1 mb-2">
                       {sale.sale_items.slice(0, 2).map((item, idx) => (
-                        <div key={idx} className="flex justify-between text-xs">
+                        <div key={idx} className={`flex justify-between text-xs ${isReturned ? "line-through text-slate-400" : ""}`}>
                           <span className="text-muted-foreground truncate flex-1">
                             {item.products?.name} × {item.quantity}
                           </span>
@@ -378,17 +494,17 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
                   {/* Payment Badges */}
                   <div className="flex items-center gap-1.5 mb-2">
                     {sale.cash_amount > 0 && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${isReturned ? "bg-slate-100 text-slate-400 line-through" : "bg-green-100 text-green-700"}`}>
                         Cash {fmtINR(sale.cash_amount)}
                       </span>
                     )}
                     {sale.upi_amount > 0 && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${isReturned ? "bg-slate-100 text-slate-400 line-through" : "bg-purple-100 text-purple-700"}`}>
                         UPI {fmtINR(sale.upi_amount)}
                       </span>
                     )}
                     {sale.outstanding_amount > 0 && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 font-medium">
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${isReturned ? "bg-slate-100 text-slate-400 line-through" : "bg-red-100 text-red-700"}`}>
                         Due {fmtINR(sale.outstanding_amount)}
                       </span>
                     )}
@@ -415,24 +531,43 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
 
                 {/* Action Buttons Row */}
                 <div className="flex border-t border-border/50">
+                  {sale.invoice_sales?.length > 0 ? (
+                    <button
+                      onClick={() => onNavigate(`/invoices/${sale.invoice_sales[0].invoice_id}`)}
+                      className="flex-1 py-2.5 min-w-0 flex items-center justify-center gap-1 text-xs font-medium text-green-600 hover:bg-green-50 active:bg-green-100 transition-colors border-r border-border/50"
+                    >
+                      <FileText className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">Invoice</span>
+                    </button>
+                  ) : role === "super_admin" || role === "manager" ? (
+                    <button
+                      onClick={() => setInvoiceSale(sale)}
+                      className="flex-1 py-2.5 min-w-0 flex items-center justify-center gap-1 text-xs font-medium text-blue-600 hover:bg-blue-50 active:bg-blue-100 transition-colors border-r border-border/50"
+                    >
+                      <FileText className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">Invoice</span>
+                    </button>
+                  ) : null}
                   <button
-                    onClick={() => { setShowDetailModal(false); onNavigate(`/sales?receipt=${sale.id}`); }}
+                    onClick={() => { setShowDetailModal(false); setReceiptSaleId(sale.id); }}
                     className="flex-1 py-2.5 min-w-0 flex items-center justify-center gap-1 text-xs font-medium text-muted-foreground hover:bg-muted active:bg-muted/80 transition-colors border-r border-border/50"
                   >
                     <Printer className="h-3.5 w-3.5 shrink-0" />
                     <span className="truncate">Receipt</span>
                   </button>
-                  <button
-                    onClick={() => { setSelectedSale(sale); setShowDetailModal(true); }}
-                    className="flex-1 py-2.5 min-w-0 flex items-center justify-center gap-1 text-xs font-medium text-muted-foreground hover:bg-muted active:bg-muted/80 transition-colors border-r border-border/50"
-                  >
-                    <Eye className="h-3.5 w-3.5 shrink-0" />
-                    <span className="truncate">View</span>
-                  </button>
-                  {sale.outstanding_amount > 0 && (
+                  {!isReturned && (
                     <button
-                      onClick={() => { setSelectedSale(sale); setShowDetailModal(true); }}
-                      className="flex-1 py-2.5 min-w-0 flex items-center justify-center gap-1 text-xs font-medium text-primary hover:bg-primary/5 active:bg-primary/10 transition-colors"
+                      onClick={() => openEditSale(sale)}
+                      className="flex-1 py-2.5 min-w-0 flex items-center justify-center gap-1 text-xs font-medium text-blue-600 hover:bg-blue-50 active:bg-blue-100 transition-colors border-r border-border/50"
+                    >
+                      <Pencil className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">Edit</span>
+                    </button>
+                  )}
+                  {!isReturned && (
+                    <button
+                      onClick={() => { setReturnSale(sale); }}
+                      className="flex-1 py-2.5 min-w-0 flex items-center justify-center gap-1 text-xs font-medium text-orange-600 hover:bg-orange-50 active:bg-orange-100 transition-colors"
                     >
                       <RotateCcw className="h-3.5 w-3.5 shrink-0" />
                       <span className="truncate">Return</span>
@@ -468,7 +603,7 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
       </div>{/* end pull-to-refresh wrapper */}
 
       {/* Detail Modal */}
-      <Dialog open={showDetailModal} onOpenChange={setShowDetailModal}>
+      <Dialog key={selectedSale?.id || 'none'} open={showDetailModal} onOpenChange={setShowDetailModal}>
         <DialogContent className="max-w-sm max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-base">Sale Details</DialogTitle>
@@ -478,9 +613,14 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
             <div className="space-y-4">
               {/* Sale Info */}
               <div className="rounded-lg bg-muted/50 p-3 space-y-2">
+                {selectedSale.is_fully_returned && (
+                  <div className="rounded-lg border border-amber-300 bg-amber-50/50 p-2.5 text-amber-800 text-xs font-semibold mb-2">
+                    This sale has been fully returned and cancelled.
+                  </div>
+                )}
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-muted-foreground">Sale ID</span>
-                  <span className="font-mono text-sm font-semibold">{selectedSale.display_id}</span>
+                  <span className={`font-mono text-sm font-semibold ${selectedSale.is_fully_returned ? "line-through text-slate-400" : ""}`}>{selectedSale.display_id}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-muted-foreground">Store</span>
@@ -502,8 +642,8 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
                     {selectedSale.sale_items.map((item, idx) => (
                       <div key={idx} className="px-3 py-2.5">
                         <div className="flex justify-between items-start mb-1">
-                          <span className="text-sm font-medium">{item.products?.name}</span>
-                          <span className="text-sm font-semibold tabular-nums">{fmtINR(item.total_price)}</span>
+                          <span className={`text-sm font-medium ${selectedSale.is_fully_returned ? "line-through text-slate-400" : ""}`}>{item.products?.name}</span>
+                          <span className={`text-sm font-semibold tabular-nums ${selectedSale.is_fully_returned ? "line-through text-slate-400" : ""}`}>{fmtINR(item.total_price)}</span>
                         </div>
                         <div className="flex justify-between text-xs text-muted-foreground">
                           <span>SKU: {item.products?.sku || item.product_id.slice(0, 8)}</span>
@@ -519,24 +659,24 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
               <div className="rounded-lg border bg-card p-3 space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-muted-foreground">Total Amount</span>
-                  <span className="font-semibold text-primary">{fmtINR(selectedSale.total_amount)}</span>
+                  <span className={`font-semibold ${selectedSale.is_fully_returned ? "line-through text-slate-400" : "text-primary"}`}>{fmtINR(selectedSale.total_amount)}</span>
                 </div>
                 {selectedSale.cash_amount > 0 && (
                   <div className="flex justify-between items-center">
-                    <span className="text-xs text-green-700">Cash</span>
-                    <span className="text-sm">{fmtINR(selectedSale.cash_amount)}</span>
+                    <span className={`text-xs ${selectedSale.is_fully_returned ? "text-slate-400" : "text-green-700"}`}>Cash</span>
+                    <span className={`text-sm ${selectedSale.is_fully_returned ? "line-through text-slate-400" : ""}`}>{fmtINR(selectedSale.cash_amount)}</span>
                   </div>
                 )}
                 {selectedSale.upi_amount > 0 && (
                   <div className="flex justify-between items-center">
-                    <span className="text-xs text-purple-700">UPI</span>
-                    <span className="text-sm">{fmtINR(selectedSale.upi_amount)}</span>
+                    <span className={`text-xs ${selectedSale.is_fully_returned ? "text-slate-400" : "text-purple-700"}`}>UPI</span>
+                    <span className={`text-sm ${selectedSale.is_fully_returned ? "line-through text-slate-400" : ""}`}>{fmtINR(selectedSale.upi_amount)}</span>
                   </div>
                 )}
                 {selectedSale.outstanding_amount > 0 && (
                   <div className="flex justify-between items-center pt-1 border-t">
-                    <span className="text-xs text-red-700 font-medium">Outstanding</span>
-                    <span className="text-sm font-semibold text-red-700">{fmtINR(selectedSale.outstanding_amount)}</span>
+                    <span className={`text-xs font-medium ${selectedSale.is_fully_returned ? "text-slate-400" : "text-red-700"}`}>Outstanding</span>
+                    <span className={`text-sm font-semibold ${selectedSale.is_fully_returned ? "line-through text-slate-400" : "text-red-700"}`}>{fmtINR(selectedSale.outstanding_amount)}</span>
                   </div>
                 )}
               </div>
@@ -564,7 +704,7 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
                   className="text-xs"
                   onClick={() => {
                     setShowDetailModal(false);
-                    onNavigate(`/sales?receipt=${selectedSale.id}`);
+                    setReceiptSaleId(selectedSale.id);
                   }}
                 >
                   <Printer className="h-3 w-3 mr-1" />
@@ -582,7 +722,7 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
                   <Eye className="h-3 w-3 mr-1" />
                   View Full
                 </Button>
-                {selectedSale.outstanding_amount > 0 && (
+                {!selectedSale.is_fully_returned && selectedSale.outstanding_amount > 0 && (
                   <Button
                     size="sm"
                     className="text-xs col-span-2"
@@ -595,11 +735,258 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
                     Process Return
                   </Button>
                 )}
+                {canCancelSales && !selectedSale.is_fully_returned && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-xs col-span-2 text-red-600 border-red-200 hover:bg-red-50"
+                    onClick={() => {
+                      setShowDetailModal(false);
+                      setShowCancelDialog(true);
+                    }}
+                  >
+                    <XCircle className="h-3 w-3 mr-1" />
+                    Cancel Sale
+                  </Button>
+                )}
               </div>
             </div>
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Cancel Sale Dialog */}
+      <Dialog open={showCancelDialog} onOpenChange={(v) => {
+        if (!v) { setShowCancelDialog(false); setCancelRestockTarget("agent"); setCancelSelectedAgentId(""); }
+      }}>
+        <DialogContent className="max-w-sm max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <XCircle className="h-5 w-5" />
+              Cancel Sale
+            </DialogTitle>
+            <DialogDescription>
+              {selectedSale?.display_id} — This cannot be undone
+            </DialogDescription>
+          </DialogHeader>
+          {selectedSale && (
+            <div className="space-y-4 py-2">
+              <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-800">
+                <p className="font-semibold">The sale will be voided and outstanding reversed.</p>
+              </div>
+
+              <div className="rounded-lg bg-muted p-3 space-y-1.5 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Total</span>
+                  <span className="font-semibold">{fmtINR(selectedSale.total_amount)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Outstanding</span>
+                  <span className="font-semibold text-red-600">{fmtINR(selectedSale.outstanding_amount)}</span>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <Label className="text-sm font-semibold">Where should the stock go?</Label>
+
+                <div
+                  className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-accent/50"
+                  onClick={() => setCancelRestockTarget("agent")}
+                >
+                  <input type="radio" checked={cancelRestockTarget === "agent"} readOnly className="accent-primary" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">Return to an agent</p>
+                    <p className="text-xs text-muted-foreground">Stock restored to the selected agent's holding</p>
+                  </div>
+                </div>
+
+                {cancelRestockTarget === "agent" && (
+                  <Select value={cancelSelectedAgentId} onValueChange={setCancelSelectedAgentId}>
+                    <SelectTrigger className="ml-7">
+                      <SelectValue placeholder="Select agent..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {agentProfiles.map((ap: any) => (
+                        <SelectItem key={ap.user_id} value={ap.user_id}>
+                          {ap.full_name || ap.user_id.slice(0, 8)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+
+                <div
+                  className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-accent/50"
+                  onClick={() => { setCancelRestockTarget("warehouse"); setCancelSelectedAgentId(""); }}
+                >
+                  <input type="radio" checked={cancelRestockTarget === "warehouse"} readOnly className="accent-primary" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">Return to warehouse</p>
+                    <p className="text-xs text-muted-foreground">Stock restored to warehouse product stock</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                <Button variant="outline" size="sm" onClick={() => { setShowCancelDialog(false); setCancelRestockTarget("agent"); setCancelSelectedAgentId(""); }}>
+                  Keep Sale
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  disabled={isCancellingSale || (cancelRestockTarget === "agent" && !cancelSelectedAgentId)}
+                  onClick={async () => {
+                    if (cancelRestockTarget === "agent" && !cancelSelectedAgentId) {
+                      toast.error("Please select an agent");
+                      return;
+                    }
+                    setIsCancellingSale(true);
+                    try {
+                      const { error } = await (supabase as any).rpc("admin_cancel_sale", {
+                        p_sale_id: selectedSale.id,
+                        p_restock_user_id: cancelRestockTarget === "warehouse" ? null : cancelSelectedAgentId,
+                      });
+                      if (error) throw error;
+                      toast.success(`Sale cancelled. Stock restored to ${cancelRestockTarget === "warehouse" ? "warehouse" : "agent"}.`);
+                      setShowCancelDialog(false);
+                      setCancelRestockTarget("agent");
+                      setCancelSelectedAgentId("");
+                      afterSaleCancelled(qc, { isMobile: true });
+                    } catch (err: any) {
+                      toast.error(err.message || "Failed to cancel sale");
+                    } finally {
+                      setIsCancellingSale(false);
+                    }
+                  }}
+                >
+                  {isCancellingSale ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Confirm Cancellation
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Sale Dialog */}
+      <Dialog open={!!editingSaleId} onOpenChange={(v) => { if (!v) { setEditingSaleId(null); setEditCash(""); setEditUpi(""); setEditingItems([]); } }}>
+        <DialogContent className="max-w-sm max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-blue-600">
+              <Pencil className="h-5 w-5" />
+              Edit Sale
+            </DialogTitle>
+            <DialogDescription>
+              {editingSale?.display_id}
+            </DialogDescription>
+          </DialogHeader>
+          {editingSale && (
+            <div className="space-y-4 py-2">
+              <div className="text-sm text-muted-foreground">
+                Adjust items and payment amounts below.
+              </div>
+
+              {/* Edit Items */}
+              <Label>Items</Label>
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {editingItems.map((item: any, idx: number) => (
+                  <div key={idx} className="flex items-center gap-2 bg-muted/50 rounded-lg p-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate">{item.name}</p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        className="h-6 w-6 rounded-md border flex items-center justify-center text-xs hover:bg-muted"
+                        onClick={() => {
+                          const next = [...editingItems];
+                          next[idx] = { ...next[idx], quantity: Math.max(0, (next[idx].quantity || 0) - 1) };
+                          setEditingItems(next);
+                        }}
+                      >
+                        -
+                      </button>
+                      <span className="w-6 text-center text-xs font-semibold">{item.quantity}</span>
+                      <button
+                        type="button"
+                        className="h-6 w-6 rounded-md border flex items-center justify-center text-xs hover:bg-muted"
+                        onClick={() => {
+                          const next = [...editingItems];
+                          next[idx] = { ...next[idx], quantity: (next[idx].quantity || 0) + 1 };
+                          setEditingItems(next);
+                        }}
+                      >
+                        +
+                      </button>
+                    </div>
+                    <span className="text-xs font-medium w-16 text-right">{fmtINR(item.quantity * item.unit_price)}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Payment Edit */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Cash Amount</Label>
+                  <Input
+                    type="number"
+                    value={editCash}
+                    onChange={(e) => setEditCash(e.target.value)}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label>UPI Amount</Label>
+                  <Input
+                    type="number"
+                    value={editUpi}
+                    onChange={(e) => setEditUpi(e.target.value)}
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-between text-sm rounded-lg bg-muted p-3">
+                <span className="text-muted-foreground">Total</span>
+                <span className="font-semibold">{fmtINR(editingItems.reduce((s: number, i: any) => s + i.quantity * i.unit_price, 0))}</span>
+              </div>
+
+              <Button
+                className="w-full bg-blue-600 hover:bg-blue-700"
+                onClick={handleEditSale}
+                disabled={submittingEdit}
+              >
+                {submittingEdit ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Save Changes
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Return Dialog */}
+      <SaleReturnDialog
+        open={!!returnSale}
+        onOpenChange={(v) => { if (!v) setReturnSale(null); }}
+        sale={returnSale}
+        onSuccess={() => {
+          setReturnSale(null);
+          qc.invalidateQueries({ queryKey: ["admin-sales"] });
+        }}
+      />
+
+      {/* Invoice Dialog */}
+      <InvoiceDialog
+        open={!!invoiceSale}
+        onOpenChange={(v) => { if (!v) setInvoiceSale(null); }}
+        sale={invoiceSale}
+      />
+
+      <SaleReceipt
+        saleId={receiptSaleId || ""}
+        open={!!receiptSaleId}
+        onClose={() => setReceiptSaleId(null)}
+      />
     </div>
   );
 }

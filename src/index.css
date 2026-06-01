@@ -354,3 +354,26 @@
     font-size: 16px !important;
   }
 }
+
+/* Custom highlighting animation for notified records */
+@keyframes highlight-pulse {
+  0% {
+    background-color: hsl(var(--warning) / 0.25);
+    border-color: hsl(var(--warning));
+    box-shadow: 0 0 0 4px hsl(var(--warning) / 0.15);
+  }
+  50% {
+    background-color: hsl(var(--warning) / 0.12);
+    border-color: hsl(var(--warning) / 0.6);
+  }
+  100% {
+    background-color: transparent;
+    border-color: inherit;
+    box-shadow: none;
+  }
+}
+
+.animate-highlight {
+  animation: highlight-pulse 3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+

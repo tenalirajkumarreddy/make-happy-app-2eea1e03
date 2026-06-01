@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { afterSaleReturned } from "@/lib/mutationHelpers";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2, Plus, RotateCcw, Search, Package, CheckCircle, XCircle, Clock, Eye, Minus } from "lucide-react";
@@ -323,9 +324,7 @@ const SaleReturns = () => {
       toast.success(canApprove ? "Sale return processed successfully" : "Sale return created successfully");
       setShowCreate(false);
       resetForm();
-      qc.invalidateQueries({ queryKey: ["sale-returns"] });
-      qc.invalidateQueries({ queryKey: ["sales"] });
-      qc.invalidateQueries({ queryKey: ["stores"] });
+      afterSaleReturned(qc);
     } catch (err: any) {
       toast.error(err.message || "Failed to create return");
     } finally {
@@ -362,10 +361,7 @@ const SaleReturns = () => {
         toast.success(`Return ${newStatus}`);
       }
 
-      qc.invalidateQueries({ queryKey: ["sale-returns"] });
-      qc.invalidateQueries({ queryKey: ["sale-return-detail", id] });
-      qc.invalidateQueries({ queryKey: ["sales"] });
-      qc.invalidateQueries({ queryKey: ["stores"] });
+      afterSaleReturned(qc, { saleId: id });
     } catch (err: any) {
       toast.error(err.message);
     }

@@ -24,6 +24,7 @@ const MOBILE_TX = [
   "mobile-customer-ledger-self", "mobile-customer-ledger-stores",
   "mobile-customer-ledger-payments", "mobile-marketer-dashboard",
   "mobile-pos-dashboard",
+  "mobile-history-balance-transactions",
 ];
 const MOBILE_ORDERS = [
   "mobile-agent-all-orders", "mobile-agent-pending-orders",
@@ -209,6 +210,8 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
     "user-holding-balance", "all-staff-balances",
     "finalizer-account", "prime-manager-account",
     "mobile-history", "mobile-history-balance",
+    "mobile-history-holding-balance",
+    ...DASHBOARD,
   ],
   user_permissions: ["all-user-permissions", "my-permissions"],
   // ── Inventory ───────────────────────────────────────────────────────────────
@@ -312,7 +315,7 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
   staff_performance_logs: ["staff-performance-logs", "agent-perf-report"],
   // ── Settings / Config ─────────────────────────────────────────────────────────
   company_settings: [
-    "company-settings", "company-settings-care", "company-settings-invoice",
+    "company-settings", "company_settings", "company-settings-care", "company-settings-invoice",
     "company-settings-map", "company-settings-portal",
     "company-settings-receipt", "company-settings-txn",
     "business-info", "business-info-invoice",
@@ -367,27 +370,31 @@ const ROLE_TABLE_MAP: Record<string, string[]> = {
     "notifications",
   ],
   agent: [
-    "sales", "sale_items", "sale_returns", "transactions", "orders", "order_items",
+    "sales", "sale_items", "sale_returns", "sale_return_items",
+    "transactions", "orders", "order_items",
     "stores", "store_pricing", "store_type_pricing", "store_type_products", "store_types",
     "store_visits", "customers", "products",
     "routes", "route_sessions", "agent_routes", "agent_store_types",
     "handovers", "handover_snapshots", "expense_claims",
     "expense_categories", "expense_category_access",
     "profiles", "stock_transfers", "staff_stock",
+    "product_stock", "stock_movements",
     "notifications", "receipts",
   ],
   marketer: [
-    "sales", "sale_items", "sale_returns",
+    "sales", "sale_items", "sale_returns", "sale_return_items",
     "orders", "order_items", "stores", "store_type_products", "store_types",
     "customers", "products", "routes", "route_sessions",
     "transactions", "agent_store_types", "profiles",
     "handovers", "handover_snapshots", "expense_claims",
     "expense_categories", "expense_category_access",
+    "staff_stock", "product_stock", "stock_transfers",
     "notifications",
   ],
   customer: [
     "orders", "order_items", "stores", "customers", "profiles",
-    "transactions", "notifications",
+    "transactions", "sales", "sale_returns",
+    "notifications",
   ],
 };
 
@@ -443,6 +450,9 @@ function shouldSkipForSubscriber(sub: RealtimeSubscriber, table: string, payload
   if (table === "staff_stock") {
     const owner = payload.new?.user_id ?? payload.old?.user_id;
     if (owner && owner !== userId) return true;
+  }
+  if (table === "sale_return_items") {
+    return false;
   }
   return false;
 }

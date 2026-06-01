@@ -160,18 +160,17 @@ export default function StockTransfers() {
     console.log("StockTransfers: role:", role, "warehouse:", currentWarehouse?.id, "user:", user?.id);
   }, [role, currentWarehouse, user]);
 
-  // Highlight row when coming from notification
+  // Scroll to highlight element once loaded
   useEffect(() => {
-    if (!highlightId) return;
-    const el = document.getElementById(`transfer-${highlightId}`);
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
-      el.classList.add("bg-yellow-100", "dark:bg-yellow-900/30");
-      setTimeout(() => {
-        el.classList.remove("bg-yellow-100", "dark:bg-yellow-900/30");
-      }, 3000);
-    }
-  }, [highlightId]);
+    if (!highlightId || transfers.length === 0) return;
+    const timer = setTimeout(() => {
+      const el = document.getElementById(`transfer-${highlightId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [highlightId, transfers]);
 
   // ── Transfers history ──────────────────────────────────────────────────
   const {
@@ -470,7 +469,7 @@ export default function StockTransfers() {
                                       (isWarehouseRecipient || isWarehouseSender || isSuperAdmin || !currentWarehouse?.id);
 
                     return (
-                      <TableRow key={t.id} id={`transfer-${t.id}`}>
+                      <TableRow key={t.id} id={`transfer-${t.id}`} className={t.id === highlightId ? "animate-highlight" : ""}>
                         <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                           {format(new Date(t.created_at), "dd MMM yy, HH:mm")}
                         </TableCell>

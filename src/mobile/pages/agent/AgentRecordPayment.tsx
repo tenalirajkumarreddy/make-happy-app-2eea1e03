@@ -15,6 +15,7 @@ import { logActivity } from "@/lib/activityLogger";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { StorePickerSheet, StoreOption } from "@/mobile/components/StorePickerSheet";
 import { cn } from "@/lib/utils";
+import { afterTransactionSaved } from "@/lib/mutationHelpers";
 
 export function RecordPayment({ preselectStore }: { preselectStore?: StoreOption | null }) {
   const { user } = useAuth();
@@ -138,8 +139,7 @@ export function RecordPayment({ preselectStore }: { preselectStore?: StoreOption
     toast.success("Payment recorded");
     setSaving(false);
     resetPayment();
-    qc.invalidateQueries({ queryKey: ["transactions"] });
-    qc.invalidateQueries({ queryKey: ["mobile-agent-tx-today"] });
+    afterTransactionSaved(qc, { isMobile: true });
   };
 
   const resetPayment = () => {

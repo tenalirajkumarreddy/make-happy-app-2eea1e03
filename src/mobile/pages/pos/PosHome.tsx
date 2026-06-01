@@ -150,7 +150,7 @@ export function PosHome({ onOpenRecord, onOpenHistory }: Props) {
         {/* Today's Sales */}
         <div className="rounded-2xl bg-white dark:bg-slate-800 shadow-xl border border-slate-100 dark:border-slate-700 p-4">
           <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Today's POS Sales</p>
+            <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Today's POS Sales</p>
             <div className="flex items-center gap-1.5 bg-violet-50 dark:bg-violet-900/40 px-2 py-1 rounded-full">
               <ShoppingCart className="h-3 w-3 text-violet-500" />
               <span className="text-[11px] font-semibold text-violet-600 dark:text-violet-400">
@@ -158,17 +158,17 @@ export function PosHome({ onOpenRecord, onOpenHistory }: Props) {
               </span>
             </div>
           </div>
-          <p className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
+          <p className="text-3xl font-bold text-slate-800 dark:text-white tracking-tight">
             {salesLoading ? <Loader2 className="h-6 w-6 animate-spin text-violet-500" /> : `₹${(salesStats?.total ?? 0).toLocaleString("en-IN")}`}
           </p>
           <div className="flex gap-4 mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
             <div className="flex items-center gap-1.5">
               <div className="h-2 w-2 rounded-full bg-emerald-400" />
-              <span className="text-xs text-slate-500 dark:text-slate-400">Cash <strong className="text-slate-700 dark:text-slate-200">₹{(salesStats?.cash ?? 0).toLocaleString("en-IN")}</strong></span>
+              <span className="text-xs text-slate-500 dark:text-slate-400">Cash <strong className="text-slate-800 dark:text-white">₹{(salesStats?.cash ?? 0).toLocaleString("en-IN")}</strong></span>
             </div>
             <div className="flex items-center gap-1.5">
               <div className="h-2 w-2 rounded-full bg-violet-400" />
-              <span className="text-xs text-slate-500 dark:text-slate-400">UPI <strong className="text-slate-700 dark:text-slate-200">₹{(salesStats?.upi ?? 0).toLocaleString("en-IN")}</strong></span>
+              <span className="text-xs text-slate-500 dark:text-slate-400">UPI <strong className="text-slate-800 dark:text-white">₹{(salesStats?.upi ?? 0).toLocaleString("en-IN")}</strong></span>
             </div>
           </div>
         </div>
@@ -185,30 +185,30 @@ export function PosHome({ onOpenRecord, onOpenHistory }: Props) {
             </button>
             <button
               onClick={() => onOpenHistory()}
-              className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm active:scale-95 transition-all"
+              className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm active:scale-95 transition-all"
             >
               <div className="h-8 w-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
                 <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
               </div>
-              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200">View History</span>
+              <span className="text-[11px] font-bold text-slate-800 dark:text-white">View History</span>
             </button>
             <button
               onClick={() => window.location.href = "/production"}
-              className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm active:scale-95 transition-all"
+              className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm active:scale-95 transition-all"
             >
               <div className="h-8 w-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center">
                 <Factory className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
               </div>
-              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200">Production</span>
+              <span className="text-[11px] font-bold text-slate-800 dark:text-white">Production</span>
             </button>
             <button
               onClick={() => onOpenInventory()}
-              className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm active:scale-95 transition-all"
+              className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm active:scale-95 transition-all"
             >
               <div className="h-8 w-8 rounded-lg bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center">
                 <Package className="h-4 w-4 text-amber-600 dark:text-amber-400" />
               </div>
-              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200">Inventory</span>
+              <span className="text-[11px] font-bold text-slate-800 dark:text-white">Inventory</span>
             </button>
           </div>
         )}
@@ -257,7 +257,7 @@ export function PosHome({ onOpenRecord, onOpenHistory }: Props) {
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 truncate">
+                      <p className="text-xs font-semibold text-slate-800 dark:text-white truncate">
                         {mov.products?.name ?? "Product"}
                       </p>
                       <p className="text-[10px] text-slate-400 truncate">{mov.remarks || (isIncoming ? "Stock received" : "Stock dispatched")}</p>
@@ -291,7 +291,7 @@ export function PosHome({ onOpenRecord, onOpenHistory }: Props) {
                     <ClipboardList className={cn("h-4 w-4", order.status === "completed" || order.status === "delivered" ? "text-emerald-500" : "text-blue-500")} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 truncate">{order.stores?.name ?? "Unknown"}</p>
+                    <p className="text-xs font-semibold text-slate-800 dark:text-white truncate">{order.stores?.name ?? "Unknown"}</p>
                     <p className="text-[10px] text-slate-400">₹{Number(order.total_amount || 0).toLocaleString("en-IN")}</p>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">

@@ -11,7 +11,7 @@ import {
   arrayBufferToBlob,
   PendingFileUpload,
   getConflictedActions,
-  getRetryableActionsExcludingConflicts,
+  getRetryableActionsOrdered,
   storeConflict,
 } from "@/lib/offlineQueue";
 import { supabase } from "@/integrations/supabase/client";
@@ -149,10 +149,13 @@ export function useOnlineStatus() {
     totalSynced += fileResult.synced;
     totalFailed += fileResult.failed;
 
-    // Get actions excluding those with conflicts
-    const actions = await getRetryableActionsExcludingConflicts();
+    // Get actions ordered by createdAt (FCFS), excluding those with conflicts
+    const actions = await getRetryableActionsOrdered();
+    const conflicted = await getConflictedActions();
+    const conflictIds = new Set(conflicted.map(a => a.id));
+    const filteredActions = actions.filter(a => !conflictIds.has(a.id));
 
-    for (const action of actions) {
+    for (const action of filteredActions) {
       try {
         // Validate user permission before executing the action
         let userIdToCheck: string | null = null;

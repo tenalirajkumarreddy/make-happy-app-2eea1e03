@@ -38,7 +38,7 @@ HoverCard,
 HoverCardContent,
 HoverCardTrigger,
 } from "@/components/ui/hover-card";
-
+import { afterTransactionSaved, afterPaymentReturned } from "@/lib/mutationHelpers";
 const Transactions = () => {
   const { user, role } = useAuth();
   const { currentWarehouse } = useWarehouse();
@@ -339,7 +339,7 @@ const Transactions = () => {
     setSaving(false);
     setShowAdd(false);
     resetForm();
-    qc.invalidateQueries({ queryKey: ["transactions"] });
+    afterTransactionSaved(qc);
   };
 
   // Filtering is now done server-side; local array mirrors the fetched page(s)
@@ -878,7 +878,7 @@ const Transactions = () => {
                 toast.success("Payment return recorded");
                 setShowReturnDialog(false);
                 resetReturnForm();
-                qc.invalidateQueries({ queryKey: ["transactions"] });
+                afterPaymentReturned(qc);
               }
               setReturnLoading(false);
             }}

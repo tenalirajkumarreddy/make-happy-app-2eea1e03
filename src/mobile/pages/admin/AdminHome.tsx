@@ -168,7 +168,7 @@ export function AdminHome({
         {/* Floating Revenue Card */}
         <div className="rounded-2xl bg-white dark:bg-slate-800 shadow-xl border border-slate-100 dark:border-slate-700 p-4">
           <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Today's Revenue</p>
+            <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Today's Revenue</p>
             <div className="flex items-center gap-1.5 bg-blue-50 dark:bg-blue-900/40 px-2 py-1 rounded-full">
               <ShoppingCart className="h-3 w-3 text-blue-500" />
               <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">
@@ -182,11 +182,11 @@ export function AdminHome({
           <div className="flex gap-4 mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
             <div className="flex items-center gap-1.5">
               <div className="h-2 w-2 rounded-full bg-emerald-400" />
-              <span className="text-xs text-slate-500 dark:text-slate-400">Cash <strong className="text-slate-700 dark:text-slate-200">₹{(stats?.todayCash ?? 0).toLocaleString("en-IN")}</strong></span>
+              <span className="text-xs text-slate-500 dark:text-slate-400">Cash <strong className="text-slate-800 dark:text-white">₹{(stats?.todayCash ?? 0).toLocaleString("en-IN")}</strong></span>
             </div>
             <div className="flex items-center gap-1.5">
               <div className="h-2 w-2 rounded-full bg-violet-400" />
-              <span className="text-xs text-slate-500 dark:text-slate-400">UPI <strong className="text-slate-700 dark:text-slate-200">₹{(stats?.todayUpi ?? 0).toLocaleString("en-IN")}</strong></span>
+              <span className="text-xs text-slate-500 dark:text-slate-400">UPI <strong className="text-slate-800 dark:text-white">₹{(stats?.todayUpi ?? 0).toLocaleString("en-IN")}</strong></span>
             </div>
           </div>
         </div>
@@ -211,7 +211,7 @@ export function AdminHome({
                 <div className={cn("h-8 w-8 rounded-lg bg-gradient-to-br flex items-center justify-center shrink-0", a.color)}>
                   <Icon className="h-3.5 w-3.5 text-white" />
                 </div>
-                <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 text-center leading-tight truncate w-full">{a.label}</span>
+                <span className="text-xs font-semibold text-slate-800 dark:text-white text-center leading-tight truncate w-full">{a.label}</span>
               </button>
             );
           })}
@@ -249,7 +249,7 @@ export function AdminHome({
             <div className="h-12 w-12 rounded-2xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center mx-auto mb-3">
               <ShoppingCart className="h-6 w-6 text-slate-400" />
             </div>
-            <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">No Recent Sales</p>
+            <p className="text-sm font-semibold text-slate-800 dark:text-white">No Recent Sales</p>
             <p className="text-xs text-slate-400 mt-1">Sales will appear here as they come in</p>
           </div>
         )}

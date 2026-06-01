@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
 import { usePermission } from "@/hooks/usePermission";
-import { Loader2, Plus, Eye, Package, AlertCircle, X, CheckCircle2, Ban, Edit, User, ArrowRightLeft, Calendar, Filter, Printer } from "lucide-react";
+import { Loader2, Plus, Eye, Package, AlertCircle, X, CheckCircle2, Ban, Edit, User, ArrowRightLeft, Calendar, Filter, Printer, ShoppingCart, Pencil } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -18,6 +18,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -26,6 +27,7 @@ import { format } from "date-fns";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { fmtINR } from "@/lib/utils";
 import { CANCEL_REASONS } from "@/lib/constants";
+import { sendNotificationToMany, getApproverUserIds, getUsersByRole, getAgentsForStore } from "@/lib/notifications";
 import { OrderStockSummary } from "@/components/orders/OrderStockSummary";
 import { usePullToRefresh } from "@/mobile/hooks/usePullToRefresh";
 import { ProformaView } from "@/components/orders/ProformaView";
@@ -103,17 +105,14 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
   const [viewProformaId, setViewProformaId] = useState<string | null>(null);
   const [editOrder, setEditOrder] = useState<Order | null>(null);
 
-  // Order access level
-  const { data: orderAccess } = useQuery({
-    queryKey: ["my-order-access-mobile", user?.id],
-    queryFn: async () => {
-      if (!user?.id) return "all";
-      const { data } = await supabase.from("user_order_access").select("access_level").eq("user_id", user.id).maybeSingle();
-      return (data as any)?.access_level || "all";
-    },
-    enabled: !!user?.id,
-    staleTime: 60_000,
-  });
+  // Create form state
+  const [showCreate, setShowCreate] = useState(false);
+  const [createStoreId, setCreateStoreId] = useState("");
+  const [createStoreSearch, setCreateStoreSearch] = useState("");
+  const [createOrderType, setCreateOrderType] = useState<"simple" | "detailed">("simple");
+  const [createRequirementNote, setCreateRequirementNote] = useState("");
+  const [createOrderItems, setCreateOrderItems] = useState<{ product_id: string; quantity: number; unit_price: number; products?: { name: string; base_price: number } }[]>([]);
+  const [createSaving, setCreateSaving] = useState(false);
 
   const { data: viewProforma } = useQuery({
     queryKey: ["mobile-view-proforma", viewProformaId],
@@ -141,7 +140,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
   const PAGE_SIZE = 20;
 
   const { data: orders, isLoading, refetch } = useQuery({
-    queryKey: ["mobile-orders", currentWarehouse?.id, statusFilter, dateFrom, dateTo, customerFilter, storeFilter, assignedToFilter, page, user?.id, orderAccess],
+    queryKey: ["mobile-orders", currentWarehouse?.id, statusFilter, dateFrom, dateTo, customerFilter, storeFilter, assignedToFilter, page, user?.id],
     queryFn: async () => {
       const from = 0;
       const to = page * PAGE_SIZE - 1;
@@ -152,25 +151,12 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
           stores(name, display_id, store_type_id, store_types(name), routes(name)),
           customers(name, display_id),
           order_items(id, product_id, quantity, products(name, sku, base_price)),
-          creator_profile:profiles!orders_created_by_fkey(full_name),
-          updater_profile:profiles!orders_updated_by_fkey(full_name),
-          fulfiller_profile:profiles!orders_fulfilled_by_fkey(full_name)
+          updater_profile:profiles!orders_updated_by_fkey(full_name)
         `, { count: "exact" })
         .order("created_at", { ascending: false })
         .range(from, to);
 
       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
-
-      // Order access control (with route-level support)
-      if (orderAccess !== "all") {
-        const { data: ua } = await supabase.from("user_order_access").select("route_ids").eq("user_id", user!.id).maybeSingle();
-        const routeIds = ((ua as any)?.route_ids || []) as string[];
-        const orParts = [`assigned_to.eq.${user!.id}`, `created_by.eq.${user!.id}`];
-        if (routeIds.length > 0) {
-          orParts.push(`stores.route_id.in.(${routeIds.join(",")})`);
-        }
-        query = query.or(orParts.join(","));
-      }
 
       if (statusFilter !== "all") query = query.eq("status", statusFilter);
       if (dateFrom) query = query.gte("created_at", `${dateFrom}T00:00:00`);
@@ -202,7 +188,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
   const { data: stores = [] } = useQuery({
     queryKey: ["mobile-orders-stores", currentWarehouse?.id],
     queryFn: async () => {
-      const { data } = await supabase.from("stores").select("id, name, display_id").order("name").limit(100);
+      const { data } = await supabase.from("stores").select("id, name, display_id, customer_id").order("name").limit(100);
       return data || [];
     },
     enabled: !!currentWarehouse,
@@ -214,6 +200,19 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
       const { data } = await supabase.from("profiles").select("user_id, full_name").order("full_name").limit(100);
       return data || [];
     },
+  });
+
+  const { data: createProducts = [] } = useQuery({
+    queryKey: ["admin-create-products", currentWarehouse?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("products")
+        .select("id, name, sku, base_price")
+        .eq("is_active", true)
+        .order("name");
+      return data || [];
+    },
+    enabled: showCreate,
   });
 
   const { handlers: pullHandlers, isPulling, isRefreshing, pullDistance, threshold } = usePullToRefresh({
@@ -321,6 +320,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
         p_outstanding_amount: 0,
         p_sale_items: saleItems,
         p_created_at: null,
+        p_fulfilled_order_id: order.id,
       });
       if (saleError) throw saleError;
 
@@ -374,6 +374,137 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
     }
   };
 
+  const addCreateItem = (product: any) => {
+    setCreateOrderItems((prev) => {
+      const existing = prev.find((i) => i.product_id === product.id);
+      if (existing) {
+        return prev.map((i) =>
+          i.product_id === product.id ? { ...i, quantity: i.quantity + 1 } : i
+        );
+      }
+      return [
+        ...prev,
+        { product_id: product.id, quantity: 1, unit_price: product.base_price, products: { name: product.name, base_price: product.base_price } },
+      ];
+    });
+  };
+
+  const updateCreateQty = (productId: string, qty: number) => {
+    setCreateOrderItems((prev) =>
+      qty <= 0
+        ? prev.filter((i) => i.product_id !== productId)
+        : prev.map((i) => (i.product_id === productId ? { ...i, quantity: qty } : i))
+    );
+  };
+
+  const updateCreatePrice = (productId: string, price: number) => {
+    setCreateOrderItems((prev) =>
+      prev.map((i) => (i.product_id === productId ? { ...i, unit_price: price } : i))
+    );
+  };
+
+  const handleCreateOrder = async () => {
+    if (!createStoreId) {
+      toast.error("Select a store");
+      return;
+    }
+    if (createOrderType === "detailed" && createOrderItems.length === 0) {
+      toast.error("Add at least one item");
+      return;
+    }
+
+    setCreateSaving(true);
+    try {
+      const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "ORD", seq_name: "order_display_seq" }) as any;
+      if (!displayId) throw new Error("Failed to generate order ID");
+
+      const store = stores.find((s: any) => s.id === createStoreId);
+
+      const { data: orderRow, error: orderError } = await supabase
+        .from("orders")
+        .insert({
+          display_id: displayId,
+          store_id: createStoreId,
+          customer_id: store?.customer_id || null,
+          order_type: createOrderType,
+          source: "manual",
+          created_by: user!.id,
+          status: "confirmed",
+          warehouse_id: currentWarehouse?.id,
+          requirement_note: createOrderType === "simple" ? createRequirementNote : null,
+        })
+        .select("id")
+        .single();
+
+      if (orderError) throw orderError;
+
+      if (createOrderType === "detailed" && createOrderItems.length > 0) {
+        const { error: itemError } = await supabase.from("order_items").insert(
+          createOrderItems.map((item) => ({
+            order_id: orderRow.id,
+            product_id: item.product_id,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+          }))
+        );
+        if (itemError) throw itemError;
+      }
+
+      toast.success("Order created");
+
+      const storeName = store?.name || "store";
+      getApproverUserIds().then((ids) => {
+        if (ids.length > 0) {
+          sendNotificationToMany(ids, {
+            title: "New Order Created",
+            message: `Order ${displayId} for ${storeName}`,
+            type: "order",
+            entityType: "order",
+            entityId: orderRow.id,
+          }, { excludeFromBroadcast: [user!.id] });
+        }
+      });
+      getUsersByRole(["marketer"]).then((ids) => {
+        if (ids.length > 0) {
+          sendNotificationToMany(ids, {
+            title: "New Order Created",
+            message: `Order ${displayId} for ${storeName}`,
+            type: "order",
+            entityType: "order",
+            entityId: orderRow.id,
+          }, { excludeFromBroadcast: [user!.id] });
+        }
+      });
+      getAgentsForStore(createStoreId).then((agentIds) => {
+        if (agentIds.length > 0) {
+          sendNotificationToMany(agentIds, {
+            title: "New Order for Your Store",
+            message: `Order ${displayId} for ${storeName}`,
+            type: "order",
+            entityType: "order",
+            entityId: orderRow.id,
+          });
+        }
+      });
+
+      setShowCreate(false);
+      setCreateStoreId("");
+      setCreateStoreSearch("");
+      setCreateOrderType("simple");
+      setCreateRequirementNote("");
+      setCreateOrderItems([]);
+      qc.invalidateQueries({ queryKey: ["mobile-orders"] });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to create order");
+    } finally {
+      setCreateSaving(false);
+    }
+  };
+
+  const getCreateTotal = () => {
+    return createOrderItems.reduce((s, i) => s + i.quantity * i.unit_price, 0);
+  };
+
   const handleTransfer = async (order: Order) => {
     if (!transferToUser) {
       toast.error("Please select a staff member");
@@ -407,7 +538,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
             <h2 className="text-white text-lg font-bold">Orders</h2>
             <p className="text-blue-200/80 text-xs mt-0.5">Manage all orders</p>
           </div>
-          <Button size="sm" className="gap-1 bg-white/20 hover:bg-white/30 text-white border-0 rounded-xl" onClick={() => onNavigate("/orders")}>
+          <Button size="sm" className="gap-1 bg-white/20 hover:bg-white/30 text-white border-0 rounded-xl" onClick={() => setShowCreate(true)}>
             <Plus className="h-4 w-4" /> Create
           </Button>
         </div>
@@ -999,6 +1130,154 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Create Order Sheet */}
+      <Sheet open={showCreate} onOpenChange={(v) => { if (!v) { setCreateStoreId(""); setCreateStoreSearch(""); setCreateOrderType("simple"); setCreateRequirementNote(""); setCreateOrderItems([]); } setShowCreate(v); }}>
+        <SheetContent side="bottom" className="rounded-t-3xl pb-10 px-0 max-h-[90vh] overflow-y-auto">
+          <div className="px-6">
+            <SheetHeader className="mb-5 text-left">
+              <SheetTitle className="text-lg font-bold">Create Order</SheetTitle>
+            </SheetHeader>
+
+            <div className="space-y-4">
+              <div>
+                <Label className="text-xs font-bold text-muted-foreground mb-2 block">Store</Label>
+                <Input
+                  placeholder="Search stores by name or ID..."
+                  value={createStoreSearch}
+                  onChange={(e) => setCreateStoreSearch(e.target.value)}
+                  className="text-sm h-10 rounded-xl"
+                />
+                {createStoreSearch && (
+                  <div className="mt-1 max-h-36 overflow-y-auto border rounded-xl divide-y bg-background">
+                    {(stores || [])
+                      .filter((s: any) =>
+                        s.name.toLowerCase().includes(createStoreSearch.toLowerCase()) ||
+                        (s.display_id || "").toLowerCase().includes(createStoreSearch.toLowerCase())
+                      )
+                      .map((s: any) => (
+                        <button key={s.id} type="button"
+                          onClick={() => { setCreateStoreId(s.id); setCreateStoreSearch(""); }}
+                          className={`w-full text-left px-3 py-2.5 text-sm transition-colors hover:bg-accent ${createStoreId === s.id ? "bg-primary/10 font-semibold text-primary" : "text-foreground"}`}
+                        >
+                          <span className="font-medium">{s.name}</span>
+                          <span className="ml-2 font-mono text-[10px] text-muted-foreground">{s.display_id}</span>
+                        </button>
+                      ))}
+                  </div>
+                )}
+                {createStoreId && !createStoreSearch && (
+                  <div className="rounded-xl bg-primary/5 border border-primary/20 px-3 py-2.5 flex items-center justify-between mt-1">
+                    <span className="text-sm font-medium">{(stores as any[])?.find((s: any) => s.id === createStoreId)?.name || "Store selected"}</span>
+                    <button type="button" onClick={() => { setCreateStoreId(""); }} className="text-xs text-muted-foreground hover:text-foreground font-medium">Change</button>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <Label className="text-xs font-bold text-muted-foreground mb-2 block">Order Type</Label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setCreateOrderType("simple")}
+                    className={`flex-1 px-4 py-3 rounded-xl text-xs font-medium transition-colors ${
+                      createOrderType === "simple"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    Simple
+                  </button>
+                  <button
+                    onClick={() => setCreateOrderType("detailed")}
+                    className={`flex-1 px-4 py-3 rounded-xl text-xs font-medium transition-colors ${
+                      createOrderType === "detailed"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    Detailed
+                  </button>
+                </div>
+              </div>
+
+              {createOrderType === "simple" ? (
+                <div>
+                  <Label className="text-xs font-bold text-muted-foreground mb-2 block">Requirement Note</Label>
+                  <textarea
+                    value={createRequirementNote}
+                    onChange={(e) => setCreateRequirementNote(e.target.value)}
+                    placeholder="Describe what the customer needs..."
+                    className="w-full min-h-[100px] rounded-xl border border-input bg-background px-3 py-2 text-sm resize-none"
+                  />
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <Label className="text-xs font-bold text-muted-foreground mb-2 block">Products</Label>
+                  <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1">
+                    {createProducts.map((p: any) => {
+                      const inCart = createOrderItems.find((i) => i.product_id === p.id);
+                      return (
+                        <div key={p.id} className="flex items-center gap-3 p-2 rounded-xl border bg-card">
+                          <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                            <Package className="h-5 w-5 text-muted-foreground" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{p.name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {fmtINR(p.base_price)}
+                              {inCart ? ` × ${inCart.quantity} = ${fmtINR(inCart.quantity * inCart.unit_price)}` : ""}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            {inCart ? (
+                              <>
+                                <Button type="button" variant="outline" size="icon" className="h-8 w-8 rounded-lg"
+                                  onClick={() => updateCreateQty(p.id, inCart.quantity - 1)}>
+                                  <Minus className="h-3.5 w-3.5" />
+                                </Button>
+                                <span className="text-sm font-bold w-6 text-center">{inCart.quantity}</span>
+                                <Button type="button" variant="outline" size="icon" className="h-8 w-8 rounded-lg"
+                                  onClick={() => updateCreateQty(p.id, inCart.quantity + 1)}>
+                                  <Plus className="h-3.5 w-3.5" />
+                                </Button>
+                              </>
+                            ) : (
+                              <Button type="button" variant="outline" size="icon" className="h-8 w-8 rounded-lg"
+                                onClick={() => addCreateItem(p)}>
+                                <Plus className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {createOrderItems.length > 0 && (
+                    <div className="flex justify-between items-center p-3 rounded-xl border bg-muted/50">
+                      <span className="text-sm font-medium">Order Total ({createOrderItems.length} items)</span>
+                      <span className="text-base font-bold">{fmtINR(getCreateTotal())}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <Button
+                size="sm"
+                className="w-full text-xs h-11"
+                onClick={handleCreateOrder}
+                disabled={createSaving || !createStoreId}
+              >
+                {createSaving ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                ) : (
+                  <ShoppingCart className="h-4 w-4 mr-1" />
+                )}
+                {createSaving ? "Creating..." : "Create Order"}
+              </Button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       <EditOrderSheet
         order={editOrder}

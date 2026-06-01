@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, startOfDay } from "date-fns";
 import {
@@ -6,12 +6,18 @@ import {
   CheckCircle2,
   HandCoins,
   Loader2,
+  Pencil,
   Receipt,
   ReceiptIndianRupee,
   Send,
   TrendingUp,
   Wallet,
   XCircle,
+  RotateCcw,
+  Package,
+  AlertCircle,
+  Minus,
+  Plus,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -31,13 +37,18 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermission } from "@/hooks/usePermission";
 import { supabase } from "@/integrations/supabase/client";
-import { sendNotification, getAdminUserIds } from "@/lib/notifications";
+import { afterSaleEdited, afterSaleReturned } from "@/lib/mutationHelpers";
+import { sendNotification, getAdminUserIds, sendNotificationToMany } from "@/lib/notifications";
+import { logActivity } from "@/lib/activityLogger";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { BillImages } from "@/mobile/components/BillImageUpload";
-import { SaleReturnDialog } from "@/components/sales/SaleReturnDialog";
+import { SaleReceipt } from "@/components/shared/SaleReceipt";
 
 type TimelineItem = {
   id: string;
@@ -52,6 +63,8 @@ type TimelineItem = {
   _store_id?: string;
   _customer_id?: string;
   _outstanding_amount?: number;
+  _is_fully_returned?: boolean;
+  _updated_at?: string;
 };
 
 type ExpenseClaim = {
@@ -76,6 +89,7 @@ type ExpenseClaim = {
 export function AgentHistory() {
   const { user, profile, role } = useAuth();
   const isAdmin = role === "super_admin" || role === "manager";
+  const { allowed: canReturnSales } = usePermission("create_sale_returns");
   const qc = useQueryClient();
   const [view, setView] = useState<"activity" | "handovers" | "claims">("activity");
   const [selectedActivityDate, setSelectedActivityDate] = useState<string | null>(null);
@@ -94,9 +108,53 @@ export function AgentHistory() {
   const [expenseBillUrls, setExpenseBillUrls] = useState<string[]>([]);
 
   // Sale return state
-  const [returningSale, setReturningSale] = useState<{ id: string; display_id: string; total_amount: number; outstanding_amount: number; store_id: string; customer_id: string; created_at: string } | null>(null);
+  const [returningSale, setReturningSale] = useState<{ id: string; display_id: string; total_amount: number; outstanding_amount: number; store_id: string; customer_id: string; created_at: string; is_fully_returned?: boolean } | null>(null);
+
+  // Edit sale state
+  const [editingSale, setEditingSale] = useState<{ id: string; display_id: string; total_amount: number; cash_amount: number; upi_amount: number; outstanding_amount: number; store_id: string; customer_id: string; created_at: string } | null>(null);
+  const [editCash, setEditCash] = useState("");
+  const [editUpi, setEditUpi] = useState("");
+  const [submittingEdit, setSubmittingEdit] = useState(false);
+  const [editingItemsState, setEditingItemsState] = useState<any[]>([]);
+
+  // Return sale state
+  const [returnReason, setReturnReason] = useState("");
+  const [returnOtherReason, setReturnOtherReason] = useState("");
+  const [returnNotes, setReturnNotes] = useState("");
+  const [returnIsDamaged, setReturnIsDamaged] = useState(false);
+  const [submittingReturn, setSubmittingReturn] = useState(false);
+  const [receiptSaleId, setReceiptSaleId] = useState<string | null>(null);
 
   const todayStart = startOfDay(new Date()).toISOString();
+  // Admins can always edit/return; agents are limited to same-day
+  const isPastDate = (created_at: string, updated_at?: string) => {
+    if (isAdmin) return false; // Admins bypass date lock
+    if (!created_at) return false;
+    
+    const today = new Date();
+    const todayYear = today.getFullYear();
+    const todayMonth = today.getMonth();
+    const todayDay = today.getDate();
+
+    const isToday = (dateStr: string) => {
+      const d = new Date(dateStr);
+      return d.getFullYear() === todayYear && d.getMonth() === todayMonth && d.getDate() === todayDay;
+    };
+
+    if (isToday(created_at)) return false;
+    if (updated_at && isToday(updated_at)) return false;
+    
+    const saleDate = new Date(created_at);
+    const saleYear = saleDate.getFullYear();
+    const saleMonth = saleDate.getMonth();
+    const saleDay = saleDate.getDate();
+    
+    if (saleYear < todayYear) return true;
+    if (saleYear > todayYear) return false;
+    if (saleMonth < todayMonth) return true;
+    if (saleMonth > todayMonth) return false;
+    return saleDay < todayDay;
+  };
 
   const { data: handovers, isLoading: loadingHandovers } = useQuery({
     queryKey: ["handovers", user?.id, "mobile-history"],
@@ -119,7 +177,8 @@ export function AgentHistory() {
       const { data, error } = await supabase
         .from("sales")
         .select("cash_amount, upi_amount, created_at")
-        .eq("recorded_by", user!.id);
+        .eq("recorded_by", user!.id)
+        .gte("created_at", todayStart);
       if (error) throw error;
       return (data as any[]) || [];
     },
@@ -132,7 +191,7 @@ export function AgentHistory() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("sales")
-        .select("id, display_id, total_amount, cash_amount, upi_amount, outstanding_amount, created_at, store_id, customer_id, stores(name)")
+        .select("id, display_id, total_amount, cash_amount, upi_amount, outstanding_amount, is_fully_returned, created_at, updated_at, store_id, customer_id, stores(name)")
         .eq("recorded_by", user!.id)
         .order("created_at", { ascending: false })
         .limit(500);
@@ -149,7 +208,8 @@ export function AgentHistory() {
       const { data, error } = await supabase
         .from("transactions")
         .select("cash_amount, upi_amount, created_at")
-        .eq("recorded_by", user!.id);
+        .eq("recorded_by", user!.id)
+        .gte("created_at", todayStart);
       if (error) throw error;
       return (data as any[]) || [];
     },
@@ -281,6 +341,96 @@ export function AgentHistory() {
     enabled: !!user,
   });
 
+  const { data: editingSaleItems } = useQuery({
+    queryKey: ["sale-items-for-edit", editingSale?.id],
+    queryFn: async () => {
+      if (!editingSale?.id) return [];
+      const { data, error } = await supabase
+        .from("sale_items")
+        .select("id, product_id, quantity, unit_price, total_price, products(name, sku, unit)")
+        .eq("sale_id", editingSale.id);
+      if (error) throw error;
+      return (data as any[]) || [];
+    },
+    enabled: !!editingSale?.id,
+  });
+
+  useEffect(() => {
+    if (editingSaleItems) {
+      setEditingItemsState(
+        editingSaleItems.map((item) => ({
+          id: item.id,
+          product_id: item.product_id,
+          name: item.products?.name || "Product",
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          total_price: item.total_price || item.quantity * item.unit_price,
+        }))
+      );
+    } else {
+      setEditingItemsState([]);
+    }
+  }, [editingSaleItems]);
+
+  const { data: returningSaleItems } = useQuery({
+    queryKey: ["sale-items-for-return-mobile", returningSale?.id],
+    queryFn: async () => {
+      if (!returningSale?.id) return [];
+      const { data, error } = await supabase
+        .from("sale_items")
+        .select("id, product_id, quantity, unit_price, total_price, products(name, sku, unit)")
+        .eq("sale_id", returningSale.id);
+      if (error) throw error;
+      return (data as any[]) || [];
+    },
+    enabled: !!returningSale?.id,
+  });
+
+  useEffect(() => {
+    if (!returningSale) {
+      setReturnReason("");
+      setReturnOtherReason("");
+      setReturnNotes("");
+      setReturnIsDamaged(false);
+    }
+  }, [returningSale]);
+
+  const updateEditingItemQty = (productId: string, delta: number) => {
+    setEditingItemsState(
+      editingItemsState.map((item) => {
+        if (item.product_id !== productId) return item;
+        const newQty = Math.max(0, item.quantity + delta);
+        return { ...item, quantity: newQty, total_price: newQty * item.unit_price };
+      }).filter((item) => item.quantity > 0)
+    );
+  };
+
+  const setEditingItemQtyDirect = (productId: string, value: string) => {
+    const parsed = parseInt(value, 10);
+    if (value === "") {
+      setEditingItemsState(editingItemsState.filter((item) => item.product_id !== productId));
+      return;
+    }
+    if (!Number.isFinite(parsed) || parsed < 0) return;
+    setEditingItemsState(
+      editingItemsState.map((item) => {
+        if (item.product_id !== productId) return item;
+        return { ...item, quantity: parsed, total_price: parsed * item.unit_price };
+      })
+    );
+  };
+
+  const updateEditingItemPrice = (productId: string, value: string) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed < 0) return;
+    setEditingItemsState(
+      editingItemsState.map((item) => {
+        if (item.product_id !== productId) return item;
+        return { ...item, unit_price: parsed, total_price: item.quantity * parsed };
+      })
+    );
+  };
+
   const profileNameMap = useMemo(() => {
     const map = new Map<string, string>();
     (profiles || []).forEach((profile) => {
@@ -303,6 +453,8 @@ export function AgentHistory() {
       _store_id: sale.store_id,
       _customer_id: sale.customer_id,
       _outstanding_amount: Number(sale.outstanding_amount || 0),
+      _is_fully_returned: sale.is_fully_returned || false,
+      _updated_at: sale.updated_at,
     }));
 
     const transactions = (transactionsTimeline || []).map((transaction: any) => ({
@@ -339,15 +491,21 @@ export function AgentHistory() {
     () =>
       timelineDates.map((date) => {
         const items = timelineByDate[date] || [];
-        const salesCount = items.filter((item) => item.type === "sale").length;
+        const activeSales = items.filter((item) => item.type === "sale" && !item._is_fully_returned);
+        const returnedSales = items.filter((item) => item.type === "sale" && item._is_fully_returned);
+        const salesCount = activeSales.length;
         const transactionsCount = items.filter((item) => item.type === "transaction").length;
-        const total = items.reduce((sum, item) => sum + item.amount, 0);
+        // Exclude fully returned sales from totals — they've been reversed
+        const total = items
+          .filter((item) => !item._is_fully_returned)
+          .reduce((sum, item) => sum + item.amount, 0);
         return {
           date,
           items,
           total,
           salesCount,
           transactionsCount,
+          returnedCount: returnedSales.length,
         };
       }),
     [timelineByDate, timelineDates]
@@ -359,11 +517,7 @@ export function AgentHistory() {
     return profileNameMap.get(personId) || "Staff";
   };
 
-  const totalSales = (salesForBalance || []).reduce(
-    (sum: number, sale: any) => sum + Number(sale.cash_amount || 0) + Number(sale.upi_amount || 0),
-    0
-  );
-  const todaySales = (salesForBalance || []).filter((sale: any) => sale.created_at >= todayStart);
+  const todaySales = salesForBalance || [];
   const todayTotalSales = todaySales.reduce(
     (sum: number, sale: any) => sum + Number(sale.cash_amount || 0) + Number(sale.upi_amount || 0),
     0
@@ -371,7 +525,7 @@ export function AgentHistory() {
   const todayCashSales = todaySales.reduce((sum: number, sale: any) => sum + Number(sale.cash_amount || 0), 0);
   const todayUpiSales = todaySales.reduce((sum: number, sale: any) => sum + Number(sale.upi_amount || 0), 0);
 
-  const todayPayments = (transactionsForBalance || []).filter((tx: any) => tx.created_at >= todayStart);
+  const todayPayments = transactionsForBalance || [];
   const todayTotalPayments = todayPayments.reduce(
     (sum: number, tx: any) => sum + Number(tx.cash_amount || 0) + Number(tx.upi_amount || 0),
     0
@@ -623,11 +777,148 @@ export function AgentHistory() {
     }
   };
 
+  const handleEditSale = async () => {
+    if (!editingSale) return;
+    if (!editCash && !editUpi) {
+      toast.error("Enter at least one payment amount");
+      return;
+    }
+    if (editingItemsState.length === 0) {
+      toast.error("At least one product item is required");
+      return;
+    }
+    setSubmittingEdit(true);
+    try {
+      const editedTotalAmount = editingItemsState.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
+      const editedOutstanding = Math.max(editedTotalAmount - (Number(editCash) || 0) - (Number(editUpi) || 0), 0);
+
+      const { data: saleData } = await supabase
+        .from("sales")
+        .select("display_id, recorded_by, logged_by")
+        .eq("id", editingSale.id)
+        .single();
+
+      if (!saleData) throw new Error("Sale not found");
+
+      const { data: result, error } = await (supabase as any).rpc("edit_sale", {
+        p_original_sale_id: editingSale.id,
+        p_store_id: editingSale.store_id,
+        p_customer_id: editingSale.customer_id,
+        p_display_id: saleData.display_id,
+        p_total_amount: editedTotalAmount,
+        p_cash_amount: Number(editCash) || 0,
+        p_upi_amount: Number(editUpi) || 0,
+        p_outstanding_amount: editedOutstanding,
+        p_sale_items: editingItemsState.map((si: any) => ({
+          product_id: si.product_id,
+          quantity: si.quantity,
+          unit_price: si.unit_price,
+          total_price: si.quantity * si.unit_price,
+        })),
+        p_recorded_by: saleData.recorded_by,
+        p_logged_by: saleData.logged_by,
+        p_created_at: editingSale.created_at,
+      });
+
+      if (error) throw error;
+
+      toast.success("Sale updated");
+      setEditingSale(null);
+      setEditCash("");
+      setEditUpi("");
+      setEditingItemsState([]);
+      afterSaleEdited(qc, { isMobile: true });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to edit sale");
+    } finally {
+      setSubmittingEdit(false);
+    }
+  };
+
+  const handleReturnSale = async () => {
+    if (!returningSale) return;
+    const finalReason = returnReason === "Other" ? returnOtherReason : returnReason;
+    if (!finalReason?.trim()) {
+      toast.error("Please provide a reason for the return");
+      return;
+    }
+    if (!returningSaleItems || returningSaleItems.length === 0) {
+      toast.error("No items found for this sale");
+      return;
+    }
+
+    setSubmittingReturn(true);
+    try {
+      const payload = returningSaleItems.map((item: any) => ({
+        sale_item_id: item.id,
+        product_id: item.product_id,
+        return_qty: item.quantity,
+        damaged_qty: returnIsDamaged ? item.quantity : 0,
+        unit_price: item.unit_price,
+      }));
+
+      const { data: result, error } = await (supabase as any).rpc("record_sale_return", {
+        p_sale_id: returningSale.id,
+        p_returned_by: user!.id,
+        p_reason: finalReason,
+        p_items: payload,
+      });
+
+      if (error) throw error;
+
+      const row = (result as any)?.[0];
+      const returnId = row?.return_id;
+      const displayId = row?.display_id;
+      toast.success(`Sale fully returned. New outstanding: ₹${(row?.new_outstanding ?? 0).toLocaleString()}`);
+
+      if (returnId && displayId) {
+        logActivity(user!.id, "Full sale return processed", "sale_return", displayId, returnId, { saleId: returningSale.id, reason: finalReason });
+        
+        getAdminUserIds().then(async (ids) => {
+          const recipientIds = [...ids];
+          if (returningSale.customer_id) {
+            try {
+              const { data: custData } = await supabase
+                .from("customers")
+                .select("user_id")
+                .eq("id", returningSale.customer_id)
+                .maybeSingle();
+              if (custData?.user_id) recipientIds.push(custData.user_id);
+            } catch (err) {
+              console.error("Failed to fetch customer for notifications", err);
+            }
+          }
+          const uniqueRecipients = Array.from(new Set(recipientIds.filter((id) => id !== user?.id)));
+          if (uniqueRecipients.length > 0) {
+            sendNotificationToMany(uniqueRecipients, {
+              title: "Sale Returned",
+              message: `Full return for sale #${displayId}${returnIsDamaged ? " (Damaged Items)" : ""}`,
+              type: "payment",
+              entityType: "sale_return",
+              entityId: returnId,
+            });
+          }
+        });
+      }
+
+      setReturningSale(null);
+      afterSaleReturned(qc, { isMobile: true, saleId: returningSale?.id });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to process return");
+    } finally {
+      setSubmittingReturn(false);
+    }
+  };
+
   const timelineLoading = loadingSalesTimeline || loadingTransactionsTimeline;
 
   if (selectedActivityDate) {
     const selectedItems = timelineByDate[selectedActivityDate] || [];
-    const selectedTotal = selectedItems.reduce((sum, item) => sum + item.amount, 0);
+    // Exclude returned sales from totals — they've been reversed
+    const selectedTotal = selectedItems
+      .filter((item) => !item._is_fully_returned)
+      .reduce((sum, item) => sum + item.amount, 0);
+    const returnedCount = selectedItems.filter((item) => item._is_fully_returned).length;
 
     return (
       <div className="pb-6">
@@ -644,6 +935,7 @@ export function AgentHistory() {
           <h2 className="text-white text-xl font-bold mt-0.5">{formatGroupDate(selectedActivityDate)} Records</h2>
           <p className="text-blue-100 text-xs mt-1">
             {selectedItems.length} entries · ₹{selectedTotal.toLocaleString("en-IN")}
+            {returnedCount > 0 && ` · ${returnedCount} returned`}
           </p>
         </div>
 
@@ -659,54 +951,125 @@ export function AgentHistory() {
               <p className="text-xs text-slate-400 mt-1">No sales or transactions were recorded on this day.</p>
             </div>
           ) : (
-            selectedItems.map((item) => (
-              <div
-                key={item.id}
-                className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-3 shadow-sm"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Badge variant="outline" className={cn("text-[10px] font-semibold", item.type === "sale" ? "border-blue-200 text-blue-600 dark:border-blue-700 dark:text-blue-400" : "border-emerald-200 text-emerald-600 dark:border-emerald-700 dark:text-emerald-400")}>
-                        {item.type === "sale" ? "Sale" : "Transaction"}
-                      </Badge>
-                      {item.display_id && <span className="text-[11px] text-slate-400">{item.display_id}</span>}
+            selectedItems.map((item) => {
+              const isReturned = item.type === "sale" && item._is_fully_returned;
+              return (
+                <div
+                  key={item.id}
+                  className={cn(
+                    "rounded-2xl p-3 shadow-sm transition-all",
+                    isReturned
+                      ? "bg-slate-50 dark:bg-slate-900/40 border border-dashed border-red-200 dark:border-red-900/50 opacity-75"
+                      : "bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700"
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {isReturned ? (
+                          <Badge className="text-[10px] font-bold bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-md px-1.5 py-0">
+                            ↩ RETURNED
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className={cn("text-[10px] font-semibold", item.type === "sale" ? "border-blue-200 text-blue-600 dark:border-blue-700 dark:text-blue-400" : "border-emerald-200 text-emerald-600 dark:border-emerald-700 dark:text-emerald-400")}>
+                            {item.type === "sale" ? "Sale" : "Transaction"}
+                          </Badge>
+                        )}
+                        {item.display_id && (
+                          <span className={cn("text-[11px]", isReturned ? "text-slate-300 dark:text-slate-600 line-through" : "text-slate-400")}>
+                            {item.display_id}
+                          </span>
+                        )}
+                      </div>
+                      <p className={cn("text-sm font-semibold mt-1", isReturned ? "text-slate-400 dark:text-slate-500" : "text-slate-800 dark:text-white")}>
+                        {item.store_name || "Store"}
+                      </p>
+                      <div className={cn("flex items-center gap-3 mt-1 text-[11px]", isReturned ? "text-slate-300 dark:text-slate-600" : "text-slate-400")}>
+                        <span>{format(new Date(item.created_at), "hh:mm a")}</span>
+                        {!isReturned && (
+                          <>
+                            <span>Cash ₹{item.cash.toLocaleString("en-IN")}</span>
+                            <span>UPI ₹{item.upi.toLocaleString("en-IN")}</span>
+                          </>
+                        )}
+                      </div>
                     </div>
-                    <p className="text-sm font-semibold text-slate-800 dark:text-white mt-1">
-                      {item.store_name || "Store"}
-                    </p>
-                    <div className="flex items-center gap-3 mt-1 text-[11px] text-slate-400">
-                      <span>{format(new Date(item.created_at), "hh:mm a")}</span>
-                      <span>Cash ₹{item.cash.toLocaleString("en-IN")}</span>
-                      <span>UPI ₹{item.upi.toLocaleString("en-IN")}</span>
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <p className="text-base font-bold text-slate-800 dark:text-white">₹{item.amount.toLocaleString("en-IN")}</p>
-                    {item.type === "sale" && item._sale_id && (
-                      (isAdmin || startOfDay(new Date(item.created_at)).getTime() === startOfDay(new Date()).getTime()) ? (
+                    <div className="flex flex-col items-end gap-1">
+                      <p className={cn(
+                        "text-base font-bold",
+                        isReturned
+                          ? "text-slate-300 dark:text-slate-600 line-through"
+                          : "text-slate-800 dark:text-white"
+                      )}>
+                        ₹{item.amount.toLocaleString("en-IN")}
+                      </p>
+                      {/* Receipt button — always visible for sales */}
+                      {item.type === "sale" && item._sale_id && (
                         <button
-                          onClick={() => setReturningSale({
-                            id: item._sale_id!,
-                            display_id: item.display_id || "",
-                            total_amount: item.amount,
-                            outstanding_amount: item._outstanding_amount || 0,
-                            store_id: item._store_id || "",
-                            customer_id: item._customer_id || "",
-                            created_at: item.created_at,
-                          })}
-                          className="text-[10px] text-red-500 hover:text-red-600 font-semibold px-2 py-0.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                          onClick={() => setReceiptSaleId(item._sale_id!)}
+                          className="text-xs font-semibold px-2 py-1 rounded-lg transition-colors text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
                         >
-                          Return
+                          Receipt
                         </button>
-                      ) : (
-                        <span className="text-[10px] text-slate-300 dark:text-slate-600 italic">Past sales cannot be returned</span>
-                      )
-                    )}
+                      )}
+                      {/* No actions on returned sales — cancelled state is final */}
+                      {!isReturned && item.type === "sale" && item._sale_id && (
+                        <div className="flex items-center gap-1">
+                          <button
+                            disabled={isPastDate(item.created_at, item._updated_at)}
+                            onClick={() => {
+                              setEditCash(String(item.cash));
+                              setEditUpi(String(item.upi));
+                              setEditingSale({
+                                id: item._sale_id!,
+                                display_id: item.display_id || "",
+                                total_amount: item.amount,
+                                cash_amount: item.cash,
+                                upi_amount: item.upi,
+                                outstanding_amount: item._outstanding_amount || 0,
+                                store_id: item._store_id || "",
+                                customer_id: item._customer_id || "",
+                                created_at: item.created_at,
+                              });
+                            }}
+                            className={cn(
+                              "text-xs font-semibold px-2 py-1 rounded-lg transition-colors",
+                              isPastDate(item.created_at, item._updated_at)
+                                ? "text-slate-300 dark:text-slate-600 cursor-not-allowed"
+                                : "text-blue-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                            )}
+                          >
+                            Edit
+                          </button>
+                          {canReturnSales && (
+                            <button
+                              disabled={isPastDate(item.created_at, item._updated_at)}
+                              onClick={() => setReturningSale({
+                                id: item._sale_id!,
+                                display_id: item.display_id || "",
+                                total_amount: item.amount,
+                                outstanding_amount: item._outstanding_amount || 0,
+                                store_id: item._store_id || "",
+                                customer_id: item._customer_id || "",
+                                created_at: item.created_at,
+                              })}
+                              className={cn(
+                                "text-xs font-semibold px-2 py-1 rounded-lg transition-colors",
+                                isPastDate(item.created_at, item._updated_at)
+                                  ? "text-slate-300 dark:text-slate-600 cursor-not-allowed"
+                                  : "text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                              )}
+                            >
+                              Return
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
@@ -825,7 +1188,12 @@ export function AgentHistory() {
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-sm font-bold text-slate-800 dark:text-white">{formatGroupDate(card.date)}</p>
-                      <p className="text-[11px] text-slate-400 mt-1">{card.items.length} records · {card.salesCount} sales · {card.transactionsCount} transactions</p>
+                      <p className="text-[11px] text-slate-400 mt-1">
+                        {card.items.length} records · {card.salesCount} sales · {card.transactionsCount} txns
+                        {card.returnedCount > 0 && (
+                          <span className="text-red-400"> · {card.returnedCount} returned</span>
+                        )}
+                      </p>
                     </div>
                     <p className="text-base font-bold text-slate-800 dark:text-white">₹{card.total.toLocaleString("en-IN")}</p>
                   </div>
@@ -1212,12 +1580,293 @@ export function AgentHistory() {
         </SheetContent>
       </Sheet>
 
-      <SaleReturnDialog
-        open={!!returningSale}
-        onOpenChange={(open) => { if (!open) setReturningSale(null); }}
-        sale={returningSale}
-        onSuccess={() => { setReturningSale(null); qc.invalidateQueries({ queryKey: ["mobile-history-sales-timeline"] }); }}
+      {/* Edit Sale Sheet */}
+      <Sheet open={!!editingSale} onOpenChange={(open) => { if (!open) { setEditingSale(null); setEditCash(""); setEditUpi(""); setEditingItemsState([]); } }}>
+        <SheetContent side="bottom" className="rounded-t-2xl pb-6 px-4 max-h-[85vh] overflow-y-auto">
+          <div className="space-y-4">
+            <SheetHeader>
+              <SheetTitle className="flex items-center gap-2">
+                <Pencil className="h-5 w-5 text-blue-500" />
+                Edit Sale — {editingSale?.display_id}
+              </SheetTitle>
+            </SheetHeader>
+
+            {/* Product items editing list */}
+            <div className="space-y-2.5">
+              <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest block">Products & Quantities</Label>
+              {editingItemsState.length === 0 ? (
+                <div className="flex justify-center items-center py-4 gap-2">
+                  <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
+                  <span className="text-xs text-slate-400">Loading items...</span>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                  {editingItemsState.map((item) => (
+                    <div key={item.product_id} className="rounded-xl border border-slate-100 dark:border-slate-700 bg-slate-50/40 dark:bg-slate-900/10 p-3 flex items-center justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-foreground dark:text-white truncate">{item.name}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          ₹{item.unit_price.toLocaleString("en-IN")} × {item.quantity} = ₹{(item.quantity * item.unit_price).toLocaleString("en-IN")}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] text-muted-foreground">₹</span>
+                          <Input
+                            type="number"
+                            min="0"
+                            value={item.unit_price}
+                            onChange={(e) => updateEditingItemPrice(item.product_id, e.target.value)}
+                            className="h-9 w-16 text-xs text-center font-semibold rounded-xl border border-slate-200 dark:border-slate-700"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => updateEditingItemQty(item.product_id, -1)}
+                          className="h-9 w-9 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                        >
+                          <Minus className="h-4 w-4 text-slate-500" />
+                        </button>
+                        <Input
+                          type="number"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          min="1"
+                          value={item.quantity}
+                          onChange={(e) => setEditingItemQtyDirect(item.product_id, e.target.value)}
+                          className="h-9 w-12 text-sm text-center font-bold rounded-xl border border-slate-200 dark:border-slate-700"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => updateEditingItemQty(item.product_id, 1)}
+                          className="h-9 w-9 bg-blue-600 rounded-xl flex items-center justify-center hover:bg-blue-700 transition-colors text-white"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Calculations total */}
+            {editingItemsState.length > 0 && (
+              <div className="rounded-xl bg-slate-50 dark:bg-slate-900/50 p-3 space-y-1.5 border border-slate-100 dark:border-slate-700">
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Original Total:</span>
+                  <span className="font-semibold line-through text-muted-foreground">₹{(editingSale?.total_amount || 0).toLocaleString("en-IN")}</span>
+                </div>
+                <div className="flex justify-between text-sm font-bold">
+                  <span className="text-foreground">New Total:</span>
+                  <span className="text-blue-600 dark:text-blue-400">
+                    ₹{editingItemsState.reduce((sum, item) => sum + item.total_price, 0).toLocaleString("en-IN")}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Payments input cash/upi */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs font-semibold text-muted-foreground">Cash Amount</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={editCash}
+                  onChange={(e) => setEditCash(e.target.value)}
+                  placeholder={String(editingSale?.cash_amount || 0)}
+                  className="h-12 rounded-xl text-base font-bold mt-1"
+                />
+              </div>
+              <div>
+                <Label className="text-xs font-semibold text-muted-foreground">UPI Amount</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={editUpi}
+                  onChange={(e) => setEditUpi(e.target.value)}
+                  placeholder={String(editingSale?.upi_amount || 0)}
+                  className="h-12 rounded-xl text-base font-bold mt-1"
+                />
+              </div>
+            </div>
+
+            {/* New outstanding calculation */}
+            {editingSale && editingItemsState.length > 0 && (
+              <div className="rounded-xl border border-dashed p-3 text-xs bg-slate-50/20 flex justify-between items-center">
+                <span className="text-muted-foreground">Calculated Outstanding:</span>
+                <span className={cn(
+                  "font-bold text-sm",
+                  Math.max(editingItemsState.reduce((sum, item) => sum + item.total_price, 0) - (Number(editCash) || 0) - (Number(editUpi) || 0), 0) > 0
+                    ? "text-red-500"
+                    : "text-emerald-500"
+                )}>
+                  ₹{Math.max(editingItemsState.reduce((sum, item) => sum + item.total_price, 0) - (Number(editCash) || 0) - (Number(editUpi) || 0), 0).toLocaleString("en-IN")}
+                </span>
+              </div>
+            )}
+
+            <button
+              className={cn(
+                "w-full h-12 rounded-xl text-base font-bold flex items-center justify-center gap-2 transition-all shadow-md text-white",
+                submittingEdit
+                  ? "bg-blue-400 cursor-not-allowed"
+                  : "bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 active:scale-[0.98]"
+              )}
+              onClick={handleEditSale}
+              disabled={submittingEdit || editingItemsState.length === 0}
+            >
+              {submittingEdit ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <><Pencil className="h-4 w-4" />Save and Update Sale</>
+              )}
+            </button>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Sale Receipt Modal */}
+      <SaleReceipt
+        saleId={receiptSaleId || ""}
+        open={!!receiptSaleId}
+        onClose={() => setReceiptSaleId(null)}
       />
+
+      {/* Return Sale Sheet */}
+      <Sheet open={!!returningSale} onOpenChange={(open) => { if (!open) setReturningSale(null); }}>
+        <SheetContent side="bottom" className="rounded-t-2xl pb-6 px-4 max-h-[85vh] overflow-y-auto">
+          <div className="space-y-4">
+            <SheetHeader>
+              <SheetTitle className="flex items-center gap-2 text-red-500">
+                <RotateCcw className="h-5 w-5" />
+                Full Sale Return — {returningSale?.display_id}
+              </SheetTitle>
+            </SheetHeader>
+
+            <Alert className="bg-amber-50/50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-700/40 p-3 rounded-xl flex gap-2.5 items-start">
+              <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+              <div className="text-xs text-amber-700 dark:text-amber-400">
+                All items in this sale will be fully returned. Stock will be adjusted, and outstanding balance reverted.
+              </div>
+            </Alert>
+
+            {/* List of items being returned */}
+            <div className="space-y-2">
+              <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest block">Items to Return</Label>
+              {!returningSaleItems ? (
+                <div className="flex justify-center items-center py-4 gap-2">
+                  <Loader2 className="h-5 w-5 animate-spin text-red-500" />
+                  <span className="text-xs text-slate-400">Loading items...</span>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700 max-h-[180px] overflow-y-auto">
+                  {returningSaleItems.map((item: any) => (
+                    <div key={item.id} className="flex justify-between items-center p-3 text-xs bg-card">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-slate-800 dark:text-white truncate">{item.products?.name}</p>
+                        <p className="text-slate-400 mt-0.5">₹{item.unit_price.toLocaleString()} × {item.quantity}</p>
+                      </div>
+                      <span className="font-bold text-slate-800 dark:text-white shrink-0 ml-3">
+                        ₹{(item.quantity * item.unit_price).toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Return summary */}
+            {returningSale && returningSaleItems && (
+              <div className="rounded-xl bg-slate-50 dark:bg-slate-900/50 p-3 space-y-1.5 border border-slate-100 dark:border-slate-700 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Current outstanding:</span>
+                  <span>₹{(returningSale.outstanding_amount ?? 0).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-red-500 font-medium">
+                  <span>Return adjustment:</span>
+                  <span>-₹{returningSaleItems.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between font-bold border-t pt-1.5 text-sm">
+                  <span>New outstanding:</span>
+                  <span className="text-emerald-600">
+                    ₹{Math.max(0, (returningSale.outstanding_amount ?? 0) - returningSaleItems.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0)).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Return Reason Selector */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-slate-500 uppercase tracking-widest">Return Reason *</Label>
+              <Select value={returnReason} onValueChange={(val) => { setReturnReason(val); if (val === "Damage") setReturnIsDamaged(true); }}>
+                <SelectTrigger className="h-11 rounded-xl">
+                  <SelectValue placeholder="Select reason" />
+                </SelectTrigger>
+                <SelectContent>
+                  {["Damage", "Defect", "Expired", "Other"].map((r) => (
+                    <SelectItem key={r} value={r}>{r}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Specific return details */}
+            {returnReason === "Other" && (
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-700">Specify Reason *</Label>
+                <Input
+                  value={returnOtherReason}
+                  onChange={(e) => setReturnOtherReason(e.target.value)}
+                  placeholder="Enter reason"
+                  className="h-11 rounded-xl"
+                />
+              </div>
+            )}
+
+            {/* Damage toggle */}
+            <div className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 p-3 shadow-sm bg-slate-50/10">
+              <div className="space-y-0.5 max-w-[80%]">
+                <Label className="text-xs font-semibold text-slate-700 dark:text-slate-200">Mark returned items as damaged?</Label>
+                <p className="text-[10px] text-muted-foreground">
+                  If toggled, stock will go strictly to wastage and will NOT be added back to agent or warehouse stock.
+                </p>
+              </div>
+              <Switch checked={returnIsDamaged} onCheckedChange={setReturnIsDamaged} />
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold text-slate-700">Notes (Optional)</Label>
+              <Textarea
+                value={returnNotes}
+                onChange={(e) => setReturnNotes(e.target.value)}
+                placeholder="Additional notes..."
+                rows={2}
+                className="rounded-xl resize-none"
+              />
+            </div>
+
+            <button
+              className={cn(
+                "w-full h-12 rounded-xl text-base font-bold flex items-center justify-center gap-2 transition-all shadow-md text-white",
+                submittingReturn || !returnReason
+                  ? "bg-slate-300 cursor-not-allowed text-slate-500"
+                  : "bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 active:scale-[0.98]"
+              )}
+              onClick={handleReturnSale}
+              disabled={submittingReturn || !returnReason}
+            >
+              {submittingReturn ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <><RotateCcw className="h-4 w-4" />Confirm Full Return</>
+              )}
+            </button>
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

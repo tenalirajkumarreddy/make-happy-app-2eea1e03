@@ -57,14 +57,13 @@ export default defineConfig(({ mode }) => ({
         runtimeCaching: [
           {
             urlPattern: /^https?:\/\/.*\.supabase\.co\/rest\/v1\/.*/i,
-            handler: "NetworkFirst",
+            handler: "StaleWhileRevalidate",
             options: {
               cacheName: "supabase-api-cache",
               expiration: {
                 maxEntries: 200,
                 maxAgeSeconds: 60 * 60 * 24 * SUPABASE_CACHE_DAYS,
               },
-              networkTimeoutSeconds: 10,
               cacheableResponse: {
                 statuses: [0, 200],
               },
@@ -72,14 +71,13 @@ export default defineConfig(({ mode }) => ({
           },
           {
             urlPattern: /^https?:\/\/.*\.supabase\.co\/auth\/v1\/.*/i,
-            handler: "NetworkFirst",
+            handler: "StaleWhileRevalidate",
             options: {
               cacheName: "supabase-auth-cache",
               expiration: {
                 maxEntries: 50,
                 maxAgeSeconds: 60 * 60 * AUTH_CACHE_HOURS,
               },
-              networkTimeoutSeconds: 10,
               cacheableResponse: {
                 statuses: [0, 200],
               },

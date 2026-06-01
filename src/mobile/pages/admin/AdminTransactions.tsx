@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
 import { Loader2, Plus, Eye, CreditCard, ChevronRight, Receipt, FileText, Calendar, Filter } from "lucide-react";
+import { SaleReceipt } from "@/components/shared/SaleReceipt";
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -50,6 +51,7 @@ export function AdminTransactions({ onNavigate }: { onNavigate: (path: string) =
   const [selectedTxn, setSelectedTxn] = useState<Transaction | null>(null);
   const [page, setPage] = useState(1);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [receiptTxnId, setReceiptTxnId] = useState<string | null>(null);
 
   const getDateRange = useCallback((filter: string) => {
     const now = new Date();
@@ -518,7 +520,7 @@ export function AdminTransactions({ onNavigate }: { onNavigate: (path: string) =
                   className="text-xs"
                   onClick={() => {
                     setShowDetailModal(false);
-                    onNavigate(`/transactions?receipt=${selectedTxn.id}`);
+                    setReceiptTxnId(selectedTxn.id);
                   }}
                 >
                   <Receipt className="h-3 w-3 mr-1" />
@@ -529,6 +531,11 @@ export function AdminTransactions({ onNavigate }: { onNavigate: (path: string) =
           )}
         </DialogContent>
       </Dialog>
+      <SaleReceipt
+        saleId={receiptTxnId || ""}
+        open={!!receiptTxnId}
+        onClose={() => setReceiptTxnId(null)}
+      />
     </div>
   );
 }

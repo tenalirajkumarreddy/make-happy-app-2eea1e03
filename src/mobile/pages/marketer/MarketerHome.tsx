@@ -157,66 +157,66 @@ export function MarketerHome({ onOpenOrders, onOpenRecord, onOpenStores, onOpenA
           <div className="grid grid-cols-3 gap-2">
             <button
               onClick={onOpenOrders}
-              className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95 transition-all shadow-sm"
+              className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95 transition-all shadow-sm"
             >
               <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
                 <ClipboardList className="h-4 w-4 text-white" />
               </div>
-              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200 text-center">Orders</span>
+              <span className="text-[11px] font-bold text-slate-800 dark:text-white text-center">Orders</span>
             </button>
             <button
               onClick={onOpenRecord}
-              className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95 transition-all shadow-sm"
+              className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95 transition-all shadow-sm"
             >
               <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center">
                 <Wallet className="h-4 w-4 text-white" />
               </div>
-              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200 text-center">Record Payment</span>
+              <span className="text-[11px] font-bold text-slate-800 dark:text-white text-center">Record Payment</span>
             </button>
             <button
               onClick={onOpenStores}
-              className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95 transition-all shadow-sm"
+              className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95 transition-all shadow-sm"
             >
               <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center">
                 <Users className="h-4 w-4 text-white" />
               </div>
-              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200 text-center">Stores</span>
+              <span className="text-[11px] font-bold text-slate-800 dark:text-white text-center">Stores</span>
             </button>
             <button
               onClick={onGoCustomers}
-              className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95 transition-all shadow-sm"
+              className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95 transition-all shadow-sm"
             >
               <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center">
                 <Contact className="h-4 w-4 text-white" />
               </div>
-              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200 text-center">Customers</span>
+              <span className="text-[11px] font-bold text-slate-800 dark:text-white text-center">Customers</span>
             </button>
             <button
               onClick={onGoStockTransfers}
-              className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95 transition-all shadow-sm"
+              className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95 transition-all shadow-sm"
             >
               <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center">
                 <ArrowRightLeft className="h-4 w-4 text-white" />
               </div>
-              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200 text-center">Stock Transfers</span>
+              <span className="text-[11px] font-bold text-slate-800 dark:text-white text-center">Stock Transfers</span>
             </button>
             <button
               onClick={() => onGoMap?.()}
-              className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95 transition-all shadow-sm"
+              className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95 transition-all shadow-sm"
             >
               <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center">
                 <MapPin className="h-4 w-4 text-white" />
               </div>
-              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200 text-center">Map View</span>
+              <span className="text-[11px] font-bold text-slate-800 dark:text-white text-center">Map View</span>
             </button>
             <button
               onClick={onOpenAddEntity}
-              className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95 transition-all shadow-sm"
+              className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95 transition-all shadow-sm"
             >
               <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-rose-500 to-pink-600 flex items-center justify-center">
                 <Store className="h-4 w-4 text-white" />
               </div>
-              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200 text-center">Add Store</span>
+              <span className="text-[11px] font-bold text-slate-800 dark:text-white text-center">Add Store</span>
             </button>
           </div>
         </div>
@@ -342,14 +342,14 @@ export function MarketerHome({ onOpenOrders, onOpenRecord, onOpenStores, onOpenA
 
 function MiniStat({ icon: Icon, label, value, subValue, color }: { icon: React.ElementType; label: string; value: string; subValue?: string; color: string }) {
   return (
-    <div className="rounded-xl border border-slate-100 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/30 p-3">
+    <div className="rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-3 flex flex-col gap-2">
       <div className="flex items-start justify-between gap-2">
-        <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium leading-tight">{label}</p>
-        <div className={cn("h-6 w-6 rounded-md bg-gradient-to-br flex items-center justify-center shrink-0", color)}>
-          <Icon className="h-3 w-3 text-white" />
+        <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wide leading-none">{label}</p>
+        <div className={cn("h-7 w-7 rounded-lg bg-gradient-to-br flex items-center justify-center shrink-0", color)}>
+          <Icon className="h-3.5 w-3.5 text-white" />
         </div>
       </div>
-      <p className="text-lg font-bold text-slate-900 dark:text-white mt-1">{value}</p>
+      <p className="text-sm font-bold text-slate-800 dark:text-white leading-tight">{value}</p>
       {subValue && <p className="text-[11px] text-amber-500 mt-0.5">{subValue}</p>}
     </div>
   );

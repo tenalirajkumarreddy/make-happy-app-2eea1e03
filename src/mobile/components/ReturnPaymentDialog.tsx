@@ -10,6 +10,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { Loader2, RotateCcw } from "lucide-react"
 import { fmtINR } from "@/lib/utils"
 import { useAuth } from "@/contexts/AuthContext"
+import { afterPaymentReturned } from "@/lib/mutationHelpers"
 
 interface Transaction {
   id: string
@@ -62,9 +63,7 @@ export function ReturnPaymentDialog({ open, onOpenChange, transaction }: Props) 
       })
       if (rpcError) throw rpcError
 
-      qc.invalidateQueries({ queryKey: ["mobile-transactions"] })
-      qc.invalidateQueries({ queryKey: ["mobile-admin-dashboard"] })
-      qc.invalidateQueries({ queryKey: ["mobile-recent-activity"] })
+      afterPaymentReturned(qc, { isMobile: true })
       onOpenChange(false)
       setReturnAmount("")
       setReturnType("cash")

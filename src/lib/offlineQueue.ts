@@ -7,7 +7,7 @@
 import { toast } from "sonner";
 
 const DB_NAME = "aquaprime_offline";
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 const STORE_NAME = "pending_actions";
 const FILE_STORE_NAME = "pending_files";
 const CONFLICT_STORE_NAME = "conflict_info";
@@ -72,7 +72,7 @@ function emitQueueChanged() {
   }
 }
 
-function openDB(): Promise<IDBDatabase> {
+export function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = (event) => {
@@ -104,6 +104,16 @@ function openDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(CONFLICT_STORE_NAME)) {
         const conflictStore = db.createObjectStore(CONFLICT_STORE_NAME, { keyPath: "actionId" });
         conflictStore.createIndex("resolved", "resolved", { unique: false });
+      }
+
+      // Create auth_cache store (v5)
+      if (!db.objectStoreNames.contains("auth_cache")) {
+        db.createObjectStore("auth_cache", { keyPath: "id" });
+      }
+
+      // Create query_cache store (v5)
+      if (!db.objectStoreNames.contains("query_cache")) {
+        db.createObjectStore("query_cache", { keyPath: "id" });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -378,6 +388,26 @@ export async function getRetryableActions(): Promise<PendingAction[]> {
 export async function getFailedActions(): Promise<PendingAction[]> {
   const actions = await getQueuedActions();
   return actions.filter((action) => (action.retryCount || 0) >= MAX_RETRIES);
+}
+
+/**
+ * Get queued actions ordered by createdAt (FCFS - oldest first)
+ */
+export async function getQueuedActionsOrdered(): Promise<PendingAction[]> {
+  const actions = await getQueuedActions();
+  return actions.sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  );
+}
+
+/**
+ * Get retryable actions ordered by createdAt (FCFS - oldest first)
+ */
+export async function getRetryableActionsOrdered(): Promise<PendingAction[]> {
+  const actions = await getRetryableActions();
+  return actions.sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

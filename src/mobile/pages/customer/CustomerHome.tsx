@@ -163,10 +163,10 @@ export function CustomerHome({ selectedStoreId, onStoreChange, onOpenSales, onOp
           ) : (
             <div className="space-y-2 mt-2">
               {(sales || []).map(sale => (
-                <div key={sale.id} className="rounded-xl border border-slate-100 dark:border-slate-700 p-3">
+                <div key={sale.id} className="rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-3">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{sale.display_id}</p>
-                    <p className="text-sm font-bold text-slate-900 dark:text-white">₹{Number(sale.total_amount).toLocaleString("en-IN")}</p>
+                    <p className="text-sm font-bold text-slate-800 dark:text-white">₹{Number(sale.total_amount).toLocaleString("en-IN")}</p>
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">{sale.stores?.name || "Store"}</p>
                   <p className="text-[11px] text-slate-400 mt-1">
@@ -187,11 +187,11 @@ function MiniStat({ label, value, icon: Icon, color }: { label: string; value: s
     <div className="rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-3 shadow-sm">
       <div className="flex items-start justify-between gap-1">
         <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wide leading-tight">{label}</p>
-        <div className={cn("h-6 w-6 rounded-md bg-gradient-to-br flex items-center justify-center shrink-0", color)}>
+        <div className={cn("h-7 w-7 rounded-lg bg-gradient-to-br flex items-center justify-center shrink-0", color)}>
           <Icon className="h-3 w-3 text-white" />
         </div>
       </div>
-      <p className="text-sm font-bold text-slate-900 dark:text-white mt-1 line-clamp-1">{value}</p>
+      <p className="text-sm font-bold text-slate-800 dark:text-white mt-1 line-clamp-1">{value}</p>
     </div>
   );
 }
@@ -199,7 +199,7 @@ function MiniStat({ label, value, icon: Icon, color }: { label: string; value: s
 function QuickButton({ label, onClick, icon: Icon, color }: { label: string; onClick: () => void; icon: React.ElementType; color: string }) {
   return (
     <button type="button" onClick={onClick}
-      className="h-16 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex flex-col items-center justify-center gap-1 active:scale-95 transition-all">
+      className="h-16 rounded-xl border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 flex flex-col items-center justify-center gap-1 active:scale-95 transition-all">
       <div className={cn("h-6 w-6 rounded-md bg-gradient-to-br flex items-center justify-center", color)}>
         <Icon className="h-3 w-3 text-white" />
       </div>

@@ -1,6 +1,7 @@
 -- Fix record_sale: restore staff_stock check + DEDUCTION, credit limit gated by setting,
 -- lock stock rows FOR UPDATE, restore outstanding validation, keep warehouse_id fix
 
+DROP FUNCTION IF EXISTS public.record_sale(TEXT, UUID, UUID, UUID, UUID, NUMERIC, NUMERIC, NUMERIC, NUMERIC, JSONB, TIMESTAMPTZ);
 DROP FUNCTION IF EXISTS public.record_sale(TEXT, UUID, UUID, UUID, UUID, NUMERIC, NUMERIC, NUMERIC, NUMERIC, JSONB, TIMESTAMPTZ, NUMERIC);
 
 CREATE OR REPLACE FUNCTION public.record_sale(
@@ -33,7 +34,8 @@ DECLARE
     v_product_id UUID;
     v_quantity NUMERIC;
     v_product_name TEXT;
-    v_available_stock NUMERIC;
+    v_staff_available_stock NUMERIC;
+    v_product_available_stock NUMERIC;
     v_has_staff_stock BOOLEAN;
     v_insufficient_products TEXT[] := ARRAY[]::TEXT[];
     v_credit_limit_check TEXT;
@@ -43,6 +45,8 @@ DECLARE
     v_credit_limit_override NUMERIC;
     v_caller_is_admin BOOLEAN;
     v_caller_role TEXT;
+    v_all_product_ids uuid[];
+    v_store_customer_id UUID;
 BEGIN
     IF auth.uid() IS NULL THEN
         RAISE EXCEPTION 'Not authenticated';
@@ -68,12 +72,16 @@ BEGIN
     SELECT EXISTS (SELECT 1 FROM public.staff_stock WHERE user_id = v_target_user_id) INTO v_has_staff_stock;
 
     -- LOCK store row + fetch outstanding
-    SELECT s.outstanding, s.store_type_id
-    INTO v_old_outstanding, v_store_type_id
+    SELECT s.outstanding, s.store_type_id, s.customer_id
+    INTO v_old_outstanding, v_store_type_id, v_store_customer_id
     FROM public.stores s WHERE s.id = p_store_id FOR UPDATE;
 
     IF NOT FOUND THEN
         RAISE EXCEPTION 'Store % not found', p_store_id;
+    END IF;
+
+    IF v_store_customer_id IS DISTINCT FROM p_customer_id THEN
+        RAISE EXCEPTION 'Customer does not belong to this store';
     END IF;
 
     -- Optimistic concurrency check
@@ -112,6 +120,23 @@ BEGIN
         END IF;
     END IF;
 
+    -- Lock all stock rows upfront in consistent order to prevent deadlocks
+    SELECT array_agg(DISTINCT (item->>'product_id')::uuid ORDER BY (item->>'product_id')::uuid)
+    INTO v_all_product_ids
+    FROM jsonb_array_elements(p_sale_items) AS item;
+
+    PERFORM ss.product_id
+    FROM staff_stock ss
+    WHERE ss.user_id = v_target_user_id AND ss.product_id = ANY(v_all_product_ids)
+    ORDER BY ss.product_id
+    FOR UPDATE;
+
+    PERFORM ps.product_id
+    FROM product_stock ps
+    WHERE ps.warehouse_id = v_warehouse_id AND ps.product_id = ANY(v_all_product_ids)
+    ORDER BY ps.product_id
+    FOR UPDATE;
+
     -- LOCK stock rows + pre-check + DEDUCT in one pass
     FOR v_item IN SELECT * FROM jsonb_array_elements(p_sale_items)
     LOOP
@@ -121,35 +146,33 @@ BEGIN
         SELECT name INTO v_product_name FROM public.products WHERE id = v_product_id;
 
         IF v_has_staff_stock THEN
-            SELECT ss.quantity INTO v_available_stock
+            SELECT ss.quantity INTO v_staff_available_stock
             FROM public.staff_stock ss
             WHERE ss.user_id = v_target_user_id
               AND ss.product_id = v_product_id
-              AND ss.warehouse_id = v_warehouse_id
-            FOR UPDATE;
+              AND ss.warehouse_id = v_warehouse_id;
 
-            v_available_stock := COALESCE(v_available_stock, 0);
+            v_staff_available_stock := COALESCE(v_staff_available_stock, 0);
 
-            IF v_available_stock >= v_quantity THEN
+            IF v_staff_available_stock >= v_quantity THEN
                 UPDATE public.staff_stock
                 SET quantity = quantity - v_quantity, updated_at = now()
                 WHERE user_id = v_target_user_id
                   AND product_id = v_product_id
                   AND warehouse_id = v_warehouse_id;
             ELSE
-                v_available_stock := 0;
+                v_staff_available_stock := 0;
             END IF;
         END IF;
 
-        IF NOT v_has_staff_stock OR v_available_stock < v_quantity THEN
-            SELECT ps.quantity INTO v_available_stock
+        IF NOT v_has_staff_stock OR v_staff_available_stock < v_quantity THEN
+            SELECT ps.quantity INTO v_product_available_stock
             FROM public.product_stock ps
-            WHERE ps.product_id = v_product_id AND ps.warehouse_id = v_warehouse_id
-            FOR UPDATE;
+            WHERE ps.product_id = v_product_id AND ps.warehouse_id = v_warehouse_id;
 
-            v_available_stock := COALESCE(v_available_stock, 0);
+            v_product_available_stock := COALESCE(v_product_available_stock, 0);
 
-            IF v_available_stock >= v_quantity THEN
+            IF v_product_available_stock >= v_quantity THEN
                 UPDATE public.product_stock
                 SET quantity = quantity - v_quantity, updated_at = now()
                 WHERE product_id = v_product_id AND warehouse_id = v_warehouse_id;
@@ -162,6 +185,10 @@ BEGIN
 
     IF array_length(v_insufficient_products, 1) > 0 THEN
         RAISE EXCEPTION 'insufficient_stock: %', array_to_string(v_insufficient_products, ', ');
+    END IF;
+
+    IF COALESCE(p_total_amount, 0) <= 0 THEN
+        RAISE EXCEPTION 'Sale amount must be positive';
     END IF;
 
     -- Insert sale
@@ -189,12 +216,14 @@ BEGIN
     -- Auto-fulfill pending orders for this store
     UPDATE public.orders o SET status = 'delivered', delivered_at = now(), fulfilled_by = p_recorded_by
     WHERE o.store_id = p_store_id AND o.status = 'pending'
-    AND EXISTS (
+    AND NOT EXISTS (
         SELECT 1 FROM public.order_items oi
         WHERE oi.order_id = o.id
-        AND oi.product_id IN (
-            SELECT (item->>'product_id')::UUID FROM jsonb_array_elements(p_sale_items) AS item
-        )
+        AND oi.quantity > COALESCE((
+            SELECT SUM((item->>'quantity')::numeric)
+            FROM jsonb_array_elements(p_sale_items) AS item
+            WHERE (item->>'product_id')::uuid = oi.product_id
+        ), 0)
     );
 
     -- Recalculate running balances if backdated

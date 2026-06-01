@@ -405,9 +405,13 @@ function StaffApp({ role }: { role: StaffRole }) {
       {/* Sidebar Drawer */}
       <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
         <SheetContent side="left" className="w-72 p-0 border-0">
-          <div className="h-full flex flex-col bg-white dark:bg-slate-900">
+          <div className="h-full flex flex-col bg-card">
             {/* User Info Header */}
-            <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 dark:from-slate-900 dark:via-blue-950 dark:to-indigo-950 px-4 py-5" style={{ paddingTop: "calc(env(safe-area-inset-top) + 1.25rem)" }}>
+            <div 
+              onClick={() => handleNavigate("/settings")}
+              className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 dark:from-slate-900 dark:via-blue-950 dark:to-indigo-950 px-4 py-5 cursor-pointer hover:opacity-95 transition-opacity" 
+              style={{ paddingTop: "calc(env(safe-area-inset-top) + 1.25rem)" }}
+            >
               <div className="flex items-center gap-3">
                 <div className="h-11 w-11 rounded-full bg-white/20 ring-2 ring-white/40 flex items-center justify-center shrink-0">
                   <span className="text-white text-sm font-bold">{initials}</span>
@@ -427,7 +431,7 @@ function StaffApp({ role }: { role: StaffRole }) {
             <nav className="flex-1 px-3 py-2 overflow-y-auto">
               {menuSections.map((section, si) => (
                 <div key={section.section} className={si > 0 ? "mt-3" : ""}>
-                  <p className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                  <p className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                     {section.section}
                   </p>
                   <div className="space-y-0.5">
@@ -444,19 +448,19 @@ function StaffApp({ role }: { role: StaffRole }) {
                           className={cn(
                             "w-full flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-all active:scale-[0.98]",
                             isActive
-                              ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-semibold shadow-sm"
-                              : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+                              ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-semibold"
+                              : "text-muted-foreground hover:bg-muted"
                           )}
                         >
                           <div className={cn(
                             "h-7 w-7 rounded-lg flex items-center justify-center shrink-0 transition-colors",
                             isActive
                               ? "bg-blue-100 dark:bg-blue-800/50"
-                              : "bg-slate-100 dark:bg-slate-800"
+                              : "bg-muted"
                           )}>
                             <Icon className={cn(
                               "h-3.5 w-3.5",
-                              isActive ? "text-blue-600 dark:text-blue-400" : "text-slate-500 dark:text-slate-400"
+                              isActive ? "text-blue-600 dark:text-blue-400" : "text-muted-foreground"
                             )} />
                           </div>
                           <span className="truncate">{item.label}</span>
@@ -472,7 +476,7 @@ function StaffApp({ role }: { role: StaffRole }) {
             </nav>
 
             {/* Sign Out */}
-            <div className="border-t border-slate-100 dark:border-slate-800 px-3 py-3">
+            <div className="border-t px-3 py-3">
               <button
                 onClick={() => { setMenuOpen(false); setShowSignOutConfirm(true); }}
                 className="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all active:scale-[0.98]"
@@ -599,7 +603,7 @@ function MarketerApp() {
           )}
           {tab === "products" && <AgentProducts />}
           {tab === "orders" && <MarketerOrders />}
-          {tab === "record" && <AgentRecord preselectStore={preselectStore} preselectTab={recordAction === "sale" ? "sale" : "payment"} allowSale={true} allowPayment={true} />}
+          {tab === "record" && <AgentRecord preselectStore={preselectStore} preselectTab={recordAction === "sale" ? "sale" : "payment"} allowSale={true} allowPayment={true} onSuccess={() => setTab("history")} />}
           {tab === "history" && <AgentHistory />}
           {tab === "customers" && !profileStore && (
             <MarketerStores
@@ -699,7 +703,7 @@ function AgentApp() {
             />
           )}
           {tab === "products" && <AgentProducts />}
-          {tab === "routes" && <AgentRoutes onOpenStore={(store) => handleOpenStoreProfile(store, "routes")} />}
+          {tab === "routes" && <AgentRoutes onOpenStore={(store) => handleOpenStoreProfile(store, "routes")} onGoRecord={handleGoRecord} />}
           {tab === "scan" && !recordAction && (
             <AgentScan
               onGoRecord={handleGoRecord}
@@ -707,7 +711,7 @@ function AgentApp() {
               onOpenStore={(store) => handleOpenStoreProfile(store, "scan")}
             />
           )}
-          {tab === "scan" && !!recordAction && <AgentRecord preselectStore={preselectStore} preselectTab={recordAction} />}
+          {tab === "scan" && !!recordAction && <AgentRecord preselectStore={preselectStore} preselectTab={recordAction} onSuccess={() => setTab("history")} />}
           {tab === "history" && <AgentHistory />}
           {tab === "customers" && !profileStore && (
             <AgentCustomers
@@ -755,7 +759,7 @@ function PosApp() {
     <MobileShell title={TAB_TITLES[tab]} tabs={posTabs} tab={tab} onTabChange={handlePosTabChange}>
       {tab === "home" && <PosHome onOpenRecord={() => setTab("record")} onOpenHistory={() => setTab("history")} setTab={setTab} activeTab={tab} store={posStore} onStoreChange={setPosStore} />}
       {tab === "orders" && <AdminOrders onNavigate={(path) => { if (path === "/orders") { setTab("orders"); } else { window.location.href = path; } }} />}
-      {tab === "record" && <AgentRecord preselectTab="sale" allowPayment={false} />}
+      {tab === "record" && <AgentRecord preselectTab="sale" allowPayment={false} onSuccess={() => setTab("history")} />}
       {tab === "handovers" && <AgentHistory />}
       {tab === "products" && <AgentProducts />}
       {tab === "history" && <AgentHistory />}
@@ -774,11 +778,43 @@ function getStorageItem(key: string, defaultValue: string = ""): string {
 
 export function MobileApp() {
   const { role, loading } = useAuth();
+  const location = useLocation();
   const permsDone = getStorageItem("mobile_permissions_done") === "1";
   const [permissionsSetupComplete, setPermissionsSetupComplete] = useState(
     // In native mode always show permissions screen on first run; in browser always skip
     isNativeApp() ? permsDone : true
   );
+
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const handleTap = (e: Event) => {
+      const customEvent = e as CustomEvent<{ entityId: string; entityType: string }>;
+      const { entityId, entityType } = customEvent.detail;
+      if (!entityId) return;
+
+      if (entityType === "order") {
+        navigate(`/orders?highlight=${entityId}`);
+      } else if (entityType === "sale") {
+        navigate(`/sales?highlight=${entityId}`);
+      } else if (entityType === "transaction") {
+        navigate(`/transactions?highlight=${entityId}`);
+      } else if (entityType === "handover") {
+        navigate(`/handovers?highlight=${entityId}`);
+      } else if (entityType === "expense_claim" || entityType === "expense_request") {
+        navigate(`/handovers?highlight=${entityId}`);
+      } else if (entityType === "stock_transfer") {
+        navigate(`/stock-transfers?highlight=${entityId}`);
+      } else if (entityType === "customer") {
+        navigate(`/customers/${entityId}`);
+      }
+    };
+
+    window.addEventListener("push-notification-tap", handleTap);
+    return () => {
+      window.removeEventListener("push-notification-tap", handleTap);
+    };
+  }, [navigate]);
 
   logDebug("[MobileApp] state", { role, loading, isNative: isNativeApp() });
 
@@ -796,6 +832,27 @@ export function MobileApp() {
 
   if (!permissionsSetupComplete) {
     return <PermissionSetup onComplete={() => setPermissionsSetupComplete(true)} />;
+  }
+
+  // Universal paths for all roles on mobile
+  if (location.pathname === "/settings") {
+    return (
+      <Suspense fallback={<PageLoader />}>
+        <MobilePageWrapper showBack>
+          <SettingsPage />
+        </MobilePageWrapper>
+      </Suspense>
+    );
+  }
+
+  if (location.pathname === "/profile") {
+    return (
+      <Suspense fallback={<PageLoader />}>
+        <MobilePageWrapper showBack>
+          <UserProfile />
+        </MobilePageWrapper>
+      </Suspense>
+    );
   }
 
   // Role-based routing

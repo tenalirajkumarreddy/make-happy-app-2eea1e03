@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
 import { usePermission } from "@/hooks/usePermission";
-import {Loader2, Package, AlertCircle, CheckCircle2, Ban, Plus, ShoppingCart, User, Calendar, X, Pencil, Edit, FileText} from "lucide-react";
+import {Loader2, Package, AlertCircle, CheckCircle2, Ban, Plus, ShoppingCart, User, Calendar, X, Pencil, Edit, FileText, Minus, Search} from "lucide-react";
 import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -104,12 +104,12 @@ export function OperatorOrders() {
   const [editOrder, setEditOrder] = useState<Order | null>(null);
 
   const [showCreate, setShowCreate] = useState(false);
-  const [customerId, setCustomerId] = useState("");
-  const [storeId, setStoreId] = useState("");
-  const [orderType, setOrderType] = useState<"simple" | "detailed">("simple");
-  const [requirementNote, setRequirementNote] = useState("");
-  const [orderItems, setOrderItems] = useState<OrderItemData[]>([]);
-  const [saving, setSaving] = useState(false);
+  const [createStoreSearch, setCreateStoreSearch] = useState("");
+  const [createStoreId, setCreateStoreId] = useState("");
+  const [createOrderType, setCreateOrderType] = useState<"simple" | "detailed">("simple");
+  const [createRequirementNote, setCreateRequirementNote] = useState("");
+  const [createOrderItems, setCreateOrderItems] = useState<OrderItemData[]>([]);
+  const [createSaving, setCreateSaving] = useState(false);
 
   const { data: orders, isLoading, error, refetch } = useQuery({
     queryKey: ["operator-orders", statusFilter, dateFrom, dateTo],
@@ -121,10 +121,7 @@ export function OperatorOrders() {
           stores(name, display_id, store_type_id, store_types(name), routes(name)),
           customers(name, display_id),
           order_items(id, product_id, quantity, unit_price, products(name, sku, base_price)),
-          creator_profile:profiles!orders_created_by_fkey(full_name),
-          updater_profile:profiles!orders_updated_by_fkey(full_name),
-          fulfiller_profile:profiles!orders_fulfilled_by_fkey(full_name),
-          canceller_profile:profiles!orders_cancelled_by_fkey(full_name)
+          updater_profile:profiles!orders_updated_by_fkey(full_name)
         `)
         .order("created_at", { ascending: false })
         .limit(100);
@@ -196,31 +193,21 @@ export function OperatorOrders() {
     enabled: !!viewProformaId,
   });
 
-  const { data: customers = [] } = useQuery({
-    queryKey: ["operator-create-customers", currentWarehouse?.id],
+  const { data: createStores = [] } = useQuery({
+    queryKey: ["operator-create-stores", currentWarehouse?.id],
     queryFn: async () => {
-      const { data } = await supabase.from("customers").select("id, name").order("name").limit(100);
-      return (data || []) as Customer[];
-    },
-  });
-
-  const { data: stores = [] } = useQuery({
-    queryKey: ["operator-create-stores", customerId],
-    queryFn: async () => {
-      if (!customerId) return [];
       const { data } = await supabase
         .from("stores")
-        .select("id, name, display_id")
-        .eq("customer_id", customerId)
+        .select("id, name, display_id, customer_id")
         .eq("is_active", true)
-        .order("name");
-      return (data || []) as Store[];
+        .order("name")
+        .limit(100);
+      return (data || []) as any[];
     },
-    enabled: !!customerId,
   });
 
-  const { data: products = [] } = useQuery({
-    queryKey: ["operator-products"],
+  const { data: createProducts = [] } = useQuery({
+    queryKey: ["operator-create-products"],
     queryFn: async () => {
       const { data } = await supabase
         .from("products")
@@ -295,8 +282,8 @@ export function OperatorOrders() {
     }
   };
 
-  const addOrderItem = (product: Product) => {
-    setOrderItems((prev) => {
+  const addCreateItem = (product: Product) => {
+    setCreateOrderItems((prev) => {
       const existing = prev.find((i) => i.product_id === product.id);
       if (existing) {
         return prev.map((i) =>
@@ -310,55 +297,58 @@ export function OperatorOrders() {
     });
   };
 
-  const updateItemQty = (productId: string, qty: number) => {
-    setOrderItems((prev) =>
+  const updateCreateQty = (productId: string, qty: number) => {
+    setCreateOrderItems((prev) =>
       qty <= 0
         ? prev.filter((i) => i.product_id !== productId)
         : prev.map((i) => (i.product_id === productId ? { ...i, quantity: qty } : i))
     );
   };
 
-  const updateItemPrice = (productId: string, price: number) => {
-    setOrderItems((prev) =>
+  const updateCreatePrice = (productId: string, price: number) => {
+    setCreateOrderItems((prev) =>
       prev.map((i) => (i.product_id === productId ? { ...i, unit_price: price } : i))
     );
   };
 
   const handleCreateOrder = async () => {
-    if (!customerId || !storeId) {
-      toast.error("Select customer and store");
+    if (!createStoreId) {
+      toast.error("Select a store");
       return;
     }
-    if (orderType === "detailed" && orderItems.length === 0) {
+    if (createOrderType === "detailed" && createOrderItems.length === 0) {
       toast.error("Add at least one item");
       return;
     }
 
-    setSaving(true);
+    setCreateSaving(true);
     try {
       const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "ORD", seq_name: "order_display_seq" }) as any;
       if (!displayId) throw new Error("Failed to generate order ID");
+
+      const store = createStores.find((s: any) => s.id === createStoreId);
 
       const { data: orderRow, error: orderError } = await supabase
         .from("orders")
         .insert({
           display_id: displayId,
-          store_id: storeId,
-          customer_id: customerId,
-          order_type: orderType,
+          store_id: createStoreId,
+          customer_id: store?.customer_id || null,
+          order_type: createOrderType,
           source: "manual",
           created_by: user!.id,
+          status: "confirmed",
           warehouse_id: currentWarehouse?.id,
-          requirement_note: orderType === "simple" ? requirementNote : null,
+          requirement_note: createOrderType === "simple" ? createRequirementNote : null,
         })
         .select("id")
         .single();
 
       if (orderError) throw orderError;
 
-      if (orderType === "detailed" && orderItems.length > 0) {
+      if (createOrderType === "detailed" && createOrderItems.length > 0) {
         const { error: itemError } = await supabase.from("order_items").insert(
-          orderItems.map((item) => ({
+          createOrderItems.map((item) => ({
             order_id: orderRow.id,
             product_id: item.product_id,
             quantity: item.quantity,
@@ -370,32 +360,30 @@ export function OperatorOrders() {
 
       toast.success("Order created");
 
-      const storeName = stores.find((s) => s.id === storeId)?.name || "store";
+      const storeName = store?.name || "store";
       getApproverUserIds().then((ids) => {
-        const others = ids.filter((id) => id !== user!.id);
-        if (others.length > 0) {
-          sendNotificationToMany(others, {
+        if (ids.length > 0) {
+          sendNotificationToMany(ids, {
             title: "New Order Created",
             message: `Order ${displayId} for ${storeName}`,
             type: "order",
             entityType: "order",
             entityId: orderRow.id,
-          });
+          }, { excludeFromBroadcast: [user!.id] });
         }
       });
       getUsersByRole(["marketer"]).then((ids) => {
-        const others = ids.filter((id) => id !== user!.id);
-        if (others.length > 0) {
-          sendNotificationToMany(others, {
+        if (ids.length > 0) {
+          sendNotificationToMany(ids, {
             title: "New Order Created",
             message: `Order ${displayId} for ${storeName}`,
             type: "order",
             entityType: "order",
             entityId: orderRow.id,
-          });
+          }, { excludeFromBroadcast: [user!.id] });
         }
       });
-      getAgentsForStore(storeId).then((agentIds) => {
+      getAgentsForStore(createStoreId).then((agentIds) => {
         if (agentIds.length > 0) {
           sendNotificationToMany(agentIds, {
             title: "New Order for Your Store",
@@ -408,21 +396,21 @@ export function OperatorOrders() {
       });
 
       setShowCreate(false);
-      setCustomerId("");
-      setStoreId("");
-      setOrderType("simple");
-      setRequirementNote("");
-      setOrderItems([]);
+      setCreateStoreSearch("");
+      setCreateStoreId("");
+      setCreateOrderType("simple");
+      setCreateRequirementNote("");
+      setCreateOrderItems([]);
       qc.invalidateQueries({ queryKey: ["operator-orders"] });
     } catch (err: any) {
       toast.error(err.message || "Failed to create order");
     } finally {
-      setSaving(false);
+      setCreateSaving(false);
     }
   };
 
-  const getItemTotal = () => {
-    return orderItems.reduce((s, i) => s + i.quantity * i.unit_price, 0);
+  const getCreateTotal = () => {
+    return createOrderItems.reduce((s, i) => s + i.quantity * i.unit_price, 0);
   };
 
   if (isLoading) {
@@ -784,7 +772,7 @@ export function OperatorOrders() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <Sheet open={showCreate} onOpenChange={setShowCreate}>
+      <Sheet open={showCreate} onOpenChange={(v) => { if (!v) { setCreateStoreSearch(""); setCreateStoreId(""); setCreateOrderType("simple"); setCreateRequirementNote(""); setCreateOrderItems([]); } setShowCreate(v); }}>
         <SheetContent side="bottom" className="rounded-t-3xl pb-10 px-0 max-h-[90vh] overflow-y-auto">
           <div className="px-6">
             <SheetHeader className="mb-5 text-left">
@@ -793,40 +781,46 @@ export function OperatorOrders() {
 
             <div className="space-y-4">
               <div>
-                <Label className="text-xs font-bold text-muted-foreground mb-2 block">Customer</Label>
-                <Select value={customerId} onValueChange={(v) => { setCustomerId(v); setStoreId(""); }}>
-                  <SelectTrigger className="rounded-xl h-11">
-                    <SelectValue placeholder="Select customer..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {customers.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
                 <Label className="text-xs font-bold text-muted-foreground mb-2 block">Store</Label>
-                <Select value={storeId} onValueChange={setStoreId} disabled={!customerId}>
-                  <SelectTrigger className="rounded-xl h-11">
-                    <SelectValue placeholder={customerId ? "Select store..." : "Select customer first"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {stores.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Input
+                  placeholder="Search stores by name or ID..."
+                  value={createStoreSearch}
+                  onChange={(e) => setCreateStoreSearch(e.target.value)}
+                  className="text-sm h-10 rounded-xl"
+                />
+                {createStoreSearch && (
+                  <div className="mt-1 max-h-36 overflow-y-auto border rounded-xl divide-y bg-background">
+                    {(createStores || [])
+                      .filter((s: any) =>
+                        s.name.toLowerCase().includes(createStoreSearch.toLowerCase()) ||
+                        (s.display_id || "").toLowerCase().includes(createStoreSearch.toLowerCase())
+                      )
+                      .map((s: any) => (
+                        <button key={s.id} type="button"
+                          onClick={() => { setCreateStoreId(s.id); setCreateStoreSearch(""); }}
+                          className={`w-full text-left px-3 py-2.5 text-sm transition-colors hover:bg-accent ${createStoreId === s.id ? "bg-primary/10 font-semibold text-primary" : "text-foreground"}`}
+                        >
+                          <span className="font-medium">{s.name}</span>
+                          <span className="ml-2 font-mono text-[10px] text-muted-foreground">{s.display_id}</span>
+                        </button>
+                      ))}
+                  </div>
+                )}
+                {createStoreId && !createStoreSearch && (
+                  <div className="rounded-xl bg-primary/5 border border-primary/20 px-3 py-2.5 flex items-center justify-between mt-1">
+                    <span className="text-sm font-medium">{(createStores as any[])?.find((s: any) => s.id === createStoreId)?.name || "Store selected"}</span>
+                    <button type="button" onClick={() => { setCreateStoreId(""); }} className="text-xs text-muted-foreground hover:text-foreground font-medium">Change</button>
+                  </div>
+                )}
               </div>
 
               <div>
                 <Label className="text-xs font-bold text-muted-foreground mb-2 block">Order Type</Label>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => setOrderType("simple")}
+                    onClick={() => setCreateOrderType("simple")}
                     className={`flex-1 px-4 py-3 rounded-xl text-xs font-medium transition-colors ${
-                      orderType === "simple"
+                      createOrderType === "simple"
                         ? "bg-primary text-primary-foreground"
                         : "bg-muted text-muted-foreground"
                     }`}
@@ -834,9 +828,9 @@ export function OperatorOrders() {
                     Simple
                   </button>
                   <button
-                    onClick={() => setOrderType("detailed")}
+                    onClick={() => setCreateOrderType("detailed")}
                     className={`flex-1 px-4 py-3 rounded-xl text-xs font-medium transition-colors ${
-                      orderType === "detailed"
+                      createOrderType === "detailed"
                         ? "bg-primary text-primary-foreground"
                         : "bg-muted text-muted-foreground"
                     }`}
@@ -846,12 +840,12 @@ export function OperatorOrders() {
                 </div>
               </div>
 
-              {orderType === "simple" ? (
+              {createOrderType === "simple" ? (
                 <div>
                   <Label className="text-xs font-bold text-muted-foreground mb-2 block">Requirement Note</Label>
                   <textarea
-                    value={requirementNote}
-                    onChange={(e) => setRequirementNote(e.target.value)}
+                    value={createRequirementNote}
+                    onChange={(e) => setCreateRequirementNote(e.target.value)}
                     placeholder="Describe what the customer needs..."
                     className="w-full min-h-[100px] rounded-xl border border-input bg-background px-3 py-2 text-sm resize-none"
                   />
@@ -859,65 +853,49 @@ export function OperatorOrders() {
               ) : (
                 <div className="space-y-3">
                   <Label className="text-xs font-bold text-muted-foreground mb-2 block">Products</Label>
-                  <div className="flex flex-wrap gap-1.5">
-                    {products.map((p) => (
-                      <button
-                        key={p.id}
-                        onClick={() => addOrderItem(p)}
-                        className="px-3 py-1.5 rounded-full text-xs bg-muted hover:bg-muted/80 text-muted-foreground transition-colors"
-                      >
-                        {p.name}
-                      </button>
-                    ))}
-                  </div>
-
-                  {orderItems.length > 0 && (
-                    <div className="space-y-2">
-                      {orderItems.map((item) => (
-                        <div key={item.product_id} className="bg-muted/30 rounded-xl p-3 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <p className="text-xs font-medium">{(item.products as Product)?.name || "Product"}</p>
-                            <button onClick={() => updateItemQty(item.product_id, 0)}>
-                              <X className="h-3.5 w-3.5 text-muted-foreground" />
-                            </button>
+                  <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1">
+                    {createProducts.map((p) => {
+                      const inCart = createOrderItems.find((i) => i.product_id === p.id);
+                      return (
+                        <div key={p.id} className="flex items-center gap-3 p-2 rounded-xl border bg-card">
+                          <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                            <Package className="h-5 w-5 text-muted-foreground" />
                           </div>
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1">
-                              <Label className="text-[10px] text-muted-foreground">Qty</Label>
-                              <Input
-                                type="number"
-                                min={1}
-                                value={item.quantity}
-                                onChange={(e) => updateItemQty(item.product_id, Number(e.target.value))}
-                                className="h-8 text-xs"
-                              />
-                            </div>
-                            <div className="flex-1">
-                              <Label className="text-[10px] text-muted-foreground flex items-center gap-1">
-                                Price
-                                {canModifyPrices && <Pencil className="h-2.5 w-2.5" />}
-                              </Label>
-                              <Input
-                                type="number"
-                                min={0}
-                                step={0.01}
-                                value={item.unit_price}
-                                onChange={(e) => updateItemPrice(item.product_id, Number(e.target.value))}
-                                className="h-8 text-xs"
-                                readOnly={!canModifyPrices}
-                              />
-                            </div>
-                            <div className="text-right">
-                              <Label className="text-[10px] text-muted-foreground">Total</Label>
-                              <p className="text-xs font-semibold mt-1">{fmtINR(item.quantity * item.unit_price)}</p>
-                            </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{p.name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {fmtINR(p.base_price)}
+                              {inCart ? ` × ${inCart.quantity} = ${fmtINR(inCart.quantity * inCart.unit_price)}` : ""}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            {inCart ? (
+                              <>
+                                <Button type="button" variant="outline" size="icon" className="h-8 w-8 rounded-lg"
+                                  onClick={() => updateCreateQty(p.id, inCart.quantity - 1)}>
+                                  <Minus className="h-3.5 w-3.5" />
+                                </Button>
+                                <span className="text-sm font-bold w-6 text-center">{inCart.quantity}</span>
+                                <Button type="button" variant="outline" size="icon" className="h-8 w-8 rounded-lg"
+                                  onClick={() => updateCreateQty(p.id, inCart.quantity + 1)}>
+                                  <Plus className="h-3.5 w-3.5" />
+                                </Button>
+                              </>
+                            ) : (
+                              <Button type="button" variant="outline" size="icon" className="h-8 w-8 rounded-lg"
+                                onClick={() => addCreateItem(p)}>
+                                <Plus className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
                           </div>
                         </div>
-                      ))}
-                      <div className="flex justify-between items-center pt-2 border-t">
-                        <span className="text-xs font-medium">Order Total</span>
-                        <span className="text-sm font-bold">{fmtINR(getItemTotal())}</span>
-                      </div>
+                      );
+                    })}
+                  </div>
+                  {createOrderItems.length > 0 && (
+                    <div className="flex justify-between items-center p-3 rounded-xl border bg-muted/50">
+                      <span className="text-sm font-medium">Order Total ({createOrderItems.length} items)</span>
+                      <span className="text-base font-bold">{fmtINR(getCreateTotal())}</span>
                     </div>
                   )}
                 </div>
@@ -927,14 +905,14 @@ export function OperatorOrders() {
                 size="sm"
                 className="w-full text-xs h-11"
                 onClick={handleCreateOrder}
-                disabled={saving || !customerId || !storeId}
+                disabled={createSaving || !createStoreId}
               >
-                {saving ? (
+                {createSaving ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-1" />
                 ) : (
                   <ShoppingCart className="h-4 w-4 mr-1" />
                 )}
-                {saving ? "Creating..." : "Create Order"}
+                {createSaving ? "Creating..." : "Create Order"}
               </Button>
             </div>
           </div>

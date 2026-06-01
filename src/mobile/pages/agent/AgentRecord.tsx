@@ -19,7 +19,9 @@ import { resolveCreditLimit } from "@/lib/creditLimit";
 import { validateCreditLimitOffline } from "@/lib/offlineCreditValidation";
 import { StorePickerSheet, StoreOption } from "@/mobile/components/StorePickerSheet";
 import { cn } from "@/lib/utils";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { SaleReceipt } from "@/components/shared/SaleReceipt";
+import { afterSaleSaved, afterTransactionSaved } from "@/lib/mutationHelpers";
 
 interface SaleItem {
   product_id: string;
@@ -28,11 +30,12 @@ interface SaleItem {
 }
 
 // ─── Record Sale ─────────────────────────────────────────────────────────────
-function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null }) {
+function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOption | null; onSuccess?: () => void }) {
   const { user, role } = useAuth();
   const isAdmin = role === "super_admin" || role === "manager";
   const { allowed: canOverridePrice } = usePermission("price_override");
   const { allowed: canRecordBehalf } = usePermission("record_behalf");
+  const { allowed: canBackdate } = usePermission("backdate");
   const qc = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [store, setStore] = useState<StoreOption | null>(null);
@@ -44,7 +47,7 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
   const [saleDate, setSaleDate] = useState("");
   const [showProductSearch, setShowProductSearch] = useState(false);
   const [showOrders, setShowOrders] = useState(false);
-  const [lastSaleId, setLastSaleId] = useState<string | null>(null);
+  const [receiptSaleId, setReceiptSaleId] = useState<string | null>(null);
 
   useEffect(() => {
     if (preselectStore) {
@@ -169,6 +172,13 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
     }).filter(Boolean));
   };
 
+  const setQtyDirect = (productId: string, value: string) => {
+    const parsed = parseInt(value, 10);
+    if (value === "") { setItems(items.filter((i) => i.product_id !== productId)); return; }
+    if (!Number.isFinite(parsed) || parsed < 0) return;
+    setItems(items.map((i) => i.product_id === productId ? { ...i, quantity: parsed || 1 } : i));
+  };
+
   const totalAmount = items.reduce((s, i) => s + i.quantity * i.unit_price, 0);
   const cash = parseFloat(cashAmount) || 0;
   const upi = parseFloat(upiAmount) || 0;
@@ -224,8 +234,11 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
     ? resolveCreditLimit(store, storeTypes as any[], customers as any[])
     : null;
 
-  const creditExceeded = !!(creditLimitInfo && creditLimitInfo.limit > 0 && newOutstanding > creditLimitInfo.limit);
-  const creditWarning = !!(creditLimitInfo && creditLimitInfo.limit > 0 && newOutstanding > creditLimitInfo.limit * 0.8 && !creditExceeded);
+  const { data: settings } = useCompanySettings();
+  const isCreditCheckEnabled = settings?.credit_limit_check !== "false";
+
+  const creditExceeded = isCreditCheckEnabled && !!(creditLimitInfo && creditLimitInfo.limit > 0 && newOutstanding > creditLimitInfo.limit);
+  const creditWarning = isCreditCheckEnabled && !!(creditLimitInfo && creditLimitInfo.limit > 0 && newOutstanding > creditLimitInfo.limit * 0.8 && !creditExceeded);
 
   const updateUnitPrice = (productId: string, value: string) => {
     const parsed = Number(value);
@@ -284,19 +297,21 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
       new_outstanding: newOutstanding,
       ...(saleDate ? { created_at: new Date(saleDate).toISOString() } : {}),
     };
-    const saleItems = items.map((i) => ({ product_id: i.product_id, quantity: i.quantity, unit_price: i.unit_price }));
+    const saleItems = items.map((i) => ({ product_id: i.product_id, quantity: i.quantity, unit_price: i.unit_price, total_price: i.quantity * i.unit_price }));
 
     if (!navigator.onLine) {
-      const offlineCredit = await validateCreditLimitOffline(store.id, outstandingFromSale, isAdmin);
-      if (!offlineCredit.valid && !isAdmin) {
-        toast.error(offlineCredit.warning || "Credit limit exceeded. Cannot queue sale offline.");
-        setSaving(false);
-        return;
-      }
-      if (offlineCredit.exceeded && !isAdmin) {
-        toast.error("Credit limit exceeded. Cannot queue sale offline.");
-        setSaving(false);
-        return;
+      if (isCreditCheckEnabled) {
+        const offlineCredit = await validateCreditLimitOffline(store.id, outstandingFromSale, isAdmin);
+        if (!offlineCredit.valid && !isAdmin) {
+          toast.error(offlineCredit.warning || "Credit limit exceeded. Cannot queue sale offline.");
+          setSaving(false);
+          return;
+        }
+        if (offlineCredit.exceeded && !isAdmin) {
+          toast.error("Credit limit exceeded. Cannot queue sale offline.");
+          setSaving(false);
+          return;
+        }
       }
       await addToQueue({
         id: crypto.randomUUID(), type: "sale",
@@ -322,6 +337,7 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
       p_outstanding_amount: outstandingFromSale,
       p_sale_items: saleItems,
       p_created_at: saleDate ? new Date(saleDate).toISOString() : null,
+      p_expected_outstanding: store?.outstanding ?? null,
     });
 
     if (error) {
@@ -353,10 +369,13 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
 
     toast.success("Sale recorded successfully");
     setSaving(false);
-    if (saleRow?.sale_id) setLastSaleId(saleRow.sale_id);
     resetSale();
-    qc.invalidateQueries({ queryKey: ["sales"] });
-    qc.invalidateQueries({ queryKey: ["mobile-agent-sales-today"] });
+    afterSaleSaved(qc, { isMobile: true, storeId: store?.id });
+    if (saleRow?.sale_id) {
+      setReceiptSaleId(saleRow.sale_id);
+    } else {
+      onSuccess?.();
+    }
   };
 
   const resetSale = () => {
@@ -501,7 +520,7 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
               </select>
             </div>
           )}
-          {isAdmin && (
+          {canBackdate && (
             <div>
               <Label className="text-xs text-muted-foreground dark:text-muted-foreground font-semibold">Sale Date (optional)</Label>
               <Input
@@ -556,28 +575,48 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
                         </div>
                       </div>
                       {inCart ? (
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-xs text-muted-foreground font-medium">
-                            ₹{(inCart.quantity * inCart.unit_price).toLocaleString("en-IN")}
-                          </span>
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs text-muted-foreground font-medium mr-1">
+                              ₹{(inCart.quantity * inCart.unit_price).toLocaleString("en-IN")}
+                            </span>
+                            <button
+                              className="h-10 w-10 rounded-xl border-2 border-border border flex items-center justify-center hover:bg-muted/80 transition-colors active:scale-90"
+                              onClick={() => updateQty(product.id, -1)}
+                              aria-label={`Decrease ${product.name} quantity`}
+                            >
+                              <Minus className="h-4.5 w-4.5 text-muted-foreground" />
+                            </button>
+                          <Input
+                            type="number"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            min="1"
+                            value={inCart.quantity}
+                            onChange={(e) => setQtyDirect(product.id, e.target.value)}
+                            className="h-10 w-14 text-sm font-bold text-center rounded-xl border-border border"
+                          />
                           <button
-                            className="h-10 w-10 rounded-xl border-2 border-border border flex items-center justify-center hover:bg-muted/80 transition-colors active:scale-90"
-                            onClick={() => updateQty(product.id, -1)}
-                            aria-label={`Decrease ${product.name} quantity`}
-                          >
-                            <Minus className="h-4.5 w-4.5 text-muted-foreground" />
-                          </button>
-                          <span className="text-sm font-bold text-foreground dark:text-white w-7 text-center">
-                            {inCart.quantity}
-                          </span>
-                          <button
-                            className="h-10 w-10 rounded-xl bg-blue-600 flex items-center justify-center hover:bg-blue-700 active:scale-90 transition-all"
+                            className="h-10 w-10 rounded-xl bg-blue-600 flex items-center justify-center hover:bg-blue-700 active:scale-90 transition-all text-white"
                             onClick={() => updateQty(product.id, 1)}
                             aria-label={`Increase ${product.name} quantity`}
                           >
-                            <Plus className="h-4.5 w-4.5 text-white" />
+                            <Plus className="h-4.5 w-4.5" />
                           </button>
                         </div>
+                        {canOverridePrice && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] text-muted-foreground">₹</span>
+                            <Input
+                              type="number"
+                              min="0"
+                              value={inCart.unit_price}
+                              onChange={(e) => updateUnitPrice(product.id, e.target.value)}
+                              className="h-8 w-20 text-xs text-center font-semibold rounded-xl border-border border"
+                            />
+                          </div>
+                        )}
+                      </div>
                       ) : (
                         <button
                           className="h-9 w-9 rounded-xl bg-blue-600 flex items-center justify-center hover:bg-blue-700 active:scale-90 transition-all shadow-sm"
@@ -649,19 +688,9 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
                 return (
                   <div key={item.product_id} className="flex justify-between items-center gap-2 text-xs text-muted-foreground dark:text-muted-foreground">
                     <span className="flex-1">{p?.name ?? "Product"} × {item.quantity}</span>
-                    {canOverridePrice ? (
-                      <Input
-                        type="number"
-                        min="0"
-                        value={item.unit_price}
-                        onChange={(e) => updateUnitPrice(item.product_id, e.target.value)}
-                        className="h-7 w-24 text-xs rounded-lg"
-                      />
-                    ) : (
-                      <span className="font-semibold text-foreground">
-                        ₹{(item.quantity * item.unit_price).toLocaleString("en-IN")}
-                      </span>
-                    )}
+                    <span className="font-semibold text-foreground">
+                      ₹{(item.quantity * item.unit_price).toLocaleString("en-IN")}
+                    </span>
                   </div>
                 );
               })}
@@ -787,6 +816,15 @@ function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null })
           setUpiAmount("");
         }}
       />
+
+      <SaleReceipt
+        saleId={receiptSaleId || ""}
+        open={!!receiptSaleId}
+        onClose={() => {
+          setReceiptSaleId(null);
+          onSuccess?.();
+        }}
+      />
     </div>
   );
 }
@@ -908,8 +946,7 @@ function RecordPayment({ preselectStore }: { preselectStore?: StoreOption | null
     toast.success("Payment recorded");
     setSaving(false);
     resetPayment();
-    qc.invalidateQueries({ queryKey: ["transactions"] });
-    qc.invalidateQueries({ queryKey: ["mobile-agent-tx-today"] });
+    afterTransactionSaved(qc, { isMobile: true, storeId: store?.id });
   };
 
   const resetPayment = () => {
@@ -1118,6 +1155,7 @@ interface AgentRecordProps {
   preselectTab?: "sale" | "payment";
   allowSale?: boolean;
   allowPayment?: boolean;
+  onSuccess?: () => void;
 }
 
 export function AgentRecord({
@@ -1125,6 +1163,7 @@ export function AgentRecord({
   preselectTab,
   allowSale = true,
   allowPayment = true,
+  onSuccess,
 }: AgentRecordProps) {
   const initialTab = !allowSale ? "payment" : (preselectTab ?? "sale");
   const [activeTab, setActiveTab] = useState<string>(initialTab);
@@ -1179,7 +1218,7 @@ export function AgentRecord({
       </div>
 
       <div className="mt-4">
-        {allowSale && activeTab === "sale" && <RecordSale preselectStore={preselectStore} />}
+        {allowSale && activeTab === "sale" && <RecordSale preselectStore={preselectStore} onSuccess={onSuccess} />}
         {allowPayment && activeTab === "payment" && <RecordPayment preselectStore={preselectStore} />}
       </div>
     </div>

@@ -101,7 +101,7 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
-      staleTime: 30_000,
+      staleTime: 5 * 60 * 1000,
     },
     mutations: {
       onError: (error) => {
@@ -238,7 +238,7 @@ const App = () => {
 <Route path="/staff/:userId" element={<RoleGuard allowed={["super_admin", "manager"]}><StaffProfile /></RoleGuard>} />
 <Route path="/staff/:userId/edit" element={<RoleGuard allowed={["super_admin", "manager"]}><StaffProfile /></RoleGuard>} />
 <Route path="/income" element={<RoleGuard allowed={["super_admin", "manager"]}><Income /></RoleGuard>} />
-               <Route path="/settings" element={<RoleGuard allowed={["super_admin", "manager"]}><Settings /></RoleGuard>} />
+               <Route path="/settings" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer", "operator", "customer"]}><Settings /></RoleGuard>} />
                <Route path="/map" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer"]}><MapPage /></RoleGuard>} />
                <Route path="/profile" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer", "operator", "customer"]}><UserProfile /></RoleGuard>} />
                <Route path="/cost-insights" element={<RoleGuard allowed={["super_admin", "manager"]}><CostInsights /></RoleGuard>} />

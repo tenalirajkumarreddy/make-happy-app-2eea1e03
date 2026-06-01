@@ -23,11 +23,12 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePermission } from "@/hooks/usePermission";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
+import { afterSaleSaved } from "@/lib/mutationHelpers";
 import {
   Package,
   Plus,
@@ -104,7 +105,6 @@ export function OrderFulfillmentDialog({
   onOpenChange,
   onFulfilled,
 }: OrderFulfillmentDialogProps) {
-  const { toast } = useToast();
   const queryClient = useQueryClient();
 
    // State
@@ -268,10 +268,8 @@ const [selectedProduct, setSelectedProduct] = useState<string>("");
         setUpiAmount("0");
       } catch (error) {
         console.error("Error loading fulfillment data:", error);
-        toast({
-          title: "Error loading data",
+        toast.error("Error loading data", {
           description: "Failed to load order details. Please try again.",
-          variant: "destructive",
         });
       } finally {
         setLoading(false);
@@ -290,10 +288,8 @@ const [selectedProduct, setSelectedProduct] = useState<string>("");
 
     // Check if already in items
     if (items.some((item) => item.product_id === selectedProduct)) {
-      toast({
-        title: "Product already added",
+      toast.error("Product already added", {
         description: "Increase quantity instead of adding again.",
-        variant: "destructive",
       });
       return;
     }
@@ -376,30 +372,24 @@ const hasInsufficientStock = items.some((item) => {
 const handleSubmit = async () => {
   if (!order) return;
   if (items.length === 0) {
-    toast({
-      title: "No items",
+    toast.error("No items", {
       description: "Please add at least one item to the order.",
-      variant: "destructive",
     });
     return;
   }
 
   // Check permission to fulfill orders
   if (!canFulfill) {
-    toast({
-      title: "Permission Denied",
+    toast.error("Permission Denied", {
       description: "You don't have permission to fulfill orders.",
-      variant: "destructive",
     });
     return;
   }
 
   // Also need record_sale permission to create sale from order
   if (!hasSalePermission) {
-    toast({
-      title: "Permission Denied",
+    toast.error("Permission Denied", {
       description: "You don't have permission to record sales.",
-      variant: "destructive",
     });
     return;
   }
@@ -412,10 +402,8 @@ const handleSubmit = async () => {
 
   if (insufficientItems.length > 0) {
     const itemNames = insufficientItems.map(i => i.product_name).join(", ");
-    toast({
-      title: "Insufficient Stock",
+    toast.error("Insufficient Stock", {
       description: `Cannot fulfill order. Insufficient stock for: ${itemNames}. Please reduce quantities or add stock.`,
-      variant: "destructive",
     });
     return;
   }
@@ -449,74 +437,42 @@ const handleSubmit = async () => {
     // record_sale requires customer_id to be NOT NULL
     const customerId = order.customer_id || order.stores?.customer_id;
     if (!customerId) {
-      toast({
-        title: "Missing Customer",
+      toast.error("Missing Customer", {
         description: "This order is not linked to a customer. Please check the order details.",
-        variant: "destructive",
       });
       setSubmitting(false);
       return;
     }
 
-    // Call record_sale RPC - pass 0 to let it compute from sale_items
+    // Call record_sale RPC - pass subtotal and p_fulfilled_order_id to let the DB handle it atomically
     const { error: saleError } = await (supabase.rpc("record_sale", {
       p_display_id: saleDisplayId,
       p_store_id: order.store_id,
       p_customer_id: customerId,
       p_recorded_by: user.id,
       p_logged_by: null,
-      p_total_amount: 0, // Let DB compute from sale_items
+      p_total_amount: subtotal,
       p_cash_amount: parseFloat(cashAmount) || 0,
       p_upi_amount: parseFloat(upiAmount) || 0,
       p_outstanding_amount: outstandingAmount,
       p_sale_items: saleItems,
       p_created_at: null,
+      p_expected_outstanding: null,
+      p_fulfilled_order_id: order.id,
     } as any));
 
-      if (saleError) throw saleError;
+    if (saleError) throw saleError;
 
-      // Get the sale we just created to link it to the order
-        const { data: newSale, error: fetchSaleError } = await ((supabase as any)
-        .from("sales")
-        .select("id")
-        .eq("display_id", saleDisplayId)
-        .single());
-
-      if (fetchSaleError) throw fetchSaleError;
-
-      // Update the sale with order_id reference
-      const { error: linkError } = await supabase
-        .from("sales")
-        .update({ order_id: order.id } as any)
-        .eq("id", newSale.id as any);
-
-      if (linkError) throw linkError;
-
-      // Update order status to delivered with sale link
-      const { error: orderError } = await supabase
-        .from("orders")
-        .update({
-          status: "delivered",
-          fulfilled_by: user.id,
-          fulfilled_by_sale_id: newSale.id,
-          delivered_at: new Date().toISOString(),
-          updated_by: user.id,
-        } as any)
-        .eq("id", order.id as any);
-
-      if (orderError) throw orderError;
-
-      // Send notification to customer if exists
-      if (order.stores?.customer_id) {
-        await (supabase.from("notifications") as any).insert({
-          user_id: order.stores.customer_id,
-          title: "Order Delivered",
-          message: `Your order ${order.display_id} has been delivered and recorded as sale ${saleDisplayId}.`,
-          type: "order",
-          reference_id: order.id,
-          reference_type: "order",
-        });
-      }
+    // Send notification to customer if exists
+    if (customerId) {
+      await sendNotificationToMany([customerId], {
+        title: "Order Delivered",
+        message: `Your order ${order.display_id} has been delivered and recorded as sale ${saleDisplayId}.`,
+        type: "order",
+        entityType: "order",
+        entityId: order.id,
+      }).catch((err) => console.error("Notification error (customer):", err));
+    }
 
     // Send notification to admins/managers
     const storeName = order.stores?.name || "store";
@@ -579,27 +535,21 @@ const handleSubmit = async () => {
         },
       });
 
-      toast({
-        title: "Order Fulfilled",
+      toast.success("Order Fulfilled", {
         description: `Sale ${saleDisplayId} created successfully.`,
       });
 
-      // Invalidate queries
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
-      queryClient.invalidateQueries({ queryKey: ["sales"] });
-      queryClient.invalidateQueries({ queryKey: ["customer-balances"] });
+      afterSaleSaved(queryClient, { storeId: order.store_id });
 
       onOpenChange(false);
       onFulfilled?.();
     } catch (error) {
       console.error("Fulfillment error:", error);
-      toast({
-        title: "Fulfillment Failed",
+      toast.error("Fulfillment Failed", {
         description:
           error instanceof Error
             ? error.message
             : "Failed to complete order. Please try again.",
-        variant: "destructive",
       });
     } finally {
       setSubmitting(false);
@@ -699,7 +649,7 @@ const handleSubmit = async () => {
                               }`}>
                                 Stock: {productStock.get(item.product_id) || 0} available
                                 {(productStock.get(item.product_id) || 0) < item.quantity && (
-                                  <span className="ml-1">ΓÜá∩╕Å Insufficient</span>
+                                  <span className="ml-1">⚠️ Insufficient</span>
                                 )}
                               </div>
                             )}
@@ -742,7 +692,7 @@ const handleSubmit = async () => {
 
                           {/* Total */}
                           <div className="w-20 text-right font-medium">
-                            Γé╣{item.total.toFixed(2)}
+                            ₹{item.total.toFixed(2)}
                           </div>
 
                           {/* Remove */}
@@ -766,7 +716,7 @@ const handleSubmit = async () => {
               {/* Subtotal */}
               <div className="flex justify-between items-center text-lg font-semibold">
                 <span>Subtotal</span>
-                <span>Γé╣{subtotal.toFixed(2)}</span>
+                <span>₹{subtotal.toFixed(2)}</span>
               </div>
 
               {/* Payment Section */}
@@ -823,17 +773,17 @@ const handleSubmit = async () => {
                 <div className="bg-muted p-3 rounded-lg space-y-1 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Previous Outstanding</span>
-                    <span>Γé╣{oldOutstanding.toFixed(2)}</span>
+                    <span>₹{oldOutstanding.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">This Order Outstanding</span>
-                    <span>Γé╣{outstandingAmount.toFixed(2)}</span>
+                    <span>₹{outstandingAmount.toFixed(2)}</span>
                   </div>
                   <Separator className="my-2" />
                   <div className="flex justify-between font-medium">
                     <span>New Total Outstanding</span>
                     <span className={newOutstanding > 0 ? "text-orange-600" : "text-green-600"}>
-                      Γé╣{newOutstanding.toFixed(2)}
+                      ₹{newOutstanding.toFixed(2)}
                     </span>
                   </div>
                 </div>

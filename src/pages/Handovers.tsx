@@ -450,29 +450,30 @@ const Handovers = () => {
       : [];
   }, [expenseClaims, canApproveExpenses]);
 
-  // Read highlight param from URL and open review dialog
+  // Read highlight param from URL and handle focuses
   const [searchParams] = useSearchParams();
+  const highlightId = searchParams.get("highlight");
+
   useEffect(() => {
-    const highlightId = searchParams.get("highlight");
     if (highlightId && expenseClaims.length > 0) {
       const expense = expenseClaims.find((e: any) => e.id === highlightId);
-      if (expense) {
-        setHighlightExpenseId(highlightId);
+      if (expense && expense.status === "pending") {
         openReviewDialog(expense);
-        // Clear the URL param so it doesn't re-trigger on page refresh
-        navigate("/handovers", { replace: true });
       }
     }
-  }, [searchParams, expenseClaims]);
+  }, [highlightId, expenseClaims]);
 
-  // Scroll to and highlight the expense claim
+  // Scroll to highlighted handover or expense claim once loaded
   useEffect(() => {
-    if (highlightExpenseId && highlightedRef.current[highlightExpenseId]) {
-      highlightedRef.current[highlightExpenseId]?.scrollIntoView({ behavior: "smooth", block: "center" });
-      const timer = setTimeout(() => setHighlightExpenseId(null), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [highlightExpenseId]);
+    if (!highlightId) return;
+    const timer = setTimeout(() => {
+      const el = document.getElementById(`handover-${highlightId}`) || document.getElementById(`expense-${highlightId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [highlightId, handovers, expenseClaims]);
 
   const handleCreate = async () => {
     if (!toUserId || !amount || Number(amount) <= 0) {
@@ -1048,8 +1049,13 @@ const Handovers = () => {
       : item.status === "cancelled" ? "border-l-gray-400"
       : "border-l-amber-500";
 
+    const isHighlighted = highlightId === item.id;
+
     return (
-      <div className={`flex items-center gap-3 rounded-lg border bg-card px-4 py-3 hover:shadow-sm transition-shadow border-l-4 ${borderAccent}`}>
+      <div 
+        id={`handover-${item.id}`} 
+        className={`flex items-center gap-3 rounded-lg border bg-card px-4 py-3 hover:shadow-sm transition-all border-l-4 ${borderAccent} ${isHighlighted ? "animate-highlight" : ""}`}
+      >
         <UserHoverCard userId={item.handed_to} profileMap={profileMap} size="md" />
 
         <div className="flex-1 min-w-0">
@@ -1130,7 +1136,6 @@ const Handovers = () => {
   const ExpenseClaimCard = ({ item, showReviewAction = false }: { item: any; showReviewAction?: boolean }) => {
     const isOwner = item.user_id === user?.id;
     const isLoading = actionLoading === item.id;
-    const isHighlighted = highlightExpenseId === item.id;
     const statusLabel = item.status === "approved" ? "Approved"
       : item.status === "rejected" ? "Rejected"
       : item.status === "cancelled" ? "Cancelled"
@@ -1141,6 +1146,7 @@ const Handovers = () => {
     const wasAmountChanged = item.status === "approved" && item.approved_amount && Number(item.approved_amount) !== Number(item.amount);
     const wasCategoryChanged = item.status === "approved" && item.category_id !== item.original_category_id;
 
+    const isHighlighted = highlightId === item.id;
     const badgeStatus = item.status === "approved" ? "success"
       : item.status === "rejected" ? "rejected"
       : item.status === "cancelled" ? "cancelled"
@@ -1153,10 +1159,11 @@ const Handovers = () => {
 
     return (
       <div
-        ref={(el) => { highlightedRef.current[item.id] = el; }}
-        className={`group flex items-center gap-4 rounded-lg border bg-card px-4 py-3 hover:shadow-sm transition-shadow border-l-4 ${borderAccent} ${
-          isHighlighted ? "ring-2 ring-primary ring-offset-2 animate-pulse" : ""
-        }`}>
+        id={`expense-${item.id}`}
+        className={`group flex items-center gap-4 rounded-lg border bg-card px-4 py-3 hover:shadow-sm transition-all border-l-4 ${borderAccent} ${
+          isHighlighted ? "animate-highlight" : ""
+        }`}
+      >
         <div className="flex items-center justify-center h-10 w-10 rounded-lg shrink-0" style={{ backgroundColor: `${getCategoryColor(item.category_id)}20` }}>
           <Receipt className="h-5 w-5" style={{ color: getCategoryColor(item.category_id) }} />
         </div>
