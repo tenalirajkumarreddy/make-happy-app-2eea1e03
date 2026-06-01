@@ -51,7 +51,6 @@ import { useRouteAccess } from "@/hooks/useRouteAccess";
 import { getCurrentPosition } from "@/lib/capacitorUtils";
 import { CANCEL_REASONS } from "@/lib/constants";
 import { OrderStockSummary } from "@/components/orders/OrderStockSummary";
-import { EditOrderSheet } from "@/components/orders/EditOrderSheet";
 import { ProformaView } from "@/components/orders/ProformaView";
 import { QrStoreSelector } from "@/components/shared/QrStoreSelector";
 import { usePermission } from "@/hooks/usePermission";
@@ -315,7 +314,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
   const [createOrderType, setCreateOrderType] = useState<"simple" | "detailed">("simple");
   const [createRequirementNote, setCreateRequirementNote] = useState("");
   const [createOrderItems, setCreateOrderItems] = useState<OrderItemInput[]>([{ product_id: "", quantity: 1 }]);
-  const [editOrder, setEditOrder] = useState<OrderRow | null>(null);
+  const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [existingOrderForStore, setExistingOrderForStore] = useState<ActiveOrderInfo | null>(null);
   const [existingOrderStoreName, setExistingOrderStoreName] = useState("");
 
@@ -391,10 +390,14 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
         .in("status", ["pending", "confirmed"]);
       if (error) throw error;
 
-      await supabase
-        .from("proforma_invoices")
-        .update({ status: "cancelled", deleted_at: new Date().toISOString() })
-        .eq("order_id", cancelOrderId);
+      try {
+        await supabase
+          .from("proforma_invoices")
+          .update({ status: "cancelled", deleted_at: new Date().toISOString() })
+          .eq("order_id", cancelOrderId);
+      } catch {
+        // proforma cleanup is best-effort
+      }
 
       toast.success("Order cancelled");
       setCancelOrderId(null);
@@ -493,6 +496,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
     setCreateOrderType("simple");
     setCreateRequirementNote("");
     setCreateOrderItems([{ product_id: "", quantity: 1 }]);
+    setEditingOrderId(null);
   };
 
   const handleCreateOrder = async () => {
@@ -510,62 +514,95 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
     }
     setCreateSaving(true);
     try {
-      const activeOrder = await getActiveOrderForStore(supabase, createStoreId);
-      if (activeOrder) {
-        const store = routeList.flatMap((r) => r.stores).find((s) => s.id === createStoreId);
-        setExistingOrderStoreName(store?.name || "");
-        setExistingOrderForStore(activeOrder);
-        setCreateSaving(false);
-        return;
-      }
-
-      const rpcClient = supabase as unknown as SupabaseRpcClient;
-      const { data: displayId, error: displayError } = await rpcClient.rpc("generate_display_id", {
-        prefix: "ORD",
-        seq_name: "ord_display_seq",
-      });
-      if (displayError) throw displayError;
-      if (!displayId) throw new Error("Failed to generate order ID");
-
-      const storeData = routeList.flatMap((r) => r.stores).find((s) => s.id === createStoreId);
-
-      const { data: orderRow, error: orderError } = await supabase
-        .from("orders")
-        .insert({
-          display_id: displayId,
-          store_id: createStoreId,
-          customer_id: storeData?.customer_id || null,
-          order_type: createOrderType,
-          source: "manual",
-          created_by: user!.id,
-          status: "confirmed",
-          requirement_note: createOrderType === "simple" ? createRequirementNote : null,
-        })
-        .select("id")
-        .single();
-
-      if (orderError) throw orderError;
-
-      if (createOrderType === "detailed") {
-        const validItems = createOrderItems.filter((item) => item.product_id);
-        if (validItems.length > 0) {
-          const { error: itemError } = await supabase.from("order_items").insert(
-            validItems.map((item) => ({
-              order_id: orderRow.id,
-              product_id: item.product_id,
-              quantity: item.quantity,
-            }))
-          );
-          if (itemError) throw itemError;
+      if (!editingOrderId) {
+        const activeOrder = await getActiveOrderForStore(supabase, createStoreId);
+        if (activeOrder) {
+          const store = routeList.flatMap((r) => r.stores).find((s) => s.id === createStoreId);
+          setExistingOrderStoreName(store?.name || "");
+          setExistingOrderForStore(activeOrder);
+          setCreateSaving(false);
+          return;
         }
       }
 
-      toast.success("Order created");
+      if (editingOrderId) {
+        const { error: orderError } = await supabase
+          .from("orders")
+          .update({
+            order_type: createOrderType,
+            requirement_note: createOrderType === "simple" ? createRequirementNote : createRequirementNote || null,
+            updated_by: user!.id,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", editingOrderId)
+          .in("status", ["pending", "confirmed"]);
+        if (orderError) throw orderError;
+
+        if (createOrderType === "detailed") {
+          const validItems = createOrderItems.filter((item) => item.product_id);
+          await supabase.from("order_items").delete().eq("order_id", editingOrderId);
+          if (validItems.length > 0) {
+            const { error: itemError } = await supabase.from("order_items").insert(
+              validItems.map((item) => ({
+                order_id: editingOrderId,
+                product_id: item.product_id,
+                quantity: item.quantity,
+              }))
+            );
+            if (itemError) throw itemError;
+          }
+        }
+
+        toast.success("Order updated");
+      } else {
+        const rpcClient = supabase as unknown as SupabaseRpcClient;
+        const { data: displayId, error: displayError } = await rpcClient.rpc("generate_display_id", {
+          prefix: "ORD",
+          seq_name: "ord_display_seq",
+        });
+        if (displayError) throw displayError;
+        if (!displayId) throw new Error("Failed to generate order ID");
+
+        const storeData = routeList.flatMap((r) => r.stores).find((s) => s.id === createStoreId);
+
+        const { data: orderRow, error: orderError } = await supabase
+          .from("orders")
+          .insert({
+            display_id: displayId,
+            store_id: createStoreId,
+            customer_id: storeData?.customer_id || null,
+            order_type: createOrderType,
+            source: "manual",
+            created_by: user!.id,
+            status: "confirmed",
+            requirement_note: createOrderType === "simple" ? createRequirementNote : null,
+          })
+          .select("id")
+          .single();
+
+        if (orderError) throw orderError;
+
+        if (createOrderType === "detailed") {
+          const validItems = createOrderItems.filter((item) => item.product_id);
+          if (validItems.length > 0) {
+            const { error: itemError } = await supabase.from("order_items").insert(
+              validItems.map((item) => ({
+                order_id: orderRow.id,
+                product_id: item.product_id,
+                quantity: item.quantity,
+              }))
+            );
+            if (itemError) throw itemError;
+          }
+        }
+      }
+
+      toast.success(editingOrderId ? "Order updated" : "Order created");
       setShowCreate(false);
       resetCreateForm();
       qc.invalidateQueries({ queryKey: ["mobile-agent-all-orders"] });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to create order";
+      const message = error instanceof Error ? error.message : "Failed to save order";
       toast.error(message);
     } finally {
       setCreateSaving(false);
@@ -1257,16 +1294,32 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
                         </button>
                         {(order.status === "pending" || order.status === "confirmed") && canModifyOrders && (
                           <button
-                            onClick={() => { setEditOrder(order); }}
+                            onClick={() => {
+                              setEditingOrderId(order.id);
+                              setCreateStoreId(order.store_id);
+                              setCreateSelectedStoreName(order.stores?.name || "");
+                              setCreateSelectedStoreTypeId(order.stores?.store_type_id || null);
+                              setCreateOrderType(order.order_type);
+                              setCreateRequirementNote(order.requirement_note || "");
+                              setCreateOrderItems(
+                                (order.order_items || []).length > 0
+                                  ? order.order_items.map((item) => ({
+                                      product_id: item.product_id,
+                                      quantity: item.quantity,
+                                    }))
+                                  : [{ product_id: "", quantity: 1 }]
+                              );
+                              setShowCreate(true);
+                            }}
                             className="flex-1 py-3.5 flex items-center justify-center gap-1.5 text-xs font-semibold text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors border-r border"
                           >
                             <Edit className="h-4 w-4 text-amber-400" />
                             Edit
                           </button>
                         )}
-                        {order.status === "pending" && (
+                        {(order.status === "pending" || order.status === "confirmed") && (
                           <>
-                            {canFulfillOrders && (
+                            {order.status === "pending" && canFulfillOrders && (
                               <button
                                 onClick={() => { setFulfillOrder(order); setFulfillCash(""); setFulfillUpi(""); }}
                                 className="flex-1 py-3.5 flex items-center justify-center gap-1.5 text-xs font-semibold text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors border-r border"
@@ -1286,7 +1339,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
                             )}
                           </>
                         )}
-                        {order.status !== "pending" && (
+                        {order.status !== "pending" && order.status !== "confirmed" && (
                           <button
                             onClick={() => { setSelectedOrder(order); setShowDetailModal(true); }}
                             className="flex-1 py-3.5 flex items-center justify-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400 hover:bg-muted/50 transition-colors"
@@ -1707,13 +1760,6 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
           </DialogContent>
         </Dialog>
 
-        <EditOrderSheet
-          order={editOrder}
-          open={!!editOrder}
-          onOpenChange={(o) => { if (!o) setEditOrder(null); }}
-          onSaved={() => qc.invalidateQueries({ queryKey: ["mobile-agent-all-orders"] })}
-        />
-
         <ActiveOrderExistsDialog
           open={!!existingOrderForStore}
           onOpenChange={(o) => { if (!o) setExistingOrderForStore(null); }}
@@ -1731,7 +1777,23 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
             setView("orders");
             setTimeout(() => {
               const found = allOrders?.find((o: any) => o.id === order.id);
-              if (found) setEditOrder(found as any);
+              if (found) {
+                setEditingOrderId(found.id);
+                setCreateStoreId(found.store_id);
+                setCreateSelectedStoreName(found.stores?.name || "");
+                setCreateSelectedStoreTypeId(found.stores?.store_type_id || null);
+                setCreateOrderType(found.order_type);
+                setCreateRequirementNote(found.requirement_note || "");
+                setCreateOrderItems(
+                  (found.order_items || []).length > 0
+                    ? found.order_items.map((item: any) => ({
+                        product_id: item.product_id,
+                        quantity: item.quantity,
+                      }))
+                    : [{ product_id: "", quantity: 1 }]
+                );
+                setShowCreate(true);
+              }
             }, 100);
           }}
         />
