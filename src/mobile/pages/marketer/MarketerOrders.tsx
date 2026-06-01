@@ -9,6 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { afterSaleSaved } from "@/lib/mutationHelpers";
+import { getActiveOrderForStore, type ActiveOrderInfo } from "@/lib/orders";
+import { ActiveOrderExistsDialog } from "@/mobile/components/ActiveOrderExistsDialog";
 import { CANCEL_REASONS } from "@/lib/constants";
 import { OrderStockSummary } from "@/components/orders/OrderStockSummary";
 import { ProformaView } from "@/components/orders/ProformaView";
@@ -93,7 +96,7 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
   const { role } = useAuth();
   const { canAccessRoute } = useRouteAccess(user?.id, role);
 
-  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "delivered" | "cancelled">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "confirmed" | "delivered" | "cancelled">("all");
   const [filterStoreType, setFilterStoreType] = useState("all");
   const [filterRoute, setFilterRoute] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
@@ -114,6 +117,8 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
   const [deliverUpi, setDeliverUpi] = useState("");
   const [viewProformaId, setViewProformaId] = useState<string | null>(null);
   const [editOrder, setEditOrder] = useState<OrderRow | null>(null);
+  const [existingOrderForStore, setExistingOrderForStore] = useState<ActiveOrderInfo | null>(null);
+  const [existingOrderStoreName, setExistingOrderStoreName] = useState("");
 
   useEffect(() => {
     if (!preselectStore) return;
@@ -267,6 +272,15 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
 
     setCreateSaving(true);
     try {
+      const activeOrder = await getActiveOrderForStore(supabase, createStoreId);
+      if (activeOrder) {
+        const store = (createStores || []).find((s: any) => s.id === createStoreId);
+        setExistingOrderStoreName(store?.name || "");
+        setExistingOrderForStore(activeOrder);
+        setCreateSaving(false);
+        return;
+      }
+
       const rpcClient = supabase as unknown as SupabaseRpcClient;
       const { data: displayId, error: displayError } = await rpcClient.rpc("generate_display_id", {
         prefix: "ORD",
@@ -385,7 +399,7 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
         p_cash_amount: cash,
         p_upi_amount: upi,
         p_outstanding_amount: 0,
-        p_sale_items: saleItems.length > 0 ? saleItems : [{ product_id: "00000000-0000-0000-0000-000000000000", quantity: 1, unit_price: total }],
+        p_sale_items: saleItems,
         p_created_at: null,
         p_fulfilled_order_id: fulfillOrder.id,
       });
@@ -395,13 +409,20 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
       setFulfillOrder(null);
       setDeliverCash("");
       setDeliverUpi("");
-      qc.invalidateQueries({ queryKey: ["mobile-marketer-orders"] });
+      afterSaleSaved(qc, { storeId: fulfillOrder.store_id });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to fulfill order";
       toast.error(message);
     } finally {
       setDeliveringId(null);
     }
+  };
+
+  const scrollToOrder = (orderId: string) => {
+    setTimeout(() => {
+      const el = document.getElementById(`order-card-${orderId}`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
   };
 
   return (
@@ -422,7 +443,7 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
 
       <div className="px-4 -mt-4 space-y-3">
         <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-1 flex gap-1">
-          {(["all", "pending", "delivered", "cancelled"] as const).map((status) => (
+          {(["all", "pending", "confirmed", "delivered", "cancelled"] as const).map((status) => (
             <button
               key={status}
               onClick={() => setStatusFilter(status)}
@@ -491,7 +512,7 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
         ) : (
           <div className="space-y-2">
             {filteredOrders.map((order) => (
-              <div key={order.id} className="rounded-2xl bg-card border border-border shadow-sm overflow-hidden">
+              <div key={order.id} id={`order-card-${order.id}`} className="rounded-2xl bg-card border border-border shadow-sm overflow-hidden">
                 <div className={`h-1 ${
                   order.status === "pending" ? "bg-amber-400" :
                   order.status === "delivered" ? "bg-emerald-400" :
@@ -541,7 +562,7 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
                     <Button size="sm" variant="outline" className="h-9 rounded-xl flex-1 min-w-[120px]" onClick={() => { setViewProformaId(order.id); }}>
                       <FileText className="h-4 w-4 mr-1.5" /> Proforma
                     </Button>
-                    {order.status === "pending" && (
+                    {(order.status === "pending" || order.status === "confirmed") && (
                       <>
                         <Button size="sm" variant="outline" className="h-9 rounded-xl flex-1 min-w-[80px]" onClick={() => { setEditOrder(order); }}>
                           <Edit className="h-4 w-4 mr-1.5" /> Edit
@@ -806,6 +827,27 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
         open={!!editOrder}
         onOpenChange={(o) => { if (!o) setEditOrder(null); }}
         onSaved={() => qc.invalidateQueries({ queryKey: ["mobile-marketer-orders"] })}
+      />
+
+      <ActiveOrderExistsDialog
+        open={!!existingOrderForStore}
+        onOpenChange={(o) => { if (!o) setExistingOrderForStore(null); }}
+        orderDisplayId={existingOrderForStore?.display_id || ""}
+        storeName={existingOrderStoreName}
+        onView={() => {
+          const id = existingOrderForStore?.id;
+          setExistingOrderForStore(null);
+          if (id) scrollToOrder(id);
+        }}
+        onEdit={() => {
+          const order = existingOrderForStore;
+          if (!order) return;
+          setExistingOrderForStore(null);
+          setTimeout(() => {
+            const found = orders?.find((o: any) => o.id === order.id);
+            if (found) setEditOrder(found as any);
+          }, 100);
+        }}
       />
     </div>
   );

@@ -55,6 +55,9 @@ import { EditOrderSheet } from "@/components/orders/EditOrderSheet";
 import { ProformaView } from "@/components/orders/ProformaView";
 import { QrStoreSelector } from "@/components/shared/QrStoreSelector";
 import { usePermission } from "@/hooks/usePermission";
+import { afterSaleSaved } from "@/lib/mutationHelpers";
+import { getActiveOrderForStore, type ActiveOrderInfo } from "@/lib/orders";
+import { ActiveOrderExistsDialog } from "@/mobile/components/ActiveOrderExistsDialog";
 import type { StoreOption } from "@/mobile/components/StorePickerSheet";
 
 interface CustomerItem { id: string; name: string; }
@@ -140,6 +143,8 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
   const { user, role } = useAuth();
   const qc = useQueryClient();
   const { allowed: canFulfillOrders } = usePermission("fulfill_orders");
+  const { allowed: canModifyOrders } = usePermission("modify_orders");
+  const { allowed: canCancelOrders } = usePermission("cancel_orders");
   const [view, setView] = useState<"routes" | "orders">("routes");
   const [expandedRouteId, setExpandedRouteId] = useState<string | null>(null);
   const [agentPos, setAgentPos] = useState<{ lat: number; lng: number } | null>(null);
@@ -311,6 +316,8 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
   const [createRequirementNote, setCreateRequirementNote] = useState("");
   const [createOrderItems, setCreateOrderItems] = useState<OrderItemInput[]>([{ product_id: "", quantity: 1 }]);
   const [editOrder, setEditOrder] = useState<OrderRow | null>(null);
+  const [existingOrderForStore, setExistingOrderForStore] = useState<ActiveOrderInfo | null>(null);
+  const [existingOrderStoreName, setExistingOrderStoreName] = useState("");
 
   const { data: createAllStores } = useQuery({
     queryKey: ["mobile-agent-create-all-stores", allStoreIds],
@@ -377,6 +384,8 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
           cancellation_reason: cancelReason,
           cancelled_by: user!.id,
           cancelled_at: new Date().toISOString(),
+          updated_by: user!.id,
+          updated_at: new Date().toISOString(),
         })
         .eq("id", cancelOrderId)
         .in("status", ["pending", "confirmed"]);
@@ -433,8 +442,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
       setFulfillOrder(null);
       setFulfillCash("");
       setFulfillUpi("");
-      qc.invalidateQueries({ queryKey: ["mobile-agent-all-orders"] });
-      qc.invalidateQueries({ queryKey: ["sales"] });
+      afterSaleSaved(qc, { storeId: fulfillOrder.store_id });
     } catch (err: any) {
       toast.error(err.message || "Failed to fulfill order");
     } finally {
@@ -502,6 +510,15 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
     }
     setCreateSaving(true);
     try {
+      const activeOrder = await getActiveOrderForStore(supabase, createStoreId);
+      if (activeOrder) {
+        const store = routeList.flatMap((r) => r.stores).find((s) => s.id === createStoreId);
+        setExistingOrderStoreName(store?.name || "");
+        setExistingOrderForStore(activeOrder);
+        setCreateSaving(false);
+        return;
+      }
+
       const rpcClient = supabase as unknown as SupabaseRpcClient;
       const { data: displayId, error: displayError } = await rpcClient.rpc("generate_display_id", {
         prefix: "ORD",
@@ -510,12 +527,14 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
       if (displayError) throw displayError;
       if (!displayId) throw new Error("Failed to generate order ID");
 
+      const storeData = routeList.flatMap((r) => r.stores).find((s) => s.id === createStoreId);
+
       const { data: orderRow, error: orderError } = await supabase
         .from("orders")
         .insert({
           display_id: displayId,
           store_id: createStoreId,
-          customer_id: user!.id,
+          customer_id: storeData?.customer_id || null,
           order_type: createOrderType,
           source: "manual",
           created_by: user!.id,
@@ -551,6 +570,14 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
     } finally {
       setCreateSaving(false);
     }
+  };
+
+  const scrollToOrder = (orderId: string) => {
+    setView("orders");
+    setTimeout(() => {
+      const el = document.getElementById(`order-card-${orderId}`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
   };
 
   const { data: viewProforma } = useQuery({
@@ -1027,7 +1054,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
 
             {/* Status filter chips */}
             <div className="flex gap-1.5 overflow-x-auto pb-1 mb-2">
-              {(["all", "pending", "delivered", "cancelled"] as const).map((s) => (
+              {(["all", "pending", "confirmed", "delivered", "cancelled"] as const).map((s) => (
                 <button
                   key={s}
                   onClick={() => setFilterStatus(s)}
@@ -1101,6 +1128,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
                   return (
                     <div
                       key={order.id}
+                      id={`order-card-${order.id}`}
                       className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm overflow-hidden"
                     >
                       <div className={`h-1 ${
@@ -1227,7 +1255,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
                           <Package className="h-4 w-4 text-indigo-400" />
                           Proforma
                         </button>
-                        {(order.status === "pending" || order.status === "confirmed") && (
+                        {(order.status === "pending" || order.status === "confirmed") && canModifyOrders && (
                           <button
                             onClick={() => { setEditOrder(order); }}
                             className="flex-1 py-3.5 flex items-center justify-center gap-1.5 text-xs font-semibold text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors border-r border"
@@ -1238,20 +1266,24 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
                         )}
                         {order.status === "pending" && (
                           <>
-                            <button
-                              onClick={() => { setFulfillOrder(order); setFulfillCash(""); setFulfillUpi(""); }}
-                              className="flex-1 py-3.5 flex items-center justify-center gap-1.5 text-xs font-semibold text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors border-r border"
-                            >
-                              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                              Fulfill
-                            </button>
-                            <button
-                              onClick={() => { setCancelOrderId(order.id); setCancelReason(""); }}
-                              className="flex-1 py-3.5 flex items-center justify-center gap-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                            >
-                              <X className="h-4 w-4 text-red-500" />
-                              Cancel
-                            </button>
+                            {canFulfillOrders && (
+                              <button
+                                onClick={() => { setFulfillOrder(order); setFulfillCash(""); setFulfillUpi(""); }}
+                                className="flex-1 py-3.5 flex items-center justify-center gap-1.5 text-xs font-semibold text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors border-r border"
+                              >
+                                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                                Fulfill
+                              </button>
+                            )}
+                            {canCancelOrders && (
+                              <button
+                                onClick={() => { setCancelOrderId(order.id); setCancelReason(""); }}
+                                className="flex-1 py-3.5 flex items-center justify-center gap-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                              >
+                                <X className="h-4 w-4 text-red-500" />
+                                Cancel
+                              </button>
+                            )}
                           </>
                         )}
                         {order.status !== "pending" && (
@@ -1680,6 +1712,28 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
           open={!!editOrder}
           onOpenChange={(o) => { if (!o) setEditOrder(null); }}
           onSaved={() => qc.invalidateQueries({ queryKey: ["mobile-agent-all-orders"] })}
+        />
+
+        <ActiveOrderExistsDialog
+          open={!!existingOrderForStore}
+          onOpenChange={(o) => { if (!o) setExistingOrderForStore(null); }}
+          orderDisplayId={existingOrderForStore?.display_id || ""}
+          storeName={existingOrderStoreName}
+          onView={() => {
+            const id = existingOrderForStore?.id;
+            setExistingOrderForStore(null);
+            if (id) scrollToOrder(id);
+          }}
+          onEdit={() => {
+            const order = existingOrderForStore;
+            if (!order) return;
+            setExistingOrderForStore(null);
+            setView("orders");
+            setTimeout(() => {
+              const found = allOrders?.find((o: any) => o.id === order.id);
+              if (found) setEditOrder(found as any);
+            }, 100);
+          }}
         />
       </div>
     </div>

@@ -3,6 +3,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
 import { usePermission } from "@/hooks/usePermission";
+import { afterSaleSaved } from "@/lib/mutationHelpers";
+import { getActiveOrderForStore, type ActiveOrderInfo } from "@/lib/orders";
+import { ActiveOrderExistsDialog } from "@/mobile/components/ActiveOrderExistsDialog";
 import { Loader2, Plus, Eye, Package, AlertCircle, X, CheckCircle2, Ban, Edit, User, ArrowRightLeft, Calendar, Filter, Printer, ShoppingCart, Pencil } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -55,7 +58,6 @@ interface Order {
   requirement_note: string | null;
   total_amount: number;
   created_at: string;
-  stores?: { name: string; display_id: string };
   stores?: { name: string; display_id: string; store_type_id: string | null; store_types: { name: string } | null; routes: { name: string } | null };
   customers?: { name: string; display_id: string };
   order_items?: OrderItem[];
@@ -104,6 +106,8 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
   const [fulfillUpi, setFulfillUpi] = useState("");
   const [viewProformaId, setViewProformaId] = useState<string | null>(null);
   const [editOrder, setEditOrder] = useState<Order | null>(null);
+  const [existingOrderForStore, setExistingOrderForStore] = useState<ActiveOrderInfo | null>(null);
+  const [existingOrderStoreName, setExistingOrderStoreName] = useState("");
 
   // Create form state
   const [showCreate, setShowCreate] = useState(false);
@@ -329,8 +333,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
       setFulfillCash("");
       setFulfillUpi("");
       setShowDetailModal(false);
-      qc.invalidateQueries({ queryKey: ["mobile-orders"] });
-      qc.invalidateQueries({ queryKey: ["sales"] });
+      afterSaleSaved(qc, { storeId: order.store_id });
     } catch (err: any) {
       toast.error(err.message || "Failed to fulfill order");
     } finally {
@@ -415,6 +418,15 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
 
     setCreateSaving(true);
     try {
+      const activeOrder = await getActiveOrderForStore(supabase, createStoreId);
+      if (activeOrder) {
+        const store = stores.find((s: any) => s.id === createStoreId);
+        setExistingOrderStoreName(store?.name || "");
+        setExistingOrderForStore(activeOrder);
+        setCreateSaving(false);
+        return;
+      }
+
       const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "ORD", seq_name: "order_display_seq" }) as any;
       if (!displayId) throw new Error("Failed to generate order ID");
 
@@ -527,6 +539,13 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
     } finally {
       setIsActioning(false);
     }
+  };
+
+  const scrollToOrder = (orderId: string) => {
+    setTimeout(() => {
+      const el = document.getElementById(`order-card-${orderId}`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
   };
 
   return (
@@ -709,6 +728,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
             return (
               <div
                 key={order.id}
+                id={`order-card-${order.id}`}
                 className="rounded-2xl border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden"
               >
                 {/* Status bar */}
@@ -1284,6 +1304,27 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
         open={!!editOrder}
         onOpenChange={(o) => { if (!o) setEditOrder(null); }}
         onSaved={() => qc.invalidateQueries({ queryKey: ["mobile-orders"] })}
+      />
+
+      <ActiveOrderExistsDialog
+        open={!!existingOrderForStore}
+        onOpenChange={(o) => { if (!o) setExistingOrderForStore(null); }}
+        orderDisplayId={existingOrderForStore?.display_id || ""}
+        storeName={existingOrderStoreName}
+        onView={() => {
+          const id = existingOrderForStore?.id;
+          setExistingOrderForStore(null);
+          if (id) scrollToOrder(id);
+        }}
+        onEdit={() => {
+          const order = existingOrderForStore;
+          if (!order) return;
+          setExistingOrderForStore(null);
+          setTimeout(() => {
+            const found = filteredOrders?.find((o: any) => o.id === order.id);
+            if (found) setEditOrder(found as any);
+          }, 100);
+        }}
       />
     </div>
   );

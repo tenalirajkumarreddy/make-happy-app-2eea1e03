@@ -9,6 +9,7 @@ import { logActivity } from "@/lib/activityLogger";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { CANCEL_REASONS } from "@/lib/constants";
 import { useAuth } from "@/contexts/AuthContext";
+import { getActiveOrderForStore } from "@/lib/orders";
 import { useWarehouse } from "@/contexts/WarehouseContext";
 import { useRouteAccess } from "@/hooks/useRouteAccess";
 import { usePermission } from "@/hooks/usePermission";
@@ -484,18 +485,13 @@ const Orders = () => {
     if (orderType === "simple" && !requirementNote.trim()) { toast.error("Please describe the requirement"); return; }
     if (orderType === "detailed" && !orderItems.some((i) => i.product_id)) { toast.error("Please add at least one product"); return; }
 
-    // Duplicate check: store can have only one active (pending) order
-    const { data: existingOrders } = await supabase
-      .from("orders")
-      .select("id, display_id")
-      .eq("store_id", storeId)
-      .eq("status", "pending")
-      .limit(1);
-    if (existingOrders && existingOrders.length > 0) {
-      toast.warning(`Store already has a pending order (${existingOrders[0].display_id}). Edit it instead.`);
+    // Duplicate check: store can have only one active (pending or confirmed) order
+    const activeOrder = await getActiveOrderForStore(supabase, storeId);
+    if (activeOrder) {
+      toast.warning(`Store already has an active order (${activeOrder.display_id}). Please edit or fulfill it instead.`);
       setShowAdd(false);
       resetForm();
-      setTimeout(() => handleOpenEdit(existingOrders[0].id), 300);
+      setTimeout(() => handleOpenEdit(activeOrder.id), 300);
       return;
     }
 

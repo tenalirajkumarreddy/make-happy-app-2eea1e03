@@ -6,6 +6,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { resolveCustomer } from "@/lib/resolveCustomer";
 import { useAuth } from "@/contexts/AuthContext";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
+import { getActiveOrderForStore, type ActiveOrderInfo } from "@/lib/orders";
+import { ActiveOrderExistsDialog } from "@/mobile/components/ActiveOrderExistsDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -52,6 +54,8 @@ export function CustomerOrders({ selectedStoreId, onStoreChange }: Props) {
   const [createOrderType, setCreateOrderType] = useState<"simple" | "detailed">("simple");
   const [createNote, setCreateNote] = useState("");
   const [createOrderItems, setCreateOrderItems] = useState<{ product_id: string; quantity: number; unit_price: number; products?: { name: string; base_price: number } }[]>([]);
+  const [existingOrderForStore, setExistingOrderForStore] = useState<ActiveOrderInfo | null>(null);
+  const [existingOrderStoreName, setExistingOrderStoreName] = useState("");
 
   const { data: customer } = useQuery({
     queryKey: ["mobile-customer-orders-self", user?.id],
@@ -143,11 +147,11 @@ export function CustomerOrders({ selectedStoreId, onStoreChange }: Props) {
       return;
     }
 
-    const activeOrder = (orders || []).find(
-      (order) => order.store_id === createStoreId && (order.status === "pending" || order.status === "confirmed")
-    );
+    const activeOrder = await getActiveOrderForStore(supabase, createStoreId);
     if (activeOrder) {
-      toast.error("An active order already exists for this store");
+      const store = (stores || []).find((s: any) => s.id === createStoreId);
+      setExistingOrderStoreName(store?.name || "");
+      setExistingOrderForStore(activeOrder);
       return;
     }
 
@@ -226,6 +230,13 @@ export function CustomerOrders({ selectedStoreId, onStoreChange }: Props) {
     }
   };
 
+  const scrollToOrder = (orderId: string) => {
+    setTimeout(() => {
+      const el = document.getElementById(`order-card-${orderId}`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
+  };
+
   return (
     <div className="pb-6">
       <div className="px-4 pt-4 flex justify-end">
@@ -245,7 +256,7 @@ export function CustomerOrders({ selectedStoreId, onStoreChange }: Props) {
           </div>
         ) : (
           filteredOrders.map((order) => (
-            <div key={order.id} className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-3 shadow-sm">
+            <div key={order.id} id={`order-card-${order.id}`} className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-3 shadow-sm">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-sm font-bold text-slate-800 dark:text-white">{order.display_id}</p>
@@ -412,6 +423,23 @@ export function CustomerOrders({ selectedStoreId, onStoreChange }: Props) {
           </div>
         </SheetContent>
       </Sheet>
+
+      <ActiveOrderExistsDialog
+        open={!!existingOrderForStore}
+        onOpenChange={(o) => { if (!o) setExistingOrderForStore(null); }}
+        orderDisplayId={existingOrderForStore?.display_id || ""}
+        storeName={existingOrderStoreName}
+        onView={() => {
+          const id = existingOrderForStore?.id;
+          setExistingOrderForStore(null);
+          if (id) scrollToOrder(id);
+        }}
+        onEdit={() => {
+          const id = existingOrderForStore?.id;
+          setExistingOrderForStore(null);
+          if (id) scrollToOrder(id);
+        }}
+      />
     </div>
   );
 }
