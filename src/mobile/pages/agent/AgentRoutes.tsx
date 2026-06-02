@@ -122,6 +122,7 @@ interface OrderRow {
   creator_profile?: { full_name: string } | null;
   updater_profile?: { full_name: string } | null;
   fulfiller_profile?: { full_name: string } | null;
+  canceller_profile?: { full_name: string } | null;
 }
 
 const toStoreOption = (s: RouteStore): StoreOption => ({
@@ -220,7 +221,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
     queryFn: async () => {
       let query = supabase
         .from("orders")
-        .select("*, stores(id, name, display_id, address, phone, lat, lng, route_id, store_type_id, routes(name), store_types(name)), customers(name, display_id), order_items(id, product_id, quantity, products(name, sku, base_price)), updater_profile:profiles!orders_updated_by_fkey(full_name)")
+        .select("*, stores(id, name, display_id, address, phone, lat, lng, route_id, store_type_id, routes(name), store_types(name)), customers(name, display_id), order_items(id, product_id, quantity, products(name, sku, base_price)), creator_profile:profiles!orders_created_by_profiles_fkey(full_name), updater_profile:profiles!orders_updated_by_fkey(full_name), fulfiller_profile:profiles!orders_fulfilled_by_profiles_fkey(full_name), canceller_profile:profiles!orders_cancelled_by_profiles_fkey(full_name)")
         .order("created_at", { ascending: false })
         .limit(50);
       if (allStoreIds.length > 0) {
@@ -1257,7 +1258,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
                         </div>
                       </div>
 
-                      {(order.creator_profile || order.updater_profile || order.fulfiller_profile) && (
+                      {(order.creator_profile || order.updater_profile || order.fulfiller_profile || (order.status === "cancelled" && order.canceller_profile)) && (
                         <div className="border-t border-slate-100 dark:border-slate-700 px-3 py-1.5">
                           <div className="flex items-center gap-1 text-[10px] text-slate-500 dark:text-slate-400 flex-wrap">
                             {order.creator_profile && <span>Created by {order.creator_profile.full_name}</span>}
@@ -1271,6 +1272,12 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
                               <>
                                 <span className="text-slate-400/60 dark:text-slate-500/60">•</span>
                                 <span>Fulfilled by {order.fulfiller_profile.full_name}</span>
+                              </>
+                            )}
+                            {order.status === "cancelled" && order.canceller_profile && (
+                              <>
+                                <span className="text-slate-400/60 dark:text-slate-500/60">•</span>
+                                <span className="text-red-500">Cancelled by {order.canceller_profile.full_name}</span>
                               </>
                             )}
                           </div>
@@ -1434,6 +1441,36 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
                     <p className="text-sm text-slate-800 dark:text-white">{selectedOrder.requirement_note}</p>
                   </div>
                 ) : null}
+
+                {(selectedOrder.creator_profile || selectedOrder.updater_profile || selectedOrder.fulfiller_profile || (selectedOrder.status === "cancelled" && selectedOrder.cancelled_by)) && (
+                  <div className="rounded-xl border p-3 space-y-1.5">
+                    <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Audit Trail</p>
+                    {selectedOrder.creator_profile && (
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-slate-400">Created by</span>
+                        <span className="font-medium text-slate-700 dark:text-slate-300">{selectedOrder.creator_profile.full_name}</span>
+                      </div>
+                    )}
+                    {selectedOrder.updater_profile && selectedOrder.updater_profile.full_name !== selectedOrder.creator_profile?.full_name && (
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-slate-400">Edited by</span>
+                        <span className="font-medium text-slate-700 dark:text-slate-300">{selectedOrder.updater_profile.full_name}</span>
+                      </div>
+                    )}
+                    {selectedOrder.fulfiller_profile && (
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-slate-400">Fulfilled by</span>
+                        <span className="font-medium text-slate-700 dark:text-slate-300">{selectedOrder.fulfiller_profile.full_name}</span>
+                      </div>
+                    )}
+                    {selectedOrder.status === "cancelled" && selectedOrder.canceller_profile && (
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-slate-400">Cancelled by</span>
+                        <span className="font-medium text-red-600 dark:text-red-400">{selectedOrder.canceller_profile.full_name}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </DialogContent>

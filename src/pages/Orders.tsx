@@ -128,6 +128,7 @@ interface OrderRecord {
   creator_profile?: { full_name: string } | null;
   updater_profile?: { full_name: string } | null;
   fulfiller_profile?: { full_name: string } | null;
+  canceller_profile?: { full_name: string } | null;
 }
 
 interface OrderItemData {
@@ -268,7 +269,7 @@ const Orders = () => {
     queryFn: async () => {
       let query = supabase
         .from("orders")
-        .select("*, stores(id, name, display_id, route_id, store_type_id, address, outstanding), customers(id, name, display_id, phone, email), assigned_to, fulfilled_by_sale_id, updater_profile:profiles!orders_updated_by_fkey(full_name)")
+        .select("*, stores(id, name, display_id, route_id, store_type_id, address, outstanding), customers(id, name, display_id, phone, email), assigned_to, fulfilled_by_sale_id, creator_profile:profiles!orders_created_by_profiles_fkey(full_name), updater_profile:profiles!orders_updated_by_fkey(full_name), fulfiller_profile:profiles!orders_fulfilled_by_profiles_fkey(full_name), canceller_profile:profiles!orders_cancelled_by_profiles_fkey(full_name)")
         .order("created_at", { ascending: false });
 
       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
@@ -812,8 +813,12 @@ if (orderType === "detailed" && canModifyPrices) {
         .from("orders")
         .select(`
           *,
-          stores(id, name, store_type_id, customer_id),
-          order_items(id, product_id, quantity, unit_price, products(id, name, sku, base_price, image_url))
+          stores(id, name, store_type_id, customer_id, route_id),
+          order_items(id, product_id, quantity, unit_price, products(id, name, sku, base_price, image_url)),
+          creator_profile:profiles!orders_created_by_profiles_fkey(full_name),
+          updater_profile:profiles!orders_updated_by_fkey(full_name),
+          fulfiller_profile:profiles!orders_fulfilled_by_profiles_fkey(full_name),
+          canceller_profile:profiles!orders_cancelled_by_profiles_fkey(full_name)
         `)
         .eq("id", orderId)
         .single();
@@ -1659,7 +1664,7 @@ const columns = [
                 <span className="text-xs text-muted-foreground italic truncate max-w-[180px]">{row.cancellation_reason}</span>
               )}
             </div>
-            {(row.creator_profile || row.updater_profile || row.fulfiller_profile) && (
+            {(row.creator_profile || row.updater_profile || row.fulfiller_profile || (row.status === "cancelled" && row.canceller_profile)) && (
               <div className="flex items-center gap-1 text-[10px] text-muted-foreground flex-wrap mt-2 pt-2 border-t border-border/50">
                 {row.creator_profile && <span>Created by {row.creator_profile.full_name}</span>}
                 {row.updater_profile && row.updater_profile.full_name !== row.creator_profile?.full_name && (
@@ -1672,6 +1677,12 @@ const columns = [
                   <>
                     <span className="text-muted-foreground/40">•</span>
                     <span>Fulfilled by {row.fulfiller_profile.full_name}</span>
+                  </>
+                )}
+                {row.status === "cancelled" && row.canceller_profile && (
+                  <>
+                    <span className="text-muted-foreground/40">•</span>
+                    <span className="text-red-500">Cancelled by {row.canceller_profile.full_name}</span>
                   </>
                 )}
               </div>
@@ -1831,6 +1842,23 @@ const columns = [
           <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader><DialogTitle>Edit Order {editOrder?.display_id}</DialogTitle></DialogHeader>
             <form onSubmit={handleEdit} className="space-y-4">
+          {(editOrder?.creator_profile || editOrder?.updater_profile || editOrder?.fulfiller_profile || editOrder?.canceller_profile) && (
+            <div className="rounded-lg bg-muted p-3 space-y-1 text-xs">
+              <p className="font-semibold text-muted-foreground mb-1">Audit Trail</p>
+              {editOrder.creator_profile && (
+                <div className="flex justify-between"><span className="text-muted-foreground">Created by</span><span>{editOrder.creator_profile.full_name}</span></div>
+              )}
+              {editOrder.updater_profile && editOrder.updater_profile.full_name !== editOrder.creator_profile?.full_name && (
+                <div className="flex justify-between"><span className="text-muted-foreground">Edited by</span><span>{editOrder.updater_profile.full_name}</span></div>
+              )}
+              {editOrder.fulfiller_profile && (
+                <div className="flex justify-between"><span className="text-muted-foreground">Fulfilled by</span><span>{editOrder.fulfiller_profile.full_name}</span></div>
+              )}
+              {editOrder.status === "cancelled" && editOrder.canceller_profile && (
+                <div className="flex justify-between"><span className="text-muted-foreground">Cancelled by</span><span className="text-red-500">{editOrder.canceller_profile.full_name}</span></div>
+              )}
+            </div>
+          )}
           <div>
             <Label>Requirement Note</Label>
             <Textarea value={requirementNote} onChange={(e) => setRequirementNote(e.target.value)} className="mt-1" />
