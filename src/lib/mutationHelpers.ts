@@ -64,6 +64,8 @@ export function afterSaleSaved(qc: QueryClient, options?: { isMobile?: boolean; 
 export function afterTransactionSaved(qc: QueryClient, options?: { isMobile?: boolean; storeId?: string }) {
   invalidateAll(qc, ["transactions"]);
   invalidateAll(qc, ["stores"]);
+  invalidateAll(qc, ["orders"]);
+  invalidateAll(qc, ["pending-orders-for-store"]);
   invalidateAll(qc, ["customer-balances"]);
   invalidateAll(qc, ["customer-transactions"]);
   invalidateAll(qc, ["store-transactions"]);
@@ -85,6 +87,8 @@ export function afterSaleReturned(qc: QueryClient, options?: { isMobile?: boolea
   invalidateAll(qc, ["sale-returns"]);
   invalidateAll(qc, ["sales"]);
   invalidateAll(qc, ["stores"]);
+  invalidateAll(qc, ["orders"]);
+  invalidateAll(qc, ["pending-orders-for-store"]);
   invalidateAll(qc, ["staff-stock"], true);
   invalidateAll(qc, ["product-stock"], true);
   invalidateAll(qc, ["stock-movements"], true);
@@ -103,6 +107,7 @@ export function afterSaleReturned(qc: QueryClient, options?: { isMobile?: boolea
   invalidateAll(qc, ["super-admin-dashboard-stats"]);
   invalidateAll(qc, ["manager-dashboard"]);
   invalidateAll(qc, ["mobile-admin-dashboard"]);
+  invalidateAll(qc, ["analytics"]);
   if (options?.isMobile) {
     invalidateAll(qc, ["mobile-history-sales-timeline"]);
     invalidateAll(qc, ["mobile-history-balance-sales"]);
@@ -110,6 +115,7 @@ export function afterSaleReturned(qc: QueryClient, options?: { isMobile?: boolea
     invalidateAll(qc, ["mobile-agent-stock-holdings"], true);
     invalidateAll(qc, ["mobile-products-for-sale"], true);
     invalidateAll(qc, ["mobile-inventory"], true);
+    invalidateAll(qc, ["mobile-agent-pending-orders"]);
   }
   if (options?.saleId) {
     invalidateAll(qc, ["sale-return-detail", options.saleId]);
@@ -119,6 +125,7 @@ export function afterSaleReturned(qc: QueryClient, options?: { isMobile?: boolea
 export function afterSaleEdited(qc: QueryClient, options?: { isMobile?: boolean }) {
   invalidateAll(qc, ["sales"]);
   invalidateAll(qc, ["stores"]);
+  invalidateAll(qc, ["orders"]);
   invalidateAll(qc, ["sale-items"]);
   invalidateAll(qc, ["staff-stock"], true);
   invalidateAll(qc, ["product-stock"], true);
@@ -128,6 +135,7 @@ export function afterSaleEdited(qc: QueryClient, options?: { isMobile?: boolean 
   invalidateAll(qc, ["warehouse-stock"], true);
   invalidateAll(qc, ["super-admin-dashboard-stats"]);
   invalidateAll(qc, ["manager-dashboard"]);
+  invalidateAll(qc, ["analytics"]);
   if (options?.isMobile) {
     invalidateAll(qc, ["mobile-history-sales-timeline"]);
     invalidateAll(qc, ["mobile-history-balance-sales"]);
@@ -142,11 +150,13 @@ export function afterSaleEdited(qc: QueryClient, options?: { isMobile?: boolean 
 export function afterSaleCancelled(qc: QueryClient, options?: { isMobile?: boolean }) {
   invalidateAll(qc, ["sales"]);
   invalidateAll(qc, ["stores"]);
+  invalidateAll(qc, ["orders"]);
   invalidateAll(qc, ["staff-stock"], true);
   invalidateAll(qc, ["product-stock"], true);
   invalidateAll(qc, ["stock-movements"], true);
   invalidateAll(qc, ["agent-stock"], true);
   invalidateAll(qc, ["agent-stock-holdings"], true);
+  invalidateAll(qc, ["analytics"]);
   invalidateAll(qc, ["super-admin-dashboard-stats"]);
   invalidateAll(qc, ["manager-dashboard"]);
   invalidateAll(qc, ["mobile-admin-dashboard"]);
@@ -163,6 +173,9 @@ export function afterPaymentReturned(qc: QueryClient, options?: { isMobile?: boo
   invalidateAll(qc, ["transactions"]);
   invalidateAll(qc, ["stores"]);
   invalidateAll(qc, ["customer-balances"]);
+  invalidateAll(qc, ["orders"]);
+  invalidateAll(qc, ["pending-orders-for-store"]);
+  invalidateAll(qc, ["analytics"]);
   invalidateAll(qc, ["super-admin-dashboard-stats"]);
   invalidateAll(qc, ["manager-dashboard"]);
   invalidateAll(qc, ["mobile-admin-dashboard"]);

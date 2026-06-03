@@ -2,14 +2,15 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
-import { Loader2, Plus, Eye, CreditCard, ChevronRight, Receipt, FileText, Calendar, Filter } from "lucide-react";
+import { Loader2, Plus, Eye, CreditCard, ChevronRight, Receipt, Calendar, Filter } from "lucide-react";
 import { SaleReceipt } from "@/components/shared/SaleReceipt";
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { format, startOfWeek, startOfMonth } from "date-fns";
+import { format, startOfWeek } from "date-fns";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { fmtINR } from "@/lib/utils";
 import { usePullToRefresh } from "@/mobile/hooks/usePullToRefresh";
@@ -25,6 +26,7 @@ interface Transaction {
   upi_amount: number;
   old_outstanding: number;
   new_outstanding: number;
+  is_fully_returned: boolean;
   created_at: string;
   recorded_by: string;
   stores?: { name: string; display_id: string };
@@ -308,10 +310,16 @@ export function AdminTransactions({ onNavigate }: { onNavigate: (path: string) =
         </div>
       ) : (
         <div className="px-4 space-y-3">
-          {filteredTxns.map((txn) => (
+          {filteredTxns.map((txn) => {
+            const isReturned = txn.is_fully_returned;
+            return (
             <div
               key={txn.id}
-              className="rounded-2xl border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden"
+              className={`rounded-2xl border shadow-sm overflow-hidden ${
+                isReturned
+                  ? "border-dashed border-red-200 dark:border-red-900/40 bg-red-50/30 dark:bg-red-950/10 opacity-70"
+                  : "border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800"
+              }`}
             >
               {/* Card Content */}
               <div
@@ -323,12 +331,17 @@ export function AdminTransactions({ onNavigate }: { onNavigate: (path: string) =
               >
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-mono font-semibold text-primary">{txn.display_id}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className={`text-sm font-mono font-semibold ${isReturned ? "line-through text-muted-foreground" : "text-primary"}`}>{txn.display_id}</p>
+                      {isReturned && (
+                        <Badge variant="outline" className="text-[9px] h-4 border-amber-300 text-amber-600 bg-amber-50 rounded px-1 py-0">Returned</Badge>
+                      )}
+                    </div>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {txn.stores?.name || "Unknown Store"}
                     </p>
                   </div>
-                  <p className="text-sm font-bold tabular-nums text-primary">{fmtINR(txn.total_amount)}</p>
+                  <p className={`text-sm font-bold tabular-nums ${isReturned ? "line-through text-muted-foreground" : "text-primary"}`}>{fmtINR(txn.total_amount)}</p>
                 </div>
 
                 {/* Payment Badges */}
@@ -395,7 +408,8 @@ export function AdminTransactions({ onNavigate }: { onNavigate: (path: string) =
                 </button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
         )}
 

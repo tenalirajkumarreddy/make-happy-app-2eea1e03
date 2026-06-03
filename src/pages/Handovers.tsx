@@ -283,7 +283,7 @@ const Handovers = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("staff_cash_accounts")
-        .select("user_id, cash_balance, cash_amount, upi_amount, account_type, last_reset_at, profiles(full_name)")
+        .select("user_id, cash_amount, upi_amount, account_type, last_reset_at, profiles(full_name)")
         .eq("account_type", "prime_manager");
       if (error) throw error;
       return (data || []) as any;
@@ -1879,7 +1879,7 @@ const Handovers = () => {
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold truncate">{f.full_name}</p>
                           <div className="flex gap-3 text-[11px] text-muted-foreground mt-0.5">
-                            <span>Cash: ₹{Number(f.cash_balance || 0).toLocaleString()}</span>
+                            <span>Cash: ₹{Number(f.cash_amount || 0).toLocaleString()}</span>
                             <span>UPI: ₹{Number(f.upi_amount || 0).toLocaleString()}</span>
                           </div>
                           {f.last_reset_at && (

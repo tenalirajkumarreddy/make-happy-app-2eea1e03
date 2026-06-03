@@ -161,7 +161,7 @@ export async function isUserActive(userId: string): Promise<boolean> {
  */
 export async function validateActionPermission(
   userId: string,
-  actionType: "sale" | "transaction" | "visit" | "customer" | "store" | "file_upload"
+  actionType: "sale" | "transaction" | "visit" | "customer" | "store" | "file_upload" | "transaction_edit" | "payment_return"
 ): Promise<{ allowed: boolean; reason?: string }> {
   // First check if user is active
   const active = await isUserActive(userId);
@@ -190,6 +190,12 @@ export async function validateActionPermission(
     case "file_upload":
       // File uploads are generally allowed if user can perform other actions
       hasPermission = true;
+      break;
+    case "transaction_edit":
+      hasPermission = await canRecordTransaction(userId);
+      break;
+    case "payment_return":
+      hasPermission = await canRecordTransaction(userId);
       break;
     default:
       hasPermission = false;

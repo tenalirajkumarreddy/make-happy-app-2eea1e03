@@ -180,6 +180,9 @@ export function useOnlineStatus() {
           // For store creation, check current user
           const { data: { user } } = await supabase.auth.getUser();
           userIdToCheck = user?.id ?? null;
+        } else if (action.type === "transaction_edit" || action.type === "payment_return") {
+          const { recordedBy } = action.payload as any;
+          userIdToCheck = recordedBy;
         }
 
         // Validate permission before proceeding
@@ -239,6 +242,30 @@ export function useOnlineStatus() {
             store_id: storeId,
             lat: lat ?? null,
             lng: lng ?? null,
+          });
+          if (error) throw error;
+        } else if (action.type === "transaction_edit") {
+          const { txnId, cashAmount, upiAmount, notes } = action.payload as any;
+          const { error } = await (supabase as any).rpc("update_transaction", {
+            p_transaction_id: txnId,
+            p_cash_amount: cashAmount,
+            p_upi_amount: upiAmount,
+            p_notes: notes ?? null,
+          });
+          if (error) throw error;
+        } else if (action.type === "payment_return") {
+          const { displayId, originalTransactionId, storeId, customerId, recordedBy, loggedBy, returnAmount, returnType, reason, notes } = action.payload as any;
+          const { error } = await (supabase as any).rpc("record_payment_return", {
+            p_display_id: displayId,
+            p_original_transaction_id: originalTransactionId,
+            p_store_id: storeId,
+            p_customer_id: customerId,
+            p_recorded_by: recordedBy,
+            p_logged_by: loggedBy ?? null,
+            p_return_amount: returnAmount,
+            p_return_type: returnType,
+            p_reason: reason,
+            p_notes: notes ?? null,
           });
           if (error) throw error;
         } else if (action.type === "customer") {

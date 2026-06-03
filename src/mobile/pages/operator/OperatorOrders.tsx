@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
 import { usePermission } from "@/hooks/usePermission";
-import {Loader2, Package, AlertCircle, CheckCircle2, Ban, Plus, ShoppingCart, User, Calendar, X, Pencil, Edit, FileText, Minus, Search} from "lucide-react";
+import {Loader2, Package, AlertCircle, CheckCircle2, Ban, Plus, ShoppingCart, User, Calendar, Edit, FileText, Minus} from "lucide-react";
 import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -27,6 +27,8 @@ import { sendNotificationToMany, getApproverUserIds, getUsersByRole, getAgentsFo
 import { format } from "date-fns";
 import { fmtINR } from "@/lib/utils";
 import { CANCEL_REASONS } from "@/lib/constants";
+import { getActiveOrderForStore, type ActiveOrderInfo } from "@/lib/orders";
+import { ActiveOrderExistsDialog } from "@/mobile/components/ActiveOrderExistsDialog";
 import { OrderStockSummary } from "@/components/orders/OrderStockSummary";
 import { CardSkeletonList } from "@/mobile/components/CardSkeleton";
 import { ProformaView } from "@/components/orders/ProformaView";
@@ -102,6 +104,8 @@ export function OperatorOrders() {
 
   const [viewProformaId, setViewProformaId] = useState<string | null>(null);
   const [editOrder, setEditOrder] = useState<Order | null>(null);
+  const [existingOrderForStore, setExistingOrderForStore] = useState<ActiveOrderInfo | null>(null);
+  const [existingOrderStoreName, setExistingOrderStoreName] = useState("");
 
   const [showCreate, setShowCreate] = useState(false);
   const [createStoreSearch, setCreateStoreSearch] = useState("");
@@ -121,7 +125,10 @@ export function OperatorOrders() {
           stores(name, display_id, store_type_id, store_types(name), routes(name)),
           customers(name, display_id),
           order_items(id, product_id, quantity, unit_price, products(name, sku, base_price)),
-          updater_profile:profiles!orders_updated_by_fkey(full_name)
+          updater_profile:profiles!orders_updated_by_fkey(full_name),
+          creator_profile:profiles!orders_created_by_fkey(full_name),
+          fulfiller_profile:profiles!orders_fulfilled_by_fkey(full_name),
+          canceller_profile:profiles!orders_cancelled_by_fkey(full_name)
         `)
         .order("created_at", { ascending: false })
         .limit(100);
@@ -260,15 +267,19 @@ export function OperatorOrders() {
           cancellation_reason: cancelReason.trim(),
           cancelled_by: user!.id,
           cancelled_at: new Date().toISOString(),
+          updated_by: user!.id,
+          updated_at: new Date().toISOString(),
         })
         .eq("id", order.id)
         .in("status", ["pending", "confirmed"]);
       if (error) throw error;
 
-      await supabase
-        .from("proforma_invoices")
-        .update({ status: "cancelled", deleted_at: new Date().toISOString() })
-        .eq("order_id", order.id);
+      try {
+        await supabase
+          .from("proforma_invoices")
+          .update({ status: "cancelled", deleted_at: new Date().toISOString() })
+          .eq("order_id", order.id);
+      } catch { /* best-effort */ }
 
       toast.success(`Order ${order.display_id} cancelled`);
       qc.invalidateQueries({ queryKey: ["operator-orders"] });
@@ -323,6 +334,15 @@ export function OperatorOrders() {
 
     setCreateSaving(true);
     try {
+      const activeOrder = await getActiveOrderForStore(supabase, createStoreId);
+      if (activeOrder) {
+        const store = createStores.find((s: any) => s.id === createStoreId);
+        setExistingOrderStoreName(store?.name || "");
+        setExistingOrderForStore(activeOrder);
+        setCreateSaving(false);
+        return;
+      }
+
       const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "ORD", seq_name: "order_display_seq" }) as any;
       if (!displayId) throw new Error("Failed to generate order ID");
 
@@ -411,6 +431,13 @@ export function OperatorOrders() {
 
   const getCreateTotal = () => {
     return createOrderItems.reduce((s, i) => s + i.quantity * i.unit_price, 0);
+  };
+
+  const scrollToOrder = (orderId: string) => {
+    setTimeout(() => {
+      const el = document.getElementById(`order-card-${orderId}`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
   };
 
   if (isLoading) {
@@ -542,6 +569,7 @@ export function OperatorOrders() {
             {filteredOrders.map((order) => (
               <div
                 key={order.id}
+                id={`order-card-${order.id}`}
                 onClick={() => { setSelectedOrder(order); setShowDetailModal(true); }}
                 className="rounded-xl border bg-card p-4 cursor-pointer active:scale-[0.99] transition-transform"
               >
@@ -671,6 +699,18 @@ export function OperatorOrders() {
                   <div className="flex justify-between">
                     <span className="text-xs text-muted-foreground">Created by</span>
                     <span className="text-xs font-medium">{selectedOrder.creator_profile.full_name}</span>
+                  </div>
+                )}
+                {selectedOrder.updater_profile && selectedOrder.updater_profile.full_name !== selectedOrder.creator_profile?.full_name && (
+                  <div className="flex justify-between">
+                    <span className="text-xs text-muted-foreground">Edited by</span>
+                    <span className="text-xs font-medium">{selectedOrder.updater_profile.full_name}</span>
+                  </div>
+                )}
+                {selectedOrder.fulfiller_profile && (
+                  <div className="flex justify-between">
+                    <span className="text-xs text-muted-foreground">Fulfilled by</span>
+                    <span className="text-xs font-medium">{selectedOrder.fulfiller_profile.full_name}</span>
                   </div>
                 )}
                 {selectedOrder.status === "cancelled" && selectedOrder.canceller_profile && (
@@ -931,6 +971,27 @@ export function OperatorOrders() {
         open={!!editOrder}
         onOpenChange={(o) => { if (!o) setEditOrder(null); }}
         onSaved={() => qc.invalidateQueries({ queryKey: ["operator-orders"] })}
+      />
+
+      <ActiveOrderExistsDialog
+        open={!!existingOrderForStore}
+        onOpenChange={(o) => { if (!o) setExistingOrderForStore(null); }}
+        orderDisplayId={existingOrderForStore?.display_id || ""}
+        storeName={existingOrderStoreName}
+        onView={() => {
+          const id = existingOrderForStore?.id;
+          setExistingOrderForStore(null);
+          if (id) scrollToOrder(id);
+        }}
+        onEdit={() => {
+          const order = existingOrderForStore;
+          if (!order) return;
+          setExistingOrderForStore(null);
+          setTimeout(() => {
+            const found = filteredOrders?.find((o: any) => o.id === order.id);
+            if (found) setEditOrder(found as any);
+          }, 100);
+        }}
       />
     </div>
   );

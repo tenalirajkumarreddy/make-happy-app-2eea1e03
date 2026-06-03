@@ -261,6 +261,15 @@ const StoreDetail = () => {
     enabled: !!id,
   });
 
+  const { data: paymentReturns } = useQuery({
+    queryKey: ["store-payment-returns", id],
+    queryFn: async () => {
+      const { data } = await supabase.from("payment_returns").select("*").eq("store_id", id!).order("created_at", { ascending: false });
+      return data || [];
+    },
+    enabled: !!id,
+  });
+
   const { data: qrCodes } = useQuery({
     queryKey: ["store-qr-codes", id],
     queryFn: async () => {
@@ -739,6 +748,7 @@ const handleDeleteQr = async (qrId: string) => {
           <StoreLedger
             sales={sales || []}
             transactions={transactions || []}
+            paymentReturns={paymentReturns || []}
             balanceAdjustments={balanceAdjustments || []}
             openingBalance={Number(store.opening_balance)}
             storeCreatedAt={store.created_at}

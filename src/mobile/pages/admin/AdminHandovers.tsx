@@ -58,8 +58,8 @@ interface ExpenseClaim {
 interface StaffBalance {
   user_id: string;
   full_name: string;
-  cash_balance: number;
-  upi_balance: number;
+  cash_amount: number;
+  upi_amount: number;
   total_balance: number;
 }
 
@@ -197,14 +197,13 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
     queryFn: async () => {
       const { data, error } = await (supabase
         .from("staff_cash_accounts")
-        .select("user_id, cash_balance, cash_amount, upi_amount, profiles(full_name, avatar_url)" as any)
+        .select("user_id, cash_amount, upi_amount, profiles(full_name, avatar_url)" as any)
         .order("cash_amount", { ascending: false })) as any;
       if (error) throw error;
       return (data || []).map((item: any) => ({
         user_id: item.user_id,
         full_name: item.profiles?.full_name || "Unknown",
         avatar_url: item.profiles?.avatar_url || null,
-        cash_balance: Number(item.cash_balance || 0),
         cash_amount: Number(item.cash_amount || 0),
         upi_amount: Number(item.upi_amount || 0),
         total_balance: Number(item.cash_amount || 0) + Number(item.upi_amount || 0),
@@ -273,18 +272,17 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
     queryFn: async () => {
       const { data, error } = await (supabase
         .from("staff_cash_accounts")
-        .select("user_id, cash_balance, cash_amount, upi_amount, account_type, last_reset_at, profiles(full_name)" as any)
+        .select("user_id, cash_amount, upi_amount, account_type, last_reset_at, profiles(full_name)" as any)
         .eq("account_type", "prime_manager" as any)) as any;
       if (error) throw error;
       return (data || []).map((item: any) => ({
         user_id: item.user_id,
         full_name: item.profiles?.full_name || "Unknown",
-        cash_balance: Number(item.cash_balance || 0),
         cash_amount: Number(item.cash_amount || 0),
         upi_amount: Number(item.upi_amount || 0),
         total_balance: Number(item.cash_amount || 0) + Number(item.upi_amount || 0),
         last_reset_at: item.last_reset_at,
-      })) as Array<{ user_id: string; full_name: string; cash_balance: number; cash_amount: number; upi_amount: number; total_balance: number; last_reset_at: string }>;
+      })) as Array<{ user_id: string; full_name: string; cash_amount: number; upi_amount: number; total_balance: number; last_reset_at: string }>;
     },
     enabled: !!user && isAdmin,
   });
@@ -304,7 +302,7 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
     setActionLoading(id);
     try {
       const handover = handovers?.find((h) => h.id === id);
-      const { error } = await (supabase.rpc("confirm_handover_v2", { p_handover_id: id, p_confirmed_by: user?.id } as any));
+      const { error } = await (supabase.rpc("confirm_handover", { p_handover_id: id, p_confirmed_by: user?.id } as any));
       if (error) throw error;
       toast.success("Handover confirmed");
       if (handover?.user_id) {

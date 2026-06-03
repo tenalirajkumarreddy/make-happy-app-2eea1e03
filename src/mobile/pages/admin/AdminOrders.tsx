@@ -6,7 +6,7 @@ import { usePermission } from "@/hooks/usePermission";
 import { afterSaleSaved } from "@/lib/mutationHelpers";
 import { getActiveOrderForStore, type ActiveOrderInfo } from "@/lib/orders";
 import { ActiveOrderExistsDialog } from "@/mobile/components/ActiveOrderExistsDialog";
-import { Loader2, Plus, Eye, Package, AlertCircle, X, CheckCircle2, Ban, Edit, User, ArrowRightLeft, Calendar, Filter, Printer, ShoppingCart, Pencil } from "lucide-react";
+import { Loader2, Plus, Eye, Package, AlertCircle, X, CheckCircle2, Ban, Edit, ArrowRightLeft, Calendar, Filter, Printer, ShoppingCart } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -27,7 +27,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { fmtINR } from "@/lib/utils";
 import { CANCEL_REASONS } from "@/lib/constants";
 import { sendNotificationToMany, getApproverUserIds, getUsersByRole, getAgentsForStore } from "@/lib/notifications";
@@ -67,6 +66,7 @@ interface Order {
   creator_profile?: { full_name: string } | null;
   updater_profile?: { full_name: string } | null;
   fulfiller_profile?: { full_name: string } | null;
+  canceller_profile?: { full_name: string } | null;
 }
 
 interface Profile {
@@ -155,7 +155,10 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
           stores(name, display_id, store_type_id, store_types(name), routes(name)),
           customers(name, display_id),
           order_items(id, product_id, quantity, products(name, sku, base_price)),
-          updater_profile:profiles!orders_updated_by_fkey(full_name)
+          updater_profile:profiles!orders_updated_by_fkey(full_name),
+          creator_profile:profiles!orders_created_by_fkey(full_name),
+          fulfiller_profile:profiles!orders_fulfilled_by_fkey(full_name),
+          canceller_profile:profiles!orders_cancelled_by_fkey(full_name)
         `, { count: "exact" })
         .order("created_at", { ascending: false })
         .range(from, to);
@@ -355,15 +358,19 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
           cancellation_reason: cancelReason,
           cancelled_by: user!.id,
           cancelled_at: new Date().toISOString(),
+          updated_by: user!.id,
+          updated_at: new Date().toISOString(),
         })
         .eq("id", order.id)
         .in("status", ["pending", "confirmed"]);
       if (error) throw error;
 
-      await supabase
-        .from("proforma_invoices")
-        .update({ status: "cancelled", deleted_at: new Date().toISOString() })
-        .eq("order_id", order.id);
+      try {
+        await supabase
+          .from("proforma_invoices")
+          .update({ status: "cancelled", deleted_at: new Date().toISOString() })
+          .eq("order_id", order.id);
+      } catch { /* best-effort */ }
 
       toast.success(`Order ${order.display_id} cancelled`);
       qc.invalidateQueries({ queryKey: ["mobile-orders"] });

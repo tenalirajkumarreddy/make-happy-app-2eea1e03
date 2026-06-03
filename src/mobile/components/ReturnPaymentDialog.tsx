@@ -1,7 +1,6 @@
 import { useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
@@ -30,7 +29,6 @@ interface Props {
 }
 
 export function ReturnPaymentDialog({ open, onOpenChange, transaction }: Props) {
-  const [returnAmount, setReturnAmount] = useState("")
   const [returnType, setReturnType] = useState("cash")
   const [reason, setReason] = useState("")
   const [notes, setNotes] = useState("")
@@ -39,33 +37,37 @@ export function ReturnPaymentDialog({ open, onOpenChange, transaction }: Props) 
   const qc = useQueryClient()
   const { user } = useAuth()
 
-  const maxReturn = transaction?.total_amount || 0
+  const returnAmount = transaction?.total_amount || 0
 
   const handleSubmit = async () => {
-    const amount = Number.parseFloat(returnAmount)
-    if (!amount || amount <= 0) { setError("Enter a valid amount"); return }
-    if (amount > maxReturn) { setError(`Amount cannot exceed ${fmtINR(maxReturn)}`); return }
+    if (!returnAmount || returnAmount <= 0) { setError("Invalid return amount"); return }
     if (!reason) { setError("Select a reason"); return }
     if (!transaction || !user?.id) return
 
     setSubmitting(true)
     setError("")
     try {
+      const { data: displayIdResult } = await supabase.rpc("generate_random_display_id", {
+        p_prefix: "RET",
+        p_table_name: "payment_returns",
+      }) as any;
+      const displayId = displayIdResult || ("RET-" + Date.now().toString().slice(-6));
       const { error: rpcError } = await supabase.rpc("record_payment_return", {
+        p_display_id: displayId,
         p_original_transaction_id: transaction.id,
         p_store_id: transaction.store_id,
         p_customer_id: transaction.customer_id || null,
-        p_return_amount: amount,
+        p_return_amount: returnAmount,
         p_return_type: returnType,
         p_reason: reason,
         p_notes: notes || null,
         p_recorded_by: user.id,
+        p_logged_by: user.id,
       })
       if (rpcError) throw rpcError
 
       afterPaymentReturned(qc, { isMobile: true })
       onOpenChange(false)
-      setReturnAmount("")
       setReturnType("cash")
       setReason("")
       setNotes("")
@@ -80,19 +82,15 @@ export function ReturnPaymentDialog({ open, onOpenChange, transaction }: Props) 
     <Dialog open={open} onOpenChange={(open) => { if (!open) { onOpenChange(false); setError(""); } }}>
       <DialogContent className="max-w-sm rounded-2xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><RotateCcw className="h-4 w-4" /> Return Payment</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><RotateCcw className="h-4 w-4" /> Full Return Payment</DialogTitle>
         </DialogHeader>
         {transaction && (
           <div className="space-y-3">
             <div className="rounded-xl bg-muted/50 p-3 space-y-1">
               <p className="text-sm font-medium">{transaction.display_id}</p>
               <p className="text-xs text-muted-foreground">{transaction.stores?.name}</p>
-              <p className="text-xs text-muted-foreground">Max return: {fmtINR(maxReturn)}</p>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>Return Amount</Label>
-              <Input type="number" placeholder="0" value={returnAmount} onChange={(e) => setReturnAmount(e.target.value)} max={maxReturn} />
+              <p className="text-sm font-bold text-red-500">Full amount: {fmtINR(returnAmount)}</p>
+              <p className="text-[10px] text-muted-foreground">For partial adjustments, edit the transaction instead.</p>
             </div>
 
             <div className="space-y-1.5">
@@ -127,9 +125,9 @@ export function ReturnPaymentDialog({ open, onOpenChange, transaction }: Props) 
 
             {error && <p className="text-xs text-red-500">{error}</p>}
 
-            <Button onClick={handleSubmit} disabled={!returnAmount || !reason || submitting} className="w-full rounded-xl">
+            <Button onClick={handleSubmit} disabled={!reason || submitting} className="w-full rounded-xl">
               {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
-              Process Return
+              Return Full {fmtINR(returnAmount)}
             </Button>
           </div>
         )}

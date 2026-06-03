@@ -274,6 +274,11 @@ const Orders = () => {
 
       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
 
+      // Users with only view_assigned_orders see only their assigned orders
+      if (canViewAssignedOrders && !canViewOrders && user?.id) {
+        query = query.eq("assigned_to", user.id);
+      }
+
       // Server-side filters
       if (statusFilter !== "all") query = query.eq("status", statusFilter);
       if (filterFrom) query = query.gte("created_at", filterFrom + "T00:00:00");
@@ -485,6 +490,7 @@ const Orders = () => {
     if (!storeId) { toast.error("Please select a store"); return; }
     if (orderType === "simple" && !requirementNote.trim()) { toast.error("Please describe the requirement"); return; }
     if (orderType === "detailed" && !orderItems.some((i) => i.product_id)) { toast.error("Please add at least one product"); return; }
+    if (orderType === "detailed" && orderItems.some((i) => i.product_id && (!i.quantity || i.quantity <= 0))) { toast.error("All products must have a quantity greater than 0"); return; }
 
     // Duplicate check: store can have only one active (pending or confirmed) order
     const activeOrder = await getActiveOrderForStore(supabase, storeId);
@@ -787,16 +793,12 @@ if (orderType === "detailed" && canModifyPrices) {
       if (error) throw error;
 
       setEditOrder(orderData as unknown as FulfillOrder);
-      setOrderType(orderData.order_type);
-      setRequirementNote(orderData.requirement_note || "");
-      setAssignedTo(orderData.assigned_to || "unassigned");
-      setShowEdit(true);
+      setShowView(true);
     } catch (error) {
       console.error("Error loading order details for view:", error);
       toast.error("Failed to load order details");
     } finally {
       setLoadingOrderDetails(null);
-      setViewingOrderId(null);
     }
   };
 

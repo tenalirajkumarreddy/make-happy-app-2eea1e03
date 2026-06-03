@@ -719,6 +719,11 @@ let query = supabase
       return;
     }
 
+    if (items.some((i) => i.product_id && (!i.quantity || i.quantity <= 0))) {
+      toast.error("All products must have a quantity greater than 0");
+      return;
+    }
+
     setSaving(true);
 
   const customerId = selectedStore?.customer_id;
@@ -731,7 +736,7 @@ let query = supabase
   // NEW: Check stock availability before sale
   const hasProducts = items.some(i => i.product_id && i.quantity > 0);
   if (hasProducts) {
-    const saleItemsForStockCheck = items.filter((i) => i.product_id).map((i) => ({
+    const saleItemsForStockCheck = items.filter((i) => i.product_id && i.quantity > 0).map((i) => ({
       product_id: i.product_id,
       quantity: i.quantity,
     }));
@@ -768,7 +773,7 @@ let query = supabase
     if (!navigator.onLine) {
       const effectiveRecordedByOffline = recordedFor || user!.id;
       const loggedByOffline = recordedFor ? user!.id : null;
-      const saleItems = items.filter((i) => i.product_id).map((i) => ({
+      const saleItems = items.filter((i) => i.product_id && i.quantity > 0).map((i) => ({
         product_id: i.product_id,
         quantity: i.quantity,
         unit_price: i.unit_price,
@@ -843,7 +848,7 @@ let query = supabase
     const effectiveRecordedBy = recordedFor || user!.id;
     const loggedBy = recordedFor ? user!.id : null;
 
-    const saleItems = items.filter((i) => i.product_id).map((i) => ({
+    const saleItems = items.filter((i) => i.product_id && i.quantity > 0).map((i) => ({
       product_id: i.product_id,
       quantity: i.quantity,
       unit_price: i.unit_price,

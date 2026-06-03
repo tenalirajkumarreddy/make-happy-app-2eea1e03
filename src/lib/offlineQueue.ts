@@ -18,7 +18,7 @@ const RETRY_DELAYS = [1000, 5000, 15000]; // Exponential backoff
 
 export interface PendingAction {
   id: string;
-  type: "sale" | "transaction" | "visit" | "customer" | "store" | "file_upload" | "order";
+  type: "sale" | "transaction" | "visit" | "customer" | "store" | "file_upload" | "order" | "transaction_edit" | "payment_return";
   payload: unknown;
   createdAt: string;
   retryCount?: number;
@@ -212,6 +212,19 @@ export function generateBusinessKey(
     case 'order':
       if (params.storeId) parts.push(params.storeId);
       if (params.orderType) parts.push(params.orderType);
+      break;
+
+    case 'transaction_edit':
+      if (params.storeId) parts.push(params.storeId);
+      if (params.customerId) parts.push(params.customerId);
+      parts.push('edit');
+      break;
+
+    case 'payment_return':
+      if (params.storeId) parts.push(params.storeId);
+      if (params.customerId) parts.push(params.customerId);
+      if (params.amount !== undefined) parts.push(String(Math.round(params.amount * 100) / 100));
+      parts.push('return');
       break;
 
     default:

@@ -59,6 +59,7 @@ interface OrderRow {
   creator_profile?: { full_name: string } | null;
   updater_profile?: { full_name: string } | null;
   fulfiller_profile?: { full_name: string } | null;
+  canceller_profile?: { full_name: string } | null;
   order_items?: Array<{ id: string; product_id: string; quantity: number; products?: { name: string; base_price: number } | null }>;
 }
 
@@ -132,7 +133,7 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
     queryFn: async () => {
       let query = supabase
         .from("orders")
-        .select("id, display_id, status, order_type, requirement_note, cancellation_reason, created_at, updater_profile:profiles!orders_updated_by_fkey(full_name), store_id, customer_id, stores(name, store_type_id, store_types(name), routes(name)), customers(name), order_items(id, product_id, quantity, products(name, base_price))")
+        .select("id, display_id, status, order_type, requirement_note, cancellation_reason, created_at, updater_profile:profiles!orders_updated_by_fkey(full_name), creator_profile:profiles!orders_created_by_fkey(full_name), fulfiller_profile:profiles!orders_fulfilled_by_fkey(full_name), canceller_profile:profiles!orders_cancelled_by_fkey(full_name), store_id, customer_id, stores(name, store_type_id, store_types(name), routes(name)), customers(name), order_items(id, product_id, quantity, products(name, base_price))")
         .eq("created_by", user!.id)
         .order("created_at", { ascending: false });
 
@@ -349,15 +350,19 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
           cancellation_reason: cancelReason,
           cancelled_by: user!.id,
           cancelled_at: new Date().toISOString(),
+          updated_by: user!.id,
+          updated_at: new Date().toISOString(),
         })
         .eq("id", cancelOrderId)
         .in("status", ["pending", "confirmed"]);
       if (error) throw error;
 
-      await supabase
-        .from("proforma_invoices")
-        .update({ status: "cancelled", deleted_at: new Date().toISOString() })
-        .eq("order_id", cancelOrderId);
+      try {
+        await supabase
+          .from("proforma_invoices")
+          .update({ status: "cancelled", deleted_at: new Date().toISOString() })
+          .eq("order_id", cancelOrderId);
+      } catch { /* best-effort */ }
 
       toast.success("Order cancelled");
       setCancelOrderId(null);

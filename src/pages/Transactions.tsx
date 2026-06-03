@@ -7,7 +7,7 @@ import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { addToQueue, generateBusinessKey } from "@/lib/offlineQueue";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
-import { Loader2, X, CalendarIcon, Store as StoreIcon, Banknote, CreditCard, RotateCcw, Scale, AlertCircle, Receipt, Printer, Share2, UserCircle, MapPin, Phone, Mail } from "lucide-react";
+import { Loader2, X, CalendarIcon, Store as StoreIcon, RotateCcw, Receipt, Printer, Share2, Pencil } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { QrStoreSelector } from "@/components/shared/QrStoreSelector";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
@@ -49,6 +49,7 @@ const Transactions = () => {
   const [showAdd, setShowAdd] = useState(false);
   const [saving, setSaving] = useState(false);
   const [storeId, setStoreId] = useState(searchParams.get("store") ?? "");
+  const [editingTransaction, setEditingTransaction] = useState<any>(null);
   const PAGE_SIZE = 100;
 
   // When navigated with ?store=<id>, auto-open the add dialog
@@ -84,10 +85,6 @@ const Transactions = () => {
   const [filterPayment, setFilterPayment] = useState("all");
   const [loadedPages, setLoadedPages] = useState(1);
 
-  // Transaction Receipt state
-  const [showTransactionReceipt, setShowTransactionReceipt] = useState(false);
-  const [receiptTxnId, setReceiptTxnId] = useState<string | null>(null);
-
   // Reset to page 1 whenever any filter changes
   useEffect(() => {
     setLoadedPages(1);
@@ -99,7 +96,7 @@ const Transactions = () => {
       queryFn: async () => {
        let query: any = supabase
        .from("transactions")
-       .select("*, stores(name, display_id, store_type_id, route_id, outstanding, customer_id), customers(id, name, display_id)")
+        .select("*, is_fully_returned, stores(name, display_id, store_type_id, route_id, outstanding, customer_id), customers(id, name, display_id)")
        .order("created_at", { ascending: false });
        if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
        // Non-admin roles only see their own records
@@ -211,22 +208,15 @@ const Transactions = () => {
 
   const resetForm = () => {
     setStoreId(""); setCashAmount(""); setUpiAmount(""); setNotes(""); setRecordedFor(""); setTxnDate("");
+    setEditingTransaction(null);
   };
 
   const resetReturnForm = () => {
     setReturnTxnId(null);
-    setReturnAmount("");
+    setFullReturnAmount(-1);
     setReturnType("cash");
     setReturnReason("");
     setReturnNotes("");
-  };
-
-  const resetCorrectionForm = () => {
-    setCorrectionStoreId("");
-    setCorrectionType("adjustment");
-    setCorrectionAmount("");
-    setCorrectionReason("");
-    setCorrectionDescription("");
   };
 
   // Force fresh fetch on mount to bypass any stale cache
@@ -234,8 +224,69 @@ const Transactions = () => {
     qc.invalidateQueries({ queryKey: ["transactions"] });
   }, []);
 
+  const startEdit = (txn: any) => {
+    setEditingTransaction(txn);
+    setStoreId(txn.store_id);
+    setCashAmount(String(txn.cash_amount || ""));
+    setUpiAmount(String(txn.upi_amount || ""));
+    setNotes(txn.notes || "");
+    setTxnDate(txn.created_at ? new Date(txn.created_at).toISOString().slice(0, 16) : "");
+    setShowAdd(true);
+  };
+
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (editingTransaction) {
+      if (!editingTransaction.id) { toast.error("Transaction not found"); return; }
+      if (cash < 0 || upi < 0) { toast.error("Cash and UPI amounts cannot be negative"); return; }
+      if (totalPayment <= 0) { toast.error("Total payment must be positive"); return; }
+
+      // Offline: queue edit and return
+      if (!navigator.onLine) {
+        const bizKey = generateBusinessKey("transaction_edit", {
+          storeId: editingTransaction.store_id,
+          customerId: editingTransaction.customer_id,
+          timestamp: new Date().toISOString(),
+        });
+        await addToQueue({
+          id: crypto.randomUUID(),
+          type: "transaction_edit",
+          payload: {
+            txnId: editingTransaction.id,
+            cashAmount: cash,
+            upiAmount: upi,
+            notes: notes || null,
+            recordedBy: user!.id,
+          },
+          createdAt: new Date().toISOString(),
+          businessKey: bizKey,
+        });
+        setSaving(false);
+        setShowAdd(false);
+        resetForm();
+        toast.warning("Offline — transaction edit queued and will sync automatically");
+        return;
+      }
+
+      setSaving(true);
+      const { data: result, error: rpcError } = await (supabase as any).rpc("update_transaction", {
+        p_transaction_id: editingTransaction.id,
+        p_cash_amount: cash,
+        p_upi_amount: upi,
+        p_notes: notes || null,
+      });
+
+      if (rpcError) { toast.error(rpcError.message); setSaving(false); return; }
+
+      toast.success("Transaction updated");
+      setSaving(false);
+      setShowAdd(false);
+      resetForm();
+      afterTransactionSaved(qc);
+      return;
+    }
+
     if (!storeId || totalPayment <= 0) {
       toast.error("Please select a store and enter payment amount");
       return;
@@ -254,7 +305,7 @@ const Transactions = () => {
     setSaving(true);
 
     // Generate random display ID
-    const { data: displayId } = await supabase.rpc("generate_random_display_id", { p_prefix: "PAY", p_table_name: "transactions" }) as any;
+    const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "PAY", seq_name: "pay_display_seq" }) as any;
 
     const effectiveRecordedBy = recordedFor || user!.id;
     const loggedBy = recordedFor ? user!.id : null;
@@ -373,26 +424,42 @@ const Transactions = () => {
   // State for payment return dialog
   const [showReturnDialog, setShowReturnDialog] = useState(false);
   const [returnTxnId, setReturnTxnId] = useState<string | null>(null);
-  const [returnAmount, setReturnAmount] = useState("");
+  const [fullReturnAmount, setFullReturnAmount] = useState<number>(-1); // -1 = loading
   const [returnType, setReturnType] = useState("cash");
   const [returnReason, setReturnReason] = useState("");
   const [returnNotes, setReturnNotes] = useState("");
   const [returnLoading, setReturnLoading] = useState(false);
-  const [correctionStoreId, setCorrectionStoreId] = useState("");
-  const [correctionType, setCorrectionType] = useState("adjustment");
-  const [correctionAmount, setCorrectionAmount] = useState("");
-  const [correctionReason, setCorrectionReason] = useState("");
-  const [correctionDescription, setCorrectionDescription] = useState("");
+
+  useEffect(() => {
+    if (!returnTxnId) { setFullReturnAmount(-1); return; }
+    const txn = transactions?.find((t: any) => t.id === returnTxnId);
+    if (!txn) { setFullReturnAmount(0); return; }
+    (async () => {
+      const { data: returnedRows } = await (supabase as any)
+        .from("payment_returns")
+        .select("return_amount")
+        .eq("original_transaction_id", returnTxnId)
+        .eq("status", "completed");
+      const totalReturned = (returnedRows || []).reduce((sum: number, r: any) => sum + Number(r.return_amount), 0);
+      setFullReturnAmount(Number(txn.total_amount) - totalReturned);
+    })();
+  }, [returnTxnId]);
 
   const columns = [
-    { header: "Payment ID", accessor: "display_id" as const, className: "font-mono text-xs" },
-    { header: "Store", accessor: (row: any) => row.stores?.name || "—", className: "font-medium" },
-    { header: "Total", accessor: (row: any) => `₹${Number(row.total_amount || 0).toLocaleString()}`, className: "font-semibold" },
-    { header: "Cash", accessor: (row: any) => `₹${Number(row.cash_amount || 0).toLocaleString()}`, className: "text-sm hidden md:table-cell" },
-    { header: "UPI", accessor: (row: any) => `₹${Number(row.upi_amount || 0).toLocaleString()}`, className: "text-sm hidden md:table-cell" },
-    { header: "Old Bal.", accessor: (row: any) => `₹${Number(row.old_outstanding || 0).toLocaleString()}`, className: "text-muted-foreground text-sm hidden lg:table-cell" },
-    { header: "New Bal.", accessor: (row: any) => `₹${Number(row.new_outstanding || 0).toLocaleString()}`, className: "text-sm hidden lg:table-cell" },
-    { header: "Date", accessor: (row: any) => new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }), className: "text-muted-foreground text-xs hidden sm:table-cell" },
+    { header: "Payment ID", accessor: (row: any) => (
+      <span className={`font-mono text-xs ${row.is_fully_returned ? "line-through text-muted-foreground" : ""}`}>
+        {row.display_id}
+        {row.is_fully_returned && <span className="ml-1.5 text-[9px] font-bold bg-amber-100 text-amber-600 border border-amber-200 rounded px-1 py-0">Returned</span>}
+      </span>
+    ), className: "font-mono text-xs" },
+    { header: "Store", accessor: (row: any) => <span className={row.is_fully_returned ? "line-through text-muted-foreground" : ""}>{row.stores?.name || "—"}</span>, className: "font-medium" },
+    { header: "Total", accessor: (row: any) => (
+      <span className={`font-semibold ${row.is_fully_returned ? "line-through text-muted-foreground" : ""}`}>
+        ₹{Number(row.total_amount || 0).toLocaleString()}
+      </span>
+    ), className: "font-semibold" },
+    { header: "Cash", accessor: (row: any) => <span className={`text-sm hidden md:table-cell ${row.is_fully_returned ? "line-through text-muted-foreground" : ""}`}>₹{Number(row.cash_amount || 0).toLocaleString()}</span>, className: "text-sm hidden md:table-cell" },
+    { header: "UPI", accessor: (row: any) => <span className={`text-sm hidden md:table-cell ${row.is_fully_returned ? "line-through text-muted-foreground" : ""}`}>₹{Number(row.upi_amount || 0).toLocaleString()}</span>, className: "text-sm hidden md:table-cell" },
     { header: "Actions", accessor: (row: any) => (
       <TooltipProvider>
         <div className="flex items-center gap-1">
@@ -411,20 +478,48 @@ const Transactions = () => {
             <TooltipContent><p>View Receipt</p></TooltipContent>
           </Tooltip>
 
-          {/* Return Payment */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 text-amber-600 hover:bg-amber-50"
-                onClick={(e) => { e.stopPropagation(); setReturnTxnId(row.id); setShowReturnDialog(true); }}
-              >
-                <RotateCcw className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent><p>Return Payment</p></TooltipContent>
-          </Tooltip>
+          {!row.is_fully_returned && <>
+            {/* Return (opens dialog for full or partial) */}
+            {(() => {
+              const isToday = new Date(row.created_at).toDateString() === new Date().toDateString();
+              const canReturn = isAdmin || (row.recorded_by === user?.id && isToday);
+              return (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={`h-7 w-7 ${canReturn ? "text-green-600 hover:bg-green-50" : "text-muted-foreground/30 cursor-not-allowed"}`}
+                      onClick={(e) => {
+                        if (!canReturn) return;
+                        e.stopPropagation();
+                        setReturnTxnId(row.id);
+                        setShowReturnDialog(true);
+                      }}
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent><p>{canReturn ? "Return (Full / Partial)" : "Only same-day self-returns allowed"}</p></TooltipContent>
+                </Tooltip>
+              );
+            })()}
+
+            {/* Edit Transaction */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-amber-600 hover:bg-amber-50"
+                  onClick={(e) => { e.stopPropagation(); startEdit(row); }}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent><p>Edit Transaction</p></TooltipContent>
+            </Tooltip>
+          </>}
         </div>
         </TooltipProvider>
       ), className: "hidden sm:table-cell" },
@@ -469,23 +564,30 @@ const Transactions = () => {
   };
 
   // Update columns to use hover cards
+  const returnedClass = (row: any) => row.is_fully_returned ? "line-through text-muted-foreground" : "";
+
   const columnsWithHover = [
-    { header: "Payment ID", accessor: "display_id" as const, className: "font-mono text-xs" },
+    { header: "Payment ID", accessor: (row: any) => (
+      <span className={`font-mono text-xs ${returnedClass(row)}`}>
+        {row.display_id}
+        {row.is_fully_returned && <span className="ml-1.5 text-[9px] font-bold bg-amber-100 text-amber-600 border border-amber-200 rounded px-1 py-0">Returned</span>}
+      </span>
+    ), className: "font-mono text-xs" },
     { header: "Store", accessor: (row: any) => (
-      <div className="flex items-center gap-2">
-        <StoreIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+      <div className={`flex items-center gap-2 ${returnedClass(row)}`}>
+        <StoreIcon className={`h-3.5 w-3.5 shrink-0 ${returnedClass(row)}`} />
         <StoreHoverCard store={row.stores}>
           <span>{row.stores?.name || "—"}</span>
         </StoreHoverCard>
       </div>
     ), className: "font-medium" },
-    { header: "Total", accessor: (row: any) => `₹${Number(row.total_amount || 0).toLocaleString()}`, className: "font-semibold" },
-    { header: "Cash", accessor: (row: any) => `₹${Number(row.cash_amount || 0).toLocaleString()}`, className: "text-sm hidden md:table-cell" },
-    { header: "UPI", accessor: (row: any) => `₹${Number(row.upi_amount || 0).toLocaleString()}`, className: "text-sm hidden md:table-cell" },
-    { header: "Old Bal.", accessor: (row: any) => `₹${Number(row.old_outstanding || 0).toLocaleString()}`, className: "text-muted-foreground text-sm hidden lg:table-cell" },
-    { header: "New Bal.", accessor: (row: any) => `₹${Number(row.new_outstanding || 0).toLocaleString()}`, className: "text-sm hidden lg:table-cell" },
-    { header: "Date", accessor: (row: any) => new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }), className: "text-muted-foreground text-xs hidden sm:table-cell" },
-    columns[8], // Keep the actions column
+    { header: "Total", accessor: (row: any) => <span className={`font-semibold ${returnedClass(row)}`}>₹{Number(row.total_amount || 0).toLocaleString()}</span>, className: "font-semibold" },
+    { header: "Cash", accessor: (row: any) => <span className={`text-sm hidden md:table-cell ${returnedClass(row)}`}>₹{Number(row.cash_amount || 0).toLocaleString()}</span>, className: "text-sm hidden md:table-cell" },
+    { header: "UPI", accessor: (row: any) => <span className={`text-sm hidden md:table-cell ${returnedClass(row)}`}>₹{Number(row.upi_amount || 0).toLocaleString()}</span>, className: "text-sm hidden md:table-cell" },
+    { header: "Old Bal.", accessor: (row: any) => <span className={`text-muted-foreground text-sm hidden lg:table-cell ${returnedClass(row)}`}>₹{Number(row.old_outstanding || 0).toLocaleString()}</span>, className: "text-muted-foreground text-sm hidden lg:table-cell" },
+    { header: "New Bal.", accessor: (row: any) => <span className={`text-sm hidden lg:table-cell ${returnedClass(row)}`}>₹{Number(row.new_outstanding || 0).toLocaleString()}</span>, className: "text-sm hidden lg:table-cell" },
+    { header: "Date", accessor: (row: any) => <span className={`text-muted-foreground text-xs hidden sm:table-cell ${returnedClass(row)}`}>{new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}</span>, className: "text-muted-foreground text-xs hidden sm:table-cell" },
+    columns[5], // Keep the actions column
   ];
 
   if (isLoading) {
@@ -592,22 +694,25 @@ const Transactions = () => {
         searchPlaceholder="Search by payment ID..."
         emptyMessage="No transactions recorded yet."
         renderMobileCard={(row: any) => (
-          <div className="rounded-lg border bg-card p-3">
+          <div className={`rounded-lg border bg-card p-3 ${row.is_fully_returned ? "opacity-70 bg-slate-50 dark:bg-slate-900/40 border-dashed border-red-200 dark:border-red-900/40" : ""}`}>
             {/* Header row: ID + Date */}
             <div className="flex items-center justify-between mb-1.5">
-              <span className="font-mono text-xs text-primary font-medium">{row.display_id}</span>
+              <span className={`font-mono text-xs font-medium ${row.is_fully_returned ? "line-through text-muted-foreground" : "text-primary"}`}>
+                {row.display_id}
+                {row.is_fully_returned && <span className="ml-1.5 text-[9px] font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800 rounded px-1.5 py-0">Returned</span>}
+              </span>
               <span className="text-[10px] text-muted-foreground">{format(new Date(row.created_at), "dd MMM yy, hh:mm a")}</span>
             </div>
             {/* Store name */}
-            <div className="flex items-center gap-1.5 mb-2">
-              <StoreIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            <div className={`flex items-center gap-1.5 mb-2 ${returnedClass(row)}`}>
+              <StoreIcon className={`h-3.5 w-3.5 shrink-0 ${returnedClass(row)}`} />
               <span className="font-medium text-sm truncate">{row.stores?.name || "—"}</span>
             </div>
             {/* Amounts row - inline compact */}
             <div className="flex items-center gap-3 text-xs">
-              <span className="font-bold text-foreground">₹{Number(row.total_amount || 0).toLocaleString()}</span>
-              <span className="text-muted-foreground">Cash: ₹{Number(row.cash_amount || 0).toLocaleString()}</span>
-              <span className="text-muted-foreground">UPI: ₹{Number(row.upi_amount || 0).toLocaleString()}</span>
+              <span className={`font-bold ${returnedClass(row)}`}>₹{Number(row.total_amount || 0).toLocaleString()}</span>
+              <span className={`${returnedClass(row)}`}>Cash: ₹{Number(row.cash_amount || 0).toLocaleString()}</span>
+              <span className={`${returnedClass(row)}`}>UPI: ₹{Number(row.upi_amount || 0).toLocaleString()}</span>
             </div>
             {/* Footer: Recorder + Balance */}
             <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
@@ -620,7 +725,7 @@ const Transactions = () => {
               </div>
               <div className="flex items-center gap-1.5 text-xs">
                 <span className="text-muted-foreground">Bal:</span>
-                <span className={Number(row.new_outstanding || 0) < Number(row.old_outstanding || 0) ? "font-semibold text-green-600" : "text-muted-foreground"}>
+                <span className={`${returnedClass(row)} ${!row.is_fully_returned && Number(row.new_outstanding || 0) < Number(row.old_outstanding || 0) ? "font-semibold text-green-600" : ""}`}>
                   ₹{Number(row.new_outstanding || 0).toLocaleString()}
                 </span>
               </div>
@@ -640,9 +745,9 @@ const Transactions = () => {
 
       <Dialog open={showAdd} onOpenChange={(v) => { setShowAdd(v); if (!v) resetForm(); }}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>Record Transaction</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editingTransaction ? "Edit Transaction" : "Record Transaction"}</DialogTitle></DialogHeader>
           <form onSubmit={handleAdd} className="space-y-4">
-            {canRecordBehalf && (
+            {!editingTransaction && canRecordBehalf && (
               <div>
                 <Label>Record on behalf of</Label>
                 <Select value={recordedFor || "self"} onValueChange={(v) => setRecordedFor(v === "self" ? "" : v)}>
@@ -656,7 +761,7 @@ const Transactions = () => {
                 </Select>
               </div>
             )}
-            {isAdmin && (
+            {!editingTransaction && isAdmin && (
               <div>
                 <Label>Transaction Date <span className="text-muted-foreground text-xs font-normal">(leave blank to use current time)</span></Label>
                 <Input
@@ -670,7 +775,7 @@ const Transactions = () => {
             <div>
               <Label>Store</Label>
               <div className="flex gap-2 mt-1">
-                <Select value={storeId} onValueChange={setStoreId}>
+                <Select value={storeId} onValueChange={setStoreId} disabled={!!editingTransaction}>
                   <SelectTrigger className="flex-1"><SelectValue placeholder="Select store" /></SelectTrigger>
                   <SelectContent>{stores?.map((s) => (
                       <SelectItem key={s.id} value={s.id} disabled={!(s ).is_active}>
@@ -678,7 +783,7 @@ const Transactions = () => {
                       </SelectItem>
                     ))}</SelectContent>
                 </Select>
-                <QrStoreSelector onStoreSelected={setStoreId} />
+                {!editingTransaction && <QrStoreSelector onStoreSelected={setStoreId} />}
               </div>
               {selectedStore && (
                 <p className="text-xs text-muted-foreground mt-1">Current outstanding: ₹{oldOutstanding.toLocaleString()}</p>
@@ -695,7 +800,7 @@ const Transactions = () => {
             <div><Label>Notes (optional)</Label><Input value={notes} onChange={(e) => setNotes(e.target.value)} className="mt-1" placeholder="Payment reference..." /></div>
             <Button type="submit" className="w-full" disabled={saving}>
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Record Transaction
+              {editingTransaction ? "Update Transaction" : "Record Transaction"}
             </Button>
 </form>
       </DialogContent>
@@ -729,7 +834,8 @@ const Transactions = () => {
                 variant="outline" 
                 onClick={() => {
                   if (selectedTransaction) {
-                    const text = `Receipt: ${selectedTransaction.display_id}\nStore: ${selectedTransaction.stores?.name}\nDate: ${new Date(selectedTransaction.created_at).toLocaleDateString('en-IN')}\nAmount: ₹${Number(selectedTransaction.total_amount || 0).toLocaleString()}\nPrevious Balance: ₹${Number(selectedTransaction.old_outstanding || 0).toLocaleString()}\nTotal Due: ₹${Number(selectedTransaction.new_outstanding || 0).toLocaleString()}`;
+                    const returnedLabel = selectedTransaction.is_fully_returned ? "\nStatus: CANCELLED (Fully Returned)" : "";
+                    const text = `Receipt: ${selectedTransaction.display_id}\nStore: ${selectedTransaction.stores?.name}\nDate: ${new Date(selectedTransaction.created_at).toLocaleDateString('en-IN')}\nAmount: ₹${Number(selectedTransaction.total_amount || 0).toLocaleString()}${returnedLabel}\nPrevious Balance: ₹${Number(selectedTransaction.old_outstanding || 0).toLocaleString()}\nTotal Due: ₹${Number(selectedTransaction.new_outstanding || 0).toLocaleString()}`;
                     navigator.clipboard.writeText(text);
                     toast.success("Receipt copied to clipboard");
                   }
@@ -743,6 +849,7 @@ const Transactions = () => {
         {(() => {
           if (!selectedTransaction) return <p className="text-center text-muted-foreground py-8">Receipt not found</p>;
           
+          const isReturned = selectedTransaction.is_fully_returned;
           const amountPaid = Number(selectedTransaction.total_amount || 0);
           const previousBalance = Number(selectedTransaction.old_outstanding || 0);
           const totalDue = Number(selectedTransaction.new_outstanding || 0);
@@ -751,6 +858,13 @@ const Transactions = () => {
           
           return (
             <div id="txn-receipt-content" className="font-mono text-sm">
+              {isReturned && (
+                <div className="text-center mb-2">
+                  <span className="inline-block text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 rounded px-2 py-0.5 uppercase tracking-wider">
+                    CANCELLED — Fully Returned
+                  </span>
+                </div>
+              )}
               {/* Header */}
               <div className="text-center mb-4">
                 <h1 className="font-bold text-lg">{settings.business_name || "Aqua Prime"}</h1>
@@ -790,7 +904,7 @@ const Transactions = () => {
               <div className="space-y-1">
                 <div className="flex justify-between font-bold text-base pt-1 border-t">
                   <span>AMOUNT PAID:</span>
-                  <span>₹{amountPaid.toLocaleString()}</span>
+                  <span className={isReturned ? "line-through text-muted-foreground" : ""}>₹{amountPaid.toLocaleString()}</span>
                 </div>
                 {Number(selectedTransaction.cash_amount) > 0 && (
                   <div className="flex justify-between text-xs">
@@ -828,7 +942,7 @@ const Transactions = () => {
 
               {/* Footer */}
               <div className="text-center text-xs space-y-1">
-                <p className="font-semibold">Thank you for your payment!</p>
+                <p className="font-semibold">{isReturned ? "This payment has been fully returned" : "Thank you for your payment!"}</p>
                 {selectedTransaction.notes && <p className="text-muted-foreground text-[10px]">Note: {selectedTransaction.notes}</p>}
                 <p className="text-[10px] text-muted-foreground mt-2">
                   This is a computer generated receipt
@@ -847,8 +961,16 @@ const Transactions = () => {
           <form
             onSubmit={async (e) => {
               e.preventDefault();
-              if (!returnTxnId || !returnAmount || parseFloat(returnAmount) <= 0) {
-                toast.error("Please enter a valid return amount");
+              if (!returnTxnId) {
+                toast.error("Transaction not found");
+                return;
+              }
+              if (fullReturnAmount === -1) {
+                toast.error("Still calculating return amount, please wait");
+                return;
+              }
+              if (fullReturnAmount <= 0) {
+                toast.error("This transaction has already been fully returned");
                 return;
               }
               const txn = transactions?.find((t: any) => t.id === returnTxnId);
@@ -856,22 +978,62 @@ const Transactions = () => {
                 toast.error("Transaction not found");
                 return;
               }
-              const maxReturn = Number(txn.cash_amount) + Number(txn.upi_amount);
-              if (parseFloat(returnAmount) > maxReturn) {
-                toast.error(`Cannot return more than original payment (₹${maxReturn.toLocaleString()})`);
+              if (!returnReason) {
+                toast.error("Please select a return reason");
                 return;
               }
+
+              // Offline: queue payment return
+              if (!navigator.onLine) {
+                const offlineDisplayId = "RET-" + Date.now().toString().slice(-6);
+                const bizKey = generateBusinessKey("payment_return", {
+                  storeId: txn.store_id,
+                  customerId: txn.customer_id,
+                  amount: fullReturnAmount,
+                  timestamp: new Date().toISOString(),
+                });
+                await addToQueue({
+                  id: crypto.randomUUID(),
+                  type: "payment_return",
+                  payload: {
+                    displayId: offlineDisplayId,
+                    originalTransactionId: returnTxnId,
+                    storeId: txn.store_id,
+                    customerId: txn.customer_id,
+                    recordedBy: user!.id,
+                    loggedBy: user!.id,
+                    returnAmount: fullReturnAmount,
+                    returnType: returnType,
+                    reason: returnReason,
+                    notes: returnNotes || null,
+                  },
+                  createdAt: new Date().toISOString(),
+                  businessKey: bizKey,
+                });
+                setShowReturnDialog(false);
+                resetReturnForm();
+                toast.warning("Offline — payment return queued and will sync automatically");
+                return;
+              }
+
                setReturnLoading(true);
-               const { error } = await (supabase as any).rpc("record_payment_return", {
-                p_original_transaction_id: returnTxnId,
-                p_store_id: txn.store_id,
-                p_customer_id: txn.customer_id,
-                p_return_amount: parseFloat(returnAmount),
-                p_return_type: returnType,
-                p_reason: returnReason,
-                p_notes: returnNotes || null,
-                p_recorded_by: user!.id,
-              });
+                const { data: displayIdResult } = await (supabase as any).rpc("generate_random_display_id", {
+                  p_prefix: "RET",
+                  p_table_name: "payment_returns",
+                });
+                const displayId = displayIdResult || ("RET-" + Date.now().toString().slice(-6));
+                const { error } = await (supabase as any).rpc("record_payment_return", {
+                 p_original_transaction_id: returnTxnId,
+                 p_store_id: txn.store_id,
+                 p_customer_id: txn.customer_id,
+                 p_return_amount: fullReturnAmount,
+                 p_return_type: returnType,
+                 p_reason: returnReason,
+                 p_notes: returnNotes || null,
+                 p_recorded_by: user!.id,
+                 p_display_id: displayId,
+                 p_logged_by: user!.id,
+               });
               if (error) {
                 toast.error(error.message);
               } else {
@@ -895,9 +1057,12 @@ const Transactions = () => {
                     <div className="flex justify-between text-xs text-muted-foreground"><span>Store:</span><span>{txn.stores?.name}</span></div>
                     <div className="flex justify-between text-xs text-muted-foreground"><span>Date:</span><span>{new Date(txn.created_at).toLocaleDateString()}</span></div>
                   </div>
-                  <div>
-                    <Label>Return Amount (₹) <span className="text-muted-foreground text-xs">max ₹{originalAmount.toLocaleString()}</span></Label>
-                    <Input type="number" value={returnAmount} onChange={(e) => setReturnAmount(e.target.value)} className="mt-1" placeholder="0" min="0.01" step="0.01" max={originalAmount} required />
+                  <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm">
+                    <div className="flex justify-between font-semibold">
+                      <span className="text-red-600">Amount to return:</span>
+                      <span className="text-red-600">{fullReturnAmount === -1 ? "Loading..." : `₹${fullReturnAmount.toLocaleString()}`}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">Full return — for partial adjustments, edit the transaction instead.</p>
                   </div>
                   <div>
                     <Label>Return Type</Label>
@@ -929,7 +1094,7 @@ const Transactions = () => {
                   <div className="rounded-lg border bg-muted/30 p-3 text-sm">
                     <div className="flex justify-between font-semibold">
                       <span>Store will be credited:</span>
-                      <span className="text-green-600">+₹{(parseFloat(returnAmount) || 0).toLocaleString()}</span>
+                      <span className="text-green-600">{fullReturnAmount === -1 ? "Loading..." : `+₹${fullReturnAmount.toLocaleString()}`}</span>
                     </div>
                   </div>
                   <Button type="submit" className="w-full" disabled={returnLoading}>

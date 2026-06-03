@@ -42,7 +42,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermission } from "@/hooks/usePermission";
 import { supabase } from "@/integrations/supabase/client";
-import { afterSaleEdited, afterSaleReturned } from "@/lib/mutationHelpers";
+import { afterSaleEdited, afterSaleReturned, afterPaymentReturned } from "@/lib/mutationHelpers";
+import { ReturnPaymentDialog } from "@/mobile/components/ReturnPaymentDialog";
+import { addToQueue, generateBusinessKey } from "@/lib/offlineQueue";
 import { sendNotification, getAdminUserIds, sendNotificationToMany } from "@/lib/notifications";
 import { logActivity } from "@/lib/activityLogger";
 import { cn } from "@/lib/utils";
@@ -60,11 +62,13 @@ type TimelineItem = {
   display_id: string | null;
   store_name: string | null;
   _sale_id?: string;
+  _txn_id?: string;
   _store_id?: string;
   _customer_id?: string;
   _outstanding_amount?: number;
   _is_fully_returned?: boolean;
   _updated_at?: string;
+  _notes?: string;
 };
 
 type ExpenseClaim = {
@@ -116,6 +120,14 @@ export function AgentHistory() {
   const [editUpi, setEditUpi] = useState("");
   const [submittingEdit, setSubmittingEdit] = useState(false);
   const [editingItemsState, setEditingItemsState] = useState<any[]>([]);
+
+  // Transaction return/edit state
+  const [returningTransaction, setReturningTransaction] = useState<any>(null);
+  const [editingTransaction, setEditingTransaction] = useState<{ id: string; display_id: string; cash_amount: number; upi_amount: number; store_id: string; customer_id: string; created_at: string; notes: string } | null>(null);
+  const [editTxnCash, setEditTxnCash] = useState("");
+  const [editTxnUpi, setEditTxnUpi] = useState("");
+  const [editTxnNotes, setEditTxnNotes] = useState("");
+  const [submittingEditTxn, setSubmittingEditTxn] = useState(false);
 
   // Return sale state
   const [returnReason, setReturnReason] = useState("");
@@ -273,7 +285,7 @@ export function AgentHistory() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("transactions")
-        .select("id, display_id, total_amount, cash_amount, upi_amount, created_at, stores(name)")
+        .select("id, display_id, total_amount, cash_amount, upi_amount, created_at, updated_at, store_id, customer_id, notes, is_fully_returned, stores(id, name)")
         .eq("recorded_by", user!.id)
         .order("created_at", { ascending: false })
         .limit(500);
@@ -466,6 +478,12 @@ export function AgentHistory() {
       created_at: transaction.created_at,
       display_id: transaction.display_id || null,
       store_name: transaction.stores?.name || null,
+      _txn_id: transaction.id,
+      _store_id: transaction.store_id,
+      _customer_id: transaction.customer_id,
+      _updated_at: transaction.updated_at,
+      _notes: transaction.notes,
+      _is_fully_returned: transaction.is_fully_returned || false,
     }));
 
     return [...sales, ...transactions].sort(
@@ -493,9 +511,11 @@ export function AgentHistory() {
         const items = timelineByDate[date] || [];
         const activeSales = items.filter((item) => item.type === "sale" && !item._is_fully_returned);
         const returnedSales = items.filter((item) => item.type === "sale" && item._is_fully_returned);
+        const activeTransactions = items.filter((item) => item.type === "transaction" && !item._is_fully_returned);
+        const returnedTransactions = items.filter((item) => item.type === "transaction" && item._is_fully_returned);
         const salesCount = activeSales.length;
-        const transactionsCount = items.filter((item) => item.type === "transaction").length;
-        // Exclude fully returned sales from totals — they've been reversed
+        const transactionsCount = activeTransactions.length;
+        // Exclude fully returned items from totals — they've been reversed
         const total = items
           .filter((item) => !item._is_fully_returned)
           .reduce((sum, item) => sum + item.amount, 0);
@@ -505,7 +525,7 @@ export function AgentHistory() {
           total,
           salesCount,
           transactionsCount,
-          returnedCount: returnedSales.length,
+          returnedCount: returnedSales.length + returnedTransactions.length,
         };
       }),
     [timelineByDate, timelineDates]
@@ -574,20 +594,18 @@ export function AgentHistory() {
     }
 
     setSubmitting(true);
-    const { data: handoverRole } = await supabase.from("user_roles").select("warehouse_id").eq("user_id", user!.id).maybeSingle();
-    const { error } = await supabase.from("handovers").insert({
-      user_id: user!.id,
-      handed_to: toUserId,
-      cash_amount: Number(amount),
-      upi_amount: 0,
-      status: "awaiting_confirmation",
-      notes: handoverNotes || null,
-      warehouse_id: (handoverRole as any)?.warehouse_id || null,
+    const { error: rpcError } = await supabase.rpc("create_handover_with_type", {
+      p_user_id: user!.id,
+      p_handed_to: toUserId,
+      p_cash_amount: Number(amount),
+      p_upi_amount: 0,
+      p_notes: handoverNotes || null,
+      p_handover_type: "transfer",
     });
     setSubmitting(false);
 
-    if (error) {
-      toast.error(error.message);
+    if (rpcError) {
+      toast.error(rpcError.message);
       return;
     }
 
@@ -660,56 +678,87 @@ export function AgentHistory() {
     }
   };
 
-  const handleCancelHandover = async (handoverId: string) => {
+  const handleCancelHandover = async (handover: any) => {
     if (!confirm("Cancel this handover request?")) return;
     setSubmitting(true);
     const { error } = await supabase
       .from("handovers")
       .update({ status: "cancelled" })
-      .eq("id", handoverId);
+      .eq("id", handover.id);
     setSubmitting(false);
     if (error) {
       toast.error(error.message);
       return;
     }
+    const total = Number(handover.cash_amount || 0) + Number(handover.upi_amount || 0);
     toast.success("Handover cancelled");
+    if (handover.handed_to) {
+      sendNotification({
+        userId: handover.handed_to,
+        title: "Handover Cancelled",
+        message: `A ₹${total.toLocaleString()} handover was cancelled by sender`,
+        type: "handover",
+        entityType: "handover",
+        entityId: handover.id,
+      });
+    }
     qc.invalidateQueries({ queryKey: ["handovers"] });
   };
 
-  const handleConfirm = async (handoverId: string) => {
-    const { error } = await supabase
-      .from("handovers")
-      .update({
-        status: "confirmed",
-        confirmed_by: user!.id,
-        confirmed_at: new Date().toISOString(),
-      })
-      .eq("id", handoverId);
+  const handleConfirm = async (handover: any) => {
+    const { error } = await supabase.rpc("confirm_handover", {
+      p_handover_id: handover.id,
+      p_confirmed_by: user!.id,
+    });
 
     if (error) {
       toast.error(error.message);
       return;
     }
 
-    toast.success("Handover confirmed");
+    const total = Number(handover.cash_amount || 0) + Number(handover.upi_amount || 0);
+    const isCollection = handover.handover_type === 'collection';
+    toast.success(isCollection ? "Collection confirmed - income recorded" : "Handover confirmed");
+    if (handover.user_id) {
+      sendNotification({
+        userId: handover.user_id,
+        title: isCollection ? "Collection Confirmed" : "Transfer Confirmed",
+        message: `Your ₹${total.toLocaleString()} ${isCollection ? 'collection' : 'transfer'} was accepted`,
+        type: "handover",
+        entityType: "handover",
+        entityId: handover.id,
+      });
+    }
     qc.invalidateQueries({ queryKey: ["handovers"] });
+    qc.invalidateQueries({ queryKey: ["agent-cash-holding"] });
   };
 
-  const handleReject = async (handoverId: string) => {
+  const handleReject = async (handover: any) => {
     const { error } = await supabase
       .from("handovers")
       .update({
         status: "rejected",
         rejected_at: new Date().toISOString(),
       })
-      .eq("id", handoverId);
+      .eq("id", handover.id);
 
     if (error) {
       toast.error(error.message);
       return;
     }
 
+    const total = Number(handover.cash_amount || 0) + Number(handover.upi_amount || 0);
     toast.success("Handover rejected");
+    if (handover.user_id) {
+      sendNotification({
+        userId: handover.user_id,
+        title: "Handover Rejected",
+        message: `Your ₹${total.toLocaleString()} handover was rejected`,
+        type: "handover",
+        entityType: "handover",
+        entityId: handover.id,
+      });
+    }
     qc.invalidateQueries({ queryKey: ["handovers"] });
   };
 
@@ -835,6 +884,63 @@ export function AgentHistory() {
     }
   };
 
+  const handleEditTransaction = async () => {
+    if (!editingTransaction) return;
+    const cash = Number(editTxnCash) || 0;
+    const upi = Number(editTxnUpi) || 0;
+    if (cash < 0 || upi < 0) { toast.error("Amounts cannot be negative"); return; }
+    if (cash + upi <= 0) { toast.error("Total payment must be positive"); return; }
+
+    setSubmittingEditTxn(true);
+    if (!navigator.onLine) {
+      const bizKey = generateBusinessKey("transaction_edit", {
+        storeId: editingTransaction.store_id,
+        customerId: editingTransaction.customer_id,
+        timestamp: new Date().toISOString(),
+      });
+      await addToQueue({
+        id: crypto.randomUUID(),
+        type: "transaction_edit",
+        payload: {
+          txnId: editingTransaction.id,
+          cashAmount: cash,
+          upiAmount: upi,
+          notes: editTxnNotes || null,
+          recordedBy: user!.id,
+        },
+        createdAt: new Date().toISOString(),
+        businessKey: bizKey,
+      });
+      setEditingTransaction(null);
+      setEditTxnCash("");
+      setEditTxnUpi("");
+      setEditTxnNotes("");
+      setSubmittingEditTxn(false);
+      toast.warning("Offline — edit queued and will sync automatically");
+      return;
+    }
+
+    try {
+      const { error } = await (supabase as any).rpc("update_transaction", {
+        p_transaction_id: editingTransaction.id,
+        p_cash_amount: cash,
+        p_upi_amount: upi,
+        p_notes: editTxnNotes || null,
+      });
+      if (error) throw error;
+      toast.success("Transaction updated");
+      setEditingTransaction(null);
+      setEditTxnCash("");
+      setEditTxnUpi("");
+      setEditTxnNotes("");
+      afterPaymentReturned(qc, { isMobile: true });
+      setSubmittingEditTxn(false);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to edit transaction");
+      setSubmittingEditTxn(false);
+    }
+  };
+
   const handleReturnSale = async () => {
     if (!returningSale) return;
     const finalReason = returnReason === "Other" ? returnOtherReason : returnReason;
@@ -952,7 +1058,7 @@ export function AgentHistory() {
             </div>
           ) : (
             selectedItems.map((item) => {
-              const isReturned = item.type === "sale" && item._is_fully_returned;
+              const isReturned = item._is_fully_returned;
               return (
                 <div
                   key={item.id}
@@ -1013,6 +1119,58 @@ export function AgentHistory() {
                         </button>
                       )}
                       {/* No actions on returned sales — cancelled state is final */}
+                      {/* Edit + Return buttons for transactions */}
+                      {!isReturned && item.type === "transaction" && item._txn_id && (
+                        <div className="flex items-center gap-1">
+                          <button
+                            disabled={isPastDate(item.created_at, item._updated_at)}
+                            onClick={() => {
+                              setEditTxnCash(String(item.cash));
+                              setEditTxnUpi(String(item.upi));
+                              setEditTxnNotes(item._notes || "");
+                              setEditingTransaction({
+                                id: item._txn_id!,
+                                display_id: item.display_id || "",
+                                cash_amount: item.cash,
+                                upi_amount: item.upi,
+                                store_id: item._store_id || "",
+                                customer_id: item._customer_id || "",
+                                created_at: item.created_at,
+                                notes: item._notes || "",
+                              });
+                            }}
+                            className={cn(
+                              "text-xs font-semibold px-2 py-1 rounded-lg transition-colors",
+                              isPastDate(item.created_at, item._updated_at)
+                                ? "text-slate-300 dark:text-slate-600 cursor-not-allowed"
+                                : "text-blue-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                            )}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            disabled={isPastDate(item.created_at, item._updated_at)}
+                            onClick={() => setReturningTransaction({
+                              id: item._txn_id!,
+                              display_id: item.display_id || "",
+                              total_amount: item.amount,
+                              cash_amount: item.cash,
+                              upi_amount: item.upi,
+                              store_id: item._store_id || "",
+                              customer_id: item._customer_id || "",
+                              stores: { name: item.store_name || "", display_id: item.display_id || "" },
+                            })}
+                            className={cn(
+                              "text-xs font-semibold px-2 py-1 rounded-lg transition-colors",
+                              isPastDate(item.created_at, item._updated_at)
+                                ? "text-slate-300 dark:text-slate-600 cursor-not-allowed"
+                                : "text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                            )}
+                          >
+                            Return
+                          </button>
+                        </div>
+                      )}
                       {!isReturned && item.type === "sale" && item._sale_id && (
                         <div className="flex items-center gap-1">
                           <button
@@ -1091,7 +1249,26 @@ export function AgentHistory() {
             <MiniStat icon={TrendingUp} label="Today's Sales" value={`₹${todaySalesAndPayments.toLocaleString("en-IN")}`} subValue={`Cash ₹${todayCash.toLocaleString("en-IN")} · UPI ₹${todayUpi.toLocaleString("en-IN")}`} color="from-blue-500 to-blue-600" />
             <MiniStat icon={Receipt} label="Today's Payments" value={`₹${todayTotalPayments.toLocaleString("en-IN")}`} subValue={`${todayPayments.length} txns`} color="from-emerald-500 to-green-600" />
             <MiniStat icon={Send} label="Transferred Today" value={`₹${transferredToday.toLocaleString("en-IN")}`} subValue={sentPending > 0 ? `₹${sentPending.toLocaleString("en-IN")} pending` : "All transferred"} color="from-orange-500 to-amber-600" />
-            <MiniStat icon={Wallet} label="Net Balance" value={`₹${netBalance.toLocaleString("en-IN")}`} subValue={netBalance > 0 ? "Your holding" : "No balance"} color="from-violet-500 to-purple-600" />
+            <div className="rounded-xl border border-slate-100 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/30 p-3">
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium leading-tight">Net Balance</p>
+                <div className={cn("h-6 w-6 rounded-md bg-gradient-to-br flex items-center justify-center shrink-0", netBalance > 0 ? "from-red-500 to-rose-600" : netBalance < 0 ? "from-green-500 to-emerald-600" : "from-violet-500 to-purple-600")}>
+                  <Wallet className="h-3 w-3 text-white" />
+                </div>
+              </div>
+              <p className={cn("text-lg font-bold mt-1", netBalance > 0 ? "text-red-600 dark:text-red-400" : netBalance < 0 ? "text-green-600 dark:text-green-400" : "text-slate-900 dark:text-white")}>
+                ₹{Math.abs(netBalance).toLocaleString("en-IN")}
+              </p>
+              <p className="text-[11px] mt-0.5 leading-tight font-medium">
+                {netBalance > 0 ? (
+                  <span className="text-red-500">You owe warehouse</span>
+                ) : netBalance < 0 ? (
+                  <span className="text-green-500">Warehouse owes you</span>
+                ) : (
+                  <span className="text-slate-400">Settled</span>
+                )}
+              </p>
+            </div>
           </div>
 
           {/* Action Buttons */}
@@ -1227,6 +1404,10 @@ export function AgentHistory() {
                 {(handovers || []).map((handover: any) => {
                   const total = Number(handover.cash_amount || 0) + Number(handover.upi_amount || 0);
                   const waitingForYou = handover.handed_to === user?.id && handover.status === "awaiting_confirmation";
+                  const isOwnSent = handover.user_id === user?.id;
+                  const isOwnReceived = handover.handed_to === user?.id;
+                  const amountColor = isOwnSent ? "text-red-600 dark:text-red-400" : isOwnReceived ? "text-green-600 dark:text-green-400" : "text-slate-800 dark:text-white";
+                  const amountSign = isOwnSent ? "−" : isOwnReceived ? "+" : "";
 
                   return (
                     <div
@@ -1236,7 +1417,7 @@ export function AgentHistory() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <p className="text-base font-bold text-slate-800 dark:text-white">₹{total.toLocaleString("en-IN")}</p>
+                            <p className={`text-base font-bold ${amountColor}`}>{amountSign}₹{total.toLocaleString("en-IN")}</p>
                             <Badge variant="outline" className={cn("text-[10px] font-semibold", getStatusTone(handover.status))}>
                               {handover.status.replaceAll("_", " ")}
                             </Badge>
@@ -1246,8 +1427,8 @@ export function AgentHistory() {
                           </p>
                           <div className="flex items-center gap-2 mt-1 text-[11px] text-slate-400 flex-wrap">
                             <span>{format(new Date(handover.created_at), "dd MMM yyyy, hh:mm a")}</span>
-                            {handover.user_id === user?.id && <span>Sent</span>}
-                            {handover.handed_to === user?.id && <span>Received</span>}
+                            {isOwnSent && <span>Sent</span>}
+                            {isOwnReceived && <span>Received</span>}
                           </div>
                           {handover.notes && (
                             <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">{handover.notes}</p>
@@ -1257,11 +1438,11 @@ export function AgentHistory() {
 
                       {waitingForYou && (
                         <div className="grid grid-cols-2 gap-2 mt-3">
-                          <Button size="sm" className="h-9 rounded-xl" onClick={() => handleConfirm(handover.id)}>
+                          <Button size="sm" className="h-9 rounded-xl" onClick={() => handleConfirm(handover)}>
                             <CheckCircle2 className="h-4 w-4 mr-1.5" />
                             Confirm
                           </Button>
-                          <Button size="sm" variant="outline" className="h-9 rounded-xl" onClick={() => handleReject(handover.id)}>
+                          <Button size="sm" variant="outline" className="h-9 rounded-xl" onClick={() => handleReject(handover)}>
                             <XCircle className="h-4 w-4 mr-1.5" />
                             Reject
                           </Button>
@@ -1274,7 +1455,7 @@ export function AgentHistory() {
                             size="sm"
                             variant="ghost"
                             className="h-8 rounded-xl text-[11px] text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-                            onClick={() => handleCancelHandover(handover.id)}
+                            onClick={() => handleCancelHandover(handover)}
                             disabled={submitting}
                           >
                             <XCircle className="h-3 w-3 mr-1" />
@@ -1728,6 +1909,74 @@ export function AgentHistory() {
         </SheetContent>
       </Sheet>
 
+      {/* Edit Transaction Sheet */}
+      <Sheet open={!!editingTransaction} onOpenChange={(open) => { if (!open) { setEditingTransaction(null); setEditTxnCash(""); setEditTxnUpi(""); setEditTxnNotes(""); } }}>
+        <SheetContent side="bottom" className="rounded-t-2xl pb-6 px-4 max-h-[85vh] overflow-y-auto">
+          <div className="space-y-4">
+            <SheetHeader>
+              <SheetTitle className="flex items-center gap-2">
+                <Pencil className="h-5 w-5 text-blue-500" />
+                Edit Transaction — {editingTransaction?.display_id}
+              </SheetTitle>
+            </SheetHeader>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs font-semibold text-muted-foreground">Cash Amount</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={editTxnCash}
+                  onChange={(e) => setEditTxnCash(e.target.value)}
+                  placeholder={String(editingTransaction?.cash_amount || 0)}
+                  className="h-12 rounded-xl text-base font-bold mt-1"
+                />
+              </div>
+              <div>
+                <Label className="text-xs font-semibold text-muted-foreground">UPI Amount</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={editTxnUpi}
+                  onChange={(e) => setEditTxnUpi(e.target.value)}
+                  placeholder={String(editingTransaction?.upi_amount || 0)}
+                  className="h-12 rounded-xl text-base font-bold mt-1"
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-xs font-semibold text-muted-foreground">Notes (optional)</Label>
+              <Textarea
+                value={editTxnNotes}
+                onChange={(e) => setEditTxnNotes(e.target.value)}
+                placeholder="Additional notes..."
+                rows={2}
+                className="rounded-xl resize-none mt-1"
+              />
+            </div>
+
+            <button
+              className={cn(
+                "w-full h-12 rounded-xl text-base font-bold flex items-center justify-center gap-2 transition-all shadow-md text-white",
+                submittingEditTxn
+                  ? "bg-blue-400 cursor-not-allowed"
+                  : "bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 active:scale-[0.98]"
+              )}
+              onClick={handleEditTransaction}
+              disabled={submittingEditTxn}
+            >
+              {submittingEditTxn ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <Pencil className="h-4 w-4" />
+              )}
+              Save and Update Transaction
+            </button>
+          </div>
+        </SheetContent>
+      </Sheet>
+
       {/* Sale Receipt Modal */}
       <SaleReceipt
         saleId={receiptSaleId || ""}
@@ -1867,6 +2116,13 @@ export function AgentHistory() {
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* Return Payment Dialog */}
+      <ReturnPaymentDialog
+        open={!!returningTransaction}
+        onOpenChange={(v) => { if (!v) setReturningTransaction(null); }}
+        transaction={returningTransaction}
+      />
     </div>
   );
 }
