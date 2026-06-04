@@ -417,6 +417,8 @@ const ManagerDashboard = () => {
         pendingOrdersRes,
         lowStockRes,
         staffSalesRes,
+        fulfillmentRes,
+        collectionRes,
        ] = await Promise.all([
          // Today's sales for this warehouse
           supabase.from("sales")
@@ -446,6 +448,18 @@ const ManagerDashboard = () => {
            .select("total_amount, recorded_by, profiles(full_name)")
            .eq("warehouse_id", currentWarehouse!.id)
            .gte("created_at", today + "T00:00:00"),
+          // Order fulfillment rate (warehouse-scoped)
+          supabase.from("orders")
+            .select("status")
+            .eq("warehouse_id", currentWarehouse!.id)
+            .gte("created_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0])
+            .limit(5000),
+          // Collection efficiency (warehouse-scoped)
+          supabase.from("sales")
+            .select("total_amount, outstanding_amount")
+            .eq("warehouse_id", currentWarehouse!.id)
+            .gte("created_at", today + "T00:00:00")
+            .limit(1000),
       ]);
 
       const todaySales: any[] = todaySalesRes.data || [];
@@ -470,6 +484,19 @@ const ManagerDashboard = () => {
       });
       const salesByStaffData = Object.values(salesByStaff).slice(0, 5);
 
+      const totalOrders = (fulfillmentRes.data || []).length;
+      const fulfilledOrders = (fulfillmentRes.data || []).filter(
+        (o: any) => o.status === "fulfilled" || o.status === "delivered"
+      ).length;
+      const fulfillmentRate = totalOrders > 0
+        ? Math.round((fulfilledOrders / totalOrders) * 100) : 0;
+
+      const collectionData = (collectionRes.data || []) as any[];
+      const collectionTotal = collectionData.reduce((s: number, r: any) => s + Number(r.total_amount), 0);
+      const collectionOutstanding = collectionData.reduce((s: number, r: any) => s + Number(r.outstanding_amount || 0), 0);
+      const collectionEfficiency = collectionTotal > 0
+        ? Math.round(((collectionTotal - collectionOutstanding) / collectionTotal) * 100) : 0;
+
       return {
         todaySales: totalSales,
         todayCash: totalCash,
@@ -488,6 +515,8 @@ const ManagerDashboard = () => {
           })),
         staffHandovers: (staffHandoversRes.data || []) as any[],
         salesByStaff: salesByStaffData,
+        fulfillmentRate,
+        collectionEfficiency,
       };
     },
     enabled: !!currentWarehouse?.id,
@@ -503,6 +532,8 @@ const ManagerDashboard = () => {
     lowStockItems: [] as any[],
     staffHandovers: [] as any[],
     salesByStaff: [] as any[],
+    fulfillmentRate: 0,
+    collectionEfficiency: 0,
   };
 
   return (
@@ -539,6 +570,26 @@ const ManagerDashboard = () => {
           value={String(s.pendingOrders.length)}
           icon={ShoppingCart}
           iconColor="info"
+        />
+      </div>
+
+      {/* Operational Metrics */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <StatCard
+          title="Order Fulfillment"
+          value={`${s.fulfillmentRate}%`}
+          change={s.fulfillmentRate >= 80 ? "On track" : s.fulfillmentRate >= 50 ? "Needs improvement" : "Critical"}
+          changeType={s.fulfillmentRate >= 80 ? "positive" : s.fulfillmentRate >= 50 ? "warning" : "negative"}
+          icon={ShoppingCart}
+          iconColor="primary"
+        />
+        <StatCard
+          title="Collection Efficiency"
+          value={`${s.collectionEfficiency}%`}
+          change={s.collectionEfficiency >= 80 ? "Strong" : "Below target"}
+          changeType={s.collectionEfficiency >= 80 ? "positive" : "negative"}
+          icon={Banknote}
+          iconColor="success"
         />
       </div>
 
