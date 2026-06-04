@@ -48,6 +48,7 @@ const SuperAdminDashboard = () => {
     queryFn: async () => {
       const today = new Date().toISOString().split("T")[0];
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
 
       const [
         todaySalesRes,
@@ -100,7 +101,9 @@ const SuperAdminDashboard = () => {
           .limit(100),
         // Order fulfillment rate
         supabase.from("orders")
-          .select("status"),
+          .select("status")
+          .gte("created_at", thirtyDaysAgo)
+          .limit(5000),
         // Collection efficiency (today's sales with outstanding)
         supabase.from("sales")
           .select("total_amount, outstanding_amount")
@@ -151,10 +154,11 @@ const SuperAdminDashboard = () => {
       const fulfillmentRate = totalOrders > 0
         ? Math.round((fulfilledOrders / totalOrders) * 100) : 0;
 
-      const todaySaleTotal = todaySales.reduce((s: number, r: any) => s + Number(r.total_amount), 0);
-      const todayOutstanding = todaySales.reduce((s: number, r: any) => s + Number(r.outstanding_amount || 0), 0);
-      const collectionEfficiency = todaySaleTotal > 0
-        ? Math.round(((todaySaleTotal - todayOutstanding) / todaySaleTotal) * 100) : 0;
+      const collectionData = (collectionRes.data || []) as any[];
+      const collectionTotal = collectionData.reduce((s: number, r: any) => s + Number(r.total_amount), 0);
+      const collectionOutstanding = collectionData.reduce((s: number, r: any) => s + Number(r.outstanding_amount || 0), 0);
+      const collectionEfficiency = collectionTotal > 0
+        ? Math.round(((collectionTotal - collectionOutstanding) / collectionTotal) * 100) : 0;
 
       const staffSales: Record<string, number> = {};
       (staffRankRes.data || []).forEach((sale: any) => {
@@ -264,12 +268,14 @@ const SuperAdminDashboard = () => {
           icon={Store}
           iconColor="emerald"
         />
-        <StatCard
-          title="Warehouses"
-          value={String(s.warehouseCount)}
-          icon={WarehouseIcon}
-          iconColor="orange"
-        />
+          <StatCard
+            title="Overdue Stores"
+            value={String(s.overdueStores)}
+            change={`Out of ${s.storeCount} stores`}
+            changeType={s.overdueStores > 0 ? "warning" : "positive"}
+            icon={AlertCircle}
+            iconColor="warning"
+          />
         <StatCard
           title="Pending Handovers"
           value={`₹${s.pendingHandover.toLocaleString()}`}
