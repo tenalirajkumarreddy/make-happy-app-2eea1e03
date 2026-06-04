@@ -28,7 +28,7 @@ const PosDashboard = () => {
 
       const [
         salesRes, handoversRes, movementsRes, purchasesRes,
-        invoicesRes, attendanceRes, productionRes, rmStockRes, wastageRes
+        invoicesRes, attendanceRes, productionRes, rmStockRes
       ] = await Promise.all([
         supabase.from("sales").select("total_amount, cash_amount, upi_amount").eq("recorded_by", user!.id).gte("created_at", today + "T00:00:00"),
         supabase.from("handovers").select("cash_amount, upi_amount, status").eq("user_id", user!.id),
@@ -38,7 +38,6 @@ const PosDashboard = () => {
         supabase.from("attendance_entries").select("id, is_present, worker_id, user_id").gte("created_at", today + "T00:00:00"),
         supabase.from("production_log").select("id, product_id, quantity_produced, notes, created_at, product:products(name)").gte("production_date", today).order("created_at", { ascending: false }).limit(5),
         supabase.from("raw_material_stock").select("id, quantity, raw_material:raw_materials(name, min_stock_level, unit)"),
-        supabase.from("wastage_entries").select("id, product_id, quantity, reason, created_at, product:products(name)").gte("created_at", today + "T00:00:00").order("created_at", { ascending: false }).limit(5),
       ]);
 
       const todaySales: any[] = salesRes.data || [];
@@ -49,7 +48,6 @@ const PosDashboard = () => {
       const attendance: any[] = attendanceRes.data || [];
       const production: any[] = productionRes.data || [];
       const rmStock: any[] = rmStockRes.data || [];
-      const wastage: any[] = wastageRes.data || [];
 
       const pendingHandover = handovers
         .filter((h) => h.status === "pending" || h.status === "awaiting_confirmation")
@@ -73,14 +71,18 @@ const PosDashboard = () => {
         recentPurchases: purchases,
         recentProduction: production,
         lowRmStock,
-        recentWastage: wastage,
       };
     },
     enabled: !!user,
   });
 
   if (isLoading) return <DashboardSkeleton />;
-  const s = stats!;
+  const s = stats ?? {
+    totalSales: 0, totalCash: 0, totalUpi: 0, pendingHandover: 0,
+    movementsCount: 0, purchasesCount: 0, pendingInvoices: 0, workersPresent: 0,
+    recentMovements: [], recentPurchases: [], recentProduction: [],
+    lowRmStock: [],
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
