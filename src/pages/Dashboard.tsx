@@ -58,6 +58,9 @@ const SuperAdminDashboard = () => {
         staffRes,
         pendingHandoversRes,
         alertsRes,
+        fulfillmentRes,
+        collectionRes,
+        staffRankRes,
       ] = await Promise.all([
         // Today's sales across all warehouses
         supabase.from("sales")
@@ -95,6 +98,20 @@ const SuperAdminDashboard = () => {
         supabase.from("product_stock")
           .select("id, warehouse_id, stock_quantity:quantity, products(name, is_active)")
           .limit(100),
+        // Order fulfillment rate
+        supabase.from("orders")
+          .select("status"),
+        // Collection efficiency (today's sales with outstanding)
+        supabase.from("sales")
+          .select("total_amount, outstanding_amount")
+          .gte("created_at", today + "T00:00:00")
+          .limit(1000),
+        // Staff sales ranking
+        supabase.from("sales")
+          .select("total_amount, recorded_by, profiles!inner(full_name)")
+          .gte("created_at", today + "T00:00:00")
+          .order("created_at", { ascending: false })
+          .limit(1000),
       ]);
 
       const todaySales: any[] = todaySalesRes.data || [];
@@ -127,6 +144,28 @@ const SuperAdminDashboard = () => {
         };
       });
 
+      const totalOrders = (fulfillmentRes.data || []).length;
+      const fulfilledOrders = (fulfillmentRes.data || []).filter(
+        (o: any) => o.status === "fulfilled" || o.status === "delivered"
+      ).length;
+      const fulfillmentRate = totalOrders > 0
+        ? Math.round((fulfilledOrders / totalOrders) * 100) : 0;
+
+      const todaySaleTotal = todaySales.reduce((s: number, r: any) => s + Number(r.total_amount), 0);
+      const todayOutstanding = todaySales.reduce((s: number, r: any) => s + Number(r.outstanding_amount || 0), 0);
+      const collectionEfficiency = todaySaleTotal > 0
+        ? Math.round(((todaySaleTotal - todayOutstanding) / todaySaleTotal) * 100) : 0;
+
+      const staffSales: Record<string, number> = {};
+      (staffRankRes.data || []).forEach((sale: any) => {
+        const name = sale.profiles?.full_name || "Unknown";
+        staffSales[name] = (staffSales[name] || 0) + Number(sale.total_amount);
+      });
+      const topStaff = Object.entries(staffSales)
+        .sort(([, a], [, b]) => (b as number) - (a as number))
+        .slice(0, 3)
+        .map(([name, sales]) => ({ name, sales: sales as number }));
+
       return {
         todayTotal,
         todayCash,
@@ -150,6 +189,9 @@ const SuperAdminDashboard = () => {
             warehouse_id: item.warehouse_id,
           })),
         weeklySales,
+        fulfillmentRate,
+        collectionEfficiency,
+        topStaff,
       };
     },
   });
@@ -168,6 +210,9 @@ const SuperAdminDashboard = () => {
     pendingHandover: 0,
     lowStockAlerts: [] as any[],
     weeklySales: [] as any[],
+    fulfillmentRate: 0,
+    collectionEfficiency: 0,
+    topStaff: [] as { name: string; sales: number }[],
   };
 
   return (
@@ -235,6 +280,39 @@ const SuperAdminDashboard = () => {
          />
        </div>
 
+       {/* Operational Metrics */}
+       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+         <StatCard
+           title="Order Fulfillment"
+           value={`${s.fulfillmentRate}%`}
+           change={s.fulfillmentRate >= 80 ? "On track" : s.fulfillmentRate >= 50 ? "Needs improvement" : "Critical"}
+           changeType={s.fulfillmentRate >= 80 ? "positive" : s.fulfillmentRate >= 50 ? "warning" : "negative"}
+           icon={ShoppingCart}
+           iconColor="primary"
+         />
+         <StatCard
+           title="Collection Efficiency"
+           value={`${s.collectionEfficiency}%`}
+           change={s.collectionEfficiency >= 80 ? "Strong" : "Below target"}
+           changeType={s.collectionEfficiency >= 80 ? "positive" : "negative"}
+           icon={Banknote}
+           iconColor="success"
+         />
+         <StatCard
+           title="Top Staff (Today)"
+           value={s.topStaff[0]?.name || "—"}
+           change={s.topStaff[0] ? `₹${(s.topStaff[0].sales || 0).toLocaleString()}` : ""}
+           icon={Users}
+           iconColor="purple"
+         />
+         <StatCard
+           title="Warehouses"
+           value={String(s.warehouseCount)}
+           icon={WarehouseIcon}
+           iconColor="orange"
+         />
+       </div>
+
        {/* Quick Actions */}
        <div className="rounded-xl border bg-card p-5">
          <div className="flex items-center justify-between gap-3 mb-4">
@@ -292,7 +370,7 @@ const SuperAdminDashboard = () => {
         <div className="rounded-xl border bg-card p-5">
           <h3 className="text-sm font-semibold mb-4">Alerts</h3>
           <div className="space-y-3">
-            <div className="rounded-lg bg-destructive/5 border border-destructive/20 p-4">
+            <div className="rounded-lg bg-destructive/5 border border-destructive/20 p-4 cursor-pointer" onClick={() => navigate("/stores")}>
               <div className="flex items-center gap-2">
                 <AlertCircle className="h-4 w-4 text-destructive" />
                 <p className="text-sm font-medium">Outstanding Risk</p>
@@ -300,7 +378,7 @@ const SuperAdminDashboard = () => {
               <p className="mt-2 text-2xl font-bold">₹{s.totalOutstanding.toLocaleString()}</p>
               <p className="text-xs text-muted-foreground mt-1">{s.overdueStores} stores with balance</p>
             </div>
-            <div className="rounded-lg border p-4">
+            <div className="rounded-lg border p-4 cursor-pointer" onClick={() => navigate("/inventory")}>
               <div className="flex items-center gap-2">
                 <Package className="h-4 w-4 text-warning" />
                 <p className="text-sm font-medium">Low Stock Items</p>
