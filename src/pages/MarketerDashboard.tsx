@@ -37,13 +37,13 @@ const MarketerDashboard = () => {
         supabase.from("orders").select("id, status, total_amount").eq("created_by", user!.id),
         supabase.from("transactions").select("cash_amount, upi_amount, total_amount").eq("recorded_by", user!.id).gte("created_at", today + "T00:00:00"),
         supabase.from("customers").select("id, created_at").eq("is_active", true),
-        supabase.from("stores").select("id, outstanding, last_visit_date").eq("created_by", user!.id),
+        supabase.from("stores").select("id, outstanding").eq("created_by", user!.id),
         supabase.from("handovers").select("cash_amount, upi_amount, status, handover_date").eq("user_id", user!.id).order("handover_date", { ascending: false }).limit(10),
         supabase.from("orders").select("id, display_id, status, created_at, total_amount, stores(name), customers(name)").eq("created_by", user!.id).order("created_at", { ascending: false }).limit(5),
         supabase.from("transactions").select("id, total_amount, created_at, stores(name)").eq("recorded_by", user!.id).order("created_at", { ascending: false }).limit(5),
-        supabase.from("orders").select("id, status").eq("created_by", user!.id).gte("created_at", sevenDaysAgo + "T00:00:00"),
+        supabase.from("orders").select("id, status, total_amount").eq("created_by", user!.id).gte("created_at", sevenDaysAgo + "T00:00:00"),
         supabase.from("transactions").select("total_amount").eq("recorded_by", user!.id).gte("created_at", thirtyDaysAgo + "T00:00:00"),
-        supabase.from("stores").select("id, name, outstanding, last_visit_date, customers(name)").eq("created_by", user!.id).order("outstanding", { ascending: false }).limit(5),
+        supabase.from("stores").select("id, name, outstanding, customers(name)").eq("created_by", user!.id).order("outstanding", { ascending: false }).limit(5),
       ]);
 
       const orders: any[] = ordersRes.data || [];
@@ -60,13 +60,13 @@ const MarketerDashboard = () => {
         .reduce((s, h) => s + Number(h.cash_amount) + Number(h.upi_amount), 0);
 
       const pipeline = {
-        pending: orders.filter((o) => o.status === "pending").length,
-        confirmed: orders.filter((o) => o.status === "confirmed").length,
+        pending: weekOrders.filter((o) => o.status === "pending").length,
+        confirmed: weekOrders.filter((o) => o.status === "confirmed").length,
         fulfilled: weekOrders.filter((o) => o.status === "fulfilled").length,
       };
       const pipelineValue = {
-        pending: orders.filter((o) => o.status === "pending").reduce((s, o) => s + Number(o.total_amount || 0), 0),
-        confirmed: orders.filter((o) => o.status === "confirmed").reduce((s, o) => s + Number(o.total_amount || 0), 0),
+        pending: weekOrders.filter((o) => o.status === "pending").reduce((s, o) => s + Number(o.total_amount || 0), 0),
+        confirmed: weekOrders.filter((o) => o.status === "confirmed").reduce((s, o) => s + Number(o.total_amount || 0), 0),
         fulfilled: weekOrders.filter((o) => o.status === "fulfilled").reduce((s, o) => s + Number(o.total_amount || 0), 0),
       };
 
@@ -78,19 +78,17 @@ const MarketerDashboard = () => {
 
       const recentActivity = [
         ...(recentOrdersRes.data || []).map((order: any) => ({
-          id: `order-${order.id}`, kind: "order" as const,
+          id: `order-${order.id}`,
           title: `Order ${order.display_id || ""}`.trim(),
           subtitle: order.stores?.name || order.customers?.name || "—",
           created_at: order.created_at, meta: order.status,
-          total: Number(order.total_amount || 0),
         })),
         ...(recentTxnsRes.data || []).map((txn: any) => ({
-          id: `txn-${txn.id}`, kind: "payment" as const,
+          id: `txn-${txn.id}`,
           title: "Payment recorded",
           subtitle: txn.stores?.name || "—",
           created_at: txn.created_at,
           meta: `₹${Number(txn.total_amount).toLocaleString()}`,
-          total: 0,
         })),
       ]
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
@@ -171,7 +169,7 @@ const MarketerDashboard = () => {
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle className="text-base">Order Pipeline</CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">Your order funnel this week</p>
+              <p className="text-sm text-muted-foreground mt-1">Your orders this week</p>
             </div>
             <Button variant="ghost" size="sm" onClick={() => navigate("/orders")}>
               View all <ArrowRight className="h-4 w-4 ml-1" />
