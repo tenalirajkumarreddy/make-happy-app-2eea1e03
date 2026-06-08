@@ -110,64 +110,92 @@ export function useNotifications() {
     },
   });
 
-  // Realtime subscription updates the query cache
+  // Stable channel name + reconnection logic
   useEffect(() => {
     if (!user) return;
 
-    const channelName = `notifications-${user.id}-${Math.random().toString(36).substring(2, 9)}`;
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "notifications",
-          filter: `user_id=eq.${user.id}`,
-        },
-        (payload) => {
-          const newNotif = payload.new as AppNotification;
-          queryClient.setQueryData<AppNotification[]>(queryKey, (old) => {
-            if (!old) return [newNotif];
-            if (old.some((n) => n.id === newNotif.id)) return old;
-            return [newNotif, ...old].slice(0, 50);
-          });
-          if (!Capacitor.isNativePlatform()) {
-            showBrowserNotification(newNotif.title, newNotif.message);
-          } else {
-            fireNativeNotification(newNotif.id, newNotif.title, newNotif.message);
+    const SEEN = new Set<string>();
+    const MAX_SEEN = 100;
+    let retryCount = 0;
+    const MAX_RETRIES = 3;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let mounted = true;
+
+    const channelName = `notifications-${user.id}`;
+    let channel = supabase.channel(channelName);
+
+    function setupChannel() {
+      if (!mounted) return;
+      supabase.removeChannel(channel);
+
+      channel = supabase.channel(channelName)
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` },
+          (payload) => {
+            const newNotif = payload.new as AppNotification;
+            if (SEEN.has(newNotif.id)) return;
+            SEEN.add(newNotif.id);
+            if (SEEN.size > MAX_SEEN) {
+              const first = SEEN.values().next().value;
+              if (first) SEEN.delete(first);
+            }
+
+            queryClient.setQueryData<AppNotification[]>(queryKey, (old) => {
+              if (!old) return [newNotif];
+              if (old.some((n) => n.id === newNotif.id)) return old;
+              return [newNotif, ...old].slice(0, 50);
+            });
+
+            if (!Capacitor.isNativePlatform()) {
+              showBrowserNotification(newNotif.title, newNotif.message);
+            } else {
+              fireNativeNotification(newNotif.id, newNotif.title, newNotif.message);
+            }
+            toast(newNotif.title, { description: newNotif.message, duration: 5000 });
           }
-          
-          // Display visual in-app toast
-          toast(newNotif.title, {
-            description: newNotif.message,
-            duration: 5000,
-          });
+        )
+        .on(
+          "postgres_changes",
+          { event: "UPDATE", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` },
+          (payload) => {
+            const updated = payload.new as AppNotification;
+            queryClient.setQueryData<AppNotification[]>(queryKey, (old) =>
+              old?.map((n) => (n.id === updated.id ? updated : n))
+            );
+          }
+        )
+        .subscribe((status: string) => {
+          if (!mounted) return;
+          if (status === "SUBSCRIBED") {
+            retryCount = 0;
+          } else if (status === "CHANNEL_ERROR" || status === "CLOSED" || status === "TIMED_OUT") {
+            if (retryCount >= MAX_RETRIES) return;
+            const delay = Math.min(1000 * 2 ** retryCount, 8000);
+            retryCount++;
+            retryTimer = setTimeout(setupChannel, delay);
+          }
+        });
+    }
+
+    setupChannel();
+
+    function onVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        if (retryCount > 0 || ((channel as any)._state !== "SUBSCRIBED" && (channel as any).state !== "SUBSCRIBED")) {
+          retryCount = 0;
+          if (retryTimer) clearTimeout(retryTimer);
+          setupChannel();
         }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "notifications",
-          filter: `user_id=eq.${user.id}`,
-        },
-        (payload) => {
-          const updated = payload.new as AppNotification;
-          queryClient.setQueryData<AppNotification[]>(queryKey, (old) =>
-            old?.map((n) => (n.id === updated.id ? updated : n))
-          );
-        }
-      )
-      .subscribe();
+      }
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
-      try {
-        supabase.removeChannel(channel);
-      } catch (err) {
-        logError("Failed to remove notification channel", err);
-      }
+      mounted = false;
+      if (retryTimer) clearTimeout(retryTimer);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      supabase.removeChannel(channel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, queryClient]);
@@ -202,39 +230,42 @@ export function useNotifications() {
 
     const syncFCMToken = async () => {
       try {
+        // Step 1: If a token was cached by main.tsx, save it immediately
+        const cachedToken = localStorage.getItem("last_fcm_token");
+        if (cachedToken) {
+          await saveFCMTokenToBackend(user.id, cachedToken);
+        }
+
+        // Step 2: Check permission, then register to capture any new/refreshed token
         const permResult = await PushNotifications.checkPermissions();
         if (permResult.receive !== "granted") {
           logDebug("FCM Sync: Notification permission not granted");
           return;
         }
 
-        // Add listener BEFORE register() to avoid race condition
-        // (main.tsx also has a listener, but this one saves token
-        // directly in sync context without relying on localStorage)
         let capturedToken: string | null = null;
         const handler = await PushNotifications.addListener(
           "registration",
           (token: any) => {
             capturedToken = token.value;
             localStorage.setItem("last_fcm_token", token.value);
+            if (active) {
+              saveFCMTokenToBackend(user.id, token.value);
+            }
           }
         );
 
+        // register() may not fire 'registration' if token already obtained,
+        // but if it does (first time or token refresh), we catch it above
         await PushNotifications.register();
 
-        // If registration event already fired, save immediately
-        if (capturedToken && active) {
-          await saveFCMTokenToBackend(user.id, capturedToken);
+        if (capturedToken) {
           handler.remove();
           return;
         }
 
-        // Fallback: check localStorage (main.tsx listener may have saved it)
-        const lastToken = localStorage.getItem("last_fcm_token");
-        if (lastToken && active) {
-          await saveFCMTokenToBackend(user.id, lastToken);
-        }
-
+        // Fallback: if register() didn't fire event, token was already
+        // handled in Step 1 from localStorage — no-op
         handler.remove();
       } catch (err) {
         logError("FCM token synchronization failed", err);
