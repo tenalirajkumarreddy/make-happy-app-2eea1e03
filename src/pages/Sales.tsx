@@ -23,6 +23,7 @@ import { SaleReturnDialog } from "@/components/sales/SaleReturnDialog";
 import { useState, useMemo, useEffect } from "react";
 import { useSearchParams, useNavigate, Link } from "react-router-dom";
 import { usePermission } from "@/hooks/usePermission";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 import {
 Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -169,6 +170,8 @@ const Sales = () => {
   const { allowed: _canOverridePrice } = usePermission("price_override");
   const { allowed: canRecordBehalf } = usePermission("record_behalf");
   const { allowed: canCancelSales } = usePermission("cancel_sales");
+  const { data: companySettings } = useCompanySettings();
+  const isCreditCheckEnabled = companySettings?.credit_limit_check !== "false";
   const qc = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -594,8 +597,8 @@ let query = supabase
   const oldOutstanding = Number(selectedStore?.outstanding || 0);
   const newOutstanding = oldOutstanding + outstandingFromSale;
 
-  // Credit limit calculation
-  const creditLimitInfo = selectedStore && storeTypes && customers
+  // Credit limit calculation (gated by feature flag)
+  const creditLimitInfo = selectedStore && storeTypes && customers && isCreditCheckEnabled
     ? resolveCreditLimit(selectedStore, storeTypes, customers)
     : null;
 
@@ -716,6 +719,13 @@ let query = supabase
 
     if (!validation.valid) {
       toast.error(validation.errors[0] || "Validation failed");
+      return;
+    }
+
+    // Operator/POS restriction: cannot create outstanding sales (must pay full amount)
+    if (isPosUser && outstandingFromSale !== 0) {
+      toast.error("POS users must record full payment. Outstanding balance not allowed.");
+      setSaving(false);
       return;
     }
 
@@ -871,6 +881,7 @@ let query = supabase
       p_cash_amount: cash,
       p_upi_amount: upi,
       p_outstanding_amount: outstandingFromSale,
+      p_expected_outstanding: oldOutstanding,
       p_sale_items: saleItems,
       p_created_at: saleDate ? new Date(saleDate).toISOString() : null,
     } as any) as any;

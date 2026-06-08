@@ -90,6 +90,7 @@ import { AgentHistory } from "./pages/agent/AgentHistory";
 import { AgentCustomers } from "./pages/agent/AgentCustomers";
 import { AgentStoreProfile } from "./pages/agent/AgentStoreProfile";
 import { AgentProducts } from "./pages/agent/AgentProducts";
+import { StockTransferSheet } from "./components/StockTransferSheet";
 import { MarketerHome } from "./pages/marketer/MarketerHome";
 import { MarketerOrders } from "./pages/marketer/MarketerOrders";
 import { MarketerStores } from "./pages/marketer/MarketerStores";
@@ -634,9 +635,11 @@ function AgentApp() {
   const [recordAction, setRecordAction] = useState<"sale" | "payment" | null>(null);
   const [profileStore, setProfileStore] = useState<StoreOption | null>(null);
   const [profileReturnTab, setProfileReturnTab] = useState<MobileTab>("customers");
+  const [showStockTransfer, setShowStockTransfer] = useState(false);
   const { data: pendingHandoversCount = 0 } = useHandoverBadge(user?.id);
 
   useHardwareBackButton(() => {
+    if (showStockTransfer) { setShowStockTransfer(false); return; }
     if (showAddEntity) { setShowAddEntity(false); return; }
     if (recordAction) { setRecordAction(null); setPreselectStore(null); }
     else if (profileStore) { setProfileStore(null); }
@@ -700,8 +703,11 @@ function AgentApp() {
               onGoRecord={(store, action) => handleGoRecord(store, action)}
               onGoProducts={() => setTab("products")}
               onOpenAddEntity={() => setShowAddEntity(true)}
+              onGoMap={() => setTab("routes")}
+              onOpenStockTransfer={() => setShowStockTransfer(true)}
             />
           )}
+          <StockTransferSheet open={showStockTransfer} onOpenChange={setShowStockTransfer} />
           {tab === "products" && <AgentProducts />}
           {tab === "routes" && <AgentRoutes onOpenStore={(store) => handleOpenStoreProfile(store, "routes")} onGoRecord={handleGoRecord} />}
           {tab === "scan" && !recordAction && (

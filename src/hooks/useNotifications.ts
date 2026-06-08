@@ -21,6 +21,9 @@ export interface AppNotification {
 }
 
 const NOTIF_STALE_MS = 5 * 60 * 1000;
+const NOTIF_SEEN_MAX = 100;
+const NOTIF_RECONNECT_MAX_RETRIES = 3;
+const NOTIF_RECONNECT_MAX_DELAY_MS = 8000;
 
 async function fetchNotificationsFromDb(userId: string): Promise<AppNotification[]> {
   const { data, error } = await supabase
@@ -115,9 +118,7 @@ export function useNotifications() {
     if (!user) return;
 
     const SEEN = new Set<string>();
-    const MAX_SEEN = 100;
     let retryCount = 0;
-    const MAX_RETRIES = 3;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
     let mounted = true;
 
@@ -126,7 +127,7 @@ export function useNotifications() {
 
     function setupChannel() {
       if (!mounted) return;
-      supabase.removeChannel(channel);
+      try { supabase.removeChannel(channel); } catch { /* ignore */ }
 
       channel = supabase.channel(channelName)
         .on(
@@ -136,7 +137,7 @@ export function useNotifications() {
             const newNotif = payload.new as AppNotification;
             if (SEEN.has(newNotif.id)) return;
             SEEN.add(newNotif.id);
-            if (SEEN.size > MAX_SEEN) {
+            if (SEEN.size > NOTIF_SEEN_MAX) {
               const first = SEEN.values().next().value;
               if (first) SEEN.delete(first);
             }
@@ -147,6 +148,7 @@ export function useNotifications() {
               return [newNotif, ...old].slice(0, 50);
             });
 
+            if (!mounted) return;
             if (!Capacitor.isNativePlatform()) {
               showBrowserNotification(newNotif.title, newNotif.message);
             } else {
@@ -170,8 +172,8 @@ export function useNotifications() {
           if (status === "SUBSCRIBED") {
             retryCount = 0;
           } else if (status === "CHANNEL_ERROR" || status === "CLOSED" || status === "TIMED_OUT") {
-            if (retryCount >= MAX_RETRIES) return;
-            const delay = Math.min(1000 * 2 ** retryCount, 8000);
+            if (retryCount >= NOTIF_RECONNECT_MAX_RETRIES) return;
+            const delay = Math.min(1000 * 2 ** retryCount, NOTIF_RECONNECT_MAX_DELAY_MS);
             retryCount++;
             retryTimer = setTimeout(setupChannel, delay);
           }
@@ -180,9 +182,12 @@ export function useNotifications() {
 
     setupChannel();
 
+    let visibilityThrottle: ReturnType<typeof setTimeout> | null = null;
     function onVisibilityChange() {
       if (document.visibilityState === "visible") {
-        if (retryCount > 0 || ((channel as any)._state !== "SUBSCRIBED" && (channel as any).state !== "SUBSCRIBED")) {
+        if (visibilityThrottle) return;
+        visibilityThrottle = setTimeout(() => { visibilityThrottle = null; }, 1000);
+        if (retryCount > 0) {
           retryCount = 0;
           if (retryTimer) clearTimeout(retryTimer);
           setupChannel();
@@ -194,8 +199,9 @@ export function useNotifications() {
     return () => {
       mounted = false;
       if (retryTimer) clearTimeout(retryTimer);
+      if (visibilityThrottle) clearTimeout(visibilityThrottle);
       document.removeEventListener("visibilitychange", onVisibilityChange);
-      supabase.removeChannel(channel);
+      try { supabase.removeChannel(channel); } catch { /* ignore */ }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, queryClient]);

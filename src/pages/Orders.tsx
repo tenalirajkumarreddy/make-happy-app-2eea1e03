@@ -487,14 +487,18 @@ const Orders = () => {
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving) return;
     if (!storeId) { toast.error("Please select a store"); return; }
     if (orderType === "simple" && !requirementNote.trim()) { toast.error("Please describe the requirement"); return; }
     if (orderType === "detailed" && !orderItems.some((i) => i.product_id)) { toast.error("Please add at least one product"); return; }
     if (orderType === "detailed" && orderItems.some((i) => i.product_id && (!i.quantity || i.quantity <= 0))) { toast.error("All products must have a quantity greater than 0"); return; }
 
+    setSaving(true);
+
     // Duplicate check: store can have only one active (pending or confirmed) order
     const activeOrder = await getActiveOrderForStore(supabase, storeId);
     if (activeOrder) {
+      setSaving(false);
       toast.warning(`Store already has an active order (${activeOrder.display_id}). Please edit or fulfill it instead.`);
       setShowAdd(false);
       resetForm();
@@ -529,8 +533,6 @@ const Orders = () => {
       setSaving(false);
       return;
     }
-
-    setSaving(true);
 
     // Check credit limit before creating order (for detailed orders)
     if (orderType === "detailed") {
@@ -588,7 +590,20 @@ const Orders = () => {
 
     const { data: order, error } = await supabase.from("orders").insert(insertData as any).select("id").single();
 
-    if (error) { toast.error(error.message); setSaving(false); return; }
+    if (error) {
+      if (error.code === "23505" || error.message?.includes("duplicate key") || error.message?.includes("unique")) {
+        toast.warning("This store already has an active order. Please edit or fulfill the existing order instead.");
+        const existing = await getActiveOrderForStore(supabase, storeId);
+        if (existing) {
+          setShowAdd(false); resetForm();
+          setTimeout(() => handleOpenEdit(existing.id), 300);
+        }
+      } else {
+        toast.error(error.message);
+      }
+      setSaving(false);
+      return;
+    }
 
     if (orderType === "detailed") {
       const validItems = orderItems.filter((i) => i.product_id);

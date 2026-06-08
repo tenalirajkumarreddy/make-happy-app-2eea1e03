@@ -47,7 +47,7 @@ const Handovers = () => {
   const [amount, setAmount] = useState("");
   const [notes, setNotes] = useState("");
   const [toUserId, setToUserId] = useState("");
-  const [handoverType] = useState<"collection" | "transfer">("transfer");
+  const [handoverType, setHandoverType] = useState<"collection" | "transfer">("transfer");
   const [submitting, setSubmitting] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null);
@@ -498,7 +498,7 @@ const Handovers = () => {
         p_cash_amount: Number(amount),
         p_upi_amount: 0,
         p_notes: notes || undefined,
-        p_handover_type: "transfer",
+        p_handover_type: handoverType,
       });
 
     setSubmitting(false);
@@ -585,10 +585,10 @@ const Handovers = () => {
     if (actionLoading) return;
     const handover = myHandovers.find((h) => h.id === id);
     setActionLoading(id);
-    const { error } = await supabase.from("handovers").update({
-      status: "rejected",
-      rejected_at: new Date().toISOString(),
-    }).eq("id", id);
+    const { error } = await supabase.rpc("reject_handover", {
+      p_handover_id: id,
+      p_rejected_by: user!.id,
+    });
     setActionLoading(null);
     if (error) toast.error(error.message);
     else {
@@ -627,9 +627,10 @@ const Handovers = () => {
       return;
     }
     setActionLoading(id);
-    const { error } = await supabase.from("handovers").update({
-      status: "cancelled",
-    }).eq("id", id);
+    const { error } = await supabase.rpc("cancel_handover", {
+      p_handover_id: id,
+      p_cancelled_by: user!.id,
+    });
     setActionLoading(null);
     setCancelConfirmId(null);
     if (error) toast.error(error.message);
@@ -2046,6 +2047,17 @@ const Handovers = () => {
                           <SelectItem key={p.user_id} value={p.user_id}>{p.full_name} ({p.roleLabel})</SelectItem>
                         ))
                       )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Handover Type</Label>
+                  <Select value={handoverType} onValueChange={(v) => setHandoverType(v as "collection" | "transfer")}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="transfer">Transfer</SelectItem>
+                      <SelectItem value="collection">Collection</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

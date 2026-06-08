@@ -145,7 +145,7 @@ export function AgentCustomers({ onOpenStore, onGoRecord, onGoVisit }: Props) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search store, customer, address..."
-            className="pl-9 pr-9 h-10 rounded-xl"
+            className="pl-9 pr-9 h-12 rounded-xl"
           />
           {query && (
             <button className="absolute right-3 top-1/2 -translate-y-1/2" onClick={() => setQuery("")}>
@@ -156,7 +156,7 @@ export function AgentCustomers({ onOpenStore, onGoRecord, onGoVisit }: Props) {
 
         <div className="flex gap-2">
           <Select value={filterRoute} onValueChange={setFilterRoute}>
-            <SelectTrigger className="h-8 text-xs rounded-lg flex-1">
+            <SelectTrigger className="h-11 text-xs rounded-lg flex-1">
               <SelectValue placeholder="All Routes" />
             </SelectTrigger>
             <SelectContent>
@@ -167,7 +167,7 @@ export function AgentCustomers({ onOpenStore, onGoRecord, onGoVisit }: Props) {
             </SelectContent>
           </Select>
           <Select value={filterType} onValueChange={setFilterType}>
-            <SelectTrigger className="h-8 text-xs rounded-lg flex-1">
+            <SelectTrigger className="h-11 text-xs rounded-lg flex-1">
               <SelectValue placeholder="All Types" />
             </SelectTrigger>
             <SelectContent>
@@ -334,7 +334,7 @@ const StoreCard = memo(({ s, onOpenStore, onGoRecord, onGoVisit, handleNavigate,
               variant="outline"
               size="sm"
               className="h-11 rounded-xl text-xs font-bold bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700"
-              onClick={onGoVisit}
+              onClick={() => onOpenStore(storeOption)}
             >
               <CheckCircle2 className="h-4 w-4 mr-1 shrink-0" />
               Visit

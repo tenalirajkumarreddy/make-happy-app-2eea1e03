@@ -19,6 +19,7 @@ import {
   Minus,
   Plus,
 } from "lucide-react";
+import { MiniStat } from "@/mobile/pages/agent/MiniStat";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +40,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermission } from "@/hooks/usePermission";
 import { supabase } from "@/integrations/supabase/client";
@@ -102,6 +104,8 @@ export function AgentHistory() {
   const [handoverNotes, setHandoverNotes] = useState("");
   const [toUserId, setToUserId] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [cancelHandoverConfirm, setCancelHandoverConfirm] = useState<{ show: boolean; requestId: string }>({ show: false, requestId: "" });
+  const [cancelClaimConfirm, setCancelClaimConfirm] = useState<{ show: boolean; claimId: string }>({ show: false, claimId: "" });
 
   // Expense submission state
   const [expenseOpen, setExpenseOpen] = useState(false);
@@ -678,13 +682,20 @@ export function AgentHistory() {
     }
   };
 
-  const handleCancelHandover = async (handover: any) => {
-    if (!confirm("Cancel this handover request?")) return;
+  const handleCancelHandover = (handover: any) => {
+    setCancelHandoverConfirm({ show: true, requestId: handover.id });
+  };
+
+  const executeCancelHandover = async (handoverId: string) => {
+    if (!handoverId) return;
+    setCancelHandoverConfirm({ show: false, requestId: "" });
+    const handover = (handovers || []).find((h: any) => h.id === handoverId);
+    if (!handover) return;
     setSubmitting(true);
     const { error } = await supabase
       .from("handovers")
       .update({ status: "cancelled" })
-      .eq("id", handover.id);
+      .eq("id", handoverId);
     setSubmitting(false);
     if (error) {
       toast.error(error.message);
@@ -806,8 +817,13 @@ export function AgentHistory() {
     }
   };
 
-  const handleCancelExpenseClaim = async (claimId: string) => {
-    if (!confirm("Cancel this expense claim?")) return;
+  const handleCancelExpenseClaim = (claimId: string) => {
+    setCancelClaimConfirm({ show: true, claimId });
+  };
+
+  const executeCancelExpenseClaim = async (claimId: string) => {
+    if (!claimId) return;
+    setCancelClaimConfirm({ show: false, claimId: "" });
     setSubmitting(true);
     try {
       const { error } = await supabase
@@ -2123,21 +2139,31 @@ export function AgentHistory() {
         onOpenChange={(v) => { if (!v) setReturningTransaction(null); }}
         transaction={returningTransaction}
       />
+
+      <AlertDialog open={cancelHandoverConfirm.show} onOpenChange={(open) => setCancelHandoverConfirm({ show: open, requestId: "" })}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel handover request?</AlertDialogTitle>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setCancelHandoverConfirm({ show: false, requestId: "" })}>No</AlertDialogCancel>
+            <AlertDialogAction onClick={() => executeCancelHandover(cancelHandoverConfirm.requestId)}>Yes, cancel</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={cancelClaimConfirm.show} onOpenChange={(open) => setCancelClaimConfirm({ show: open, claimId: "" })}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel this expense claim?</AlertDialogTitle>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setCancelClaimConfirm({ show: false, claimId: "" })}>No</AlertDialogCancel>
+            <AlertDialogAction onClick={() => executeCancelExpenseClaim(cancelClaimConfirm.claimId)}>Yes, cancel</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
 
-function MiniStat({ icon: Icon, label, value, subValue, color }: { icon: React.ElementType; label: string; value: string; subValue?: string; color: string }) {
-  return (
-    <div className="rounded-xl border border-slate-100 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/30 p-3">
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium leading-tight">{label}</p>
-        <div className={cn("h-6 w-6 rounded-md bg-gradient-to-br flex items-center justify-center shrink-0", color)}>
-          <Icon className="h-3 w-3 text-white" />
-        </div>
-      </div>
-      <p className="text-lg font-bold text-slate-900 dark:text-white mt-1">{value}</p>
-      {subValue && <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 leading-tight">{subValue}</p>}
-    </div>
-  );
-}

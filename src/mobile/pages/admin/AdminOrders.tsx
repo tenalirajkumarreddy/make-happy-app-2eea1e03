@@ -824,23 +824,8 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
                   </div>
                 )}
 
-                {/* Action Buttons Row — each does a distinct real action */}
+                {/* Action Buttons — card click = view, so first action is Fulfill */}
                 <div className="flex border-t border-border/50">
-                  <button
-                    onClick={() => { setSelectedOrder(order); setShowDetailModal(true); }}
-                    disabled={isActioning}
-                    className="flex-1 py-2.5 min-w-0 flex items-center justify-center gap-1 text-xs font-medium text-muted-foreground hover:bg-muted active:bg-muted/80 transition-colors border-r border-border/50 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Eye className="h-3.5 w-3.5 shrink-0" />
-                    <span className="truncate">View</span>
-                  </button>
-                  <button
-                    onClick={() => setViewProformaId(order.id)}
-                    className="flex-1 py-2.5 min-w-0 flex items-center justify-center gap-1 text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors border-r border-border/50"
-                  >
-                    <Printer className="h-3.5 w-3.5 shrink-0" />
-                    <span className="truncate">Proforma</span>
-                  </button>
                   {order.status === "pending" && canFulfillOrders && (
                     <button
                       onClick={() => setFulfillConfirmOrder(order)}
@@ -848,9 +833,16 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
                       className="flex-1 py-2.5 min-w-0 flex items-center justify-center gap-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 active:bg-emerald-100 transition-colors border-r border-border/50 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-                      <span className="truncate">Deliver</span>
+                      <span className="truncate">Fulfill</span>
                     </button>
                   )}
+                  <button
+                    onClick={() => setViewProformaId(order.id)}
+                    className="flex-1 py-2.5 min-w-0 flex items-center justify-center gap-1 text-xs font-medium text-sky-600 hover:bg-sky-50 active:bg-sky-100 transition-colors border-r border-border/50"
+                  >
+                    <Printer className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">Proforma</span>
+                  </button>
                   {(order.status === "pending" || order.status === "confirmed") && (
                     <button
                       onClick={() => setEditOrder(order)}

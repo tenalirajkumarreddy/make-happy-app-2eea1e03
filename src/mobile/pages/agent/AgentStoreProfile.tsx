@@ -122,19 +122,19 @@ export function AgentStoreProfile({ store, onBack, onGoRecord }: Props) {
 
   const handleNavigate = () => {
     if (currentStore.lat != null && currentStore.lng != null) {
-      window.open(`https://www.google.com/maps/dir/?api=1&destination=${currentStore.lat},${currentStore.lng}`, "_blank");
+      window.open(`https://www.google.com/maps/dir/?api=1&destination=${currentStore.lat},${currentStore.lng}`, "_system");
       return;
     }
 
     if (currentStore.address) {
-      window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(currentStore.address)}`, "_blank");
+      window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(currentStore.address)}`, "_system");
     }
   };
 
   const handleCall = () => {
     const phone = currentStore.phone || (currentStore.customers as any)?.phone || null;
     if (!phone) return;
-    window.open(`tel:${phone}`, "_self");
+    window.open(`tel:${phone}`, "_system");
   };
 
   const handleMarkVisited = async () => {
@@ -203,7 +203,7 @@ export function AgentStoreProfile({ store, onBack, onGoRecord }: Props) {
       <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 dark:from-slate-900 dark:via-blue-950 dark:to-indigo-950 px-4 pt-4 pb-6">
         <button
           type="button"
-          className="h-9 px-3 rounded-xl bg-white/15 text-white text-sm font-semibold flex items-center gap-2"
+          className="h-11 px-3 rounded-xl bg-white/15 text-white text-sm font-semibold flex items-center gap-2"
           onClick={onBack}
         >
           <ArrowLeft className="h-4 w-4" />
@@ -253,11 +253,11 @@ export function AgentStoreProfile({ store, onBack, onGoRecord }: Props) {
             )}
 
             <div className="grid grid-cols-2 gap-2 mt-3">
-              <Button variant="outline" size="sm" className="h-9 rounded-xl text-xs" onClick={handleNavigate} disabled={!canNavigate}>
+              <Button variant="outline" size="sm" className="h-11 rounded-xl text-xs" onClick={handleNavigate} disabled={!canNavigate}>
                 <Navigation2 className="h-3.5 w-3.5 mr-1.5" />
                 Navigate
               </Button>
-              <Button variant="outline" size="sm" className="h-9 rounded-xl text-xs" onClick={handleCall} disabled={!phone}>
+              <Button variant="outline" size="sm" className="h-11 rounded-xl text-xs" onClick={handleCall} disabled={!phone}>
                 <Phone className="h-3.5 w-3.5 mr-1.5" />
                 Call
               </Button>

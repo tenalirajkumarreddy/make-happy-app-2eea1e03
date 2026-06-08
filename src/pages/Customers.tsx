@@ -135,10 +135,6 @@ const Customers = () => {
     return () => clearTimeout(timer);
   }, [phone]);
 
-  useEffect(() => {
-    document.title = "Customers";
-  }, []);
-
     const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {

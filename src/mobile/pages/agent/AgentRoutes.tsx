@@ -10,6 +10,7 @@ import {
   Eye,
   List,
   Loader2,
+  Map,
   MapPin,
   Minus,
   Navigation2,
@@ -55,8 +56,11 @@ import { ProformaView } from "@/components/orders/ProformaView";
 import { QrStoreSelector } from "@/components/shared/QrStoreSelector";
 import { usePermission } from "@/hooks/usePermission";
 import { afterSaleSaved } from "@/lib/mutationHelpers";
+import { cacheQueryResult, getCachedQueryResult } from "@/lib/offlineRouteCache";
 import { getActiveOrderForStore, type ActiveOrderInfo } from "@/lib/orders";
 import { ActiveOrderExistsDialog } from "@/mobile/components/ActiveOrderExistsDialog";
+import { VisitReasonDialog } from "@/components/routes/VisitReasonDialog";
+import { RouteMap } from "@/components/routes/RouteMap";
 import type { StoreOption } from "@/mobile/components/StorePickerSheet";
 
 interface CustomerItem { id: string; name: string; }
@@ -146,6 +150,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
   const { allowed: canModifyOrders } = usePermission("modify_orders");
   const { allowed: canCancelOrders } = usePermission("cancel_orders");
   const [view, setView] = useState<"routes" | "orders">("routes");
+  const [showMap, setShowMap] = useState(false);
   const [expandedRouteId, setExpandedRouteId] = useState<string | null>(null);
   const [agentPos, setAgentPos] = useState<{ lat: number; lng: number } | null>(null);
   const [fetchingPos, setFetchingPos] = useState(false);
@@ -155,10 +160,21 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
   const [showFilters, setShowFilters] = useState(false);
   const todayStart = startOfDay(new Date()).toISOString();
   const { canAccessRoute, loading: loadingRouteAccess } = useRouteAccess(user?.id, role);
+  const [isOfflineData, setIsOfflineData] = useState(false);
 
   const { data: routes, isLoading } = useQuery({
     queryKey: ["mobile-agent-routes", user?.id, role],
     queryFn: async () => {
+      const cacheKey = `routes:${user?.id}:${role}`;
+
+      if (!navigator.onLine) {
+        const cached = await getCachedQueryResult<RouteRow[]>(cacheKey);
+        if (cached) {
+          setIsOfflineData(true);
+          return cached;
+        }
+      }
+
       const { data, error } = await supabase
         .from("routes")
         .select(
@@ -167,7 +183,13 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
         .eq("is_active", true)
         .order("name");
       if (error) throw error;
-      return (data as unknown as RouteRow[]) || [];
+
+      const result = (data as unknown as RouteRow[]) || [];
+      setIsOfflineData(false);
+
+      await cacheQueryResult(cacheKey, result);
+
+      return result;
     },
     enabled: !!user,
   });
@@ -294,6 +316,24 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
     enabled: !!user,
   });
 
+  const { data: sessionPosition } = useQuery({
+    queryKey: ["session-position", activeSession?.id],
+    queryFn: async () => {
+      if (!activeSession) return null;
+      const { data } = await supabase
+        .from("route_sessions")
+        .select("current_lat, current_lng")
+        .eq("id", activeSession.id)
+        .maybeSingle();
+      if (data?.current_lat && data?.current_lng) {
+        return { lat: data.current_lat, lng: data.current_lng };
+      }
+      return null;
+    },
+    enabled: !!activeSession,
+    refetchInterval: 15_000,
+  });
+
   const [selectedOrder, setSelectedOrder] = useState<OrderRow | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [cancelOrderId, setCancelOrderId] = useState<string | null>(null);
@@ -307,6 +347,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
   const [showCreate, setShowCreate] = useState(false);
   const [createSaving, setCreateSaving] = useState(false);
   const [visitLoading, setVisitLoading] = useState<string | null>(null);
+  const [visitReasonDialog, setVisitReasonDialog] = useState<{ store: RouteStore; resolve?: (reason: string) => void } | null>(null);
   const [createStoreSearch, setCreateStoreSearch] = useState("");
   const [createStoreId, setCreateStoreId] = useState("");
   const [createSelectedStoreName, setCreateSelectedStoreName] = useState("");
@@ -364,7 +405,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
       return ((products || []) as any[]).map((p: any) => ({
         id: p.id,
         name: p.name,
-        effective_price: storePriceMap.get(p.id) ?? typePriceMap.get(p.id) ?? Number(p.base_price) ?? 0,
+        effective_price: storePriceMap.get(p.id) ?? typePriceMap.get(p.id) ?? Number(p.base_price ?? 0),
       }));
     },
     enabled: !!createSelectedStoreTypeId && !!createStoreId,
@@ -685,7 +726,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
     }
   };
 
-  const handleMarkVisited = async (store: RouteStore, fromQr?: boolean) => {
+  const handleMarkVisited = async (store: RouteStore, fromQr?: boolean, reason?: string) => {
     if (!user) return;
     setVisitLoading(store.id);
     try {
@@ -739,6 +780,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
         store_id: store.id,
         lat,
         lng,
+        visit_reason: reason || null,
       });
       if (error) throw error;
       toast.success(`Visit recorded for ${store.name}`);
@@ -748,6 +790,10 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
     } finally {
       setVisitLoading(null);
     }
+  };
+
+  const handleMarkVisitedClick = (store: RouteStore) => {
+    setVisitReasonDialog({ store });
   };
 
   return (
@@ -785,6 +831,20 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
             All Orders
           </button>
         </div>
+
+        <button
+          type="button"
+          onClick={() => setShowMap(!showMap)}
+          className={cn(
+            "w-full mt-2 py-2 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors rounded-xl",
+            showMap
+              ? "bg-white text-blue-700"
+              : "bg-white/10 text-white/80 hover:bg-white/20"
+          )}
+        >
+          <Map className="h-3.5 w-3.5" />
+          {showMap ? "Hide Map" : "Show Map"}
+        </button>
       </div>
 
       <div className="px-4 -mt-5 space-y-4">
@@ -795,7 +855,31 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
               <RouteSessionPanel />
             </div>
 
+            {showMap && (
+              <RouteMap
+                stores={routeList.flatMap(r => r.stores).map(s => ({
+                  id: s.id,
+                  name: s.name,
+                  display_id: s.display_id,
+                  lat: s.lat,
+                  lng: s.lng,
+                  visited: (visitedStoresByRoute?.get(
+                    routeList.find(r => r.stores.some(st => st.id === s.id))?.id || ""
+                  ) || new Set()).has(s.id),
+                  outstanding: Number(s.outstanding || 0),
+                }))}
+                agentLocation={sessionPosition}
+                className="mb-4"
+              />
+            )}
+
             <div>
+              {isOfflineData && (
+                <div className="rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 p-3 flex items-center gap-2 mb-2">
+                  <AlertCircle className="h-4 w-4 text-amber-500 shrink-0" />
+                  <p className="text-xs text-amber-700 dark:text-amber-400">Offline — showing cached route data</p>
+                </div>
+              )}
               <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2.5">
                 Available Routes
               </p>
@@ -972,7 +1056,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
                                                 variant="outline"
                                                 size="sm"
                                                 className="h-10 flex-1 rounded-xl text-xs font-semibold border border-slate-100 dark:border-slate-700"
-                                                onClick={() => handleMarkVisited(store)}
+                                                onClick={() => handleMarkVisitedClick(store)}
                                                 disabled={visitLoading === store.id}
                                               >
                                                 {visitLoading === store.id ? (
@@ -1285,13 +1369,15 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
                       )}
 
                       <div className="flex border-t border-slate-100 dark:border-slate-700">
-                        <button
-                          onClick={() => { setSelectedOrder(order); setShowDetailModal(true); }}
-                          className="flex-1 py-3.5 flex items-center justify-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400 hover:bg-muted/50 transition-colors border-r border"
-                        >
-                          <Eye className="h-4 w-4 text-slate-400 dark:text-slate-500" />
-                          View
-                        </button>
+                        {order.status === "pending" && canFulfillOrders && (
+                          <button
+                            onClick={() => { setFulfillOrder(order); setFulfillCash(""); setFulfillUpi(""); }}
+                            className="flex-1 py-3.5 flex items-center justify-center gap-1.5 text-xs font-semibold text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors border-r border"
+                          >
+                            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                            Fulfill
+                          </button>
+                        )}
                         <button
                           onClick={() => { setViewProformaId(order.id); }}
                           className="flex-1 py-3.5 flex items-center justify-center gap-1.5 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors border-r border"
@@ -1324,27 +1410,14 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
                             Edit
                           </button>
                         )}
-                        {(order.status === "pending" || order.status === "confirmed") && (
-                          <>
-                            {order.status === "pending" && canFulfillOrders && (
-                              <button
-                                onClick={() => { setFulfillOrder(order); setFulfillCash(""); setFulfillUpi(""); }}
-                                className="flex-1 py-3.5 flex items-center justify-center gap-1.5 text-xs font-semibold text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors border-r border"
-                              >
-                                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                                Fulfill
-                              </button>
-                            )}
-                            {canCancelOrders && (
-                              <button
-                                onClick={() => { setCancelOrderId(order.id); setCancelReason(""); }}
-                                className="flex-1 py-3.5 flex items-center justify-center gap-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                              >
-                                <X className="h-4 w-4 text-red-500" />
-                                Cancel
-                              </button>
-                            )}
-                          </>
+                        {(order.status === "pending" || order.status === "confirmed") && canCancelOrders && (
+                          <button
+                            onClick={() => { setCancelOrderId(order.id); setCancelReason(""); }}
+                            className="flex-1 py-3.5 flex items-center justify-center gap-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                          >
+                            <X className="h-4 w-4 text-red-500" />
+                            Cancel
+                          </button>
                         )}
                         {order.status !== "pending" && order.status !== "confirmed" && (
                           <button
@@ -1833,6 +1906,19 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
               }
             }, 100);
           }}
+        />
+
+        <VisitReasonDialog
+          open={!!visitReasonDialog}
+          onOpenChange={(v) => { if (!v) setVisitReasonDialog(null); }}
+          storeName={visitReasonDialog?.store.name || ""}
+          onConfirm={async (reason) => {
+            const store = visitReasonDialog?.store;
+            if (!store) return;
+            setVisitReasonDialog(null);
+            await handleMarkVisited(store, false, reason);
+          }}
+          loading={visitLoading === visitReasonDialog?.store.id}
         />
       </div>
     </div>

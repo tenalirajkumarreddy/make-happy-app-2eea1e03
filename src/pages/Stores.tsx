@@ -3,7 +3,6 @@ import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import { DataTable } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import { StorePricingDialog } from "@/components/stores/StorePricingDialog";
 import { CreateStoreWizard } from "@/components/stores/CreateStoreWizard";
 import { CsvImportDialog } from "@/components/shared/CsvImportDialog";
@@ -12,22 +11,12 @@ import { useInfiniteQuery, useQueryClient, useQuery } from "@tanstack/react-quer
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
-import { DollarSign, Store, Settings2, Upload, Loader2, Phone, MapPin, Building2, CheckCircle2 } from "lucide-react";
+import { DollarSign, Store, Settings2, Upload, Loader2, Phone, MapPin } from "lucide-react";
 import { usePermission } from "@/hooks/usePermission";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useState, useMemo, useEffect } from "react";
 
-// Set page title hook
-const usePageTitle = (title: string) => {
-  useEffect(() => {
-    const originalTitle = document.title;
-    document.title = title;
-    return () => {
-      document.title = originalTitle;
-    };
-  }, [title]);
-};
 import { useNavigate } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
@@ -36,14 +25,13 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { logActivity } from "@/lib/activityLogger";
-import { sanitizeString, sanitizeObject } from "@/lib/sanitization";
+import { sanitizeObject } from "@/lib/sanitization";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
 const Stores = () => {
-  usePageTitle("Stores | BizManager");
   const navigate = useNavigate();
   const { user, role } = useAuth();
   const { currentWarehouse, allWarehouses } = useWarehouse();

@@ -328,10 +328,10 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
     setActionLoading(id);
     try {
       const handover = handovers?.find((h) => h.id === id);
-      const { error } = await supabase.from("handovers").update({
-        status: "rejected",
-        rejected_at: new Date().toISOString(),
-      } as any).eq("id", id as any);
+      const { error } = await supabase.rpc("reject_handover", {
+        p_handover_id: id,
+        p_rejected_by: user!.id,
+      });
       if (error) throw error;
       toast.success("Handover rejected");
       if (handover?.user_id) {

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -62,7 +62,7 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
     "sales", "my-sales", ...DASHBOARD, ...MOBILE_SALES, ...ANALYTICS,
     "daily-report", "daybook-sales", "sales-report",
     ...PL, "sale-for-invoice", "statement-sales", "user-sales-totals",
-    ...INVENTORY_TIMELINE, "mobile-recent-activity",
+    ...INVENTORY_TIMELINE, "mobile-recent-activity", "mobile-admin-ops",
   ],
   sale_items: [
     "sale-items", "sale-items-detail", "sale-items-for-invoice",
@@ -89,7 +89,7 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
     ...DASHBOARD, ...MOBILE_ORDERS,
     "order-report", "pending-orders-for-store", "mobile-pending-orders-for-store",
     "pending-order-stores", "pending-orders-map", "routes-for-orders",
-    "daybook-sales",
+    "daybook-sales", "mobile-admin-ops",
   ],
   order_items: ["orders", "order-items", "mobile-marketer-orders"],
   stores: [
@@ -158,7 +158,7 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
     "receivables-aging", "mobile-marketer-order-customers",
     "mobile-customers-kyc-sale", "mobile-customer",
     "mobile-customer-self", "mobile-customer-profile",
-    "my-customer",
+    "my-customer", "mobile-marketer-followup",
   ],
   kyc_documents: ["customer-kyc"],
   products: [
@@ -289,9 +289,9 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
   shift_rates: ["shift-rates"],
   // ── Attendance ───────────────────────────────────────────────────────────────
   attendance_records: ["attendance-records", "attendance-entries"],
-  attendance_entries: ["attendance-entries", "attendance-records", "staff-for-attendance"],
+  attendance_entries: ["attendance-entries", "attendance-records", "staff-for-attendance", "mobile-pos-attendance"],
   // ── Invoices ─────────────────────────────────────────────────────────────────
-  invoices: ["invoices", "invoice", "uninvoiced-sales", "invoice-items"],
+  invoices: ["invoices", "invoice", "uninvoiced-sales", "invoice-items", "mobile-pos-invoices"],
   invoice_items: ["invoices", "invoice"],
   invoice_sales: ["invoices", "uninvoiced-sales"],
   // ── Raw materials / BOM ──────────────────────────────────────────────────────
@@ -306,6 +306,7 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
   bill_of_materials: ["boms", "bom_summary", "bom_details"],
   // ── Manufacturing ─────────────────────────────────────────────────────────────
   production_log: ["production_log", "production_log_summary", "product_total_costs", "operator-dashboard"],
+  production_runs: ["production_runs", "mobile-pos-production", "operator-dashboard", "manager-dashboard"],
   wac_cost_history: ["wac_cost_history"],
   unit_conversions: ["unit_conversions"],
   // ── Staff / HR ────────────────────────────────────────────────────────────────
@@ -363,7 +364,7 @@ const ROLE_TABLE_MAP: Record<string, string[]> = {
     "stores", "store_type_products",
     "products", "profiles",
     "product_stock", "stock_movements", "staff_stock", "stock_transfers",
-    "stock_requests", "warehouses", "production_log",
+    "stock_requests", "warehouses", "production_log", "production_runs",
     "raw_materials", "raw_material_stock", "bill_of_materials",
     "handovers", "handover_snapshots", "expense_claims",
     "expense_categories", "expense_category_access",
@@ -559,9 +560,17 @@ export function useRealtimeSync() {
   const qc = useQueryClient();
   const { role, user } = useAuth();
   const isAdmin = role === "super_admin" || role === "manager";
+  const prevRoleRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!role) return;
+
+    // If role changed, tear down existing channels and rebuild
+    if (prevRoleRef.current !== null && prevRoleRef.current !== role) {
+      tearDownChannels();
+    }
+    prevRoleRef.current = role;
+
     const id = Symbol("rt-sub");
     subscribers.set(id, { qc, isAdmin, userId: user?.id, role });
     buildChannel(role);

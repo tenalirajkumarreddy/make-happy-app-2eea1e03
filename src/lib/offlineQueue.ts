@@ -233,13 +233,14 @@ export function generateBusinessKey(
       break;
   }
 
-  // Round to minute precision so same-minute actions produce the same key
+  // Round to 10-second precision to prevent accidental double-taps
+  // while allowing legitimate separate transactions within the same minute
   const ts = params.timestamp || Date.now();
   const timestampMs = typeof ts === 'string'
     ? new Date(ts).getTime()
     : ts;
-  const minuteKey = Math.floor(timestampMs / 60000);
-  parts.push(String(minuteKey));
+  const tenSecKey = Math.floor(timestampMs / 10000);
+  parts.push(String(tenSecKey));
 
   return parts.join(':');
 }

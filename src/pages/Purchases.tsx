@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase';
 import { useWarehouse } from '@/contexts/WarehouseContext';
@@ -6,6 +6,7 @@ import { DataTable } from "@/components/shared/DataTable";
 import { purchaseOrderColumns } from '@/components/inventory/purchase-order-columns';
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PurchaseOrderForm } from '@/components/inventory/PurchaseOrderForm';
+import { RecordPurchaseForm } from '@/components/inventory/RecordPurchaseForm';
 import { TableSkeleton } from '@/components/shared/TableSkeleton';
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
@@ -13,6 +14,7 @@ import type { PurchaseOrderView } from '@/types/purchases';
 
 const PurchasesPage = () => {
   const { currentWarehouse } = useWarehouse();
+  const [showRecordPurchase, setShowRecordPurchase] = useState(false);
 
   useEffect(() => { document.title = "Purchases"; }, []);
 
@@ -80,7 +82,13 @@ const PurchasesPage = () => {
     <div className="space-y-4">
       <div className="flex items-start justify-between">
         <PageHeader title="Purchase Orders" />
-        <PurchaseOrderForm />
+        <div className="flex gap-2">
+          <PurchaseOrderForm />
+          <Button onClick={() => setShowRecordPurchase(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Record Purchase
+          </Button>
+        </div>
       </div>
 
       {error ? (
@@ -104,6 +112,7 @@ const PurchasesPage = () => {
           <PurchaseOrderForm />
         </div>
       )}
+      <RecordPurchaseForm open={showRecordPurchase} onOpenChange={setShowRecordPurchase} />
     </div>
   );
 };

@@ -38,7 +38,6 @@ async function resolveUserType(supabaseClient: any, userId: string): Promise<{
   // This happens when staff are created directly via admin panel invite
   // (AdminStaffDirectory) rather than through the full onboarding flow.
   // Treat them as staff so they don't get redirected to /onboarding.
-  const explicitStaff = !!roleData?.role && roleData.role !== "customer";
 
   const { data: customerData } = await supabaseClient
     .from("customers")
@@ -48,7 +47,7 @@ async function resolveUserType(supabaseClient: any, userId: string): Promise<{
 
   const isCustomer = !!customerData;
 
-  const role = isStaff || explicitStaff
+  const role = isStaff
     ? normalizeRole(roleData?.role ?? null)
     : "customer";
 

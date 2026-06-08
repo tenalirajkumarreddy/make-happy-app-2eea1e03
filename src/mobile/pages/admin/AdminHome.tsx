@@ -36,16 +36,20 @@ export function AdminHome({
   const { profile, user } = useAuth();
   const { currentWarehouse } = useWarehouse();
 
+  const warehouseFilter = (role === "manager" && currentWarehouse?.id)
+    ? (q: any) => q.eq("warehouse_id", currentWarehouse!.id)
+    : (q: any) => q;
+
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ["mobile-admin-dashboard", currentWarehouse?.id, role],
     queryFn: async () => {
       const today = new Date().toISOString().split("T")[0];
       const [todaySalesRes, storesRes, stockRes, ordersCountRes] = await Promise.all([
-        supabase.from("sales").select("total_amount, cash_amount, upi_amount")
+        warehouseFilter(supabase.from("sales").select("total_amount, cash_amount, upi_amount"))
           .gte("created_at", `${today}T00:00:00`).lte("created_at", `${today}T23:59:59`),
-        supabase.from("stores").select("outstanding"),
-        supabase.from("product_stock").select("quantity, reorder_level"),
-        supabase.from("orders").select("*", { count: "exact", head: true }).eq("status", "pending"),
+        warehouseFilter(supabase.from("stores").select("outstanding")),
+        warehouseFilter(supabase.from("product_stock").select("quantity, reorder_level")),
+        warehouseFilter(supabase.from("orders").select("*", { count: "exact", head: true })).eq("status", "pending"),
       ]);
       const td = todaySalesRes.data || [];
       return {
@@ -64,7 +68,7 @@ export function AdminHome({
   const { data: recentActivity } = useQuery({
     queryKey: ["mobile-recent-activity", currentWarehouse?.id],
     queryFn: async () => {
-      const { data } = await supabase.from("sales")
+      const { data } = await warehouseFilter(supabase.from("sales"))
         .select("id, display_id, total_amount, created_at, stores(name)")
         .order("created_at", { ascending: false }).limit(5);
       return (data || []).map(s => ({
@@ -86,6 +90,34 @@ export function AdminHome({
       return data || [];
     },
     refetchInterval: 30_000,
+  });
+
+  const { data: opsMetrics } = useQuery({
+    queryKey: ["mobile-admin-ops", currentWarehouse?.id, role],
+    queryFn: async () => {
+      const today = new Date().toISOString().split("T")[0];
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+
+      const [ordersRes, salesRes] = await Promise.all([
+        warehouseFilter(supabase.from("orders").select("status"))
+          .gte("created_at", thirtyDaysAgo).limit(5000),
+        warehouseFilter(supabase.from("sales").select("total_amount, outstanding_amount"))
+          .gte("created_at", today).limit(1000),
+      ]);
+
+      const orders = ordersRes.data || [];
+      const sales = salesRes.data || [];
+      const totalOrders = orders.length;
+      const fulfilledOrders = orders.filter((o: any) => o.status === "fulfilled" || o.status === "delivered").length;
+      const fulfillmentRate = totalOrders > 0 ? Math.round((fulfilledOrders / totalOrders) * 100) : 0;
+
+      const totalSale = sales.reduce((s: number, r: any) => s + Number(r.total_amount), 0);
+      const totalOutstanding = sales.reduce((s: number, r: any) => s + Number(r.outstanding_amount || 0), 0);
+      const collectionEfficiency = totalSale > 0 ? Math.round(((totalSale - totalOutstanding) / totalSale) * 100) : 0;
+
+      return { fulfillmentRate, collectionEfficiency };
+    },
+    refetchInterval: 60_000,
   });
 
   const qc = useQueryClient();
@@ -196,6 +228,22 @@ export function AdminHome({
           <MiniStat label="Outstanding" value={`₹${fmtK(stats?.outstandingAmount ?? 0)}`} color="from-red-500 to-rose-600" icon={TrendingDown} />
           <MiniStat label="Pending" value={String(stats?.totalOrders ?? 0)} color="from-amber-500 to-orange-600" icon={ClipboardList} />
           <MiniStat label="Low Stock" value={String(stats?.lowStockCount ?? 0)} color="from-orange-500 to-red-600" icon={Package} alert={(stats?.lowStockCount ?? 0) > 0} />
+        </div>
+
+        {/* Operational Metrics */}
+        <div className="grid grid-cols-2 gap-2">
+          <MiniStat
+            label="Fulfillment"
+            value={opsMetrics ? `${opsMetrics.fulfillmentRate}%` : "—"}
+            color={opsMetrics && opsMetrics.fulfillmentRate >= 80 ? "from-emerald-500 to-green-600" : opsMetrics && opsMetrics.fulfillmentRate >= 50 ? "from-amber-500 to-orange-600" : "from-red-500 to-rose-600"}
+            icon={ShoppingCart}
+          />
+          <MiniStat
+            label="Collection"
+            value={opsMetrics ? `${opsMetrics.collectionEfficiency}%` : "—"}
+            color={opsMetrics && opsMetrics.collectionEfficiency >= 80 ? "from-emerald-500 to-green-600" : opsMetrics && opsMetrics.collectionEfficiency >= 50 ? "from-amber-500 to-orange-600" : "from-red-500 to-rose-600"}
+            icon={Wallet}
+          />
         </div>
       </div>
 

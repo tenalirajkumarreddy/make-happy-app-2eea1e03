@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { ClipboardList, Loader2, Smartphone, Users, Wallet, MapPin, Store, Navigation2, ShoppingCart, CheckCircle2, ArrowRightLeft, Contact } from "lucide-react";
+import { ClipboardList, Loader2, Smartphone, Users, Wallet, MapPin, Store, Navigation2, ShoppingCart, CheckCircle2, ArrowRightLeft, Contact, UserPlus, Building2, Target, Bell } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -57,12 +57,19 @@ export function MarketerHome({ onOpenOrders, onOpenRecord, onOpenStores, onOpenA
       ]);
       const orders: any[] = ordersRes.data || [];
       const todayTxns: any[] = txnRes.data || [];
+      const monthlyTarget = 50000;
+      const todayTotal = todayTxns.reduce((s, r) => s + Number(r.cash_amount || 0) + Number(r.upi_amount || 0), 0);
+      const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
+      const dailyAverage = todayTotal;
+      const projectedMonthly = dailyAverage * daysInMonth;
+      const collectionPercent = Math.min(100, Math.round((projectedMonthly / monthlyTarget) * 100));
       return {
         totalOrders: orders.length,
         pendingOrders: orders.filter(o => o.status === "pending").length,
         todayCash: todayTxns.reduce((s, r) => s + Number(r.cash_amount || 0), 0),
         todayUpi: todayTxns.reduce((s, r) => s + Number(r.upi_amount || 0), 0),
         customerCount: customersRes.data?.length || 0,
+        collectionPercent,
       };
     },
     enabled: !!user,
@@ -114,6 +121,22 @@ export function MarketerHome({ onOpenOrders, onOpenRecord, onOpenStores, onOpenA
     enabled: !!activeSession?.id,
   });
 
+  const { data: followUps = [] } = useQuery({
+    queryKey: ["mobile-marketer-followup", user?.id],
+    queryFn: async () => {
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const { data: customers } = await supabase
+        .from("customers")
+        .select("id, name, phone")
+        .eq("is_active", true)
+        .lt("last_order_date", sevenDaysAgo)
+        .limit(5);
+      return (customers || []).map(c => ({ type: "inactive", ...c }));
+    },
+    enabled: !!user,
+    refetchInterval: 120_000,
+  });
+
   const greeting = () => {
     const h = new Date().getHours();
     return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
@@ -132,6 +155,26 @@ export function MarketerHome({ onOpenOrders, onOpenRecord, onOpenStores, onOpenA
       </div>
 
       <div className="px-4 -mt-5 space-y-3">
+        {followUps.length > 0 && (
+          <div className="rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 p-3.5">
+            <div className="flex items-center gap-2 mb-2">
+              <Bell className="h-4 w-4 text-amber-500" />
+              <p className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider">
+                Needs Follow-up ({followUps.length})
+              </p>
+            </div>
+            {followUps.slice(0, 3).map((item: any) => (
+              <div key={item.id} className="flex items-center justify-between py-1.5 border-b border-amber-100 dark:border-amber-800 last:border-0">
+                <div>
+                  <p className="text-sm font-medium text-slate-800 dark:text-white">{item.name}</p>
+                  <p className="text-xs text-slate-500">{item.phone}</p>
+                </div>
+                <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/40 px-2 py-0.5 rounded-full">7d+ inactive</span>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="rounded-2xl bg-white dark:bg-slate-800 shadow-xl border border-slate-100 dark:border-slate-700 p-4">
           <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">Today Snapshot</p>
           {isLoading ? (
@@ -139,11 +182,13 @@ export function MarketerHome({ onOpenOrders, onOpenRecord, onOpenStores, onOpenA
               <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-2">
               <MiniStat icon={Users} label="Active Customers" value={String(stats?.customerCount ?? 0)} color="from-blue-500 to-blue-600" />
-              <MiniStat icon={ClipboardList} label="My Orders" value={String(stats?.totalOrders ?? 0)} subValue={`${stats?.pendingOrders ?? 0} pending`} color="from-amber-500 to-orange-600" />
-              <MiniStat icon={Wallet} label="Cash Collected" value={`₹${Number(stats?.todayCash ?? 0).toLocaleString("en-IN")}`} color="from-emerald-500 to-green-600" />
-              <MiniStat icon={Smartphone} label="UPI Collected" value={`₹${Number(stats?.todayUpi ?? 0).toLocaleString("en-IN")}`} color="from-violet-500 to-purple-600" />
+              <MiniStat icon={ClipboardList} label="Total Orders" value={String(stats?.totalOrders ?? 0)} color="from-amber-500 to-orange-600" />
+              <MiniStat icon={ShoppingCart} label="Pending" value={String(stats?.pendingOrders ?? 0)} color="from-rose-500 to-pink-600" />
+              <MiniStat icon={Wallet} label="Cash" value={`₹${Number(stats?.todayCash ?? 0).toLocaleString("en-IN")}`} color="from-emerald-500 to-green-600" />
+              <MiniStat icon={Smartphone} label="UPI" value={`₹${Number(stats?.todayUpi ?? 0).toLocaleString("en-IN")}`} color="from-violet-500 to-purple-600" />
+              <MiniStat icon={Target} label="Target" value={stats ? `${stats.collectionPercent ?? 0}%` : "—"} color="from-sky-500 to-cyan-600" />
             </div>
           )}
         </div>
@@ -154,69 +199,36 @@ export function MarketerHome({ onOpenOrders, onOpenRecord, onOpenStores, onOpenA
 
         <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-4 shadow-sm">
           <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2.5">Quick Actions</p>
-          <div className="grid grid-cols-3 gap-2">
-            <button
-              onClick={onOpenOrders}
-              className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95 transition-all shadow-sm"
-            >
+          <div className="grid grid-cols-4 gap-2">
+            <button onClick={onGoCustomers} className="flex flex-col items-center gap-1.5 p-2.5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 hover:bg-slate-50 active:scale-95 transition-all shadow-sm">
               <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
-                <ClipboardList className="h-4 w-4 text-white" />
+                <UserPlus className="h-4 w-4 text-white" />
               </div>
-              <span className="text-[11px] font-bold text-slate-800 dark:text-white text-center">Orders</span>
+              <span className="text-[10px] font-bold text-slate-800 dark:text-white text-center">Add Customer</span>
             </button>
-            <button
-              onClick={onOpenRecord}
-              className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95 transition-all shadow-sm"
-            >
+            <button onClick={onOpenOrders} className="flex flex-col items-center gap-1.5 p-2.5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 hover:bg-slate-50 active:scale-95 transition-all shadow-sm">
               <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center">
+                <ShoppingCart className="h-4 w-4 text-white" />
+              </div>
+              <span className="text-[10px] font-bold text-slate-800 dark:text-white text-center">Create Order</span>
+            </button>
+            <button onClick={onOpenRecord} className="flex flex-col items-center gap-1.5 p-2.5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 hover:bg-slate-50 active:scale-95 transition-all shadow-sm">
+              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
                 <Wallet className="h-4 w-4 text-white" />
               </div>
-              <span className="text-[11px] font-bold text-slate-800 dark:text-white text-center">Record Payment</span>
+              <span className="text-[10px] font-bold text-slate-800 dark:text-white text-center">Record Payment</span>
             </button>
-            <button
-              onClick={onOpenStores}
-              className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95 transition-all shadow-sm"
-            >
-              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center">
-                <Users className="h-4 w-4 text-white" />
-              </div>
-              <span className="text-[11px] font-bold text-slate-800 dark:text-white text-center">Stores</span>
-            </button>
-            <button
-              onClick={onGoCustomers}
-              className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95 transition-all shadow-sm"
-            >
-              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center">
-                <Contact className="h-4 w-4 text-white" />
-              </div>
-              <span className="text-[11px] font-bold text-slate-800 dark:text-white text-center">Customers</span>
-            </button>
-            <button
-              onClick={onGoStockTransfers}
-              className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95 transition-all shadow-sm"
-            >
+            <button onClick={onOpenStores} className="flex flex-col items-center gap-1.5 p-2.5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 hover:bg-slate-50 active:scale-95 transition-all shadow-sm">
               <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center">
-                <ArrowRightLeft className="h-4 w-4 text-white" />
+                <Building2 className="h-4 w-4 text-white" />
               </div>
-              <span className="text-[11px] font-bold text-slate-800 dark:text-white text-center">Stock Transfers</span>
+              <span className="text-[10px] font-bold text-slate-800 dark:text-white text-center">Stores</span>
             </button>
-            <button
-              onClick={() => onGoMap?.()}
-              className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95 transition-all shadow-sm"
-            >
+            <button onClick={() => onGoMap?.()} className="flex flex-col items-center gap-1.5 p-2.5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 hover:bg-slate-50 active:scale-95 transition-all shadow-sm">
               <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center">
                 <MapPin className="h-4 w-4 text-white" />
               </div>
-              <span className="text-[11px] font-bold text-slate-800 dark:text-white text-center">Map View</span>
-            </button>
-            <button
-              onClick={onOpenAddEntity}
-              className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95 transition-all shadow-sm"
-            >
-              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-rose-500 to-pink-600 flex items-center justify-center">
-                <Store className="h-4 w-4 text-white" />
-              </div>
-              <span className="text-[11px] font-bold text-slate-800 dark:text-white text-center">Add Store</span>
+              <span className="text-[10px] font-bold text-slate-800 dark:text-white text-center">Map View</span>
             </button>
           </div>
         </div>

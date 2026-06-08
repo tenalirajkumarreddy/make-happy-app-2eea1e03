@@ -125,9 +125,27 @@ export default function AddCustomerStore({ onClose }: { onClose: () => void }) {
       if (mode === "store") setStep("customer"); // Select customer
       else setStep("customer"); // Create customer
     } else if (step === "customer") {
+      if (mode !== "store") {
+        if (!custName.trim()) {
+          toast.error("Customer name is required");
+          return;
+        }
+        if (custPhone.length < 10) {
+          toast.error("Valid phone number is required (min 10 digits)");
+          return;
+        }
+      }
       if (mode === "customer") setStep("review");
       else setStep("store");
     } else if (step === "store") {
+      if (!storeName.trim()) {
+        toast.error("Store name is required");
+        return;
+      }
+      if (!storeTypeId) {
+        toast.error("Store type is required");
+        return;
+      }
       setStep("review");
     }
   };

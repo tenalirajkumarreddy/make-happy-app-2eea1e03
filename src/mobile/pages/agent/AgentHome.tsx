@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   MapPin, Phone, Navigation2, TrendingUp,
   Store, ShoppingCart, Loader2, Banknote, Wallet, ArrowRight, CheckCircle2, Eye, Package,
-  ArrowRightLeft, Boxes, RefreshCw,
+  ArrowRightLeft, Boxes, RefreshCw, Square,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,9 @@ import { toast } from "sonner";
 import type { StoreOption } from "@/mobile/components/StorePickerSheet";
 import { getCurrentPosition } from "@/lib/capacitorUtils";
 import { addToQueue, generateBusinessKey } from "@/lib/offlineQueue";
+import { VisitReasonDialog } from "@/components/routes/VisitReasonDialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { MiniStat } from "@/mobile/pages/agent/MiniStat";
 
 interface Props {
   onOpenStore: (store: StoreOption) => void;
@@ -77,6 +80,25 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
   const today = new Date().toISOString().split("T")[0];
   const [currentPosition, setCurrentPosition] = useState<{ lat: number; lng: number } | null>(null);
   const [visitLoading, setVisitLoading] = useState(false);
+  const [visitReasonDialog, setVisitReasonDialog] = useState<boolean>(false);
+  const [showEndRouteConfirm, setShowEndRouteConfirm] = useState(false);
+  const [elapsed, setElapsed] = useState("");
+  const qc = useQueryClient();
+
+  useEffect(() => {
+    if (!activeSession?.started_at) return;
+    const update = () => {
+      const start = new Date(activeSession.started_at).getTime();
+      const diff = Date.now() - start;
+      const hrs = Math.floor(diff / 3600000);
+      const mins = Math.floor((diff % 3600000) / 60000);
+      setElapsed(`${hrs}h ${mins}m`);
+    };
+    update();
+    const interval = setInterval(update, 60000);
+    return () => clearInterval(interval);
+  }, [activeSession?.started_at]);
+
   const [queueStatus, setQueueStatus] = useState({
     total: 0,
     pending: 0,
@@ -201,6 +223,22 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
     refetchInterval: 60_000,
   });
 
+  const { data: routePendingOrders } = useQuery({
+    queryKey: ["mobile-route-pending-orders", activeSession?.id],
+    queryFn: async () => {
+      if (!activeSession) return 0;
+      const storeIds = routeStores.map(s => s.id);
+      if (storeIds.length === 0) return 0;
+      const { count } = await supabase
+        .from("orders")
+        .select("id", { count: "exact", head: true })
+        .in("store_id", storeIds)
+        .in("status", ["pending", "confirmed"]);
+      return count ?? 0;
+    },
+    enabled: !!activeSession && routeStores.length > 0,
+  });
+
   // Stock holdings
   const { data: stockItems = [] } = useQuery({
     queryKey: ["mobile-agent-stock-holdings", user?.id],
@@ -280,7 +318,7 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
     }
   };
 
-  const handleMarkVisited = async () => {
+  const handleMarkVisited = async (reason?: string) => {
     if (!user || !nextStore || !activeSession?.id) return;
 
     setVisitLoading(true);
@@ -320,6 +358,7 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
         store_id: nextStore.id,
         lat,
         lng,
+        visit_reason: reason || null,
       });
 
       if (error) throw error;
@@ -328,6 +367,24 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
       toast.error("Failed to record visit");
     } finally {
       setVisitLoading(false);
+    }
+  };
+
+  const handleEndRoute = async () => {
+    if (!activeSession) return;
+    try {
+      const { error } = await supabase
+        .from("route_sessions")
+        .update({
+          status: "completed",
+          ended_at: new Date().toISOString(),
+        })
+        .eq("id", activeSession.id);
+      if (error) throw error;
+      toast.success("Route session ended");
+      qc.invalidateQueries({ queryKey: ["mobile-active-session"] });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to end session");
     }
   };
 
@@ -452,12 +509,32 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
         <div className="px-4 mt-5">
           <SectionLabel>Active Route</SectionLabel>
           <div className="rounded-2xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden">
-            <div className="bg-blue-50/50 dark:bg-blue-900/20 px-4 py-3.5 flex items-center justify-between">
-              <div>
-                <p className="font-semibold text-slate-800 dark:text-white">{activeSession?.routes?.name ?? "Route"}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{visitedCount} of {routeStores.length} stores done</p>
+            <div className="bg-blue-50/50 dark:bg-blue-900/20 px-4 py-3.5">
+              <div className="flex items-center justify-between">
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-slate-800 dark:text-white">{activeSession?.routes?.name ?? "Route"}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    {visitedCount} of {routeStores.length} stores · {elapsed}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {routePendingOrders && routePendingOrders > 0 && (
+                    <span className="h-6 min-w-[24px] px-1.5 rounded-md bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center">
+                      {routePendingOrders}
+                    </span>
+                  )}
+                  <Badge className="bg-blue-600 text-white text-[10px] font-semibold px-2.5 border-0">Active</Badge>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-[10px] font-semibold text-red-500 border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 px-2"
+                    onClick={() => setShowEndRouteConfirm(true)}
+                  >
+                    <Square className="h-3 w-3 mr-1" />
+                    End
+                  </Button>
+                </div>
               </div>
-              <Badge className="bg-blue-600 text-white text-[10px] font-semibold px-2.5 border-0">Active</Badge>
             </div>
             <div className="px-4 py-3.5">
               <div className="h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
@@ -517,7 +594,7 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
                 <Phone className="h-4 w-4" />
                 Call
               </Button>
-              <Button size="sm" variant="outline" className="h-10 rounded-xl gap-1.5 text-xs font-semibold" onClick={handleMarkVisited} disabled={visitLoading}>
+              <Button size="sm" variant="outline" className="h-10 rounded-xl gap-1.5 text-xs font-semibold" onClick={() => setVisitReasonDialog(true)} disabled={visitLoading}>
                 {visitLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                 Visit
               </Button>
@@ -597,6 +674,34 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
           </div>
         </div>
       )}
+
+      <VisitReasonDialog
+        open={visitReasonDialog}
+        onOpenChange={setVisitReasonDialog}
+        storeName={nextStore?.name || ""}
+        onConfirm={async (reason) => {
+          setVisitReasonDialog(false);
+          await handleMarkVisited(reason);
+        }}
+        loading={visitLoading}
+      />
+
+      <AlertDialog open={showEndRouteConfirm} onOpenChange={setShowEndRouteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>End Route Session?</AlertDialogTitle>
+          </AlertDialogHeader>
+          <p className="text-sm text-muted-foreground">
+            You visited {visitedCount} of {routeStores.length} stores. This will mark the session as complete.
+          </p>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleEndRoute} className="bg-red-500 hover:bg-red-600">
+              End Session
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -605,23 +710,4 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   return <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-3">{children}</p>;
 }
 
-interface MiniStatProps {
-  label: string;
-  value: string;
-  color: string;
-  icon: React.ElementType;
-}
 
-function MiniStat({ label, value, color, icon: Icon }: MiniStatProps) {
-  return (
-    <div className="rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-3 flex flex-col gap-2">
-      <div className={cn("h-7 w-7 rounded-lg bg-gradient-to-br flex items-center justify-center", color)}>
-        <Icon className="h-3.5 w-3.5 text-white" />
-      </div>
-      <div>
-        <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wide leading-none mb-0.5">{label}</p>
-        <p className="text-sm font-bold text-slate-800 dark:text-white leading-tight">{value}</p>
-      </div>
-    </div>
-  );
-}
