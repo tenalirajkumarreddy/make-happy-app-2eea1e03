@@ -84,7 +84,7 @@ describe("Sale Validation", () => {
     const rules = { minQuantity: 1, allowZeroTotal: false };
 
     it("accepts valid items", () => {
-      const items = [{ product_id: "p1", quantity: 2 }];
+      const items = [{ product_id: "p1", quantity: 2, unit_price: 100 }];
       const result = validateSaleItems(items, rules);
       expect(result.valid).toBe(true);
     });
@@ -141,9 +141,9 @@ describe("Sale Validation", () => {
       expect(result.exceeded).toBe(false);
     });
 
-    it("warns when limit exceeded", () => {
+    it("rejects when limit exceeded", () => {
       const result = validateCreditLimit(800, 1200, 1000);
-      expect(result.valid).toBe(true);
+      expect(result.valid).toBe(false);
       expect(result.exceeded).toBe(true);
       expect(result.warning).toContain("exceeded");
     });

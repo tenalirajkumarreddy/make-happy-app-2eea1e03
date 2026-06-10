@@ -10,6 +10,7 @@ interface Column<T> {
   accessor: keyof T | ((row: T) => React.ReactNode);
   className?: string;
   mobileLabel?: string;
+  hideOnMobile?: boolean;
 }
 
 interface VirtualDataTableProps<T> {
@@ -22,6 +23,9 @@ interface VirtualDataTableProps<T> {
   emptyMessage?: string;
   renderMobileCard?: (row: T) => React.ReactNode;
   keyExtractor?: (row: T) => string | number;
+  getRowClassName?: (row: T) => string | undefined;
+  onSearch?: (value: string) => void;
+  searchValue?: string;
 }
 
 export function VirtualDataTable<T extends Record<string, any>>({
@@ -34,21 +38,31 @@ export function VirtualDataTable<T extends Record<string, any>>({
   emptyMessage = "No results found.",
   renderMobileCard,
   keyExtractor,
+  getRowClassName,
+  onSearch,
+  searchValue,
 }: VirtualDataTableProps<T>) {
-  const [search, setSearch] = useState("");
+  const [internalSearch, setInternalSearch] = useState("");
+  const search = onSearch ? (searchValue ?? "") : internalSearch;
+  const setSearch = onSearch ? onSearch : setInternalSearch;
   const parentRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
   const shouldRenderCards = isMobile && !!renderMobileCard;
 
-  // Filter data based on searchKey
+  const visibleColumns = useMemo(
+    () => isMobile ? columns.filter((col) => !col.hideOnMobile) : columns,
+    [columns, isMobile]
+  );
+
   const filteredData = useMemo(() => {
+    if (onSearch) return data;
     if (!searchKey || !search) return data;
     const lowerSearch = search.toLowerCase();
     return data.filter((row) => {
       const val = row[searchKey];
       return String(val).toLowerCase().includes(lowerSearch);
     });
-  }, [data, search, searchKey]);
+  }, [data, search, searchKey, onSearch]);
 
   const rowVirtualizer = useVirtualizer({
     count: filteredData.length,
@@ -82,12 +96,12 @@ export function VirtualDataTable<T extends Record<string, any>>({
       )}
 
       {/* Container with border only on desktop or if not cards */}
-      <div className={cn("overflow-hidden", !shouldRenderCards && "rounded-xl border bg-card")}>
+      <div className={cn(!shouldRenderCards && "overflow-hidden rounded-xl border bg-card")}>
         {/* Header Row - Hide on mobile if rendering cards */}
         {!shouldRenderCards && (
-          <div className="flex items-center border-b border-border/50 bg-muted/30 font-bold text-muted-foreground text-[10px] uppercase tracking-wider py-2.5 px-0">
-             {columns.map((col, i) => (
-                <div key={i} className={cn("flex-1 px-4 truncate", col.className)}>
+          <div className="flex items-center border-b border-border/50 bg-muted/30 font-bold text-muted-foreground text-2xs uppercase tracking-wider py-2.5 px-0 min-w-0">
+             {visibleColumns.map((col, i) => (
+                <div key={i} className={cn("flex-1 px-4 truncate min-w-0", col.className)}>
                   {getHeaderValue(col)}
                 </div>
              ))}
@@ -126,17 +140,18 @@ export function VirtualDataTable<T extends Record<string, any>>({
                       "absolute top-0 left-0 w-full transition-colors",
                       !shouldRenderCards && "flex items-center border-b px-0 py-2 text-sm hover:bg-muted/50",
                       shouldRenderCards && "pb-3",
-                      onRowClick && !shouldRenderCards ? "cursor-pointer" : ""
+                      onRowClick ? "cursor-pointer" : "",
+                      getRowClassName?.(row)
                     )}
                     style={{
                       transform: `translateY(${virtualRow.start}px)`,
                     }}
-                    onClick={() => !shouldRenderCards && onRowClick?.(row)}
+                    onClick={() => onRowClick?.(row)}
                   >
                    {shouldRenderCards ? (
                      renderMobileCard?.(row)
                    ) : (
-                     columns.map((col, i) => (
+                     visibleColumns.map((col, i) => (
                         <div key={i} className={cn("flex-1 px-4 truncate", col.className)}>
                           {getCellValue(col, row)}
                         </div>

@@ -40,6 +40,8 @@ interface DataTableProps<T> {
   renderMobileCard?: (row: T, index: number) => React.ReactNode;
   /** Message shown when there are no rows. Defaults to "No results found." */
   emptyMessage?: string;
+  /** Custom row class name generator */
+  getRowClassName?: (row: T) => string | undefined;
 }
 
 export function DataTable<T extends Record<string, any>>({
@@ -51,6 +53,7 @@ export function DataTable<T extends Record<string, any>>({
   pageSize: defaultPageSize = 10,
   renderMobileCard,
   emptyMessage,
+  getRowClassName,
 }: DataTableProps<T>) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
@@ -103,7 +106,7 @@ export function DataTable<T extends Record<string, any>>({
           <TableHeader>
             <TableRow className="bg-muted/30 hover:bg-muted/30 border-b border-border/50">
               {columns.map((col, i) => (
-                <TableHead key={i} className={cn("text-[10px] uppercase tracking-wider font-bold text-muted-foreground py-3 h-auto", col.className)}>
+                <TableHead key={i} className={cn("text-2xs uppercase tracking-wider font-bold text-muted-foreground py-3 h-auto", col.className)}>
                   {typeof col.header === "function" ? col.header() : col.header}
                 </TableHead>
               ))}
@@ -123,7 +126,15 @@ export function DataTable<T extends Record<string, any>>({
               </TableRow>
             ) : (
               paged.map((row, i) => (
-                <TableRow key={i} className={`group hover:bg-muted/30 ${onRowClick ? "cursor-pointer" : ""}`} onClick={() => onRowClick?.(row)}>
+                <TableRow 
+                  key={i} 
+                  className={cn(
+                    "group hover:bg-muted/30 transition-all", 
+                    onRowClick && "cursor-pointer",
+                    getRowClassName?.(row)
+                  )} 
+                  onClick={() => onRowClick?.(row)}
+                >
                   {columns.map((col, j) => (
                     <TableCell key={j} className={col.className}>
                       {getCellValue(col, row)}
@@ -174,7 +185,7 @@ export function DataTable<T extends Record<string, any>>({
                     }
                     return (
                       <div key={j} className="min-w-0">
-                        <p className="text-[11px] text-muted-foreground truncate">{label}</p>
+                        <p className="text-3xs text-muted-foreground truncate">{label}</p>
                         <div className="text-sm font-medium truncate">{value}</div>
                       </div>
                     );

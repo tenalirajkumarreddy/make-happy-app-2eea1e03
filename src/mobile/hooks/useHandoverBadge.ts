@@ -15,5 +15,6 @@ export function useHandoverBadge(userId?: string | null, keySuffix = "") {
     },
     enabled: !!userId,
     refetchInterval: 30_000,
+    staleTime: 30_000,
   });
 }

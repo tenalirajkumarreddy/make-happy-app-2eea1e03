@@ -36,7 +36,8 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { usePermission } from "@/hooks/usePermission";
+import { fmtINR, formatDate } from "@/lib/utils";
 import { toast } from "sonner";
 
 interface InvoiceItem {
@@ -164,6 +165,7 @@ export function InvoiceDialog({
   const qc = useQueryClient();
   const [activeTab, setActiveTab] = useState("details");
   const [saving, setSaving] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   
   // Form state
   const [invoiceType, setInvoiceType] = useState<"proforma" | "tax" | "credit_note">("proforma");
@@ -349,7 +351,7 @@ export function InvoiceDialog({
 
       if (mode === "create") {
         // Generate invoice number
-        const { data: invoiceNum } = await supabase.rpc("generate_invoice_number");
+        const { data: invoiceNum } = await supabase.rpc("generate_invoice_number") as any;
         invoiceData.display_id = invoiceNum;
         invoiceData.order_ref = order?.id || null;
         invoiceData.status = "draft";
@@ -379,11 +381,11 @@ export function InvoiceDialog({
             total_amount: calculateItemTotal(item),
           }));
           
-          await supabase.from("invoice_items").insert(invoiceItems);
+          await (supabase as any).from("invoice_items").insert(invoiceItems);
         }
         
         return data;
-      } else if (mode === "edit" && invoice) {
+      } else if ((mode === "edit" || isEditing) && invoice) {
         // Update invoice
         const { error } = await supabase
           .from("invoices")
@@ -413,7 +415,7 @@ export function InvoiceDialog({
             total_amount: calculateItemTotal(item),
           }));
           
-          await supabase.from("invoice_items").insert(invoiceItems);
+          await (supabase as any).from("invoice_items").insert(invoiceItems);
         }
         
         return { id: invoice.id };
@@ -421,6 +423,7 @@ export function InvoiceDialog({
     },
   onSuccess: (data) => {
     setSaving(false);
+    setIsEditing(false);
     toast.success(mode === "create" ? "Invoice created successfully" : "Invoice updated");
     // Invalidate all related queries
     qc.invalidateQueries({ queryKey: ["invoices"], exact: false });
@@ -443,9 +446,9 @@ export function InvoiceDialog({
       .from("invoices")
       .update({ 
         status: "issued",
-        updated_by: user?.id,
+        updated_by: user?.id as string,
         updated_at: new Date().toISOString(),
-      })
+      } as any)
       .eq("id", invoice.id);
     
     if (error) {
@@ -465,9 +468,9 @@ export function InvoiceDialog({
       .from("invoices")
       .update({ 
         status: "cancelled",
-        cancelled_by: user?.id,
+        cancelled_by: user?.id as string,
         updated_at: new Date().toISOString(),
-      })
+      } as any)
       .eq("id", invoice.id);
     
     if (error) {
@@ -488,8 +491,8 @@ export function InvoiceDialog({
       .from("invoices")
       .update({ 
         deleted_at: new Date().toISOString(),
-        updated_by: user?.id,
-      })
+        updated_by: user?.id as string,
+      } as any)
       .eq("id", invoice.id);
     
     if (error) {
@@ -502,8 +505,10 @@ export function InvoiceDialog({
     }
   };
 
-  const canEdit = mode === "create" || (mode === "edit" && invoice?.status === "draft");
-  const isViewOnly = mode === "view";
+  const canEditInvoice = usePermission("edit_invoices");
+  const canDeleteInvoice = usePermission("delete_invoices");
+  const canEdit = (mode === "create" || (mode === "edit" && invoice?.status === "draft") || (isEditing && canEditInvoice));
+  const isViewOnly = mode === "view" && !isEditing;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -518,7 +523,7 @@ export function InvoiceDialog({
                   invoice.status === "paid" ? "success" :
                   invoice.status === "issued" ? "info" :
                   invoice.status === "cancelled" ? "destructive" :
-                  "secondary"
+                  "secondary" as any
                 }
               >
                 {invoice.status}
@@ -701,7 +706,7 @@ export function InvoiceDialog({
                     </div>
                     
                     <div className="mt-2 text-right text-sm text-muted-foreground">
-                      Line Total: {formatCurrency(calculateItemTotal(item))}
+                      Line Total: {fmtINR(calculateItemTotal(item))}
                     </div>
                   </CardContent>
                 </Card>
@@ -764,8 +769,8 @@ export function InvoiceDialog({
                       <tr key={i} className="border-b border-muted">
                         <td className="py-2">{item.description}</td>
                         <td className="text-right py-2">{item.quantity}</td>
-                        <td className="text-right py-2">{formatCurrency(item.unit_price)}</td>
-                        <td className="text-right py-2">{formatCurrency(calculateItemTotal(item))}</td>
+                        <td className="text-right py-2">{fmtINR(item.unit_price)}</td>
+                        <td className="text-right py-2">{fmtINR(calculateItemTotal(item))}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -774,20 +779,20 @@ export function InvoiceDialog({
                 <div className="space-y-1 text-right">
                   <p className="text-sm">
                     <span className="text-muted-foreground">Subtotal:</span>{" "}
-                    {formatCurrency(totals.subtotal)}
+                    {fmtINR(totals.subtotal)}
                   </p>
                   <p className="text-sm">
                     <span className="text-muted-foreground">Discount:</span>{" "}
-                    {formatCurrency(totals.discountAmount)}
+                    {fmtINR(totals.discountAmount)}
                   </p>
                   <p className="text-sm">
                     <span className="text-muted-foreground">Tax:</span>{" "}
-                    {formatCurrency(totals.taxAmount)}
+                    {fmtINR(totals.taxAmount)}
                   </p>
                   <Separator />
                   <p className="text-lg font-bold">
                     <span className="text-muted-foreground">Total:</span>{" "}
-                    {formatCurrency(totals.total)}
+                    {fmtINR(totals.total)}
                   </p>
                 </div>
                 
@@ -814,25 +819,31 @@ export function InvoiceDialog({
 
         <DialogFooter className="flex justify-between">
           <div className="flex gap-2">
-            {mode === "view" && invoice?.status === "draft" && (
-              <Button variant="outline" onClick={() => {}}>
-                Edit
+            {mode === "view" && !isEditing && invoice?.status === "draft" && canEditInvoice && (
+              <Button variant="outline" onClick={() => setIsEditing(true)}>
+                <FileText className="h-4 w-4 mr-1" /> Edit
               </Button>
             )}
             
-            {mode === "view" && invoice?.status === "draft" && (
+            {isEditing && (
+              <Button variant="outline" onClick={() => { setIsEditing(false); }}>
+                Cancel Edit
+              </Button>
+            )}
+            
+            {mode === "view" && invoice?.status === "draft" && !isEditing && canEditInvoice && (
               <Button variant="default" onClick={issueInvoice}>
                 <CheckCircle2 className="h-4 w-4 mr-1" /> Issue
               </Button>
             )}
             
-            {mode === "view" && (invoice?.status === "draft" || invoice?.status === "issued") && (
+            {mode === "view" && (invoice?.status === "draft" || invoice?.status === "issued") && canEditInvoice && (
               <Button variant="destructive" onClick={cancelInvoice}>
                 <XCircle className="h-4 w-4 mr-1" /> Cancel
               </Button>
             )}
             
-            {mode === "view" && invoice?.status === "cancelled" && (
+            {mode === "view" && invoice?.status === "cancelled" && canDeleteInvoice && (
               <Button variant="destructive" onClick={deleteInvoice}>
                 <Trash2 className="h-4 w-4 mr-1" /> Delete
               </Button>
@@ -841,7 +852,7 @@ export function InvoiceDialog({
           
           <div className="flex gap-2">
             {mode === "view" && (
-              <Button variant="outline" onClick={() => {}}>
+              <Button variant="outline" onClick={() => window.print()}>
                 <Printer className="h-4 w-4 mr-1" /> Print
               </Button>
             )}

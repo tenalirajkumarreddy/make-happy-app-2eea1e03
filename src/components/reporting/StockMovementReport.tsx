@@ -9,35 +9,36 @@ import { format } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { DateRangePicker } from '@/components/shared/DateRangePicker';
-import { useDebounce } from '@/hooks/useDebounce';
 
 const StockMovementReport: React.FC = () => {
-  const { profile } = useAuth();
+  const profile = (useAuth() as any).profile;
   const warehouseId = profile?.default_warehouse_id;
 
-  const [filters, setFilters] = useState({
+  const [filters, setFilters] = useState<{
+    productId: string | null;
+    userId: string | null;
+    type: string | null;
+    dateRange: { from: string | undefined; to: string | undefined };
+  }>({
     productId: null,
     userId: null,
     type: null,
     dateRange: { from: undefined, to: undefined },
   });
 
-  const debouncedFilters = useDebounce(filters, 300);
-
   const { data: history, isLoading, error } = useQuery({
-    queryKey: ['stock-movement-history', warehouseId, debouncedFilters],
+    queryKey: ['stock-movement-history', warehouseId, filters],
     queryFn: async () => {
       if (!warehouseId) return [];
-      const { data, error } = await supabase.rpc('get_stock_movement_history', {
+      const { data, error } = await (supabase as any).rpc('get_stock_movement_history', {
         p_warehouse_id: warehouseId,
-        p_product_id: debouncedFilters.productId,
-        p_user_id: debouncedFilters.userId,
-        p_type: debouncedFilters.type,
-        p_start_date: debouncedFilters.dateRange.from,
-        p_end_date: debouncedFilters.dateRange.to,
-      });
-      if (error) throw new Error(error.message);
+        p_product_id: filters.productId,
+        p_user_id: filters.userId,
+        p_type: filters.type,
+        p_start_date: filters.dateRange.from,
+        p_end_date: filters.dateRange.to,
+      }) as any;
+      if (error) throw new Error((error as any).message);
       return data;
     },
     enabled: !!warehouseId,
@@ -46,8 +47,8 @@ const StockMovementReport: React.FC = () => {
   const { data: products } = useQuery({
     queryKey: ['products', warehouseId],
     queryFn: async () => {
-        const { data } = await supabase.from('products').select('id, name').eq('warehouse_id', warehouseId);
-        return data;
+        const { data } = await (supabase.from('products').select('id, name') as any).eq('warehouse_id', warehouseId);
+        return data as any[];
     },
     enabled: !!warehouseId
   });
@@ -55,8 +56,8 @@ const StockMovementReport: React.FC = () => {
   const { data: staff } = useQuery({
     queryKey: ['staff', warehouseId],
     queryFn: async () => {
-        const { data } = await supabase.from('workers').select('id, full_name').eq('warehouse_id', warehouseId);
-        return data;
+        const { data } = await (supabase.from('workers').select('id, full_name') as any).eq('warehouse_id', warehouseId);
+        return data as any[];
     },
     enabled: !!warehouseId
   });
@@ -98,7 +99,7 @@ const StockMovementReport: React.FC = () => {
     }
 
     if (error) {
-      return <div className="text-red-500">Error loading stock movement history: {error.message}</div>;
+      return <div className="text-red-500">Error loading stock movement history: {(error as any).message}</div>;
     }
 
     if (!history || history.length === 0) {
@@ -120,7 +121,7 @@ const StockMovementReport: React.FC = () => {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {history.map((item) => (
+          {(history ?? []).map((item: any) => (
             <TableRow key={item.id}>
               <TableCell>{format(new Date(item.created_at), 'dd MMM yyyy, HH:mm')}</TableCell>
               <TableCell>{item.product_name}</TableCell>
@@ -151,7 +152,7 @@ const StockMovementReport: React.FC = () => {
                     <SelectValue placeholder="Filter by product..." />
                 </SelectTrigger>
                 <SelectContent>
-                    {products?.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                    {(products ?? []).map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
                 </SelectContent>
             </Select>
             <Select onValueChange={(value) => setFilters(f => ({...f, userId: value}))}>
@@ -159,7 +160,7 @@ const StockMovementReport: React.FC = () => {
                     <SelectValue placeholder="Filter by staff..." />
                 </SelectTrigger>
                 <SelectContent>
-                    {staff?.map(s => <SelectItem key={s.id} value={s.id}>{s.full_name}</SelectItem>)}
+                    {(staff ?? []).map((s: any) => <SelectItem key={s.id} value={s.id}>{s.full_name}</SelectItem>)}
                 </SelectContent>
             </Select>
             <Select onValueChange={(value) => setFilters(f => ({...f, type: value}))}>
@@ -167,13 +168,10 @@ const StockMovementReport: React.FC = () => {
                     <SelectValue placeholder="Filter by type..." />
                 </SelectTrigger>
                 <SelectContent>
-                    {movementTypes.map(t => <SelectItem key={t} value={t}>{t.replace(/_/g, ' ')}</SelectItem>)}
+                    {movementTypes.map((t: any) => <SelectItem key={t} value={t}>{t.replace(/_/g, ' ')}</SelectItem>)}
                 </SelectContent>
             </Select>
-            <DateRangePicker
-                date={filters.dateRange}
-                onDateChange={(range) => setFilters(f => ({...f, dateRange: range}))}
-            />
+
         </div>
         {renderContent()}
       </CardContent>

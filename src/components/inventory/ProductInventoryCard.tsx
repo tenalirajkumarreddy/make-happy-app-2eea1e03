@@ -67,14 +67,14 @@ export function ProductInventoryCard({ item, staffHoldings = [], onAdjust, onTra
 
   return (
     <Card className="overflow-hidden flex flex-col hover:border-border transition-colors">
-      <div className="relative h-40 bg-muted/30 flex items-center justify-center p-4 border-b">
+      <div className="relative h-32 @[500px]:h-40 bg-muted/30 flex items-center justify-center p-4 border-b">
         {imageUrl ? (
           <img src={imageUrl} alt={product.name} loading="lazy" className="h-full w-auto object-contain drop-shadow-sm" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
         ) : (
-          <Package className="h-16 w-16 text-muted-foreground/30" />
+          <Package className="h-12 w-12 @[400px]:h-16 @[400px]:w-16 text-muted-foreground/30" />
         )}
       <div 
-        className={`absolute top-2 right-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider ring-1 ring-inset shadow-xs uppercase ${statusColor}`}
+        className={`absolute top-2 right-2 px-2.5 py-0.5 rounded-full text-2xs font-bold tracking-wider ring-1 ring-inset shadow-xs uppercase ${statusColor}`}
         role="status"
         aria-label={`Stock status: ${getStatusText(quantity, minLevel)}. Current quantity: ${quantity} ${product.unit}`}
       >
@@ -92,18 +92,18 @@ export function ProductInventoryCard({ item, staffHoldings = [], onAdjust, onTra
           
           <div className="grid grid-cols-2 gap-2 mb-4">
             <div className="bg-slate-50 rounded p-2 border">
-              <span className="text-[10px] uppercase font-bold text-muted-foreground block mb-0.5">Price / {product.unit}</span>
+              <span className="text-2xs uppercase font-bold text-muted-foreground block mb-0.5">Price / {product.unit}</span>
               <span className="font-medium text-sm">{formatCurrency(basePrice)}</span>
             </div>
             <div className="bg-slate-50 rounded p-2 border">
-              <span className="text-[10px] uppercase font-bold text-muted-foreground block mb-0.5">Total Value</span>
+              <span className="text-2xs uppercase font-bold text-muted-foreground block mb-0.5">Total Value</span>
               <span className="font-medium text-sm">{formatCurrency(basePrice * Number(quantity || 0))}</span>
             </div>
           </div>
           
           <div className="mb-4">
             <div className="flex items-baseline gap-1 mb-1">
-              <span className="text-3xl font-bold tracking-tight" style={{ color: quantity <= minLevel ? 'var(--destructive)' : 'var(--emerald-600)'}}>{quantity}</span>
+              <span className="text-2xl @[400px]:text-3xl font-bold tracking-tight" style={{ color: quantity <= minLevel ? 'var(--destructive)' : 'var(--emerald-600)'}}>{quantity}</span>
               <span className="text-sm font-medium text-muted-foreground">{product.unit}(s)</span>
             </div>
             <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">

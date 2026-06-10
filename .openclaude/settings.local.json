@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(code-review:code-review)",
+      "Bash(npm run:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx eslint:*)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5005/)"
+    ]
+  },
+  "enabledMcpjsonServers": [
+    "code-review-graph",
+    "supabase"
+  ]
+}

@@ -39,12 +39,12 @@ export default function AgentPerformanceReport() {
         supabase.from("store_visits").select("session_id, store_id, visited_at").gte("visited_at", start).lte("visited_at", end),
       ]);
 
-      const sales = salesRes.data || [];
-      const txns = txnRes.data || [];
-      const profiles = profilesRes.data || [];
-      const roles = rolesRes.data || [];
-      const handovers = handoversRes.data || [];
-      const visits = visitsRes.data || [];
+      const sales: any[] = salesRes.data || [];
+      const txns: any[] = txnRes.data || [];
+      const profiles: any[] = profilesRes.data || [];
+      const roles: any[] = rolesRes.data || [];
+      const handovers: any[] = handoversRes.data || [];
+      const visits: any[] = visitsRes.data || [];
 
       const profileMap = Object.fromEntries(profiles.map(p => [p.user_id, p.full_name]));
       const staffIds = [...new Set(roles.map(r => r.user_id))];

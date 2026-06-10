@@ -1,11 +1,15 @@
 import { PageHeader } from "@/components/shared/PageHeader";
-import { StatusBadge } from "@/components/shared/StatusBadge";
 import { ImageUpload } from "@/components/shared/ImageUpload";
+import { StatusBadge } from "@/components/shared/StatusBadge";
+import { EmptyState } from "@/components/shared/EmptyState";
+import { CurrencyDisplay } from "@/components/shared/CurrencyDisplay";
+import { NoticeBox } from "@/components/shared/NoticeBox";
+import { UserHoverCard } from "@/components/shared/UserHoverCard";
 import {
-  Banknote, CheckCircle, Clock, AlertCircle, Loader2, Send,
-  ArrowDownLeft, XCircle, User, ChevronDown, Users, ShoppingCart, Wallet, Eye,
-  Receipt, Tag, FileText, Edit2, Image, Download, Search, CalendarIcon, X, Store as StoreIcon, MapPin, Phone, Mail,
-  TrendingUp, RefreshCw
+  Banknote, CheckCircle, AlertCircle, Loader2, Send,
+  ArrowDownLeft, XCircle, Wallet, Eye,
+  Receipt, Edit2, Image, Download, CalendarIcon, X,
+  TrendingUp, RefreshCw, HandCoins
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -13,7 +17,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { usePermission } from "@/hooks/usePermission";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -23,17 +26,21 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner";
 import { sendNotification, sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { useState, useMemo, useEffect, useRef } from "react";
-import { useNotifications } from "@/hooks/useNotifications";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format, startOfDay } from "date-fns";
-import { DataTable } from "@/components/shared/DataTable";
-import {
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
-} from "@/components/ui/hover-card";
 import { Calendar } from "@/components/ui/calendar";
+import { Badge } from "@/components/ui/badge";
 
 type ExpenseCategory = {
   id: string;
@@ -45,8 +52,6 @@ type ExpenseCategory = {
 const Handovers = () => {
   const { user, role } = useAuth();
   const qc = useQueryClient();
-  const db: any = supabase;
-  const { unreadCount } = useNotifications();
   const [createOpen, setCreateOpen] = useState(false);
   const [createType, setCreateType] = useState<"handover" | "expense">("handover");
   const [amount, setAmount] = useState("");
@@ -56,6 +61,9 @@ const Handovers = () => {
   const [submitting, setSubmitting] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null);
+  const [expenseCancelConfirmOpen, setExpenseCancelConfirmOpen] = useState(false);
+  const [expenseCancelConfirmId, setExpenseCancelConfirmId] = useState<string | null>(null);
+  const [resetAllConfirmOpen, setResetAllConfirmOpen] = useState(false);
   const [highlightExpenseId, setHighlightExpenseId] = useState<string | null>(null);
   const highlightedRef = useRef<Record<string, HTMLDivElement | null>>({});
 
@@ -93,12 +101,12 @@ const Handovers = () => {
 
   const { allowed: isFinalizer } = usePermission("finalizer");
   const { allowed: canSeeBalances } = usePermission("see_handover_balance");
-  const { allowed: canSubmitExpenses, loading: expensePermLoading } = usePermission("submit_expenses");
+  const { allowed: canSubmitExpenses } = usePermission("submit_expenses");
   const { allowed: canModifyHandovers } = usePermission("modify_handovers");
-  const { allowed: canCancelAnyHandover } = usePermission("cancel_any_handover");
+  const { allowed: _canCancelAnyHandover } = usePermission("cancel_any_handover");
   const { allowed: canAdjustHoldingBalance } = usePermission("adjust_holding_balance");
   const { allowed: canApproveExpenses } = usePermission("approve_expenses");
-  const { allowed: canTransferBetweenStaff } = usePermission("transfer_between_staff");
+  const { allowed: canTransferBetweenStaff } = usePermission("transfer_between_staff" as any);
   const navigate = useNavigate();
 
   // Admin-specific states
@@ -121,7 +129,7 @@ const Handovers = () => {
   const [adjustUpiAmount, setAdjustUpiAmount] = useState("");
   const [adjustReason, setAdjustReason] = useState("");
 
-  const { data: staffProfiles, isLoading: staffLoading, error: staffError } = useQuery({
+  const { data: staffProfiles } = useQuery({
     queryKey: ["staff-profiles", user?.id],
     queryFn: async () => {
       // Exclude super_admin from staff list (admins don't have holding accounts)
@@ -208,7 +216,7 @@ const Handovers = () => {
     enabled: !!user,
   });
 
-  const { data: userDailyBalance, isLoading: userDailyBalanceLoading } = useQuery({
+  const { data: userDailyBalance } = useQuery({
     queryKey: ["user-daily-balance", user?.id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -288,30 +296,22 @@ const Handovers = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("staff_cash_accounts")
-        .select("user_id, cash_balance, cash_amount, upi_amount, account_type, last_reset_at, profiles(full_name)")
+        .select("user_id, cash_amount, upi_amount, account_type, last_reset_at, profiles(full_name)")
         .eq("account_type", "prime_manager");
       if (error) throw error;
-      return (data || []) as Array<{ user_id: string; full_name: string; cash_balance: number; cash_amount: number; upi_amount: number; total_balance: number; last_reset_at: string }>;
+      return (data || []) as any;
     },
     enabled: isAdminOrManager,
   });
 
   // Also fetch detailed breakdown for display (optional)
-  const { data: agentCashHolding } = useQuery({
+  const { data: _agentCashHolding } = useQuery({
     queryKey: ["agent-cash-holding", user?.id],
     queryFn: async () => {
       const { data, error } = await supabase
         .rpc("get_agent_cash_holding", { p_user_id: user!.id });
       if (error) throw error;
-      return data?.[0] as {
-        net_holding: number;
-        sales_total: number;
-        transactions_total: number;
-        received_confirmed: number;
-        sent_confirmed: number;
-        sent_pending: number;
-        materialized_balance: number;
-      } | undefined;
+      return data?.[0] as any;
     },
     enabled: !!user && isStaff,
   });
@@ -330,7 +330,7 @@ const Handovers = () => {
   const { data: allStaffBalances } = useQuery({
     queryKey: ["all-staff-balances"],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("get_all_staff_balances");
+      const { data, error } = await supabase.rpc("get_all_staff_balances") as any;
       if (error) throw error;
       return data || [];
     },
@@ -342,15 +342,7 @@ const Handovers = () => {
     [handovers, user?.id]
   );
 
-  const sentConfirmed = myHandovers
-    .filter((h) => h.user_id === user?.id && h.status === "confirmed")
-    .reduce((s, h) => s + Number(h.cash_amount) + Number(h.upi_amount), 0);
-  const sentPending = myHandovers
-    .filter((h) => h.user_id === user?.id && h.status === "awaiting_confirmation")
-    .reduce((s, h) => s + Number(h.cash_amount) + Number(h.upi_amount), 0);
-  const receivedConfirmed = myHandovers
-    .filter((h) => h.handed_to === user?.id && h.status === "confirmed")
-    .reduce((s, h) => s + Number(h.cash_amount) + Number(h.upi_amount), 0);
+
 
   const todayStart = startOfDay(new Date()).toISOString();
   const todayReceivedConfirmed = myHandovers
@@ -371,13 +363,7 @@ const Handovers = () => {
     total_holding: materializedHolding
   };
 
-  const holdingBreakdown = useMemo(() => ({
-    sales: dailyData.today_sales,
-    transactions: dailyData.today_payments,
-    received: dailyData.today_received,
-    sentConfirmed: dailyData.today_sent_confirmed,
-    sentPending: dailyData.today_sent_pending,
-  }), [dailyData]);
+
 
   const notHandedOver = materializedHolding;
   
@@ -411,8 +397,8 @@ const Handovers = () => {
        const { data: roleData } = await supabase
          .from("user_roles")
          .select("role")
-         .eq("user_id", user?.id)
-         .single();
+        .eq("user_id", user!.id)
+        .single();
 
        const userRole = roleData?.role || "agent";
 
@@ -420,7 +406,7 @@ const Handovers = () => {
        const { data: denyRules } = await supabase
          .from("expense_category_access")
          .select("category_id")
-         .or(`user_id.eq.${user?.id},role.eq.${userRole}`);
+          .or(`user_id.eq.${user!.id},role.eq.${userRole}`);
 
        const deniedIds = new Set(
          denyRules?.map((r: any) => r.category_id) || []
@@ -477,29 +463,30 @@ const Handovers = () => {
       : [];
   }, [expenseClaims, canApproveExpenses]);
 
-  // Read highlight param from URL and open review dialog
+  // Read highlight param from URL and handle focuses
   const [searchParams] = useSearchParams();
+  const highlightId = searchParams.get("highlight");
+
   useEffect(() => {
-    const highlightId = searchParams.get("highlight");
     if (highlightId && expenseClaims.length > 0) {
       const expense = expenseClaims.find((e: any) => e.id === highlightId);
-      if (expense) {
-        setHighlightExpenseId(highlightId);
+      if (expense && expense.status === "pending") {
         openReviewDialog(expense);
-        // Clear the URL param so it doesn't re-trigger on page refresh
-        navigate("/handovers", { replace: true });
       }
     }
-  }, [searchParams, expenseClaims]);
+  }, [highlightId, expenseClaims]);
 
-  // Scroll to and highlight the expense claim
+  // Scroll to highlighted handover or expense claim once loaded
   useEffect(() => {
-    if (highlightExpenseId && highlightedRef.current[highlightExpenseId]) {
-      highlightedRef.current[highlightExpenseId]?.scrollIntoView({ behavior: "smooth", block: "center" });
-      const timer = setTimeout(() => setHighlightExpenseId(null), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [highlightExpenseId]);
+    if (!highlightId) return;
+    const timer = setTimeout(() => {
+      const el = document.getElementById(`handover-${highlightId}`) || document.getElementById(`expense-${highlightId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [highlightId, handovers, expenseClaims]);
 
   const handleCreate = async () => {
     if (!toUserId || !amount || Number(amount) <= 0) {
@@ -523,8 +510,8 @@ const Handovers = () => {
         p_handed_to: toUserId,
         p_cash_amount: Number(amount),
         p_upi_amount: 0,
-        p_notes: notes || null,
-        p_handover_type: "transfer",
+        p_notes: notes || undefined,
+        p_handover_type: handoverType,
       });
 
     setSubmitting(false);
@@ -580,7 +567,7 @@ const Handovers = () => {
     const { error } = await supabase.rpc("confirm_handover", { 
       p_handover_id: id,
       p_confirmed_by: user?.id 
-    });
+    }) as any;
     setActionLoading(null);
     if (error) toast.error(error.message);
     else {
@@ -611,10 +598,10 @@ const Handovers = () => {
     if (actionLoading) return;
     const handover = myHandovers.find((h) => h.id === id);
     setActionLoading(id);
-    const { error } = await supabase.from("handovers").update({
-      status: "rejected",
-      rejected_at: new Date().toISOString(),
-    }).eq("id", id);
+    const { error } = await supabase.rpc("reject_handover", {
+      p_handover_id: id,
+      p_rejected_by: user!.id,
+    });
     setActionLoading(null);
     if (error) toast.error(error.message);
     else {
@@ -653,9 +640,10 @@ const Handovers = () => {
       return;
     }
     setActionLoading(id);
-    const { error } = await supabase.from("handovers").update({
-      status: "cancelled",
-    }).eq("id", id);
+    const { error } = await supabase.rpc("cancel_handover", {
+      p_handover_id: id,
+      p_cancelled_by: user!.id,
+    });
     setActionLoading(null);
     setCancelConfirmId(null);
     if (error) toast.error(error.message);
@@ -698,7 +686,7 @@ const Handovers = () => {
           p_from_user_id: adminTransferFrom,
           p_to_user_id: adminTransferTo,
           p_amount: Number(adminTransferAmount),
-          p_reason: adminTransferReason.trim() || null,
+          p_reason: adminTransferReason.trim() || undefined,
           p_admin_id: user!.id,
         });
 
@@ -759,7 +747,7 @@ const Handovers = () => {
         p_notes: selectedHandoverForEdit.notes
           ? `${selectedHandoverForEdit.notes}\n[Admin Edit: ${new Date().toLocaleString()}]`
           : `[Admin Edit: ${new Date().toLocaleString()}]`
-      });
+      }) as any;
 
       if (error) throw error;
 
@@ -798,13 +786,13 @@ const Handovers = () => {
 
     setSubmitting(true);
     try {
-      const { data: result, error } = await supabase.rpc("adjust_staff_holding_balance", {
+      const { data: _result, error } = await supabase.rpc("adjust_staff_holding_balance" as any, {
         p_target_user_id: adjustHoldingUser,
         p_admin_id: user!.id,
         p_cash_adjustment: cashAdj,
         p_upi_adjustment: upiAdj,
         p_reason: adjustReason.trim() || null
-      });
+      }) as any;
 
       if (error) throw error;
 
@@ -848,7 +836,7 @@ const Handovers = () => {
       const requestedAmount = Number(expenseAmount);
 
       // Get user's holding balance from profiles table (single source of truth)
-      const { data: profileData, error: profileError } = await supabase
+      const { data: profileData } = await supabase
         .from("profiles")
         .select("holding_balance")
         .eq("user_id", user!.id)
@@ -881,10 +869,33 @@ const Handovers = () => {
         throw new Error(`Insufficient holding balance.`);
       }
 
+      // Re-check balance right before insert to reduce race condition window
+      const { data: recheckProfile } = await supabase
+        .from("profiles")
+        .select("holding_balance")
+        .eq("user_id", user!.id)
+        .maybeSingle();
+      const recheckHolding = Number(recheckProfile?.holding_balance) || 0;
+
+      const { data: recheckPending } = await supabase
+        .from("expense_claims")
+        .select("amount")
+        .eq("user_id", user!.id)
+        .eq("status", "pending");
+      const recheckLocked = (recheckPending || []).reduce((sum: number, r: any) => sum + Number(r.amount), 0);
+      const recheckAvailable = recheckHolding - recheckLocked;
+
+      if (recheckAvailable < requestedAmount) {
+        toast.error(`Insufficient balance — another claim may have been submitted. Available: ₹${recheckAvailable.toLocaleString()}`);
+        throw new Error(`Insufficient holding balance (re-check failed).`);
+      }
+
       const { data: displayId } = await supabase.rpc("generate_display_id", {
         prefix: "EXC",
         seq_name: "expenses_display_id_seq"
-      });
+      }) as any;
+
+      const { data: myRole } = await supabase.from("user_roles").select("warehouse_id").eq("user_id", user!.id).maybeSingle();
 
        const { data: expenseData, error } = await supabase.from("expense_claims").insert({
          display_id: displayId || `EXC-${Date.now()}`,
@@ -897,6 +908,7 @@ const Handovers = () => {
          receipt_url: expenseReceiptUrl,
          status: "pending",
          holding_amount_locked: requestedAmount, // Lock the amount immediately
+         warehouse_id: (myRole as any)?.warehouse_id || null,
        }).select().single();
 
       if (error) throw error;
@@ -907,7 +919,7 @@ const Handovers = () => {
       sendNotificationToMany(adminIds, {
         title: "New Expense Claim",
         message: `₹${Number(expenseAmount).toLocaleString()} expense claim requires your review`,
-        type: "expense_request",
+        type: "expense_request" as any,
         entityType: "expense_claim",
         entityId: expenseData?.id,
       });
@@ -935,50 +947,19 @@ const Handovers = () => {
 
     try {
       const originalAmount = Number(reviewExpense.amount);
-      const approvedAmount = Number(reviewAmount) || originalAmount;
+      const approvedAmount = action === "approve" ? (Number(reviewAmount) || originalAmount) : null;
 
-      const updates: any = {
-        status: action === "approve" ? "approved" : "rejected",
-        reviewed_by: user!.id,
-        reviewed_at: new Date().toISOString(),
-        reviewer_notes: reviewNotes.trim() || null,
-      };
+      // Use atomic RPC for expense approval - handles both status update AND holding deduction
+      const { data: rpcResult, error: rpcError } = await supabase.rpc("approve_expense_claim" as any, {
+        p_claim_id: reviewExpense.id,
+        p_reviewer_id: user!.id,
+        p_status: action === "approve" ? "approved" : "rejected",
+        p_approved_amount: approvedAmount,
+        p_category_id: reviewCategory && reviewCategory !== reviewExpense.category_id ? reviewCategory : null,
+        p_reviewer_notes: reviewNotes.trim() || null,
+      } as any);
 
-      if (action === "approve") {
-        if (reviewCategory && reviewCategory !== reviewExpense.category_id) {
-          updates.category_id = reviewCategory;
-        }
-        updates.approved_amount = approvedAmount;
-
-        // Deduct from user's holding balance at approval time
-        // Try profiles first, then fallback to staff_cash_accounts
-        const { error: holdingError } = await supabase.rpc("deduct_expense_from_holding", {
-          p_user_id: reviewExpense.user_id,
-          p_amount: approvedAmount,
-        });
-        if (holdingError) {
-          // Fallback: update staff_cash_accounts directly
-          const { data: cashData } = await supabase
-            .from("staff_cash_accounts")
-            .select("cash_amount")
-            .eq("user_id", reviewExpense.user_id)
-            .maybeSingle();
-          if (cashData) {
-            const newAmount = Number(cashData.cash_amount) - approvedAmount;
-            await supabase
-              .from("staff_cash_accounts")
-              .update({ cash_amount: newAmount })
-              .eq("user_id", reviewExpense.user_id);
-          }
-        }
-      }
-
-      const { error } = await supabase
-         .from("expense_claims")
-         .update(updates)
-         .eq("id", reviewExpense.id);
-
-      if (error) throw error;
+      if (rpcError) throw rpcError;
 
       toast.success(`Expense claim ${action === "approve" ? "approved" : "rejected"}`);
 
@@ -986,7 +967,7 @@ const Handovers = () => {
         userId: reviewExpense.user_id,
         title: `Expense Claim ${action === "approve" ? "Approved" : "Rejected"}`,
         message: action === "approve"
-          ? `Your ₹${Number(updates.approved_amount).toLocaleString()} expense claim was approved`
+          ? `Your ₹${(rpcResult as any)?.amount?.toLocaleString() || approvedAmount?.toLocaleString()} expense claim was approved`
           : `Your ₹${Number(reviewExpense.amount).toLocaleString()} expense claim was rejected`,
         type: "system",
         entityType: "expense_claim",
@@ -1014,13 +995,22 @@ const Handovers = () => {
 
   // Cancel own expense claim (before approval)
   const handleCancelExpenseClaim = async (claimId: string) => {
-    if (!confirm("Cancel this expense claim?")) return;
+    setExpenseCancelConfirmId(claimId);
+    setExpenseCancelConfirmOpen(true);
+  };
+
+  const confirmCancelExpenseClaim = async () => {
+    if (!expenseCancelConfirmId || !user?.id) return;
+    const claimId = expenseCancelConfirmId;
+    setExpenseCancelConfirmOpen(false);
+    setExpenseCancelConfirmId(null);
     setActionLoading(claimId);
     try {
       const { error } = await supabase
         .from("expense_claims")
         .update({ status: "cancelled" })
-        .eq("id", claimId);
+        .eq("id", claimId)
+        .eq("user_id", user.id); // Ownership check: only cancel own claims
 
       if (error) throw error;
 
@@ -1040,57 +1030,12 @@ const Handovers = () => {
 
   const getCategoryColor = (categoryId: string | null) => {
     const cat = expenseCategories.find((c) => c.id === categoryId);
-    return cat?.color || "#6b7280";
+    return cat?.color || "hsl(var(--muted-foreground))";
   };
 
   const getProfile = (userId: string | null) => profileMap?.[userId || ""] || { name: "Unknown", avatar: null };
   const getName = (userId: string | null) => getProfile(userId).name;
   const getInitials = (name: string) => name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
-
-  // User Hover Card component
-  const UserHoverCard = ({ userId, children, size = "sm" }: { userId: string | null; children?: React.ReactNode; size?: "sm" | "md" | "lg" }) => {
-    const p = getProfile(userId);
-    if (!userId) return <span>{children || p.name}</span>;
-
-    const cls = size === "lg" ? "h-10 w-10" : size === "md" ? "h-9 w-9" : "h-7 w-7";
-    const textCls = size === "lg" ? "text-sm" : size === "md" ? "text-xs" : "text-[10px]";
-
-    return (
-      <HoverCard>
-        <HoverCardTrigger asChild>
-          {children ? (
-            <span className="cursor-pointer hover:underline">{children}</span>
-          ) : (
-            <Avatar className={`${cls} ring-2 ring-background cursor-pointer hover:ring-primary/30 transition-all`}>
-              <AvatarImage src={p.avatar || undefined} alt={p.name} />
-              <AvatarFallback className={`bg-primary/10 text-primary font-semibold ${textCls}`}>
-                {getInitials(p.name) || <User className="h-3 w-3" />}
-              </AvatarFallback>
-            </Avatar>
-          )}
-        </HoverCardTrigger>
-        <HoverCardContent className="w-56 p-0" align="start">
-          <div className="p-3 space-y-2">
-            <div className="flex items-center gap-2">
-              <Avatar className="h-10 w-10">
-                <AvatarImage src={p.avatar || undefined} />
-                <AvatarFallback className="bg-primary/10 text-primary font-semibold text-sm">
-                  {getInitials(p.name)}
-                </AvatarFallback>
-              </Avatar>
-              <div>
-                <p className="font-semibold text-sm">{p.name}</p>
-                <p className="text-xs text-muted-foreground">Staff Member</p>
-              </div>
-            </div>
-            <Button size="sm" variant="outline" className="w-full text-xs" asChild>
-              <Link to={`/staff/${userId}`}>View Profile</Link>
-            </Button>
-          </div>
-        </HoverCardContent>
-      </HoverCard>
-    );
-  };
 
   // ========== SIMPLIFIED HANDOVER CARD ==========
   const HandoverCard = ({ item, showActions = false, showAdminActions = false }: { item: typeof myHandovers[0]; showActions?: boolean; showAdminActions?: boolean }) => {
@@ -1100,40 +1045,44 @@ const Handovers = () => {
     const total = Number(item.cash_amount) + Number(item.upi_amount);
     const isLoading = actionLoading === item.id;
     
-    // Sender can cancel their own pending handovers
     const canCancel = (isSender || isAdminOrManager) && isPending;
-    // Recipient can accept/decline pending handovers sent TO them
     const canAcceptDecline = isRecipient && isPending;
-    // Admins can do everything on pending handovers
     const canAdminAct = isAdminOrManager && isPending;
 
-    const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
-      confirmed: { label: "Confirmed", color: "text-green-600", bg: "bg-green-50" },
-      rejected: { label: "Rejected", color: "text-red-600", bg: "bg-red-50" },
-      cancelled: { label: "Cancelled", color: "text-slate-500", bg: "bg-slate-100" },
-      awaiting_confirmation: { label: "Pending", color: "text-amber-600", bg: "bg-amber-50" },
+    const statusToBadge: Record<string, { status: "pending" | "success" | "rejected" | "cancelled"; label: string }> = {
+      confirmed: { status: "success", label: "Confirmed" },
+      rejected: { status: "rejected", label: "Rejected" },
+      cancelled: { status: "cancelled", label: "Cancelled" },
+      awaiting_confirmation: { status: "pending", label: "Pending" },
     };
-    const status = statusConfig[item.status] || statusConfig.awaiting_confirmation;
+    const badge = statusToBadge[item.status] || statusToBadge.awaiting_confirmation;
+
+    const borderAccent = item.status === "confirmed" ? "border-l-success"
+      : item.status === "rejected" ? "border-l-destructive"
+      : item.status === "cancelled" ? "border-l-gray-400"
+      : "border-l-warning";
+
+    const isHighlighted = highlightId === item.id;
 
     return (
-      <div className="flex items-center gap-3 rounded-lg border bg-card px-4 py-3 hover:shadow-sm transition-shadow">
-        {/* Recipient Avatar (primary) */}
-        <UserHoverCard userId={item.handed_to} size="md" />
+      <div 
+        id={`handover-${item.id}`} 
+        className={`flex items-center gap-3 rounded-lg border bg-card px-4 py-3 hover:shadow-sm transition-all border-l-4 ${borderAccent} ${isHighlighted ? "animate-highlight" : ""}`}
+      >
+        <UserHoverCard userId={item.handed_to} profileMap={profileMap} size="md" />
 
-        {/* Amount & Status */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-lg font-bold tabular-nums">₹{(total || 0).toLocaleString()}</span>
-            <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${status.bg} ${status.color}`}>
-              {status.label}
-            </span>
+            <CurrencyDisplay amount={total || 0} className="text-lg font-bold" />
+            <StatusBadge status={badge.status} label={badge.label} />
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">
+            {getName(item.user_id)} <span className="text-muted-foreground/50">→</span> {getName(item.handed_to)}
+            <span className="mx-1.5">•</span>
             {format(new Date(item.created_at), "dd MMM, hh:mm a")}
           </p>
         </div>
 
-        {/* Actions: Recipient Accept/Decline - only show for pending handovers sent TO user */}
         {showActions && canAcceptDecline && (
           <div className="flex items-center gap-1.5 shrink-0">
             <Button size="sm" className="h-8 text-xs gap-1" onClick={() => handleAccept(item.id)} disabled={isLoading}>
@@ -1146,7 +1095,6 @@ const Handovers = () => {
           </div>
         )}
 
-        {/* Admin: Show Accept/Decline/Edit/Cancel - only for pending handovers */}
         {showAdminActions && canAdminAct && (
           <div className="flex items-center gap-1.5 shrink-0">
             <Button size="sm" className="h-8 text-xs gap-1" onClick={() => handleAccept(item.id)} disabled={isLoading}>
@@ -1182,7 +1130,6 @@ const Handovers = () => {
           </div>
         )}
 
-        {/* Sender: Show Cancel only for their own pending handovers */}
         {canCancel && !canAcceptDecline && !canAdminAct && (
           <Button
             size="sm"
@@ -1202,7 +1149,6 @@ const Handovers = () => {
   const ExpenseClaimCard = ({ item, showReviewAction = false }: { item: any; showReviewAction?: boolean }) => {
     const isOwner = item.user_id === user?.id;
     const isLoading = actionLoading === item.id;
-    const isHighlighted = highlightExpenseId === item.id;
     const statusLabel = item.status === "approved" ? "Approved"
       : item.status === "rejected" ? "Rejected"
       : item.status === "cancelled" ? "Cancelled"
@@ -1213,56 +1159,60 @@ const Handovers = () => {
     const wasAmountChanged = item.status === "approved" && item.approved_amount && Number(item.approved_amount) !== Number(item.amount);
     const wasCategoryChanged = item.status === "approved" && item.category_id !== item.original_category_id;
 
+    const isHighlighted = highlightId === item.id;
+    const badgeStatus = item.status === "approved" ? "success"
+      : item.status === "rejected" ? "rejected"
+      : item.status === "cancelled" ? "cancelled"
+      : "pending";
+
+    const borderAccent = item.status === "approved" ? "border-l-success"
+      : item.status === "rejected" ? "border-l-destructive"
+      : item.status === "cancelled" ? "border-l-gray-400"
+      : "border-l-warning";
+
     return (
       <div
-        ref={(el) => { highlightedRef.current[item.id] = el; }}
-        className={`group flex items-center gap-4 rounded-lg border bg-card px-4 py-3 hover:shadow-sm transition-shadow border-l-4 ${
-          isHighlighted ? "ring-2 ring-primary ring-offset-2 animate-pulse" : ""
-        } ${
-          item.status === "approved" ? "border-l-green-500" :
-          item.status === "rejected" ? "border-l-red-500" :
-          item.status === "cancelled" ? "border-l-gray-400" :
-          "border-l-orange-500"
-        }`}>
+        id={`expense-${item.id}`}
+        className={`group flex items-center gap-4 rounded-lg border bg-card px-4 py-3 hover:shadow-sm transition-all border-l-4 ${borderAccent} ${
+          isHighlighted ? "animate-highlight" : ""
+        }`}
+      >
         <div className="flex items-center justify-center h-10 w-10 rounded-lg shrink-0" style={{ backgroundColor: `${getCategoryColor(item.category_id)}20` }}>
           <Receipt className="h-5 w-5" style={{ color: getCategoryColor(item.category_id) }} />
         </div>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-base font-bold tabular-nums">₹{(displayAmount || 0).toLocaleString()}</span>
+            <CurrencyDisplay amount={displayAmount || 0} className="text-base font-bold" />
             {wasAmountChanged && (
-              <span className="text-[10px] text-muted-foreground line-through">₹{Number(item.amount || 0).toLocaleString()}</span>
+              <span className="text-xs text-muted-foreground line-through">
+                <CurrencyDisplay amount={Number(item.amount || 0)} />
+              </span>
             )}
-            <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded-full ${
-              item.status === "approved" ? "bg-success/10 text-success" :
-              item.status === "rejected" ? "bg-destructive/10 text-destructive" :
-              item.status === "cancelled" ? "bg-muted text-muted-foreground" :
-              "bg-warning/10 text-warning"
-            }`}>{statusLabel}</span>
+            <StatusBadge status={badgeStatus as any} label={statusLabel} />
           </div>
           <p className="text-xs text-muted-foreground mt-0.5 truncate" title={item.description}>
             {item.description}
           </p>
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             <span
-              className="text-[10px] font-medium px-1.5 py-px rounded"
+              className="text-2xs font-medium px-1.5 py-px rounded"
               style={{ backgroundColor: `${getCategoryColor(item.category_id)}20`, color: getCategoryColor(item.category_id) }}
             >
               {getCategoryName(item.category_id)}
               {wasCategoryChanged && " (changed)"}
             </span>
-            <span className="text-[11px] text-muted-foreground">
+            <span className="text-3xs text-muted-foreground">
               {format(new Date(item.expense_date), "dd MMM yyyy")}
             </span>
             {!isOwner && (
-              <span className="text-[10px] font-medium bg-primary/8 text-primary px-1.5 py-px rounded">
-                by <UserHoverCard userId={item.user_id}>{getName(item.user_id)}</UserHoverCard>
+              <span className="text-2xs font-medium bg-primary/8 text-primary px-1.5 py-px rounded">
+                by <UserHoverCard userId={item.user_id} profileMap={profileMap}>{getName(item.user_id)}</UserHoverCard>
               </span>
             )}
           </div>
           {item.reviewer_notes && item.status !== "pending" && (
-            <p className="text-[11px] text-muted-foreground/70 italic mt-1 truncate">Note: "{item.reviewer_notes}"</p>
+            <p className="text-3xs text-muted-foreground/70 italic mt-1 truncate">Note: "{item.reviewer_notes}"</p>
           )}
         </div>
 
@@ -1277,7 +1227,6 @@ const Handovers = () => {
           </Button>
         )}
 
-        {/* Owner: Show Cancel for their own pending claims */}
         {isOwner && item.status === "pending" && (
           <Button
             size="sm"
@@ -1440,7 +1389,7 @@ const Handovers = () => {
     setDailyResetLoading(true);
     try {
       const uid = targetUserId || user!.id;
-      const { error } = await supabase.rpc("finalizer_daily_reset", { p_finalizer_id: uid });
+      const { error } = await supabase.rpc("finalizer_daily_reset", { p_finalizer_id: uid }) as any;
       if (error) throw error;
       toast.success("Daily balance reset recorded. Income entry created.");
       qc.invalidateQueries({ queryKey: ["finalizer-account"] });
@@ -1454,7 +1403,19 @@ const Handovers = () => {
   };
 
   if (isLoading) {
-    return <div className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+    return (
+      <div className="space-y-5">
+        <div className="h-8 w-48 bg-muted rounded animate-pulse" />
+        <div className="h-4 w-72 bg-muted rounded animate-pulse" />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+          {[1,2,3,4].map(i => <div key={i} className="h-24 bg-muted rounded-lg animate-pulse" />)}
+        </div>
+        <div className="h-16 bg-muted rounded-lg animate-pulse" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {[1,2].map(i => <div key={i} className="h-28 bg-muted rounded-lg animate-pulse" />)}
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -1480,104 +1441,113 @@ const Handovers = () => {
       {!isAdminOrManager && (
         <div className="space-y-4 mb-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Card className="bg-blue-50 border border-blue-200">
+            <Card className="border-l-4 border-l-info">
               <CardHeader className="p-4 pb-2">
-                <CardTitle className="text-xs font-medium text-blue-800">Today's Sales</CardTitle>
+                <CardTitle className="text-xs font-medium text-muted-foreground">Today's Sales</CardTitle>
               </CardHeader>
               <CardContent className="p-4 pt-0">
-                <p className="text-xl font-bold text-blue-600">₹{(dailyData.today_sales || 0).toLocaleString()}</p>
+                <CurrencyDisplay amount={dailyData.today_sales || 0} className="text-xl font-bold text-info" />
               </CardContent>
             </Card>
 
-            <Card className="bg-indigo-50 border border-indigo-200">
+            <Card className="border-l-4 border-l-info">
               <CardHeader className="p-4 pb-2">
-                <CardTitle className="text-xs font-medium text-indigo-800">Today's Payments</CardTitle>
+                <CardTitle className="text-xs font-medium text-muted-foreground">Today's Payments</CardTitle>
               </CardHeader>
               <CardContent className="p-4 pt-0">
-                <p className="text-xl font-bold text-indigo-600">₹{(dailyData.today_payments || 0).toLocaleString()}</p>
+                <CurrencyDisplay amount={dailyData.today_payments || 0} className="text-xl font-bold text-info" />
               </CardContent>
             </Card>
 
-            <Card className="bg-green-50 border border-green-200">
+            <Card className="border-l-4 border-l-success">
               <CardHeader className="p-4 pb-2">
-                <CardTitle className="text-xs font-medium text-green-800">Transferred Today</CardTitle>
+                <CardTitle className="text-xs font-medium text-muted-foreground">Transferred Today</CardTitle>
               </CardHeader>
               <CardContent className="p-4 pt-0">
-                <p className="text-xl font-bold text-green-600">₹{(dailyData.today_sent_confirmed || 0).toLocaleString()}</p>
+                <CurrencyDisplay amount={dailyData.today_sent_confirmed || 0} className="text-xl font-bold text-success" />
                 {(dailyData.today_sent_pending || 0) > 0 && (
-                  <p className="text-[10px] text-amber-600 font-medium mt-0.5">
-                    +₹{(dailyData.today_sent_pending || 0).toLocaleString()} pending
+                    <p className="text-2xs text-warning font-medium mt-0.5">
+                    +<CurrencyDisplay amount={dailyData.today_sent_pending || 0} /> pending
                   </p>
                 )}
               </CardContent>
             </Card>
 
-            <Card className="bg-rose-50 border border-rose-200">
+            <Card className="border-l-4 border-l-destructive">
               <CardHeader className="p-4 pb-2">
-                <CardTitle className="text-xs font-medium text-rose-800">Previous Pending</CardTitle>
+                <CardTitle className="text-xs font-medium text-muted-foreground">Previous Pending</CardTitle>
               </CardHeader>
               <CardContent className="p-4 pt-0">
-                <p className="text-xl font-bold text-rose-600">₹{(dailyData.prev_pending || 0).toLocaleString()}</p>
+                <CurrencyDisplay amount={dailyData.prev_pending || 0} className="text-xl font-bold text-destructive" />
               </CardContent>
             </Card>
           </div>
 
-          <div className={`p-4 rounded-lg border flex items-center justify-between ${notHandedOver > 0 ? 'bg-red-50/50 border-red-200' : 'bg-green-50/50 border-green-200'}`}>
-            <div>
+          <div className="relative overflow-hidden rounded-lg border bg-gradient-to-r from-card to-muted/50 p-4 flex items-center justify-between">
+            <div className="relative z-10">
               <p className="text-sm font-medium text-muted-foreground">Net Balance</p>
-              <p className="text-xs text-muted-foreground">
-                {notHandedOver > 0 ? 'You owe warehouse (handover required)' : notHandedOver < 0 ? 'Warehouse owes you' : 'No pending balance'}
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {notHandedOver > 0 ? 'You owe warehouse — handover required' : notHandedOver < 0 ? 'Warehouse owes you' : 'No pending balance'}
               </p>
             </div>
-            <p className={`text-2xl font-bold ${notHandedOver > 0 ? 'text-red-600' : 'text-green-600'}`}>
-              ₹{Math.abs(notHandedOver || 0).toLocaleString()}
+            <p className={`relative z-10 text-2xl font-bold ${notHandedOver > 0 ? 'text-destructive' : notHandedOver < 0 ? 'text-success' : 'text-muted-foreground'}`}>
+              {notHandedOver !== 0 && (notHandedOver > 0 ? '- ' : '+ ')}
+              <CurrencyDisplay amount={Math.abs(notHandedOver || 0)} className="text-2xl" />
             </p>
+            <div className={`absolute right-0 top-0 bottom-0 w-32 opacity-10 ${notHandedOver > 0 ? 'bg-gradient-to-l from-destructive' : 'bg-gradient-to-l from-success'}`} />
           </div>
 
           {/* Pending Actions & Finalizer Account side-by-side */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card className="bg-amber-50 border border-amber-200">
-              <CardHeader className="p-4 pb-2">
-                <CardTitle className="text-sm font-medium text-amber-800">Pending Actions</CardTitle>
+            <Card className="border-l-4 border-l-warning">
+              <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between">
+                <CardTitle className="text-sm font-medium">Pending Actions</CardTitle>
+                <span className="flex items-center justify-center h-8 w-8 rounded-lg bg-warning/20 dark:bg-warning/10">
+                  <AlertCircle className="h-4 w-4 text-warning" />
+                </span>
               </CardHeader>
               <CardContent className="p-4 pt-2 flex items-center justify-between">
                 <div>
-                  <p className="text-2xl font-bold text-amber-600">{incoming.length}</p>
+                  <p className="text-2xl font-bold text-warning">{incoming.length}</p>
                   <p className="text-xs text-muted-foreground mt-1">Handovers awaiting confirmation</p>
                 </div>
                 {awaitingAmount > 0 && (
                   <div className="text-right">
-                    <p className="text-sm font-bold text-amber-600">₹{awaitingAmount.toLocaleString()}</p>
-                    <p className="text-[10px] text-muted-foreground">Sent by you</p>
+                    <CurrencyDisplay amount={awaitingAmount} className="text-sm font-bold text-warning" />
+                    <p className="text-2xs text-muted-foreground">Sent by you</p>
                   </div>
                 )}
               </CardContent>
             </Card>
 
             {isFinalizer ? (
-              <Card className="bg-emerald-50 border border-emerald-200">
-                <CardHeader className="p-4 pb-2">
-                  <CardTitle className="text-sm font-medium text-emerald-800">Holding Balance</CardTitle>
+              <Card className="border-l-4 border-l-success">
+                <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between">
+                  <CardTitle className="text-sm font-medium">Holding Balance</CardTitle>
+                  <span className="flex items-center justify-center h-8 w-8 rounded-lg bg-success/20 dark:bg-success/10">
+                    <Wallet className="h-4 w-4 text-success" />
+                  </span>
                 </CardHeader>
                 <CardContent className="p-4 pt-2">
-                  <p className="text-2xl font-bold text-emerald-600">
-                    ₹{(Number(finalizerAccount?.cash_amount || 0) + Number(finalizerAccount?.upi_amount || 0)).toLocaleString()}
-                  </p>
+                  <CurrencyDisplay amount={Number(finalizerAccount?.cash_amount || 0) + Number(finalizerAccount?.upi_amount || 0)} className="text-2xl font-bold text-success" />
                   <p className="text-xs text-muted-foreground mt-1">Income since last daily reset</p>
                   {finalizerAccount?.last_reset_at && (
-                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                    <p className="text-2xs text-muted-foreground mt-0.5">
                       Reset: {format(new Date(finalizerAccount.last_reset_at), "dd MMM, hh:mm a")}
                     </p>
                   )}
                 </CardContent>
               </Card>
             ) : (
-              <Card className="bg-green-50 border border-green-200">
-                <CardHeader className="p-4 pb-2">
-                  <CardTitle className="text-sm font-medium text-green-800">Pending Expenses</CardTitle>
+              <Card className="border-l-4 border-l-success">
+                <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between">
+                  <CardTitle className="text-sm font-medium">Pending Expenses</CardTitle>
+                  <span className="flex items-center justify-center h-8 w-8 rounded-lg bg-success/20 dark:bg-success/10">
+                    <Receipt className="h-4 w-4 text-success" />
+                  </span>
                 </CardHeader>
-                <CardContent className="p-4 pt-2 flex flex-col justify-center">
-                  <p className="text-2xl font-bold text-green-600">₹{(myPendingExpenses || 0).toLocaleString()}</p>
+                <CardContent className="p-4 pt-2">
+                  <CurrencyDisplay amount={myPendingExpenses || 0} className="text-2xl font-bold text-success" />
                   <p className="text-xs text-muted-foreground mt-1">Claims awaiting approval</p>
                 </CardContent>
               </Card>
@@ -1588,67 +1558,54 @@ const Handovers = () => {
 
       {/* ========== SIMPLIFIED TABS ========== */}
       <Tabs defaultValue="handovers" className="w-full">
-        <TabsList className="w-full h-10">
-          <TabsTrigger value="handovers" className="flex-1 gap-1.5 text-xs relative">
-            <span className="relative">
-              <Banknote className="h-3.5 w-3.5" />
-              {incoming.length > 0 && (
-                <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
-              )}
-            </span>
+        <TabsList className="w-full h-10 bg-muted/30">
+          <TabsTrigger value="handovers" className="flex-1 gap-1.5 text-xs relative data-[state=active]:bg-background">
+            <Banknote className="h-3.5 w-3.5" />
             <span className="flex items-center gap-1">
               Handovers
               {incoming.length > 0 && (
-                <span className="ml-1 bg-amber-100 text-amber-700 text-[10px] px-1.5 py-0.5 rounded-full">
+                <Badge variant="secondary" className="ml-0.5 h-4 min-w-4 px-1 text-2xs">
                   {incoming.length}
-                </span>
+                </Badge>
               )}
             </span>
           </TabsTrigger>
 
           {(canSubmitExpenses || isAdminOrManager || isStaff) && (
-            <TabsTrigger value="expenses" className="flex-1 gap-1.5 text-xs relative">
-              <span className="relative">
-                <Receipt className="h-3.5 w-3.5" />
-                {/* Red dot for pending expense claims to review */}
-                {(isAdminOrManager ? expenseClaims : myExpenseClaims).filter((e: any) => e.status === "pending").length > 0 && (
-                  <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
-                )}
-              </span>
+            <TabsTrigger value="expenses" className="flex-1 gap-1.5 text-xs relative data-[state=active]:bg-background">
+              <Receipt className="h-3.5 w-3.5" />
               <span className="flex items-center gap-1">
                 Expenses
                 {(isAdminOrManager ? expenseClaims : myExpenseClaims).filter((e: any) => e.status === "pending").length > 0 && (
-                  <span className="ml-1 bg-amber-100 text-amber-700 text-[10px] px-1.5 py-0.5 rounded-full">
+                  <Badge variant="secondary" className="ml-0.5 h-4 min-w-4 px-1 text-2xs">
                     {(isAdminOrManager ? expenseClaims : myExpenseClaims).filter((e: any) => e.status === "pending").length}
-                  </span>
+                  </Badge>
                 )}
               </span>
             </TabsTrigger>
           )}
 
           {canSeeBalances && (
-            <TabsTrigger value="balances" className="flex-1 gap-1.5 text-xs relative">
-              <span className="relative">
-                <Eye className="h-3.5 w-3.5" />
-                {/* Red dot for balance updates/changes */}
-                {pendingExpenseClaimsForReview.length > 0 && (
-                  <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
-                )}
-              </span>
+            <TabsTrigger value="balances" className="flex-1 gap-1.5 text-xs relative data-[state=active]:bg-background">
+              <Eye className="h-3.5 w-3.5" />
               Balances
+              {pendingExpenseClaimsForReview.length > 0 && (
+                <Badge variant="secondary" className="ml-0.5 h-4 min-w-4 px-1 text-2xs">
+                  {pendingExpenseClaimsForReview.length}
+                </Badge>
+              )}
             </TabsTrigger>
           )}
 
           {(isFinalizer || isSuperAdmin || isManager) && (
-            <TabsTrigger value="income" className="flex-1 gap-1.5 text-xs relative">
-              <span className="relative">
-                <TrendingUp className="h-3.5 w-3.5" />
-                {/* Red dot for new income/confirmed handovers */}
-                {todayReceivedConfirmed > 0 && (
-                  <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
-                )}
-              </span>
+            <TabsTrigger value="income" className="flex-1 gap-1.5 text-xs relative data-[state=active]:bg-background">
+              <TrendingUp className="h-3.5 w-3.5" />
               Income
+              {todayReceivedConfirmed > 0 && (
+                <Badge variant="secondary" className="ml-0.5 h-4 min-w-4 px-1 text-2xs">
+                  {todayReceivedConfirmed}
+                </Badge>
+              )}
             </TabsTrigger>
           )}
         </TabsList>
@@ -1656,12 +1613,12 @@ const Handovers = () => {
         {/* ========== HANDOVERS TAB ========== */}
         <TabsContent value="handovers" className="space-y-4 mt-3">
           {/* Simplified Filter Bar */}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 bg-muted/30 rounded-lg p-2">
             <div className="flex flex-wrap items-center gap-2 w-full">
               <div className="flex flex-wrap gap-2">
                 <Popover>
                   <PopoverTrigger asChild>
-                    <Button variant="outline" className="h-9 text-xs gap-1.5">
+                    <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 bg-background">
                       <CalendarIcon className="h-3.5 w-3.5" />
                       {filterFrom ? format(new Date(filterFrom + "T00:00:00"), "dd MMM") : "From"}
                     </Button>
@@ -1673,7 +1630,7 @@ const Handovers = () => {
                 
                 <Popover>
                   <PopoverTrigger asChild>
-                    <Button variant="outline" className="h-9 text-xs gap-1.5">
+                    <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 bg-background">
                       <CalendarIcon className="h-3.5 w-3.5" />
                       {filterTo ? format(new Date(filterTo + "T00:00:00"), "dd MMM") : "To"}
                     </Button>
@@ -1684,7 +1641,7 @@ const Handovers = () => {
                 </Popover>
                 
                 <Select value={filterStatus} onValueChange={setFilterStatus}>
-                  <SelectTrigger className="h-9 text-xs w-32">
+                  <SelectTrigger className="h-8 text-xs w-32 bg-background">
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1698,7 +1655,7 @@ const Handovers = () => {
                 
                 {isAdminOrManager && (
                   <Select value={filterUser} onValueChange={setFilterUser}>
-                    <SelectTrigger className="h-9 text-xs w-36">
+                    <SelectTrigger className="h-8 text-xs w-36 bg-background">
                       <SelectValue placeholder="User" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1711,12 +1668,16 @@ const Handovers = () => {
                 <div className="flex-1" />
                 
                 {activeHandoverFilterCount > 0 && (
-                  <Button variant="ghost" size="sm" className="h-9 text-xs" onClick={clearHandoverFilters}>
-                    <X className="h-3 w-3 mr-1" /> Clear
+                  <Button variant="ghost" size="sm" className="h-8 text-xs gap-1" onClick={clearHandoverFilters}>
+                    <X className="h-3 w-3" />
+                    Clear
+                    <Badge variant="secondary" className="h-4 min-w-4 px-1 text-2xs ml-0.5">
+                      {activeHandoverFilterCount}
+                    </Badge>
                   </Button>
                 )}
                 
-                <Button variant="outline" size="sm" className="h-9 text-xs gap-1" onClick={exportHandoversCSV}>
+                <Button variant="outline" size="sm" className="h-8 text-xs gap-1 bg-background" onClick={exportHandoversCSV}>
                   <Download className="h-3 w-3" /> Export
                 </Button>
               </div>
@@ -1726,9 +1687,12 @@ const Handovers = () => {
           {/* Incoming Actions (integrated into tab) */}
           {incoming.length > 0 && (
             <div className="space-y-2">
-              <h3 className="text-xs font-medium text-amber-600 flex items-center gap-1.5">
-                <ArrowDownLeft className="h-3.5 w-3.5" /> Action Required
-              </h3>
+              <NoticeBox
+                title="Action Required"
+                message={`${incoming.length} handover${incoming.length > 1 ? 's' : ''} awaiting your confirmation`}
+                variant="warning"
+                icon={ArrowDownLeft}
+              />
               <div className="space-y-2">
                 {incoming.map((item) => (
                   <HandoverCard key={item.id} item={item} showActions={!isAdminOrManager} showAdminActions={isAdminOrManager} />
@@ -1739,9 +1703,11 @@ const Handovers = () => {
 
           {/* Handover List */}
           {filteredHandovers.length === 0 ? (
-            <div className="rounded-lg border bg-card p-8 text-center text-sm text-muted-foreground">
-              No handovers match your filters.
-            </div>
+            <EmptyState
+              icon={HandCoins}
+              title="No handovers found"
+              description={activeHandoverFilterCount > 0 ? "No handovers match your filters. Try adjusting them." : "No handovers yet. Create one to get started."}
+            />
           ) : (
             <div className="space-y-4">
               {groupByDate(filteredHandovers).map(([date, items]) => (
@@ -1750,6 +1716,9 @@ const Handovers = () => {
                     <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                       {formatDateGroup(date)}
                     </span>
+                    <Badge variant="outline" className="h-4 px-1.5 text-2xs font-mono">
+                      {items.length}
+                    </Badge>
                     <div className="flex-1 h-px bg-border" />
                   </div>
                   {items.map((item) => (
@@ -1768,14 +1737,14 @@ const Handovers = () => {
         {/* ========== EXPENSES TAB ========== */}
         {(canSubmitExpenses || isAdminOrManager) && (
           <TabsContent value="expenses" className="space-y-4 mt-3">
-            <div className="flex gap-3">
-              <div className="stat-card flex-1">
-                <span className="text-xs font-medium text-muted-foreground">Pending Claims</span>
-                <p className="text-xl font-bold text-warning">₹{(myPendingExpenses || 0).toLocaleString()}</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-lg border bg-card p-3 border-l-4 border-l-warning">
+                <p className="text-xs text-muted-foreground">Pending Claims</p>
+                <CurrencyDisplay amount={myPendingExpenses || 0} className="text-xl font-bold text-warning" />
               </div>
-              <div className="stat-card flex-1">
-                <span className="text-xs font-medium text-muted-foreground">Approved (Owed)</span>
-                <p className="text-xl font-bold text-success">₹{(myApprovedExpenses || 0).toLocaleString()}</p>
+              <div className="rounded-lg border bg-card p-3 border-l-4 border-l-success">
+                <p className="text-xs text-muted-foreground">Approved (Owed)</p>
+                <CurrencyDisplay amount={myApprovedExpenses || 0} className="text-xl font-bold text-success" />
               </div>
             </div>
 
@@ -1786,9 +1755,9 @@ const Handovers = () => {
             )}
 
             {/* Expense Filters */}
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 bg-muted/30 rounded-lg p-2">
               <Select value={filterExpenseStatus} onValueChange={setFilterExpenseStatus}>
-                <SelectTrigger className="h-9 text-xs w-32">
+                <SelectTrigger className="h-8 text-xs w-32 bg-background">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1802,7 +1771,7 @@ const Handovers = () => {
 
               {isAdminOrManager && (
                 <Select value={filterUser} onValueChange={setFilterUser}>
-                  <SelectTrigger className="h-9 text-xs w-36">
+                  <SelectTrigger className="h-8 text-xs w-36 bg-background">
                     <SelectValue placeholder="User" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1814,7 +1783,7 @@ const Handovers = () => {
 
               <div className="flex-1" />
 
-              <Button variant="outline" size="sm" className="h-9 text-xs gap-1" onClick={exportExpensesCSV}>
+              <Button variant="outline" size="sm" className="h-8 text-xs gap-1 bg-background" onClick={exportExpensesCSV}>
                 <Download className="h-3 w-3" /> Export
               </Button>
             </div>
@@ -1825,9 +1794,11 @@ const Handovers = () => {
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
               </div>
             ) : filteredExpenseClaims.length === 0 ? (
-              <div className="rounded-lg border bg-card p-8 text-center text-sm text-muted-foreground">
-                {canSubmitExpenses ? "No expense claims match your filters." : "No expense claims to show."}
-              </div>
+              <EmptyState
+                icon={Receipt}
+                title="No expense claims"
+                description={canSubmitExpenses ? "No expense claims match your filters." : "No expense claims to show."}
+              />
             ) : (
               <div className="space-y-2">
                 {filteredExpenseClaims.map((item: any) => (
@@ -1843,21 +1814,19 @@ const Handovers = () => {
           <TabsContent value="balances" className="space-y-4 mt-3">
             {/* Summary Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div className="rounded-lg border bg-card p-3">
+              <div className="rounded-lg border bg-card p-3 border-l-4 border-l-destructive">
                 <p className="text-xs text-muted-foreground">Total Holding</p>
-                <p className="text-lg font-bold text-destructive">
-                  ₹{(allStaffBalances || []).reduce((s: number, b: any) => s + Number(b.holding_balance || 0), 0).toLocaleString()}
-                </p>
+                <CurrencyDisplay amount={(allStaffBalances || []).reduce((s: number, b: any) => s + Number(b.holding_balance || 0), 0)} className="text-lg font-bold text-destructive" />
               </div>
-              <div className="rounded-lg border bg-card p-3">
+              <div className="rounded-lg border bg-card p-3 border-l-4 border-l-primary">
                 <p className="text-xs text-muted-foreground">Agents</p>
                 <p className="text-lg font-bold">{(allStaffBalances || []).filter((b: any) => b.role === 'agent').length}</p>
               </div>
-              <div className="rounded-lg border bg-card p-3">
+              <div className="rounded-lg border bg-card p-3 border-l-4 border-l-chart-2">
                 <p className="text-xs text-muted-foreground">Marketers</p>
                 <p className="text-lg font-bold">{(allStaffBalances || []).filter((b: any) => b.role === 'marketer').length}</p>
               </div>
-              <div className="rounded-lg border bg-card p-3">
+              <div className="rounded-lg border bg-card p-3 border-l-4 border-l-chart-3">
                 <p className="text-xs text-muted-foreground">Operators</p>
                 <p className="text-lg font-bold">{(allStaffBalances || []).filter((b: any) => b.role === 'operator').length}</p>
               </div>
@@ -1865,7 +1834,7 @@ const Handovers = () => {
 
             {/* Staff List */}
             {!allStaffBalances || allStaffBalances.length === 0 ? (
-              <div className="rounded-lg border bg-card p-8 text-center text-sm text-muted-foreground">No staff balances to show.</div>
+              <EmptyState icon={Wallet} title="No staff balances" description="No staff balances to show." />
             ) : (
               <div className="space-y-2">
                 {(allStaffBalances as any[])
@@ -1873,22 +1842,20 @@ const Handovers = () => {
                   .map((bal) => (
                     <Link key={bal.user_id} to={`/staff/${bal.user_id}`} className="block">
                       <div className="flex items-center gap-3 rounded-lg border bg-card px-4 py-3 hover:shadow-sm hover:border-primary/30 transition-all cursor-pointer">
-                        <UserHoverCard userId={bal.user_id} size="lg" />
+                        <UserHoverCard userId={bal.user_id} profileMap={profileMap} size="lg" />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <p className="text-sm font-semibold truncate">{bal.full_name}</p>
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground capitalize">{bal.role}</span>
+                            <span className="text-2xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground capitalize">{bal.role}</span>
                           </div>
-                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-0.5 text-[11px] text-muted-foreground">
-                            <span>Today Sales: ₹{(Number(bal.today_sales || 0) + Number(bal.today_payments || 0)).toLocaleString()}</span>
-                            <span>Prev Pending: ₹{Number(bal.prev_pending || 0).toLocaleString()}</span>
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-0.5 text-3xs text-muted-foreground">
+                            <span>Today Sales: <CurrencyDisplay amount={Number(bal.today_sales || 0) + Number(bal.today_payments || 0)} /></span>
+                            <span>Prev Pending: <CurrencyDisplay amount={Number(bal.prev_pending || 0)} /></span>
                           </div>
                         </div>
                         <div className="text-right shrink-0">
-                          <p className={`text-base font-bold tabular-nums ${(Number(bal.holding_balance) || 0) > 0 ? "text-destructive" : "text-success"}`}>
-                            ₹{Math.max(0, Number(bal.holding_balance) || 0).toLocaleString()}
-                          </p>
-                          <p className="text-[10px] text-muted-foreground">Holding</p>
+                          <CurrencyDisplay amount={Math.max(0, Number(bal.holding_balance) || 0)} className={`text-base font-bold ${(Number(bal.holding_balance) || 0) > 0 ? "text-destructive" : "text-success"}`} />
+                          <p className="text-2xs text-muted-foreground">Holding</p>
                         </div>
                       </div>
                     </Link>
@@ -1907,34 +1874,30 @@ const Handovers = () => {
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Finalizer Holdings</h3>
                   <Button size="sm" variant="outline" className="h-8 text-xs gap-1" disabled={dailyResetLoading}
-                    onClick={() => {
-                      if (confirm("Trigger daily reset for ALL finalizers? This creates income entries and zeros their balances.")) {
-                        (finalizerHoldings || []).forEach((f) => handleDailyReset(f.user_id));
-                      }
-                    }}>
+                    onClick={() => setResetAllConfirmOpen(true)}>
                     <RefreshCw className="h-3 w-3" /> Reset All
                   </Button>
                 </div>
                 {!finalizerHoldings || finalizerHoldings.length === 0 ? (
-                  <div className="rounded-lg border bg-card p-6 text-center text-sm text-muted-foreground">No finalizer accounts found.</div>
+                  <EmptyState icon={Wallet} title="No finalizer accounts" description="No finalizer accounts found." />
                 ) : (
                   <div className="space-y-2">
-                    {finalizerHoldings.map((f) => (
+                    {finalizerHoldings.map((f: any) => (
                       <div key={f.user_id} className="flex items-center gap-3 rounded-lg border bg-card px-4 py-3">
-                        <UserHoverCard userId={f.user_id} size="md" />
+                        <UserHoverCard userId={f.user_id} profileMap={profileMap} size="md" />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold truncate">{f.full_name}</p>
-                          <div className="flex gap-3 text-[11px] text-muted-foreground mt-0.5">
-                            <span>Cash: ₹{Number(f.cash_balance || 0).toLocaleString()}</span>
-                            <span>UPI: ₹{Number(f.upi_balance || 0).toLocaleString()}</span>
+                          <div className="flex gap-3 text-3xs text-muted-foreground mt-0.5">
+                            <span>Cash: ₹{Number(f.cash_amount || 0).toLocaleString()}</span>
+                            <span>UPI: ₹{Number(f.upi_amount || 0).toLocaleString()}</span>
                           </div>
                           {f.last_reset_at && (
-                            <p className="text-[10px] text-muted-foreground">Reset: {format(new Date(f.last_reset_at), "dd MMM, hh:mm a")}</p>
+                            <p className="text-2xs text-muted-foreground">Reset: {format(new Date(f.last_reset_at), "dd MMM, hh:mm a")}</p>
                           )}
                         </div>
                         <div className="text-right shrink-0">
-                          <p className="text-base font-bold text-emerald-600">₹{Number(f.total_balance || 0).toLocaleString()}</p>
-                          <Button size="sm" variant="ghost" className="h-7 text-[10px] text-muted-foreground mt-1 gap-1" disabled={dailyResetLoading}
+                          <p className="text-base font-bold text-success">₹{Number(f.total_balance || 0).toLocaleString()}</p>
+                          <Button size="sm" variant="ghost" className="h-7 text-2xs text-muted-foreground mt-1 gap-1" disabled={dailyResetLoading}
                             onClick={() => handleDailyReset(f.user_id)}>
                             <RefreshCw className="h-3 w-3" /> Reset
                           </Button>
@@ -1965,11 +1928,9 @@ const Handovers = () => {
 
                 {/* Summary */}
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-lg border bg-card p-3">
+                  <div className="rounded-lg border bg-card p-3 border-l-4 border-l-success">
                     <p className="text-xs text-muted-foreground">Total Income ({incomeFilterDate === today ? "Today" : format(new Date(incomeFilterDate + "T00:00:00"), "dd MMM")})</p>
-                    <p className="text-xl font-bold text-emerald-600 mt-1">
-                      ₹{(finalizerIncome || []).reduce((s: number, e: any) => s + Number(e.amount || 0), 0).toLocaleString()}
-                    </p>
+                    <CurrencyDisplay amount={(finalizerIncome || []).reduce((s: number, e: any) => s + Number(e.amount || 0), 0)} className="text-xl font-bold text-success mt-1" />
                   </div>
                   <div className="rounded-lg border bg-card p-3">
                     <p className="text-xs text-muted-foreground">Entries</p>
@@ -1989,9 +1950,9 @@ const Handovers = () => {
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium capitalize">{(entry.entry_type || 'collection').replace(/_/g, ' ')}</p>
                           {entry.description && <p className="text-xs text-muted-foreground truncate">{entry.description}</p>}
-                          <p className="text-[10px] text-muted-foreground">{format(new Date(entry.created_at), "dd MMM, hh:mm a")}</p>
+                          <p className="text-2xs text-muted-foreground">{format(new Date(entry.created_at), "dd MMM, hh:mm a")}</p>
                         </div>
-                        <p className="text-base font-bold text-emerald-600 shrink-0">+₹{Number(entry.amount || 0).toLocaleString()}</p>
+                        <p className="text-base font-bold text-success shrink-0">+₹{Number(entry.amount || 0).toLocaleString()}</p>
                       </div>
                     ))}
                   </div>
@@ -2034,7 +1995,7 @@ const Handovers = () => {
                       {expenseCategories.map((cat: any) => (
                         <SelectItem key={cat.id} value={cat.id}>
                           <div className="flex items-center gap-2">
-                            <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: cat.color || "#6b7280" }} />
+                            <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: cat.color || `hsl(var(--muted-foreground))` }} />
                             {cat.name}
                           </div>
                         </SelectItem>
@@ -2069,14 +2030,14 @@ const Handovers = () => {
                 <div className="rounded-lg bg-muted/50 p-3 space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-muted-foreground">Your Balance</span>
-                    <span className={`text-lg font-bold ${notHandedOver > 0 ? "text-red-600" : notHandedOver < 0 ? "text-green-600" : "text-blue-600"}`}>
+                    <span className={`text-lg font-bold ${notHandedOver > 0 ? "text-destructive" : notHandedOver < 0 ? "text-success" : "text-info"}`}>
                       Rs{Math.abs(notHandedOver || 0).toLocaleString()}
                     </span>
                   </div>
                   {notHandedOver > 0 ? (
-                    <p className="text-xs text-red-600 font-medium">You owe warehouse Rs{Math.abs(notHandedOver).toLocaleString()} - handover required</p>
+                    <p className="text-xs text-destructive font-medium">You owe warehouse Rs{Math.abs(notHandedOver).toLocaleString()} - handover required</p>
                   ) : notHandedOver < 0 ? (
-                    <p className="text-xs text-green-600 font-medium">Warehouse owes you Rs{Math.abs(notHandedOver).toLocaleString()}</p>
+                    <p className="text-xs text-success font-medium">Warehouse owes you Rs{Math.abs(notHandedOver).toLocaleString()}</p>
                   ) : (
                     <p className="text-xs text-muted-foreground">No pending balance</p>
                   )}
@@ -2094,6 +2055,17 @@ const Handovers = () => {
                           <SelectItem key={p.user_id} value={p.user_id}>{p.full_name} ({p.roleLabel})</SelectItem>
                         ))
                       )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Handover Type</Label>
+                  <Select value={handoverType} onValueChange={(v) => setHandoverType(v as "collection" | "transfer")}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="transfer">Transfer</SelectItem>
+                      <SelectItem value="collection">Collection</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -2169,7 +2141,7 @@ const Handovers = () => {
                   {expenseCategories.map((cat: any) => (
                     <SelectItem key={cat.id} value={cat.id}>
                       <div className="flex items-center gap-2">
-                        <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: cat.color || "#6b7280" }} />
+                        <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: cat.color || `hsl(var(--muted-foreground))` }} />
                         {cat.name}
                       </div>
                     </SelectItem>
@@ -2241,7 +2213,7 @@ const Handovers = () => {
                     {expenseCategories.map((cat: any) => (
                       <SelectItem key={cat.id} value={cat.id}>
                         <div className="flex items-center gap-2">
-                          <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: cat.color || "#6b7280" }} />
+                          <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: cat.color || `hsl(var(--muted-foreground))` }} />
                           {cat.name}
                         </div>
                       </SelectItem>
@@ -2298,7 +2270,7 @@ const Handovers = () => {
                           <span className="font-medium">{p.full_name}</span>
                           <div className="flex items-center gap-2">
                             <span className="text-xs text-muted-foreground">{p.roleLabel}</span>
-                            <span className={`text-xs font-semibold ${(balance || 0) > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                            <span className={`text-xs font-semibold ${(balance || 0) > 0 ? 'text-destructive' : 'text-success'}`}>
                               ₹{(balance || 0).toLocaleString()}
                             </span>
                           </div>
@@ -2311,7 +2283,7 @@ const Handovers = () => {
               {adminTransferFrom && (
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Available Balance:</span>
-                  <span className={`font-bold ${(allStaffBalances?.[adminTransferFrom]?.total || 0) > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                  <span className={`font-bold ${(allStaffBalances?.[adminTransferFrom]?.total || 0) > 0 ? 'text-destructive' : 'text-success'}`}>
                     ₹{((allStaffBalances?.[adminTransferFrom]?.total || 0) + (allStaffBalances?.[adminTransferFrom]?.sentPending || 0)).toLocaleString()}
                   </span>
                 </div>
@@ -2470,6 +2442,41 @@ const Handovers = () => {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Expense Cancel Confirm Dialog */}
+      <AlertDialog open={expenseCancelConfirmOpen} onOpenChange={setExpenseCancelConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel Expense Claim?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will cancel your expense claim. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => { setExpenseCancelConfirmOpen(false); setExpenseCancelConfirmId(null); }}>Keep it</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmCancelExpenseClaim}>Yes, Cancel</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Reset All Finalizers Confirm Dialog */}
+      <AlertDialog open={resetAllConfirmOpen} onOpenChange={setResetAllConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset All Finalizers?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will trigger a daily reset for ALL finalizers. It creates income entries and zeros their balances. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              (finalizerHoldings || []).forEach((f: any) => handleDailyReset(f.user_id));
+              setResetAllConfirmOpen(false);
+            }}>Yes, Reset All</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

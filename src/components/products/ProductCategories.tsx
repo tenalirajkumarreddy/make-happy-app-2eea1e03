@@ -174,7 +174,7 @@ export function ProductCategories({ onBack }: ProductCategoriesProps) {
                     <>
                       <div className="flex-1 flex items-center gap-2">
                         <h3 className="font-semibold text-sm">{cat.name}</h3>
-                        <Badge variant="secondary" className="text-[10px]">
+                        <Badge variant="secondary" className="text-2xs">
                           {catProducts.length} product{catProducts.length !== 1 ? "s" : ""}
                         </Badge>
                       </div>
@@ -228,7 +228,7 @@ export function ProductCategories({ onBack }: ProductCategoriesProps) {
                           <span className="text-sm font-medium truncate block">{p.name}</span>
                           <span className="text-xs text-muted-foreground font-mono">{p.sku}</span>
                         </div>
-                        <Badge variant={p.is_active ? "default" : "secondary"} className="text-[10px] shrink-0">
+                        <Badge variant={p.is_active ? "default" : "secondary"} className="text-2xs shrink-0">
                           {p.is_active ? "Active" : "Inactive"}
                         </Badge>
                       </div>
@@ -247,7 +247,7 @@ export function ProductCategories({ onBack }: ProductCategoriesProps) {
               <div className="flex items-center gap-3 p-4 border-b bg-muted/30">
                 <div className="flex-1 flex items-center gap-2">
                   <h3 className="font-semibold text-sm text-muted-foreground">Uncategorized</h3>
-                  <Badge variant="outline" className="text-[10px]">
+                  <Badge variant="outline" className="text-2xs">
                     {uncategorizedProducts.length} product{uncategorizedProducts.length !== 1 ? "s" : ""}
                   </Badge>
                 </div>
@@ -266,7 +266,7 @@ export function ProductCategories({ onBack }: ProductCategoriesProps) {
                       <span className="text-sm font-medium truncate block">{p.name}</span>
                       <span className="text-xs text-muted-foreground font-mono">{p.sku}</span>
                     </div>
-                    <Badge variant={p.is_active ? "default" : "secondary"} className="text-[10px] shrink-0">
+                    <Badge variant={p.is_active ? "default" : "secondary"} className="text-2xs shrink-0">
                       {p.is_active ? "Active" : "Inactive"}
                     </Badge>
                   </div>

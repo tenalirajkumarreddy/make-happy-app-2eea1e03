@@ -132,12 +132,12 @@ export function BannerManagement() {
     let bannerId: string;
 
     if (editId) {
-      const { error } = await supabase.from("promotional_banners").update(payload).eq("id", editId);
+      const { error } = await (supabase as any).from("promotional_banners").update(payload).eq("id", editId);
       if (error) { toast.error(error.message); setSaving(false); return; }
       bannerId = editId;
       toast.success("Banner updated");
     } else {
-      const { data: inserted, error } = await supabase.from("promotional_banners").insert(payload).select("id").single();
+      const { data: inserted, error } = await (supabase as any).from("promotional_banners").insert(payload).select("id").single();
       if (error) { toast.error(error.message); setSaving(false); return; }
       bannerId = inserted.id;
       toast.success("Banner created");
@@ -160,7 +160,7 @@ export function BannerManagement() {
   };
 
 const handleDelete = async (id: string) => {
-  const { error } = await supabase.from("promotional_banners").update({ deleted_at: new Date().toISOString() }).eq("id", id);
+  const { error } = await (supabase as any).from("promotional_banners").update({ deleted_at: new Date().toISOString() }).eq("id", id);
   if (error) toast.error(error.message);
     else { toast.success("Banner deleted"); qc.invalidateQueries({ queryKey: ["banners-admin"] }); }
   };
@@ -206,20 +206,20 @@ const handleDelete = async (id: string) => {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-medium truncate">{b.title}</p>
-                  {!b.is_active && <Badge variant="secondary" className="text-[10px]">Inactive</Badge>}
+                  {!b.is_active && <Badge variant="secondary" className="text-2xs">Inactive</Badge>}
                 </div>
                 {b.description && <p className="text-xs text-muted-foreground truncate">{b.description}</p>}
                 <div className="flex items-center gap-1 mt-1 flex-wrap">
                   {(b._storeTypeIds || []).length === 0 ? (
-                    <Badge variant="outline" className="text-[10px]">All Types</Badge>
+                    <Badge variant="outline" className="text-2xs">All Types</Badge>
                   ) : (
                     (b._storeTypeIds || []).map((id: string) => (
-                      <Badge key={id} variant="secondary" className="text-[10px]">
+                      <Badge key={id} variant="secondary" className="text-2xs">
                         {storeTypes?.find((t: any) => t.id === id)?.name || "Unknown"}
                       </Badge>
                     ))
                   )}
-                  <span className="text-[10px] text-muted-foreground ml-1">Order: {b.sort_order}</span>
+                  <span className="text-2xs text-muted-foreground ml-1">Order: {b.sort_order}</span>
                 </div>
               </div>
               <div className="flex gap-2 shrink-0">

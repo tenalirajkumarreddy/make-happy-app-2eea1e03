@@ -23,11 +23,12 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePermission } from "@/hooks/usePermission";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
+import { afterSaleSaved } from "@/lib/mutationHelpers";
 import {
   Package,
   Plus,
@@ -104,7 +105,6 @@ export function OrderFulfillmentDialog({
   onOpenChange,
   onFulfilled,
 }: OrderFulfillmentDialogProps) {
-  const { toast } = useToast();
   const queryClient = useQueryClient();
 
    // State
@@ -156,11 +156,12 @@ const [selectedProduct, setSelectedProduct] = useState<string>("");
       setLoading(true);
       try {
         // Load products
-        const { data: productsData, error: productsError } = await supabase
+        const { data: productsData, error: productsError } = await (supabase
           .from("products")
           .select("id, name, sku, base_price, image_url")
-          .eq("is_active", true)
-          .order("name");
+          .eq("is_active", true as any)
+          .order("name")) as any;
+        const productsDataArr: any[] = productsData ?? [];
 
         if (productsError) throw productsError;
         setProducts(productsData || []);
@@ -168,24 +169,24 @@ const [selectedProduct, setSelectedProduct] = useState<string>("");
         // Load warehouse stock for products
         const { data: { user: currentUser } } = await supabase.auth.getUser();
         if (currentUser) {
-          const { data: userRole } = await supabase
+          const { data: userRole } = await ((supabase as any)
             .from("user_roles")
             .select("warehouse_id, role")
             .eq("user_id", currentUser.id)
-            .single();
+            .single());
           
           if (userRole?.warehouse_id) {
-            const productIds = productsData?.map(p => p.id) || [];
+            const productIds = (productsData as any[])?.map((p: any) => p.id) || [];
             if (productIds.length > 0) {
-              const { data: stockData } = await supabase
+              const { data: stockData } = await ((supabase as any)
                 .from("product_stock")
                 .select("product_id, current_stock")
                 .eq("warehouse_id", userRole.warehouse_id)
-                .in("product_id", productIds);
+                .in("product_id", productIds));
               
               if (stockData) {
                 const stockMap = new Map<string, number>();
-                stockData.forEach(s => stockMap.set(s.product_id, Number(s.current_stock)));
+                (stockData as any[]).forEach((s: any) => stockMap.set(s.product_id, Number(s.current_stock)));
                 setProductStock(stockMap);
               }
             }
@@ -197,11 +198,11 @@ const [selectedProduct, setSelectedProduct] = useState<string>("");
           const { data: storePrices, error: storePricesError } = await supabase
             .from("store_pricing")
             .select("product_id, price")
-            .eq("store_id", order.store_id);
+            .eq("store_id", order.store_id as any);
 
           if (!storePricesError && storePrices) {
             const priceMap = new Map<string, number>();
-            storePrices.forEach((sp) => priceMap.set(sp.product_id, sp.price));
+            (storePrices as any[]).forEach((sp: any) => priceMap.set(sp.product_id, sp.price));
             setStorePricing(priceMap);
           }
 
@@ -210,11 +211,11 @@ const [selectedProduct, setSelectedProduct] = useState<string>("");
             const { data: typePrices, error: typePricesError } = await supabase
               .from("store_type_pricing")
               .select("product_id, price")
-              .eq("store_type_id", order.stores.store_type_id);
+              .eq("store_type_id", order.stores.store_type_id as any);
 
             if (!typePricesError && typePrices) {
               const priceMap = new Map<string, number>();
-              typePrices.forEach((tp) => priceMap.set(tp.product_id, tp.price));
+              (typePrices as any[]).forEach((tp: any) => priceMap.set(tp.product_id, tp.price));
               setStoreTypePricing(priceMap);
             }
           }
@@ -225,7 +226,7 @@ const [selectedProduct, setSelectedProduct] = useState<string>("");
           const { data: storeData, error: storeError } = await supabase
             .from("stores")
             .select("outstanding")
-            .eq("id", order.store_id)
+            .eq("id", order.store_id as any)
             .maybeSingle();
 
           if (!storeError && storeData) {
@@ -235,11 +236,11 @@ const [selectedProduct, setSelectedProduct] = useState<string>("");
 
         // Pre-fill items from order if detailed
         if (order.order_type === "detailed" && order.order_items?.length) {
-          const productMap = new Map(productsData?.map((p) => [p.id, p]) || []);
+          const productMap = new Map(productsData?.map((p: any) => [p.id, p]) ?? []);
           const initialItems: FulfillmentItem[] = [];
 
           for (const item of order.order_items) {
-            const product = productMap.get(item.product_id) || item.products;
+            const product: any = productMap.get(item.product_id) || item.products;
             if (!product) continue;
 
             const basePrice = product.base_price;
@@ -267,10 +268,8 @@ const [selectedProduct, setSelectedProduct] = useState<string>("");
         setUpiAmount("0");
       } catch (error) {
         console.error("Error loading fulfillment data:", error);
-        toast({
-          title: "Error loading data",
+        toast.error("Error loading data", {
           description: "Failed to load order details. Please try again.",
-          variant: "destructive",
         });
       } finally {
         setLoading(false);
@@ -284,15 +283,13 @@ const [selectedProduct, setSelectedProduct] = useState<string>("");
   const handleAddProduct = () => {
     if (!selectedProduct) return;
 
-    const product = products.find((p) => p.id === selectedProduct);
+    const product = products.find((p: any) => p.id === selectedProduct);
     if (!product) return;
 
     // Check if already in items
     if (items.some((item) => item.product_id === selectedProduct)) {
-      toast({
-        title: "Product already added",
+      toast.error("Product already added", {
         description: "Increase quantity instead of adding again.",
-        variant: "destructive",
       });
       return;
     }
@@ -329,7 +326,7 @@ const [selectedProduct, setSelectedProduct] = useState<string>("");
             total: newQty * item.unit_price,
           };
         })
-        .filter(Boolean) as FulfillmentItem[]
+        .filter((x): x is FulfillmentItem => !!x)
     );
   };
 
@@ -375,30 +372,24 @@ const hasInsufficientStock = items.some((item) => {
 const handleSubmit = async () => {
   if (!order) return;
   if (items.length === 0) {
-    toast({
-      title: "No items",
+    toast.error("No items", {
       description: "Please add at least one item to the order.",
-      variant: "destructive",
     });
     return;
   }
 
   // Check permission to fulfill orders
   if (!canFulfill) {
-    toast({
-      title: "Permission Denied",
+    toast.error("Permission Denied", {
       description: "You don't have permission to fulfill orders.",
-      variant: "destructive",
     });
     return;
   }
 
   // Also need record_sale permission to create sale from order
   if (!hasSalePermission) {
-    toast({
-      title: "Permission Denied",
+    toast.error("Permission Denied", {
       description: "You don't have permission to record sales.",
-      variant: "destructive",
     });
     return;
   }
@@ -411,10 +402,8 @@ const handleSubmit = async () => {
 
   if (insufficientItems.length > 0) {
     const itemNames = insufficientItems.map(i => i.product_name).join(", ");
-    toast({
-      title: "Insufficient Stock",
+    toast.error("Insufficient Stock", {
       description: `Cannot fulfill order. Insufficient stock for: ${itemNames}. Please reduce quantities or add stock.`,
-      variant: "destructive",
     });
     return;
   }
@@ -425,7 +414,7 @@ const handleSubmit = async () => {
       const { data: displayIdData, error: displayIdError } = await supabase.rpc(
         "generate_display_id",
         { prefix: "SALE", seq_name: "sale_display_seq" }
-      );
+      ) as any;
       if (displayIdError) throw displayIdError;
 
       const saleDisplayId = displayIdData as string;
@@ -448,73 +437,42 @@ const handleSubmit = async () => {
     // record_sale requires customer_id to be NOT NULL
     const customerId = order.customer_id || order.stores?.customer_id;
     if (!customerId) {
-      toast({
-        title: "Missing Customer",
+      toast.error("Missing Customer", {
         description: "This order is not linked to a customer. Please check the order details.",
-        variant: "destructive",
       });
       setSubmitting(false);
       return;
     }
 
-    // Call record_sale RPC - pass 0 to let it compute from sale_items
-    const { error: saleError } = await supabase.rpc("record_sale", {
+    // Call record_sale RPC - pass subtotal and p_fulfilled_order_id to let the DB handle it atomically
+    const { error: saleError } = await (supabase.rpc("record_sale", {
       p_display_id: saleDisplayId,
       p_store_id: order.store_id,
       p_customer_id: customerId,
       p_recorded_by: user.id,
       p_logged_by: null,
-      p_total_amount: 0, // Let DB compute from sale_items
+      p_total_amount: subtotal,
       p_cash_amount: parseFloat(cashAmount) || 0,
       p_upi_amount: parseFloat(upiAmount) || 0,
       p_outstanding_amount: outstandingAmount,
       p_sale_items: saleItems,
       p_created_at: null,
-    });
+      p_expected_outstanding: null,
+      p_fulfilled_order_id: order.id,
+    } as any));
 
-      if (saleError) throw saleError;
+    if (saleError) throw saleError;
 
-      // Get the sale we just created to link it to the order
-      const { data: newSale, error: fetchSaleError } = await supabase
-        .from("sales")
-        .select("id")
-        .eq("display_id", saleDisplayId)
-        .single();
-
-      if (fetchSaleError) throw fetchSaleError;
-
-      // Update the sale with order_id reference
-      const { error: linkError } = await supabase
-        .from("sales")
-        .update({ order_id: order.id })
-        .eq("id", newSale.id);
-
-      if (linkError) throw linkError;
-
-      // Update order status to delivered with sale link
-      const { error: orderError } = await supabase
-        .from("orders")
-        .update({
-          status: "delivered",
-          fulfilled_by: user.id,
-          fulfilled_by_sale_id: newSale.id,
-          delivered_at: new Date().toISOString(),
-        })
-        .eq("id", order.id);
-
-      if (orderError) throw orderError;
-
-      // Send notification to customer if exists
-      if (order.stores?.customer_id) {
-        await supabase.from("notifications").insert({
-          user_id: order.stores.customer_id,
-          title: "Order Delivered",
-          message: `Your order ${order.display_id} has been delivered and recorded as sale ${saleDisplayId}.`,
-          type: "order",
-          reference_id: order.id,
-          reference_type: "order",
-        });
-      }
+    // Send notification to customer if exists
+    if (customerId) {
+      await sendNotificationToMany([customerId], {
+        title: "Order Delivered",
+        message: `Your order ${order.display_id} has been delivered and recorded as sale ${saleDisplayId}.`,
+        type: "order",
+        entityType: "order",
+        entityId: order.id,
+      }).catch((err) => console.error("Notification error (customer):", err));
+    }
 
     // Send notification to admins/managers
     const storeName = order.stores?.name || "store";
@@ -549,9 +507,9 @@ const handleSubmit = async () => {
     );
 
     // Notify the assigned agent if different from fulfiller
-    if (order.assigned_to && order.assigned_to !== user.id) {
+    if ((order as any).assigned_to && (order as any).assigned_to !== user.id) {
       notifications.push(
-        sendNotificationToMany([order.assigned_to], {
+        sendNotificationToMany([(order as any).assigned_to], {
           title: "Assigned Order Fulfilled",
           message: `Order ${order.display_id} for ${storeName} (assigned to you) has been fulfilled by another agent. Sale ${saleDisplayId} created.`,
           type: "order",
@@ -564,7 +522,7 @@ const handleSubmit = async () => {
     await Promise.all(notifications);
 
       // Log activity
-      await supabase.from("activity_log").insert({
+      await ((supabase as any).from("activity_log") as any).insert({
         action: "order_fulfilled",
         entity_type: "order",
         entity_id: order.id,
@@ -577,27 +535,21 @@ const handleSubmit = async () => {
         },
       });
 
-      toast({
-        title: "Order Fulfilled",
+      toast.success("Order Fulfilled", {
         description: `Sale ${saleDisplayId} created successfully.`,
       });
 
-      // Invalidate queries
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
-      queryClient.invalidateQueries({ queryKey: ["sales"] });
-      queryClient.invalidateQueries({ queryKey: ["customer-balances"] });
+      afterSaleSaved(queryClient, { storeId: order.store_id });
 
       onOpenChange(false);
       onFulfilled?.();
     } catch (error) {
       console.error("Fulfillment error:", error);
-      toast({
-        title: "Fulfillment Failed",
+      toast.error("Fulfillment Failed", {
         description:
           error instanceof Error
             ? error.message
             : "Failed to complete order. Please try again.",
-        variant: "destructive",
       });
     } finally {
       setSubmitting(false);
@@ -697,7 +649,7 @@ const handleSubmit = async () => {
                               }`}>
                                 Stock: {productStock.get(item.product_id) || 0} available
                                 {(productStock.get(item.product_id) || 0) < item.quantity && (
-                                  <span className="ml-1">ΓÜá∩╕Å Insufficient</span>
+                                  <span className="ml-1">⚠️ Insufficient</span>
                                 )}
                               </div>
                             )}
@@ -740,7 +692,7 @@ const handleSubmit = async () => {
 
                           {/* Total */}
                           <div className="w-20 text-right font-medium">
-                            Γé╣{item.total.toFixed(2)}
+                            ₹{item.total.toFixed(2)}
                           </div>
 
                           {/* Remove */}
@@ -764,7 +716,7 @@ const handleSubmit = async () => {
               {/* Subtotal */}
               <div className="flex justify-between items-center text-lg font-semibold">
                 <span>Subtotal</span>
-                <span>Γé╣{subtotal.toFixed(2)}</span>
+                <span>₹{subtotal.toFixed(2)}</span>
               </div>
 
               {/* Payment Section */}
@@ -821,17 +773,17 @@ const handleSubmit = async () => {
                 <div className="bg-muted p-3 rounded-lg space-y-1 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Previous Outstanding</span>
-                    <span>Γé╣{oldOutstanding.toFixed(2)}</span>
+                    <span>₹{oldOutstanding.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">This Order Outstanding</span>
-                    <span>Γé╣{outstandingAmount.toFixed(2)}</span>
+                    <span>₹{outstandingAmount.toFixed(2)}</span>
                   </div>
                   <Separator className="my-2" />
                   <div className="flex justify-between font-medium">
                     <span>New Total Outstanding</span>
                     <span className={newOutstanding > 0 ? "text-orange-600" : "text-green-600"}>
-                      Γé╣{newOutstanding.toFixed(2)}
+                      ₹{newOutstanding.toFixed(2)}
                     </span>
                   </div>
                 </div>

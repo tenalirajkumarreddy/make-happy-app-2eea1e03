@@ -76,8 +76,8 @@ const AgentDashboard = () => {
         supabase.from("handovers").select("cash_amount, upi_amount").eq("user_id", user!.id).eq("status", "awaiting_confirmation"),
       ]);
 
-      const todaySales = salesRes.data || [];
-      const todayTxns = txnRes.data || [];
+      const todaySales: any[] = salesRes.data || [];
+      const todayTxns: any[] = txnRes.data || [];
 
       const totalSale = todaySales.reduce((s, r) => s + Number(r.total_amount), 0);
       const totalCash = todaySales.reduce((s, r) => s + Number(r.cash_amount), 0) + todayTxns.reduce((s, r) => s + Number(r.cash_amount), 0);
@@ -98,7 +98,7 @@ const AgentDashboard = () => {
         totalUpi,
         todayHandoverable,
         totalPendingHandoverable,
-        pendingOrders: ordersRes.data || [],
+        pendingOrders: (ordersRes.data || []) as any[],
         materializedHolding,
         holdingUpdatedAt: profileRes.data?.holding_balance_updated_at,
       };
@@ -176,7 +176,7 @@ const AgentDashboard = () => {
   if (isLoading) return <DashboardSkeleton />;
   const s = stats!;
 
-  const totalStockValue = staffStock?.reduce((sum, item) => sum + (item.amount_value || 0), 0) || 0;
+  const totalStockValue = staffStock?.reduce((sum, item) => sum + ((item as any).amount_value || 0), 0) || 0;
   const totalStockItems = staffStock?.reduce((sum, item) => sum + item.quantity, 0) || 0;
   const pendingRequests = stockRequests?.filter((r: any) => r.status === "pending") || [];
 

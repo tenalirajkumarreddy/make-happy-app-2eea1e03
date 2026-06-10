@@ -3,7 +3,6 @@ import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import { DataTable } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import { StorePricingDialog } from "@/components/stores/StorePricingDialog";
 import { CreateStoreWizard } from "@/components/stores/CreateStoreWizard";
 import { CsvImportDialog } from "@/components/shared/CsvImportDialog";
@@ -12,22 +11,12 @@ import { useInfiniteQuery, useQueryClient, useQuery } from "@tanstack/react-quer
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
-import { DollarSign, Store, Settings2, Upload, Loader2, Phone, MapPin, Building2, CheckCircle2 } from "lucide-react";
+import { DollarSign, Store, Settings2, Upload, Loader2, Phone, MapPin } from "lucide-react";
 import { usePermission } from "@/hooks/usePermission";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useState, useMemo, useEffect } from "react";
 
-// Set page title hook
-const usePageTitle = (title: string) => {
-  useEffect(() => {
-    const originalTitle = document.title;
-    document.title = title;
-    return () => {
-      document.title = originalTitle;
-    };
-  }, [title]);
-};
 import { useNavigate } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
@@ -36,14 +25,13 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { logActivity } from "@/lib/activityLogger";
-import { sanitizeString, sanitizeObject } from "@/lib/sanitization";
+import { sanitizeObject } from "@/lib/sanitization";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
 const Stores = () => {
-  usePageTitle("Stores | BizManager");
   const navigate = useNavigate();
   const { user, role } = useAuth();
   const { currentWarehouse, allWarehouses } = useWarehouse();
@@ -59,6 +47,7 @@ const Stores = () => {
   const [editData, setEditData] = useState<Record<string, { name: string; phone: string }>>({});
   const [bulkSaving, setBulkSaving] = useState(false);
   const [confirmBulkDeactivate, setConfirmBulkDeactivate] = useState(false);
+  const [confirmBulkActivate, setConfirmBulkActivate] = useState(false);
   const [filters, setFilters] = useState<FilterValues>({});
   const qc = useQueryClient();
   const PAGE_SIZE = 50;
@@ -87,25 +76,26 @@ const Stores = () => {
 
       // Scope all users to selected warehouse context.
       if (currentWarehouse?.id) {
-        query = query.eq("warehouse_id", currentWarehouse.id);
+        query = query.eq("warehouse_id", currentWarehouse.id as any);
       }
 
       // Apply search and advanced filters
-      if (filters.search) {
-        query = query.or(`name.ilike.%${filters.search}%,display_id.ilike.%${filters.search}%`);
+      const f = filters as any;
+      if (f.search) {
+        query = query.or(`name.ilike.%${f.search}%,display_id.ilike.%${f.search}%`);
       }
-      if (filters.route && filters.route !== "all") {
-        query = query.eq("route_id", filters.route);
+      if (f.route && f.route !== "all") {
+        query = query.eq("route_id", f.route);
       }
-      if (filters.type && filters.type !== "all") {
-        query = query.eq("store_type_id", filters.type);
+      if (f.type && f.type !== "all") {
+        query = query.eq("store_type_id", f.type);
       }
-      if (filters.customer && filters.customer !== "all") {
-        query = query.eq("customer_id", filters.customer);
+      if (f.customer && f.customer !== "all") {
+        query = query.eq("customer_id", f.customer);
       }
-      if (filters.status === "active") query = query.eq("is_active", true);
-      if (filters.status === "inactive") query = query.eq("is_active", false);
-      if (filters.status === "with_outstanding") query = query.gt("outstanding", 0);
+      if (f.status === "active") query = query.eq("is_active", true);
+      if (f.status === "inactive") query = query.eq("is_active", false);
+      if (f.status === "with_outstanding") query = query.gt("outstanding", 0);
 
       const { data, error } = await query
         .order("created_at", { ascending: false })
@@ -125,8 +115,8 @@ const Stores = () => {
    const { data: allRoutes } = useQuery({
      queryKey: ["all-routes", currentWarehouse?.id],
      queryFn: async () => {
-       let query = supabase.from("routes").select("id, name").eq("is_active", true);
-       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+        let query = supabase.from("routes").select("id, name").eq("is_active", true as any);
+       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id as any);
        const { data } = await query;
        return data || [];
      },
@@ -135,7 +125,7 @@ const Stores = () => {
   const { data: storeTypes } = useQuery({
     queryKey: ["store-types-list"],
     queryFn: async () => {
-      const { data } = await supabase.from("store_types").select("id, name").eq("is_active", true);
+       const { data } = await supabase.from("store_types").select("id, name").eq("is_active", true as any);
       return data || [];
     },
   });
@@ -143,8 +133,8 @@ const Stores = () => {
    const { data: customersList } = useQuery({
      queryKey: ["customers-list", currentWarehouse?.id],
      queryFn: async () => {
-       let query = supabase.from("customers").select("id, name, display_id").eq("is_active", true);
-       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+        let query = supabase.from("customers").select("id, name, display_id").eq("is_active", true as any);
+       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id as any);
        const { data } = await query;
        return data || [];
      },
@@ -184,7 +174,8 @@ const Stores = () => {
 
     const { data: results, error } = await supabase.rpc("bulk_update_stores", {
       p_updates: updates,
-    });
+      p_user_id: user?.id,
+    }) as any;
 
     setBulkSaving(false);
 
@@ -222,7 +213,7 @@ const Stores = () => {
 
       // Match customer by name or display_id
       const customer = customersList?.find(
-        (c) => c.name.toLowerCase() === row.customer?.toLowerCase() || c.display_id === row.customer
+        (c) => (c.name || "").toLowerCase() === (row.customer || "").toLowerCase() || c.display_id === row.customer
       );
       if (!customer) {
         errors.push(`Row ${i + 2}: Customer "${row.customer}" not found`);
@@ -230,7 +221,7 @@ const Stores = () => {
       }
 
       // Match store type by name
-      const storeType = storeTypes?.find((t) => t.name.toLowerCase() === row.store_type?.toLowerCase());
+      const storeType = storeTypes?.find((t) => (t.name || "").toLowerCase() === (row.store_type || "").toLowerCase());
       if (!storeType) {
         errors.push(`Row ${i + 2}: Store type "${row.store_type}" not found`);
         continue;
@@ -239,7 +230,7 @@ const Stores = () => {
       // Optionally match route
       let routeId: string | null = null;
       if (row.route) {
-        const route = allRoutes?.find((r) => r.name.toLowerCase() === row.route?.toLowerCase());
+        const route = allRoutes?.find((r) => (r.name || "").toLowerCase() === (row.route || "").toLowerCase());
         if (!route) {
           errors.push(`Row ${i + 2}: Route "${row.route}" not found`);
           continue;
@@ -248,7 +239,7 @@ const Stores = () => {
       }
 
       // Use database function to generate display_id
-      const { data: newStore, error } = await supabase.rpc("create_store_with_display_id", {
+      const { data: newStore, error } = await (supabase as any).rpc("create_store_with_display_id", {
         p_name: row.name,
         p_customer_id: customer.id,
         p_store_type_id: storeType.id,
@@ -256,7 +247,7 @@ const Stores = () => {
         p_phone: row.phone || null,
         p_address: row.address || null,
         p_warehouse_id: currentWarehouse?.id || null,
-      });
+      }) as any;
 
       if (error) {
         errors.push(`Row ${i + 2}: ${error.message}`);
@@ -291,7 +282,7 @@ const Stores = () => {
   const handleBulkStatus = async (active: boolean) => {
     if (selected.size === 0) return;
     const ids = Array.from(selected);
-    const { error } = await supabase.from("stores").update({ is_active: active }).in("id", ids);
+    const { error } = await supabase.from("stores").update({ is_active: active } as any).in("id", ids as any);
     if (error) { toast.error(error.message); return; }
     toast.success(`${ids.length} stores ${active ? "activated" : "deactivated"}`);
     setSelected(new Set());
@@ -301,7 +292,7 @@ const Stores = () => {
   const handleBulkRoute = async () => {
     if (selected.size === 0 || !bulkRoute) return;
     const ids = Array.from(selected);
-    const { error } = await supabase.from("stores").update({ route_id: bulkRoute }).in("id", ids);
+    const { error } = await supabase.from("stores").update({ route_id: bulkRoute } as any).in("id", ids as any);
     if (error) { toast.error(error.message); return; }
     toast.success(`Route assigned to ${ids.length} stores`);
     setSelected(new Set());
@@ -332,11 +323,11 @@ const Stores = () => {
       <div className="flex items-center gap-2">
         {row.photo_url && <img src={row.photo_url} alt="" loading="lazy" className="h-8 w-8 rounded-md object-cover" />}
         {editMode ? (
-          <input
-            className="border border-input rounded px-2 py-0.5 text-sm bg-background w-36 focus:outline-none focus:ring-1 focus:ring-ring"
+          <Input
+            className="h-8 w-36"
             value={editData[row.id]?.name ?? row.name ?? ""}
             onChange={(e) => setField(row.id, "name", e.target.value)}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e: React.MouseEvent) => e.stopPropagation()}
           />
         ) : (
           <span className="font-medium">{row.name}</span>
@@ -346,11 +337,11 @@ const Stores = () => {
     ...(role === "super_admin" ? [{ header: "Warehouse", accessor: (row: any) => warehouseNameById.get(row.warehouse_id) || "—", className: "hidden xl:table-cell text-sm text-muted-foreground" }] : []),
     { header: "Customer", accessor: (row: any) => row.customers?.name || "—", className: "text-muted-foreground text-sm hidden sm:table-cell" },
     { header: "Phone", accessor: (row: any) => editMode ? (
-      <input
-        className="border border-input rounded px-2 py-0.5 text-sm bg-background w-32 focus:outline-none focus:ring-1 focus:ring-ring"
+      <Input
+        className="h-8 w-32"
         value={editData[row.id]?.phone ?? row.phone ?? ""}
         onChange={(e) => setField(row.id, "phone", e.target.value)}
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e: React.MouseEvent) => e.stopPropagation()}
         placeholder="Add phone"
       />
     ) : (
@@ -434,7 +425,7 @@ const Stores = () => {
   {canBulk && selectMode && selected.size > 0 && (
     <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-accent/50 p-3" role="region" aria-label="Bulk actions">
       <span className="text-sm font-medium">{selected.size} selected</span>
-      <Button variant="outline" size="sm" onClick={() => handleBulkStatus(true)} aria-label={`Activate ${selected.size} stores`}>Activate</Button>
+      <Button variant="outline" size="sm" onClick={() => setConfirmBulkActivate(true)} aria-label={`Activate ${selected.size} stores`}>Activate</Button>
       <Button variant="outline" size="sm" className="text-destructive border-destructive/40" onClick={() => setConfirmBulkDeactivate(true)} aria-label={`Deactivate ${selected.size} stores`}>Deactivate</Button>
       <div className="flex items-center gap-2">
         <label htmlFor="bulk-route-select" className="sr-only">Assign route</label>
@@ -576,7 +567,7 @@ const Stores = () => {
                   <StatusBadge status={row.is_active ? "active" : "inactive"} />
                 </div>
                 {role === "super_admin" && row.warehouse_id && (
-                  <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
+                  <p className="text-3xs text-muted-foreground mt-0.5 truncate">
                     Warehouse: {warehouseNameById.get(row.warehouse_id) || "—"}
                   </p>
                 )}
@@ -586,7 +577,7 @@ const Stores = () => {
                 </div>
                 <div className="flex items-center justify-between mt-1.5">
                   <span className="text-xs text-muted-foreground truncate">{row.customers?.name || "—"}</span>
-                  <p className={`font-bold text-sm ${Number(row.outstanding || 0) > 0 ? 'text-red-600' : 'text-foreground'}`}>₹{Number(row.outstanding || 0).toLocaleString()}</p>
+                  <p className={`font-bold text-sm ${Number(row.outstanding || 0) > 0 ? 'text-destructive' : 'text-foreground'}`}>₹{Number(row.outstanding || 0).toLocaleString()}</p>
                 </div>
               </div>
             </div>
@@ -642,6 +633,21 @@ const Stores = () => {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction className="bg-destructive hover:bg-destructive/90" onClick={() => { setConfirmBulkDeactivate(false); handleBulkStatus(false); }}>Deactivate</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={confirmBulkActivate} onOpenChange={setConfirmBulkActivate}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Activate {selected.size} store(s)?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The selected stores will be activated and available for sales and orders.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setConfirmBulkActivate(false); handleBulkStatus(true); }}>Activate</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

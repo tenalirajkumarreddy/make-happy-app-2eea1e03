@@ -7,7 +7,7 @@
  */
 
 import { supabase } from "@/integrations/supabase/client";
-import { PendingAction } from "./offlineQueue";
+import { PendingAction, addToQueue } from "./offlineQueue";
 
 // Types for conflict detection
 export interface OperationContext {
@@ -226,11 +226,11 @@ export async function captureOperationContext(
         context.storeId = storeId;
         
         // Get current store outstanding
-        const { data: store } = await supabase
+        const { data: store } = await (supabase
           .from("stores")
           .select("outstanding_balance, is_active, credit_limit")
           .eq("id", storeId)
-          .single();
+          .single() as any) as { data: any; error: any };
         
         if (store) {
           context.storeOutstandingAtQueueTime = store.outstanding_balance || 0;
@@ -244,10 +244,10 @@ export async function captureOperationContext(
         const productIds = products.map((p: { product_id: string }) => p.product_id);
         context.productIds = productIds;
 
-        const { data: productData } = await supabase
+        const { data: productData } = await (supabase
           .from("products")
           .select("id, price")
-          .in("id", productIds);
+          .in("id", productIds) as any) as { data: any; error: any };
 
         if (productData && productData.length > 0) {
           // Store first product price as reference (can be extended to store all)
@@ -261,6 +261,17 @@ export async function captureOperationContext(
     console.error("Error capturing operation context:", error);
     return context;
   }
+}
+
+/**
+ * Enqueue an action with captured context for conflict detection.
+ * Captures current server state (outstanding, prices, etc.) before queuing.
+ */
+export async function enqueueWithContext(
+  action: PendingAction
+): Promise<void> {
+  const context = await captureOperationContext(action);
+  return addToQueue({ ...action, context });
 }
 
 /**
@@ -282,11 +293,11 @@ export async function detectConflicts(
 
     // Check store status
     if (context.storeId) {
-      const { data: currentStore } = await supabase
+      const { data: currentStore } = await (supabase
         .from("stores")
         .select("outstanding_balance, is_active, credit_limit, name")
         .eq("id", context.storeId)
-        .single();
+        .single() as any) as { data: any; error: any };
 
       if (currentStore) {
         // Conflict: Store is inactive
@@ -344,21 +355,21 @@ export async function detectConflicts(
 
     // Check product availability
     if (context.productIds && context.productIds.length > 0) {
-      const { data: products } = await supabase
+      const { data: products } = await (supabase
         .from("products")
         .select("id, name, price, is_active, stock_quantity")
-        .in("id", context.productIds);
+        .in("id", context.productIds) as any) as { data: any; error: any };
 
       if (products) {
         // Check for unavailable products
-        const unavailableProducts = products.filter((p) => p.is_active === false);
+        const unavailableProducts = products.filter((p: any) => p.is_active === false);
         if (unavailableProducts.length > 0) {
           conflicts.push({
             id: `product-unavailable-${action.id}`,
             type: ConflictType.PRODUCT_UNAVAILABLE,
             operation: action,
             currentState: {
-              unavailableProducts: unavailableProducts.map((p) => p.name),
+              unavailableProducts: unavailableProducts.map((p: any) => p.name),
             },
             queuedState: context,
             reason: `${unavailableProducts.length} product(s) are no longer available`,
@@ -367,7 +378,7 @@ export async function detectConflicts(
         }
 
         // Check for price changes
-        const priceChangedProducts = products.filter((p) => {
+        const priceChangedProducts = products.filter((p: any) => {
           const queuedPrice = context.productPriceAtQueueTime;
           return queuedPrice && Math.abs(p.price - queuedPrice) > 0.01;
         });
@@ -501,9 +512,7 @@ export async function logConflictResolution(
   resolution: ConflictResolution
 ): Promise<void> {
   try {
-    const { supabase } = await import("@/integrations/supabase/client");
-    
-    await supabase.from("activity_logs").insert({
+    await (supabase.from("activity_logs" as any) as any).insert({
       action: "conflict_resolved",
       entity_type: "offline_operation",
       entity_id: conflict.operation.id,
@@ -560,5 +569,4 @@ export async function getConflictsSummary(
   return summary;
 }
 
-// Export types (enums ConflictType and ResolutionStrategy already exported above)
-export type { Conflict, ConflictResolution, ResolutionOption, OperationContext };
+// Types already exported as interfaces above

@@ -18,7 +18,7 @@ const BillOfMaterialsPage = () => {
     queryFn: async () => {
       if (!warehouse?.id) return [];
       // This RPC call is needed to get the summary data for each BOM.
-      const { data, error } = await supabase.rpc('get_bom_summary', { p_warehouse_id: warehouse.id });
+      const { data, error } = await (supabase as any).rpc('get_bom_summary', { p_warehouse_id: warehouse.id });
       if (error) throw error;
       return data;
     },
@@ -28,21 +28,20 @@ const BillOfMaterialsPage = () => {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Bill of Materials (BOM)"
-        description="Define the raw material composition for your finished products."
-      >
-        <Button asChild>
-          <Link to="/inventory/boms/new">
-            <PlusCircle className="mr-2 h-4 w-4" />
-            Create BOM
-          </Link>
-        </Button>
-      </PageHeader>
+        {...{ title: "Bill of Materials (BOM)", description: "Define the raw material composition for your finished products.", actions: [
+          <Button key="create" asChild>
+            <Link to="/inventory/boms/new">
+              <PlusCircle className="mr-2 h-4 w-4" />
+              Create BOM
+            </Link>
+          </Button>
+        ] } as any}
+      />
       
       {isLoading ? (
         <TableSkeleton />
       ) : (
-        <DataTable columns={bomColumns} data={boms || []} />
+        <DataTable columns={bomColumns as any} data={boms || []} />
       )}
     </div>
   );

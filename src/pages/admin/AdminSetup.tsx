@@ -4,16 +4,28 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { usePermission } from "@/hooks/usePermission";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Plus, Pencil, Trash2 } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, ShieldAlert } from "lucide-react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Form,
   FormControl,
@@ -44,6 +56,8 @@ type ConversionFormValues = z.infer<typeof conversionSchema>;
 
 export default function AdminSetup() {
   const queryClient = useQueryClient();
+  const { role } = useAuth();
+  const { allowed: canManageSetup } = usePermission("manage_setup" as any);
   const [activeTab, setActiveTab] = useState("categories");
   
   // Category State
@@ -53,6 +67,11 @@ export default function AdminSetup() {
   // Conversion State
   const [convOpen, setConvOpen] = useState(false);
   const [editingConvId, setEditingConvId] = useState<string | null>(null);
+
+  // Delete Confirmation State
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteConfirmType, setDeleteConfirmType] = useState<"category" | "conversion">("category");
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   useEffect(() => {
     document.title = 'Setup';
@@ -118,7 +137,7 @@ export default function AdminSetup() {
 
 const deleteCatMutation = useMutation({
   mutationFn: async (id: string) => {
-    const { error } = await supabase.from("raw_material_categories").update({ deleted_at: new Date().toISOString() }).eq("id", id);
+    const { error } = await supabase.from("raw_material_categories").update({ deleted_at: new Date().toISOString() } as any).eq("id", id);
     if (error) throw error;
   },
     onSuccess: () => {
@@ -160,7 +179,7 @@ const deleteCatMutation = useMutation({
 
 const deleteConvMutation = useMutation({
   mutationFn: async (id: string) => {
-    const { error } = await supabase.from("unit_conversions").update({ deleted_at: new Date().toISOString() }).eq("id", id);
+    const { error } = await supabase.from("unit_conversions").update({ deleted_at: new Date().toISOString() } as any).eq("id", id);
     if (error) throw error;
   },
     onSuccess: () => {
@@ -184,6 +203,17 @@ const deleteConvMutation = useMutation({
   const getMaterialName = (id: string) => {
     return rawMaterials?.find((r: any) => r.id === id)?.name || "Unknown";
   };
+
+  // Permission guard - only super_admin or users with manage_setup permission
+  if (role !== "super_admin" && !canManageSetup) {
+    return (
+      <div className="container mx-auto py-16 text-center">
+        <ShieldAlert className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+        <h2 className="text-xl font-semibold mb-2">Access Denied</h2>
+        <p className="text-muted-foreground">You don't have permission to access ERP Setup.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto py-8">
@@ -225,7 +255,7 @@ const deleteConvMutation = useMutation({
                           <td className="px-4 py-3 text-sm text-muted-foreground">{cat.description || "-"}</td>
                           <td className="px-4 py-3 text-sm text-right">
                             <Button variant="ghost" size="icon" onClick={() => handleEditCat(cat)}><Pencil className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="icon" onClick={() => confirm("Delete category?") && deleteCatMutation.mutate(cat.id)} className="text-destructive"><Trash2 className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" onClick={() => { setDeleteConfirmType("category"); setDeleteConfirmId(cat.id); setDeleteConfirmOpen(true); }} className="text-destructive"><Trash2 className="h-4 w-4" /></Button>
                           </td>
                         </tr>
                       ))}
@@ -271,7 +301,7 @@ const deleteConvMutation = useMutation({
                           <td className="px-4 py-3 text-sm">{conv.conversion_rate}</td>
                           <td className="px-4 py-3 text-sm text-right">
                             <Button variant="ghost" size="icon" onClick={() => handleEditConv(conv)}><Pencil className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="icon" onClick={() => confirm("Delete conversion?") && deleteConvMutation.mutate(conv.id)} className="text-destructive"><Trash2 className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" onClick={() => { setDeleteConfirmType("conversion"); setDeleteConfirmId(conv.id); setDeleteConfirmOpen(true); }} className="text-destructive"><Trash2 className="h-4 w-4" /></Button>
                           </td>
                         </tr>
                       ))}
@@ -346,6 +376,37 @@ const deleteConvMutation = useMutation({
           </Form>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Delete {deleteConfirmType === "category" ? "Category" : "Conversion"}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the {deleteConfirmType}.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (deleteConfirmType === "category" && deleteConfirmId) {
+                  deleteCatMutation.mutate(deleteConfirmId);
+                } else if (deleteConfirmType === "conversion" && deleteConfirmId) {
+                  deleteConvMutation.mutate(deleteConfirmId);
+                }
+                setDeleteConfirmOpen(false);
+                setDeleteConfirmId(null);
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

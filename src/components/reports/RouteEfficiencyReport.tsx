@@ -33,19 +33,20 @@ export default function RouteEfficiencyReport() {
       const from = format(dateRange.from, "yyyy-MM-dd");
       const to = format(dateRange.to, "yyyy-MM-dd") + "T23:59:59";
 
+      const sb = supabase as any;
       const [routesRes, storeVisitsRes, salesRes, collectionsRes, sessionsRes] = await Promise.all([
-        supabase.from("routes").select("id, name, stores(id, name, display_id, outstanding, warehouse_id)").eq("is_active", true),
-        supabase.from("store_visits").select("store_id, session_id, visited_at, route_sessions(route_id)").gte("visited_at", from).lte("visited_at", to),
-        supabase.from("sales").select("store_id, total_amount, outstanding_amount, created_at").gte("created_at", from).lte("created_at", to),
-        supabase.from("transactions").select("store_id, amount").eq("type", "payment").gte("transaction_date", from).lte("transaction_date", to),
-        supabase.from("route_sessions").select("id, route_id, status, started_at").eq("status", "completed").gte("started_at", from).lte("started_at", to),
+        sb.from("routes").select("id, name, stores(id, name, display_id, outstanding, warehouse_id)").eq("is_active", true),
+        sb.from("store_visits").select("store_id, session_id, visited_at, route_sessions(route_id)").gte("visited_at", from).lte("visited_at", to),
+        sb.from("sales").select("store_id, total_amount, outstanding_amount, created_at").gte("created_at", from).lte("created_at", to),
+        sb.from("transactions").select("store_id, amount").eq("type", "payment").gte("transaction_date", from).lte("transaction_date", to),
+        sb.from("route_sessions").select("id, route_id, status, started_at").eq("status", "completed").gte("started_at", from).lte("started_at", to),
       ]);
 
-      const routes = routesRes.data || [];
-      const visits = storeVisitsRes.data || [];
-      const sales = salesRes.data || [];
-      const collections = collectionsRes.data || [];
-      const sessions = sessionsRes.data || [];
+      const routes: any[] = routesRes.data || [];
+      const visits: any[] = storeVisitsRes.data || [];
+      const sales: any[] = salesRes.data || [];
+      const collections: any[] = collectionsRes.data || [];
+      const sessions: any[] = sessionsRes.data || [];
 
       const visitedStores = new Set(visits.map((v: any) => v.store_id));
       const visitedByRoute: Record<string, number> = {};
@@ -125,14 +126,14 @@ export default function RouteEfficiencyReport() {
   }));
 
   return (
-    <ReportContainer title="Route Efficiency" loading={isLoading}>
+    <ReportContainer title="Route Efficiency" isLoading={isLoading}>
       <div className="space-y-6">
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
           <ReportKPICard label="Routes Tracked" value={routeData.length} icon={Route} />
           <ReportKPICard label="Stores in Routes" value={totals.stores} icon={MapPin} />
-          <ReportKPICard label="Avg Visit Rate" value={`${overallVisitPct}%`} icon={CheckCircle2} iconClass="text-green-600" />
+          <ReportKPICard label="Avg Visit Rate" value={`${overallVisitPct}%`} icon={CheckCircle2} />
           <ReportKPICard label="Route Sales" value={fmt(totals.sales)} icon={ShoppingCart} />
-          <ReportKPICard label="Collection Rate" value={`${overallCollRate}%`} icon={Banknote} iconClass="text-blue-600" />
+          <ReportKPICard label="Collection Rate" value={`${overallCollRate}%`} icon={Banknote} />
         </div>
 
         <div className="grid lg:grid-cols-2 gap-6">

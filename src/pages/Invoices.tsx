@@ -38,7 +38,7 @@ const Invoices = () => {
     document.title = 'Invoices';
   }, []);
 
-  const { data: invoices = [], isLoading } = useQuery({
+  const { data: invoices = [] as any[], isLoading } = useQuery({
     queryKey: ["invoices", currentWarehouse?.id],
     queryFn: async () => {
       let query = supabase

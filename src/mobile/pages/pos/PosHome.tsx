@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, ShoppingCart, TrendingUp, ArrowRightLeft, ClipboardList, Store, Banknote, Smartphone, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Loader2, ShoppingCart, TrendingUp, ArrowRightLeft, ClipboardList, Store, Banknote, Smartphone, ArrowDownToLine, ArrowUpFromLine, Factory, Package, Users } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -8,11 +9,13 @@ import { useOperatorWarehouse } from "@/mobile/hooks/useOperatorWarehouse";
 type Props = {
   onOpenRecord: () => void;
   onOpenHistory: () => void;
+  onOpenInventory: () => void;
 };
 
-export function PosHome({ onOpenRecord, onOpenHistory }: Props) {
+export function PosHome({ onOpenRecord, onOpenHistory, onOpenInventory }: Props) {
   const { user, profile } = useAuth();
-  const { warehouse, posStore, isLoading: warehouseLoading } = useOperatorWarehouse(user?.id);
+  const navigate = useNavigate();
+  const { warehouse, posStore, isLoading: warehouseLoading } = useOperatorWarehouse(user?.id) as any;
 
   // Today's sales stats for the POS store
   const { data: salesStats, isLoading: salesLoading } = useQuery({
@@ -25,7 +28,7 @@ export function PosHome({ onOpenRecord, onOpenHistory }: Props) {
         .select("total_amount, cash_amount, upi_amount")
         .eq("store_id", posStore!.id)
         .gte("created_at", `${today}T00:00:00`);
-      const sales = data || [];
+      const sales: any[] = data || [];
       return {
         total: sales.reduce((s, r) => s + Number(r.total_amount || 0), 0),
         cash: sales.reduce((s, r) => s + Number(r.cash_amount || 0), 0),
@@ -35,13 +38,14 @@ export function PosHome({ onOpenRecord, onOpenHistory }: Props) {
     },
     enabled: !!posStore,
     refetchInterval: 60_000,
+    staleTime: 60_000,
   });
 
   // Orders for the warehouse's stores
   const { data: ordersData, isLoading: ordersLoading } = useQuery({
     queryKey: ["mobile-pos-orders", warehouse?.id],
     queryFn: async () => {
-      if (!warehouse) return { pending: [], recent: [] };
+      if (!warehouse) return { pending: [] as any[], recent: [] as any[] };
 
       // Get all stores linked to this warehouse
       const { data: stores } = await supabase
@@ -50,7 +54,7 @@ export function PosHome({ onOpenRecord, onOpenHistory }: Props) {
         .eq("warehouse_id", warehouse!.id);
 
       const storeIds = (stores || []).map(s => s.id);
-      if (storeIds.length === 0) return { pending: [], recent: [] };
+      if (storeIds.length === 0) return { pending: [] as any[], recent: [] as any[] };
 
       const today = new Date().toISOString().split("T")[0];
 
@@ -78,6 +82,7 @@ export function PosHome({ onOpenRecord, onOpenHistory }: Props) {
     },
     enabled: !!warehouse,
     refetchInterval: 60_000,
+    staleTime: 60_000,
   });
 
   // Stock movements for the warehouse
@@ -95,6 +100,85 @@ export function PosHome({ onOpenRecord, onOpenHistory }: Props) {
     },
     enabled: !!warehouse,
     refetchInterval: 60_000,
+    staleTime: 60_000,
+  });
+
+  // Production runs today
+  const { data: productionRuns = [] } = useQuery({
+    queryKey: ["mobile-pos-production", warehouse?.id],
+    queryFn: async () => {
+      if (!warehouse) return [];
+      const today = new Date().toISOString().split("T")[0];
+      try {
+        const { data } = await supabase
+          .from("production_runs")
+          .select("*, products(name)")
+          .eq("warehouse_id", warehouse!.id)
+          .gte("created_at", `${today}T00:00:00`)
+          .order("created_at", { ascending: false })
+          .limit(5);
+        return data || [];
+      } catch {
+        return [];
+      }
+    },
+    enabled: !!warehouse,
+    refetchInterval: 60_000,
+    staleTime: 60_000,
+  });
+
+  // Worker attendance today
+  const { data: attendanceData } = useQuery({
+    queryKey: ["mobile-pos-attendance", warehouse?.id],
+    queryFn: async () => {
+      if (!warehouse) return null;
+      const today = new Date().toISOString().split("T")[0];
+      try {
+        const { data } = await supabase
+          .from("attendance_entries")
+          .select("id, status")
+          .eq("warehouse_id", warehouse!.id)
+          .eq("date", today);
+        const entries = data || [];
+        return {
+          present: entries.filter((e: any) => e.status === "present").length,
+          absent: entries.filter((e: any) => e.status === "absent").length,
+          total: entries.length,
+        };
+      } catch {
+        return null;
+      }
+    },
+    enabled: !!warehouse,
+    refetchInterval: 120_000,
+    staleTime: 120_000,
+  });
+
+  // Pending invoices for this warehouse
+  const { data: pendingInvoices = [] } = useQuery({
+    queryKey: ["mobile-pos-invoices", warehouse?.id],
+    queryFn: async () => {
+      if (!warehouse) return [];
+      try {
+        const { data: stores } = await supabase
+          .from("stores")
+          .select("id")
+          .eq("warehouse_id", warehouse!.id);
+        const storeIds = (stores || []).map((s: any) => s.id);
+        if (storeIds.length === 0) return [];
+        const { data } = await supabase
+          .from("invoices")
+          .select("id")
+          .in("store_id", storeIds)
+          .in("status", ["draft", "pending"]);
+        return data || [];
+      } catch {
+        return [];
+      }
+    },
+    enabled: !!warehouse,
+    refetchInterval: 120_000,
+    staleTime: 120_000,
   });
 
   const greeting = () => {
@@ -146,31 +230,28 @@ export function PosHome({ onOpenRecord, onOpenHistory }: Props) {
           </div>
         )}
 
-        {/* Today's Sales */}
-        <div className="rounded-2xl bg-white dark:bg-slate-800 shadow-xl border border-slate-100 dark:border-slate-700 p-4">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Today's POS Sales</p>
-            <div className="flex items-center gap-1.5 bg-violet-50 dark:bg-violet-900/40 px-2 py-1 rounded-full">
-              <ShoppingCart className="h-3 w-3 text-violet-500" />
-              <span className="text-[11px] font-semibold text-violet-600 dark:text-violet-400">
-                {salesLoading ? "…" : `${salesStats?.count ?? 0} sales`}
-              </span>
-            </div>
-          </div>
-          <p className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
-            {salesLoading ? <Loader2 className="h-6 w-6 animate-spin text-violet-500" /> : `₹${(salesStats?.total ?? 0).toLocaleString("en-IN")}`}
-          </p>
-          <div className="flex gap-4 mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
-            <div className="flex items-center gap-1.5">
-              <div className="h-2 w-2 rounded-full bg-emerald-400" />
-              <span className="text-xs text-slate-500 dark:text-slate-400">Cash <strong className="text-slate-700 dark:text-slate-200">₹{(salesStats?.cash ?? 0).toLocaleString("en-IN")}</strong></span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="h-2 w-2 rounded-full bg-violet-400" />
-              <span className="text-xs text-slate-500 dark:text-slate-400">UPI <strong className="text-slate-700 dark:text-slate-200">₹{(salesStats?.upi ?? 0).toLocaleString("en-IN")}</strong></span>
-            </div>
-          </div>
+        {/* Core Ops Stats */}
+        <div className="grid grid-cols-3 gap-2">
+          <MiniStat icon={ShoppingCart} label="Sales" value={salesLoading ? "..." : `₹${(salesStats?.total ?? 0).toLocaleString("en-IN")}`} subValue={`${salesStats?.count ?? 0} txns`} color="from-violet-500 to-purple-600" />
+          <MiniStat icon={ArrowRightLeft} label="Movements" value={String(stockMovements?.length ?? 0)} subValue="today" color="from-emerald-500 to-green-600" />
+          <MiniStat icon={ClipboardList} label="Pending Orders" value={String(ordersData?.pending.length ?? 0)} color="from-amber-500 to-orange-600" />
+          <MiniStat icon={Factory} label="Production" value={String(productionRuns.length)} subValue="runs today" color="from-blue-500 to-sky-600" />
+          <MiniStat icon={Banknote} label="Invoices" value={String(pendingInvoices.length)} subValue="pending" color="from-rose-500 to-pink-600" />
+          <MiniStat icon={Users} label="Workers" value={attendanceData ? String(attendanceData.present) : "—"} subValue={attendanceData ? `${attendanceData.absent} absent` : undefined} color="from-teal-500 to-cyan-600" />
         </div>
+
+        {salesStats && salesStats.total > 0 && (
+          <div className="rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-3 flex items-center gap-4">
+            <div className="flex items-center gap-1.5">
+              <div className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
+              <span className="text-xs text-slate-500 dark:text-slate-400">Cash <strong className="text-slate-800 dark:text-white">₹{(salesStats?.cash ?? 0).toLocaleString("en-IN")}</strong></span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="h-2.5 w-2.5 rounded-full bg-violet-400" />
+              <span className="text-xs text-slate-500 dark:text-slate-400">UPI <strong className="text-slate-800 dark:text-white">₹{(salesStats?.upi ?? 0).toLocaleString("en-IN")}</strong></span>
+            </div>
+          </div>
+        )}
 
         {/* Quick Actions */}
         {posStore && (
@@ -180,16 +261,34 @@ export function PosHome({ onOpenRecord, onOpenHistory }: Props) {
               className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 shadow-lg active:scale-95 transition-all"
             >
               <ShoppingCart className="h-6 w-6 text-white" />
-              <span className="text-[11px] font-bold text-white">Record Sale</span>
+              <span className="text-xs font-bold text-white">Record Sale</span>
             </button>
             <button
               onClick={() => onOpenHistory()}
-              className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm active:scale-95 transition-all"
+              className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm active:scale-95 transition-all"
             >
               <div className="h-8 w-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
                 <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
               </div>
-              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200">View History</span>
+              <span className="text-xs font-bold text-slate-800 dark:text-white">View History</span>
+            </button>
+            <button
+              onClick={() => navigate("/production")}
+              className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm active:scale-95 transition-all"
+            >
+              <div className="h-8 w-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center">
+                <Factory className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+              </div>
+              <span className="text-xs font-bold text-slate-800 dark:text-white">Production</span>
+            </button>
+            <button
+              onClick={() => onOpenInventory()}
+              className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm active:scale-95 transition-all"
+            >
+              <div className="h-8 w-8 rounded-lg bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center">
+                <Package className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              </div>
+              <span className="text-xs font-bold text-slate-800 dark:text-white">Inventory</span>
             </button>
           </div>
         )}
@@ -209,8 +308,34 @@ export function PosHome({ onOpenRecord, onOpenHistory }: Props) {
                     <p className="text-xs text-slate-400">₹{Number(order.total_amount || 0).toLocaleString("en-IN")}</p>
                   </div>
                   {order.display_id && (
-                    <span className="text-[10px] font-mono text-slate-400">{order.display_id}</span>
+                    <span className="text-xs font-mono text-slate-400">{order.display_id}</span>
                   )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Today's Production */}
+        {productionRuns.length > 0 && (
+          <div>
+            <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2.5 flex items-center gap-1.5">
+              <Factory className="h-3.5 w-3.5" />
+              Today's Production
+            </p>
+            <div className="space-y-1.5">
+              {productionRuns.slice(0, 3).map((run: any) => (
+                <div key={run.id} className="rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-3 flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-lg bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center shrink-0">
+                    <Factory className="h-4 w-4 text-blue-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-slate-800 dark:text-white truncate">{run.products?.name ?? "Product"}</p>
+                    <p className="text-xs text-slate-400">Qty: {run.quantity ?? run.quantity_produced ?? 0}</p>
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    {new Date(run.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+                  </p>
                 </div>
               ))}
             </div>
@@ -238,16 +363,16 @@ export function PosHome({ onOpenRecord, onOpenHistory }: Props) {
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 truncate">
+                      <p className="text-xs font-semibold text-slate-800 dark:text-white truncate">
                         {mov.products?.name ?? "Product"}
                       </p>
-                      <p className="text-[10px] text-slate-400 truncate">{mov.remarks || (isIncoming ? "Stock received" : "Stock dispatched")}</p>
+                      <p className="text-xs text-slate-400 truncate">{mov.remarks || (isIncoming ? "Stock received" : "Stock dispatched")}</p>
                     </div>
                     <div className="text-right shrink-0">
                       <p className={cn("text-xs font-bold", isIncoming ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400")}>
                         {isIncoming ? "+" : "-"}{mov.quantity}
                       </p>
-                      <p className="text-[9px] text-slate-400">
+                      <p className="text-xs text-slate-400">
                         {new Date(mov.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
                       </p>
                     </div>
@@ -272,11 +397,11 @@ export function PosHome({ onOpenRecord, onOpenHistory }: Props) {
                     <ClipboardList className={cn("h-4 w-4", order.status === "completed" || order.status === "delivered" ? "text-emerald-500" : "text-blue-500")} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 truncate">{order.stores?.name ?? "Unknown"}</p>
-                    <p className="text-[10px] text-slate-400">₹{Number(order.total_amount || 0).toLocaleString("en-IN")}</p>
+                    <p className="text-xs font-semibold text-slate-800 dark:text-white truncate">{order.stores?.name ?? "Unknown"}</p>
+                    <p className="text-xs text-slate-400">₹{Number(order.total_amount || 0).toLocaleString("en-IN")}</p>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", order.status === "completed" || order.status === "delivered" ? "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400" : "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400")}>
+                    <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full", order.status === "completed" || order.status === "delivered" ? "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400" : "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400")}>
                       {order.status}
                     </span>
                   </div>
@@ -286,6 +411,21 @@ export function PosHome({ onOpenRecord, onOpenHistory }: Props) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function MiniStat({ icon: Icon, label, value, subValue, color }: { icon: React.ElementType; label: string; value: string; subValue?: string; color: string }) {
+  return (
+    <div className="rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-3 flex flex-col gap-1.5">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wide leading-none">{label}</p>
+        <div className={cn("h-7 w-7 rounded-lg bg-gradient-to-br flex items-center justify-center shrink-0", color)}>
+          <Icon className="h-3.5 w-3.5 text-white" />
+        </div>
+      </div>
+      <p className="text-sm font-bold text-slate-800 dark:text-white leading-tight">{value}</p>
+      {subValue && <p className="text-xs text-slate-400 mt-0.5">{subValue}</p>}
     </div>
   );
 }

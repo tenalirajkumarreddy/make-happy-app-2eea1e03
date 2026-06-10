@@ -63,11 +63,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 
 const COLORS = [
-  '#3b82f6', '#10b981', '#f59e0b', '#ef4444', 
-  '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16',
+  'hsl(var(--primary))', 'hsl(var(--success))', 'hsl(var(--warning))', 'hsl(var(--destructive))',
+  '#8b5cf6', '#ec4899', 'hsl(var(--info))', '#84cc16',
   '#f97316', '#14b8a6', '#6366f1', '#f43f5e'
 ];
 
@@ -163,7 +163,7 @@ export default function CostInsights() {
       
       // Calculate costs
       const summary = products?.map(product => {
-        const productBoms = boms?.filter(b => b.finished_product_id === product.id) || [];
+        const productBoms: any[] = boms?.filter(b => b.finished_product_id === product.id) || [];
         const bomCost = productBoms.reduce((sum, b) => {
           const raw = rawMaterialMap.get((b as any).raw_material_id);
           const cost = (b.quantity || 0) * (raw?.unit_cost || 0);
@@ -190,14 +190,14 @@ export default function CostInsights() {
     // WAC metrics
     const wacChanges = wacHistory?.length || 0;
     const latestWac = wacHistory?.[wacHistory.length - 1];
-    const avgWacChange = wacHistory?.reduce((sum, h) => {
+    const avgWacChange = (wacHistory ?? []).reduce((sum: number, h: any) => {
       const change = Math.abs((h.new_cost || 0) - (h.old_cost || 0));
       return sum + change;
     }, 0) / (wacChanges || 1);
     
     // BOM metrics
     const totalBoms = bomSummary?.length || 0;
-    const avgBomCost = bomSummary?.reduce((sum, b) => sum + b.bomCost, 0) / (totalBoms || 1);
+    const avgBomCost = (bomSummary ?? []).reduce((sum: number, b: any) => sum + b.bomCost, 0) / (totalBoms || 1);
     
     // Material price variance
     const priceVariance = rawMaterials?.reduce((sum, m) => {
@@ -341,8 +341,8 @@ export default function CostInsights() {
                     <p className="text-sm text-muted-foreground">WAC Adjustments</p>
                     <p className="text-2xl font-bold">{metrics.wacChanges}</p>
                   </div>
-                  <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                    <TrendingUp className="h-5 w-5 text-blue-600" />
+                  <div className="h-10 w-10 rounded-full bg-info/10 flex items-center justify-center">
+                    <TrendingUp className="h-5 w-5 text-info" />
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
@@ -359,25 +359,25 @@ export default function CostInsights() {
                     <div className="flex items-center gap-2">
                       <p className={cn(
                         "text-2xl font-bold",
-                        metrics.latestWacMove >= 0 ? "text-green-600" : "text-red-600"
+                        metrics.latestWacMove >= 0 ? "text-success" : "text-destructive"
                       )}>
                         {metrics.latestWacMove >= 0 ? "+" : ""}
-                        {formatCurrency($1)}
+                        {formatCurrency(metrics.latestWacMove)}
                       </p>
                       {metrics.latestWacMove >= 0 ? (
-                        <ArrowUpRight className="h-4 w-4 text-green-600" />
+                        <ArrowUpRight className="h-4 w-4 text-success" />
                       ) : (
-                        <ArrowDownRight className="h-4 w-4 text-red-600" />
+                        <ArrowDownRight className="h-4 w-4 text-destructive" />
                       )}
                     </div>
                   </div>
                   <div className={cn(
                     "h-10 w-10 rounded-full flex items-center justify-center",
-                    metrics.latestWacMove >= 0 ? "bg-green-100" : "bg-red-100"
+                    metrics.latestWacMove >= 0 ? "bg-success/10" : "bg-destructive/10"
                   )}>
                     <IndianRupee className={cn(
                       "h-5 w-5",
-                      metrics.latestWacMove >= 0 ? "text-green-600" : "text-red-600"
+                      metrics.latestWacMove >= 0 ? "text-success" : "text-destructive"
                     )} />
                   </div>
                 </div>
@@ -394,12 +394,12 @@ export default function CostInsights() {
                     <p className="text-sm text-muted-foreground">Active BOMs</p>
                     <p className="text-2xl font-bold">{metrics.totalBoms}</p>
                   </div>
-                  <div className="h-10 w-10 rounded-full bg-purple-100 flex items-center justify-center">
-                    <Package className="h-5 w-5 text-purple-600" />
+                  <div className="h-10 w-10 rounded-full bg-accent/10 flex items-center justify-center">
+                    <Package className="h-5 w-5 text-accent-foreground" />
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
-                  Avg cost: {formatCurrency($1)}
+                   Avg cost: {formatCurrency(metrics.avgBomCost)}
                 </p>
               </CardContent>
             </Card>
@@ -411,8 +411,8 @@ export default function CostInsights() {
                     <p className="text-sm text-muted-foreground">Materials Tracked</p>
                     <p className="text-2xl font-bold">{metrics.materialsTracked}</p>
                   </div>
-                  <div className="h-10 w-10 rounded-full bg-amber-100 flex items-center justify-center">
-                    <Factory className="h-5 w-5 text-amber-600" />
+                  <div className="h-10 w-10 rounded-full bg-warning/10 flex items-center justify-center">
+                    <Factory className="h-5 w-5 text-warning" />
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
@@ -534,17 +534,17 @@ export default function CostInsights() {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                     <div className="space-y-2">
                       <p className="text-sm text-muted-foreground">Avg WAC Change</p>
-                      <p className="text-xl font-bold">{formatCurrency($1)}</p>
+                      <p className="text-xl font-bold">{formatCurrency(metrics.avgWacChange)}</p>
                       <Badge variant="outline" className="text-xs">Per adjustment</Badge>
                     </div>
                     <div className="space-y-2">
                       <p className="text-sm text-muted-foreground">Avg BOM Cost</p>
-                      <p className="text-xl font-bold">{formatCurrency($1)}</p>
+                      <p className="text-xl font-bold">{formatCurrency(metrics.avgBomCost)}</p>
                       <Badge variant="outline" className="text-xs">Per product</Badge>
                     </div>
                     <div className="space-y-2">
                       <p className="text-sm text-muted-foreground">Price Variance</p>
-                      <p className="text-xl font-bold">{formatCurrency($1)}</p>
+                      <p className="text-xl font-bold">{formatCurrency(metrics.priceVariance)}</p>
                       <Badge variant="outline" className="text-xs">Estimated ±5%</Badge>
                     </div>
                     <div className="space-y-2">
@@ -589,8 +589,8 @@ export default function CostInsights() {
                         <ComposedChart data={wacChartData}>
                           <defs>
                             <linearGradient id="wacGradient" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                              <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                              <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                              <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
                             </linearGradient>
                           </defs>
                           <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -613,9 +613,9 @@ export default function CostInsights() {
                                       </p>
                                       <p className={cn(
                                         "text-sm font-medium",
-                                        Number(data.change) >= 0 ? "text-green-600" : "text-red-600"
+                                        Number(data.change) >= 0 ? "text-success" : "text-destructive"
                                       )}>
-                                        Change: {Number(data.change) >= 0 ? "+" : ""}{formatCurrency($1)} ({data.variance}%)
+                                        Change: {Number(data.change) >= 0 ? "+" : ""}{formatCurrency(data.change)} ({data.variance}%)
                                       </p>
                                     </div>
                                   </div>
@@ -627,16 +627,16 @@ export default function CostInsights() {
                           <Area 
                             type="monotone" 
                             dataKey="cost" 
-                            stroke="#3b82f6" 
+                            stroke="hsl(var(--primary))" 
                             strokeWidth={2}
                             fill="url(#wacGradient)" 
                           />
                           <Line 
                             type="monotone" 
                             dataKey="cost" 
-                            stroke="#3b82f6" 
+                            stroke="hsl(var(--primary))" 
                             strokeWidth={2}
-                            dot={{ fill: "#3b82f6", r: 4 }}
+                            dot={{ fill: "hsl(var(--primary))", r: 4 }}
                             activeDot={{ r: 6 }}
                           />
                         </ComposedChart>
@@ -683,14 +683,14 @@ export default function CostInsights() {
                               {h.raw_materials?.name}
                             </TableCell>
                             <TableCell className="text-right">
-                              {formatCurrency($1)}
+                              {formatCurrency(h.old_cost)}
                             </TableCell>
                             <TableCell className="text-right font-semibold">
-                              {formatCurrency($1)}
+                              {formatCurrency(h.new_cost)}
                             </TableCell>
                             <TableCell className={cn(
                               "text-right font-medium",
-                              isIncrease ? "text-green-600" : "text-red-600"
+                              isIncrease ? "text-success" : "text-destructive"
                             )}>
                               <div className="flex items-center justify-end gap-1">
                                 {isIncrease ? (
@@ -748,9 +748,9 @@ export default function CostInsights() {
                             contentStyle={{ fontSize: 12 }}
                           />
                           <Legend />
-                          <Bar dataKey="bomCost" name="BOM Cost" stackId="a" fill="#3b82f6" />
-                          <Bar dataKey="margin" name="Margin" stackId="a" fill="#10b981" />
-                          <ReferenceLine y={0} stroke="#000" />
+                          <Bar dataKey="bomCost" name="BOM Cost" stackId="a" fill="hsl(var(--primary))" />
+                          <Bar dataKey="margin" name="Margin" stackId="a" fill="hsl(var(--success))" />
+                          <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" />
                         </BarChart>
                       </ResponsiveContainer>
                     ) : (
@@ -783,19 +783,19 @@ export default function CostInsights() {
                           <TableRow key={product.id}>
                             <TableCell className="font-medium">{product.name}</TableCell>
                             <TableCell className="text-right">
-                              {formatCurrency($1)}
+                              {formatCurrency(product.bomCost)}
                             </TableCell>
                             <TableCell className="text-right">
                               <Badge variant="secondary">{product.materialCount}</Badge>
                             </TableCell>
                             <TableCell className="text-right">
-                              {formatCurrency($1)}
+                              {formatCurrency(product.sellingPrice)}
                             </TableCell>
                             <TableCell className={cn(
                               "text-right font-semibold",
-                              isProfitable ? "text-green-600" : "text-red-600"
+                              isProfitable ? "text-success" : "text-destructive"
                             )}>
-                              {isProfitable ? "+" : ""}{formatCurrency($1)}
+                              {isProfitable ? "+" : ""}{formatCurrency(margin)}
                             </TableCell>
                             <TableCell className="text-right">
                               <Badge 
@@ -806,12 +806,12 @@ export default function CostInsights() {
                             </TableCell>
                             <TableCell>
                               {isProfitable ? (
-                                <div className="flex items-center gap-1 text-green-600">
+                                <div className="flex items-center gap-1 text-success">
                                   <CheckCircle2 className="h-4 w-4" />
                                   <span className="text-sm">Profitable</span>
                                 </div>
                               ) : (
-                                <div className="flex items-center gap-1 text-red-600">
+                                <div className="flex items-center gap-1 text-destructive">
                                   <AlertTriangle className="h-4 w-4" />
                                   <span className="text-sm">Loss</span>
                                 </div>
@@ -863,7 +863,7 @@ export default function CostInsights() {
                             contentStyle={{ fontSize: 12 }}
                           />
                           <Legend />
-                          <Bar dataKey="value" name="Inventory Value" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="value" name="Inventory Value" fill="hsl(var(--chart-4))" radius={[4, 4, 0, 0]} />
                         </BarChart>
                       </ResponsiveContainer>
                     ) : (
@@ -895,7 +895,7 @@ export default function CostInsights() {
                             <TableCell className="font-medium">{m.name}</TableCell>
                             <TableCell>{m.unit}</TableCell>
                             <TableCell className="text-right">
-                              {formatCurrency($1)}
+                              {formatCurrency(m.unit_cost)}
                             </TableCell>
                             <TableCell className="text-right">
                               {(m.current_stock || 0).toLocaleString('en-IN')}

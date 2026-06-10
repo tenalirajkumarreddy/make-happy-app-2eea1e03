@@ -29,7 +29,7 @@ interface CustomerData {
   payment_ratio: number;
 }
 
-const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#84cc16"];
+const COLORS = ["hsl(217, 91%, 50%)", "hsl(142, 72%, 42%)", "hsl(38, 92%, 50%)", "hsl(0, 72%, 51%)", "hsl(280, 65%, 60%)", "hsl(330, 70%, 50%)", "hsl(190, 80%, 45%)", "hsl(84, 80%, 44%)"];
 
 export default function CustomerReport() {
   const [dateRange, setDateRange] = useState<DateRange>({
@@ -71,7 +71,7 @@ export default function CustomerReport() {
       const { data } = await supabase
         .from("transactions")
         .select("id, customer_id, amount, created_at")
-        .eq("type", "payment")
+        .eq("type" as any, "payment")
         .gte("created_at", format(dateRange.from, "yyyy-MM-dd"))
         .lte("created_at", format(dateRange.to, "yyyy-MM-dd") + "T23:59:59");
       return data || [];

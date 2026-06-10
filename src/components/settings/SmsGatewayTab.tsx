@@ -64,7 +64,7 @@ export const SmsGatewayTab = () => {
                     level="H"
                     includeMargin={true}
                   />
-                  <p className="text-[10px] text-muted-foreground font-mono break-all text-center">
+                  <p className="text-2xs text-muted-foreground font-mono break-all text-center">
                     {base64Payload.substring(0, 30)}...
                   </p>
                   <div className="flex gap-2">

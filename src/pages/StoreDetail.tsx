@@ -261,6 +261,15 @@ const StoreDetail = () => {
     enabled: !!id,
   });
 
+  const { data: paymentReturns } = useQuery({
+    queryKey: ["store-payment-returns", id],
+    queryFn: async () => {
+      const { data } = await supabase.from("payment_returns").select("*").eq("store_id", id!).order("created_at", { ascending: false });
+      return data || [];
+    },
+    enabled: !!id,
+  });
+
   const { data: qrCodes } = useQuery({
     queryKey: ["store-qr-codes", id],
     queryFn: async () => {
@@ -290,7 +299,7 @@ const StoreDetail = () => {
   };
 
 const handleDeleteQr = async (qrId: string) => {
-  const { error } = await supabase.from("store_qr_codes").update({ deleted_at: new Date().toISOString() }).eq("id", qrId);
+  const { error } = await supabase.from("store_qr_codes").update({ deleted_at: new Date().toISOString() } as any).eq("id", qrId);
   if (error) { toast.error(error.message); return; }
     toast.success("QR code removed");
     qc.invalidateQueries({ queryKey: ["store-qr-codes", id] });
@@ -366,7 +375,7 @@ const handleDeleteQr = async (qrId: string) => {
         state: form.state || null,
         pincode: form.pincode || null,
         address: address || null,
-        store_type_id: form.store_type_id || null,
+        store_type_id: form.store_type_id || undefined,
         route_id: form.route_id || null,
         photo_url: photoUrl || null,
       })
@@ -434,12 +443,12 @@ const handleDeleteQr = async (qrId: string) => {
   const renderCompactCard = (type: "sale" | "txn" | "order" | "visit") => (row: any) => {
     const p = type !== "visit" ? getRecorder(row.recorded_by || row.created_by) : null;
     return (
-      <div className="rounded-xl border bg-card px-3 py-2.5 shadow-sm">
+      <div className={`rounded-xl border bg-card px-3 py-2.5 shadow-sm ${type === "sale" && row.is_fully_returned ? "opacity-75 bg-slate-50 dark:bg-slate-900/40 border-dashed border-red-200 dark:border-red-900/40" : ""}`}>
         <div className="flex items-center justify-between">
-          <span className="font-mono text-[11px] text-muted-foreground">
+          <span className="font-mono text-3xs text-muted-foreground">
             {type === "visit" ? ((row.route_sessions as any)?.routes?.name || "Visit") : row.display_id}
           </span>
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-3xs text-muted-foreground">
             {new Date(type === "visit" ? row.visited_at : row.created_at).toLocaleDateString("en-IN")}
           </span>
         </div>
@@ -447,18 +456,24 @@ const handleDeleteQr = async (qrId: string) => {
         {type === "sale" && (
           <>
             <div className="flex items-center justify-between mt-1.5">
-              <span className="text-sm font-bold text-foreground">₹{Number(row.total_amount).toLocaleString()}</span>
-              <span className={`text-xs font-medium ${Number(row.outstanding_amount) > 0 ? "text-destructive" : "text-muted-foreground"}`}>
-                Due: ₹{Number(row.outstanding_amount).toLocaleString()}
+              <span className={`text-sm font-bold ${row.is_fully_returned ? "line-through text-muted-foreground" : "text-foreground"}`}>
+                ₹{Number(row.total_amount).toLocaleString()}
               </span>
+              {row.is_fully_returned ? (
+                <Badge variant="outline" className="text-2xs border-amber-300 text-amber-600 bg-amber-50 rounded-md">Returned</Badge>
+              ) : (
+                <span className={`text-xs font-medium ${Number(row.outstanding_amount) > 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                  Due: ₹{Number(row.outstanding_amount).toLocaleString()}
+                </span>
+              )}
             </div>
-            <div className="flex items-center justify-between mt-1.5 text-[11px] text-muted-foreground">
+            <div className="flex items-center justify-between mt-1.5 text-3xs text-muted-foreground">
               <span>Cash ₹{Number(row.cash_amount).toLocaleString()} · UPI ₹{Number(row.upi_amount).toLocaleString()}</span>
               {p && (
                 <div className="flex items-center gap-1">
                   <Avatar className="h-4 w-4">
                     <AvatarImage src={p?.avatar_url || undefined} />
-                    <AvatarFallback className="text-[8px] bg-primary/10 text-primary">{(p?.full_name || "?").charAt(0)}</AvatarFallback>
+                    <AvatarFallback className="text-5xs bg-primary/10 text-primary">{(p?.full_name || "?").charAt(0)}</AvatarFallback>
                   </Avatar>
                   <span>{p?.full_name || "—"}</span>
                 </div>
@@ -475,7 +490,7 @@ const handleDeleteQr = async (qrId: string) => {
                 Bal: ₹{Number(row.old_outstanding).toLocaleString()} → ₹{Number(row.new_outstanding).toLocaleString()}
               </span>
             </div>
-            <div className="flex items-center justify-between mt-1.5 text-[11px] text-muted-foreground">
+            <div className="flex items-center justify-between mt-1.5 text-3xs text-muted-foreground">
               <span>Cash ₹{Number(row.cash_amount).toLocaleString()} · UPI ₹{Number(row.upi_amount).toLocaleString()}</span>
               {row.notes && <span className="truncate max-w-[120px]">{row.notes}</span>}
             </div>
@@ -489,7 +504,7 @@ const handleDeleteQr = async (qrId: string) => {
               <span className="text-xs text-muted-foreground capitalize">{row.order_type} · {row.source}</span>
             </div>
             {row.requirement_note && (
-              <p className="text-[11px] text-muted-foreground mt-1.5 truncate">{row.requirement_note}</p>
+              <p className="text-3xs text-muted-foreground mt-1.5 truncate">{row.requirement_note}</p>
             )}
           </>
         )}
@@ -500,9 +515,9 @@ const handleDeleteQr = async (qrId: string) => {
               <span className="text-sm font-medium text-foreground">
                 {new Date(row.visited_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
               </span>
-              {row.lat && <span className="text-[11px] text-muted-foreground">{row.lat.toFixed(4)}, {row.lng?.toFixed(4)}</span>}
+              {row.lat && <span className="text-3xs text-muted-foreground">{row.lat.toFixed(4)}, {row.lng?.toFixed(4)}</span>}
             </div>
-            {row.notes && <p className="text-[11px] text-muted-foreground mt-1.5 truncate">{row.notes}</p>}
+            {row.notes && <p className="text-3xs text-muted-foreground mt-1.5 truncate">{row.notes}</p>}
           </>
         )}
       </div>
@@ -665,11 +680,11 @@ const handleDeleteQr = async (qrId: string) => {
               {/* Credit Limits — visible to all staff (from store_types) */}
               <div className="flex flex-wrap gap-4 pt-1 border-t border-border/50">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Credit (No KYC)</span>
+                  <span className="text-2xs text-muted-foreground uppercase tracking-wider">Credit (No KYC)</span>
                   <span className="text-sm font-semibold text-foreground">₹{Number((store as any).store_types?.credit_limit_no_kyc || 0).toLocaleString()}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Credit (KYC Done)</span>
+                  <span className="text-2xs text-muted-foreground uppercase tracking-wider">Credit (KYC Done)</span>
                   <span className="text-sm font-semibold text-success">₹{Number((store as any).store_types?.credit_limit_kyc || 0).toLocaleString()}</span>
                 </div>
                 {/* Customer KYC status */}
@@ -680,7 +695,7 @@ const handleDeleteQr = async (qrId: string) => {
                   return (
                     <div className="flex w-full sm:w-auto items-center gap-2 sm:ml-auto">
                       <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Customer KYC:</span>
+                      <span className="text-2xs text-muted-foreground uppercase tracking-wider">Customer KYC:</span>
                       <Badge
                         variant="outline"
                         className={
@@ -693,7 +708,7 @@ const handleDeleteQr = async (qrId: string) => {
                         {kycStatus.replace("_", " ")}
                       </Badge>
                       {canEdit && (kycStatus === "pending" || kycStatus === "rejected") && (
-                        <Button size="sm" variant="outline" className="h-6 text-[10px] px-2 rounded-full" onClick={() => setShowKycDialog(true)}>
+                        <Button size="sm" variant="outline" className="h-6 text-2xs px-2 rounded-full" onClick={() => setShowKycDialog(true)}>
                           Review KYC
                         </Button>
                       )}
@@ -733,6 +748,7 @@ const handleDeleteQr = async (qrId: string) => {
           <StoreLedger
             sales={sales || []}
             transactions={transactions || []}
+            paymentReturns={paymentReturns || []}
             balanceAdjustments={balanceAdjustments || []}
             openingBalance={Number(store.opening_balance)}
             storeCreatedAt={store.created_at}
@@ -756,11 +772,11 @@ const handleDeleteQr = async (qrId: string) => {
                   <div key={p.id} className="flex items-center justify-between rounded-lg border bg-card px-4 py-3">
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium truncate">{p.name}</p>
-                      <Badge variant="outline" className="text-[10px] mt-0.5">{p.sku}</Badge>
+                      <Badge variant="outline" className="text-2xs mt-0.5">{p.sku}</Badge>
                     </div>
                     <div className="text-right shrink-0 ml-4">
                       <p className="text-sm font-bold">₹{price.toLocaleString()}</p>
-                      <span className={`text-[10px] font-medium capitalize px-1.5 py-0.5 rounded-full ${
+                      <span className={`text-2xs font-medium capitalize px-1.5 py-0.5 rounded-full ${
                         label === "store" ? "bg-primary/10 text-primary" :
                         label === "type" ? "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400" :
                         "bg-muted text-muted-foreground"
@@ -794,7 +810,7 @@ const handleDeleteQr = async (qrId: string) => {
                     <div>
                       <p className="font-mono text-sm">{qr.upi_id}</p>
                       {qr.payee_name && <p className="text-xs text-muted-foreground mt-0.5">{qr.payee_name}</p>}
-                      <p className="text-[11px] text-muted-foreground mt-0.5">Added {new Date(qr.created_at).toLocaleDateString("en-IN")}</p>
+                      <p className="text-3xs text-muted-foreground mt-0.5">Added {new Date(qr.created_at).toLocaleDateString("en-IN")}</p>
                     </div>
                     {canEdit && (
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDeleteQr(qr.id)}>
@@ -900,7 +916,7 @@ const handleDeleteQr = async (qrId: string) => {
 function InfoItem({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0 rounded-lg border bg-muted/30 px-3 py-2.5">
-      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{label}</p>
+      <p className="text-2xs text-muted-foreground uppercase tracking-wider">{label}</p>
       <p className="text-sm font-medium text-foreground mt-0.5 break-words">{value}</p>
     </div>
   );

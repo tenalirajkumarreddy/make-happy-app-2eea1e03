@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Dialog,
@@ -9,25 +9,18 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, AlertCircle, Package, Minus, Plus } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Loader2, AlertCircle, Package } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { format } from "date-fns";
-
-interface Sale {
-  id: string;
-  display_id: string;
-  total_amount: number;
-  outstanding_amount: number;
-  store_id: string;
-  customer_id: string;
-  created_at: string;
-}
+import { logActivity } from "@/lib/activityLogger";
+import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
+import { useAuth } from "@/contexts/AuthContext";
+import { afterSaleReturned } from "@/lib/mutationHelpers";
 
 interface SaleItem {
   id: string;
@@ -43,14 +36,15 @@ interface SaleItem {
   };
 }
 
-interface ReturnItem {
-  sale_item_id: string;
-  product_id: string;
-  product_name: string;
-  quantity: number;
-  max_qty: number;
-  unit_price: number;
-  selected: boolean;
+interface Sale {
+  id: string;
+  display_id: string;
+  total_amount: number;
+  outstanding_amount: number;
+  store_id: string;
+  customer_id: string;
+  created_at: string;
+  sale_items?: SaleItem[];
 }
 
 interface SaleReturnDialogProps {
@@ -61,14 +55,12 @@ interface SaleReturnDialogProps {
 }
 
 const returnReasons = [
-  "Defective product",
-  "Wrong product delivered",
-  "Customer changed mind",
-  "Product not as described",
-  "Damaged in transit",
-  "Expired product",
-  "Delivered by mistake",
-  "Other",
+  "damaged",
+  "defective",
+  "wrong_item",
+  "not_needed",
+  "expired",
+  "other",
 ];
 
 export function SaleReturnDialog({
@@ -81,15 +73,13 @@ export function SaleReturnDialog({
   const [reason, setReason] = useState("");
   const [otherReason, setOtherReason] = useState("");
   const [notes, setNotes] = useState("");
-  const [returnItems, setReturnItems] = useState<ReturnItem[]>([]);
-  const [cashRefund, setCashRefund] = useState("");
-  const [upiRefund, setUpiRefund] = useState("");
+  const [isDamaged, setIsDamaged] = useState(false);
+  const { user: authUser } = useAuth();
 
-  // Fetch sale items when sale is selected
-  const { data: saleItems = [], isLoading: loadingItems } = useQuery({
+  const { data: fetchedItems = [] } = useQuery({
     queryKey: ["sale-items-for-return", sale?.id],
     queryFn: async () => {
-      if (!sale?.id) return [];
+      if (!sale?.id || sale?.sale_items?.length) return [];
       const { data, error } = await supabase
         .from("sale_items")
         .select("id, product_id, quantity, unit_price, total_price, products(name, sku, unit)")
@@ -97,103 +87,25 @@ export function SaleReturnDialog({
       if (error) throw error;
       return data || [];
     },
-    enabled: !!sale?.id && open,
+    enabled: !!sale?.id && open && !sale?.sale_items?.length,
   });
 
-  // Initialize return items when sale items load
-  useEffect(() => {
-    if (saleItems.length > 0 && returnItems.length === 0) {
-      const items: ReturnItem[] = saleItems.map((si: SaleItem) => ({
-        sale_item_id: si.id,
-        product_id: si.product_id,
-        product_name: si.products?.name || "Unknown Product",
-        quantity: 0,
-        max_qty: si.quantity,
-        unit_price: si.unit_price,
-        selected: false,
-      }));
-      setReturnItems(items);
-    }
-  }, [saleItems]);
+  const items = sale?.sale_items?.length ? sale.sale_items : fetchedItems;
 
-  // Reset form when dialog opens/closes
   useEffect(() => {
     if (!open) {
-      resetForm();
+      setReason("");
+      setOtherReason("");
+      setNotes("");
+      setIsDamaged(false);
     }
   }, [open]);
-
-  const resetForm = () => {
-    setReason("");
-    setOtherReason("");
-    setNotes("");
-    setReturnItems([]);
-    setCashRefund("");
-    setUpiRefund("");
-  };
-
-  const toggleItem = (index: number) => {
-    setReturnItems((prev) => {
-      const updated = [...prev];
-      updated[index].selected = !updated[index].selected;
-      // If selecting, set default quantity to max
-      if (updated[index].selected && updated[index].quantity === 0) {
-        updated[index].quantity = updated[index].max_qty;
-      }
-      return updated;
-    });
-  };
-
-  const updateQuantity = (index: number, delta: number) => {
-    setReturnItems((prev) => {
-      const updated = [...prev];
-      const newQty = updated[index].quantity + delta;
-      updated[index].quantity = Math.max(0, Math.min(newQty, updated[index].max_qty));
-      // Auto-select if quantity > 0
-      if (updated[index].quantity > 0) {
-        updated[index].selected = true;
-      }
-      return updated;
-    });
-  };
-
-  const setQuantity = (index: number, qty: number) => {
-    setReturnItems((prev) => {
-      const updated = [...prev];
-      updated[index].quantity = Math.max(0, Math.min(qty, updated[index].max_qty));
-      if (updated[index].quantity > 0) {
-        updated[index].selected = true;
-      }
-      return updated;
-    });
-  };
-
-  const calculateReturnTotal = () => {
-    return returnItems
-      .filter((item) => item.selected && item.quantity > 0)
-      .reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
-  };
-
-  const selectedItems = returnItems.filter((item) => item.selected && item.quantity > 0);
-  const returnTotal = calculateReturnTotal();
-  const cashRefundAmount = parseFloat(cashRefund) || 0;
-  const upiRefundAmount = parseFloat(upiRefund) || 0;
-  const totalRefund = cashRefundAmount + upiRefundAmount;
 
   const createReturn = useMutation({
     mutationFn: async () => {
       if (!sale) throw new Error("No sale selected");
-
-      const itemsToReturn = selectedItems.map((item) => ({
-        sale_item_id: item.sale_item_id,
-        product_id: item.product_id,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-        total_price: item.quantity * item.unit_price,
-      }));
-
-      if (itemsToReturn.length === 0) {
-        throw new Error("Please select at least one item to return");
+      if (!items || items.length === 0) {
+        throw new Error("No items found for this sale");
       }
 
       const finalReason = reason === "Other" ? otherReason : reason;
@@ -201,267 +113,197 @@ export function SaleReturnDialog({
         throw new Error("Please provide a reason for the return");
       }
 
-      // Get sale details for store/customer
-      const { data: saleData } = await supabase
-        .from("sales")
-        .select("store_id, customer_id")
-        .eq("id", sale.id)
-        .single();
+      const payload = items.map((item: any) => ({
+        sale_item_id: item.id,
+        product_id: item.product_id,
+        return_qty: item.quantity,
+        damaged_qty: isDamaged ? item.quantity : 0,
+        unit_price: item.unit_price,
+      }));
 
-      // Generate display ID
-      const { data: displayId, error: displayError } = await supabase.rpc("generate_display_id", {
-        prefix: "SRET",
-        seq_name: "sale_return_display_seq",
+      const { data: result, error } = await (supabase as any).rpc("record_sale_return", {
+        p_sale_id: sale.id,
+        p_returned_by: authUser?.id,
+        p_reason: finalReason,
+        p_items: payload,
       });
-      if (displayError) throw displayError;
 
-      // Create sale return
-      const { data: newReturn, error: returnError } = await supabase
-        .from("sale_returns")
-        .insert({
-          display_id: displayId,
-          sale_id: sale.id,
-          store_id: saleData?.store_id,
-          customer_id: saleData?.customer_id,
-          total_amount: returnTotal,
-          cash_refund: cashRefundAmount,
-          upi_refund: upiRefundAmount,
-          reason: finalReason,
-          notes: notes || null,
-          status: "pending",
-          created_by: (await supabase.auth.getUser()).data.user?.id,
-        })
-        .select()
-        .single();
+      if (error) throw error;
 
-      if (returnError) throw returnError;
-
-      // Create return items
-      const { error: itemsError } = await supabase.from("sale_return_items").insert(
-        itemsToReturn.map((item) => ({
-          return_id: newReturn.id,
-          sale_item_id: item.sale_item_id,
-          product_id: item.product_id,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          total_price: item.total_price,
-        }))
-      );
-
-      if (itemsError) throw itemsError;
-
-      return newReturn;
+      // Save notes to the return record (RPC doesn't accept notes parameter)
+      if (notes.trim() && result?.[0]?.return_id) {
+        await supabase
+          .from("sale_returns")
+          .update({ notes: notes.trim() })
+          .eq("id", result[0].return_id);
+      }
+      return result;
     },
-    onSuccess: () => {
-      toast.success("Sale return created successfully");
-      resetForm();
+    onSuccess: (result: any) => {
+      const row = (result as any)?.[0];
+      const returnId = row?.return_id;
+      const displayId = row?.display_id;
+      toast.success(`Sale fully returned. New outstanding: ₹${(row?.new_outstanding ?? 0).toLocaleString()}`);
+
+      if (returnId && displayId && authUser?.id) {
+        const finalReason = reason === "Other" ? otherReason : reason;
+        logActivity(authUser.id, "Full sale return processed", "sale_return", displayId, returnId, { saleId: sale?.id, reason: finalReason });
+        
+        getAdminUserIds().then(async (ids) => {
+          const recipientIds = [...ids];
+
+          // Fetch customer's user_id if present
+          if (sale.customer_id) {
+            try {
+              const { data: custData } = await supabase
+                .from("customers")
+                .select("user_id")
+                .eq("id", sale.customer_id)
+                .maybeSingle();
+              if (custData?.user_id) {
+                recipientIds.push(custData.user_id);
+              }
+            } catch (err) {
+              console.error("Failed to fetch customer user_id for return notification", err);
+            }
+          }
+
+          const uniqueRecipients = Array.from(new Set(recipientIds.filter((id) => id !== authUser?.id)));
+          if (uniqueRecipients.length > 0) {
+            sendNotificationToMany(uniqueRecipients, {
+              title: "Sale Returned",
+              message: `Full return for sale #${displayId}${isDamaged ? " (Damaged Items)" : ""}`,
+              type: "payment",
+              entityType: "sale_return",
+              entityId: returnId,
+            });
+          }
+        });
+      }
+
       onOpenChange(false);
-      qc.invalidateQueries({ queryKey: ["sale-returns"] });
-      qc.invalidateQueries({ queryKey: ["sales"] });
+      afterSaleReturned(qc, { saleId: sale.id });
       onSuccess?.();
     },
     onError: (error: any) => {
-      toast.error(error.message || "Failed to create return");
+      toast.error(error.message || "Failed to process return");
     },
   });
 
-  const handleSubmit = () => {
-    if (selectedItems.length === 0) {
-      toast.error("Please select at least one item to return");
-      return;
-    }
-    if (!reason) {
-      toast.error("Please select a reason");
-      return;
-    }
-    if (reason === "Other" && !otherReason.trim()) {
-      toast.error("Please specify the reason");
-      return;
-    }
-    if (totalRefund > returnTotal) {
-      toast.error("Refund amount cannot exceed return total");
-      return;
-    }
-    createReturn.mutate();
-  };
-
   if (!sale) return null;
+
+  const returnTotal = items.reduce((sum: number, i: any) => sum + i.quantity * i.unit_price, 0);
+  const newOutstanding = Math.max(0, (sale.outstanding_amount ?? 0) - returnTotal);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Process Sale Return</DialogTitle>
+          <DialogTitle>Full Sale Return</DialogTitle>
           <DialogDescription>
             Sale: {sale.display_id} | Total: ₹{sale.total_amount.toLocaleString()} | Date: {format(new Date(sale.created_at), "dd MMM yyyy")}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6 py-4">
-          {/* Alert */}
+        <div className="space-y-4 py-2">
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              Select items to return. Outstanding will be reduced by up to ₹{sale.outstanding_amount.toLocaleString()}
+              All {items.length} item(s) will be fully returned. Stock will be restored and outstanding adjusted.
             </AlertDescription>
           </Alert>
 
-          {/* Items Selection */}
-          <div className="space-y-3">
-            <Label className="flex items-center gap-2">
+          {/* Items being returned */}
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2 text-sm font-semibold">
               <Package className="h-4 w-4" />
-              Select Items to Return
+              Items to Return ({items.length})
             </Label>
-            
-            {loadingItems ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : saleItems.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No items found for this sale.</p>
-            ) : (
-              <div className="space-y-2">
-                {returnItems.map((item, index) => (
-                  <div
-                    key={item.sale_item_id}
-                    className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
-                      item.selected ? "bg-primary/5 border-primary/30" : "bg-card"
-                    }`}
-                  >
-                    <Checkbox
-                      checked={item.selected}
-                      onCheckedChange={() => toggleItem(index)}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">{item.product_name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Max: {item.max_qty} | ₹{item.unit_price.toLocaleString()} each
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => updateQuantity(index, -1)}
-                        disabled={!item.selected}
-                      >
-                        <Minus className="h-3 w-3" />
-                      </Button>
-                      <Input
-                        type="number"
-                        min={0}
-                        max={item.max_qty}
-                        value={item.quantity}
-                        onChange={(e) => setQuantity(index, parseInt(e.target.value) || 0)}
-                        className="w-16 h-7 text-center text-sm"
-                        disabled={!item.selected}
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => updateQuantity(index, 1)}
-                        disabled={!item.selected || item.quantity >= item.max_qty}
-                      >
-                        <Plus className="h-3 w-3" />
-                      </Button>
-                    </div>
-                    <div className="w-20 text-right">
-                      <p className="font-medium text-sm">
-                        ₹{(item.quantity * item.unit_price).toLocaleString()}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Return Summary */}
-          {selectedItems.length > 0 && (
-            <div className="rounded-lg bg-muted p-4 space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Items to return:</span>
-                <span className="font-medium">{selectedItems.length}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Total quantity:</span>
-                <span className="font-medium">{selectedItems.reduce((sum, i) => sum + i.quantity, 0)}</span>
-              </div>
-              <div className="flex justify-between text-base font-semibold border-t pt-2">
-                <span>Return Total:</span>
-                <span>₹{returnTotal.toLocaleString()}</span>
-              </div>
-            </div>
-          )}
-
-          {/* Refund Details */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Cash Refund (Optional)</Label>
-              <Input
-                type="number"
-                min={0}
-                max={returnTotal}
-                value={cashRefund}
-                onChange={(e) => setCashRefund(e.target.value)}
-                placeholder="0"
-                disabled={selectedItems.length === 0}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>UPI Refund (Optional)</Label>
-              <Input
-                type="number"
-                min={0}
-                max={returnTotal}
-                value={upiRefund}
-                onChange={(e) => setUpiRefund(e.target.value)}
-                placeholder="0"
-                disabled={selectedItems.length === 0}
-              />
+            <div className="rounded-lg border divide-y">
+              {items.map((item) => (
+                <div key={item.id} className="flex items-center justify-between px-3 py-2">
+                  <span className="text-sm font-medium truncate flex-1">
+                    {item.products?.name || "Product"}
+                  </span>
+                  <span className="text-sm text-muted-foreground ml-2">
+                    ×{item.quantity} @ ₹{item.unit_price.toLocaleString()}
+                  </span>
+                  <span className="text-sm font-semibold ml-3 w-20 text-right">
+                    ₹{(item.quantity * item.unit_price).toLocaleString()}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
-          {totalRefund > 0 && (
-            <p className={`text-sm ${totalRefund > returnTotal ? "text-destructive" : "text-muted-foreground"}`}>
-              Total refund: ₹{totalRefund.toLocaleString()} 
-              {totalRefund > returnTotal && " (exceeds return amount)"}
-            </p>
-          )}
+
+          {/* Outstanding summary */}
+          <div className="rounded-lg bg-muted p-3 space-y-1.5">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Current outstanding:</span>
+              <span>₹{(sale.outstanding_amount ?? 0).toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Return adjustment:</span>
+              <span className="text-red-500">-₹{returnTotal.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between text-base font-bold border-t pt-1.5">
+              <span>New outstanding:</span>
+              <span>₹{newOutstanding.toLocaleString()}</span>
+            </div>
+          </div>
 
           {/* Reason */}
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Label>Return Reason *</Label>
-            <Select value={reason} onValueChange={setReason}>
+            <Select 
+              value={reason} 
+              onValueChange={(val) => {
+                setReason(val);
+                if (val === "damaged") {
+                  setIsDamaged(true);
+                }
+              }}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select reason" />
               </SelectTrigger>
               <SelectContent>
-                {returnReasons.map((r) => (
-                  <SelectItem key={r} value={r}>
-                    {r}
-                  </SelectItem>
-                ))}
+                <SelectItem value="damaged">Damaged Product</SelectItem>
+                <SelectItem value="defective">Defective/Quality Issue</SelectItem>
+                <SelectItem value="wrong_item">Wrong Item Delivered</SelectItem>
+                <SelectItem value="not_needed">Not Needed Anymore</SelectItem>
+                <SelectItem value="expired">Expired Product</SelectItem>
+                <SelectItem value="other">Other</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          {reason === "Other" && (
-            <div className="space-y-2">
+          <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm bg-muted/40">
+            <div className="space-y-0.5 max-w-[80%]">
+              <Label className="text-sm font-semibold">Mark returned items as damaged?</Label>
+              <p className="text-xs text-muted-foreground">
+                If checked, these items will go directly to wastage and will NOT be added back to inventory.
+              </p>
+            </div>
+            <Switch
+              checked={isDamaged}
+              onCheckedChange={setIsDamaged}
+            />
+          </div>
+
+          {reason === "other" && (
+            <div className="space-y-1.5">
               <Label>Specify Reason *</Label>
-              <Input
+              <input
                 value={otherReason}
                 onChange={(e) => setOtherReason(e.target.value)}
                 placeholder="Enter reason"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               />
             </div>
           )}
 
-          {/* Notes */}
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Label>Notes (Optional)</Label>
             <Textarea
               value={notes}
@@ -472,24 +314,13 @@ export function SaleReturnDialog({
           </div>
         </div>
 
-        <div className="flex justify-end gap-2">
-          <Button
-            variant="outline"
-            onClick={() => {
-              resetForm();
-              onOpenChange(false);
-            }}
-          >
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="outline" onClick={() => { setReason(""); setOtherReason(""); setNotes(""); onOpenChange(false); }}>
             Cancel
           </Button>
-          <Button 
-            onClick={handleSubmit} 
-            disabled={createReturn.isPending || selectedItems.length === 0}
-          >
-            {createReturn.isPending ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : null}
-            Create Return
+          <Button onClick={() => createReturn.mutate()} disabled={createReturn.isPending || !reason}>
+            {createReturn.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Confirm Full Return
           </Button>
         </div>
       </DialogContent>

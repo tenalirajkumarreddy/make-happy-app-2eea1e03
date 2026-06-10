@@ -66,7 +66,7 @@ export function useVendorBalance(options: UseVendorBalanceOptions = {}) {
         .order("name");
 
       if (error) throw error;
-      return (data || []) as Vendor[];
+      return (data || []) as unknown as Vendor[];
     },
     enabled,
   });
@@ -88,7 +88,7 @@ export function useVendorBalance(options: UseVendorBalanceOptions = {}) {
         .single();
 
       if (error) throw error;
-      return data as Vendor;
+      return data as unknown as Vendor;
     },
     enabled: enabled && !!vendorId,
   });
@@ -116,7 +116,7 @@ export function useVendorBalance(options: UseVendorBalanceOptions = {}) {
 
       const { data, error } = await query;
       if (error) throw error;
-      return (data || []) as VendorTransaction[];
+      return (data || []) as unknown as VendorTransaction[];
     },
     enabled,
   });
@@ -169,7 +169,7 @@ export function useVendorBalance(options: UseVendorBalanceOptions = {}) {
         p_invoice_date: invoiceDate,
         p_notes: notes,
         p_user_id: currentUserId,
-      });
+      }) as any;
 
       if (error) throw error;
       return data;
@@ -211,7 +211,7 @@ export function useVendorBalance(options: UseVendorBalanceOptions = {}) {
         p_reference_number: referenceNumber,
         p_notes: notes,
         p_user_id: currentUserId,
-      });
+      }) as any;
 
       if (error) throw error;
       return data;
@@ -236,7 +236,7 @@ export function useVendorBalance(options: UseVendorBalanceOptions = {}) {
       vendorId: string;
       data: Partial<Vendor>;
     }) => {
-      const { data: result, error } = await supabase
+      const { data: result, error } = await (supabase as any)
         .from("vendors")
         .update(data)
         .eq("id", vendorId)
@@ -281,7 +281,7 @@ export function useVendorsWithBalance() {
         .order("current_balance", { ascending: false });
 
       if (error) throw error;
-      return (data || []) as Vendor[];
+      return (data || []) as unknown as Vendor[];
     },
   });
 

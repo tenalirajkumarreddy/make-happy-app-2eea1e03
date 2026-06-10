@@ -188,7 +188,7 @@ export function Income() {
           warehouse_name: e.warehouse?.name,
         })),
         handovers: handovers || [],
-        sales: sales || [],
+        sales: (sales || []) as any[],
       };
     },
   });
@@ -202,7 +202,7 @@ export function Income() {
       const { data, error } = await supabase
         .from("staff_cash_accounts")
         .select("*")
-        .eq("user_id", user?.id)
+        .eq("user_id", user?.id as string)
         .eq("account_type", "prime_manager")
         .maybeSingle();
 
@@ -325,7 +325,7 @@ export function Income() {
     }
 
     try {
-      const { error } = await supabase.from("income_entries").insert({
+      const { error } = await (supabase as any).from("income_entries").insert({
         entry_type: "other_income",
         source_type: "direct",
         cash_amount: parseFloat(incomeAmount),
@@ -361,7 +361,7 @@ export function Income() {
     }
 
     try {
-      const { error } = await supabase.from("income_entries").insert({
+      const { error } = await (supabase as any).from("income_entries").insert({
         entry_type: "direct_payment",
         source_type: "direct",
         cash_amount: cash,

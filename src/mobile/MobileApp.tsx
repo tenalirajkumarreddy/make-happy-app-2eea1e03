@@ -4,7 +4,6 @@ import { Capacitor } from "@capacitor/core";
 import { matchPath, useLocation, useNavigate } from "react-router-dom";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { useQuery } from "@tanstack/react-query";
 import {
 Menu, LayoutDashboard, Package, Users, Store, Route, ShoppingCart,
 Receipt, ClipboardList, HandCoins, Map, FileText, BarChart3, History,
@@ -16,21 +15,21 @@ import { useAuth } from "@/contexts/AuthContext";
 import { isNativeApp } from "@/lib/capacitorUtils";
 import { logDebug } from "@/lib/logger";
 import { useRealtimeSync } from "@/hooks/useRealtimeSync";
-import { supabase } from "@/integrations/supabase/client";
 import { PermissionSetup } from "./components/PermissionSetup";
 import { MobileHeader } from "./components/MobileHeader";
-import { BottomNav, CUSTOMER_TABS, MARKETER_TABS, MobileTab, POS_TABS, AGENT_TABS, type MobileTabItem } from "./components/BottomNav";
+import { BottomNav, CUSTOMER_TABS, MobileTab, type MobileTabItem } from "./components/BottomNav";
 import { MobileShell } from "./components/MobileShell";
 import { useHardwareBackButton } from "./hooks/useHardwareBackButton";
 import { useHandoverBadge } from "./hooks/useHandoverBadge";
 const AdminExpenseAccess = lazy(() => import("@/pages/admin/AdminExpenseAccess"));
-// Mobile-optimized admin pages (kept only essential ones with native mobile UI)
-import { AdminHome } from "./pages/admin/AdminHome";
-import { AdminOrders } from "./pages/admin/AdminOrders";
-import { AdminSales } from "./pages/admin/AdminSales";
-import { AdminTransactions } from "./pages/admin/AdminTransactions";
-import { AdminInventory } from "./pages/admin/AdminInventory";
-import { AdminPurchases } from "./pages/admin/AdminPurchases";
+// Mobile-optimized admin pages — lazy-loaded per role
+const AdminHome = lazy(() => import("./pages/admin/AdminHome").then(m => ({ default: m.AdminHome })));
+const AdminOrders = lazy(() => import("./pages/admin/AdminOrders").then(m => ({ default: m.AdminOrders })));
+const AdminSales = lazy(() => import("./pages/admin/AdminSales").then(m => ({ default: m.AdminSales })));
+const AdminTransactions = lazy(() => import("./pages/admin/AdminTransactions").then(m => ({ default: m.AdminTransactions })));
+const AdminInventory = lazy(() => import("./pages/admin/AdminInventory").then(m => ({ default: m.AdminInventory })));
+const AdminPurchases = lazy(() => import("./pages/admin/AdminPurchases").then(m => ({ default: m.AdminPurchases })));
+const AdminHandovers = lazy(() => import("./pages/admin/AdminHandovers").then(m => ({ default: m.AdminHandovers })));
 // Web app pages — lazy-loaded (used as fallback for routes without mobile-native pages)
 const Products = lazy(() => import("@/pages/Products"));
 const Customers = lazy(() => import("@/pages/Customers"));
@@ -82,26 +81,27 @@ const BomDetail = lazy(() => import("@/pages/BomDetail"));
 import { cn } from "@/lib/utils";
 import { MobilePageWrapper } from "./components/MobilePageWrapper";
 
-import { AgentHome } from "./pages/agent/AgentHome";
-import { AgentRoutes } from "./pages/agent/AgentRoutes";
-import { AgentScan } from "./pages/agent/AgentScan";
-import { AgentRecord } from "./pages/agent/AgentRecord";
-import { AgentHistory } from "./pages/agent/AgentHistory";
-import { AgentCustomers } from "./pages/agent/AgentCustomers";
-import { AgentStoreProfile } from "./pages/agent/AgentStoreProfile";
-import { AgentProducts } from "./pages/agent/AgentProducts";
-import { MarketerHome } from "./pages/marketer/MarketerHome";
-import { MarketerOrders } from "./pages/marketer/MarketerOrders";
-import { MarketerStores } from "./pages/marketer/MarketerStores";
-import { MarketerStoreProfile } from "./pages/marketer/MarketerStoreProfile";
-import { CustomerHome } from "./pages/customer/CustomerHome";
-import { CustomerSales } from "./pages/customer/CustomerSales";
-import { CustomerOrders } from "./pages/customer/CustomerOrders";
-import { CustomerTransactions } from "./pages/customer/CustomerTransactions";
-import { CustomerProfile } from "./pages/customer/CustomerProfile";
-import { PosHome } from "./pages/pos/PosHome";
+const AgentHome = lazy(() => import("./pages/agent/AgentHome").then(m => ({ default: m.AgentHome })));
+const AgentRoutes = lazy(() => import("./pages/agent/AgentRoutes").then(m => ({ default: m.AgentRoutes })));
+const AgentScan = lazy(() => import("./pages/agent/AgentScan").then(m => ({ default: m.AgentScan })));
+const AgentRecord = lazy(() => import("./pages/agent/AgentRecord").then(m => ({ default: m.AgentRecord })));
+const AgentHistory = lazy(() => import("./pages/agent/AgentHistory").then(m => ({ default: m.AgentHistory })));
+const AgentCustomers = lazy(() => import("./pages/agent/AgentCustomers").then(m => ({ default: m.AgentCustomers })));
+const AgentStoreProfile = lazy(() => import("./pages/agent/AgentStoreProfile").then(m => ({ default: m.AgentStoreProfile })));
+const AgentProducts = lazy(() => import("./pages/agent/AgentProducts").then(m => ({ default: m.AgentProducts })));
+const StockTransferSheet = lazy(() => import("./components/StockTransferSheet").then(m => ({ default: m.StockTransferSheet })));
+const MarketerHome = lazy(() => import("./pages/marketer/MarketerHome").then(m => ({ default: m.MarketerHome })));
+const MarketerOrders = lazy(() => import("./pages/marketer/MarketerOrders").then(m => ({ default: m.MarketerOrders })));
+const MarketerStores = lazy(() => import("./pages/marketer/MarketerStores").then(m => ({ default: m.MarketerStores })));
+const MarketerStoreProfile = lazy(() => import("./pages/marketer/MarketerStoreProfile").then(m => ({ default: m.MarketerStoreProfile })));
+const CustomerHome = lazy(() => import("./pages/customer/CustomerHome").then(m => ({ default: m.CustomerHome })));
+const CustomerSales = lazy(() => import("./pages/customer/CustomerSales").then(m => ({ default: m.CustomerSales })));
+const CustomerOrders = lazy(() => import("./pages/customer/CustomerOrders").then(m => ({ default: m.CustomerOrders })));
+const CustomerTransactions = lazy(() => import("./pages/customer/CustomerTransactions").then(m => ({ default: m.CustomerTransactions })));
+const CustomerProfile = lazy(() => import("./pages/customer/CustomerProfile").then(m => ({ default: m.CustomerProfile })));
+const PosHome = lazy(() => import("./pages/pos/PosHome").then(m => ({ default: m.PosHome })));
 import type { StoreOption } from "./components/StorePickerSheet";
-import AddCustomerStore from "@/mobile/pages/agent/AddCustomerStore";
+const AddCustomerStore = lazy(() => import("@/mobile/pages/agent/AddCustomerStore"));
 
 const PageLoader = () => (
   <div className="flex h-full items-center justify-center py-20">
@@ -252,20 +252,6 @@ function StaffApp({ role }: { role: StaffRole }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
 
-  // Badge: pending expense claims for Handovers tab
-  const { data: pendingExpenseCount = 0 } = useQuery({
-    queryKey: ["mobile-pending-expense-claims", role],
-    queryFn: async () => {
-      const { count } = await supabase
-        .from("expense_claims")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "pending");
-      return count ?? 0;
-    },
-    enabled: role === "super_admin" || role === "manager",
-    refetchInterval: 30_000,
-  });
-
   const menuSections = STAFF_MENU_BY_ROLE[role];
   const allMenuItems = menuSections.flatMap((s) => s.items);
 
@@ -296,7 +282,7 @@ function StaffApp({ role }: { role: StaffRole }) {
     if (path === "/orders") return <AdminOrders onNavigate={handleNavigate} />;
     if (path === "/sales") return <AdminSales onNavigate={handleNavigate} />;
     if (path === "/transactions") return <AdminTransactions onNavigate={handleNavigate} />;
-    if (path === "/handovers") return <MobilePageWrapper><Handovers /></MobilePageWrapper>;
+    if (path === "/handovers") return <AdminHandovers onNavigate={handleNavigate} />;
 
     // Operations - Use web app pages wrapped for mobile
     if (path === "/products") return <MobilePageWrapper><Products /></MobilePageWrapper>;
@@ -405,9 +391,13 @@ function StaffApp({ role }: { role: StaffRole }) {
       {/* Sidebar Drawer */}
       <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
         <SheetContent side="left" className="w-72 p-0 border-0">
-          <div className="h-full flex flex-col bg-white dark:bg-slate-900">
+          <div className="h-full flex flex-col bg-card">
             {/* User Info Header */}
-            <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 dark:from-slate-900 dark:via-blue-950 dark:to-indigo-950 px-4 py-5" style={{ paddingTop: "calc(env(safe-area-inset-top) + 1.25rem)" }}>
+            <div 
+              onClick={() => handleNavigate("/settings")}
+              className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 dark:from-slate-900 dark:via-blue-950 dark:to-indigo-950 px-4 py-5 cursor-pointer hover:opacity-95 transition-opacity" 
+              style={{ paddingTop: "calc(env(safe-area-inset-top) + 1.25rem)" }}
+            >
               <div className="flex items-center gap-3">
                 <div className="h-11 w-11 rounded-full bg-white/20 ring-2 ring-white/40 flex items-center justify-center shrink-0">
                   <span className="text-white text-sm font-bold">{initials}</span>
@@ -415,7 +405,7 @@ function StaffApp({ role }: { role: StaffRole }) {
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-bold text-white truncate">{profile?.full_name ?? "User"}</p>
                   <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-white/15 text-[10px] font-semibold text-blue-100 uppercase tracking-wider">
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-white/15 text-xs font-semibold text-blue-100 uppercase tracking-wider">
                       {role === "super_admin" ? "Admin" : "Manager"}
                     </span>
                   </div>
@@ -427,7 +417,7 @@ function StaffApp({ role }: { role: StaffRole }) {
             <nav className="flex-1 px-3 py-2 overflow-y-auto">
               {menuSections.map((section, si) => (
                 <div key={section.section} className={si > 0 ? "mt-3" : ""}>
-                  <p className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                  <p className="px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-muted-foreground">
                     {section.section}
                   </p>
                   <div className="space-y-0.5">
@@ -444,19 +434,19 @@ function StaffApp({ role }: { role: StaffRole }) {
                           className={cn(
                             "w-full flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-all active:scale-[0.98]",
                             isActive
-                              ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-semibold shadow-sm"
-                              : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+                              ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-semibold"
+                              : "text-muted-foreground hover:bg-muted"
                           )}
                         >
                           <div className={cn(
                             "h-7 w-7 rounded-lg flex items-center justify-center shrink-0 transition-colors",
                             isActive
                               ? "bg-blue-100 dark:bg-blue-800/50"
-                              : "bg-slate-100 dark:bg-slate-800"
+                              : "bg-muted"
                           )}>
                             <Icon className={cn(
                               "h-3.5 w-3.5",
-                              isActive ? "text-blue-600 dark:text-blue-400" : "text-slate-500 dark:text-slate-400"
+                              isActive ? "text-blue-600 dark:text-blue-400" : "text-muted-foreground"
                             )} />
                           </div>
                           <span className="truncate">{item.label}</span>
@@ -472,7 +462,7 @@ function StaffApp({ role }: { role: StaffRole }) {
             </nav>
 
             {/* Sign Out */}
-            <div className="border-t border-slate-100 dark:border-slate-800 px-3 py-3">
+            <div className="border-t px-3 py-3">
               <button
                 onClick={() => { setMenuOpen(false); setShowSignOutConfirm(true); }}
                 className="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all active:scale-[0.98]"
@@ -599,7 +589,7 @@ function MarketerApp() {
           )}
           {tab === "products" && <AgentProducts />}
           {tab === "orders" && <MarketerOrders />}
-          {tab === "record" && <AgentRecord preselectStore={preselectStore} preselectTab={recordAction === "sale" ? "sale" : "payment"} allowSale={true} allowPayment={true} />}
+          {tab === "record" && <AgentRecord preselectStore={preselectStore} preselectTab={recordAction === "sale" ? "sale" : "payment"} allowSale={true} allowPayment={true} onSuccess={() => setTab("history")} />}
           {tab === "history" && <AgentHistory />}
           {tab === "customers" && !profileStore && (
             <MarketerStores
@@ -630,9 +620,11 @@ function AgentApp() {
   const [recordAction, setRecordAction] = useState<"sale" | "payment" | null>(null);
   const [profileStore, setProfileStore] = useState<StoreOption | null>(null);
   const [profileReturnTab, setProfileReturnTab] = useState<MobileTab>("customers");
+  const [showStockTransfer, setShowStockTransfer] = useState(false);
   const { data: pendingHandoversCount = 0 } = useHandoverBadge(user?.id);
 
   useHardwareBackButton(() => {
+    if (showStockTransfer) { setShowStockTransfer(false); return; }
     if (showAddEntity) { setShowAddEntity(false); return; }
     if (recordAction) { setRecordAction(null); setPreselectStore(null); }
     else if (profileStore) { setProfileStore(null); }
@@ -696,10 +688,13 @@ function AgentApp() {
               onGoRecord={(store, action) => handleGoRecord(store, action)}
               onGoProducts={() => setTab("products")}
               onOpenAddEntity={() => setShowAddEntity(true)}
+              onGoMap={() => setTab("routes")}
+              onOpenStockTransfer={() => setShowStockTransfer(true)}
             />
           )}
+          <StockTransferSheet open={showStockTransfer} onOpenChange={setShowStockTransfer} />
           {tab === "products" && <AgentProducts />}
-          {tab === "routes" && <AgentRoutes />}
+          {tab === "routes" && <AgentRoutes onOpenStore={(store) => handleOpenStoreProfile(store, "routes")} onGoRecord={handleGoRecord} />}
           {tab === "scan" && !recordAction && (
             <AgentScan
               onGoRecord={handleGoRecord}
@@ -707,7 +702,7 @@ function AgentApp() {
               onOpenStore={(store) => handleOpenStoreProfile(store, "scan")}
             />
           )}
-          {tab === "scan" && !!recordAction && <AgentRecord preselectStore={preselectStore} preselectTab={recordAction} />}
+          {tab === "scan" && !!recordAction && <AgentRecord preselectStore={preselectStore} preselectTab={recordAction} onSuccess={() => setTab("history")} />}
           {tab === "history" && <AgentHistory />}
           {tab === "customers" && !profileStore && (
             <AgentCustomers
@@ -732,6 +727,7 @@ function AgentApp() {
 function PosApp() {
   useRealtimeSync();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [tab, setTab] = useState<MobileTab>("home");
   const [posStore, setPosStore] = useState<StoreOption | null>(null);
   const { data: pendingHandoversCount = 0 } = useHandoverBadge(user?.id, "-pos");
@@ -754,8 +750,8 @@ function PosApp() {
   return (
     <MobileShell title={TAB_TITLES[tab]} tabs={posTabs} tab={tab} onTabChange={handlePosTabChange}>
       {tab === "home" && <PosHome onOpenRecord={() => setTab("record")} onOpenHistory={() => setTab("history")} setTab={setTab} activeTab={tab} store={posStore} onStoreChange={setPosStore} />}
-      {tab === "orders" && <AdminOrders onNavigate={(path) => { if (path === "/orders") { setTab("orders"); } else { window.location.href = path; } }} />}
-      {tab === "record" && <AgentRecord preselectTab="sale" allowPayment={false} />}
+      {tab === "orders" && <AdminOrders onNavigate={(path) => { if (path === "/orders") { setTab("orders"); } else { navigate(path); } }} />}
+      {tab === "record" && <AgentRecord preselectTab="sale" allowPayment={false} onSuccess={() => setTab("history")} />}
       {tab === "handovers" && <AgentHistory />}
       {tab === "products" && <AgentProducts />}
       {tab === "history" && <AgentHistory />}
@@ -774,11 +770,43 @@ function getStorageItem(key: string, defaultValue: string = ""): string {
 
 export function MobileApp() {
   const { role, loading } = useAuth();
+  const location = useLocation();
   const permsDone = getStorageItem("mobile_permissions_done") === "1";
   const [permissionsSetupComplete, setPermissionsSetupComplete] = useState(
     // In native mode always show permissions screen on first run; in browser always skip
     isNativeApp() ? permsDone : true
   );
+
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const handleTap = (e: Event) => {
+      const customEvent = e as CustomEvent<{ entityId: string; entityType: string }>;
+      const { entityId, entityType } = customEvent.detail;
+      if (!entityId) return;
+
+      if (entityType === "order") {
+        navigate(`/orders?highlight=${entityId}`);
+      } else if (entityType === "sale") {
+        navigate(`/sales?highlight=${entityId}`);
+      } else if (entityType === "transaction") {
+        navigate(`/transactions?highlight=${entityId}`);
+      } else if (entityType === "handover") {
+        navigate(`/handovers?highlight=${entityId}`);
+      } else if (entityType === "expense_claim" || entityType === "expense_request") {
+        navigate(`/handovers?highlight=${entityId}`);
+      } else if (entityType === "stock_transfer") {
+        navigate(`/stock-transfers?highlight=${entityId}`);
+      } else if (entityType === "customer") {
+        navigate(`/customers/${entityId}`);
+      }
+    };
+
+    window.addEventListener("push-notification-tap", handleTap);
+    return () => {
+      window.removeEventListener("push-notification-tap", handleTap);
+    };
+  }, [navigate]);
 
   logDebug("[MobileApp] state", { role, loading, isNative: isNativeApp() });
 
@@ -798,25 +826,46 @@ export function MobileApp() {
     return <PermissionSetup onComplete={() => setPermissionsSetupComplete(true)} />;
   }
 
-  // Role-based routing
+  // Universal paths for all roles on mobile
+  if (location.pathname === "/settings") {
+    return (
+      <Suspense fallback={<PageLoader />}>
+        <MobilePageWrapper showBack>
+          <SettingsPage />
+        </MobilePageWrapper>
+      </Suspense>
+    );
+  }
+
+  if (location.pathname === "/profile") {
+    return (
+      <Suspense fallback={<PageLoader />}>
+        <MobilePageWrapper showBack>
+          <UserProfile />
+        </MobilePageWrapper>
+      </Suspense>
+    );
+  }
+
+  // Role-based routing — each role lazy-loads only its own pages
   if (role === "agent") {
-    return <AgentApp />;
+    return <Suspense fallback={<PageLoader />}><AgentApp /></Suspense>;
   }
 
   if (role === "super_admin" || role === "manager") {
-    return <StaffApp role={role} />;
+    return <Suspense fallback={<PageLoader />}><StaffApp role={role} /></Suspense>;
   }
 
   if (role === "marketer") {
-    return <MarketerApp />;
+    return <Suspense fallback={<PageLoader />}><MarketerApp /></Suspense>;
   }
 
   if (role === "customer") {
-    return <CustomerApp />;
+    return <Suspense fallback={<PageLoader />}><CustomerApp /></Suspense>;
   }
 
   if (role === "operator") {
-    return <PosApp />;
+    return <Suspense fallback={<PageLoader />}><PosApp /></Suspense>;
   }
 
   // Role is null or unknown - this shouldn't happen if user is authenticated

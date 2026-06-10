@@ -5,7 +5,7 @@ import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Search, Filter, ScanLine, X } from "lucide-react";
+import { Search, Filter, ScanLine, X, Package } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -78,7 +78,7 @@ export function AgentProducts() {
             value={search} 
             onChange={(e) => setSearch(e.target.value)} 
             placeholder="Search products..." 
-            className="pl-9 bg-muted/50 border-none shadow-none focus-visible:ring-1"
+            className="pl-9 bg-muted/50 border-none shadow-none focus-visible:ring-1 h-12"
           />
           {search && (
             <button 
@@ -95,7 +95,7 @@ export function AgentProducts() {
           <Button 
             variant="outline" 
             size="sm" 
-            className={`rounded-full h-8 whitespace-nowrap ${!categoryFilter ? "bg-primary text-primary-foreground border-primary" : ""}`}
+            className={`rounded-full h-10 whitespace-nowrap ${!categoryFilter ? "bg-primary text-primary-foreground border-primary" : ""}`}
             onClick={() => setCategoryFilter(null)}
           >
             All
@@ -105,7 +105,7 @@ export function AgentProducts() {
               key={c.id}
               variant="outline"
               size="sm"
-              className={`rounded-full h-8 whitespace-nowrap ${categoryFilter === c.name ? "bg-primary text-primary-foreground border-primary" : ""}`}
+              className={`rounded-full h-10 whitespace-nowrap ${categoryFilter === c.name ? "bg-primary text-primary-foreground border-primary" : ""}`}
               onClick={() => setCategoryFilter(categoryFilter === c.name ? null : c.name)}
             >
               {c.name}
@@ -137,11 +137,11 @@ export function AgentProducts() {
               <div className="flex-1 min-w-0">
                 <h3 className="font-medium text-sm truncate pr-2">{p.name}</h3>
                 <div className="flex items-center gap-2 mt-1">
-                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 font-normal">
+                  <Badge variant="secondary" className="text-xs px-1.5 py-0 h-5 font-normal">
                     {p.sku || "No SKU"}
                   </Badge>
                   {p.category && (
-                    <span className="text-[10px] text-muted-foreground truncate max-w-[80px]">
+                    <span className="text-xs text-muted-foreground truncate max-w-[80px]">
                       {p.category}
                     </span>
                   )}
@@ -149,11 +149,31 @@ export function AgentProducts() {
               </div>
               <div className="text-right">
                 <span className="font-semibold text-sm block">₹{Number(p.base_price).toLocaleString()}</span>
-                <span className="text-[10px] text-muted-foreground">per {p.unit}</span>
+                <span className="text-xs text-muted-foreground">per {p.unit}</span>
               </div>
             </div>
           )}
         />
+
+        {!isLoading && search && filteredProducts.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-12 px-4">
+            <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-3">
+              <Package className="h-6 w-6 text-muted-foreground" />
+            </div>
+            <p className="text-sm font-medium text-foreground">No products found</p>
+            <p className="text-xs text-muted-foreground mt-1">Try a different search term</p>
+          </div>
+        )}
+
+        {!isLoading && !search && (!products || products.length === 0) && (
+          <div className="flex flex-col items-center justify-center py-12 px-4">
+            <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-3">
+              <Package className="h-6 w-6 text-muted-foreground" />
+            </div>
+            <p className="text-sm font-medium text-foreground">No products assigned</p>
+            <p className="text-xs text-muted-foreground mt-1">Products will appear here once assigned</p>
+          </div>
+        )}
       </div>
 
       {/* Product Detail Sheet */}
@@ -174,7 +194,7 @@ export function AgentProducts() {
                   </div>
                 )}
                 <div className="absolute top-4 right-4">
-                  <Button size="icon" variant="secondary" className="rounded-full shadow-md h-8 w-8" onClick={() => setSelectedProduct(null)}>
+                  <Button size="icon" variant="secondary" className="rounded-full shadow-md h-10 w-10" onClick={() => setSelectedProduct(null)}>
                     <X className="h-4 w-4" />
                   </Button>
                 </div>

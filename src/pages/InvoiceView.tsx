@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useRef, useEffect } from "react";
 import { formatDate } from "@/lib/utils";
 import { useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, Printer, Download, ArrowLeft, Share2 } from "lucide-react";
+import { Loader2, Printer, Share2 } from "lucide-react";
 import { toast } from "sonner";
 
 // Number to words converter
@@ -40,11 +40,6 @@ const InvoiceView = () => {
   const { id } = useParams();
   const printRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (invoice) {
-      document.title = `Invoice ${invoice.invoice_number}`;
-    }
-  }, [invoice]);
 
   // Fetch invoice
   const { data: invoice, isLoading } = useQuery({
@@ -60,7 +55,7 @@ const InvoiceView = () => {
           invoice_items(*),
           invoice_sales(sale_id, sales(display_id))
         `)
-        .eq("id", id)
+        .eq("id", id!)
         .single();
       if (error) throw error;
       return data;
@@ -84,9 +79,15 @@ const InvoiceView = () => {
     queryKey: ["business-info-invoice"],
     queryFn: async () => {
       const { data } = await supabase.from("business_info").select("*").single();
-      return data;
+      return data as any;
     },
   });
+
+  useEffect(() => {
+    if (invoice) {
+      document.title = `Invoice ${invoice.invoice_number}`;
+    }
+  }, [invoice]);
 
   const handlePrint = () => {
     window.print();
@@ -489,9 +490,41 @@ const InvoiceView = () => {
       <style>{`
         @media print {
           @page { margin: 12mm; }
-          body { background: white !important; }
-          .print\\:hidden { display: none !important; }
-          .print\\:block { display: block !important; }
+          body { background: hsl(var(--card)) !important; color: hsl(var(--card-foreground)) !important; }
+
+          /* Hide all non-print elements */
+          .print\\:hidden,
+          .animate-fade-in > div:first-child,
+          header,
+          nav,
+          aside {
+            display: none !important;
+          }
+
+          /* Show print template */
+          .print\\:block,
+          .hidden.print\\:block {
+            display: block !important;
+          }
+
+          /* Print-specific styles */
+          section {
+            page-break-inside: avoid;
+          }
+
+          table {
+            border-collapse: collapse;
+            width: 100%;
+          }
+
+          th, td {
+            border: 1px solid hsl(var(--border)) !important;
+            padding: 6px 8px;
+          }
+
+          th {
+            background: hsl(var(--muted)) !important;
+          }
         }
       `}</style>
     </div>

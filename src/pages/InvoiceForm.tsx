@@ -75,7 +75,7 @@ const InvoiceForm = () => {
   // Fetch next invoice number
   useEffect(() => {
     if (!isEdit) {
-      supabase.rpc("get_next_invoice_number").then(({ data }) => {
+      (supabase.rpc("get_next_invoice_number") as any).then(({ data }: { data: any }) => {
         if (data) setInvoiceNumber(data);
         setLoadingNext(false);
       });
@@ -224,7 +224,7 @@ const InvoiceForm = () => {
       if (store) {
         setCustomerAddress(store.address || customerAddress);
         setCustomerPhone(store.phone || customerPhone);
-        setCustomerGstin(store.gstin || "");
+        setCustomerGstin((store as any).gstin || "");
       }
     }
   }, [storeId, stores]);

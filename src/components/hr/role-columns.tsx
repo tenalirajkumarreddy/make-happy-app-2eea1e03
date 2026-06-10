@@ -23,7 +23,7 @@ export const roleColumns = (onEdit: (role: WorkerRole) => void): ColumnDef<Worke
   {
     accessorKey: "name",
     header: "Role Name",
-    cell: ({ row }) => <Badge variant="outline">{row.original.name}</Badge>,
+    cell: ({ row }: { row: any }) => <Badge variant="outline">{row.original.name}</Badge>,
   },
   {
     accessorKey: "description",
@@ -32,11 +32,11 @@ export const roleColumns = (onEdit: (role: WorkerRole) => void): ColumnDef<Worke
   {
     accessorKey: "created_at",
     header: "Created At",
-    cell: ({ row }) => new Date(row.original.created_at).toLocaleDateString(),
+    cell: ({ row }: { row: any }) => new Date(row.original.created_at).toLocaleDateString(),
   },
   {
     id: "actions",
-    cell: ({ row }) => {
+    cell: ({ row }: { row: any }) => {
       const role = row.original;
       return (
         <DropdownMenu>

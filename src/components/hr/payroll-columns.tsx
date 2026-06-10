@@ -33,37 +33,7 @@ export const payrollColumns = ({ onEdit, navigate }: PayrollColumnsProps): Colum
   return [
     {
       accessorKey: "display_id",
-      header: ({ column }) => (
-        <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
-          Payroll ID
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
-      cell: ({ row }) => <div className="font-medium">{row.getValue("display_id")}</div>,
-    },
-    {
-      accessorKey: "start_date",
-      header: "Period",
-      cell: ({ row }) => {
-        const startDate = new Date(row.original.start_date).toLocaleDateString();
-        const endDate = new Date(row.original.end_date).toLocaleDateString();
-        return <div>{`${startDate} - ${endDate}`}</div>;
-      }
-    },
-    {
-      accessorKey: "status",
-      header: "Status",
-      cell: ({ row }) => {
-        const status = row.getValue("status") as string;
-        const variant: "default" | "secondary" | "destructive" | "outline" = 
-          status === 'completed' || status === 'paid' ? 'default' :
-          status === 'processing' ? 'secondary' : 'outline';
-        return <Badge variant={variant} className={status === 'paid' ? 'bg-green-500' : ''}>{status}</Badge>;
-      },
-    },
-    {
-        accessorKey: "total_amount",
-        header: ({ column }) => (
+        header: ({ column }: { column: any }) => (
             <div className="text-right">
                 <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
                     Total Amount
@@ -71,7 +41,7 @@ export const payrollColumns = ({ onEdit, navigate }: PayrollColumnsProps): Colum
                 </Button>
             </div>
         ),
-        cell: ({ row }) => {
+        cell: ({ row }: { row: any }) => {
             const amount = parseFloat(row.getValue("total_amount") || "0");
             const formatted = new Intl.NumberFormat("en-IN", {
                 style: "currency",
@@ -82,7 +52,7 @@ export const payrollColumns = ({ onEdit, navigate }: PayrollColumnsProps): Colum
     },
     {
       id: "actions",
-      cell: ({ row }) => {
+      cell: ({ row }: { row: any }) => {
         const payroll = row.original;
 
         return (

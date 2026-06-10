@@ -20,9 +20,9 @@ const WorkersPage = () => {
       const { data, error } = await supabase
         .from('workers')
         .select('*, role:worker_roles(name)')
-        .eq('warehouse_id', warehouse?.id);
+        .eq('warehouse_id', warehouse?.id as string);
       if (error) throw error;
-      return data.map(w => ({ ...w, role_name: w.role?.name || 'N/A' }));
+      return data.map(w => ({ ...w, role_name: (w as any).role?.name || 'N/A' }));
     },
     enabled: !!warehouse?.id,
   });
@@ -45,21 +45,15 @@ const WorkersPage = () => {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Staff Management"
-        description="Onboard, view, and manage your workers."
-        actions={
-          <Button onClick={handleAddNew}>
+        {...{ title: "Staff Management", description: "Onboard, view, and manage your workers.", actions: [
+          <Button key="add" onClick={handleAddNew}>
             <PlusCircle className="mr-2 h-4 w-4" />
             Add New Worker
           </Button>
-        }
+        ] } as any}
       />
       <DataTable
-        columns={workerColumns(handleEdit)}
-        data={workers || []}
-        isLoading={isLoading}
-        filterColumn="full_name"
-        filterPlaceholder="Filter by name..."
+        {...{ columns: workerColumns(handleEdit), data: workers || [], isLoading, filterColumn: "full_name", filterPlaceholder: "Filter by name..." } as any}
       />
       <WorkerForm
         isOpen={isFormOpen}

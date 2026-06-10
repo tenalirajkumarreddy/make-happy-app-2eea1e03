@@ -120,7 +120,7 @@ export function StockHistoryView({ warehouseId }: StockHistoryViewProps) {
         p_warehouse_id: warehouseId,
         p_limit: 100,
         p_offset: 0,
-      });
+      }) as any;
 
       if (error) throw error;
       

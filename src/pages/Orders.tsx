@@ -1,25 +1,29 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/shared/PageHeader";
-import { DataTable } from "@/components/shared/DataTable";
+import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { addToQueue } from "@/lib/offlineQueue";
+import { enqueueWithContext } from "@/lib/conflictResolver";
+import { generateBusinessKey } from "@/lib/offlineQueue";
 import { logActivity } from "@/lib/activityLogger";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
+import { CANCEL_REASONS } from "@/lib/constants";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
 import { useRouteAccess } from "@/hooks/useRouteAccess";
 import { usePermission } from "@/hooks/usePermission";
-import { Loader2, Plus, Minus, Trash2, XCircle, Package, Download, X, CalendarIcon, ArrowRightLeft, FileText, Edit, MoreHorizontal, Printer, Eye, CheckCircle2, ShoppingCart, RotateCcw, Store as StoreIcon, UserCircle, MapPin, Phone, Mail, Shield } from "lucide-react";
+import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
+import { useDebounce } from "@/hooks/useDebounce";
+import { Loader2, Plus, Minus, Trash2, XCircle, Package, Download, X, CalendarIcon, ArrowRightLeft, FileText, Edit, Eye, ShoppingCart, RotateCcw, Store as StoreIcon, UserCircle, MapPin, Phone, Mail, Shield } from "lucide-react";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
-import { useState, useEffect, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { OrderFulfillmentDialog } from "@/components/orders/OrderFulfillmentDialog";
 import { TransferOrderDialog } from "@/components/orders/TransferOrderDialog";
 import { InvoiceDialog } from "@/components/orders/InvoiceDialog";
 import { OrderViewDialog } from "@/components/orders/OrderViewDialog";
-import { OrderAccessMatrix } from "@/components/orders/OrderAccessMatrix";
+import { OrderStockSummary } from "@/components/orders/OrderStockSummary";
 import { ProformaView } from "@/components/orders/ProformaView";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -85,24 +89,6 @@ interface FulfillOrder {
   };
 }
 
-// Extended order interfaces for type safety
-interface Agent {
-  user_id: string;
-  full_name: string;
-}
-
-interface InsertOrder {
-  display_id: string;
-  store_id: string;
-  customer_id: string | null;
-  order_type: "simple" | "detailed";
-  source: "manual" | string;
-  created_by: string;
-  requirement_note: string | null;
-  warehouse_id: string | null;
-  assigned_to?: string | null;
-}
-
 interface UpdateOrder {
   requirement_note: string | null;
   updated_at: string;
@@ -122,6 +108,16 @@ interface OrderRecord {
   created_by: string;
   created_at: string;
   updated_at: string;
+  stores?: StoreData;
+  customers?: CustomerData;
+  cancellation_reason?: string;
+  cancelled_by?: string;
+  cancelled_at?: string;
+  fulfilled_by_sale_id?: string;
+  creator_profile?: { full_name: string } | null;
+  updater_profile?: { full_name: string } | null;
+  fulfiller_profile?: { full_name: string } | null;
+  canceller_profile?: { full_name: string } | null;
 }
 
 interface OrderItemData {
@@ -130,17 +126,10 @@ interface OrderItemData {
   unit_price: number | null;
 }
 
-interface ProductItem {
-  id: string;
-  name: string;
-  sku: string;
-  base_price: number;
-  image_url?: string;
-}
-
 interface CustomerData {
   id: string;
   name: string;
+  display_id: string;
   kyc_status?: string;
   phone?: string | null;
   email?: string | null;
@@ -159,6 +148,10 @@ interface StoreData {
     id: string;
     name: string;
   } | null;
+  routes?: {
+    id: string;
+    name: string;
+  } | null;
   store_types?: {
     name: string;
   } | null;
@@ -166,26 +159,15 @@ interface StoreData {
   lng?: number | null;
   address?: string | null;
   outstanding?: number;
-}
-
-interface InvoiceData {
-  id: string;
-  display_id?: string;
-  order_id?: string;
-  customer_id?: string | null;
-  invoice_items?: Array<{
-    id: string;
-    product_id: string;
-    quantity: number;
-    unit_price: number;
-  }>;
-  total_amount?: number;
+  image_url?: string;
 }
 
 const Orders = () => {
   const { user, role } = useAuth();
   const { currentWarehouse } = useWarehouse();
   const qc = useQueryClient();
+  const [searchParams] = useSearchParams();
+  const highlightId = searchParams.get("highlight");
   
   // Permission hooks
   const { allowed: canViewOrders } = usePermission("view_orders");
@@ -194,12 +176,9 @@ const Orders = () => {
   const { allowed: canModifyOrders } = usePermission("modify_orders");
   const { allowed: canModifyPrices } = usePermission("modify_order_item_prices");
   const { allowed: canTransferOrders } = usePermission("transfer_orders");
-  const { allowed: canDeleteOrders } = usePermission("delete_orders");
   const { allowed: canFulfillOrders } = usePermission("fulfill_orders");
   const { allowed: canCancelOrders } = usePermission("cancel_orders");
   const { allowed: canViewInvoices } = usePermission("view_invoices");
-  const { allowed: canCreateInvoices } = usePermission("create_invoices");
-  const { allowed: canEditInvoices } = usePermission("edit_invoices");
   const { allowed: canCreateSaleReturns } = usePermission("create_sale_returns");
   
   // Check if user can see orders at all
@@ -211,7 +190,6 @@ const Orders = () => {
   const [showView, setShowView] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
   const [showInvoice, setShowInvoice] = useState(false);
-  const [showOrderAccess, setShowOrderAccess] = useState(false);
   const [viewProformaId, setViewProformaId] = useState<string | null>(null);
 
   const { data: viewProforma } = useQuery({
@@ -232,7 +210,7 @@ const Orders = () => {
         total_amount: Number(pf.total_amount) || 0,
         status: pf.status,
         created_at: pf.created_at,
-      };
+      } as any;
     },
     enabled: !!viewProformaId,
   });
@@ -258,13 +236,15 @@ const Orders = () => {
   const [filterStoreType, setFilterStoreType] = useState("all");
   const [filterRoute, setFilterRoute] = useState("all");
   const [filterAssignedTo, setFilterAssignedTo] = useState("all");
+  const [filterSearch, setFilterSearch] = useState("");
+  const debouncedSearch = useDebounce(filterSearch);
   const PAGE_SIZE = 100;
   const [loadedPages, setLoadedPages] = useState(1);
 
   // Reset to page 1 whenever any filter changes
   useEffect(() => {
     setLoadedPages(1);
-  }, [statusFilter, filterFrom, filterTo, filterCustomer, filterStore, filterStoreType, filterRoute, filterAssignedTo]);
+  }, [statusFilter, filterFrom, filterTo, filterCustomer, filterStore, filterStoreType, filterRoute, filterAssignedTo, debouncedSearch]);
 
   // Form state for create
   const [customerId, setCustomerId] = useState("");
@@ -273,43 +253,21 @@ const Orders = () => {
   const [orderType, setOrderType] = useState("simple");
   const [requirementNote, setRequirementNote] = useState("");
   const [orderItems, setOrderItems] = useState<OrderItem[]>([{ product_id: "", quantity: 1 }]);
-  const [assignedTo, setAssignedTo] = useState("");
-
-  // Fetch user's order access level
-  const { data: orderAccess } = useQuery({
-    queryKey: ["my-order-access", user?.id],
-    queryFn: async () => {
-      if (!user?.id) return "all";
-      const { data } = await supabase.from("user_order_access").select("access_level").eq("user_id", user.id).maybeSingle();
-      return (data as any)?.access_level || "all";
-    },
-    enabled: !!user?.id,
-    staleTime: 60_000,
-  });
+  const [assignedTo, setAssignedTo] = useState("unassigned");
 
   const { data: orders, isLoading, isFetching } = useQuery({
-    queryKey: ["orders", currentWarehouse?.id, statusFilter, filterFrom, filterTo, filterCustomer, filterStore, filterStoreType, filterRoute, filterAssignedTo, loadedPages, user?.id, role, orderAccess],
+    queryKey: ["orders", currentWarehouse?.id, statusFilter, filterFrom, filterTo, filterCustomer, filterStore, filterStoreType, filterRoute, filterAssignedTo, debouncedSearch, loadedPages, user?.id, role],
     queryFn: async () => {
       let query = supabase
         .from("orders")
-        .select("*, stores(id, name, display_id, route_id, store_type_id, address, outstanding), customers(id, name, display_id, phone, email), assigned_to, fulfilled_by_sale_id")
+        .select("*, stores(id, name, display_id, route_id, store_type_id, address, outstanding, routes(name), store_types(name)), customers(id, name, display_id, phone, email), assigned_to, fulfilled_by_sale_id, creator_profile:profiles!orders_created_by_profiles_fkey(full_name), updater_profile:profiles!orders_updated_by_fkey(full_name), fulfiller_profile:profiles!orders_fulfilled_by_profiles_fkey(full_name), canceller_profile:profiles!orders_cancelled_by_profiles_fkey(full_name)")
         .order("created_at", { ascending: false });
 
       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
 
-      // Order access control
-      if (orderAccess !== "all") {
-        const { data: userAccess } = await supabase
-          .from("user_order_access")
-          .select("route_ids")
-          .eq("user_id", user!.id)
-          .maybeSingle();
-        const routeIds = ((userAccess as any)?.route_ids || []) as string[];
-        const orParts = [`assigned_to.eq.${user!.id}`, `created_by.eq.${user!.id}`];
-        if (routeIds.length > 0) {
-          orParts.push(`stores.route_id.in.(${routeIds.join(",")})`);
-        }
-        query = query.or(orParts.join(","));
+      // Users with only view_assigned_orders see only their assigned orders
+      if (canViewAssignedOrders && !canViewOrders && user?.id) {
+        query = query.eq("assigned_to", user.id);
       }
 
       // Server-side filters
@@ -333,6 +291,8 @@ const Orders = () => {
       if (filterRoute !== "all") {
         query = query.eq("stores.route_id", filterRoute);
       }
+
+      if (debouncedSearch.trim()) query = query.ilike("display_id", `%${debouncedSearch.trim()}%`);
 
       // Cursor pagination
       query = query.range(0, loadedPages * PAGE_SIZE - 1);
@@ -382,6 +342,11 @@ const Orders = () => {
   const { canAccessStore, hasMatrixRestrictions, hasStoreTypeRestrictions } = useRouteAccess(user?.id, role);
 
   const hasMoreOrders = (orders?.length || 0) >= loadedPages * PAGE_SIZE;
+  const sentinelRef = useInfiniteScroll(
+    useCallback(() => setLoadedPages((p: number) => p + 1), [setLoadedPages]),
+    hasMoreOrders,
+    isFetching
+  );
 
   // Fetch customers based on permissions - from customers table (not profiles)
   const { data: customers = [] } = useQuery({
@@ -433,7 +398,7 @@ const Orders = () => {
       const { data } = await q;
       return data || [];
     },
-    enabled: (!!customerId && canCreateOrders) || canModifyOrders,
+    enabled: (showAdd && canCreateOrders) || canModifyOrders,
   });
 
   // Fetch agents for order assignment - join profiles with user_roles
@@ -445,8 +410,8 @@ const Orders = () => {
         .select("user_id, full_name")
         .eq("role", "agent")
         .eq("is_active", true);
-  return (data || []).map((r: { user_id: string; full_name: string | null }) => ({
-    id: r.user_id,
+  return (data || []).map((r: { user_id: string | null; full_name: string }) => ({
+    id: r.user_id ?? "",
     full_name: r.full_name || "Agent"
   }));
     },
@@ -515,44 +480,40 @@ const Orders = () => {
   const resetForm = () => {
     setCustomerId(""); setStoreId(""); setStoreSearch("");
     setOrderType("simple"); setRequirementNote("");
-    setOrderItems([{ product_id: "", quantity: 1 }]); setAssignedTo("");
+    setOrderItems([{ product_id: "", quantity: 1 }]); setAssignedTo("unassigned");
   };
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving) return;
     if (!storeId) { toast.error("Please select a store"); return; }
     if (orderType === "simple" && !requirementNote.trim()) { toast.error("Please describe the requirement"); return; }
     if (orderType === "detailed" && !orderItems.some((i) => i.product_id)) { toast.error("Please add at least one product"); return; }
+    if (orderType === "detailed" && orderItems.some((i) => i.product_id && (!i.quantity || i.quantity <= 0))) { toast.error("All products must have a quantity greater than 0"); return; }
 
-    // Duplicate check: store can have only one active (pending) order
-    const { data: existingOrders } = await supabase
-      .from("orders")
-      .select("id, display_id")
-      .eq("store_id", storeId)
-      .eq("status", "pending")
-      .limit(1);
-    if (existingOrders && existingOrders.length > 0) {
-      toast.warning(`Store already has a pending order (${existingOrders[0].display_id}). Edit it instead.`);
-      setShowAdd(false);
-      resetForm();
-      setTimeout(() => handleOpenEdit(existingOrders[0].id), 300);
-      return;
-    }
+    setSaving(true);
 
     // Offline: queue order and return
     if (!navigator.onLine) {
-      await addToQueue({
+      const bizKey = generateBusinessKey('order', {
+        storeId: storeId,
+        orderType: orderType,
+        timestamp: new Date().toISOString(),
+      });
+      await enqueueWithContext({
         id: crypto.randomUUID(),
         type: "order",
         payload: {
           store_id: storeId,
           customer_id: customerId,
-          order_type: orderType,
+      order_type: orderType as "simple" | "detailed",
           requirement_note: requirementNote,
           order_items: orderItems.filter((i) => i.product_id),
-          assigned_to: assignedTo,
+          assigned_to: assignedTo === "unassigned" ? null : assignedTo,
+          created_by: user!.id,
         },
         createdAt: new Date().toISOString(),
+        businessKey: bizKey,
       });
       qc.invalidateQueries({ queryKey: ["orders"] });
       setShowAdd(false);
@@ -560,8 +521,6 @@ const Orders = () => {
       setSaving(false);
       return;
     }
-
-    setSaving(true);
 
     // Check credit limit before creating order (for detailed orders)
     if (orderType === "detailed") {
@@ -580,7 +539,7 @@ const Orders = () => {
         if (creditError) {
           console.error("Credit check failed:", creditError);
         } else if (creditCheck && !creditCheck[0]?.can_create) {
-          const check = creditCheck[0];
+          const check = creditCheck[0] as any;
           toast.error(
             `Credit limit warning: Current outstanding ₹${Number(check.current_outstanding).toLocaleString()} + ` +
             `Order ₹${estimatedOrderValue.toLocaleString()} = ` +
@@ -589,42 +548,57 @@ const Orders = () => {
           );
           setSaving(false);
           return;
-        } else if (creditCheck?.[0]?.utilization_percent > 80) {
+        } else if ((creditCheck as any)?.[0]?.utilization_percent > 80) {
+          const check = creditCheck[0] as any;
           toast.warning(
-            `Credit utilization is ${creditCheck[0].utilization_percent}%. ` +
-            `Available credit: ₹${Number(creditCheck[0].available_credit).toLocaleString()}`
+            `Credit utilization is ${check.utilization_percent}%. ` +
+            `Available credit: ₹${Number(check.available_credit).toLocaleString()}`
           );
         }
       }
     }
 
-    const { data: displayId } = await supabase.rpc("generate_random_display_id", { p_prefix: "ORD", p_table_name: "orders" });
+    // Use create_order RPC for atomic concurrency-safe creation
+    const { data: order, error } = await supabase.rpc("create_order", {
+      p_store_id: storeId,
+      p_customer_id: customerId || null,
+      p_assigned_to: assignedTo === "unassigned" ? null : assignedTo,
+      p_warehouse_id: currentWarehouse?.id || null,
+      p_order_type: orderType,
+      p_requirement_note: requirementNote || null,
+      p_total_amount: 0,
+      p_created_by: user!.id,
+    });
 
-    const insertData: InsertOrder = {
-      display_id: displayId,
-      store_id: storeId,
-      customer_id: customerId || null,
-      order_type: orderType,
-      source: "manual",
-      created_by: user!.id,
-      requirement_note: requirementNote || null,
-      warehouse_id: currentWarehouse?.id || null,
-    };
+    const orderRow = order?.[0];
+    const orderId = orderRow?.order_id;
+    const orderDisplayId = orderRow?.display_id;
 
-    if (assignedTo) {
-      insertData.assigned_to = assignedTo;
+    if (error || !orderId) {
+      if (error?.message?.includes("already has an active order")) {
+        const match = error.message.match(/id: ([a-f0-9-]+)/i);
+        const existingId = match?.[1];
+        if (existingId) {
+          toast.warning(error.message);
+          setShowAdd(false);
+          resetForm();
+          setTimeout(() => handleOpenEdit(existingId), 300);
+        } else {
+          toast.error(error.message);
+        }
+      } else {
+        toast.error(error?.message || "Failed to create order");
+      }
+      setSaving(false);
+      return;
     }
-
-    const { data: order, error } = await supabase.from("orders").insert(insertData).select("id").single();
-
-    if (error) { toast.error(error.message); setSaving(false); return; }
 
     if (orderType === "detailed") {
       const validItems = orderItems.filter((i) => i.product_id);
       if (validItems.length > 0) {
         await supabase.from("order_items").insert(
           validItems.map((i) => ({
-            order_id: order.id,
+            order_id: orderId,
             product_id: i.product_id,
             quantity: i.quantity,
             unit_price: canModifyPrices ? (i.unit_price || getProductPrice(i.product_id)) : getProductPrice(i.product_id)
@@ -646,20 +620,18 @@ const Orders = () => {
         unit_price: canModifyPrices ? (i.unit_price || getProductPrice(i.product_id)) : getProductPrice(i.product_id),
       };
     })) : [{ product_name: pfNote.slice(0, 50) || "Simple order", quantity: 1, unit_price: 0 }];
-    (async () => {
-      const { error: pfError } = await supabase.from("proforma_invoices").insert({
-        display_id: pfDisplayId,
-        order_id: order.id,
-        store_id: storeId,
-        customer_id: customerId,
-        total_amount: proformaItems.reduce((s, i) => s + (i.unit_price * i.quantity), 0),
-        items: proformaItems,
-        created_by: user?.id,
-      });
-      if (pfError) console.error("Proforma creation failed:", pfError);
-    })();
+    const { error: pfError } = await supabase.from("proforma_invoices").insert({
+      display_id: pfDisplayId,
+      order_id: orderId,
+      store_id: storeId,
+      customer_id: customerId,
+      total_amount: proformaItems.reduce((s, i) => s + (i.unit_price * i.quantity), 0),
+      items: proformaItems,
+      created_by: user?.id,
+    });
+    if (pfError) console.error("Proforma creation failed:", pfError);
 
-  logActivity(user!.id, "Created order", "order", displayId, order.id);
+  logActivity(user!.id, "Created order", "order", orderDisplayId, orderId);
   toast.success("Order created");
 
   // Notify admins/managers
@@ -670,11 +642,11 @@ const Orders = () => {
       if (others.length > 0) {
         sendNotificationToMany(others, {
           title: "New Order Created",
-          message: `Order ${displayId} (${orderType}) placed for ${storeName}`,
+          message: `Order ${orderDisplayId} (${orderType}) placed for ${storeName}`,
           type: "order",
           entityType: "order",
-          entityId: order.id,
-        });
+          entityId: orderId,
+        }, { excludeFromBroadcast: [user!.id] });
       }
     })
     .catch((error) => {
@@ -682,13 +654,13 @@ const Orders = () => {
     });
 
   // Notify assigned agent if order is assigned
-  if (assignedTo && assignedTo !== user!.id) {
+  if (assignedTo && assignedTo !== "unassigned" && assignedTo !== user!.id) {
     sendNotificationToMany([assignedTo], {
       title: "Order Assigned to You",
-      message: `Order ${displayId} (${orderType}) for ${storeName} has been assigned to you`,
+      message: `Order ${orderDisplayId} (${orderType}) for ${storeName} has been assigned to you`,
       type: "order",
       entityType: "order",
-      entityId: order.id,
+      entityId: orderId,
     }).catch((error) => {
       console.error("Failed to notify assigned agent:", error);
     });
@@ -710,11 +682,12 @@ const Orders = () => {
 
   const updateData: UpdateOrder = {
     requirement_note: requirementNote || null,
+    updated_by: user!.id,
     updated_at: new Date().toISOString(),
   };
 
   if (assignedTo !== undefined) {
-    updateData.assigned_to = assignedTo || null;
+    updateData.assigned_to = assignedTo === "unassigned" ? null : assignedTo;
   }
 
     const { error } = await supabase
@@ -785,13 +758,13 @@ if (orderType === "detailed" && canModifyPrices) {
       setEditOrder(orderData as unknown as FulfillOrder);
       setOrderType(orderData.order_type);
       setRequirementNote(orderData.requirement_note || "");
-      setAssignedTo(orderData.assigned_to || "");
+      setAssignedTo(orderData.assigned_to || "unassigned");
 
       if (orderData.order_items && orderData.order_items.length > 0) {
         setOrderItems(orderData.order_items.map((item: OrderItemData) => ({
           product_id: item.product_id,
           quantity: item.quantity,
-          unit_price: item.unit_price
+          unit_price: item.unit_price ?? undefined
         })));
       } else {
         setOrderItems([{ product_id: "", quantity: 1 }]);
@@ -823,23 +796,9 @@ if (orderType === "detailed" && canModifyPrices) {
       if (error) throw error;
 
       setEditOrder(orderData as unknown as FulfillOrder);
-      setOrderType(orderData.order_type);
-      setRequirementNote(orderData.requirement_note || "");
-      setAssignedTo(orderData.assigned_to || "");
-
-      if (orderData.order_items && orderData.order_items.length > 0) {
-        setOrderItems(orderData.order_items.map((item: OrderItemData) => ({
-          product_id: item.product_id,
-          quantity: item.quantity,
-          unit_price: item.unit_price
-        })));
-      } else {
-        setOrderItems([{ product_id: "", quantity: 1 }]);
-      }
-
       setShowView(true);
     } catch (error) {
-      console.error("Error loading order details:", error);
+      console.error("Error loading order details for view:", error);
       toast.error("Failed to load order details");
     } finally {
       setLoadingOrderDetails(null);
@@ -859,8 +818,12 @@ if (orderType === "detailed" && canModifyPrices) {
         .from("orders")
         .select(`
           *,
-          stores(id, name, store_type_id, customer_id),
-          order_items(id, product_id, quantity, unit_price, products(id, name, sku, base_price, image_url))
+          stores(id, name, store_type_id, customer_id, route_id),
+          order_items(id, product_id, quantity, unit_price, products(id, name, sku, base_price, image_url)),
+          creator_profile:profiles!orders_created_by_profiles_fkey(full_name),
+          updater_profile:profiles!orders_updated_by_fkey(full_name),
+          fulfiller_profile:profiles!orders_fulfilled_by_profiles_fkey(full_name),
+          canceller_profile:profiles!orders_cancelled_by_profiles_fkey(full_name)
         `)
         .eq("id", orderId)
         .single();
@@ -882,7 +845,7 @@ if (orderType === "detailed" && canModifyPrices) {
       return;
     }
     
-    const order = orders?.find((o: OrderRecord) => o.id === orderId);
+    const order = orders?.find((o) => o.id === orderId);
     if (!order) return;
     
     setTransferOrder(order as unknown as FulfillOrder);
@@ -893,7 +856,7 @@ if (orderType === "detailed" && canModifyPrices) {
   const handleTransferComplete = async (orderId: string, newAssigneeId: string) => {
     const { error } = await supabase
       .from("orders")
-      .update({ assigned_to: newAssigneeId, updated_at: new Date().toISOString() })
+      .update({ assigned_to: newAssigneeId, updated_by: user!.id, updated_at: new Date().toISOString() })
       .eq("id", orderId);
 
     if (error) {
@@ -901,7 +864,7 @@ if (orderType === "detailed" && canModifyPrices) {
       return;
     }
 
-    const order = orders?.find((o: OrderRecord) => o.id === orderId);
+    const order = orders?.find((o) => o.id === orderId);
     
     // Notify the assigned agent
     sendNotificationToMany([newAssigneeId], {
@@ -920,7 +883,7 @@ if (orderType === "detailed" && canModifyPrices) {
   };
 
   // Handle invoice button click
-const handleInvoiceAction = async (orderId: string, status: string) => {
+const handleInvoiceAction = async (orderId: string, _status: string) => {
   if (!canViewInvoices) {
     toast.error("You don't have permission to view invoices");
     return;
@@ -953,21 +916,21 @@ const handleInvoiceAction = async (orderId: string, status: string) => {
       .is("deleted_at", null)
       .order("created_at", { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
 
     setEditOrder(orderData as unknown as FulfillOrder);
     
     if (existingInvoice) {
-      // View existing invoice
       setSelectedInvoice(existingInvoice);
       setInvoiceMode("view");
-    } else {
-      // Create new invoice
+      setShowInvoice(true);
+    } else if (role === "super_admin" || role === "manager") {
       setSelectedInvoice(null);
       setInvoiceMode("create");
+      setShowInvoice(true);
+    } else {
+      setViewProformaId(orderId);
     }
-    
-    setShowInvoice(true);
   } catch (error) {
     console.error("Error loading order for invoice:", error);
     toast.error("Failed to load order details");
@@ -1018,7 +981,7 @@ const exportCSV = () => {
     setCancelling(false);
     if (error) { toast.error(error.message); return; }
 
-    const order = orders?.find((o: OrderRecord) => o.id === cancelOrderId);
+    const order = orders?.find((o) => o.id === cancelOrderId);
     logActivity(user!.id, "Cancelled order", "order", order?.display_id || "", cancelOrderId, { reason: cancelReason });
 
     // Notify customer if linked
@@ -1046,7 +1009,7 @@ const exportCSV = () => {
 
   // Filtering with matrix restrictions
   const filteredOrders = useMemo(() => {
-    let data = orders || [];
+    let data: any[] = orders || [];
     if (hasMatrixRestrictions || hasStoreTypeRestrictions) {
       data = data.filter((o: OrderRecord) =>
         o.stores && canAccessStore(o.stores.route_id, o.stores.store_type_id)
@@ -1097,7 +1060,7 @@ const buildActions = (row: OrderRecord) => {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 text-green-600 hover:bg-green-50 hover:text-green-700"
+                  className="h-8 w-8 text-success hover:bg-success/10 hover:text-success"
                   onClick={() => handleOpenFulfillment(row.id)}
                   disabled={loadingOrderDetails === row.id}
                 >
@@ -1120,7 +1083,7 @@ const buildActions = (row: OrderRecord) => {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                  className="h-8 w-8 text-info hover:bg-info/10 hover:text-info"
                   onClick={() => handleOpenEdit(row.id)}
                 >
                   <Edit className="h-4 w-4" />
@@ -1156,7 +1119,7 @@ const buildActions = (row: OrderRecord) => {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 text-purple-600 hover:bg-purple-50 hover:text-purple-700"
+                  className="h-8 w-8 text-primary hover:bg-primary/10 hover:text-primary"
                   onClick={() => handleInvoiceAction(row.id, row.status)}
                   disabled={loadingOrderDetails === row.id}
                 >
@@ -1202,7 +1165,7 @@ const buildActions = (row: OrderRecord) => {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 text-green-600 hover:bg-green-50 hover:text-green-700"
+                  className="h-8 w-8 text-success hover:bg-success/10 hover:text-success"
                   onClick={() => handleOpenFulfillment(row.id)}
                   disabled={loadingOrderDetails === row.id}
                 >
@@ -1225,7 +1188,7 @@ const buildActions = (row: OrderRecord) => {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                  className="h-8 w-8 text-info hover:bg-info/10 hover:text-info"
                   onClick={() => handleOpenEdit(row.id)}
                 >
                   <Edit className="h-4 w-4" />
@@ -1243,7 +1206,7 @@ const buildActions = (row: OrderRecord) => {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 text-purple-600 hover:bg-purple-50 hover:text-purple-700"
+                  className="h-8 w-8 text-primary hover:bg-primary/10 hover:text-primary"
                   onClick={() => handleInvoiceAction(row.id, row.status)}
                   disabled={loadingOrderDetails === row.id}
                 >
@@ -1288,7 +1251,7 @@ const buildActions = (row: OrderRecord) => {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                className="h-8 w-8 text-info hover:bg-info/10 hover:text-info"
                 onClick={() => handleOpenView(row.id)}
               >
                 <Eye className="h-4 w-4" />
@@ -1306,7 +1269,7 @@ const buildActions = (row: OrderRecord) => {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 text-green-600 hover:bg-green-50 hover:text-green-700"
+                  className="h-8 w-8 text-success hover:bg-success/10 hover:text-success"
                   onClick={() => window.location.href = `/sales/${row.fulfilled_by_sale_id}`}
                 >
                   <ShoppingCart className="h-4 w-4" />
@@ -1324,7 +1287,7 @@ const buildActions = (row: OrderRecord) => {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 text-purple-600 hover:bg-purple-50 hover:text-purple-700"
+                  className="h-8 w-8 text-primary hover:bg-primary/10 hover:text-primary"
                   onClick={() => handleInvoiceAction(row.id, row.status)}
                   disabled={loadingOrderDetails === row.id}
                 >
@@ -1368,7 +1331,7 @@ const buildActions = (row: OrderRecord) => {
 };
 
   // Store Hover Card component
-  const StoreHoverCard = ({ store, children }: { store: StoreData; children: React.ReactNode }) => {
+  const StoreHoverCard = ({ store, children }: { store?: StoreData | null; children: React.ReactNode }) => {
     if (!store) return <span>{children}</span>;
     return (
       <HoverCard>
@@ -1424,7 +1387,7 @@ const buildActions = (row: OrderRecord) => {
             {store.outstanding !== undefined && (
               <div className="flex items-center justify-between py-2 border-t text-sm">
                 <span className="text-muted-foreground">Balance:</span>
-                <span className={`font-bold ${Number(store.outstanding || 0) > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                <span className={`font-bold ${Number(store.outstanding || 0) > 0 ? 'text-destructive' : 'text-success'}`}>
                   ₹{Number(store.outstanding || 0).toLocaleString()}
                 </span>
               </div>
@@ -1440,7 +1403,7 @@ const buildActions = (row: OrderRecord) => {
   };
 
   // Customer Hover Card component
-  const CustomerHoverCard = ({ customer, children }: { customer: CustomerData; children: React.ReactNode }) => {
+  const CustomerHoverCard = ({ customer, children }: { customer?: CustomerData | null; children: React.ReactNode }) => {
     if (!customer) return <span>{children}</span>;
     return (
       <HoverCard>
@@ -1540,11 +1503,11 @@ const columns = [
       />
 
       <Tabs value={statusFilter} onValueChange={setStatusFilter} className="w-full">
-        <TabsList className="bg-muted/50 p-1 h-11">
-          <TabsTrigger value="all" className="px-6 rounded-md transition-all data-[state=active]:shadow-sm">All</TabsTrigger>
-          <TabsTrigger value="pending" className="px-6 rounded-md transition-all data-[state=active]:shadow-sm">Pending</TabsTrigger>
-          <TabsTrigger value="delivered" className="px-6 rounded-md transition-all data-[state=active]:shadow-sm">Delivered</TabsTrigger>
-          <TabsTrigger value="cancelled" className="px-6 rounded-md transition-all data-[state=active]:shadow-sm">Cancelled</TabsTrigger>
+        <TabsList className="bg-muted/50 p-1 h-11 overflow-x-auto flex-nowrap">
+          <TabsTrigger value="all" className="px-3 sm:px-6 rounded-md transition-all data-[state=active]:shadow-sm">All</TabsTrigger>
+          <TabsTrigger value="confirmed" className="px-3 sm:px-6 rounded-md transition-all data-[state=active]:shadow-sm">Confirmed</TabsTrigger>
+          <TabsTrigger value="delivered" className="px-3 sm:px-6 rounded-md transition-all data-[state=active]:shadow-sm">Delivered</TabsTrigger>
+          <TabsTrigger value="cancelled" className="px-3 sm:px-6 rounded-md transition-all data-[state=active]:shadow-sm">Cancelled</TabsTrigger>
         </TabsList>
       </Tabs>
 
@@ -1577,7 +1540,7 @@ const columns = [
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All stores</SelectItem>
-          {storesForFilter?.map((s: StoreData) => <SelectItem key={s.id} value={s.id}>{s.name} ({s.display_id})</SelectItem>)}
+          {storesForFilter?.map((s) => <SelectItem key={s.id} value={s.id}>{s.name} ({s.display_id})</SelectItem>)}
         </SelectContent>
       </Select>
       <Select value={filterStoreType} onValueChange={setFilterStoreType}>
@@ -1586,7 +1549,7 @@ const columns = [
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All store types</SelectItem>
-          {storeTypes?.map((st: StoreData) => <SelectItem key={st.id} value={st.id}>{st.name}</SelectItem>)}
+          {storeTypes?.map((st) => <SelectItem key={st.id} value={st.id}>{st.name}</SelectItem>)}
         </SelectContent>
       </Select>
       <Select value={filterRoute} onValueChange={setFilterRoute}>
@@ -1595,7 +1558,7 @@ const columns = [
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All routes</SelectItem>
-          {routes?.map((r: RouteData) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+          {routes?.map((r: any) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
         </SelectContent>
       </Select>
       <Select value={filterCustomer} onValueChange={setFilterCustomer}>
@@ -1625,14 +1588,20 @@ const columns = [
       <span className="ml-auto text-xs text-muted-foreground">{filteredOrders.length}{hasMoreOrders ? "+" : ""} result{filteredOrders.length !== 1 ? "s" : ""}</span>
     </div>
 
-<DataTable
+    <OrderStockSummary orders={orders || []} />
+
+<VirtualDataTable
       columns={columns}
       data={filteredOrders}
       searchKey="display_id"
       searchPlaceholder="Search by order ID..."
       emptyMessage={statusFilter === "all" ? "No orders created yet." : `No ${statusFilter} orders.`}
+      height="calc(100vh - 320px)"
+      getRowClassName={(row) => row.id === highlightId ? "animate-highlight" : undefined}
+      onSearch={setFilterSearch}
+      searchValue={filterSearch}
       renderMobileCard={(row: OrderRecord) => (
-        <div className="rounded-lg border bg-card p-3">
+        <div className={`rounded-lg border bg-card p-3 transition-all ${row.id === highlightId ? "animate-highlight" : ""}`}>
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5 flex-wrap mb-1">
@@ -1656,16 +1625,16 @@ const columns = [
             <StatusBadge status={row.status === "delivered" ? "active" : row.status as any} label={row.status} />
           </div>
             <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50 gap-2 flex-wrap">
-              <p className="text-[10px] text-muted-foreground">{new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}</p>
-              {row.status === "pending" && (
+              <p className="text-xs text-muted-foreground">{new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}</p>
+              {(row.status === "confirmed" || row.status === "pending") && (
                 <div className="flex items-center gap-1.5 flex-wrap">
                   {canFulfillOrders && (
-                    <Button variant="outline" size="sm" className="h-7 text-xs text-green-600 border-green-600/40" onClick={(e) => { e.stopPropagation(); handleOpenFulfillment(row.id); }} disabled={loadingOrderDetails === row.id}>
+                    <Button variant="outline" size="sm" className="h-7 text-xs text-success border-success/40" onClick={(e) => { e.stopPropagation(); handleOpenFulfillment(row.id); }} disabled={loadingOrderDetails === row.id}>
                       {loadingOrderDetails === row.id ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Package className="h-3 w-3 mr-1" />}Fulfill
                     </Button>
                   )}
                   {canModifyOrders && (
-                    <Button variant="outline" size="sm" className="h-7 text-xs text-blue-600 border-blue-600/40" onClick={(e) => { e.stopPropagation(); handleOpenEdit(row.id); }}>
+                    <Button variant="outline" size="sm" className="h-7 text-xs text-info border-info/40" onClick={(e) => { e.stopPropagation(); handleOpenEdit(row.id); }}>
                       <Edit className="h-3 w-3 mr-1" />Edit
                     </Button>
                   )}
@@ -1683,16 +1652,16 @@ const columns = [
               )}
               {row.status === "delivered" && (
                 <div className="flex items-center gap-1.5">
-                  <Button variant="outline" size="sm" className="h-7 text-xs text-blue-600 border-blue-600/40" onClick={(e) => { e.stopPropagation(); handleOpenView(row.id); }}>
+                  <Button variant="outline" size="sm" className="h-7 text-xs text-info border-info/40" onClick={(e) => { e.stopPropagation(); handleOpenView(row.id); }}>
                     <Eye className="h-3 w-3 mr-1" />View
                   </Button>
                   {row.fulfilled_by_sale_id && (
-                    <Button variant="outline" size="sm" className="h-7 text-xs text-green-600 border-green-600/40" onClick={(e) => { e.stopPropagation(); window.location.href = `/sales/${row.fulfilled_by_sale_id}`; }}>
+                    <Button variant="outline" size="sm" className="h-7 text-xs text-success border-success/40" onClick={(e) => { e.stopPropagation(); window.location.href = `/sales/${row.fulfilled_by_sale_id}`; }}>
                       <ShoppingCart className="h-3 w-3 mr-1" />Sale
                     </Button>
                   )}
                   {canViewInvoices && (
-                    <Button variant="outline" size="sm" className="h-7 text-xs text-purple-600 border-purple-600/40" onClick={(e) => { e.stopPropagation(); handleInvoiceAction(row.id, row.status); }}>
+                    <Button variant="outline" size="sm" className="h-7 text-xs text-primary border-primary/40" onClick={(e) => { e.stopPropagation(); handleInvoiceAction(row.id, row.status); }}>
                       <FileText className="h-3 w-3 mr-1" />Invoice
                     </Button>
                   )}
@@ -1703,131 +1672,171 @@ const columns = [
                 <span className="text-xs text-muted-foreground italic truncate max-w-[180px]">{row.cancellation_reason}</span>
               )}
             </div>
+            {(row.creator_profile || row.updater_profile || row.fulfiller_profile || (row.status === "cancelled" && row.canceller_profile)) && (
+              <div className="flex items-center gap-1 text-2xs text-muted-foreground flex-wrap mt-2 pt-2 border-t border-border/50">
+                {row.creator_profile && <span>Created by {row.creator_profile.full_name}</span>}
+                {row.updater_profile && row.updater_profile.full_name !== row.creator_profile?.full_name && (
+                  <>
+                    <span className="text-muted-foreground/40">•</span>
+                    <span>Edited by {row.updater_profile.full_name}</span>
+                  </>
+                )}
+                {row.fulfiller_profile && (
+                  <>
+                    <span className="text-muted-foreground/40">•</span>
+                    <span>Fulfilled by {row.fulfiller_profile.full_name}</span>
+                  </>
+                )}
+                {row.status === "cancelled" && row.canceller_profile && (
+                  <>
+                    <span className="text-muted-foreground/40">•</span>
+                    <span className="text-destructive">Cancelled by {row.canceller_profile.full_name}</span>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         )}
       />
 
-      {hasMoreOrders && (
-        <div className="flex justify-center pt-2">
-          <Button variant="outline" size="sm" onClick={() => setLoadedPages((p) => p + 1)} disabled={isFetching} className="gap-1.5">
-            {isFetching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-            Load more
-          </Button>
-        </div>
-      )}
+      <div ref={sentinelRef} className="flex justify-center py-4">
+        {isFetching ? (
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        ) : !hasMoreOrders && orders && orders.length > 0 ? (
+          <span className="text-xs text-muted-foreground">All {orders.length} results loaded</span>
+        ) : null}
+      </div>
 
       {/* Create Order Dialog */}
       {canCreateOrders && (
         <Dialog open={showAdd} onOpenChange={(v) => { setShowAdd(v); if (!v) resetForm(); }}>
-          <DialogContent className="max-w-lg h-[80vh] overflow-hidden flex flex-col">
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader><DialogTitle>Create Order</DialogTitle></DialogHeader>
-            <form onSubmit={handleAdd} className="flex-1 overflow-y-auto space-y-4 pr-1">
-            {/* Store search */}
-            <div>
-              <Label>Store</Label>
-              <Input
-                placeholder="Search stores by name or ID..."
-                value={storeSearch}
-                onChange={(e) => setStoreSearch(e.target.value)}
-                className="mt-1"
-              />
-              {storeSearch && (
-                <div className="mt-1 h-36 overflow-y-auto border rounded-lg divide-y">
-                  {(stores || [])
-                    .filter((s: any) => s.name.toLowerCase().includes(storeSearch.toLowerCase()) || s.display_id.toLowerCase().includes(storeSearch.toLowerCase()))
-                    .map((s: any) => (
-                      <button key={s.id} type="button"
-                        onClick={() => { setStoreId(s.id); setCustomerId(s.customer_id || ""); setStoreSearch(""); }}
-                        className={`w-full text-left px-3 py-2.5 text-sm transition-colors hover:bg-accent ${storeId === s.id ? "bg-primary/10 font-semibold text-primary" : "text-foreground"}`}
-                      >
-                        <span className="font-mono text-xs">{s.display_id}</span>
-                        <span className="ml-2">{s.name}</span>
-                      </button>
-                    ))}
-                </div>
-              )}
-              {storeId && (
-                <div className="mt-1.5 rounded-xl bg-primary/5 border border-primary/20 px-3 py-2 flex items-center justify-between">
-                  <span className="text-sm font-medium text-foreground">{(stores as any[])?.find((s: any) => s.id === storeId)?.name || "Store selected"}</span>
-                  <button type="button" onClick={() => { setStoreId(""); setCustomerId(""); }} className="text-xs text-muted-foreground hover:text-foreground">Change</button>
-                </div>
-              )}
-            </div>
+            <form onSubmit={handleAdd} className="space-y-4">
+              <div>
+                <Label>Store</Label>
+                <Input
+                  placeholder="Search stores by name or ID..."
+                  value={storeSearch}
+                  onChange={(e) => setStoreSearch(e.target.value)}
+                  className="mt-1" />
+                {storeSearch && (
+                  <div className="mt-1 max-h-36 overflow-y-auto border rounded-lg divide-y">
+                    {(stores || [])
+                      .filter((s: any) => s.name.toLowerCase().includes(storeSearch.toLowerCase()) || s.display_id.toLowerCase().includes(storeSearch.toLowerCase()))
+                      .map((s: any) => (
+                        <button key={s.id} type="button"
+                          onClick={() => { setStoreId(s.id); setCustomerId(s.customer_id || ""); setStoreSearch(""); }}
+                          className={`w-full text-left px-3 py-2.5 text-sm transition-colors hover:bg-accent ${storeId === s.id ? "bg-primary/10 font-semibold text-primary" : "text-foreground"}`}>
+                          <span className="font-medium">{s.name}</span>
+                          <span className="ml-2 font-mono text-xs text-muted-foreground">{s.display_id}</span>
+                        </button>
+                      ))}
+                  </div>
+                )}
+                {storeId && (
+                  <div className="mt-1.5 rounded-xl bg-primary/5 border border-primary/20 px-3 py-2 flex items-center justify-between">
+                    <span className="text-sm font-medium">{(stores as any[])?.find((s: any) => s.id === storeId)?.name || "Store selected"}</span>
+                    <button type="button" onClick={() => { setStoreId(""); setCustomerId(""); }} className="text-xs text-muted-foreground hover:text-foreground">Change</button>
+                  </div>
+                )}
+              </div>
 
-            {storeId && (
-              <>
-                {/* Order Type + Assign row */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label>Type</Label>
-                    <div className="flex mt-1 rounded-xl border overflow-hidden">
-                      <button type="button" onClick={() => setOrderType("simple")}
-                        className={`flex-1 py-2 text-xs font-semibold transition-colors ${orderType === "simple" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>Note</button>
-                      <button type="button" onClick={() => setOrderType("detailed")}
-                        className={`flex-1 py-2 text-xs font-semibold transition-colors ${orderType === "detailed" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>Products</button>
+              {storeId && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Type</Label>
+                      <div className="flex mt-1 rounded-xl border overflow-hidden">
+                        <button type="button" onClick={() => setOrderType("simple")}
+                          className={`flex-1 py-2 text-xs font-semibold transition-colors ${orderType === "simple" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>Note</button>
+                        <button type="button" onClick={() => setOrderType("detailed")}
+                          className={`flex-1 py-2 text-xs font-semibold transition-colors ${orderType === "detailed" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>Products</button>
+                      </div>
+                    </div>
+                    <div>
+                      <Label>Assign To</Label>
+                      <Select value={assignedTo} onValueChange={setAssignedTo}>
+                        <SelectTrigger className="mt-1"><SelectValue placeholder="Unassigned" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="unassigned">Unassigned</SelectItem>
+                          {agents?.map((a: any) => <SelectItem key={a.id} value={a.id}>{a.full_name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
-                  <div>
-                    <Label>Assign To</Label>
-                    <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)}
-                      className="mt-1 w-full h-9 rounded-xl border border-border bg-background px-3 text-xs"
-                    >
-                      <option value="">Unassigned</option>
-                      {agents?.map((a: any) => <option key={a.id} value={a.id}>{a.full_name}</option>)}
-                    </select>
-                  </div>
-                </div>
 
-                {/* Simple: note */}
-                {orderType === "simple" && (
-                  <div>
-                    <Label>Note</Label>
-                    <textarea value={requirementNote} onChange={(e) => setRequirementNote(e.target.value)}
-                      className="mt-1 w-full h-20 rounded-xl border border-border bg-background px-3 py-2 text-xs resize-none"
-                      placeholder="e.g., Need water bottles urgently" />
-                  </div>
-                )}
+                  {orderType === "simple" && (
+                    <div>
+                      <Label>Requirement Note</Label>
+                      <Textarea value={requirementNote} onChange={(e) => setRequirementNote(e.target.value)}
+                        placeholder="e.g., Need water bottles urgently"
+                        className="mt-1 min-h-[80px]" />
+                    </div>
+                  )}
 
-                {/* Detailed: products with +/- */}
-                {orderType === "detailed" && (
-                  <div className="h-48 overflow-y-auto space-y-1.5 border rounded-xl p-2">
-                    {((products as any[]) || []).map((p: any) => {
-                      const inCart = orderItems.find((i) => i.product_id === p.id);
-                      return (
-                        <div key={p.id} className="flex items-center justify-between rounded-xl border border-border px-3 py-2.5">
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-medium text-foreground truncate">{p.name}</p>
-                            <p className="text-[10px] text-muted-foreground">₹{Number(p.base_price).toLocaleString("en-IN")}</p>
-                          </div>
-                          {inCart ? (
-                            <div className="flex items-center gap-2">
-                              <button type="button" onClick={() => updateItemQuantity(p.id, inCart.quantity - 1)}
-                                className="h-8 w-8 rounded-lg border-2 border-border flex items-center justify-center hover:bg-muted active:scale-90 transition-all">
-                                <Minus className="h-3.5 w-3.5" />
-                              </button>
-                              <span className="text-sm font-bold text-foreground w-6 text-center">{inCart.quantity}</span>
-                              <button type="button" onClick={() => updateItemQuantity(p.id, inCart.quantity + 1)}
-                                className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center hover:bg-primary/90 active:scale-90 transition-all">
-                                <Plus className="h-3.5 w-3.5 text-primary-foreground" />
-                              </button>
+                  {orderType === "detailed" && (
+                    <div className="space-y-3">
+                      <Label className="text-base font-semibold">Products</Label>
+                      <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                        {((products as any[]) || []).map((p: any) => {
+                          const inCart = orderItems.find((i) => i.product_id === p.id);
+                          return (
+                            <div key={p.id} className="flex items-center gap-3 p-2 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
+                              <div className="w-10 h-10 rounded-md bg-muted flex items-center justify-center shrink-0 overflow-hidden">
+                                {p.image_url ? (
+                                  <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" />
+                                ) : (
+                                  <Package className="h-5 w-5 text-muted-foreground" />
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-sm truncate">{p.name}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  ₹{Number(p.base_price).toLocaleString("en-IN")}
+                                  {inCart ? ` × ${inCart.quantity} = ₹${(inCart.quantity * Number(p.base_price)).toLocaleString("en-IN")}` : ""}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                {inCart ? (
+                                  <>
+                                    <Button type="button" variant="outline" size="icon" className="h-7 w-7"
+                                      onClick={() => updateItemQuantity(p.id, inCart.quantity - 1)}>
+                                      <Minus className="h-3 w-3" />
+                                    </Button>
+                                    <Input type="number" min={0} value={inCart.quantity}
+                                      onChange={(e) => updateItemQuantity(p.id, Math.max(0, Number(e.target.value) || 0))}
+                                      className="w-14 h-7 text-center text-sm px-1" />
+                                    <Button type="button" variant="outline" size="icon" className="h-7 w-7"
+                                      onClick={() => updateItemQuantity(p.id, inCart.quantity + 1)}>
+                                      <Plus className="h-3 w-3" />
+                                    </Button>
+                                  </>
+                                ) : (
+                                  <Button type="button" variant="outline" size="icon" className="h-7 w-7"
+                                    onClick={() => addOrderItem(p.id)}>
+                                    <Plus className="h-3 w-3" />
+                                  </Button>
+                                )}
+                              </div>
                             </div>
-                          ) : (
-                            <button type="button" onClick={() => addOrderItem(p.id)}
-                              className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center hover:bg-primary/90 active:scale-90 transition-all">
-                              <Plus className="h-3.5 w-3.5 text-primary-foreground" />
-                            </button>
-                          )}
+                          );
+                        })}
+                      </div>
+                      {orderItems.filter(i => i.product_id).length > 0 && (
+                        <div className="flex justify-between items-center p-3 rounded-lg border bg-muted/50">
+                          <span className="text-sm font-medium">Order Total ({orderItems.filter(i => i.product_id).length} items)</span>
+                          <span className="text-lg font-bold">₹{orderItems.reduce((sum, i) => sum + (i.quantity * (products?.find((p: any) => p.id === i.product_id)?.base_price || 0)), 0).toLocaleString("en-IN")}</span>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </>
-            )}
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
 
-              <Button type="submit" className="w-full" disabled={saving}>
+              <Button type="submit" className="w-full" disabled={saving || !storeId}>
                 {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Create Order
+                {saving ? "Creating..." : "Create Order"}
               </Button>
             </form>
           </DialogContent>
@@ -1840,18 +1849,35 @@ const columns = [
           <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader><DialogTitle>Edit Order {editOrder?.display_id}</DialogTitle></DialogHeader>
             <form onSubmit={handleEdit} className="space-y-4">
+          {(editOrder?.creator_profile || editOrder?.updater_profile || editOrder?.fulfiller_profile || editOrder?.canceller_profile) && (
+            <div className="rounded-lg bg-muted p-3 space-y-1 text-xs">
+              <p className="font-semibold text-muted-foreground mb-1">Audit Trail</p>
+              {editOrder.creator_profile && (
+                <div className="flex justify-between"><span className="text-muted-foreground">Created by</span><span>{editOrder.creator_profile.full_name}</span></div>
+              )}
+              {editOrder.updater_profile && editOrder.updater_profile.full_name !== editOrder.creator_profile?.full_name && (
+                <div className="flex justify-between"><span className="text-muted-foreground">Edited by</span><span>{editOrder.updater_profile.full_name}</span></div>
+              )}
+              {editOrder.fulfiller_profile && (
+                <div className="flex justify-between"><span className="text-muted-foreground">Fulfilled by</span><span>{editOrder.fulfiller_profile.full_name}</span></div>
+              )}
+              {editOrder.status === "cancelled" && editOrder.canceller_profile && (
+                <div className="flex justify-between"><span className="text-muted-foreground">Cancelled by</span><span className="text-destructive">{editOrder.canceller_profile.full_name}</span></div>
+              )}
+            </div>
+          )}
           <div>
             <Label>Requirement Note</Label>
             <Textarea value={requirementNote} onChange={(e) => setRequirementNote(e.target.value)} className="mt-1" />
           </div>
           
-          {(role === "admin" || role === "manager" || role === "marketer") && (
+          {((role as string) === "admin" || role === "manager" || role === "marketer") && (
             <div>
               <Label>Assign To Agent</Label>
               <Select value={assignedTo} onValueChange={setAssignedTo}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Select agent" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Unassigned</SelectItem>
+                  <SelectItem value="unassigned">Unassigned</SelectItem>
                   {agents?.map((a) => <SelectItem key={a.id} value={a.id}>{a.full_name}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -1936,20 +1962,28 @@ const columns = [
           <DialogHeader><DialogTitle>Cancel Order</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Are you sure you want to cancel order <span className="font-mono font-medium text-foreground">{orders?.find((o: OrderRecord) => o.id === cancelOrderId)?.display_id}</span>?
+              Are you sure you want to cancel order <span className="font-mono font-medium text-foreground">{orders?.find((o) => o.id === cancelOrderId)?.display_id}</span>?
             </p>
             <div>
               <Label>Reason for cancellation</Label>
               <Select value={cancelReason} onValueChange={setCancelReason}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Select reason" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="By Mistake">By Mistake</SelectItem>
-                  <SelectItem value="Stock Available">Stock Available</SelectItem>
-                  <SelectItem value="Other Brands">Other Brands</SelectItem>
-                  <SelectItem value="Other">Other</SelectItem>
+                  {CANCEL_REASONS.map((r) => (
+                    <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
+            {cancelReason === "Other" && (
+              <Textarea
+                placeholder="Type the cancellation reason..."
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                rows={3}
+                className="mt-1"
+              />
+            )}
             <div className="flex gap-2 justify-end">
               <Button variant="outline" onClick={() => { setCancelOrderId(null); setCancelReason(""); }}>Back</Button>
               <Button variant="destructive" onClick={handleCancel} disabled={cancelling || !cancelReason}>
@@ -1958,16 +1992,6 @@ const columns = [
               </Button>
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Order Access Dialog */}
-      <Dialog open={showOrderAccess} onOpenChange={setShowOrderAccess}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Order Access Control</DialogTitle>
-          </DialogHeader>
-          <OrderAccessMatrix />
         </DialogContent>
       </Dialog>
 

@@ -49,7 +49,7 @@ export const WorkerForm: React.FC<WorkerFormProps> = ({ isOpen, onClose, worker 
   const { data: roles } = useQuery({
     queryKey: ['worker_roles', warehouse?.id],
     queryFn: async () => {
-        const { data, error } = await supabase.from('worker_roles').select('id, name').eq('warehouse_id', warehouse?.id);
+        const { data, error } = await supabase.from('worker_roles').select('id, name').eq('warehouse_id', warehouse?.id as string);
         if (error) throw error;
         return data;
     },
@@ -66,7 +66,7 @@ export const WorkerForm: React.FC<WorkerFormProps> = ({ isOpen, onClose, worker 
   useEffect(() => {
     if (worker) {
       form.reset({
-        ...worker,
+        ...worker as any,
         joining_date: worker.joining_date ? new Date(worker.joining_date).toISOString().split('T')[0] : undefined,
       });
     } else {
@@ -86,7 +86,7 @@ export const WorkerForm: React.FC<WorkerFormProps> = ({ isOpen, onClose, worker 
     mutationFn: async (formData: WorkerFormData) => {
       if (!warehouse) throw new Error("No warehouse selected");
 
-      const display_id = worker?.display_id || await generateDisplayId('workers', 'WKR');
+      const display_id = worker?.display_id || generateDisplayId('WKR');
 
       const payload = {
         id: worker?.id,
@@ -95,7 +95,7 @@ export const WorkerForm: React.FC<WorkerFormProps> = ({ isOpen, onClose, worker 
         warehouse_id: warehouse.id,
       };
 
-      const { error } = await supabase.from('workers').upsert(payload).select();
+      const { error } = await (supabase as any).from('workers').upsert(payload).select();
       if (error) throw error;
     },
     onSuccess: () => {

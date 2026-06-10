@@ -6,11 +6,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveCustomer } from "@/lib/resolveCustomer";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
+import { getActiveOrderForStore } from "@/lib/orders";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -61,23 +61,25 @@ const CustomerOrders = () => {
     e.preventDefault();
     if (!orderStoreId) { toast.error("Select a store"); return; }
 
-    // Check for existing active order for this store
-    const activeOrder = orders?.find(o => o.store_id === orderStoreId && (o.status === "pending" || o.status === "confirmed"));
+    const activeOrder = await getActiveOrderForStore(supabase, orderStoreId);
     if (activeOrder) {
       toast.error("You already have an active order for this store. Wait until it's delivered or cancelled.");
       return;
     }
 
     setSaving(true);
-    const { data: displayId } = await supabase.rpc("generate_random_display_id", { p_prefix: "ORD", p_table_name: "orders" });
+    const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "ORD", seq_name: "order_display_seq" }) as any;
+    const { data: store } = await supabase.from("stores").select("warehouse_id").eq("id", orderStoreId).single();
     const { error } = await supabase.from("orders").insert({
       display_id: displayId,
       store_id: orderStoreId,
       customer_id: customer!.id,
       order_type: "simple",
       source: "manual",
+      status: "confirmed",
       created_by: user!.id,
       requirement_note: orderNote || null,
+      warehouse_id: (store as any)?.warehouse_id || null,
     });
     setSaving(false);
     if (error) toast.error(error.message);

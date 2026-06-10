@@ -150,8 +150,10 @@ export function ReportContainer({
 
       {/* Summary Cards */}
       {summaryCards && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-          {summaryCards}
+        <div className="@container">
+          <div className="grid grid-cols-2 @[400px]:grid-cols-3 @[600px]:grid-cols-4 @[800px]:grid-cols-5 @[1000px]:grid-cols-6 gap-3">
+            {summaryCards}
+          </div>
         </div>
       )}
 
@@ -209,7 +211,7 @@ export function ReportKPICard({
       `}
     >
       <div className="flex items-start justify-between gap-2">
-        <span className={`text-[10px] font-semibold uppercase tracking-wider ${highlight ? "text-primary-foreground/80" : "text-muted-foreground"}`}>
+        <span className={`text-2xs font-semibold uppercase tracking-wider ${highlight ? "text-primary-foreground/80" : "text-muted-foreground"}`}>
           {label}
         </span>
         {Icon && (

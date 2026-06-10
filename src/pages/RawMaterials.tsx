@@ -184,7 +184,7 @@ const RawMaterials = () => {
         const { data: idData } = await supabase.rpc("generate_display_id", {
           prefix: "RM",
           seq_name: "raw_materials_display_id_seq"
-        });
+        }) as any;
 
         const { error } = await supabase.from("raw_materials").insert({
           display_id: idData,
@@ -269,7 +269,7 @@ const deleteMutation = useMutation({
 
 const unlinkVendorMutation = useMutation({
   mutationFn: async (id: string) => {
-    const { error } = await supabase.from("vendor_raw_materials").update({ deleted_at: new Date().toISOString() }).eq("id", id);
+    const { error } = await (supabase as any).from("vendor_raw_materials").update({ deleted_at: new Date().toISOString() }).eq("id", id);
     if (error) throw error;
   },
     onSuccess: () => {
@@ -339,25 +339,26 @@ const unlinkVendorMutation = useMutation({
         primaryAction={{ label: "Add Material", onClick: () => { resetForm(); setShowAdd(true); } }}
       />
 
-      <DataTable
-        columns={columns}
-        data={materials}
-        searchKey="name"
-        searchPlaceholder="Search materials..."
-        emptyMessage="No raw materials yet"
-        renderMobileCard={(row: RawMaterial) => (
+      {materials.length > 0 ? (
+        <DataTable
+          columns={columns}
+          data={materials}
+          searchKey="name"
+          searchPlaceholder="Search materials..."
+          emptyMessage="No raw materials yet"
+          renderMobileCard={(row: RawMaterial) => (
           <div className="entity-card-mobile flex-col !items-stretch">
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1 min-w-0">
                 <p className="entity-card-subtitle">{row.display_id}</p>
                 <h3 className="font-semibold text-sm truncate">{row.name}</h3>
                 <div className="flex items-center gap-1.5 flex-wrap mt-1">
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                  <span className="text-2xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
                     {row.raw_material_categories?.name || row.category || "Uncategorized"}
                   </span>
-                  {row.vendors?.name && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">
-                      {row.vendors.name}
+                  {(row as any).vendors?.name && (
+                    <span className="text-2xs px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+                      {(row as any).vendors.name}
                     </span>
                   )}
                 </div>
@@ -395,7 +396,22 @@ const unlinkVendorMutation = useMutation({
             </div>
           </div>
         )}
-      />
+        />
+      ) : (
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <div className="rounded-full bg-muted p-4 mb-4">
+            <Package className="h-8 w-8 text-muted-foreground" />
+          </div>
+          <h3 className="text-lg font-semibold mb-2">No raw materials found</h3>
+          <p className="text-muted-foreground mb-4 max-w-sm">
+            Add your first raw material to start tracking inventory and vendor links.
+          </p>
+          <Button onClick={() => { resetForm(); setShowAdd(true); }}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Material
+          </Button>
+        </div>
+      )}
 
       {/* Add/Edit Dialog */}
       <Dialog open={showAdd} onOpenChange={(open) => { setShowAdd(open); if (!open) resetForm(); }}>
@@ -526,7 +542,7 @@ const unlinkVendorMutation = useMutation({
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
-                      {link.is_preferred && <Badge variant="secondary" className="text-[10px]">Preferred</Badge>}
+                      {link.is_preferred && <Badge variant="secondary" className="text-2xs">Preferred</Badge>}
                       <Button 
                         variant="ghost" 
                         size="icon" 

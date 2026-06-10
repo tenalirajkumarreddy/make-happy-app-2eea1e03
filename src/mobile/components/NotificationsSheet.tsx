@@ -70,7 +70,7 @@ export function NotificationsSheet({ open, onOpenChange }: Props) {
                       <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
                         {n.message}
                       </p>
-                      <p className="text-[10px] text-muted-foreground/60 mt-1">
+                      <p className="text-xs text-muted-foreground/60 mt-1">
                         {new Date(n.created_at).toLocaleString()}
                       </p>
                     </div>

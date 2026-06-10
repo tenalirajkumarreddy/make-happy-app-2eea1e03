@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Handovers Redesign Mockup</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: #0f0f23;
+    color: #e0e0e0;
+    padding: 1.5rem;
+  }
+  h2 { font-size: 1.3rem; font-weight: 700; margin: 2rem 0 1rem; color: #fff; }
+  h3 { font-size: 1rem; font-weight: 600; margin: 1.5rem 0 0.75rem; color: #ccc; }
+  .badge { display: inline-block; font-size: 0.65rem; font-weight: 600; padding: 0.2rem 0.5rem; border-radius: 4px; margin-bottom: 0.5rem; }
+  .badge-blue { background: #1a3a5c; color: #7ec8e3; }
+  .badge-amber { background: #3a2a1a; color: #e3b87e; }
+
+  /* ============ PAGE LAYOUT ============ */
+  .page { max-width: 1200px; margin: 0 auto; }
+
+  /* ============ HEADER ============ */
+  .page-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;
+  }
+  .page-header h1 { font-size: 1.5rem; font-weight: 700; color: #fff; }
+  .page-header .subtitle { font-size: 0.8rem; color: #888; margin-top: 0.1rem; }
+  .header-actions { display: flex; gap: 0.5rem; }
+  .btn { padding: 0.4rem 0.9rem; border-radius: 6px; font-size: 0.8rem; font-weight: 500; border: none; cursor: default; }
+  .btn-primary { background: #2563eb; color: #fff; }
+  .btn-secondary { background: #1e293b; color: #ccc; border: 1px solid #334155; }
+  .btn-sm { padding: 0.3rem 0.6rem; font-size: 0.7rem; }
+
+  /* ============ STAT CARDS ============ */
+  .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin-bottom: 1rem; }
+  .stat-card {
+    background: #16162e; border: 1px solid #2a2a4a; border-radius: 10px; padding: 1rem;
+    position: relative; overflow: hidden;
+  }
+  .stat-card .label { font-size: 0.7rem; color: #888; text-transform: uppercase; letter-spacing: 0.05em; }
+  .stat-card .value { font-size: 1.4rem; font-weight: 700; margin-top: 0.25rem; }
+  .stat-card .icon { position: absolute; top: 0.75rem; right: 0.75rem; font-size: 1.5rem; opacity: 0.3; }
+  .stat-blue { border-left: 3px solid #3b82f6; } .stat-blue .value { color: #60a5fa; }
+  .stat-indigo { border-left: 3px solid #6366f1; } .stat-indigo .value { color: #818cf8; }
+  .stat-green { border-left: 3px solid #10b981; } .stat-green .value { color: #34d399; }
+  .stat-rose { border-left: 3px solid #f43f5e; } .stat-rose .value { color: #fb7185; }
+
+  /* ============ BANNER ============ */
+  .banner {
+    background: linear-gradient(135deg, #1e1e4a, #16162e);
+    border: 1px solid #2a2a4a; border-radius: 10px; padding: 1rem 1.5rem;
+    display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;
+  }
+  .banner .label { font-size: 0.75rem; color: #888; }
+  .banner .value { font-size: 1.2rem; font-weight: 700; }
+  .banner .positive { color: #34d399; }
+  .banner .negative { color: #fb7185; }
+
+  /* ============ QUICK ACTIONS ============ */
+  .quick-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1.5rem; }
+  .quick-card {
+    background: #16162e; border: 1px solid #2a2a4a; border-radius: 10px; padding: 1rem;
+    display: flex; align-items: center; gap: 1rem;
+  }
+  .quick-card .icon-box {
+    width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
+    font-size: 1.2rem; flex-shrink: 0;
+  }
+  .quick-card .icon-amber { background: #3a2a1a; }
+  .quick-card .icon-emerald { background: #0a3a2a; }
+  .quick-card .title { font-size: 0.85rem; font-weight: 600; color: #fff; }
+  .quick-card .desc { font-size: 0.7rem; color: #888; }
+  .quick-card .count { margin-left: auto; font-size: 1.2rem; font-weight: 700; color: #e3b87e; }
+  .quick-row .quick-card:last-child .count { color: #34d399; }
+
+  /* ============ TABS ============ */
+  .tabs { display: flex; gap: 0.25rem; margin-bottom: 1.25rem; border-bottom: 1px solid #2a2a4a; }
+  .tab { padding: 0.6rem 1rem; font-size: 0.8rem; color: #888; cursor: default; border-bottom: 2px solid transparent; margin-bottom: -1px; display: flex; align-items: center; gap: 0.4rem; }
+  .tab.active { color: #60a5fa; border-bottom-color: #3b82f6; }
+  .tab-count { background: #2a2a4a; color: #ccc; font-size: 0.65rem; padding: 0.1rem 0.4rem; border-radius: 8px; }
+
+  /* ============ FILTER BAR ============ */
+  .filter-bar {
+    display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem;
+  }
+  .filter-pill {
+    background: rgba(255,255,255,0.04); border: 1px solid #2a2a4a; border-radius: 6px;
+    padding: 0.3rem 0.7rem; font-size: 0.75rem; color: #aaa; cursor: default; display: flex; align-items: center; gap: 0.4rem;
+    height: 30px;
+  }
+  .filter-pill .dot { width: 6px; height: 6px; border-radius: 50%; background: #3b82f6; }
+  .filter-pill.clear { color: #888; border-color: #333; }
+
+  /* ============ SECTION LABEL ============ */
+  .section-label {
+    font-size: 0.75rem; color: #f59e0b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+    margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;
+  }
+  .section-label .count { background: #3a2a1a; color: #e3b87e; font-size: 0.65rem; padding: 0.1rem 0.4rem; border-radius: 6px; }
+
+  /* ============ HANDOVER CARD ============ */
+  .card-list { display: flex; flex-direction: column; gap: 0.75rem; }
+  .h-card {
+    background: #16162e; border: 1px solid #2a2a4a; border-radius: 10px; padding: 1rem;
+    display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+  }
+  .h-card .avatar {
+    width: 36px; height: 36px; border-radius: 50%; background: #2a2a4a; display: flex; align-items: center; justify-content: center;
+    font-size: 0.8rem; font-weight: 600; flex-shrink: 0;
+  }
+  .h-card .info { flex: 1; min-width: 140px; }
+  .h-card .info .name { font-size: 0.85rem; font-weight: 600; color: #fff; }
+  .h-card .info .meta { font-size: 0.7rem; color: #888; }
+  .h-card .amount { font-size: 1.1rem; font-weight: 700; color: #34d399; min-width: 80px; text-align: right; }
+  .h-card .status-badge {
+    font-size: 0.7rem; padding: 0.2rem 0.55rem; border-radius: 5px; font-weight: 500;
+  }
+  .status-pending { background: #3a2a1a; color: #e3b87e; }
+  .status-confirmed { background: #0a3a2a; color: #34d399; }
+  .status-rejected { background: #3a1a1a; color: #fb7185; }
+  .status-awaiting { background: #1a2a4a; color: #7ec8e3; }
+  .h-card .actions { display: flex; gap: 0.35rem; }
+  .h-card .actions .btn { padding: 0.3rem 0.6rem; font-size: 0.7rem; }
+  .btn-green { background: #065f46; color: #6ee7b7; }
+  .btn-red { background: #5f0606; color: #fca5a5; }
+  .btn-ghost { background: transparent; color: #888; border: 1px solid #333; }
+
+  .date-group { margin-bottom: 1rem; }
+  .date-header { font-size: 0.8rem; color: #666; font-weight: 600; margin-bottom: 0.5rem; padding: 0 0.25rem; display: flex; gap: 0.4rem; }
+  .date-header .count { color: #555; font-weight: 400; }
+
+  .arrow-icon { color: #555; font-size: 0.8rem; }
+
+  /* ============ EXPENSE SECTION ============ */
+  .expense-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-bottom: 1rem; }
+  .exp-stat { background: #16162e; border: 1px solid #2a2a4a; border-radius: 8px; padding: 0.75rem; text-align: center; }
+  .exp-stat .val { font-size: 1.2rem; font-weight: 700; }
+  .exp-stat .lbl { font-size: 0.65rem; color: #888; }
+  .exp-stat .tag { font-size: 0.6rem; color: #888; }
+
+  /* ============ BEFORE/AFTER COMPARISON ============ */
+  .comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem; }
+  .panel { border-radius: 12px; overflow: hidden; }
+  .panel-header { padding: 0.5rem 1rem; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+  .panel-before .panel-header { background: #3a1a1a; color: #fb7185; }
+  .panel-after .panel-header { background: #0a3a2a; color: #34d399; }
+  .panel-body { padding: 0.75rem; }
+  .panel-before .panel-body { background: #16162e; }
+  .panel-after .panel-body { background: #0f0f23; }
+
+  .old-card { background: #16162e; border: 1px solid #333; border-radius: 8px; padding: 1rem; margin-bottom: 0.5rem; }
+  .old-card .row { display: flex; justify-content: space-between; margin-bottom: 0.3rem; }
+  .old-card .row .l { color: #888; font-size: 0.75rem; }
+  .old-card .row .r { color: #ccc; font-size: 0.75rem; font-weight: 500; }
+  .old-card .amt { font-size: 1.2rem; font-weight: 700; color: #34d399; text-align: right; }
+  .old-actions { display: flex; gap: 0.35rem; margin-top: 0.5rem; }
+  .old-actions span { font-size: 0.65rem; background: #2a2a4a; padding: 0.15rem 0.4rem; border-radius: 4px; color: #888; }
+
+  .arrow-marker { color: #555; text-align: center; font-size: 0.7rem; font-weight: 600; margin-bottom: 0.25rem; }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <!-- SECTION: BEFORE vs AFTER -->
+  <h2>Before vs After — Card Redesign</h2>
+  <div class="comparison">
+    <div class="panel panel-before">
+      <div class="panel-header">Before — Current Handover Card</div>
+      <div class="panel-body">
+        <div class="old-card">
+          <div class="row"><span class="l">From</span><span class="r">Raj Kumar</span></div>
+          <div class="row"><span class="l">To</span><span class="r">Amit Singh</span></div>
+          <div class="row"><span class="l">Status</span><span class="r" style="color:#e3b87e;">awaiting_confirmation</span></div>
+          <div class="row"><span class="l">Date</span><span class="r">26 May 2026</span></div>
+          <div class="amt">₹ 12,500</div>
+          <div class="old-actions">
+            <span style="background:#065f46;color:#6ee7b7;">Confirm</span>
+            <span style="background:#5f0606;color:#fca5a5;">Reject</span>
+          </div>
+        </div>
+        <div class="old-card">
+          <div class="row"><span class="l">From</span><span class="r">Priya Patel</span></div>
+          <div class="row"><span class="l">To</span><span class="r">Raj Kumar</span></div>
+          <div class="row"><span class="l">Status</span><span class="r" style="color:#34d399;">confirmed</span></div>
+          <div class="row"><span class="l">Date</span><span class="r">25 May 2026</span></div>
+          <div class="amt">₹ 5,000</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel panel-after">
+      <div class="panel-header">After — Polished Handover Card</div>
+      <div class="panel-body">
+        <div class="h-card" style="border-color:#3a2a1a;">
+          <div class="avatar" style="background:#3a2a1a;color:#e3b87e;">RK</div>
+          <div class="info">
+            <div class="name">Raj Kumar <span class="arrow-icon">→</span> Amit Singh</div>
+            <div class="meta">Today, 2:15 PM</div>
+          </div>
+          <div class="amount" style="color:#e3b87e;">₹ 12,500</div>
+          <span class="status-badge status-awaiting">Awaiting</span>
+          <div class="actions">
+            <span class="btn btn-green">✓ Confirm</span>
+            <span class="btn btn-red">✕ Reject</span>
+          </div>
+        </div>
+        <div class="h-card">
+          <div class="avatar" style="background:#0a3a2a;color:#34d399;">PP</div>
+          <div class="info">
+            <div class="name">Priya Patel <span class="arrow-icon">→</span> Raj Kumar</div>
+            <div class="meta">Yesterday, 11:30 AM</div>
+          </div>
+          <div class="amount">₹ 5,000</div>
+          <span class="status-badge status-confirmed">Confirmed</span>
+          <div class="actions">
+            <span class="btn btn-ghost">View</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FULL PAGE MOCKUP -->
+  <h2>Full Handovers Page — Redesigned Layout</h2>
+
+  <!-- HEADER -->
+  <div class="page-header">
+    <div>
+      <h1>Handovers</h1>
+      <div class="subtitle">Track money flow between team members</div>
+    </div>
+    <div class="header-actions">
+      <span class="btn btn-secondary">⚖ Adjust Holding</span>
+      <span class="btn btn-primary">+ Create Handover</span>
+    </div>
+  </div>
+
+  <!-- STAT CARDS -->
+  <div class="stat-row">
+    <div class="stat-card stat-blue">
+      <div class="stat-icon">📊</div>
+      <div class="label">Today's Sales</div>
+      <div class="value">₹ 1,28,450</div>
+    </div>
+    <div class="stat-card stat-indigo">
+      <div class="stat-icon">💳</div>
+      <div class="label">Today's Payments</div>
+      <div class="value">₹ 42,300</div>
+    </div>
+    <div class="stat-card stat-green">
+      <div class="stat-icon">🔄</div>
+      <div class="label">Transferred Today</div>
+      <div class="value">₹ 18,500</div>
+    </div>
+    <div class="stat-card stat-rose">
+      <div class="stat-icon">⏳</div>
+      <div class="label">Pending from Prev</div>
+      <div class="value">₹ 3,200</div>
+    </div>
+  </div>
+
+  <!-- NET BALANCE BANNER -->
+  <div class="banner">
+    <div>
+      <div class="label">Net Balance</div>
+      <div class="value negative">You owe ₹ 2,800</div>
+    </div>
+    <div style="text-align:right;">
+      <div class="label">Last Handover</div>
+      <div style="font-size:0.8rem;color:#888;">26 May 2026 • ₹ 12,500</div>
+    </div>
+  </div>
+
+  <!-- QUICK ACTIONS -->
+  <div class="quick-row">
+    <div class="quick-card">
+      <div class="icon-box icon-amber">⚠️</div>
+      <div>
+        <div class="title">Pending Actions</div>
+        <div class="desc">Handovers awaiting your response</div>
+      </div>
+      <div class="count">2</div>
+    </div>
+    <div class="quick-card">
+      <div class="icon-box icon-emerald">💰</div>
+      <div>
+        <div class="title">Holding Balance</div>
+        <div class="desc">Your current cash + UPI position</div>
+      </div>
+      <div class="count">₹ 28,450</div>
+    </div>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <div class="tab active">📋 Handovers <span class="tab-count">8</span></div>
+    <div class="tab">📄 Expenses <span class="tab-count">3</span></div>
+    <div class="tab">⚖️ Balances</div>
+    <div class="tab">📈 Income</div>
+  </div>
+
+  <!-- FILTER BAR -->
+  <div class="filter-bar">
+    <span class="filter-pill">📅 Date Range</span>
+    <span class="filter-pill">🏷️ Status <span style="color:#888;">▼</span></span>
+    <span class="filter-pill">👤 User <span style="color:#888;">▼</span></span>
+    <span class="filter-pill">🔍 Search...</span>
+    <span class="filter-pill clear"><span class="dot"></span> Clear (1)</span>
+    <span style="font-size:0.75rem;color:#555;margin-left:auto;">8 results</span>
+  </div>
+
+  <!-- ACTION REQUIRED SECTION -->
+  <div style="background:#1a1a3a; border: 1px solid #3a2a1a; border-radius: 10px; padding: 0.75rem 1rem; margin-bottom: 1rem;">
+    <div class="section-label">⚠️ Action Required <span class="count">2 pending</span></div>
+    <div class="card-list">
+      <div class="h-card" style="border-color:#3a2a1a; background:#1a1a3a;">
+        <div class="avatar" style="background:#3a2a1a;color:#e3b87e;">AS</div>
+        <div class="info">
+          <div class="name">Amit Singh <span class="arrow-icon">→</span> You</div>
+          <div class="meta">Today, 3:20 PM • Cash handover</div>
+        </div>
+        <div class="amount" style="color:#e3b87e;">₹ 8,000</div>
+        <span class="status-badge status-awaiting">Awaiting</span>
+        <div class="actions">
+          <span class="btn btn-green">✓ Confirm</span>
+          <span class="btn btn-red">✕ Reject</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DATE GROUP: Today -->
+  <div class="date-group">
+    <div class="date-header">Today <span class="count">• 3 items</span></div>
+    <div class="card-list">
+      <div class="h-card">
+        <div class="avatar" style="background:#1a2a4a;color:#7ec8e3;">RK</div>
+        <div class="info">
+          <div class="name">You <span class="arrow-icon">→</span> Priya Patel</div>
+          <div class="meta">Today, 10:15 AM • Cash</div>
+        </div>
+        <div class="amount" style="color:#fb7185;">₹ -2,500</div>
+        <span class="status-badge status-pending">Pending</span>
+        <div class="actions">
+          <span class="btn btn-ghost">Cancel</span>
+        </div>
+      </div>
+      <div class="h-card">
+        <div class="avatar" style="background:#0a3a2a;color:#34d399;">AS</div>
+        <div class="info">
+          <div class="name">Amit Singh <span class="arrow-icon">→</span> You</div>
+          <div class="meta">Today, 9:30 AM • UPI</div>
+        </div>
+        <div class="amount">₹ 3,000</div>
+        <span class="status-badge status-confirmed">Confirmed</span>
+        <div class="actions">
+          <span class="btn btn-ghost">View</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DATE GROUP: Yesterday -->
+  <div class="date-group">
+    <div class="date-header">Yesterday <span class="count">• 2 items</span></div>
+    <div class="card-list">
+      <div class="h-card">
+        <div class="avatar" style="background:#0a3a2a;color:#34d399;">PP</div>
+        <div class="info">
+          <div class="name">Priya Patel <span class="arrow-icon">→</span> Raj Kumar</div>
+          <div class="meta">25 May 2026, 11:30 AM • Cash</div>
+        </div>
+        <div class="amount">₹ 5,000</div>
+        <span class="status-badge status-confirmed">Confirmed</span>
+      </div>
+      <div class="h-card">
+        <div class="avatar" style="background:#3a1a1a;color:#fb7185;">VK</div>
+        <div class="info">
+          <div class="name">Vikram Joshi <span class="arrow-icon">→</span> Raj Kumar</div>
+          <div class="meta">25 May 2026, 9:00 AM • Cash</div>
+        </div>
+        <div class="amount" style="color:#fb7185;">₹ -1,000</div>
+        <span class="status-badge status-rejected">Rejected</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

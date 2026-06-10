@@ -24,9 +24,9 @@ export function MobileListSkeleton({
   titleWidth = "w-32",
 }: MobileListSkeletonProps) {
   return (
-    <div className="pb-8 bg-slate-50 dark:bg-[#0f1115] min-h-full animate-pulse">
+    <div className="pb-8 bg-slate-50 dark:bg-background min-h-full animate-pulse">
       {/* Hero Header Skeleton */}
-      <div className="bg-white dark:bg-[#1a1d24] px-5 pt-3 pb-6 rounded-b-[2rem] shadow-sm mb-6">
+      <div className="bg-white dark:bg-card px-5 pt-3 pb-6 rounded-b-3xl shadow-sm mb-6">
         <div className="flex flex-col items-center text-center">
           <Skeleton className="h-3 w-20 mb-2" />
           <Skeleton className="h-12 w-24 mb-3" />
@@ -64,7 +64,7 @@ export function MobileListSkeleton({
           {Array.from({ length: items }).map((_, i) => (
             <div
               key={i}
-              className="bg-white dark:bg-[#1a1d24] rounded-2xl shadow-sm p-4"
+              className="bg-white dark:bg-card rounded-2xl shadow-sm p-4"
             >
               <div className="flex justify-between items-start mb-3">
                 <div className="flex-1">
@@ -90,9 +90,9 @@ export function MobileListSkeleton({
  */
 export function MobileDashboardSkeleton() {
   return (
-    <div className="pb-8 bg-slate-50 dark:bg-[#0f1115] min-h-full animate-pulse">
+    <div className="pb-8 bg-slate-50 dark:bg-background min-h-full animate-pulse">
       {/* Hero */}
-      <div className="bg-white dark:bg-[#1a1d24] px-5 pt-3 pb-6 rounded-b-[2rem] shadow-sm mb-6">
+      <div className="bg-white dark:bg-card px-5 pt-3 pb-6 rounded-b-3xl shadow-sm mb-6">
         <div className="flex items-center gap-3 mb-4">
           <Skeleton className="h-12 w-12 rounded-full" />
           <div>
@@ -112,7 +112,7 @@ export function MobileDashboardSkeleton() {
           {Array.from({ length: 4 }).map((_, i) => (
             <div
               key={i}
-              className="bg-white dark:bg-[#1a1d24] rounded-2xl shadow-sm p-4"
+              className="bg-white dark:bg-card rounded-2xl shadow-sm p-4"
             >
               <div className="flex items-center gap-2 mb-2">
                 <Skeleton className="h-8 w-8 rounded-lg" />
@@ -140,7 +140,7 @@ export function MobileDashboardSkeleton() {
           {Array.from({ length: 3 }).map((_, i) => (
             <div
               key={i}
-              className="bg-white dark:bg-[#1a1d24] rounded-xl p-3 flex items-center gap-3"
+              className="bg-white dark:bg-card rounded-xl p-3 flex items-center gap-3"
             >
               <Skeleton className="h-10 w-10 rounded-lg" />
               <div className="flex-1">

@@ -112,34 +112,34 @@ export function StorePickerSheet({ open, onOpenChange, onSelect, filterRouteId }
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="h-[88vh] rounded-t-3xl flex flex-col p-0">
+      <SheetContent side="bottom" className="h-[88vh] rounded-t-2xl flex flex-col p-0">
         {/* Handle bar */}
         <div className="flex justify-center pt-3 pb-1 shrink-0">
-          <div className="h-1 w-10 rounded-full bg-slate-200 dark:bg-slate-700" />
+          <div className="h-1 w-10 rounded-full bg-muted" />
         </div>
 
         {/* Header with search */}
-        <div className="px-4 pb-3 border-b border-slate-100 dark:border-slate-800 shrink-0">
+        <div className="px-4 pb-3 border-b shrink-0">
           <SheetHeader className="mb-3 text-left">
             <SheetTitle className="text-base font-bold">Select Store</SheetTitle>
           </SheetHeader>
 
           {/* Search input */}
           <div className="relative">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/70" />
             <Input
               ref={inputRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search name, ID, customer..."
-              className="pl-10 pr-10 h-11 rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm"
+              className="pl-10 pr-10 h-11 rounded-xl bg-muted text-sm"
             />
             {query && (
               <button
-                className="absolute right-3 top-1/2 -translate-y-1/2 h-6 w-6 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center"
+                className="absolute right-3 top-1/2 -translate-y-1/2 h-6 w-6 rounded-full bg-muted flex items-center justify-center"
                 onClick={() => setQuery("")}
               >
-                <X className="h-3.5 w-3.5 text-slate-500" />
+                <X className="h-3.5 w-3.5 text-muted-foreground" />
               </button>
             )}
           </div>
@@ -149,8 +149,8 @@ export function StorePickerSheet({ open, onOpenChange, onSelect, filterRouteId }
             className={cn(
               "mt-2 w-full h-9 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 transition-all",
               myPos
-                ? "border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400"
-                : "border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-blue-200 dark:hover:border-blue-700 hover:text-blue-600 dark:hover:text-blue-400"
+                ? "border-blue-200 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400"
+                : "text-muted-foreground hover:border-blue-200 hover:text-blue-600"
             )}
             onClick={handleFindNearby}
             disabled={locating}
@@ -169,21 +169,21 @@ export function StorePickerSheet({ open, onOpenChange, onSelect, filterRouteId }
           {loading || loadingRouteAccess ? (
             <div className="flex flex-col items-center justify-center h-40 gap-3">
               <Loader2 className="h-7 w-7 animate-spin text-blue-500" />
-              <p className="text-sm text-slate-400">Loading stores...</p>
+              <p className="text-sm text-muted-foreground/70">Loading stores...</p>
             </div>
           ) : filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-40 gap-2">
-              <div className="h-12 w-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-                <MapPin className="h-6 w-6 text-slate-400" />
+              <div className="h-12 w-12 rounded-xl bg-muted flex items-center justify-center">
+                <MapPin className="h-6 w-6 text-muted-foreground/60" />
               </div>
-              <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">No stores found</p>
+              <p className="text-sm font-semibold text-muted-foreground">No stores found</p>
             </div>
           ) : (
             <div className="p-3 space-y-1.5">
               {filtered.map((s) => (
                 <button
                   key={s.id}
-                  className="w-full text-left px-3.5 py-3.5 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800 active:bg-slate-100 dark:active:bg-slate-750 transition-colors flex items-center gap-3 border border-transparent hover:border-slate-100 dark:hover:border-slate-700"
+                  className="w-full text-left px-3.5 py-3.5 rounded-xl hover:bg-muted/50 active:bg-muted transition-colors flex items-center gap-3"
                   onClick={() => {
                     onSelect(s);
                     onOpenChange(false);
@@ -198,17 +198,17 @@ export function StorePickerSheet({ open, onOpenChange, onSelect, filterRouteId }
                   {/* Info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-bold text-slate-800 dark:text-white">{s.name}</span>
-                      <span className="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded-md font-mono">
+                      <span className="text-sm font-bold text-foreground">{s.name}</span>
+                      <span className="text-xs text-muted-foreground/70 bg-muted px-1.5 py-0.5 rounded-md font-mono">
                         {s.display_id}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                       {s.customers?.name && (
-                        <span className="text-xs text-slate-500 dark:text-slate-400">{s.customers.name}</span>
+                        <span className="text-xs text-muted-foreground">{s.customers.name}</span>
                       )}
                       {s.store_types?.name && (
-                        <Badge variant="outline" className="text-[9px] h-4 px-1.5 border-slate-200 dark:border-slate-700 font-semibold">
+                        <Badge variant="outline" className="text-xs h-4 px-1.5 font-semibold">
                           {s.store_types.name}
                         </Badge>
                       )}
@@ -218,7 +218,7 @@ export function StorePickerSheet({ open, onOpenChange, onSelect, filterRouteId }
                   {/* Right: dist + balance */}
                   <div className="text-right shrink-0 flex flex-col items-end gap-1">
                     {s._dist !== null && (
-                      <span className="text-[11px] text-blue-500 flex items-center gap-0.5 font-semibold">
+                      <span className="text-xs text-blue-500 flex items-center gap-0.5 font-semibold">
                         <MapPin className="h-2.5 w-2.5" />
                         {s._dist < 1
                           ? `${(s._dist * 1000).toFixed(0)}m`

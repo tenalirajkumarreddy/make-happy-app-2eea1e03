@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
+import { usePermission } from "@/hooks/usePermission";
 import {
   ShoppingCart, ClipboardList, TrendingUp, TrendingDown, Wallet,
   Users, Store, Package, ArrowRight, AlertCircle, Receipt, Loader2,
@@ -36,16 +37,24 @@ export function AdminHome({
   const { profile, user } = useAuth();
   const { currentWarehouse } = useWarehouse();
 
+  const warehouseFilter = (role === "manager" && currentWarehouse?.id)
+    ? (q: any) => q.eq("warehouse_id", currentWarehouse!.id)
+    : (q: any) => q;
+
+  const { allowed: canApproveExpenses } = usePermission("approve_expenses");
+
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ["mobile-admin-dashboard", currentWarehouse?.id, role],
     queryFn: async () => {
-      const today = new Date().toISOString().split("T")[0];
+      // Use local date instead of UTC to avoid timezone issues
+      const now = new Date();
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
       const [todaySalesRes, storesRes, stockRes, ordersCountRes] = await Promise.all([
-        supabase.from("sales").select("total_amount, cash_amount, upi_amount")
+        warehouseFilter(supabase.from("sales").select("total_amount, cash_amount, upi_amount"))
           .gte("created_at", `${today}T00:00:00`).lte("created_at", `${today}T23:59:59`),
-        supabase.from("stores").select("outstanding"),
-        supabase.from("product_stock").select("quantity, reorder_level"),
-        supabase.from("orders").select("*", { count: "exact", head: true }).eq("status", "pending"),
+        warehouseFilter(supabase.from("stores").select("outstanding")),
+        warehouseFilter(supabase.from("product_stock").select("quantity, reorder_level")),
+        warehouseFilter(supabase.from("orders").select("*", { count: "exact", head: true })).eq("status", "pending"),
       ]);
       const td = todaySalesRes.data || [];
       return {
@@ -59,12 +68,13 @@ export function AdminHome({
       } as DashboardStats;
     },
     refetchInterval: 60_000,
+    staleTime: 60_000,
   });
 
   const { data: recentActivity } = useQuery({
     queryKey: ["mobile-recent-activity", currentWarehouse?.id],
     queryFn: async () => {
-      const { data } = await supabase.from("sales")
+      const { data } = await warehouseFilter(supabase.from("sales"))
         .select("id, display_id, total_amount, created_at, stores(name)")
         .order("created_at", { ascending: false }).limit(5);
       return (data || []).map(s => ({
@@ -72,20 +82,59 @@ export function AdminHome({
         store: s.stores?.name ?? null, date: s.created_at,
       }));
     },
+    staleTime: 30_000,
   });
 
   const { data: pendingExpenses = [] } = useQuery({
     queryKey: ["mobile-pending-expense-widget", currentWarehouse?.id],
     queryFn: async () => {
-      const { data } = await supabase
+      let query = supabase
         .from("expense_claims")
         .select("id, display_id, amount, description, status, created_at, bill_urls, expense_categories(name, color), profiles(full_name)")
         .eq("status", "pending")
         .order("created_at", { ascending: false })
         .limit(5);
+      // Apply warehouse filter for managers
+      if (role === "manager" && currentWarehouse?.id) {
+        query = query.eq("warehouse_id", currentWarehouse.id);
+      }
+      const { data } = await query;
       return data || [];
     },
     refetchInterval: 30_000,
+    staleTime: 30_000,
+  });
+
+  const { data: opsMetrics } = useQuery({
+    queryKey: ["mobile-admin-ops", currentWarehouse?.id, role],
+    queryFn: async () => {
+      // Use local date instead of UTC
+      const now = new Date();
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const thirtyDaysAgoStr = `${thirtyDaysAgo.getFullYear()}-${String(thirtyDaysAgo.getMonth() + 1).padStart(2, "0")}-${String(thirtyDaysAgo.getDate()).padStart(2, "0")}`;
+
+      const [ordersRes, salesRes] = await Promise.all([
+        warehouseFilter(supabase.from("orders").select("status"))
+          .gte("created_at", thirtyDaysAgoStr).limit(5000),
+        warehouseFilter(supabase.from("sales").select("total_amount, outstanding_amount"))
+          .gte("created_at", today).limit(1000),
+      ]);
+
+      const orders = ordersRes.data || [];
+      const sales = salesRes.data || [];
+      const totalOrders = orders.length;
+      const fulfilledOrders = orders.filter((o: any) => o.status === "fulfilled" || o.status === "delivered").length;
+      const fulfillmentRate = totalOrders > 0 ? Math.round((fulfilledOrders / totalOrders) * 100) : 0;
+
+      const totalSale = sales.reduce((s: number, r: any) => s + Number(r.total_amount), 0);
+      const totalOutstanding = sales.reduce((s: number, r: any) => s + Number(r.outstanding_amount || 0), 0);
+      const collectionEfficiency = totalSale > 0 ? Math.round(((totalSale - totalOutstanding) / totalSale) * 100) : 0;
+
+      return { fulfillmentRate, collectionEfficiency };
+    },
+    refetchInterval: 60_000,
+    staleTime: 60_000,
   });
 
   const qc = useQueryClient();
@@ -168,7 +217,7 @@ export function AdminHome({
         {/* Floating Revenue Card */}
         <div className="rounded-2xl bg-white dark:bg-slate-800 shadow-xl border border-slate-100 dark:border-slate-700 p-4">
           <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Today's Revenue</p>
+            <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Today's Revenue</p>
             <div className="flex items-center gap-1.5 bg-blue-50 dark:bg-blue-900/40 px-2 py-1 rounded-full">
               <ShoppingCart className="h-3 w-3 text-blue-500" />
               <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">
@@ -182,11 +231,11 @@ export function AdminHome({
           <div className="flex gap-4 mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
             <div className="flex items-center gap-1.5">
               <div className="h-2 w-2 rounded-full bg-emerald-400" />
-              <span className="text-xs text-slate-500 dark:text-slate-400">Cash <strong className="text-slate-700 dark:text-slate-200">₹{(stats?.todayCash ?? 0).toLocaleString("en-IN")}</strong></span>
+              <span className="text-xs text-slate-500 dark:text-slate-400">Cash <strong className="text-slate-800 dark:text-white">₹{(stats?.todayCash ?? 0).toLocaleString("en-IN")}</strong></span>
             </div>
             <div className="flex items-center gap-1.5">
               <div className="h-2 w-2 rounded-full bg-violet-400" />
-              <span className="text-xs text-slate-500 dark:text-slate-400">UPI <strong className="text-slate-700 dark:text-slate-200">₹{(stats?.todayUpi ?? 0).toLocaleString("en-IN")}</strong></span>
+              <span className="text-xs text-slate-500 dark:text-slate-400">UPI <strong className="text-slate-800 dark:text-white">₹{(stats?.todayUpi ?? 0).toLocaleString("en-IN")}</strong></span>
             </div>
           </div>
         </div>
@@ -196,6 +245,22 @@ export function AdminHome({
           <MiniStat label="Outstanding" value={`₹${fmtK(stats?.outstandingAmount ?? 0)}`} color="from-red-500 to-rose-600" icon={TrendingDown} />
           <MiniStat label="Pending" value={String(stats?.totalOrders ?? 0)} color="from-amber-500 to-orange-600" icon={ClipboardList} />
           <MiniStat label="Low Stock" value={String(stats?.lowStockCount ?? 0)} color="from-orange-500 to-red-600" icon={Package} alert={(stats?.lowStockCount ?? 0) > 0} />
+        </div>
+
+        {/* Operational Metrics */}
+        <div className="grid grid-cols-2 gap-2">
+          <MiniStat
+            label="Fulfillment"
+            value={opsMetrics ? `${opsMetrics.fulfillmentRate}%` : "—"}
+            color={opsMetrics && opsMetrics.fulfillmentRate >= 80 ? "from-emerald-500 to-green-600" : opsMetrics && opsMetrics.fulfillmentRate >= 50 ? "from-amber-500 to-orange-600" : "from-red-500 to-rose-600"}
+            icon={ShoppingCart}
+          />
+          <MiniStat
+            label="Collection"
+            value={opsMetrics ? `${opsMetrics.collectionEfficiency}%` : "—"}
+            color={opsMetrics && opsMetrics.collectionEfficiency >= 80 ? "from-emerald-500 to-green-600" : opsMetrics && opsMetrics.collectionEfficiency >= 50 ? "from-amber-500 to-orange-600" : "from-red-500 to-rose-600"}
+            icon={Wallet}
+          />
         </div>
       </div>
 
@@ -211,7 +276,7 @@ export function AdminHome({
                 <div className={cn("h-8 w-8 rounded-lg bg-gradient-to-br flex items-center justify-center shrink-0", a.color)}>
                   <Icon className="h-3.5 w-3.5 text-white" />
                 </div>
-                <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 text-center leading-tight truncate w-full">{a.label}</span>
+                <span className="text-xs font-semibold text-slate-800 dark:text-white text-center leading-tight truncate w-full">{a.label}</span>
               </button>
             );
           })}
@@ -249,7 +314,7 @@ export function AdminHome({
             <div className="h-12 w-12 rounded-2xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center mx-auto mb-3">
               <ShoppingCart className="h-6 w-6 text-slate-400" />
             </div>
-            <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">No Recent Sales</p>
+            <p className="text-sm font-semibold text-slate-800 dark:text-white">No Recent Sales</p>
             <p className="text-xs text-slate-400 mt-1">Sales will appear here as they come in</p>
           </div>
         )}
@@ -274,12 +339,12 @@ export function AdminHome({
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       {exp.expense_categories && (
-                        <div className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: exp.expense_categories.color || "#6366f1" }} />
+                        <div className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: exp.expense_categories.color || `hsl(var(--primary))` }} />
                       )}
                       <p className="text-sm font-bold text-slate-800 dark:text-white truncate">
                         ₹{Number(exp.amount).toLocaleString("en-IN")}
                       </p>
-                      <span className="text-[10px] text-slate-400 truncate">
+                      <span className="text-xs text-slate-400 truncate">
                         {exp.expense_categories?.name || "Unknown"}
                       </span>
                     </div>
@@ -287,35 +352,41 @@ export function AdminHome({
                       {exp.profiles?.full_name || "Unknown"} · {format(new Date(exp.created_at), "dd MMM hh:mm a")}
                     </p>
                     {exp.description && (
-                      <p className="text-[11px] text-slate-400 mt-0.5 truncate">{exp.description}</p>
+                      <p className="text-xs text-slate-400 mt-0.5 truncate">{exp.description}</p>
                     )}
                     {exp.bill_urls && exp.bill_urls.length > 0 && (
-                      <p className="text-[10px] text-blue-500 mt-0.5">📎 {exp.bill_urls.length} attachment(s)</p>
+                      <p className="text-xs text-blue-500 mt-0.5">📎 {exp.bill_urls.length} attachment(s)</p>
                     )}
                   </div>
                   <div className="flex gap-1.5 shrink-0">
-                    <button
-                      onClick={() => setPendingExpenseAction({ id: exp.id, amount: exp.amount, name: exp.profiles?.full_name ?? "Staff", action: "approve" })}
-                      disabled={isProcessingExpense}
-                      className="h-8 w-8 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center hover:bg-emerald-100 dark:hover:bg-emerald-900/50 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
-                    >
-                      {isProcessingExpense && pendingExpenseAction?.id === exp.id ? (
-                        <Loader2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 animate-spin" />
-                      ) : (
-                        <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                      )}
-                    </button>
-                    <button
-                      onClick={() => setPendingExpenseAction({ id: exp.id, amount: exp.amount, name: exp.profiles?.full_name ?? "Staff", action: "reject" })}
-                      disabled={isProcessingExpense}
-                      className="h-8 w-8 rounded-lg bg-red-50 dark:bg-red-900/30 flex items-center justify-center hover:bg-red-100 dark:hover:bg-red-900/50 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
-                    >
-                      {isProcessingExpense && pendingExpenseAction?.id === exp.id ? (
-                        <Loader2 className="h-4 w-4 text-red-600 dark:text-red-400 animate-spin" />
-                      ) : (
-                        <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
-                      )}
-                    </button>
+                    {canApproveExpenses ? (
+                      <>
+                        <button
+                          onClick={() => setPendingExpenseAction({ id: exp.id, amount: exp.amount, name: exp.profiles?.full_name ?? "Staff", action: "approve" })}
+                          disabled={isProcessingExpense}
+                          className="h-8 w-8 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center hover:bg-emerald-100 dark:hover:bg-emerald-900/50 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+                        >
+                          {isProcessingExpense && pendingExpenseAction?.id === exp.id ? (
+                            <Loader2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 animate-spin" />
+                          ) : (
+                            <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                          )}
+                        </button>
+                        <button
+                          onClick={() => setPendingExpenseAction({ id: exp.id, amount: exp.amount, name: exp.profiles?.full_name ?? "Staff", action: "reject" })}
+                          disabled={isProcessingExpense}
+                          className="h-8 w-8 rounded-lg bg-red-50 dark:bg-red-900/30 flex items-center justify-center hover:bg-red-100 dark:hover:bg-red-900/50 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+                        >
+                          {isProcessingExpense && pendingExpenseAction?.id === exp.id ? (
+                            <Loader2 className="h-4 w-4 text-red-600 dark:text-red-400 animate-spin" />
+                          ) : (
+                            <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                          )}
+                        </button>
+                      </>
+                    ) : (
+                      <span className="text-xs text-muted-foreground px-2">No access</span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -380,7 +451,7 @@ function MiniStat({ label, value, color, icon: Icon, alert }: { label: string; v
         <Icon className="h-3.5 w-3.5 text-white" />
       </div>
       <div>
-        <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium uppercase tracking-wide leading-none mb-0.5">{label}</p>
+        <p className="text-xs text-slate-400 dark:text-slate-500 font-medium uppercase tracking-wide leading-none mb-0.5">{label}</p>
         <div className="flex items-center gap-1">
           <p className="text-sm font-bold text-slate-800 dark:text-white leading-tight">{value}</p>
           {alert && <AlertCircle className="h-3 w-3 text-orange-500" />}

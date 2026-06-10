@@ -1,0 +1,123 @@
+<h2>Proposed Improvements — All Areas</h2>
+<p class="subtitle">Same blue theme, same Inter font. Better layout, spacing, alignment, and UX.</p>
+
+<div class="section">
+  <h3>1. Page Transitions</h3>
+  <div class="split">
+    <div class="mockup" style="padding:1rem">
+      <div class="mockup-header" style="background:#2563eb;color:white;padding:0.6rem 1rem;font-weight:600;font-size:0.85rem">Current</div>
+      <div style="padding:1rem 0">
+        <div style="color:#94a3b8;font-size:0.8rem">↕ Instant snap between tabs</div>
+        <div style="color:#94a3b8;font-size:0.8rem;margin-top:0.3rem">⟳ Loader spinner on every page</div>
+        <div style="color:#94a3b8;font-size:0.8rem;margin-top:0.3rem">⎚ No gesture feedback</div>
+      </div>
+    </div>
+    <div class="mockup" style="padding:1rem;border-color:#2563eb">
+      <div class="mockup-header" style="background:#2563eb;color:white;padding:0.6rem 1rem;font-weight:600;font-size:0.85rem">Proposed</div>
+      <div style="padding:1rem 0">
+        <div style="color:#16a34a;font-size:0.8rem">→ Slide left/right on tab switch (300ms)</div>
+        <div style="color:#16a34a;font-size:0.8rem;margin-top:0.3rem">▦ Skeleton cards while loading (not spinner)</div>
+        <div style="color:#16a34a;font-size:0.8rem;margin-top:0.3rem">👆 Subtle scale-down on press (active:scale-[0.97])</div>
+        <div style="color:#16a34a;font-size:0.8rem;margin-top:0.3rem">📌 Sticky section headers scroll with content</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>2. Card & List Consistency</h3>
+  <div class="split">
+    <div class="mockup" style="padding:1rem">
+      <div class="mockup-header" style="background:#2563eb;color:white;padding:0.6rem 1rem;font-weight:600;font-size:0.85rem">Current (inconsistent)</div>
+      <div style="padding:0.75rem 0">
+        <div style="display:flex;gap:0.75rem;margin-bottom:0.75rem">
+          <div style="width:3rem;height:3rem;background:#e2e8f0;border-radius:8px;flex-shrink:0"></div>
+          <div style="flex:1">
+            <div style="height:0.75rem;background:#e2e8f0;border-radius:4px;width:70%;margin-bottom:0.4rem"></div>
+            <div style="height:0.5rem;background:#f1f5f9;border-radius:4px;width:50%"></div>
+          </div>
+          <div style="text-align:right">
+            <div style="height:0.75rem;background:#e2e8f0;border-radius:4px;width:4rem"></div>
+          </div>
+        </div>
+        <div style="color:#94a3b8;font-size:0.75rem">⚠ Mixed padding (p-3 vs p-4)</div>
+        <div style="color:#94a3b8;font-size:0.75rem">⚠ Inconsistent icon sizes (h-4 vs h-5)</div>
+        <div style="color:#94a3b8;font-size:0.75rem">⚠ Badge positions vary</div>
+      </div>
+    </div>
+    <div class="mockup" style="padding:1rem;border-color:#2563eb">
+      <div class="mockup-header" style="background:#2563eb;color:white;padding:0.6rem 1rem;font-weight:600;font-size:0.85rem">Proposed (unified)</div>
+      <div style="padding:0.75rem 0">
+        <div style="display:flex;gap:0.75rem;padding:0.75rem;border:1px solid #e2e8f0;border-radius:12px;margin-bottom:0.75rem">
+          <div style="width:3rem;height:3rem;background:#dbeafe;border-radius:10px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#2563eb;font-weight:700">S</div>
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:0.85rem">Store Name</div>
+            <div style="color:#64748b;font-size:0.75rem">Customer · Route Name</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-weight:700;font-size:0.85rem;color:#dc2626">₹12,400</div>
+            <div style="color:#94a3b8;font-size:0.65rem;font-weight:600">OUTSTANDING</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:0.4rem">
+          <span style="background:#eff6ff;color:#2563eb;font-size:0.65rem;font-weight:600;padding:0.2rem 0.6rem;border-radius:999px">RETAIL</span>
+          <span style="color:#94a3b8;font-size:0.65rem;font-weight:500">Route A</span>
+        </div>
+        <div style="color:#16a34a;font-size:0.75rem;margin-top:0.5rem">✅ All p-4 cards, rounded-2xl</div>
+        <div style="color:#16a34a;font-size:0.75rem">✅ h-12 icon area, consistent</div>
+        <div style="color:#16a34a;font-size:0.75rem">✅ Badges top-right, always</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>3. Action Page UX (Record Sale)</h3>
+  <div class="split">
+    <div class="mockup" style="padding:1rem">
+      <div class="mockup-header" style="background:#2563eb;color:white;padding:0.6rem 1rem;font-weight:600;font-size:0.85rem">Current</div>
+      <div style="padding:0.75rem 0;color:#94a3b8;font-size:0.8rem">
+        <div>⚠ AgentRecord.tsx and AgentRecordSale.tsx duplicate</div>
+        <div style="margin-top:0.3rem">⚠ Products list is flat — no grouping</div>
+        <div style="margin-top:0.3rem">⚠ Submit button scrolls with content</div>
+        <div style="margin-top:0.3rem">⚠ Outstanding balance shows after title</div>
+      </div>
+    </div>
+    <div class="mockup" style="padding:1rem;border-color:#2563eb">
+      <div class="mockup-header" style="background:#2563eb;color:white;padding:0.6rem 1rem;font-weight:600;font-size:0.85rem">Proposed</div>
+      <div style="padding:0.75rem 0">
+        <div style="color:#16a34a;font-size:0.8rem">✅ Delete AgentRecord.tsx, keep AgentRecordSale.tsx</div>
+        <div style="color:#16a34a;font-size:0.8rem;margin-top:0.3rem">✅ Products grouped by category</div>
+        <div style="color:#16a34a;font-size:0.8rem;margin-top:0.3rem">✅ Sticky bottom bar: total + submit</div>
+        <div style="color:#16a34a;font-size:0.8rem;margin-top:0.3rem">✅ Store picker in header area, not card</div>
+        <div style="color:#16a34a;font-size:0.8rem;margin-top:0.3rem">✅ Outstanding shown in compact chip</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>4. Dashboard & Data Display</h3>
+  <div class="split">
+    <div class="mockup" style="padding:1rem">
+      <div class="mockup-header" style="background:#2563eb;color:white;padding:0.6rem 1rem;font-weight:600;font-size:0.85rem">Current</div>
+      <div style="padding:0.75rem 0;color:#94a3b8;font-size:0.8rem">
+        <div>⚠ MiniStat icon area is h-6 w-6 (too small)</div>
+        <div style="margin-top:0.3rem">⚠ 2-col grid, values can overflow</div>
+        <div style="margin-top:0.3rem">⚠ No visual separation between stat blocks</div>
+      </div>
+    </div>
+    <div class="mockup" style="padding:1rem;border-color:#2563eb">
+      <div class="mockup-header" style="background:#2563eb;color:white;padding:0.6rem 1rem;font-weight:600;font-size:0.85rem">Proposed</div>
+      <div style="padding:0.75rem 0">
+        <div style="color:#16a34a;font-size:0.8rem">✅ Larger icon area (h-8 w-8)</div>
+        <div style="color:#16a34a;font-size:0.8rem;margin-top:0.3rem">✅ tabular-nums for all ₹ values</div>
+        <div style="color:#16a34a;font-size:0.8rem;margin-top:0.3rem">✅ Subtle dividers between stat rows</div>
+        <div style="color:#16a34a;font-size:0.8rem;margin-top:0.3rem">✅ Value always bottom-left, label top-left</div>
+        <div style="color:#16a34a;font-size:0.8rem;margin-top:0.3rem">✅ History uses same MiniStat component (shared)</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:2rem">Does this direction look right? Any area you'd adjust before I write the detailed spec?</p>

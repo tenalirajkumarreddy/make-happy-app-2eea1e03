@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   MapPin, Phone, Navigation2, TrendingUp,
   Store, ShoppingCart, Loader2, Banknote, Wallet, ArrowRight, CheckCircle2, Eye, Package,
-  ArrowRightLeft, Boxes,
+  ArrowRightLeft, Boxes, RefreshCw, Square,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,8 +12,11 @@ import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { StoreOption } from "@/mobile/components/StorePickerSheet";
+import { useMarkVisit } from "@/mobile/hooks/useMarkVisit";
+import { VisitReasonDialog } from "@/components/routes/VisitReasonDialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { MiniStat } from "@/mobile/pages/agent/MiniStat";
 import { getCurrentPosition } from "@/lib/capacitorUtils";
-import { addToQueue } from "@/lib/offlineQueue";
 
 interface Props {
   onOpenStore: (store: StoreOption) => void;
@@ -55,7 +58,7 @@ interface ActiveSessionData {
 interface PendingOrderRow {
   id: string;
   display_id: string | null;
-  notes: string | null;
+  requirement_note: string | null;
   stores: { name: string } | null;
   customers: { name: string } | null;
 }
@@ -76,13 +79,51 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
   const { user, profile } = useAuth();
   const today = new Date().toISOString().split("T")[0];
   const [currentPosition, setCurrentPosition] = useState<{ lat: number; lng: number } | null>(null);
-  const [visitLoading, setVisitLoading] = useState(false);
+  const { markVisit, isVisiting } = useMarkVisit();
+  const [visitReasonDialog, setVisitReasonDialog] = useState<boolean>(false);
+  const [showEndRouteConfirm, setShowEndRouteConfirm] = useState(false);
+  const [elapsed, setElapsed] = useState("");
+  const qc = useQueryClient();
+
+  const [queueStatus, setQueueStatus] = useState({
+    total: 0,
+    pending: 0,
+    failed: 0,
+    conflicts: 0,
+    readyToSync: 0,
+  });
+
+  const updateQueueStatus = async () => {
+    try {
+      const { getQueueStatus } = await import("@/lib/offlineQueue");
+      const status = await getQueueStatus();
+      setQueueStatus(status);
+    } catch (e) {
+      console.error("Failed to get queue status", e);
+    }
+  };
 
   useEffect(() => {
     getCurrentPosition().then(pos => {
       if (pos) setCurrentPosition({ lat: pos.lat, lng: pos.lng });
       else setCurrentPosition(null);
     });
+    
+    updateQueueStatus();
+
+    const handleQueueChanged = () => {
+      updateQueueStatus();
+    };
+
+    window.addEventListener("offline-queue-changed", handleQueueChanged);
+    window.addEventListener("online", handleQueueChanged);
+    window.addEventListener("offline", handleQueueChanged);
+
+    return () => {
+      window.removeEventListener("offline-queue-changed", handleQueueChanged);
+      window.removeEventListener("online", handleQueueChanged);
+      window.removeEventListener("offline", handleQueueChanged);
+    };
   }, []);
 
   const { data: salesData } = useQuery({
@@ -97,6 +138,7 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
     },
     enabled: !!user,
     refetchInterval: 60_000,
+    staleTime: 60_000,
   });
 
   const { data: txData } = useQuery({
@@ -111,6 +153,7 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
     },
     enabled: !!user,
     refetchInterval: 60_000,
+    staleTime: 60_000,
   });
 
   const { data: visitCount } = useQuery({
@@ -124,6 +167,7 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
     },
     enabled: !!user,
     refetchInterval: 60_000,
+    staleTime: 60_000,
   });
 
   const { data: activeSession } = useQuery({
@@ -139,7 +183,22 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
     },
     enabled: !!user,
     refetchInterval: 30_000,
+    staleTime: 30_000,
   });
+
+  useEffect(() => {
+    if (!activeSession?.started_at) return;
+    const update = () => {
+      const start = new Date(activeSession.started_at).getTime();
+      const diff = Date.now() - start;
+      const hrs = Math.floor(diff / 3600000);
+      const mins = Math.floor((diff % 3600000) / 60000);
+      setElapsed(`${hrs}h ${mins}m`);
+    };
+    update();
+    const interval = setInterval(update, 60000);
+    return () => clearInterval(interval);
+  }, [activeSession?.started_at]);
 
   const { data: visits } = useQuery({
     queryKey: ["mobile-session-visits", activeSession?.id],
@@ -151,6 +210,7 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
       return new Set((data || []).map((visit) => visit.store_id));
     },
     enabled: !!activeSession,
+    staleTime: 30_000,
   });
 
   const { data: pendingOrders } = useQuery({
@@ -158,7 +218,7 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
     queryFn: async () => {
       const { data } = await supabase
         .from("orders")
-        .select("id, display_id, notes, stores(name), customers(name)")
+        .select("id, display_id, requirement_note, stores(name), customers(name)")
         .eq("status", "pending")
         .order("created_at", { ascending: false })
         .limit(5);
@@ -166,6 +226,24 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
     },
     enabled: !!user,
     refetchInterval: 60_000,
+    staleTime: 60_000,
+  });
+
+  const { data: routePendingOrders } = useQuery({
+    queryKey: ["mobile-route-pending-orders", activeSession?.id],
+    queryFn: async () => {
+      if (!activeSession) return 0;
+      const storeIds = routeStores.map(s => s.id);
+      if (storeIds.length === 0) return 0;
+      const { count } = await supabase
+        .from("orders")
+        .select("id", { count: "exact", head: true })
+        .in("store_id", storeIds)
+        .in("status", ["pending", "confirmed"]);
+      return count ?? 0;
+    },
+    enabled: !!activeSession && routeStores.length > 0,
+    staleTime: 30_000,
   });
 
   // Stock holdings
@@ -183,6 +261,7 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
       }));
     },
     enabled: !!user,
+    staleTime: 30_000,
   });
 
   const totalSales = salesData?.reduce((sum, row) => sum + (row.total_amount ?? 0), 0) ?? 0;
@@ -247,48 +326,32 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
     }
   };
 
-  const handleMarkVisited = async () => {
-    if (!user || !nextStore || !activeSession?.id) return;
+  const handleMarkVisited = async (reason?: string) => {
+    if (!user || !nextStore) return;
+    await markVisit({
+      storeId: nextStore.id,
+      storeName: nextStore.name,
+      userId: user.id,
+      sessionId: activeSession?.id,
+      reason,
+    });
+  };
 
-    setVisitLoading(true);
+  const handleEndRoute = async () => {
+    if (!activeSession) return;
     try {
-      let lat: number | null = null;
-      let lng: number | null = null;
-      const pos = await getCurrentPosition();
-      if (pos) {
-        lat = pos.lat;
-        lng = pos.lng;
-      }
-
-      if (!navigator.onLine) {
-        await addToQueue({
-          id: crypto.randomUUID(),
-          type: "visit",
-          payload: {
-            userId: user.id,
-            storeId: nextStore.id,
-            lat,
-            lng,
-          },
-          createdAt: new Date().toISOString(),
-        });
-        toast.warning(`Offline — visit queued for ${nextStore.name}`);
-        return;
-      }
-
-      const { error } = await supabase.from("store_visits").insert({
-        session_id: activeSession.id,
-        store_id: nextStore.id,
-        lat,
-        lng,
-      });
-
+      const { error } = await supabase
+        .from("route_sessions")
+        .update({
+          status: "completed",
+          ended_at: new Date().toISOString(),
+        })
+        .eq("id", activeSession.id);
       if (error) throw error;
-      toast.success(`Visit recorded for ${nextStore.name}`);
-    } catch {
-      toast.error("Failed to record visit");
-    } finally {
-      setVisitLoading(false);
+      toast.success("Route session ended");
+      qc.invalidateQueries({ queryKey: ["mobile-active-session"] });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to end session");
     }
   };
 
@@ -303,58 +366,97 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
       </div>
 
       <div className="px-4 -mt-5 space-y-3">
+        {/* Offline Queue Sync Indicator */}
+        {queueStatus.total > 0 && (
+          <div className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 text-white p-4 shadow-sm flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="h-8 w-8 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
+                <RefreshCw className="h-4 w-4 text-white animate-spin" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold">Syncing Collected Data Offline</p>
+                <p className="text-xs text-white/80">
+                  {queueStatus.pending} pending sync
+                  {queueStatus.failed > 0 && ` · ${queueStatus.failed} failures`}
+                  {queueStatus.conflicts > 0 && ` · ${queueStatus.conflicts} conflicts`}
+                </p>
+              </div>
+            </div>
+            {navigator.onLine ? (
+              <Badge className="bg-emerald-500 text-white text-xs font-semibold px-2 py-0.5 shrink-0 border-0">Online</Badge>
+            ) : (
+              <Badge className="bg-slate-600/50 text-slate-200 text-xs font-semibold px-2 py-0.5 shrink-0 border-0">Offline</Badge>
+            )}
+          </div>
+        )}
+
         <div className="rounded-2xl bg-white dark:bg-slate-800 shadow-xl border border-slate-100 dark:border-slate-700 p-4">
           <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Today's Revenue</p>
-            <div className="flex items-center gap-1.5 bg-blue-50 dark:bg-blue-900/40 px-2 py-1 rounded-full">
+            <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Today's Revenue</p>
+            <div className="flex items-center gap-1.5 bg-blue-50 dark:bg-blue-900/40 px-2.5 py-1 rounded-full">
               <Store className="h-3 w-3 text-blue-500" />
-              <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400">{visitCount ?? 0} stores</span>
+              <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">{visitCount ?? 0} stores</span>
             </div>
           </div>
-          <p className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">₹{totalSales.toLocaleString("en-IN")}</p>
+          <p className="text-3xl font-bold text-slate-800 dark:text-white tracking-tight">₹{totalSales.toLocaleString("en-IN")}</p>
           <div className="flex gap-4 mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
             <div className="flex items-center gap-1.5">
               <div className="h-2 w-2 rounded-full bg-emerald-400" />
-              <span className="text-xs text-slate-500 dark:text-slate-400">Cash <strong className="text-slate-700 dark:text-slate-200">₹{(cashSales + cashCollected).toLocaleString("en-IN")}</strong></span>
+              <span className="text-xs text-slate-500 dark:text-slate-400">Cash <strong className="text-slate-800 dark:text-white">₹{(cashSales + cashCollected).toLocaleString("en-IN")}</strong></span>
             </div>
             <div className="flex items-center gap-1.5">
               <div className="h-2 w-2 rounded-full bg-violet-400" />
-              <span className="text-xs text-slate-500 dark:text-slate-400">UPI <strong className="text-slate-700 dark:text-slate-200">₹{(upiSales + upiCollected).toLocaleString("en-IN")}</strong></span>
+              <span className="text-xs text-slate-500 dark:text-slate-400">UPI <strong className="text-slate-800 dark:text-white">₹{(upiSales + upiCollected).toLocaleString("en-IN")}</strong></span>
             </div>
           </div>
         </div>
 
         {/* Stock Holdings Card */}
         {stockItems.length > 0 && (
-          <div className="rounded-2xl bg-white dark:bg-slate-800 border border-amber-100 dark:border-amber-900 shadow-sm p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <div className="h-6 w-6 rounded-md bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center">
+          <div className="rounded-2xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700 p-4">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="h-7 w-7 rounded-lg bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center">
                   <Boxes className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
                 </div>
-                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">My Stock</p>
+                <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">My Stock</p>
               </div>
               <button
                 onClick={onOpenStockTransfer}
-                className="h-7 px-2.5 rounded-lg bg-amber-50 dark:bg-amber-900/30 flex items-center gap-1 text-[10px] font-semibold text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/50 active:scale-95 transition-all"
+                className="h-8 px-3 rounded-lg bg-amber-50 dark:bg-amber-900/30 flex items-center gap-1.5 text-xs font-semibold text-amber-600 dark:text-amber-400 hover:bg-amber-100"
               >
-                <ArrowRightLeft className="h-3 w-3" />
+                <ArrowRightLeft className="h-3.5 w-3.5" />
                 Transfer
               </button>
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <div className="rounded-xl border border-slate-100 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/30 p-3 text-center">
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Products</p>
-                <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5">{stockItems.length}</p>
+              <div className="rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-3 text-center">
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Products</p>
+                <p className="text-xl font-bold text-slate-800 dark:text-white mt-1">{stockItems.length}</p>
               </div>
-              <div className="rounded-xl border border-slate-100 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/30 p-3 text-center">
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Units</p>
-                <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5">{stockUnits}</p>
+              <div className="rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-3 text-center">
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Units</p>
+                <p className="text-xl font-bold text-slate-800 dark:text-white mt-1">{stockUnits}</p>
               </div>
-              <div className="rounded-xl border border-slate-100 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/30 p-3 text-center">
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Value</p>
-                <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5">₹{stockValue >= 1000 ? `${(stockValue/1000).toFixed(1)}k` : stockValue.toLocaleString()}</p>
+              <div className="rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-3 text-center">
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Value</p>
+                <p className="text-xl font-bold text-slate-800 dark:text-white mt-1">₹{stockValue >= 1000 ? `${(stockValue/1000).toFixed(1)}k` : stockValue.toLocaleString()}</p>
               </div>
+            </div>
+
+            <div className="mt-4 pt-4 border-t space-y-1.5 max-h-48 overflow-y-auto">
+              {stockItems.map((item: any) => (
+                <div key={item.id} className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-muted/50 transition-colors">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium text-slate-800 dark:text-white truncate">{item.product?.name || "Unknown"}</p>
+                    <p className="text-xs text-slate-500/70 dark:text-slate-400/70 font-mono">{item.product?.sku || ""}{item.product?.unit ? ` · ${item.product.unit}` : ""}</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs font-bold text-slate-800 dark:text-white">{item.quantity}</span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">₹{Number(item.amount_value || 0).toLocaleString("en-IN")}</span>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -373,48 +475,68 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
       {activeSession ? (
         <div className="px-4 mt-5">
           <SectionLabel>Active Route</SectionLabel>
-          <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm overflow-hidden">
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/30 px-4 py-3 flex items-center justify-between">
-              <div>
-                <p className="font-semibold text-slate-800 dark:text-white text-base">{activeSession?.routes?.name ?? "Route"}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{visitedCount} of {routeStores.length} stores done</p>
+          <div className="rounded-2xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden">
+            <div className="bg-blue-50/50 dark:bg-blue-900/20 px-4 py-3.5">
+              <div className="flex items-center justify-between">
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-slate-800 dark:text-white">{activeSession?.routes?.name ?? "Route"}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    {visitedCount} of {routeStores.length} stores · {elapsed}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {routePendingOrders && routePendingOrders > 0 && (
+                    <span className="h-6 min-w-[24px] px-1.5 rounded-md bg-amber-500 text-white text-xs font-bold flex items-center justify-center">
+                      {routePendingOrders}
+                    </span>
+                  )}
+                  <Badge className="bg-blue-600 text-white text-xs font-semibold px-2.5 border-0">Active</Badge>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs font-semibold text-red-500 border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 px-2"
+                    onClick={() => setShowEndRouteConfirm(true)}
+                  >
+                    <Square className="h-3 w-3 mr-1" />
+                    End
+                  </Button>
+                </div>
               </div>
-              <Badge className="bg-blue-600 text-white text-[10px] font-semibold px-2">🟢 Active</Badge>
             </div>
-            <div className="px-4 py-3">
-              <div className="h-2.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-700" style={{ width: `${progressPct}%` }} />
+            <div className="px-4 py-3.5">
+              <div className="h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                <div className="h-full bg-blue-500 rounded-full transition-all duration-700" style={{ width: `${progressPct}%` }} />
               </div>
-              <div className="flex justify-between mt-1.5">
-                <span className="text-[11px] text-slate-400">{Math.round(progressPct)}% complete</span>
-                <span className="text-[11px] text-slate-400">{routeStores.length - visitedCount} remaining</span>
+              <div className="flex justify-between mt-2">
+                <span className="text-xs text-slate-500 dark:text-slate-400">{Math.round(progressPct)}% complete</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400">{routeStores.length - visitedCount} remaining</span>
               </div>
             </div>
           </div>
         </div>
       ) : (
         <div className="px-4 mt-5">
-          <div className="rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 p-5 text-center bg-slate-50/50 dark:bg-slate-800/30">
-            <div className="h-12 w-12 rounded-2xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center mx-auto mb-3">
-              <MapPin className="h-6 w-6 text-slate-400" />
+          <div className="rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 p-8 text-center bg-slate-50/50 dark:bg-slate-800/30">
+            <div className="h-12 w-12 rounded-xl bg-muted flex items-center justify-center mx-auto mb-3">
+              <MapPin className="h-6 w-6 text-slate-500/60 dark:text-slate-400/60" />
             </div>
-            <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">No Active Route</p>
-            <p className="text-xs text-slate-400 mt-1">Go to Routes tab to start your day</p>
+            <p className="text-sm font-semibold text-slate-800 dark:text-white">No Active Route</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Go to Routes tab to start your day</p>
           </div>
         </div>
       )}
 
       {nextStore && (
         <div className="px-4 mt-5">
-          <SectionLabel>Next Stop (Nearest Unvisited)</SectionLabel>
-          <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-4">
+          <SectionLabel>Next Stop</SectionLabel>
+          <div className="rounded-2xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700 p-4">
             <div className="flex items-start gap-3">
-              <button className="h-14 w-14 rounded-xl bg-slate-100 dark:bg-slate-700 overflow-hidden shrink-0" onClick={() => onOpenStore(nextStore)}>
+              <button className="h-14 w-14 rounded-xl bg-muted overflow-hidden shrink-0" onClick={() => onOpenStore(nextStore)}>
                 {nextStore.photo_url ? (
                   <img src={nextStore.photo_url} alt={nextStore.name} loading="lazy" className="h-full w-full object-cover" />
                 ) : (
                   <div className="h-full w-full flex items-center justify-center">
-                    <Store className="h-5 w-5 text-slate-400" />
+                    <Store className="h-5 w-5 text-slate-500/60 dark:text-slate-400/60" />
                   </div>
                 )}
               </button>
@@ -422,40 +544,40 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
               <div className="flex-1 min-w-0">
                 <div className="flex items-start justify-between gap-2">
                   <button className="text-left" onClick={() => onOpenStore(nextStore)}>
-                    <p className="font-semibold text-slate-800 dark:text-white text-base leading-tight truncate">{nextStore.name}</p>
+                    <p className="font-semibold text-slate-800 dark:text-white leading-tight truncate">{nextStore.name}</p>
                   </button>
-                  <Badge variant="outline" className="text-[10px] shrink-0 border-orange-200 text-orange-600 dark:border-orange-700 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20">Up Next</Badge>
+                  <Badge variant="outline" className="text-xs shrink-0 border-orange-200 text-orange-600 dark:border-orange-700 bg-orange-50 dark:bg-orange-900/20">Up Next</Badge>
                 </div>
-                {nextStore.address && <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">{nextStore.address}</p>}
+                {nextStore.address && <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1">{nextStore.address}</p>}
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-2 mt-3">
-              <Button size="sm" className="h-9 rounded-xl gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold" onClick={() => openDirections(nextStore)}>
-                <Navigation2 className="h-3.5 w-3.5" />
+            <div className="grid grid-cols-3 gap-2 mt-4">
+              <Button size="sm" className="h-10 rounded-xl gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold" onClick={() => openDirections(nextStore)}>
+                <Navigation2 className="h-4 w-4" />
                 Navigate
               </Button>
-              <Button size="sm" variant="outline" className="h-9 rounded-xl gap-1.5 text-xs font-semibold border-slate-200 dark:border-slate-600" onClick={() => window.open(`tel:${nextStore.phone}`, "_self")} disabled={!nextStore.phone}>
-                <Phone className="h-3.5 w-3.5" />
+              <Button size="sm" variant="outline" className="h-10 rounded-xl gap-1.5 text-xs font-semibold" onClick={() => window.open(`tel:${nextStore.phone}`, "_self")} disabled={!nextStore.phone}>
+                <Phone className="h-4 w-4" />
                 Call
               </Button>
-              <Button size="sm" variant="outline" className="h-9 rounded-xl gap-1.5 text-xs font-semibold" onClick={handleMarkVisited} disabled={visitLoading}>
-                {visitLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+              <Button size="sm" variant="outline" className="h-10 rounded-xl gap-1.5 text-xs font-semibold" onClick={() => setVisitReasonDialog(true)} disabled={isVisiting}>
+                {isVisiting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                 Visit
               </Button>
             </div>
 
             <div className="grid grid-cols-3 gap-2 mt-2">
-              <Button size="sm" variant="outline" className="h-9 rounded-xl gap-1.5 text-xs font-semibold" onClick={() => onGoRecord(nextStore, "sale")}>
-                <ShoppingCart className="h-3.5 w-3.5" />
+              <Button size="sm" variant="outline" className="h-10 rounded-xl gap-1.5 text-xs font-semibold" onClick={() => onGoRecord(nextStore, "sale")}>
+                <ShoppingCart className="h-4 w-4" />
                 Sale
               </Button>
-              <Button size="sm" variant="outline" className="h-9 rounded-xl gap-1.5 text-xs font-semibold" onClick={() => onGoRecord(nextStore, "payment")}>
-                <Wallet className="h-3.5 w-3.5" />
+              <Button size="sm" variant="outline" className="h-10 rounded-xl gap-1.5 text-xs font-semibold" onClick={() => onGoRecord(nextStore, "payment")}>
+                <Wallet className="h-4 w-4" />
                 Txn
               </Button>
-              <Button size="sm" variant="outline" className="h-9 rounded-xl gap-1.5 text-xs font-semibold" onClick={() => onOpenStore(nextStore)}>
-                <Eye className="h-3.5 w-3.5" />
+              <Button size="sm" variant="outline" className="h-10 rounded-xl gap-1.5 text-xs font-semibold" onClick={() => onOpenStore(nextStore)}>
+                <Eye className="h-4 w-4" />
                 Open
               </Button>
             </div>
@@ -467,31 +589,31 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
       <div className="px-4 grid grid-cols-2 gap-3 mb-6 mt-4">
         <Button
           variant="outline"
-          className="h-20 flex flex-col items-center justify-center gap-2 border-slate-200 dark:border-slate-800 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-900"
+          className="h-20 flex flex-col items-center justify-center gap-2 shadow-sm"
           onClick={() => onGoProducts?.()}
         >
-          <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center">
-            <Package className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
+            <Package className="h-3.5 w-3.5 text-white" />
           </div>
           <span className="text-xs font-medium">Product Catalog</span>
         </Button>
         <Button
           variant="outline"
-          className="h-20 flex flex-col items-center justify-center gap-2 border-slate-200 dark:border-slate-800 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-900"
+          className="h-20 flex flex-col items-center justify-center gap-2 shadow-sm"
           onClick={() => onOpenAddEntity?.()}
         >
-          <div className="h-8 w-8 rounded-full bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
-            <Store className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center">
+            <Store className="h-3.5 w-3.5 text-white" />
           </div>
           <span className="text-xs font-medium">Add Customer/Store</span>
         </Button>
         <Button
           variant="outline"
-          className="h-20 flex flex-col items-center justify-center gap-2 border-slate-200 dark:border-slate-800 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-900"
+          className="h-20 flex flex-col items-center justify-center gap-2 shadow-sm"
           onClick={() => onGoMap?.()}
         >
-          <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center">
-            <MapPin className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center">
+            <MapPin className="h-3.5 w-3.5 text-white" />
           </div>
           <span className="text-xs font-medium">Map View</span>
         </Button>
@@ -502,48 +624,57 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
           <SectionLabel>{pendingOrders!.length} Pending Orders</SectionLabel>
           <div className="space-y-2">
             {pendingOrders!.map((order) => (
-              <div key={order.id} className="flex items-center gap-3 p-3.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm">
+              <div key={order.id} className="flex items-center gap-3 p-4 rounded-2xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700">
                 <div className="h-9 w-9 rounded-xl bg-amber-50 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
                   <ShoppingCart className="h-4 w-4 text-amber-500" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-slate-800 dark:text-white truncate">{order.stores?.name ?? "Unknown Store"}</p>
-                  {order.notes && <p className="text-xs text-slate-400 truncate">{order.notes}</p>}
+                  {order.requirement_note && <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{order.requirement_note}</p>}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  <Badge variant="secondary" className="text-[10px] bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-700">{order.display_id}</Badge>
-                  <ArrowRight className="h-3.5 w-3.5 text-slate-300 dark:text-slate-600" />
+                  <Badge variant="secondary" className="text-xs bg-amber-50 dark:bg-amber-900/30 text-amber-600 border-amber-200">{order.display_id}</Badge>
+                  <ArrowRight className="h-3.5 w-3.5 text-slate-500/30 dark:text-slate-400/30" />
                 </div>
               </div>
             ))}
           </div>
         </div>
       )}
+
+      <VisitReasonDialog
+        open={visitReasonDialog}
+        onOpenChange={setVisitReasonDialog}
+        storeName={nextStore?.name || ""}
+        onConfirm={async (reason) => {
+          setVisitReasonDialog(false);
+          await handleMarkVisited(reason);
+        }}
+        loading={isVisiting}
+      />
+
+      <AlertDialog open={showEndRouteConfirm} onOpenChange={setShowEndRouteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>End Route Session?</AlertDialogTitle>
+          </AlertDialogHeader>
+          <p className="text-sm text-muted-foreground">
+            You visited {visitedCount} of {routeStores.length} stores. This will mark the session as complete.
+          </p>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleEndRoute} className="bg-red-500 hover:bg-red-600">
+              End Session
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2.5">{children}</p>;
+  return <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-3">{children}</p>;
 }
 
-interface MiniStatProps {
-  label: string;
-  value: string;
-  color: string;
-  icon: React.ElementType;
-}
 
-function MiniStat({ label, value, color, icon: Icon }: MiniStatProps) {
-  return (
-    <div className="rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-3 flex flex-col gap-2">
-      <div className={cn("h-7 w-7 rounded-lg bg-gradient-to-br flex items-center justify-center", color)}>
-        <Icon className="h-3.5 w-3.5 text-white" />
-      </div>
-      <div>
-        <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium uppercase tracking-wide leading-none mb-0.5">{label}</p>
-        <p className="text-sm font-bold text-slate-800 dark:text-white leading-tight">{value}</p>
-      </div>
-    </div>
-  );
-}

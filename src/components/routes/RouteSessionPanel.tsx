@@ -14,6 +14,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { VisitReasonDialog } from "@/components/routes/VisitReasonDialog";
 import { toast } from "sonner";
 
 export function RouteSessionPanel() {
@@ -25,6 +26,8 @@ export function RouteSessionPanel() {
   const [selectedRoute, setSelectedRoute] = useState("");
   const [saving, setSaving] = useState(false);
   const [agentLocation, setAgentLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [visitReasonDialog, setVisitReasonDialog] = useState<{ storeId: string; storeName: string } | null>(null);
+  const [visitLoading, setVisitLoading] = useState(false);
 
   const { data: activeSession, isLoading: loadingSession } = useQuery({
      queryKey: ["active-route-session", user?.id],
@@ -69,13 +72,43 @@ export function RouteSessionPanel() {
     enabled: storeIds.length > 0,
   });
 
+  const { data: sessionSales } = useQuery({
+    queryKey: ["session-sales-summary", activeSession?.id, storeIds],
+    queryFn: async () => {
+      if (!activeSession || storeIds.length === 0) return { total: 0, cash: 0, upi: 0 };
+      const todayStart = new Date(activeSession.started_at).toISOString();
+
+      const { data: sales } = await supabase
+        .from("sales")
+        .select("total_amount, cash_amount, upi_amount")
+        .in("store_id", storeIds)
+        .gte("created_at", todayStart);
+
+      const { data: txns } = await supabase
+        .from("transactions")
+        .select("total_amount, cash_amount, upi_amount")
+        .in("store_id", storeIds)
+        .gte("created_at", todayStart);
+
+      const total = ((sales || []).reduce((s: number, r: any) => s + Number(r.total_amount ?? 0), 0) +
+                     (txns || []).reduce((s: number, r: any) => s + Number(r.total_amount ?? 0), 0));
+      const cash = ((sales || []).reduce((s: number, r: any) => s + Number(r.cash_amount ?? 0), 0) +
+                    (txns || []).reduce((s: number, r: any) => s + Number(r.cash_amount ?? 0), 0));
+      const upi = ((sales || []).reduce((s: number, r: any) => s + Number(r.upi_amount ?? 0), 0) +
+                   (txns || []).reduce((s: number, r: any) => s + Number(r.upi_amount ?? 0), 0));
+
+      return { total, cash, upi };
+    },
+    enabled: !!activeSession && storeIds.length > 0,
+  });
+
   const { data: routes } = useQuery({
     queryKey: ["routes-list-active", user?.id, role],
     queryFn: async () => {
       const { data, error } = await supabase.from("routes").select("id, name").eq("is_active", true);
       if (error) throw error;
 
-      const allRoutes = data || [];
+      const allRoutes: any[] = data || [];
       if (!user?.id || !isScopedStaff) return allRoutes;
 
       const { data: accessRows, error: accessError } = await supabase
@@ -217,7 +250,7 @@ export function RouteSessionPanel() {
     }
   };
 
-  const handleVisit = async (storeId: string) => {
+  const handleVisit = async (storeId: string, reason?: string) => {
     if (!activeSession) return;
     const store = routeStores.find((s: any) => s.id === storeId);
     // Proximity check — only when geofencing is enabled in settings
@@ -238,6 +271,7 @@ export function RouteSessionPanel() {
       store_id: storeId,
       lat: loc?.lat || null,
       lng: loc?.lng || null,
+      visit_reason: reason || null,
     });
     if (error) {
       toast.error(error.message);
@@ -246,6 +280,10 @@ export function RouteSessionPanel() {
       toast.success("Store marked as visited");
       qc.invalidateQueries({ queryKey: ["session-visits"] });
     }
+  };
+
+  const handleVisitClick = (storeId: string, storeName: string) => {
+    setVisitReasonDialog({ storeId, storeName });
   };
 
   const openDirections = (store: any) => {
@@ -342,7 +380,7 @@ export function RouteSessionPanel() {
                       </Button>
                     )}
                     {!visited && (
-                      <Button size="sm" variant="outline" onClick={() => handleVisit(store.id)}>
+                      <Button size="sm" variant="outline" onClick={() => handleVisitClick(store.id, store.name)}>
                         Mark Visited
                       </Button>
                     )}
@@ -374,19 +412,60 @@ export function RouteSessionPanel() {
       <Dialog open={showEndConfirm} onOpenChange={setShowEndConfirm}>
         <DialogContent>
           <DialogHeader><DialogTitle>End Route Session?</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            You have visited {visitedCount} of {routeStores.length} stores.
-            Ending now will mark this session as complete. Continue?
-          </p>
-          <div className="flex gap-3 pt-2">
-            <Button variant="outline" className="flex-1" onClick={() => setShowEndConfirm(false)}>Cancel</Button>
-            <Button variant="destructive" className="flex-1" onClick={() => { setShowEndConfirm(false); handleEnd(); }} disabled={saving}>
-              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              End Session
-            </Button>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              You visited {visitedCount} of {routeStores.length} stores.
+            </p>
+
+            {sessionSales && sessionSales.total > 0 && (
+              <div className="rounded-xl border bg-card p-4 space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Session Summary</p>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Total Collection</span>
+                  <span className="text-lg font-bold">₹{sessionSales.total.toLocaleString("en-IN")}</span>
+                </div>
+                <div className="flex gap-4 pt-1 border-t">
+                  <div className="flex items-center gap-1.5">
+                    <div className="h-2 w-2 rounded-full bg-emerald-400" />
+                    <span className="text-xs text-muted-foreground">Cash <strong>₹{sessionSales.cash.toLocaleString("en-IN")}</strong></span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="h-2 w-2 rounded-full bg-violet-400" />
+                    <span className="text-xs text-muted-foreground">UPI <strong>₹{sessionSales.upi.toLocaleString("en-IN")}</strong></span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <p className="text-xs text-muted-foreground">
+              Ending now will mark this session as complete. Continue?
+            </p>
+
+            <div className="flex gap-3 pt-2">
+              <Button variant="outline" className="flex-1" onClick={() => setShowEndConfirm(false)}>Cancel</Button>
+              <Button variant="destructive" className="flex-1" onClick={() => { setShowEndConfirm(false); handleEnd(); }} disabled={saving}>
+                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                End Session
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
+
+      <VisitReasonDialog
+        open={!!visitReasonDialog}
+        onOpenChange={(v) => { if (!v) setVisitReasonDialog(null); }}
+        storeName={visitReasonDialog?.storeName || ""}
+        onConfirm={async (reason) => {
+          const storeId = visitReasonDialog?.storeId;
+          if (!storeId) return;
+          setVisitReasonDialog(null);
+          setVisitLoading(true);
+          await handleVisit(storeId, reason);
+          setVisitLoading(false);
+        }}
+        loading={visitLoading}
+      />
 
       <Dialog open={showStart} onOpenChange={setShowStart}>
         <DialogContent>

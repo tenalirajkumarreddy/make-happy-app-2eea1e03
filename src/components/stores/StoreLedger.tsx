@@ -12,7 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 type LedgerEntry = {
   id: string;
-  type: "sale" | "payment" | "correction";
+  type: "sale" | "payment" | "correction" | "return";
   date: string;
   display_id: string;
   description: string;
@@ -28,17 +28,23 @@ type LedgerEntry = {
 interface StoreLedgerProps {
   sales: any[];
   transactions: any[];
+  paymentReturns?: any[];
   balanceAdjustments?: any[];
   openingBalance: number;
   storeCreatedAt: string;
   profileMap: Map<string, { user_id: string; full_name: string; avatar_url: string | null }>;
 }
 
-export function StoreLedger({ sales, transactions, balanceAdjustments = [], openingBalance, storeCreatedAt, profileMap }: StoreLedgerProps) {
+export function StoreLedger({ sales, transactions, paymentReturns = [], balanceAdjustments = [], openingBalance, storeCreatedAt, profileMap }: StoreLedgerProps) {
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
 
   const ledgerEntries = useMemo(() => {
     const entries: LedgerEntry[] = [];
+
+    const returnByTxnId = new Map<string, any>();
+    for (const r of paymentReturns) {
+      returnByTxnId.set(r.original_transaction_id, r);
+    }
 
     for (const s of sales) {
       entries.push({
@@ -61,6 +67,8 @@ export function StoreLedger({ sales, transactions, balanceAdjustments = [], open
       const paymentMethod = Number(t.cash_amount) > 0 && Number(t.upi_amount) > 0
         ? "Cash+UPI"
         : Number(t.upi_amount) > 0 ? "UPI" : "Cash";
+      const ret = returnByTxnId.get(t.id);
+      const isReturned = t.is_fully_returned;
       entries.push({
         id: t.id,
         type: "payment",
@@ -70,10 +78,10 @@ export function StoreLedger({ sales, transactions, balanceAdjustments = [], open
         total_amount: Number(t.total_amount),
         cash_amount: Number(t.cash_amount),
         upi_amount: Number(t.upi_amount),
-        outstanding: Number(t.new_outstanding),
-        notes: t.notes,
+        outstanding: isReturned ? Number(t.old_outstanding) : Number(t.new_outstanding),
+        notes: isReturned ? (ret?.reason === "full_return" ? "Full return" : ret?.reason === "duplicate_payment" ? "Duplicate payment" : ret?.reason === "wrong_amount" ? "Wrong amount" : ret?.reason?.replace(/_/g, " ") || t.notes) : t.notes,
         recorded_by: t.recorded_by,
-        raw: t,
+        raw: { ...t, returnInfo: ret || null },
       });
     }
 
@@ -114,7 +122,7 @@ export function StoreLedger({ sales, transactions, balanceAdjustments = [], open
     });
 
     return entries;
-  }, [sales, transactions, balanceAdjustments, openingBalance]);
+  }, [sales, transactions, paymentReturns, balanceAdjustments, openingBalance]);
 
   const selectedEntry = ledgerEntries.find((e) => e.id === selectedEntryId);
   const isSaleSelected = selectedEntry?.type === "sale";
@@ -150,17 +158,24 @@ export function StoreLedger({ sales, transactions, balanceAdjustments = [], open
               </div>
               <div>
                 <p className="font-medium text-sm text-muted-foreground">Opening Balance</p>
-                <p className="text-[11px] text-muted-foreground">Admin</p>
+                <p className="text-3xs text-muted-foreground">Admin</p>
               </div>
             </div>
           );
         }
+        const isSaleReturned = row.type === "sale" && row.raw?.is_fully_returned;
+        const isPaymentReturned = row.type === "payment" && row.raw?.is_fully_returned;
         return (
           <div>
-            <p className="font-medium text-sm">{row.description}</p>
-            <p className="text-[11px] text-muted-foreground uppercase">{row.type === "sale" ? "SALE" : row.type === "payment" ? "PAYMENT" : "CORRECTION"}</p>
+            <p className={`font-medium text-sm ${isSaleReturned || isPaymentReturned ? "line-through text-muted-foreground" : row.type === "return" ? "text-emerald-600 dark:text-emerald-400" : ""}`}>
+              {row.description}
+              {(isSaleReturned || isPaymentReturned) && (
+                <Badge variant="outline" className="ml-2 text-4xs border-amber-300 text-amber-600 bg-amber-50 rounded px-1 py-0">Returned</Badge>
+              )}
+            </p>
+            <p className="text-3xs text-muted-foreground uppercase">{row.type === "sale" ? "SALE" : row.type === "payment" ? "PAYMENT" : row.type === "return" ? "RETURN" : "ADJUSTMENT"}</p>
             {row.notes && (
-              <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1">
+              <p className="text-3xs text-muted-foreground mt-0.5 flex items-center gap-1">
                 <span className="w-0.5 h-3 bg-primary/40 rounded-full inline-block" />
                 <span className="italic">{row.notes}</span>
               </p>
@@ -173,7 +188,7 @@ export function StoreLedger({ sales, transactions, balanceAdjustments = [], open
       header: "Debit (-)",
       accessor: (row: LedgerEntry) =>
         row.type === "sale" ? (
-          <span className="text-destructive font-medium">₹{row.total_amount.toLocaleString()}</span>
+          <span className={`font-medium ${row.raw?.is_fully_returned ? "line-through text-muted-foreground opacity-50" : "text-destructive"}`}>₹{row.total_amount.toLocaleString()}</span>
         ) : row.id === "__opening_balance__" && row.total_amount > 0 ? (
           <span className="text-destructive font-medium">₹{row.total_amount.toLocaleString()}</span>
         ) : row.type === "correction" && row.id !== "__opening_balance__" && row.total_amount > 0 ? (
@@ -189,9 +204,15 @@ export function StoreLedger({ sales, transactions, balanceAdjustments = [], open
           return <span className="text-success font-medium">₹{Math.abs(row.total_amount).toLocaleString()}</span>;
         }
         if (row.id !== "__opening_balance__" && row.type === "payment") {
+          if (row.raw?.is_fully_returned) {
+            return <span className="text-muted-foreground line-through">₹{row.total_amount.toLocaleString()}</span>;
+          }
           return <span className="text-success font-medium">₹{row.total_amount.toLocaleString()}</span>;
         }
-        if (row.type === "sale" && (row.cash_amount + row.upi_amount) > 0) {
+        if (row.type === "return") {
+          return <span className="text-success font-semibold">₹{row.total_amount.toLocaleString()}</span>;
+        }
+        if (row.type === "sale" && !row.raw?.is_fully_returned && (row.cash_amount + row.upi_amount) > 0) {
           return <span className="text-success font-medium">₹{(row.cash_amount + row.upi_amount).toLocaleString()}</span>;
         }
         if (row.type === "correction" && row.id !== "__opening_balance__" && row.total_amount < 0) {
@@ -219,10 +240,10 @@ export function StoreLedger({ sales, transactions, balanceAdjustments = [], open
       return (
         <div className="rounded-xl border bg-card px-3 py-2.5 shadow-sm">
           <div className="flex items-center justify-between">
-            <Badge variant={isCredit ? "secondary" : "destructive"} className="text-[10px] h-5">
+            <Badge variant={isCredit ? "secondary" : "destructive"} className="text-2xs h-5">
               {isCredit ? "CREDIT" : "DEBIT"}
             </Badge>
-            <span className="text-[11px] text-muted-foreground">
+            <span className="text-3xs text-muted-foreground">
               {formatDate(row.date)}
             </span>
           </div>
@@ -232,7 +253,7 @@ export function StoreLedger({ sales, transactions, balanceAdjustments = [], open
               {isCredit ? "+" : "-"}₹{displayAmount.toLocaleString()}
             </span>
           </div>
-          <div className="flex items-center justify-between mt-1 text-[11px]">
+          <div className="flex items-center justify-between mt-1 text-3xs">
             <span className={row.outstanding > 0 ? "text-destructive" : row.outstanding < 0 ? "text-success" : "text-muted-foreground"}>
               Bal: {row.outstanding < 0 ? "-" : ""}₹{Math.abs(row.outstanding).toLocaleString()}
             </span>
@@ -242,29 +263,70 @@ export function StoreLedger({ sales, transactions, balanceAdjustments = [], open
       );
     }
 
+    if (row.type === "return") {
+      return (
+        <div
+          className="rounded-xl border bg-card px-3 py-2.5 shadow-sm border-dashed border-red-200 dark:border-red-900/50 bg-red-50/5 dark:bg-red-950/5 cursor-pointer"
+          onClick={() => setSelectedEntryId(row.id)}
+        >
+          <div className="flex items-center justify-between">
+            <Badge variant="outline" className="text-2xs h-5 border-amber-300 text-amber-600 bg-amber-50 rounded px-1.5 py-0">
+              RETURN
+            </Badge>
+            <span className="text-3xs text-muted-foreground">
+              {formatDate(row.date)}
+            </span>
+          </div>
+          <div className="flex items-center justify-between mt-1.5">
+            <span className="font-mono text-xs text-muted-foreground">{row.display_id}</span>
+            <span className="text-sm font-bold text-success">+₹{row.total_amount.toLocaleString()}</span>
+          </div>
+          <div className="flex items-center justify-between mt-1 text-3xs">
+            <span className={row.outstanding > 0 ? "text-destructive" : row.outstanding < 0 ? "text-success" : "text-muted-foreground"}>
+              Bal: {row.outstanding < 0 ? "-" : ""}₹{Math.abs(row.outstanding).toLocaleString()}
+            </span>
+            {p && <span className="text-muted-foreground">{p.full_name}</span>}
+          </div>
+        </div>
+      );
+    }
+
+    const isSaleReturned = row.type === "sale" && row.raw?.is_fully_returned;
+    const isPaymentReturned = row.type === "payment" && row.raw?.is_fully_returned;
+    const isReturned = isSaleReturned || isPaymentReturned;
+    const rowTypeDisplay = isReturned ? "RETURNED" : row.type === "sale" ? "SALE" : row.type === "correction" ? "ADJUSTMENT" : "PAYMENT";
+
     return (
       <div
-        className="rounded-xl border bg-card px-3 py-2.5 shadow-sm cursor-pointer"
+        className={`rounded-xl border bg-card px-3 py-2.5 shadow-sm cursor-pointer ${isReturned ? "opacity-60 bg-slate-50 dark:bg-slate-900/40 border-dashed border-red-200 dark:border-red-900/40" : ""}`}
         onClick={() => setSelectedEntryId(row.id)}
       >
         <div className="flex items-center justify-between">
-          <Badge variant={row.type === "sale" ? "destructive" : row.type === "correction" ? "outline" : "secondary"} className="text-[10px] h-5">
-            {row.type === "sale" ? "SALE" : row.type === "correction" ? "ADJUSTMENT" : "PAYMENT"}
-          </Badge>
-          <span className="text-[11px] text-muted-foreground">
+          {isReturned ? (
+            <Badge className="text-2xs h-5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded px-1.5 py-0">
+              RETURNED
+            </Badge>
+          ) : (
+            <Badge variant={row.type === "sale" ? "destructive" : row.type === "correction" ? "outline" : "secondary"} className="text-2xs h-5">
+              {rowTypeDisplay}
+            </Badge>
+          )}
+          <span className="text-3xs text-muted-foreground">
             {formatDate(row.date)}
           </span>
         </div>
         <div className="flex items-center justify-between mt-1.5">
-          <span className="font-mono text-xs text-muted-foreground">{row.display_id}</span>
+          <span className={`font-mono text-xs text-muted-foreground ${isReturned ? "line-through text-slate-400 dark:text-slate-500" : ""}`}>{row.display_id}</span>
           <div className="flex flex-col items-end gap-0.5">
-            <span className="text-sm font-bold text-destructive">-₹{row.total_amount.toLocaleString()}</span>
-            {(row.cash_amount + row.upi_amount) > 0 && (
+            <span className={`text-sm font-bold ${isReturned ? "line-through text-slate-400 dark:text-slate-500" : row.type === "payment" ? "text-success" : "text-destructive"}`}>
+              {row.type === "payment" ? "+" : "-"}₹{row.total_amount.toLocaleString()}
+            </span>
+            {!isReturned && row.type === "sale" && (row.cash_amount + row.upi_amount) > 0 && (
               <span className="text-xs font-medium text-success">+₹{(row.cash_amount + row.upi_amount).toLocaleString()}</span>
             )}
           </div>
         </div>
-        <div className="flex items-center justify-between mt-1 text-[11px]">
+        <div className="flex items-center justify-between mt-1 text-3xs">
           <span className={row.outstanding > 0 ? "text-destructive" : row.outstanding < 0 ? "text-success" : "text-muted-foreground"}>
             Bal: {row.outstanding < 0 ? "-" : ""}₹{Math.abs(row.outstanding).toLocaleString()}
           </span>
@@ -298,7 +360,7 @@ export function StoreLedger({ sales, transactions, balanceAdjustments = [], open
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {selectedEntry?.type === "sale" ? "Sale Details" : selectedEntry?.type === "payment" ? "Payment Details" : "Entry Details"}
+              {selectedEntry?.type === "sale" ? "Sale Details" : selectedEntry?.type === "payment" ? "Payment Details" : selectedEntry?.type === "return" ? "Return Details" : "Entry Details"}
             </DialogTitle>
           </DialogHeader>
           {selectedEntry && (
@@ -330,6 +392,25 @@ export function StoreLedger({ sales, transactions, balanceAdjustments = [], open
                 </div>
               </div>
 
+              {selectedEntry.type === "payment" && selectedEntry.raw?.is_fully_returned && selectedEntry.raw?.returnInfo && (
+                <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20 p-3 space-y-1.5">
+                  <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                    <span className="w-1 h-3 bg-amber-500 rounded-full inline-block" />
+                    Return Details
+                  </p>
+                  <div className="grid grid-cols-2 gap-1 text-xs">
+                    <span className="text-muted-foreground">Return ID</span>
+                    <span className="font-mono font-medium text-right">{selectedEntry.raw.returnInfo.display_id}</span>
+                    <span className="text-muted-foreground">Return Amount</span>
+                    <span className="font-medium text-right text-success">+₹{Number(selectedEntry.raw.returnInfo.return_amount).toLocaleString()}</span>
+                    <span className="text-muted-foreground">Reason</span>
+                    <span className="font-medium text-right capitalize">{selectedEntry.raw.returnInfo.reason?.replace(/_/g, " ") || "—"}</span>
+                    <span className="text-muted-foreground">Return Date</span>
+                    <span className="font-medium text-right">{new Date(selectedEntry.raw.returnInfo.created_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</span>
+                  </div>
+                </div>
+              )}
+
               {selectedEntry.notes && (
                 <div className="rounded-lg border p-3">
                   <p className="text-xs text-muted-foreground mb-1">Notes</p>
@@ -353,11 +434,11 @@ export function StoreLedger({ sales, transactions, balanceAdjustments = [], open
                         <div key={item.id} className="flex items-center justify-between rounded-lg border bg-card p-2.5 text-sm">
                           <div>
                             <p className="font-medium">{item.products?.name || "—"}</p>
-                            <p className="text-[11px] text-muted-foreground">{item.products?.sku} · Qty: {Number(item.quantity)}</p>
+                            <p className="text-3xs text-muted-foreground">{item.products?.sku} · Qty: {Number(item.quantity)}</p>
                           </div>
                           <div className="text-right">
                             <p className="font-semibold">₹{Number(item.total_price).toLocaleString()}</p>
-                            <p className="text-[11px] text-muted-foreground">@ ₹{Number(item.unit_price).toLocaleString()}</p>
+                            <p className="text-3xs text-muted-foreground">@ ₹{Number(item.unit_price).toLocaleString()}</p>
                           </div>
                         </div>
                       ))}
@@ -374,7 +455,7 @@ export function StoreLedger({ sales, transactions, balanceAdjustments = [], open
                   <div className="flex items-center gap-2 pt-2 border-t">
                     <Avatar className="h-5 w-5">
                       <AvatarImage src={p?.avatar_url || undefined} />
-                      <AvatarFallback className="text-[9px] bg-primary/10 text-primary">
+                      <AvatarFallback className="text-4xs bg-primary/10 text-primary">
                         {(p?.full_name || "?").charAt(0)}
                       </AvatarFallback>
                     </Avatar>

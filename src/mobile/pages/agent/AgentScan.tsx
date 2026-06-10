@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 import type { StoreOption } from "@/mobile/components/StorePickerSheet";
 import { useRouteAccess } from "@/hooks/useRouteAccess";
 import { getCurrentPosition } from "@/lib/capacitorUtils";
-import { addToQueue } from "@/lib/offlineQueue";
+import { useMarkVisit } from "@/mobile/hooks/useMarkVisit";
 
 const SCANNER_ID = "mobile-qr-reader";
 
@@ -51,8 +51,9 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
 }
 
 export function AgentScan({ onGoRecord, onGoVisit, onOpenStore }: Props) {
-  const { user, role } = useAuth();
+  const { user, role, profile } = useAuth();
   const { canAccessRoute } = useRouteAccess(user?.id, role);
+  const { markVisit, isVisiting } = useMarkVisit();
 
   const [mode, setMode] = useState<"qr" | "nearby">("qr");
   const [scannerStarted, setScannerStarted] = useState(false);
@@ -60,7 +61,6 @@ export function AgentScan({ onGoRecord, onGoVisit, onOpenStore }: Props) {
   const [processing, setProcessing] = useState(false);
   const [selectedStore, setSelectedStore] = useState<StoreOption | null>(null);
   const [unknownUpi, setUnknownUpi] = useState<{ upiId: string; payeeName: string } | null>(null);
-  const [visitLoading, setVisitLoading] = useState(false);
   const [nearbyLoading, setNearbyLoading] = useState(false);
   const [nearbyStores, setNearbyStores] = useState<Array<StoreOption & { _distKm: number }>>([]);
 
@@ -230,59 +230,12 @@ export function AgentScan({ onGoRecord, onGoVisit, onOpenStore }: Props) {
 
   const handleVisitStore = async (store: StoreOption) => {
     if (!user) return;
-    setVisitLoading(true);
-    try {
-      let lat: number | null = null;
-      let lng: number | null = null;
-      const pos = await getCurrentPosition();
-      if (pos) {
-        lat = pos.lat;
-        lng = pos.lng;
-      }
-
-      if (!navigator.onLine) {
-        await addToQueue({
-          id: crypto.randomUUID(),
-          type: "visit",
-          payload: {
-            userId: user.id,
-            storeId: store.id,
-            lat,
-            lng,
-          },
-          createdAt: new Date().toISOString(),
-        });
-        toast.warning(`Offline — visit queued for ${store.name}`);
-        reset();
-        return;
-      }
-
-      const { data: session } = await supabase
-        .from("route_sessions")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("status", "active")
-        .maybeSingle();
-      if (!session) {
-        toast.error("No active route session. Start a route first.");
-        setVisitLoading(false);
-        return;
-      }
-
-      const { error } = await supabase.from("store_visits").insert({
-        session_id: session.id,
-        store_id: store.id,
-        lat,
-        lng,
-      });
-      if (error) throw error;
-      toast.success(`Visit recorded for ${store.name}`);
-      reset();
-    } catch {
-      toast.error("Failed to record visit");
-    } finally {
-      setVisitLoading(false);
-    }
+    await markVisit({
+      storeId: store.id,
+      storeName: store.name,
+      userId: user.id,
+    });
+    if (navigator.onLine) reset();
   };
 
   const hasResult = selectedStore || unknownUpi;
@@ -292,32 +245,40 @@ export function AgentScan({ onGoRecord, onGoVisit, onOpenStore }: Props) {
     <div className="grid grid-cols-3 gap-2">
       <button
         onClick={() => onGoRecord(selectedStore, "sale")}
-        className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-blue-600 hover:bg-blue-700 active:scale-95 transition-all shadow-sm"
+        className="flex flex-col items-center gap-2 p-4 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 transition-all shadow-sm"
       >
         <ShoppingCart className="h-6 w-6 text-white" />
-        <span className="text-[11px] font-bold text-white leading-tight text-center">Record Sale</span>
+        <span className="text-xs font-semibold text-white leading-tight text-center">Record Sale</span>
       </button>
       <button
         onClick={() => onGoRecord(selectedStore, "payment")}
-        className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95 transition-all shadow-sm"
+        className="flex flex-col items-center gap-2 p-4 rounded-xl bg-card border hover:bg-muted/50 active:scale-95 transition-all shadow-sm"
       >
         <Banknote className="h-6 w-6 text-emerald-500" />
-        <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200 leading-tight text-center">Record Transaction</span>
+        <span className="text-xs font-semibold text-foreground leading-tight text-center">Record Transaction</span>
       </button>
       <button
         onClick={() => selectedStore ? handleVisitStore(selectedStore) : onGoVisit()}
-        disabled={visitLoading}
-        className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-800/40 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 active:scale-95 transition-all shadow-sm disabled:opacity-60"
+        disabled={isVisiting}
+        onClick={() => selectedStore && handleVisitStore(selectedStore)}
       >
-        {visitLoading ? <Loader2 className="h-6 w-6 text-emerald-500 animate-spin" /> : <CheckCircle2 className="h-6 w-6 text-emerald-500" />}
-        <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 leading-tight text-center">{selectedStore ? "Mark Visited" : "Routes & Visits"}</span>
+        {isVisiting ? <Loader2 className="h-6 w-6 text-emerald-500 animate-spin" /> : <CheckCircle2 className="h-6 w-6 text-emerald-500" />}
+        <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 leading-tight text-center">{selectedStore ? "Mark Visited" : "Routes & Visits"}</span>
       </button>
     </div>
   );
 
   return (
     <div className="flex flex-col min-h-full">
-      <div className="px-4 pt-4 pb-2">
+      <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 dark:from-slate-900 dark:via-blue-950 dark:to-indigo-950 px-4 pt-4 pb-8">
+        <p className="text-blue-200 text-sm font-medium">Quick Action</p>
+        <h2 className="text-white text-2xl font-bold mt-0.5">{(profile?.full_name ?? "Agent").split(" ")[0]} 👋</h2>
+        <p className="text-blue-200/80 text-xs mt-1">
+          {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}
+        </p>
+      </div>
+
+      <div className="px-4 -mt-5 pb-2">
         <div className="grid grid-cols-2 gap-2">
           <Button
             variant={mode === "qr" ? "default" : "outline"}
@@ -395,7 +356,7 @@ export function AgentScan({ onGoRecord, onGoVisit, onOpenStore }: Props) {
         </div>
       ) : (
         <div className="px-4 py-3">
-          <div className="rounded-2xl border bg-card p-4 space-y-3">
+          <div className="rounded-xl bg-card shadow-sm border p-5 space-y-3">
             <Button onClick={handleFindNearby} disabled={nearbyLoading} className="w-full rounded-xl">
               {nearbyLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Navigation className="h-4 w-4 mr-2" />}
               Find Nearest 5 Stores
@@ -405,10 +366,10 @@ export function AgentScan({ onGoRecord, onGoVisit, onOpenStore }: Props) {
                 {nearbyStores.map((store) => (
                   <button
                     key={store.id}
-                    className={cn("w-full text-left rounded-xl border p-3", selectedStore?.id === store.id ? "border-primary bg-primary/5" : "border-border")}
+                    className={cn("w-full text-left rounded-xl border p-3.5", selectedStore?.id === store.id ? "border-primary bg-primary/5" : "")}
                     onClick={() => setSelectedStore(store)}
                   >
-                    <p className="font-semibold text-sm">{store.name}</p>
+                    <p className="font-semibold text-sm text-foreground">{store.name}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">{store.display_id} · {store._distKm < 1 ? `${Math.round(store._distKm * 1000)}m` : `${store._distKm.toFixed(1)}km`}</p>
                   </button>
                 ))}
@@ -429,39 +390,39 @@ export function AgentScan({ onGoRecord, onGoVisit, onOpenStore }: Props) {
 
       {selectedStore && (
         <div className="px-4 pt-3">
-          <div className="rounded-2xl bg-white dark:bg-slate-800 border border-emerald-100 dark:border-emerald-800/40 shadow-sm overflow-hidden">
-            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/30 dark:to-teal-900/30 px-4 py-2.5 flex items-center gap-2 border-b border-emerald-100 dark:border-emerald-800/40">
+          <div className="rounded-xl bg-card shadow-sm border overflow-hidden">
+            <div className="bg-emerald-50/50 dark:bg-emerald-900/20 px-4 py-3 flex items-center gap-2 border-b">
               <CheckCircle2 className="h-4 w-4 text-emerald-500" />
               <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">Store Identified</span>
             </div>
             <div className="p-4 flex items-start gap-3">
-              <button className="h-14 w-14 rounded-xl bg-slate-100 dark:bg-slate-700 overflow-hidden shrink-0" onClick={() => onOpenStore(selectedStore)}>
+              <button className="h-14 w-14 rounded-xl bg-muted overflow-hidden shrink-0" onClick={() => onOpenStore(selectedStore)}>
                 {selectedStore.photo_url ? (
                   <img src={selectedStore.photo_url} alt={selectedStore.name} loading="lazy" className="h-full w-full object-cover" />
                 ) : (
-                  <div className="h-full w-full flex items-center justify-center"><Store className="h-5 w-5 text-slate-400" /></div>
+                  <div className="h-full w-full flex items-center justify-center"><Store className="h-5 w-5 text-muted-foreground/60" /></div>
                 )}
               </button>
               <div className="flex-1 min-w-0">
-                <p className="font-bold text-slate-800 dark:text-white text-base leading-tight">{selectedStore.name}</p>
-                <p className="text-xs text-slate-400 mt-0.5">{selectedStore.display_id}</p>
+                <p className="font-bold text-foreground leading-tight">{selectedStore.name}</p>
+                <p className="text-xs text-muted-foreground/70 mt-0.5">{selectedStore.display_id}</p>
                 {selectedStore.address && (
-                  <div className="flex items-center gap-1 mt-1.5 text-xs text-slate-400">
+                  <div className="flex items-center gap-1 mt-1.5 text-xs text-muted-foreground/70">
                     <MapPin className="h-3 w-3 shrink-0" />
                     <span className="truncate">{selectedStore.address}</span>
                   </div>
                 )}
                 <div className="flex items-center gap-2 mt-2 flex-wrap">
-                  {selectedStore.store_types?.name && <Badge variant="secondary" className="text-[10px] font-semibold bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border-0">{selectedStore.store_types.name}</Badge>}
-                  {selectedStore.routes?.name && <Badge variant="secondary" className="text-[10px] font-semibold bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 border-0">{selectedStore.routes.name}</Badge>}
+                  {selectedStore.store_types?.name && <Badge variant="secondary" className="text-xs font-semibold bg-blue-50 dark:bg-blue-900/30 text-blue-600 border-0">{selectedStore.store_types.name}</Badge>}
+                  {selectedStore.routes?.name && <Badge variant="secondary" className="text-xs font-semibold bg-muted text-muted-foreground border-0">{selectedStore.routes.name}</Badge>}
                 </div>
               </div>
               <div className="text-right shrink-0">
-                <p className="text-[10px] text-slate-400 mb-0.5">Balance</p>
+                <p className="text-xs text-muted-foreground/70 mb-0.5">Balance</p>
                 <p className={cn("font-bold text-base", selectedStore.outstanding > 0 ? "text-red-500" : "text-emerald-500")}>₹{Number(selectedStore.outstanding).toLocaleString("en-IN")}</p>
               </div>
             </div>
-            <div className="px-4 pb-3">
+            <div className="px-4 pb-4">
               <Button variant="outline" size="sm" className="h-8 rounded-lg text-xs" onClick={() => onOpenStore(selectedStore)}>
                 <Eye className="h-3.5 w-3.5 mr-1.5" />
                 Open Store Profile
@@ -472,31 +433,31 @@ export function AgentScan({ onGoRecord, onGoVisit, onOpenStore }: Props) {
       )}
 
       <div className="p-4 pt-3">
-        <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-4">
-          <div className="flex items-center justify-between gap-3 mb-3">
+        <div className="rounded-xl bg-card shadow-sm border p-5">
+          <div className="flex items-center justify-between gap-3 mb-4">
             <div>
-              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Actions</p>
-              <p className="text-sm font-semibold text-slate-800 dark:text-white mt-1">{selectedStore ? `Continue with ${selectedStore.name}` : "Use the same sale and payment flow as the web app"}</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Actions</p>
+              <p className="text-sm font-semibold text-foreground mt-1">{selectedStore ? `Continue with ${selectedStore.name}` : "Use the same sale and payment flow as the web app"}</p>
             </div>
-            {selectedStore && <Badge variant="outline" className="text-[10px] font-semibold border-emerald-200 dark:border-emerald-700 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20">Store selected</Badge>}
+            {selectedStore && <Badge variant="outline" className="text-xs font-semibold border-emerald-200 text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20">Store selected</Badge>}
           </div>
           {renderQuickActions()}
-          {!selectedStore && <p className="text-[11px] text-slate-400 mt-3 leading-relaxed">If you start before scanning, the next screen lets you choose the store manually.</p>}
+          {!selectedStore && <p className="text-xs text-muted-foreground/70 mt-3 leading-relaxed">If you start before scanning, the next screen lets you choose the store manually.</p>}
         </div>
       </div>
 
       {unknownUpi && !selectedStore && (
         <div className="p-4 pt-0 space-y-3">
-          <div className="rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/40 p-4">
+          <div className="rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/40 p-5">
             <div className="flex items-center gap-2 mb-3">
               <div className="h-8 w-8 rounded-xl bg-amber-500/10 flex items-center justify-center"><AlertTriangle className="h-4 w-4 text-amber-500" /></div>
               <p className="text-sm font-bold text-amber-700 dark:text-amber-400">No Store Linked</p>
             </div>
-            <p className="font-mono text-sm text-slate-700 dark:text-slate-300 break-all bg-white dark:bg-slate-800 px-3 py-2 rounded-xl">{unknownUpi.upiId}</p>
-            {unknownUpi.payeeName && <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">{unknownUpi.payeeName}</p>}
+            <p className="font-mono text-sm text-foreground break-all bg-card px-3 py-2 rounded-xl border">{unknownUpi.upiId}</p>
+            {unknownUpi.payeeName && <p className="text-sm text-muted-foreground mt-2">{unknownUpi.payeeName}</p>}
             <p className="text-xs text-amber-600/80 dark:text-amber-500/80 mt-3 leading-relaxed">This UPI ID is not linked to any store. Ask your admin to register it.</p>
           </div>
-          <Button variant="outline" className="w-full h-10 rounded-xl border-slate-200 dark:border-slate-700" onClick={reset}>
+          <Button variant="outline" className="w-full h-10 rounded-xl" onClick={reset}>
             <RefreshCw className="h-4 w-4 mr-2" />
             Scan Again
           </Button>
@@ -505,7 +466,7 @@ export function AgentScan({ onGoRecord, onGoVisit, onOpenStore }: Props) {
 
       {!hasResult && !scannerError && (
         <div className="px-6 py-5 text-center">
-          <div className="flex items-center justify-center gap-1.5 text-slate-400 dark:text-slate-500">
+          <div className="flex items-center justify-center gap-1.5 text-muted-foreground/70">
             <Zap className="h-3.5 w-3.5" />
             <p className="text-xs font-medium">Scan to instantly record a sale or collect payment</p>
           </div>

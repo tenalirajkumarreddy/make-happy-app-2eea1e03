@@ -82,7 +82,7 @@ export function ResponsiveDataView<T extends Record<string, any>>({
       {/* Virtualized container */}
       <div
         ref={parentRef}
-        className="overflow-auto border rounded-lg bg-background"
+        className="overflow-auto border rounded-lg bg-background min-w-0"
         style={{ height }}
       >
         {filteredData.length === 0 ? (
@@ -153,7 +153,7 @@ export function ResponsiveDataView<T extends Record<string, any>>({
                           <th
                             key={idx}
                             className={cn(
-                              "px-4 py-3 text-left text-sm font-semibold text-muted-foreground",
+                              "px-4 py-3 text-left text-sm font-semibold text-muted-foreground truncate",
                               col.className
                             )}
                           >

@@ -46,16 +46,16 @@ export default function DailyReport() {
         supabase.from("store_visits").select("store_id, stores(route_id)").gte("visited_at", startOfDay).lte("visited_at", endOfDay),
       ]);
 
-      const sales = salesRes.data || [];
-      const txns = txnRes.data || [];
-      const orders = ordersRes.data || [];
-      const saleItems = saleItemsRes.data || [];
-      const stores = storesRes.data || [];
-      const handovers = handoversRes.data || [];
-      const profiles = profilesRes.data || [];
-      const roles = rolesRes.data || [];
-      const routes = routesRes.data || [];
-      const visits = visitsRes.data || [];
+      const sales: any[] = salesRes.data || [];
+      const txns: any[] = txnRes.data || [];
+      const orders: any[] = ordersRes.data || [];
+      const saleItems: any[] = saleItemsRes.data || [];
+      const stores: any[] = storesRes.data || [];
+      const handovers: any[] = handoversRes.data || [];
+      const profiles: any[] = profilesRes.data || [];
+      const roles: any[] = rolesRes.data || [];
+      const routes: any[] = routesRes.data || [];
+      const visits: any[] = visitsRes.data || [];
 
       const profileMap = Object.fromEntries(profiles.map((p) => [p.user_id, p.full_name]));
       

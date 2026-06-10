@@ -112,7 +112,7 @@ const CustomerDetail = () => {
       .from("customers")
       .update({
         name: form.name,
-        phone: form.phone || null,
+        phone: form.phone || null as any,
         email: form.email || null,
         address: form.address || null,
         gst_number: form.gst_number || null,
@@ -469,7 +469,7 @@ const CustomerDetail = () => {
 function InfoItem({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
-      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{label}</p>
+      <p className="text-2xs text-muted-foreground uppercase tracking-wider">{label}</p>
       <p className="text-sm font-medium text-foreground truncate">{value}</p>
     </div>
   );
@@ -490,24 +490,24 @@ function KycDocCard({
 
   return (
     <div className="rounded-lg border bg-muted/30 p-3 text-center space-y-2">
-      <p className="text-[11px] font-medium text-muted-foreground">{label}</p>
+      <p className="text-3xs font-medium text-muted-foreground">{label}</p>
       {publicUrl ? (
         <div className="space-y-1.5">
           <img src={publicUrl} alt={label} loading="lazy" className="w-full h-16 object-cover rounded" />
-          <a href={publicUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline">
+          <a href={publicUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-3xs text-primary hover:underline">
             View <ExternalLink className="h-3 w-3" />
           </a>
         </div>
       ) : canUpload ? (
         <>
           <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={(e) => { if (e.target.files?.[0]) onUpload(e.target.files[0]); }} />
-          <Button variant="outline" size="sm" className="w-full text-[11px] h-7" onClick={() => inputRef.current?.click()} disabled={uploading}>
+          <Button variant="outline" size="sm" className="w-full text-3xs h-7" onClick={() => inputRef.current?.click()} disabled={uploading}>
             {uploading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Upload className="h-3 w-3 mr-1" />}
             Upload
           </Button>
         </>
       ) : (
-        <p className="text-[11px] text-muted-foreground">Not uploaded</p>
+        <p className="text-3xs text-muted-foreground">Not uploaded</p>
       )}
     </div>
   );

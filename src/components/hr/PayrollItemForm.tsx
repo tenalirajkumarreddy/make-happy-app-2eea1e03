@@ -45,7 +45,7 @@ export const PayrollItemForm: React.FC<PayrollItemFormProps> = ({ isOpen, onClos
   const { data: workers } = useQuery({
     queryKey: ['workers', warehouse?.id],
     queryFn: async () => {
-        const { data, error } = await supabase.from('workers').select('id, full_name').eq('warehouse_id', warehouse?.id).eq('is_active', true);
+        const { data, error } = await supabase.from('workers').select('id, full_name').eq('warehouse_id', warehouse?.id as string).eq('is_active', true);
         if (error) throw error;
         return data;
     },
@@ -61,7 +61,7 @@ export const PayrollItemForm: React.FC<PayrollItemFormProps> = ({ isOpen, onClos
 
   useEffect(() => {
     if (item) {
-      form.reset(item);
+      form.reset(item as any);
     } else {
       form.reset({
         worker_id: undefined,
@@ -83,7 +83,7 @@ export const PayrollItemForm: React.FC<PayrollItemFormProps> = ({ isOpen, onClos
         warehouse_id: warehouse.id,
       };
 
-      const { error } = await supabase.from('payroll_items').upsert(payload).select();
+      const { error } = await (supabase as any).from('payroll_items').upsert(payload).select();
       if (error) throw error;
     },
     onSuccess: () => {
@@ -117,7 +117,7 @@ export const PayrollItemForm: React.FC<PayrollItemFormProps> = ({ isOpen, onClos
                   <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isEditMode}>
                     <FormControl><SelectTrigger><SelectValue placeholder="Select a worker" /></SelectTrigger></FormControl>
                     <SelectContent>
-                      {workers?.map(w => <SelectItem key={w.id} value={w.id}>{w.full_name}</SelectItem>)}
+                      {workers?.map((w: any) => <SelectItem key={w.id} value={w.id}>{w.full_name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                   <FormMessage />

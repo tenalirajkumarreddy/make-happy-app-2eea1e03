@@ -2,56 +2,12 @@
 // Handles expense creation, bill uploads, approval workflow, and holding amount tracking
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const ALLOWED_DOMAINS = [
-  "https://aquaprimesales.vercel.app",
-  "capacitor://localhost",
-  "ionic://localhost",
-];
-
-function isAllowedOrigin(origin: string): boolean {
-  if (!origin) return false;
-
-  // Block null origins (file:// pages, sandboxed iframes)
-  if (origin === "null") return false;
-
-  // Native mobile apps use custom protocols
-  if (origin === "capacitor://localhost" || origin === "ionic://localhost") return true;
-
-  try {
-    const url = new URL(origin);
-
-    // Allow localhost in development only
-    if (
-      (url.protocol === "http:" || url.protocol === "https:") &&
-      (url.hostname === "localhost" || url.hostname === "127.0.0.1")
-    ) {
-      return import.meta.env?.DENO_ENV === "development" || Deno.env.get("DENO_ENV") === "development";
-    }
-
-    // Explicit allowlist for production domains
-    return ALLOWED_DOMAINS.includes(origin);
-  } catch {
-    return false;
-  }
-}
-
-function getCorsHeaders(req: Request) {
-  const origin = req.headers.get("Origin") || "";
-  const allowed = isAllowedOrigin(origin) ? origin : ALLOWED_DOMAINS[0];
-  return {
-    "Access-Control-Allow-Origin": allowed,
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-    "Access-Control-Allow-Methods": "POST, GET, PUT, DELETE, OPTIONS",
-    "Vary": "Origin",
-  };
-}
+import { getCorsHeaders, handleCorsPreflightOrError } from "../_shared/cors.ts";
 
 Deno.serve(async (req) => {
+  const corsResponse = handleCorsPreflightOrError(req);
+  if (corsResponse) return corsResponse;
   const corsHeaders = getCorsHeaders(req);
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;

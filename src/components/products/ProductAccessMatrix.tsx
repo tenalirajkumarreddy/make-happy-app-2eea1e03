@@ -109,10 +109,10 @@ const handleSave = async () => {
     }
 
     // Call RPC for atomic synchronization
-    const { error } = await supabase.rpc("sync_product_access_matrix", {
+    const { error } = await supabase            .rpc("sync_product_access_matrix" as any, {
       p_access_payload: accessPayload,
       p_pricing_payload: pricingPayload
-    });
+    }) as any;
 
     if (error) throw error;
 
@@ -170,8 +170,8 @@ const handleSave = async () => {
                 <tr key={p.id} className="hover:bg-muted/30 transition-colors">
                   <td className="p-3 sticky left-0 bg-card z-10">
                     <div className="font-medium">{p.name}</div>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <Badge variant="outline" className="text-[10px] font-mono">{p.sku}</Badge>
+                    <div className="mt-1 flex items-center gap-2">
+                      <Badge variant="outline" className="text-2xs font-mono">{p.sku}</Badge>
                       <span className="text-xs text-muted-foreground">Base: ₹{Number(p.base_price).toLocaleString()}</span>
                     </div>
                   </td>
@@ -181,13 +181,13 @@ const handleSave = async () => {
                     const isOverridden = currentPrice && Number(currentPrice) !== Number(p.base_price);
                     return (
                       <td key={st.id} className={`p-3 text-center transition-colors ${checked ? "bg-primary/5" : ""}`}>
-                        <div className="flex flex-col items-center gap-1.5">
+                        <div className="flex flex-col items-center gap-2">
                           <Checkbox
                             checked={checked}
                             onCheckedChange={() => toggleAccess(p.id, st.id)}
                           />
                           {checked && (
-                            <div className="flex flex-col items-center gap-0.5">
+                            <div className="flex flex-col items-center gap-1">
                               <Input
                                 type="number"
                                 value={currentPrice}
@@ -195,7 +195,7 @@ const handleSave = async () => {
                                 className={`w-20 h-7 text-xs text-center ${isOverridden ? "border-primary" : ""}`}
                               />
                               {isOverridden && (
-                                <span className="text-[10px] text-primary font-medium">Overridden</span>
+                                <span className="text-2xs text-primary font-medium">Overridden</span>
                               )}
                             </div>
                           )}

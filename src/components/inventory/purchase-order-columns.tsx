@@ -99,7 +99,7 @@ export const purchaseOrderColumns: ColumnDef<PurchaseOrderView>[] = [
   {
     accessorKey: "display_id",
     header: "PO ID",
-    cell: ({ row }) => {
+    cell: ({ row }: { row: any }) => {
       const displayId = row.original.display_id;
       return <span className="font-mono text-xs">{displayId}</span>;
     },
@@ -107,7 +107,7 @@ export const purchaseOrderColumns: ColumnDef<PurchaseOrderView>[] = [
   {
     accessorKey: "vendors.name",
     header: "Vendor",
-    cell: ({ row }) => {
+    cell: ({ row }: { row: any }) => {
       const po = row.original;
       const vendorName = po.vendors?.name || 'Unknown Vendor';
       return (
@@ -123,7 +123,7 @@ export const purchaseOrderColumns: ColumnDef<PurchaseOrderView>[] = [
   {
     accessorKey: "item_count",
     header: "Items",
-    cell: ({ row }) => {
+    cell: ({ row }: { row: any }) => {
       const count = row.original.item_count;
       return (
         <div className="flex items-center gap-1">
@@ -136,7 +136,7 @@ export const purchaseOrderColumns: ColumnDef<PurchaseOrderView>[] = [
   {
     accessorKey: "total_amount",
     header: "Total Amount",
-    cell: ({ row }) => {
+    cell: ({ row }: { row: any }) => {
       const amount = row.original.total_amount || 0;
       const formatted = new Intl.NumberFormat("en-IN", {
         style: "currency",
@@ -149,12 +149,12 @@ export const purchaseOrderColumns: ColumnDef<PurchaseOrderView>[] = [
   {
     accessorKey: "status",
     header: "Status",
-    cell: ({ row }) => <StatusBadge status={row.original.status} />,
+    cell: ({ row }: { row: any }) => <StatusBadge status={row.original.status} />,
   },
   {
     accessorKey: "order_date",
     header: "Order Date",
-    cell: ({ row }) => {
+    cell: ({ row }: { row: any }) => {
       const date = row.original.order_date;
       try {
         return new Date(date).toLocaleDateString('en-IN', {
@@ -170,7 +170,7 @@ export const purchaseOrderColumns: ColumnDef<PurchaseOrderView>[] = [
   {
     accessorKey: "expected_delivery",
     header: "Expected Delivery",
-    cell: ({ row }) => {
+    cell: ({ row }: { row: any }) => {
       const date = row.original.expected_delivery;
       if (!date) return <span className="text-muted-foreground">-</span>;
       try {
@@ -187,6 +187,6 @@ export const purchaseOrderColumns: ColumnDef<PurchaseOrderView>[] = [
   {
     id: "actions",
     header: "Actions",
-    cell: ({ row }) => <ActionsCell po={row.original} />,
+    cell: ({ row }: { row: any }) => <ActionsCell po={row.original} />,
   },
 ];

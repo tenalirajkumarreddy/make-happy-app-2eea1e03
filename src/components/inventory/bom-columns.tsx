@@ -24,7 +24,7 @@ export const bomColumns: ColumnDef<BomSummary>[] = [
   {
     accessorKey: "finished_product_name",
     header: "Finished Product",
-    cell: ({ row }) => {
+    cell: ({ row }: { row: any }) => {
       const bom = row.original;
       return (
         <Link to={`/inventory/boms/${bom.finished_product_id}`} className="font-medium text-blue-600 hover:underline">
@@ -36,16 +36,16 @@ export const bomColumns: ColumnDef<BomSummary>[] = [
   {
     accessorKey: "raw_material_count",
     header: "No. of Raw Materials",
-    cell: ({ row }) => <Badge variant="secondary">{row.original.raw_material_count}</Badge>
+    cell: ({ row }: { row: any }) => <Badge variant="secondary">{row.original.raw_material_count}</Badge>
   },
   {
     accessorKey: "last_updated",
     header: "Last Updated",
-    cell: ({ row }) => new Date(row.original.last_updated).toLocaleDateString(),
+    cell: ({ row }: { row: any }) => new Date(row.original.last_updated).toLocaleDateString(),
   },
   {
     id: "actions",
-    cell: ({ row }) => {
+    cell: ({ row }: { row: any }) => {
       const bom = row.original;
       return (
         <DropdownMenu>

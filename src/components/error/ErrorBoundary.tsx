@@ -5,7 +5,8 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 
 // Declare Sentry on window for TypeScript
 declare global {
-  interface Window extends Window {
+  // eslint-disable-next-line @typescript-eslint/no-empty-interface
+  interface Window {
     Sentry?: {
       captureException: (error: Error, context?: unknown) => void;
     };

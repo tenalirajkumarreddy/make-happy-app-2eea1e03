@@ -196,16 +196,16 @@ const PurchaseReturns = () => {
       const purchase = purchases.find((p: any) => p.id === purchaseId);
       
       // Generate display ID
-      const { data: displayId } = await supabase.rpc("generate_purchase_return_display_id");
+      const { data: displayId } = await supabase.rpc("generate_purchase_return_display_id") as any;
       
       // Calculate total
       const totalAmount = calculateTotal();
 
       // Create return
-      const { data: newReturn, error: returnError } = await supabase
+      const { data: newReturn, error: returnError } = await (supabase as any)
         .from("purchase_returns")
         .insert({
-          display_id: displayId,
+          display_id: displayId as any,
           warehouse_id: currentWarehouse?.id || null,
           purchase_id: purchaseId,
           vendor_id: (purchase as any)?.vendor_id,
@@ -359,6 +359,7 @@ const PurchaseReturns = () => {
       ) : isMobile ? (
         <ResponsiveDataView
           data={filteredReturns}
+          columns={columns as any}
           renderMobileCard={(r: any) => (
             <Card key={r.id} className="entity-card-mobile" onClick={() => setShowDetail(r.id)}>
               <CardContent className="p-4">

@@ -7,7 +7,7 @@
 -- ============================================================
 -- 1. ENUMS
 -- ============================================================
-CREATE TYPE public.app_role AS ENUM ('super_admin', 'manager', 'agent', 'marketer', 'pos', 'customer');
+CREATE TYPE public.app_role AS ENUM ('super_admin', 'manager', 'agent', 'marketer', 'operator', 'customer');
 
 
 -- ============================================================
@@ -575,7 +575,7 @@ CREATE POLICY "Users/managers can update handovers" ON public.handovers FOR UPDA
 -- ---- notifications ----
 CREATE POLICY "Users can view own notifications" ON public.notifications FOR SELECT USING (user_id = auth.uid());
 CREATE POLICY "Users can update own notifications" ON public.notifications FOR UPDATE USING (user_id = auth.uid());
-CREATE POLICY "Staff can insert notifications" ON public.notifications FOR INSERT WITH CHECK (has_role(auth.uid(), 'super_admin') OR has_role(auth.uid(), 'manager') OR has_role(auth.uid(), 'agent') OR has_role(auth.uid(), 'marketer') OR has_role(auth.uid(), 'pos'));
+CREATE POLICY "Staff can insert notifications" ON public.notifications FOR INSERT WITH CHECK (has_role(auth.uid(), 'super_admin') OR has_role(auth.uid(), 'manager') OR has_role(auth.uid(), 'agent') OR has_role(auth.uid(), 'marketer') OR has_role(auth.uid(), 'operator'));
 
 -- ---- order_items ----
 CREATE POLICY "Insert order items" ON public.order_items FOR INSERT TO authenticated WITH CHECK (order_id IN (SELECT id FROM orders));
@@ -619,8 +619,8 @@ CREATE POLICY "Insert sale items" ON public.sale_items FOR INSERT TO authenticat
 CREATE POLICY "View sale items" ON public.sale_items FOR SELECT TO authenticated USING (sale_id IN (SELECT id FROM sales));
 
 -- ---- sales ----
-CREATE POLICY "Staff can view sales" ON public.sales FOR SELECT TO authenticated USING (has_role(auth.uid(), 'super_admin') OR has_role(auth.uid(), 'manager') OR (has_role(auth.uid(), 'agent') AND ((recorded_by = auth.uid()) OR (assigned_to = auth.uid()))) OR (has_role(auth.uid(), 'pos') AND ((recorded_by = auth.uid()) OR (assigned_to = auth.uid()))) OR (has_role(auth.uid(), 'customer') AND (customer_id IN (SELECT id FROM customers WHERE user_id = auth.uid()))));
-CREATE POLICY "Staff can insert sales" ON public.sales FOR INSERT TO authenticated WITH CHECK (has_role(auth.uid(), 'super_admin') OR has_role(auth.uid(), 'manager') OR has_role(auth.uid(), 'agent') OR has_role(auth.uid(), 'pos'));
+CREATE POLICY "Staff can view sales" ON public.sales FOR SELECT TO authenticated USING (has_role(auth.uid(), 'super_admin') OR has_role(auth.uid(), 'manager') OR (has_role(auth.uid(), 'agent') AND ((recorded_by = auth.uid()) OR (assigned_to = auth.uid()))) OR (has_role(auth.uid(), 'operator') AND ((recorded_by = auth.uid()) OR (assigned_to = auth.uid()))) OR (has_role(auth.uid(), 'customer') AND (customer_id IN (SELECT id FROM customers WHERE user_id = auth.uid()))));
+CREATE POLICY "Staff can insert sales" ON public.sales FOR INSERT TO authenticated WITH CHECK (has_role(auth.uid(), 'super_admin') OR has_role(auth.uid(), 'manager') OR has_role(auth.uid(), 'agent') OR has_role(auth.uid(), 'operator'));
 CREATE POLICY "Admin/Manager can update sales" ON public.sales FOR UPDATE TO authenticated USING (has_role(auth.uid(), 'super_admin') OR has_role(auth.uid(), 'manager'));
 
 -- ---- store_pricing ----
@@ -654,7 +654,7 @@ CREATE POLICY "View visits" ON public.store_visits FOR SELECT TO authenticated U
 -- ---- stores ----
 CREATE POLICY "Staff can view all stores" ON public.stores FOR SELECT TO authenticated USING (has_role(auth.uid(), 'super_admin') OR has_role(auth.uid(), 'manager') OR has_role(auth.uid(), 'agent') OR has_role(auth.uid(), 'marketer'));
 CREATE POLICY "Customers can view own stores" ON public.stores FOR SELECT TO authenticated USING (has_role(auth.uid(), 'customer') AND (customer_id IN (SELECT id FROM customers WHERE user_id = auth.uid())));
-CREATE POLICY "POS can view stores for sales" ON public.stores FOR SELECT TO authenticated USING (has_role(auth.uid(), 'pos'));
+CREATE POLICY "POS can view stores for sales" ON public.stores FOR SELECT TO authenticated USING (has_role(auth.uid(), 'operator'));
 CREATE POLICY "Staff can insert stores" ON public.stores FOR INSERT TO authenticated WITH CHECK (has_role(auth.uid(), 'super_admin') OR has_role(auth.uid(), 'manager') OR has_role(auth.uid(), 'agent') OR has_role(auth.uid(), 'marketer'));
 CREATE POLICY "Admin/Manager can update stores" ON public.stores FOR UPDATE TO authenticated USING (has_role(auth.uid(), 'super_admin') OR has_role(auth.uid(), 'manager'));
 CREATE POLICY "Cannot delete system POS store" ON public.stores FOR DELETE TO authenticated USING (id <> '00000000-0000-0000-0000-000000000001'::uuid);
@@ -747,3 +747,64 @@ CREATE POLICY "Customers can insert own stores" ON public.stores
 -- ============================================================
 -- END OF TOTAL MIGRATION
 -- ============================================================
+
+-- 20260527000003_record_production_with_stock.sql
+-- Atomic production recording RPC that increases finished goods stock
+-- Does NOT deduct raw materials (consumption is calculated at end-of-day closing stock)
+
+CREATE OR REPLACE FUNCTION public.record_production_with_stock(
+  p_warehouse_id UUID,
+  p_product_id UUID,
+  p_quantity_produced INTEGER,
+  p_wastage_quantity INTEGER DEFAULT 0,
+  p_production_date DATE DEFAULT CURRENT_DATE,
+  p_notes TEXT DEFAULT NULL,
+  p_created_by UUID DEFAULT NULL
+)
+RETURNS TABLE(success BOOLEAN, production_log_id UUID, error TEXT)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_log_id UUID;
+  v_rows_affected INTEGER;
+BEGIN
+  IF p_quantity_produced <= 0 THEN
+    RETURN QUERY SELECT false, NULL::UUID, 'Quantity must be positive'::TEXT;
+    RETURN;
+  END IF;
+  IF p_wastage_quantity < 0 THEN
+    RETURN QUERY SELECT false, NULL::UUID, 'Wastage cannot be negative'::TEXT;
+    RETURN;
+  END IF;
+  INSERT INTO public.production_log (
+    warehouse_id, product_id, quantity_produced,
+    production_date, wastage_quantity, notes, created_by
+  ) VALUES (
+    p_warehouse_id, p_product_id, p_quantity_produced,
+    p_production_date, p_wastage_quantity, p_notes, p_created_by
+  )
+  RETURNING id INTO v_log_id;
+  UPDATE public.product_stock
+  SET quantity = quantity + p_quantity_produced,
+      updated_at = now()
+  WHERE warehouse_id = p_warehouse_id
+    AND product_id = p_product_id;
+  GET DIAGNOSTICS v_rows_affected = ROW_COUNT;
+  IF v_rows_affected = 0 THEN
+    INSERT INTO public.product_stock (product_id, warehouse_id, quantity, updated_at)
+    VALUES (p_product_id, p_warehouse_id, p_quantity_produced, now());
+  END IF;
+  INSERT INTO public.stock_movements (
+    product_id, warehouse_id, quantity, type,
+    reference_id, reason, created_by, created_at
+  ) VALUES (
+    p_product_id, p_warehouse_id, p_quantity_produced, 'production',
+    v_log_id::text, 'Production batch', p_created_by, now()
+  );
+  RETURN QUERY SELECT true, v_log_id, NULL::TEXT;
+EXCEPTION WHEN OTHERS THEN
+  RETURN QUERY SELECT false, NULL::UUID, SQLERRM;
+END;
+$$;

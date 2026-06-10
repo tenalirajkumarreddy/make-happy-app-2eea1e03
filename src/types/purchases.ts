@@ -48,3 +48,24 @@ export interface PurchaseOrderFormData {
   expected_delivery?: string;
   notes?: string;
 }
+
+export type PurchaseRecordStatus = 'pending' | 'completed';
+
+export interface PurchaseRecord {
+  id: string;
+  display_id: string;
+  vendor_id: string;
+  warehouse_id: string;
+  purchase_date: string;
+  bill_number: string | null;
+  bill_amount: number;
+  total_amount: number;
+  status: PurchaseRecordStatus;
+  notes: string | null;
+  bill_url: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  vendors: { name: string } | null;
+}

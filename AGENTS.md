@@ -20,7 +20,7 @@
 - Proximity checks (`src/lib/proximity.ts`) enforce location constraints on sales and route visits; GPS pings are logged to `location_pings`.
 
 ## Auth and identity specifics
-- Staff auth uses Supabase email/password; customer auth uses Firebase phone OTP -> Supabase token exchange (`src/pages/Auth.tsx`, `src/lib/firebaseAuth.ts`, `supabase/functions/firebase-phone-exchange/index.ts`).
+- Staff auth uses Supabase email/password; customer auth uses OpenSMS phone OTP -> Supabase auth (`src/pages/Auth.tsx`).
 - New customer self-registration relies on RLS policies in `supabase/migrations/20260317000001_customer_self_register_rls.sql`.
 - Customer KYC documents are stored in `kyc-documents` bucket (private) with RLS policies from `supabase/migrations/20260320000001_gps_pings_push_subs_kyc_storage.sql`.
 - Staff invitation + role assignment is done by edge function `supabase/functions/invite-staff/index.ts` (super_admin gated).
@@ -50,7 +50,7 @@
 - Supabase client is in `src/integrations/supabase/client.ts` and expects `VITE_SUPABASE_URL` + `VITE_SUPABASE_PUBLISHABLE_KEY`.
 - Capacitor native plugins are initialized in `src/main.tsx` (StatusBar/SplashScreen) and wrapped via helpers in `src/lib/capacitorUtils.ts`.
 - PWA caching is configured in `vite.config.ts` with NetworkFirst runtime caching for Supabase API calls.
-- Notification writes are DB inserts (`src/lib/notifications.ts`); Web Push support is enabled via `push_subscriptions` table and `src/lib/pushSubscription.ts`.
+- Notification writes are DB inserts (`src/lib/notifications.ts`); real-time delivery uses Supabase Realtime + `LocalNotifications` plugin via `src/hooks/useNotifications.ts`.
 - Active edge functions live under `supabase/functions/` (notably: `invite-staff`, `firebase-phone-exchange`, `auto-orders`, `daily-handover-snapshot`, `daily-store-reset`, `toggle-user-ban`).
 
 ## Safe-edit checklist for agents

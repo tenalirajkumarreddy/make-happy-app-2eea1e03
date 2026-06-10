@@ -218,7 +218,7 @@ export function StoreTypeAccessMatrix() {
                           {staff.full_name || "—"}
                         </p>
                         <span
-                          className={`mt-0.5 inline-block text-[10px] uppercase font-bold px-1.5 py-0.5 rounded leading-none ${
+                          className={`mt-0.5 inline-block text-2xs uppercase font-bold px-1.5 py-0.5 rounded leading-none ${
                             ROLE_BADGE[staff.role] || ""
                           }`}
                         >

@@ -104,12 +104,12 @@ const PERMISSION_CATEGORIES = [
     label: "Orders",
     icon: Package,
     permissions: [
-      { key: "create_order", label: "Create Order" },
-      { key: "edit_order", label: "Edit Order" },
-      { key: "fulfill_order", label: "Fulfill Order" },
-      { key: "cancel_order", label: "Cancel Order" },
+      { key: "create_orders", label: "Create Orders" },
+      { key: "modify_orders", label: "Modify Orders" },
+      { key: "fulfill_orders", label: "Fulfill Orders" },
+      { key: "cancel_orders", label: "Cancel Orders" },
       { key: "view_assigned_orders", label: "View Assigned Orders" },
-      { key: "transfer_order", label: "Transfer Order" },
+      { key: "transfer_orders", label: "Transfer Orders" },
     ],
   },
   {
@@ -175,7 +175,7 @@ export function StaffProfile() {
   const queryClient = useQueryClient();
   const [savingPermissions, setSavingPermissions] = useState(false);
 
-  const canManagePermissions = usePermission("manage_users").allowed;
+  const canManagePermissions = usePermission("manage_users" as any).allowed;
   const isAdmin = role === "super_admin";
 
   // Fetch staff details
@@ -254,14 +254,14 @@ export function StaffProfile() {
         role: userRole.role,
         warehouse: userRole.warehouses,
         cashAccount: cashAccount || { cash_amount: 0, upi_amount: 0, total_amount: 0 },
-        stock: stockData || [],
-        permissions: permissions || [],
-        activity: recentActivity || [],
+        stock: (stockData || []) as any[],
+        permissions: (permissions || []) as any[],
+        activity: (recentActivity || []) as any[],
         stats: {
           todaySales: todaySales?.length || 0,
-          todaySalesAmount: todaySales?.reduce((s, x) => s + (x.total_amount || 0), 0) || 0,
+          todaySalesAmount: (todaySales as any[])?.reduce((s: any, x: any) => s + (x.total_amount || 0), 0) || 0,
           todayCollections: todayTx?.length || 0,
-          todayCollectionsAmount: todayTx?.reduce((s, x) => s + (x.total_amount || 0), 0) || 0,
+          todayCollectionsAmount: (todayTx as any[])?.reduce((s: any, x: any) => s + (x.total_amount || 0), 0) || 0,
         },
       };
     },
@@ -285,7 +285,7 @@ useEffect(() => {
     if (!canManagePermissions || !userId) return;
 
     try {
-      const { error } = await supabase.from("user_permissions").upsert({
+      const { error } = await (supabase as any).from("user_permissions").upsert({
         user_id: userId,
         permission: permissionKey,
         enabled,
@@ -306,14 +306,15 @@ useEffect(() => {
     if (!staff || !isAdmin) return;
 
     try {
+      const p = staff as any;
       const { error } = await supabase
         .from("profiles")
-        .update({ is_active: !staff.profile.is_active })
-        .eq("user_id", userId);
+        .update({ is_active: !p.profile.is_active })
+        .eq("user_id", userId!);
 
       if (error) throw error;
 
-      toast.success(`Staff ${staff.profile.is_active ? "deactivated" : "activated"}`);
+      toast.success(`Staff ${p.profile.is_active ? "deactivated" : "activated"}`);
       queryClient.invalidateQueries({ queryKey: ["staff-profile", userId] });
     } catch (error) {
       toast.error("Failed to update status");
@@ -343,6 +344,8 @@ useEffect(() => {
     );
   }
 
+  const s = staff as any;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -351,12 +354,12 @@ useEffect(() => {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold">{staff.profile.full_name}</h1>
+          <h1 className="text-2xl font-bold">{s.profile.full_name}</h1>
           <div className="flex items-center gap-2 mt-1">
-            <Badge className={roleColors[staff.role] || "bg-slate-100"}>
-              {roleLabels[staff.role] || staff.role}
+            <Badge className={roleColors[s.role] || "bg-slate-100"}>
+              {roleLabels[s.role] || s.role}
             </Badge>
-            {staff.profile.is_active ? (
+            {s.profile.is_active ? (
               <Badge variant="outline" className="text-green-600 border-green-200">
                 <CheckCircle className="h-3 w-3 mr-1" />
                 Active
@@ -372,10 +375,10 @@ useEffect(() => {
         <div className="flex gap-2">
           {isAdmin && (
             <Button
-              variant={staff.profile.is_active ? "destructive" : "default"}
+              variant={s.profile.is_active ? "destructive" : "default"}
               onClick={handleToggleActive}
             >
-              {staff.profile.is_active ? "Deactivate" : "Activate"}
+              {s.profile.is_active ? "Deactivate" : "Activate"}
             </Button>
           )}
           <Button variant="outline" onClick={() => navigate(`/staff/${userId}/edit`)}>
@@ -394,12 +397,12 @@ useEffect(() => {
               <span className="text-sm">Cash Holding</span>
             </div>
             <p className="text-2xl font-bold">
-              ₹{((staff.cashAccount.cash_amount || 0) + (staff.cashAccount.upi_amount || 0)).toLocaleString("en-IN")}
+              ₹{((s.cashAccount.cash_amount || 0) + (s.cashAccount.upi_amount || 0)).toLocaleString("en-IN")}
             </p>
             <p className="text-xs text-muted-foreground">
-              ₹{staff.cashAccount.cash_amount?.toLocaleString("en-IN") || 0} Cash
-              {staff.cashAccount.upi_amount > 0 &&
-                ` • ₹${staff.cashAccount.upi_amount.toLocaleString("en-IN")} UPI`}
+              ₹{s.cashAccount.cash_amount?.toLocaleString("en-IN") || 0} Cash
+              {s.cashAccount.upi_amount > 0 &&
+                ` • ₹${s.cashAccount.upi_amount.toLocaleString("en-IN")} UPI`}
             </p>
           </CardContent>
         </Card>
@@ -409,9 +412,9 @@ useEffect(() => {
               <Package className="h-4 w-4" />
               <span className="text-sm">Stock Holding</span>
             </div>
-            <p className="text-2xl font-bold">{staff.stock.length}</p>
+            <p className="text-2xl font-bold">{s.stock.length}</p>
             <p className="text-xs text-muted-foreground">
-              {staff.stock.reduce((s, i) => s + (i.quantity || 0), 0)} units total
+              {(s.stock as any[]).reduce((s: any, i: any) => s + (i.quantity || 0), 0)} units total
             </p>
           </CardContent>
         </Card>
@@ -421,9 +424,9 @@ useEffect(() => {
               <Activity className="h-4 w-4" />
               <span className="text-sm">Today's Sales</span>
             </div>
-            <p className="text-2xl font-bold">{staff.stats.todaySales}</p>
+            <p className="text-2xl font-bold">{s.stats.todaySales}</p>
             <p className="text-xs text-muted-foreground">
-              ₹{staff.stats.todaySalesAmount.toLocaleString("en-IN")} total
+              ₹{s.stats.todaySalesAmount.toLocaleString("en-IN")} total
             </p>
           </CardContent>
         </Card>
@@ -433,9 +436,9 @@ useEffect(() => {
               <Wallet className="h-4 w-4" />
               <span className="text-sm">Today's Collections</span>
             </div>
-            <p className="text-2xl font-bold">{staff.stats.todayCollections}</p>
+            <p className="text-2xl font-bold">{s.stats.todayCollections}</p>
             <p className="text-xs text-muted-foreground">
-              ₹{staff.stats.todayCollectionsAmount.toLocaleString("en-IN")} total
+              ₹{s.stats.todayCollectionsAmount.toLocaleString("en-IN")} total
             </p>
           </CardContent>
         </Card>
@@ -450,17 +453,17 @@ useEffect(() => {
             <CardContent className="p-6">
               <div className="flex flex-col items-center text-center">
                 <Avatar className="h-24 w-24 mb-4">
-                  <AvatarImage src={staff.profile.avatar_url || undefined} />
+                  <AvatarImage src={s.profile.avatar_url || undefined} />
                   <AvatarFallback className="text-2xl bg-primary/10 text-primary">
-                    {staff.profile.full_name?.slice(0, 2).toUpperCase()}
+                    {s.profile.full_name?.slice(0, 2).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
-                <h3 className="text-xl font-semibold">{staff.profile.full_name}</h3>
-                <p className="text-muted-foreground">{staff.profile.email}</p>
-                {staff.warehouse && (
+                <h3 className="text-xl font-semibold">{s.profile.full_name}</h3>
+                <p className="text-muted-foreground">{s.profile.email}</p>
+                {s.warehouse && (
                   <Badge variant="outline" className="mt-2">
                     <Building2 className="h-3 w-3 mr-1" />
-                    {staff.warehouse.name}
+                    {s.warehouse.name}
                   </Badge>
                 )}
               </div>
@@ -472,7 +475,7 @@ useEffect(() => {
                   <Phone className="h-4 w-4 text-muted-foreground" />
                   <div>
                     <p className="text-sm font-medium">Phone</p>
-                    <p className="text-sm text-muted-foreground">{staff.profile.phone || "Not set"}</p>
+                    <p className="text-sm text-muted-foreground">{s.profile.phone || "Not set"}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -480,22 +483,22 @@ useEffect(() => {
                   <div>
                     <p className="text-sm font-medium">Joined</p>
                     <p className="text-sm text-muted-foreground">
-                      {staff.profile.created_at
-                        ? format(new Date(staff.profile.created_at), "MMM d, yyyy")
+                      {s.profile.created_at
+                        ? format(new Date(s.profile.created_at), "MMM d, yyyy")
                         : "Unknown"}
                     </p>
                   </div>
                 </div>
-                {staff.cashAccount.last_reset_at && (
+                {s.cashAccount.last_reset_at && (
                   <div className="flex items-center gap-3">
                     <Clock className="h-4 w-4 text-muted-foreground" />
                     <div>
                       <p className="text-sm font-medium">Last Cash Reset</p>
                       <p className="text-sm text-muted-foreground">
-                        {format(new Date(staff.cashAccount.last_reset_at), "MMM d, yyyy")}
+                        {format(new Date(s.cashAccount.last_reset_at), "MMM d, yyyy")}
                       </p>
                       <p className="text-xs text-green-600">
-                        ₹{staff.cashAccount.reset_amount?.toLocaleString("en-IN")} recorded
+                        ₹{s.cashAccount.reset_amount?.toLocaleString("en-IN")} recorded
                       </p>
                     </div>
                   </div>
@@ -513,13 +516,13 @@ useEffect(() => {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-4 pt-0">
-              {staff.stock.length === 0 ? (
+              {s.stock.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-4">
                   No stock assigned
                 </p>
               ) : (
                 <div className="space-y-3">
-                  {staff.stock.slice(0, 5).map((item: any) => (
+                  {s.stock.slice(0, 5).map((item: any) => (
                     <div key={item.product?.id} className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         {item.product?.image_url ? (
@@ -545,9 +548,9 @@ useEffect(() => {
                       </p>
                     </div>
                   ))}
-                  {staff.stock.length > 5 && (
+                  {s.stock.length > 5 && (
                     <Button variant="ghost" size="sm" className="w-full" onClick={() => navigate(`/staff/${userId}/stock`)}>
-                      View all {staff.stock.length} items
+                      View all {s.stock.length} items
                       <ChevronRight className="h-4 w-4 ml-1" />
                     </Button>
                   )}
@@ -640,13 +643,13 @@ useEffect(() => {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-6 pt-0">
-                  {staff.activity.length === 0 ? (
+                  {s.activity.length === 0 ? (
                     <p className="text-sm text-muted-foreground text-center py-8">
                       No recent activity
                     </p>
                   ) : (
                     <div className="space-y-4">
-                      {staff.activity.map((log: any) => (
+                      {s.activity.map((log: any) => (
                         <div key={log.id} className="flex gap-4">
                           <div className="flex flex-col items-center">
                             <div className="w-2 h-2 rounded-full bg-primary" />

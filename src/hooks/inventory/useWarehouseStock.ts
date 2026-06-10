@@ -114,7 +114,7 @@ export function useWarehouseStock(options: UseWarehouseStockOptions = {}) {
         p_type: params.type,
         p_reason: params.reason,
         p_user_id: (await supabase.auth.getUser()).data.user?.id,
-      });
+      }) as any;
 
       if (error) {
         // Classify errors for better UX

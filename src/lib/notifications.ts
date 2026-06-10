@@ -12,35 +12,69 @@ interface NotifyParams {
   entityId?: string;
 }
 
-/** Send a notification to a single user */
-export async function sendNotification(params: NotifyParams) {
-  const { error } = await supabase.from("notifications").insert({
-    user_id: params.userId,
-    title: params.title,
-    message: params.message,
-    type: params.type,
-    entity_type: params.entityType || null,
-    entity_id: params.entityId || null,
-  });
-  if (error) logError("Notification insert error", error);
+/** Get user IDs for broadcast roles (super_admin, manager) */
+export async function getBroadcastRolesUserIds(): Promise<string[]> {
+  try {
+    const { data } = await supabase
+      .from("user_roles")
+      .select("user_id")
+      .in("role", ["super_admin", "manager"]);
+    return (data || []).map((r) => r.user_id);
+  } catch {
+    return [];
+  }
 }
 
-/** Send the same notification to multiple users */
+/** Send a notification to a single user (and broadcast to admins/managers) */
+export async function sendNotification(params: NotifyParams) {
+  try {
+    const broadcastIds = await getBroadcastRolesUserIds();
+    const recipientIds = Array.from(new Set([params.userId, ...broadcastIds]));
+
+    const rows = recipientIds.map((uid) => ({
+      user_id: uid,
+      title: params.title,
+      message: params.message,
+      type: params.type,
+      entity_type: params.entityType || null,
+      entity_id: params.entityId || null,
+    }));
+
+    const { error } = await supabase.from("notifications").insert(rows);
+    if (error) throw error;
+  } catch (error) {
+    logError("Notification insert error", error);
+  }
+}
+
+/** Send the same notification to multiple users (and broadcast to admins/managers) */
 export async function sendNotificationToMany(
   userIds: string[],
-  params: Omit<NotifyParams, "userId">
+  params: Omit<NotifyParams, "userId">,
+  options?: { excludeFromBroadcast?: string[] }
 ) {
-  if (userIds.length === 0) return;
-  const rows = userIds.map((uid) => ({
-    user_id: uid,
-    title: params.title,
-    message: params.message,
-    type: params.type,
-    entity_type: params.entityType || null,
-    entity_id: params.entityId || null,
-  }));
-  const { error } = await supabase.from("notifications").insert(rows);
-  if (error) logError("Bulk notification error", error);
+  try {
+    let broadcastIds = await getBroadcastRolesUserIds();
+    if (options?.excludeFromBroadcast?.length) {
+      broadcastIds = broadcastIds.filter((id) => !options.excludeFromBroadcast!.includes(id));
+    }
+    const recipientIds = Array.from(new Set([...userIds, ...broadcastIds]));
+    if (recipientIds.length === 0) return;
+
+    const rows = recipientIds.map((uid) => ({
+      user_id: uid,
+      title: params.title,
+      message: params.message,
+      type: params.type,
+      entity_type: params.entityType || null,
+      entity_id: params.entityId || null,
+    }));
+
+    const { error } = await supabase.from("notifications").insert(rows);
+    if (error) throw error;
+  } catch (error) {
+    logError("Bulk notification error", error);
+  }
 }
 
 /** Get approver user IDs (super_admin, manager, operator) for broadcasting alerts */
@@ -62,7 +96,7 @@ export async function getUsersByRole(roles: string[]): Promise<string[]> {
   const { data } = await supabase
     .from("user_roles")
     .select("user_id")
-    .in("role", roles);
+    .in("role", roles as any);
   return (data || []).map((r) => r.user_id);
 }
 

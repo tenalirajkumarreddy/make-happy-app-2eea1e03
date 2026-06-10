@@ -80,7 +80,7 @@ const Activity = () => {
               {/* Action + Type */}
               <div className="flex items-start justify-between gap-2 mb-1.5">
                 <p className="text-sm font-medium text-foreground leading-snug">{row.action}</p>
-                <Badge variant="outline" className="text-[10px] h-5 px-1.5 shrink-0">{row.entity_type}</Badge>
+                <Badge variant="outline" className="text-2xs h-5 px-1.5 shrink-0">{row.entity_type}</Badge>
               </div>
               {/* Entity name */}
               {(row.entity_name || row.entity_id) && (
@@ -89,7 +89,7 @@ const Activity = () => {
               {/* Footer: User + Time */}
               <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 border-t border-border/50">
                 <span className="font-medium">{getUserName(row.user_id)}</span>
-                <span className="text-[10px]">{new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}</span>
+                <span className="text-2xs">{new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}</span>
               </div>
             </div>
           )}

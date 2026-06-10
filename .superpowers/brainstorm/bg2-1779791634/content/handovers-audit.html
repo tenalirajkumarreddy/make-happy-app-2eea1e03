@@ -1,0 +1,63 @@
+<h2>Handovers Page — Inconsistencies Found</h2>
+<p class="subtitle">Compared with Sales & Transactions pages, here's what needs alignment:</p>
+
+<div class="options" data-multiselect>
+  <div class="option" data-choice="filters" onclick="toggleSelect(this)">
+    <div class="letter">1</div>
+    <div class="content">
+      <h3>Filter Bar</h3>
+      <p>Current uses <code>h-9</code> with no background. Sales/Transactions use <code>h-8 text-xs bg-muted/30</code>. Missing filter count badge.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="stats" onclick="toggleSelect(this)">
+    <div class="letter">2</div>
+    <div class="content">
+      <h3>Balance + Stats Cards</h3>
+      <p>Uses inline <code>&lt;Card&gt;</code> with hardcoded colors. Shared <code>StatCard</code> component exists but isn't used.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="tables" onclick="toggleSelect(this)">
+    <div class="letter">3</div>
+    <div class="content">
+      <h3>Data Display Pattern</h3>
+      <p>Custom card list (<code>HandoverCard</code>) instead of <code>DataTable</code>. No search, no pagination, no <code>TableSkeleton</code> or <code>EmptyState</code>.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="dialogs" onclick="toggleSelect(this)">
+    <div class="letter">4</div>
+    <div class="content">
+      <h3>Dialog Extraction</h3>
+      <p>7 dialogs all inline. Sales extracts some (SaleReturnDialog, etc.). Handovers has <code>src/pages/handovers/</code> dir already.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="layout" onclick="toggleSelect(this)">
+    <div class="letter">5</div>
+    <div class="content">
+      <h3>Overall Layout</h3>
+      <p>Most complex page — balance cards + net banner + pending actions + 4 tabs. Needs cleaner visual hierarchy.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Major question first: the data paradigm</h3>
+  <p>Handovers is fundamentally a <strong>card/activity-feed page</strong>, not a table page. This is natural for handovers (each one is an event with actions). But Sales/Transactions are table-first.</p>
+  <p>Should we keep the card-based approach (better UX for approvals) or convert to <code>DataTable</code> (consistency)?</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="keep-cards" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Keep Card List — Polish & Consistency</h3>
+      <p>Improve card design with shared <code>StatusBadge</code>, <code>EmptyState</code>, <code>TableSkeleton</code> placeholders. Add search + pagination. Extract dialogs. Unify filter bar. Keep the activity-feed feel.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="convert-table" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Convert to DataTable</h3>
+      <p>Use the same <code>PageHeader</code> + filter bar + <code>DataTable</code> + pagination pattern as Sales/Transactions with a <code>renderMobileCard</code> for responsive view.</p>
+    </div>
+  </div>
+</div>

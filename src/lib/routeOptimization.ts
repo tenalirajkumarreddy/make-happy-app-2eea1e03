@@ -40,10 +40,10 @@ export async function optimizeRoute(
   startingPoint?: { lat: number; lng: number }
 ): Promise<OptimizedRoute> {
   // Fetch store coordinates
-  const { data: stores, error } = await supabase
+  const { data: stores, error } = await (supabase
     .from("stores")
     .select("id, name, latitude, longitude, visit_priority, avg_visit_duration")
-    .in("id", storeIds);
+    .in("id", storeIds) as any);
 
   if (error || !stores) {
     console.error("Error fetching stores for route optimization:", error);
@@ -57,9 +57,8 @@ export async function optimizeRoute(
   }
 
   // Filter stores with coordinates
-  const storesWithCoords = stores.filter(
-    (s): s is Store & { latitude: number; longitude: number } =>
-      s.latitude != null && s.longitude != null
+  const storesWithCoords: any[] = (stores ?? []).filter(
+    (s: any) => s.latitude != null && s.longitude != null
   );
 
   if (storesWithCoords.length < 2) {
@@ -80,7 +79,7 @@ export async function optimizeRoute(
     );
 
     // Create route session
-    const { data: session, error: sessionError } = await supabase
+    const { data: _session, error: sessionError } = await supabase
       .from("route_sessions")
       .insert({
         agent_id: agentId,
@@ -90,7 +89,7 @@ export async function optimizeRoute(
         total_distance: optimized.totalDistance,
         starting_location: optimized.startingLocation,
         status: "planned",
-      })
+      } as any)
       .select()
       .single();
 
@@ -116,14 +115,14 @@ export async function getOrCreateRouteSession(
   const dateStr = date.toISOString().split("T")[0];
 
   // Check for existing session
-  const { data: existing, error } = await supabase
+  const { data: existing, error } = await (supabase as any)
     .from("route_sessions")
     .select("*")
     .eq("agent_id", agentId)
     .eq("date", dateStr)
     .order("created_at", { ascending: false })
     .limit(1)
-    .single();
+    .single() as any;
 
   if (error && error.code !== "PGRST116") {
     console.error("Error fetching route session:", error);
@@ -179,8 +178,8 @@ export async function updateRouteSessionStatus(
 
   const { error } = await supabase
     .from("route_sessions")
-    .update(updates)
-    .eq("id", sessionId);
+    .update(updates as any)
+    .eq("id", sessionId as any);
 
   if (error) {
     console.error("Error updating route session:", error);
@@ -199,8 +198,8 @@ export async function reorderRoute(
     .from("route_sessions")
     .update({
       optimized_order: newOrder,
-    })
-    .eq("id", sessionId);
+    } as any)
+    .eq("id", sessionId as any);
 
   if (error) {
     console.error("Error reordering route:", error);

@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Bell, Wifi, WifiOff, LogOut, Moon, Sun, ChevronDown, User } from "lucide-react";
+import { memo, useState, useEffect } from "react";
+import { Bell, Wifi, WifiOff, LogOut, Moon, Sun, ChevronDown, User, Settings } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
@@ -33,7 +33,7 @@ interface Props {
   title?: string;
 }
 
-export function MobileHeader({ title }: Props) {
+export const MobileHeader = memo(function MobileHeader({ title }: Props) {
   const { profile, role, signOut } = useAuth();
   const { unreadCount } = useNotifications();
   const { isOnline, pendingCount } = useOnlineStatus();
@@ -94,10 +94,10 @@ export function MobileHeader({ title }: Props) {
                 </div>
               )}
               <div className="min-w-0">
-                <h1 className="text-[15px] font-semibold text-white leading-tight truncate">
+                <h1 className="text-sm font-semibold text-white leading-tight truncate">
                   {title ?? companyName}
                 </h1>
-                <p className="text-[11px] text-blue-200 leading-tight">
+                <p className="text-xs text-blue-200 leading-tight">
                   {roleLabel[role ?? ""] ?? role ?? ""}
                 </p>
               </div>
@@ -108,7 +108,7 @@ export function MobileHeader({ title }: Props) {
               {/* Connectivity pill */}
               <div
                 className={cn(
-                  "flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold mr-1",
+                  "flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold mr-1",
                   isOnline
                     ? "bg-emerald-500/25 text-emerald-100"
                     : "bg-red-500/30 text-red-200"
@@ -120,7 +120,7 @@ export function MobileHeader({ title }: Props) {
                   <WifiOff className="h-3 w-3" />
                 )}
                 {pendingCount > 0 && (
-                  <span className="ml-0.5 bg-amber-400 text-amber-900 px-1 rounded-full text-[9px] font-bold">
+                  <span className="ml-0.5 bg-amber-400 text-amber-900 px-1 rounded-full text-xs font-bold">
                     {pendingCount}
                   </span>
                 )}
@@ -129,7 +129,7 @@ export function MobileHeader({ title }: Props) {
               {/* Theme toggle */}
               <button
                 onClick={toggle}
-                className="p-2 rounded-full text-white/80 hover:text-white hover:bg-white/10 transition-all"
+                className="min-w-[44px] min-h-[44px] flex items-center justify-center p-2 rounded-full text-white/80 hover:text-white hover:bg-white/10 transition-all"
                 aria-label="Toggle theme"
               >
                 {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
@@ -143,7 +143,7 @@ export function MobileHeader({ title }: Props) {
               >
                 <Bell className="h-4 w-4" />
                 {unreadCount > 0 && (
-                  <span className="absolute top-1 right-1 h-4 w-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center shadow-sm">
+                  <span className="absolute top-1 right-1 h-4 w-4 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center shadow-sm">
                     {unreadCount > 9 ? "9+" : unreadCount}
                   </span>
                 )}
@@ -152,9 +152,9 @@ export function MobileHeader({ title }: Props) {
               {/* Profile dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="flex items-center gap-1 ml-1 p-1 rounded-full hover:bg-white/10 transition-all">
+                  <button className="flex items-center gap-1 ml-1 min-w-[44px] min-h-[44px] justify-center p-1 rounded-full hover:bg-white/10 transition-all">
                     <div className="h-7 w-7 rounded-full bg-white/25 ring-2 ring-white/40 flex items-center justify-center">
-                      <span className="text-white text-[11px] font-bold">{initials}</span>
+                      <span className="text-white text-xs font-bold">{initials}</span>
                     </div>
                     <ChevronDown className="h-3 w-3 text-white/70" />
                   </button>
@@ -180,6 +180,13 @@ export function MobileHeader({ title }: Props) {
                     My Profile
                   </DropdownMenuItem>
                   <DropdownMenuItem
+                    onClick={() => navigate("/settings")}
+                    className="gap-2 mx-1 rounded-lg"
+                  >
+                    <Settings className="h-4 w-4" />
+                    Settings
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
                     onClick={signOut}
                     className="text-destructive focus:text-destructive gap-2 mx-1 mb-1 rounded-lg"
                   >
@@ -196,4 +203,4 @@ export function MobileHeader({ title }: Props) {
       <NotificationsSheet open={notifOpen} onOpenChange={setNotifOpen} />
     </>
   );
-}
+});

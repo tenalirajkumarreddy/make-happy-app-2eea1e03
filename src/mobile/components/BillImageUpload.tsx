@@ -109,7 +109,7 @@ export function BillImages({ urls, onAdd, onRemove }: BillImagesProps) {
           </label>
         </div>
       )}
-      <p className="text-[10px] text-slate-400">{urls.length}/3 photos added</p>
+      <p className="text-xs text-slate-400">{urls.length}/3 photos added</p>
     </div>
   );
 }

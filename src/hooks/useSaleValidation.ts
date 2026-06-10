@@ -147,8 +147,8 @@ export function validateSaleItems(
     };
   }
 
-  // Check total amount
-  const totalAmount = items.reduce((sum, i) => sum + i.quantity, 0);
+  // Check total amount (sum of quantity * unit_price, not just quantity)
+  const totalAmount = items.reduce((sum, i) => sum + (i.quantity * (i.unit_price || 0)), 0);
   if (!rules.allowZeroTotal && totalAmount === 0) {
     return { valid: false, error: "Sale total cannot be zero", hasProducts: true };
   }
@@ -326,7 +326,7 @@ export function validateCreditLimit(
 
   if (exceeded) {
     return {
-      valid: true, // Still valid but warn
+      valid: false,
       exceeded: true,
       warning: `Credit limit exceeded! Limit: ₹${creditLimit.toLocaleString()}, Outstanding will be: ₹${newOutstanding.toLocaleString()}`,
     };

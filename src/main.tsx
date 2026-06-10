@@ -3,16 +3,20 @@ import { Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 import { SplashScreen } from "@capacitor/splash-screen";
 import { StatusBar, Style } from "@capacitor/status-bar";
+import { Keyboard } from "@capacitor/keyboard";
 import * as Sentry from "@sentry/react";
 import App from "./App.tsx";
 import "./index.css";
+
+// Inter + JetBrains Mono fonts loaded via CDN in index.html (faster first-visit via jsdelivr cache)
 import { env } from "@/lib/env";
 import { logDebug, logError } from "@/lib/logger";
 import { supabase } from "@/integrations/supabase/client";
 import { PushNotifications } from "@capacitor/push-notifications";
 
 if (env.VITE_SENTRY_DSN && import.meta.env.PROD) {
-  Sentry.init({
+  // Defer Sentry init to after first paint to reduce main-thread blocking (LCP/TBT)
+  const initSentry = () => Sentry.init({
     dsn: env.VITE_SENTRY_DSN,
     environment: env.VITE_SENTRY_ENVIRONMENT || 'production',
     integrations: [
@@ -26,6 +30,11 @@ if (env.VITE_SENTRY_DSN && import.meta.env.PROD) {
     replaysSessionSampleRate: 0.1,
     replaysOnErrorSampleRate: 1.0,
   });
+  if (typeof requestIdleCallback !== 'undefined') {
+    requestIdleCallback(initSentry, { timeout: 3000 });
+  } else {
+    setTimeout(initSentry, 0);
+  }
 }
 
 // Initialize Capacitor plugins when running as native app
@@ -78,9 +87,22 @@ async function initCapacitor() {
     try {
       // Set status bar style
       await StatusBar.setStyle({ style: Style.Dark });
-      await StatusBar.setBackgroundColor({ color: "#1a1a2e" });
+      await StatusBar.setBackgroundColor({ color: "hsl(222, 25%, 10%)" });
     } catch (e) {
       logDebug("StatusBar plugin not available");
+    }
+
+    try {
+      // Enable keyboard-aware scrolling on Android
+      Keyboard.setScroll({ isScroll: true });
+      Keyboard.addListener("keyboardWillShow", (info) => {
+        document.documentElement.style.setProperty("--keyboard-height", `${info.keyboardHeight}px`);
+      });
+      Keyboard.addListener("keyboardWillHide", () => {
+        document.documentElement.style.removeProperty("--keyboard-height");
+      });
+    } catch (e) {
+      logDebug("Keyboard plugin not available");
     }
 
     try {
@@ -103,21 +125,13 @@ async function initPushNotifications() {
       return;
     }
 
-    // Register with FCM
-    await PushNotifications.register();
-
-    // Get FCM token and save to backend
+    // Register listeners BEFORE register() to avoid race condition
     PushNotifications.addListener("registration", async (token) => {
-      logDebug("FCM token:", token.value);
+      logDebug("FCM token received", { token: token.value });
+      localStorage.setItem("last_fcm_token", token.value);
       await saveFCMToken(token.value);
     });
 
-    // Handle incoming push notification (app in background or foreground)
-    PushNotifications.addListener("pushNotificationReceived", (notification) => {
-      logDebug("Push notification received:", notification.title);
-    });
-
-    // Handle notification tap
     PushNotifications.addListener(
       "pushNotificationActionPerformed",
       (response) => {
@@ -133,25 +147,42 @@ async function initPushNotifications() {
       }
     );
 
-    // Token refresh
-    PushNotifications.addListener("tokenRefresh", async (token) => {
-      logDebug("FCM token refreshed:", token.value);
+    PushNotifications.addListener("tokenRefresh" as any, async (token: any) => {
+      logDebug("FCM token refreshed", { token: token.value });
+      localStorage.setItem("last_fcm_token", token.value);
       await saveFCMToken(token.value);
     });
+
+    // Register with FCM (listeners are already in place)
+    await PushNotifications.register();
   } catch (e) {
-    logDebug("PushNotifications plugin not available:", e);
+    logDebug("PushNotifications plugin not available", { error: e });
   }
 }
 
 async function saveFCMToken(token: string) {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    localStorage.setItem("last_fcm_token", token);
 
-    await supabase.from("fcm_tokens").upsert(
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      logDebug("FCM token cached locally, user not logged in yet");
+      return;
+    }
+
+    const lastSaved = localStorage.getItem(`saved_fcm_token_${user.id}`);
+    if (lastSaved === token) {
+      logDebug("FCM token already synchronized for user");
+      return;
+    }
+
+    const { error } = await supabase.from("fcm_tokens").upsert(
       { user_id: user.id, token, platform: "android", updated_at: new Date().toISOString() },
       { onConflict: "user_id,token" }
     );
+    if (error) throw error;
+
+    localStorage.setItem(`saved_fcm_token_${user.id}`, token);
     logDebug("FCM token saved to backend");
   } catch (e) {
     logError("Failed to save FCM token", e);

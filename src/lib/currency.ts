@@ -121,12 +121,12 @@ export async function convertCurrency(
   // with actual exchange rate lookup
   const { supabase } = await import("@/integrations/supabase/client");
   
-  const { data, error } = await supabase.rpc("convert_currency", {
+  const { data, error } = await supabase.rpc("convert_currency" as any, {
     p_amount: amount,
     p_from_currency: from,
     p_to_currency: to,
     p_date: new Date().toISOString().split("T")[0],
-  });
+  }) as any;
 
   if (error) {
     console.error("Currency conversion error:", error);

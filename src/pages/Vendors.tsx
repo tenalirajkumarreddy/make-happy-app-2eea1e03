@@ -109,7 +109,7 @@ const Vendors = () => {
       const { data: idData } = await supabase.rpc("generate_display_id", {
         prefix: "VEN",
         seq_name: "vendors_display_id_seq"
-      });
+      }) as any;
 
     const vendorData = {
       display_id: idData,
@@ -189,7 +189,7 @@ const Vendors = () => {
     { 
       header: "Outstanding", 
       accessor: (row: any) => (
-        <span className={`font-semibold ${Number(row.outstanding) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+        <span className={`font-semibold ${Number(row.outstanding) > 0 ? 'text-destructive' : 'text-success'}`}>
           ₹{Number(row.outstanding || 0).toLocaleString()}
         </span>
       )
@@ -276,7 +276,7 @@ const Vendors = () => {
                   {/* Outstanding */}
                   <div className="entity-card-stat">
                     <p className="entity-card-label">Outstanding</p>
-                    <p className={`font-bold text-lg ${Number(vendor.outstanding) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                    <p className={`font-bold text-lg ${Number(vendor.outstanding) > 0 ? 'text-destructive' : 'text-success'}`}>
                       ₹{Number(vendor.outstanding || 0).toLocaleString()}
                     </p>
                   </div>
@@ -299,8 +299,18 @@ const Vendors = () => {
             ))}
           </div>
           {vendors.length === 0 && (
-            <div className="text-center py-12 text-muted-foreground">
-              No vendors found. Click "Add Vendor" to create your first vendor.
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <div className="rounded-full bg-muted p-4 mb-4">
+                <Building2 className="h-8 w-8 text-muted-foreground" />
+              </div>
+              <h3 className="text-lg font-semibold mb-2">No vendors found</h3>
+              <p className="text-muted-foreground mb-4 max-w-sm">
+                Add your first vendor to start managing supplier accounts and payments.
+              </p>
+              <Button onClick={() => { resetForm(); setShowAdd(true); }}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Vendor
+              </Button>
             </div>
           )}
         </div>
@@ -326,7 +336,7 @@ const Vendors = () => {
                 {row.contact_person && <p className="text-xs text-muted-foreground mt-0.5">{row.contact_person}</p>}
                 <div className="flex items-center justify-between mt-1.5">
                   <span className="text-xs text-muted-foreground">Outstanding</span>
-                  <span className={`font-bold text-sm ${Number(row.outstanding) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                  <span className={`font-bold text-sm ${Number(row.outstanding) > 0 ? 'text-destructive' : 'text-success'}`}>
                     ₹{Number(row.outstanding || 0).toLocaleString()}
                   </span>
                 </div>

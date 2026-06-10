@@ -29,6 +29,7 @@ export function CustomerHome({ selectedStoreId, onStoreChange, onOpenSales, onOp
     queryKey: ["mobile-customer-self", user?.id],
     queryFn: async () => (await resolveCustomer(user!.id, "id, name, display_id, kyc_status")) as CustomerRow | null,
     enabled: !!user,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: stores } = useQuery({
@@ -40,6 +41,7 @@ export function CustomerHome({ selectedStoreId, onStoreChange, onOpenSales, onOp
       return (data as StoreRow[]) || [];
     },
     enabled: !!customer,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: orders } = useQuery({
@@ -51,6 +53,7 @@ export function CustomerHome({ selectedStoreId, onStoreChange, onOpenSales, onOp
       return (data as OrderRow[]) || [];
     },
     enabled: !!customer,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: sales, isLoading: loadingSales } = useQuery({
@@ -63,6 +66,7 @@ export function CustomerHome({ selectedStoreId, onStoreChange, onOpenSales, onOp
       return (data as unknown as SaleRow[]) || [];
     },
     enabled: !!customer,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: settings } = useQuery({
@@ -73,6 +77,7 @@ export function CustomerHome({ selectedStoreId, onStoreChange, onOpenSales, onOp
       if (error) throw error;
       return data?.value || "";
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   const scopedOrders = useMemo(() => {
@@ -118,7 +123,7 @@ export function CustomerHome({ selectedStoreId, onStoreChange, onOpenSales, onOp
 
       <div className="px-4 -mt-4 space-y-3">
         <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-3 shadow-sm">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-2">Store</p>
+          <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Store</p>
           <Select value={selectedStoreId ?? "all"} onValueChange={(v) => onStoreChange(v === "all" ? null : v)}>
             <SelectTrigger className="h-10 rounded-xl"><SelectValue placeholder="Select store" /></SelectTrigger>
             <SelectContent>
@@ -163,13 +168,13 @@ export function CustomerHome({ selectedStoreId, onStoreChange, onOpenSales, onOp
           ) : (
             <div className="space-y-2 mt-2">
               {(sales || []).map(sale => (
-                <div key={sale.id} className="rounded-xl border border-slate-100 dark:border-slate-700 p-3">
+                <div key={sale.id} className="rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-3">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{sale.display_id}</p>
-                    <p className="text-sm font-bold text-slate-900 dark:text-white">₹{Number(sale.total_amount).toLocaleString("en-IN")}</p>
+                    <p className="text-sm font-bold text-slate-800 dark:text-white">₹{Number(sale.total_amount).toLocaleString("en-IN")}</p>
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">{sale.stores?.name || "Store"}</p>
-                  <p className="text-[11px] text-slate-400 mt-1">
+                  <p className="text-xs text-slate-400 mt-1">
                     Paid ₹{(Number(sale.cash_amount || 0) + Number(sale.upi_amount || 0)).toLocaleString("en-IN")} • {new Date(sale.created_at).toLocaleDateString("en-IN")}
                   </p>
                 </div>
@@ -186,12 +191,12 @@ function MiniStat({ label, value, icon: Icon, color }: { label: string; value: s
   return (
     <div className="rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-3 shadow-sm">
       <div className="flex items-start justify-between gap-1">
-        <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wide leading-tight">{label}</p>
-        <div className={cn("h-6 w-6 rounded-md bg-gradient-to-br flex items-center justify-center shrink-0", color)}>
+        <p className="text-xs text-slate-500 font-medium uppercase tracking-wide leading-tight">{label}</p>
+        <div className={cn("h-7 w-7 rounded-lg bg-gradient-to-br flex items-center justify-center shrink-0", color)}>
           <Icon className="h-3 w-3 text-white" />
         </div>
       </div>
-      <p className="text-sm font-bold text-slate-900 dark:text-white mt-1 line-clamp-1">{value}</p>
+      <p className="text-sm font-bold text-slate-800 dark:text-white mt-1 line-clamp-1">{value}</p>
     </div>
   );
 }
@@ -199,11 +204,11 @@ function MiniStat({ label, value, icon: Icon, color }: { label: string; value: s
 function QuickButton({ label, onClick, icon: Icon, color }: { label: string; onClick: () => void; icon: React.ElementType; color: string }) {
   return (
     <button type="button" onClick={onClick}
-      className="h-16 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex flex-col items-center justify-center gap-1 active:scale-95 transition-all">
+      className="h-16 rounded-xl border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 flex flex-col items-center justify-center gap-1 active:scale-95 transition-all">
       <div className={cn("h-6 w-6 rounded-md bg-gradient-to-br flex items-center justify-center", color)}>
         <Icon className="h-3 w-3 text-white" />
       </div>
-      <span className="text-[10px] font-semibold text-slate-700 dark:text-slate-200">{label}</span>
+      <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">{label}</span>
     </button>
   );
 }

@@ -74,7 +74,7 @@ export default function InventoryTimelineReport() {
       const { data } = await supabase
         .from("purchase_items")
         .select("id, item_type, item_id, quantity, purchases(display_id, purchase_date, warehouses(name)), products(name)")
-        .eq("item_type", "product")
+        .eq("item_type" as any, "product")
         .gte("purchases.purchase_date", format(dateRange.from, "yyyy-MM-dd"))
         .lte("purchases.purchase_date", format(dateRange.to, "yyyy-MM-dd"));
       return (data || []).filter((p: any) => p.purchases);
@@ -102,8 +102,8 @@ export default function InventoryTimelineReport() {
       const { data } = await supabase
         .from("purchase_return_items")
         .select("id, item_type, item_id, quantity, purchase_returns(display_id, return_date, status), products(name)")
-        .eq("purchase_returns.status", "completed")
-        .eq("item_type", "product")
+        .eq("purchase_returns.status" as any, "completed")
+        .eq("item_type" as any, "product")
         .gte("purchase_returns.return_date", format(dateRange.from, "yyyy-MM-dd"))
         .lte("purchase_returns.return_date", format(dateRange.to, "yyyy-MM-dd"));
       return (data || []).filter((r: any) => r.purchase_returns);

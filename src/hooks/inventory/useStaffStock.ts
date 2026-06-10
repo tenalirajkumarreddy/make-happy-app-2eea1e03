@@ -109,8 +109,8 @@ export function useStaffStockByWarehouse(warehouseId: string | undefined) {
       ]);
 
       // Extract data from settled promises (handle failures gracefully)
-      const profiles = profilesResult.status === "fulfilled" ? profilesResult.value.data : [];
-      const roles = rolesResult.status === "fulfilled" ? rolesResult.value.data : [];
+      const profiles: any[] = profilesResult.status === "fulfilled" ? (profilesResult.value as any).data : [];
+      const roles: any[] = rolesResult.status === "fulfilled" ? (rolesResult.value as any).data : [];
 
       // Log warnings for debugging
       if (profilesResult.status === "rejected") {
@@ -262,7 +262,7 @@ export function useStaffStock(options: UseStaffStockOptions = {}) {
   // Return shape that old callers expect
   return {
     staffStock: data ?? [],
-    staffSummary: [],           // legacy callers shouldn't use this; use useStaffStockByWarehouse
+    staffSummary: [] as any[],           // legacy callers shouldn't use this; use useStaffStockByWarehouse
     isLoadingStock: isLoading,
     stockError: error,
   };

@@ -61,8 +61,8 @@ export const CustomerLedger = memo(({ customerId, customerName }: CustomerLedger
       const { data, error } = await supabase
         .rpc("generate_customer_statement", {
           p_customer_id: customerId,
-          p_from_date: null,
-          p_to_date: null,
+          p_from_date: null as any,
+          p_to_date: null as any,
         });
 
       if (error) throw error;
@@ -120,7 +120,7 @@ export const CustomerLedger = memo(({ customerId, customerName }: CustomerLedger
             <Badge
               variant={row.transaction_type === "SALE" ? "destructive"
                 : row.transaction_type === "PAYMENT" ? "default" : "secondary"}
-              className={`text-[10px] ${row.transaction_type === "PAYMENT" ? "bg-green-500" : ""}`}
+              className={`text-2xs ${row.transaction_type === "PAYMENT" ? "bg-green-500" : ""}`}
             >
               {row.transaction_type}
             </Badge>

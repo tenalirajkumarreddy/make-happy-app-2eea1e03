@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -24,6 +24,7 @@ const MOBILE_TX = [
   "mobile-customer-ledger-self", "mobile-customer-ledger-stores",
   "mobile-customer-ledger-payments", "mobile-marketer-dashboard",
   "mobile-pos-dashboard",
+  "mobile-history-balance-transactions",
 ];
 const MOBILE_ORDERS = [
   "mobile-agent-all-orders", "mobile-agent-pending-orders",
@@ -61,7 +62,7 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
     "sales", "my-sales", ...DASHBOARD, ...MOBILE_SALES, ...ANALYTICS,
     "daily-report", "daybook-sales", "sales-report",
     ...PL, "sale-for-invoice", "statement-sales", "user-sales-totals",
-    ...INVENTORY_TIMELINE, "mobile-recent-activity",
+    ...INVENTORY_TIMELINE, "mobile-recent-activity", "mobile-admin-ops",
   ],
   sale_items: [
     "sale-items", "sale-items-detail", "sale-items-for-invoice",
@@ -88,7 +89,7 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
     ...DASHBOARD, ...MOBILE_ORDERS,
     "order-report", "pending-orders-for-store", "mobile-pending-orders-for-store",
     "pending-order-stores", "pending-orders-map", "routes-for-orders",
-    "daybook-sales",
+    "daybook-sales", "mobile-admin-ops",
   ],
   order_items: ["orders", "order-items", "mobile-marketer-orders"],
   stores: [
@@ -157,7 +158,7 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
     "receivables-aging", "mobile-marketer-order-customers",
     "mobile-customers-kyc-sale", "mobile-customer",
     "mobile-customer-self", "mobile-customer-profile",
-    "my-customer",
+    "my-customer", "mobile-marketer-followup",
   ],
   kyc_documents: ["customer-kyc"],
   products: [
@@ -209,6 +210,8 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
     "user-holding-balance", "all-staff-balances",
     "finalizer-account", "prime-manager-account",
     "mobile-history", "mobile-history-balance",
+    "mobile-history-holding-balance",
+    ...DASHBOARD,
   ],
   user_permissions: ["all-user-permissions", "my-permissions"],
   // ── Inventory ───────────────────────────────────────────────────────────────
@@ -286,9 +289,9 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
   shift_rates: ["shift-rates"],
   // ── Attendance ───────────────────────────────────────────────────────────────
   attendance_records: ["attendance-records", "attendance-entries"],
-  attendance_entries: ["attendance-entries", "attendance-records", "staff-for-attendance"],
+  attendance_entries: ["attendance-entries", "attendance-records", "staff-for-attendance", "mobile-pos-attendance"],
   // ── Invoices ─────────────────────────────────────────────────────────────────
-  invoices: ["invoices", "invoice", "uninvoiced-sales", "invoice-items"],
+  invoices: ["invoices", "invoice", "uninvoiced-sales", "invoice-items", "mobile-pos-invoices"],
   invoice_items: ["invoices", "invoice"],
   invoice_sales: ["invoices", "uninvoiced-sales"],
   // ── Raw materials / BOM ──────────────────────────────────────────────────────
@@ -303,6 +306,7 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
   bill_of_materials: ["boms", "bom_summary", "bom_details"],
   // ── Manufacturing ─────────────────────────────────────────────────────────────
   production_log: ["production_log", "production_log_summary", "product_total_costs", "operator-dashboard"],
+  production_runs: ["production_runs", "mobile-pos-production", "operator-dashboard", "manager-dashboard"],
   wac_cost_history: ["wac_cost_history"],
   unit_conversions: ["unit_conversions"],
   // ── Staff / HR ────────────────────────────────────────────────────────────────
@@ -312,7 +316,7 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
   staff_performance_logs: ["staff-performance-logs", "agent-perf-report"],
   // ── Settings / Config ─────────────────────────────────────────────────────────
   company_settings: [
-    "company-settings", "company-settings-care", "company-settings-invoice",
+    "company-settings", "company_settings", "company-settings-care", "company-settings-invoice",
     "company-settings-map", "company-settings-portal",
     "company-settings-receipt", "company-settings-txn",
     "business-info", "business-info-invoice",
@@ -360,34 +364,38 @@ const ROLE_TABLE_MAP: Record<string, string[]> = {
     "stores", "store_type_products",
     "products", "profiles",
     "product_stock", "stock_movements", "staff_stock", "stock_transfers",
-    "stock_requests", "warehouses", "production_log",
+    "stock_requests", "warehouses", "production_log", "production_runs",
     "raw_materials", "raw_material_stock", "bill_of_materials",
     "handovers", "handover_snapshots", "expense_claims",
     "expense_categories", "expense_category_access",
     "notifications",
   ],
   agent: [
-    "sales", "sale_items", "sale_returns", "transactions", "orders", "order_items",
+    "sales", "sale_items", "sale_returns", "sale_return_items",
+    "transactions", "orders", "order_items",
     "stores", "store_pricing", "store_type_pricing", "store_type_products", "store_types",
     "store_visits", "customers", "products",
     "routes", "route_sessions", "agent_routes", "agent_store_types",
     "handovers", "handover_snapshots", "expense_claims",
     "expense_categories", "expense_category_access",
     "profiles", "stock_transfers", "staff_stock",
+    "product_stock", "stock_movements",
     "notifications", "receipts",
   ],
   marketer: [
-    "sales", "sale_items", "sale_returns",
+    "sales", "sale_items", "sale_returns", "sale_return_items",
     "orders", "order_items", "stores", "store_type_products", "store_types",
     "customers", "products", "routes", "route_sessions",
     "transactions", "agent_store_types", "profiles",
     "handovers", "handover_snapshots", "expense_claims",
     "expense_categories", "expense_category_access",
+    "staff_stock", "product_stock", "stock_transfers",
     "notifications",
   ],
   customer: [
     "orders", "order_items", "stores", "customers", "profiles",
-    "transactions", "notifications",
+    "transactions", "sales", "sale_returns",
+    "notifications",
   ],
 };
 
@@ -444,6 +452,9 @@ function shouldSkipForSubscriber(sub: RealtimeSubscriber, table: string, payload
     const owner = payload.new?.user_id ?? payload.old?.user_id;
     if (owner && owner !== userId) return true;
   }
+  if (table === "sale_return_items") {
+    return false;
+  }
   return false;
 }
 
@@ -499,12 +510,12 @@ function buildChannel(role: string | null) {
     });
 
     ch.subscribe((status: string) => {
-      if (isTearingDown && (status === "CLOSED" || status === "TIMED_OUT")) return;
+      if (isTearingDown) return;
       if (status === "SUBSCRIBED") {
         retryAttempt = 0;
         if (import.meta.env.DEV) console.log(`[Realtime] Batch ${idx} subscribed to ${batch.length} tables`); // eslint-disable-line no-console
       } else if (status === "CHANNEL_ERROR") {
-        logError(new Error(`[Realtime] Channel error batch ${idx}`), { context: "useRealtimeSync" });
+        logError(`[Realtime] Channel error batch ${idx}`, { context: "useRealtimeSync" });
         scheduleReconnect(role);
       } else if (status === "CLOSED" || status === "TIMED_OUT") {
         if (import.meta.env.DEV) console.warn(`[Realtime] Batch ${idx} connection`, status, "— reconnecting…");
@@ -519,28 +530,31 @@ function buildChannel(role: string | null) {
 function scheduleReconnect(role: string | null) {
   if (retryTimer) clearTimeout(retryTimer);
   if (retryAttempt >= RETRY.maxRetries) {
-    logError(new Error("[Realtime] Max retries reached"), { context: "useRealtimeSync" });
+    logError("[Realtime] Max retries reached", { context: "useRealtimeSync" });
     return;
   }
   const delay = Math.min(RETRY.baseDelay * 2 ** retryAttempt, RETRY.maxDelay);
-  retryTimer = setTimeout(() => {
+  retryTimer = setTimeout(async () => {
     retryAttempt++;
-    tearDownChannels();
+    await tearDownChannels();
     buildChannel(role);
   }, delay);
 }
 
-function tearDownChannels() {
+async function tearDownChannels() {
   if (channels.size === 0) return;
   isTearingDown = true;
-  channels.forEach((ch) => supabase.removeChannel(ch));
+  const removals = Array.from(channels.values()).map((ch) =>
+    supabase.removeChannel(ch).catch(() => {})
+  );
+  await Promise.allSettled(removals);
   channels.clear();
   isTearingDown = false;
 }
 
-function maybeTearDown() {
+async function maybeTearDown() {
   if (subscribers.size > 0) return;
-  tearDownChannels();
+  await tearDownChannels();
   if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
 }
 
@@ -549,13 +563,30 @@ export function useRealtimeSync() {
   const qc = useQueryClient();
   const { role, user } = useAuth();
   const isAdmin = role === "super_admin" || role === "manager";
+  const prevRoleRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!role) return;
+
+    let cancelled = false;
     const id = Symbol("rt-sub");
-    subscribers.set(id, { qc, isAdmin, userId: user?.id, role });
-    buildChannel(role);
+
+    const setup = async () => {
+      // If role changed, tear down existing channels and rebuild
+      if (prevRoleRef.current !== null && prevRoleRef.current !== role) {
+        await tearDownChannels();
+      }
+      if (cancelled) return;
+      prevRoleRef.current = role;
+
+      subscribers.set(id, { qc, isAdmin, userId: user?.id, role });
+      buildChannel(role);
+    };
+
+    setup();
+
     return () => {
+      cancelled = true;
       subscribers.delete(id);
       maybeTearDown();
     };

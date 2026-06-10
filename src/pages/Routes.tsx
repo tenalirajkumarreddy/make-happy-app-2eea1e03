@@ -6,6 +6,7 @@ import { RouteAccessMatrix } from "@/components/routes/RouteAccessMatrix";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
+import { usePermission } from "@/hooks/usePermission";
 import { supabase } from "@/integrations/supabase/client";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -23,6 +24,7 @@ import { toast } from "sonner";
 const Routes = () => {
   const { role, user } = useAuth();
   const isAdmin = role === "super_admin" || role === "manager";
+  const { allowed: canCreateRoutes } = usePermission("create_routes" as any);
   const isScopedStaff = role === "agent" || role === "marketer" || role === "operator";
   const navigate = useNavigate();
   const [showAdd, setShowAdd] = useState(false);
@@ -52,7 +54,7 @@ const Routes = () => {
        const { data, error } = await query;
        if (error) throw error;
 
-      const allRoutes = data || [];
+      const allRoutes: any[] = data || [];
       if (!isScopedStaff || !user?.id) return allRoutes;
 
       const { data: accessRows, error: accessError } = await supabase
@@ -118,7 +120,7 @@ const Routes = () => {
               ]
             : undefined
         }
-        primaryAction={isAdmin ? { label: "Create Route", onClick: () => setShowAdd(true) } : undefined}
+        primaryAction={(isAdmin || canCreateRoutes) ? { label: "Create Route", onClick: () => setShowAdd(true) } : undefined}
       />
 
       {role === "agent" && <RouteSessionPanel />}

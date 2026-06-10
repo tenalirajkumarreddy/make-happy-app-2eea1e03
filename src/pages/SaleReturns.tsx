@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { afterSaleReturned } from "@/lib/mutationHelpers";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2, Plus, RotateCcw, Search, Package, CheckCircle, XCircle, Clock, Eye, Minus } from "lucide-react";
@@ -62,7 +63,7 @@ const SaleReturns = () => {
   const { data: returns = [], isLoading } = useQuery({
     queryKey: ["sale-returns"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase
         .from("sale_returns")
         .select(`
           *,
@@ -70,8 +71,8 @@ const SaleReturns = () => {
           stores(name, customers(name)),
           profiles:created_by(full_name),
           approver:approved_by(full_name)
-        `)
-        .order("created_at", { ascending: false });
+        ` as any)
+        .order("created_at", { ascending: false })) as any;
       if (error) throw error;
       return data || [];
     },
@@ -97,9 +98,9 @@ const SaleReturns = () => {
   const { data: sales = [] } = useQuery({
     queryKey: ["sales-for-return", canReturnAnyDay],
     queryFn: async () => {
-      let query = supabase
+      let query: any = supabase
         .from("sales")
-        .select("id, display_id, created_at, total_amount, store_id, customer_id, stores(name, customers(name))")
+        .select("id, display_id, created_at, total_amount, store_id, customer_id, stores(name, customers(name))" as any)
         .order("created_at", { ascending: false })
         .limit(100);
 
@@ -130,10 +131,10 @@ const SaleReturns = () => {
     queryKey: ["sale-items-for-return", saleId],
     queryFn: async () => {
       if (!saleId) return [];
-      const { data } = await supabase
+      const { data } = await (supabase
         .from("sale_items")
-        .select("id, product_id, quantity, unit_price, total_price, products(name)")
-        .eq("sale_id", saleId);
+        .select("id, product_id, quantity, unit_price, total_price, products(name)" as any)
+        .eq("sale_id", saleId as any)) as any;
       return data || [];
     },
     enabled: !!saleId,
@@ -144,7 +145,7 @@ const SaleReturns = () => {
     queryKey: ["sale-return-detail", showDetail],
     queryFn: async () => {
       if (!showDetail) return null;
-      const { data: ret } = await supabase
+      const { data: ret } = await (supabase
         .from("sale_returns")
         .select(`
           *,
@@ -152,14 +153,14 @@ const SaleReturns = () => {
           stores(name, customers(name)),
           profiles:created_by(full_name),
           approver:approved_by(full_name)
-        `)
-        .eq("id", showDetail)
-        .single();
+        ` as any)
+        .eq("id", showDetail as any)
+        .single()) as any;
       
-      const { data: items } = await supabase
+      const { data: items } = await (supabase
         .from("sale_return_items")
-        .select("*, products(name)")
-        .eq("return_id", showDetail);
+        .select("*, products(name)" as any)
+        .eq("return_id", showDetail as any)) as any;
       
       return { ...ret, items: items || [] };
     },
@@ -260,7 +261,7 @@ const SaleReturns = () => {
     const { data: existingReturn } = await supabase
       .from("sale_returns")
       .select("id, status")
-      .eq("sale_id", saleId)
+      .eq("sale_id", saleId as any)
       .order("created_at", { ascending: false })
       .limit(1);
     if (existingReturn && existingReturn.length > 0) {
@@ -273,59 +274,52 @@ const SaleReturns = () => {
       // Get sale details (from dropdown or search results)
       const sale = sales.find((s: any) => s.id === saleId) || searchedSales.find((s: any) => s.id === saleId);
       
-      // Generate display ID
-      const { data: displayId } = await supabase.rpc("generate_sale_return_display_id");
-      if (!displayId) { throw new Error("Failed to generate return ID"); }
-      
       // Calculate total
       const totalAmount = calculateTotal();
 
-      // Create return (auto-complete if admin/manager)
-      const { data: newReturn, error: returnError } = await supabase
-        .from("sale_returns")
-        .insert({
-          display_id: displayId,
-          sale_id: saleId,
-          store_id: sale?.store_id,
-          customer_id: sale?.customer_id,
-          return_date: new Date().toISOString().split("T")[0],
-          total_amount: totalAmount,
-          reason,
-          notes,
-          is_damaged: isDamaged,
-          status: canApprove ? "processed" : "pending",
-          approved_by: canApprove ? user?.id : null,
-          approved_at: canApprove ? new Date().toISOString() : null,
-          created_by: user?.id,
-        })
-        .select("id")
-        .single();
-
-      if (returnError) throw returnError;
-
-      // Create return items
-      const returnItemsData = itemsToReturn.map((item) => ({
-        return_id: newReturn.id,
+      // Build RPC payload
+      const rpcItems = itemsToReturn.map((item) => ({
         sale_item_id: item.sale_item_id,
         product_id: saleItems.find((si: any) => si.id === item.sale_item_id)?.product_id,
-        quantity: item.quantity,
+        return_qty: item.quantity,
+        damaged_qty: isDamaged ? item.quantity : 0,
         unit_price: item.unit_price,
-        total: item.quantity * item.unit_price,
       }));
 
-      const { error: itemsError } = await supabase
-        .from("sale_return_items")
-        .insert(returnItemsData);
+      const { data: result, error: rpcError } = await supabase.rpc("record_sale_return", {
+        p_sale_id: saleId,
+        p_returned_by: user?.id,
+        p_reason: reason,
+        p_items: rpcItems,
+      }) as any;
 
-      if (itemsError) throw itemsError;
+      if (rpcError) throw rpcError;
 
-      // Auto-process stock for admin/manager returns
+      const resultRow = Array.isArray(result) ? result[0] : result;
+      if (resultRow && !resultRow.success) {
+        throw new Error(resultRow.message || "Failed to create return");
+      }
+
+      // Save notes to the return record (RPC doesn't accept notes)
+      if (notes.trim() && resultRow?.return_id) {
+        await supabase
+          .from("sale_returns")
+          .update({ notes: notes.trim(), is_damaged: isDamaged })
+          .eq("id", resultRow.return_id);
+      }
+
+      // Auto-process for admin/manager (call process RPC if status was set to processed)
+      if (canApprove && resultRow?.return_id) {
+        const { error: processError } = await supabase.rpc("process_completed_sale_return", {
+          p_return_id: resultRow.return_id,
+        }) as any;
+        if (processError) console.error("Auto-process failed:", processError);
+      }
+
       toast.success(canApprove ? "Sale return processed successfully" : "Sale return created successfully");
       setShowCreate(false);
       resetForm();
-      qc.invalidateQueries({ queryKey: ["sale-returns"] });
-      qc.invalidateQueries({ queryKey: ["sales"] });
-      qc.invalidateQueries({ queryKey: ["stores"] });
+      afterSaleReturned(qc, { saleId });
     } catch (err: any) {
       toast.error(err.message || "Failed to create return");
     } finally {
@@ -335,16 +329,10 @@ const SaleReturns = () => {
 
   const handleStatusUpdate = async (id: string, newStatus: "approved" | "rejected" | "processed") => {
     try {
-      const updates: any = { status: newStatus };
-      if (newStatus === "approved" || newStatus === "rejected") {
-        updates.approved_by = user?.id;
-        updates.approved_at = new Date().toISOString();
-      }
-
       if (newStatus === "processed") {
         const { data: result, error: processError } = await supabase.rpc("process_completed_sale_return", {
           p_return_id: id,
-        });
+        }) as any;
         if (processError) throw processError;
         const resultRow = Array.isArray(result) ? result[0] : result;
         if (resultRow && !resultRow.success) {
@@ -352,20 +340,21 @@ const SaleReturns = () => {
         }
         toast.success(resultRow?.message || "Return processed successfully");
       } else {
-        const { error } = await supabase
-          .from("sale_returns")
-          .update(updates)
-          .eq("id", id)
-          .eq("status", "approved");
+        const { data: result, error } = await supabase.rpc("approve_or_reject_return", {
+          p_return_id: id,
+          p_status: newStatus,
+          p_approved_by: user!.id,
+        });
 
         if (error) throw error;
+        const parsed = result as any;
+        if (!parsed?.success) {
+          throw new Error(parsed?.error || `Failed to ${newStatus} return`);
+        }
         toast.success(`Return ${newStatus}`);
       }
 
-      qc.invalidateQueries({ queryKey: ["sale-returns"] });
-      qc.invalidateQueries({ queryKey: ["sale-return-detail", id] });
-      qc.invalidateQueries({ queryKey: ["sales"] });
-      qc.invalidateQueries({ queryKey: ["stores"] });
+      afterSaleReturned(qc, { saleId: id });
     } catch (err: any) {
       toast.error(err.message);
     }
@@ -459,6 +448,7 @@ const SaleReturns = () => {
       ) : isMobile ? (
         <ResponsiveDataView
           data={filteredReturns}
+          columns={[]}
           renderMobileCard={(r: any) => (
             <Card key={r.id} className="entity-card-mobile" onClick={() => setShowDetail(r.id)}>
               <CardContent className="p-4">

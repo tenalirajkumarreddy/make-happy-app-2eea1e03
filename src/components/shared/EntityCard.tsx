@@ -56,6 +56,7 @@ export function EntityCard({
     <div
       onClick={onClick}
       className={cn(
+        "@container",
         CARD_STYLES.clickable,
         !isActive && CARD_STYLES.inactive,
         isSelected && CARD_STYLES.selected,
@@ -76,8 +77,8 @@ export function EntityCard({
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" 
           />
         ) : Icon ? (
-          <div className="w-16 h-16 rounded-lg bg-muted/50 flex items-center justify-center backdrop-blur-sm">
-            <Icon className={cn("h-8 w-8", colors.icon)} />
+          <div className="w-16 h-16 @[450px]:w-20 @[450px]:h-20 rounded-lg bg-muted/50 flex items-center justify-center backdrop-blur-sm">
+            <Icon className={cn("h-8 w-8 @[450px]:h-10 @[450px]:w-10", colors.icon)} />
           </div>
         ) : null}
         
@@ -105,7 +106,7 @@ export function EntityCard({
       </div>
 
       {/* Content */}
-      <div className="p-4 space-y-3">
+      <div className="p-3 @[450px]:p-4 space-y-2 @[450px]:space-y-3">
         {children}
       </div>
     </div>

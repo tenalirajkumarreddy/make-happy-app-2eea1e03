@@ -24,7 +24,7 @@ export function RouteErrorBoundary({
   return (
     <ErrorBoundary
       fallback={fallback}
-      onError={(error, errorInfo) => {
+      onError={(error: any, errorInfo) => {
         logError(error, {
           context: `RouteErrorBoundary:${routeName}`,
           componentStack: errorInfo.componentStack,

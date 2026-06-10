@@ -57,6 +57,7 @@ export function StockTransferSheet({ open, onOpenChange }: Props) {
       })) as StockItem[];
     },
     enabled: !!user,
+    staleTime: 5 * 60 * 1000,
   });
 
   // Warehouses (for staff_to_warehouse)
@@ -79,6 +80,7 @@ export function StockTransferSheet({ open, onOpenChange }: Props) {
       return data || [];
     },
     enabled: !!user,
+    staleTime: 5 * 60 * 1000,
   });
 
   // Target staff (for staff_to_staff)
@@ -99,6 +101,7 @@ export function StockTransferSheet({ open, onOpenChange }: Props) {
         .filter((s: any) => s.user_id !== user?.id && s.full_name !== "Unknown");
     },
     enabled: !!user,
+    staleTime: 5 * 60 * 1000,
   });
 
   const [toId, setToId] = useState("");
@@ -204,15 +207,15 @@ export function StockTransferSheet({ open, onOpenChange }: Props) {
               <div className="grid grid-cols-3 gap-2">
                 <div className="rounded-xl border bg-slate-50 dark:bg-slate-900 p-3 text-center">
                   <p className="text-lg font-bold text-slate-800 dark:text-white">{stockItems.length}</p>
-                  <p className="text-[10px] text-slate-500 uppercase tracking-wide">Products</p>
+                  <p className="text-xs text-slate-500 uppercase tracking-wide">Products</p>
                 </div>
                 <div className="rounded-xl border bg-slate-50 dark:bg-slate-900 p-3 text-center">
                   <p className="text-lg font-bold text-slate-800 dark:text-white">{totalUnits}</p>
-                  <p className="text-[10px] text-slate-500 uppercase tracking-wide">Units</p>
+                  <p className="text-xs text-slate-500 uppercase tracking-wide">Units</p>
                 </div>
                 <div className="rounded-xl border bg-slate-50 dark:bg-slate-900 p-3 text-center">
                   <p className="text-lg font-bold text-slate-800 dark:text-white">₹{totalValue >= 1000 ? `${(totalValue/1000).toFixed(1)}k` : totalValue.toLocaleString()}</p>
-                  <p className="text-[10px] text-slate-500 uppercase tracking-wide">Value</p>
+                  <p className="text-xs text-slate-500 uppercase tracking-wide">Value</p>
                 </div>
               </div>
 
@@ -228,7 +231,7 @@ export function StockTransferSheet({ open, onOpenChange }: Props) {
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-base font-bold text-slate-800 dark:text-white">{item.quantity}</p>
-                    <p className="text-[10px] text-slate-400">units</p>
+                    <p className="text-xs text-slate-400">units</p>
                   </div>
                 </div>
               ))}

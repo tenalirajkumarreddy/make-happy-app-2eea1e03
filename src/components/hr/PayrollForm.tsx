@@ -52,7 +52,7 @@ export const PayrollForm: React.FC<PayrollFormProps> = ({ isOpen, onClose, payro
   useEffect(() => {
     if (payroll) {
       form.reset({
-        ...payroll,
+        ...payroll as any,
         start_date: new Date(payroll.start_date).toISOString().split('T')[0],
         end_date: new Date(payroll.end_date).toISOString().split('T')[0],
       });
@@ -73,7 +73,7 @@ export const PayrollForm: React.FC<PayrollFormProps> = ({ isOpen, onClose, payro
     mutationFn: async (formData: PayrollFormData) => {
       if (!warehouse) throw new Error("No warehouse selected");
 
-      const display_id = payroll?.display_id || await generateDisplayId('payrolls', 'PAY');
+      const display_id = payroll?.display_id || generateDisplayId('PAY');
 
       const payload = {
         id: payroll?.id,
@@ -82,7 +82,7 @@ export const PayrollForm: React.FC<PayrollFormProps> = ({ isOpen, onClose, payro
         warehouse_id: warehouse.id,
       };
 
-      const { error } = await supabase.from('payrolls').upsert(payload).select();
+      const { error } = await (supabase as any).from('payrolls').upsert(payload).select();
       if (error) throw error;
     },
     onSuccess: () => {

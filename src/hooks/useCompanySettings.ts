@@ -52,7 +52,7 @@ export function useCompanySettings() {
         ...settingsMap,
       };
     },
-    // Settings change rarely, cache for a long time
-    staleTime: 1000 * 60 * 60, // 1 hour
+    // Settings update in realtime (sync is triggered on change, but low staleTime helps concurrency)
+    staleTime: 1000 * 5, // 5 seconds
   });
 }

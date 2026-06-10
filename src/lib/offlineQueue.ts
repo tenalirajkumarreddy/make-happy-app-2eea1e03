@@ -7,7 +7,7 @@
 import { toast } from "sonner";
 
 const DB_NAME = "aquaprime_offline";
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 const STORE_NAME = "pending_actions";
 const FILE_STORE_NAME = "pending_files";
 const CONFLICT_STORE_NAME = "conflict_info";
@@ -18,7 +18,7 @@ const RETRY_DELAYS = [1000, 5000, 15000]; // Exponential backoff
 
 export interface PendingAction {
   id: string;
-  type: "sale" | "transaction" | "visit" | "customer" | "store" | "file_upload" | "order";
+  type: "sale" | "transaction" | "visit" | "customer" | "store" | "file_upload" | "order" | "transaction_edit" | "payment_return";
   payload: unknown;
   createdAt: string;
   retryCount?: number;
@@ -72,7 +72,7 @@ function emitQueueChanged() {
   }
 }
 
-function openDB(): Promise<IDBDatabase> {
+export function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = (event) => {
@@ -87,7 +87,7 @@ function openDB(): Promise<IDBDatabase> {
         store.createIndex("businessKey", "businessKey", { unique: false }); // Index for O(1) dedup lookups
       } else {
         // Ensure businessKey index exists on existing store (v4 upgrade)
-        const store = tx.objectStore(STORE_NAME);
+        const store = (req.transaction)!.objectStore(STORE_NAME);
         if (!store.indexNames.contains("businessKey")) {
           store.createIndex("businessKey", "businessKey", { unique: false });
         }
@@ -104,6 +104,16 @@ function openDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(CONFLICT_STORE_NAME)) {
         const conflictStore = db.createObjectStore(CONFLICT_STORE_NAME, { keyPath: "actionId" });
         conflictStore.createIndex("resolved", "resolved", { unique: false });
+      }
+
+      // Create auth_cache store (v5)
+      if (!db.objectStoreNames.contains("auth_cache")) {
+        db.createObjectStore("auth_cache", { keyPath: "id" });
+      }
+
+      // Create query_cache store (v5)
+      if (!db.objectStoreNames.contains("query_cache")) {
+        db.createObjectStore("query_cache", { keyPath: "id" });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -145,42 +155,92 @@ export async function isBusinessKeyQueued(businessKey: string): Promise<boolean>
 
 /**
  * Generate business key for deduplication
- * Uses millisecond precision with salt to prevent collisions
+ * Uses type-specific meaningful identifiers so identical actions
+ * produce the same key and are deduplicated at queue time.
+ * Timestamps are rounded to minute precision.
  */
 export function generateBusinessKey(
   type: PendingAction['type'],
   params: {
     storeId?: string;
     customerId?: string;
+    userId?: string;
     amount?: number;
     timestamp?: string | number;
     products?: Array<{ product_id: string; quantity: number }>;
+    phone?: string;
+    name?: string;
+    orderType?: string;
   }
 ): string {
   const parts: string[] = [type];
 
-  if (params.storeId) parts.push(params.storeId);
-  if (params.customerId) parts.push(params.customerId);
-  if (params.amount !== undefined) parts.push(String(Math.round(params.amount * 100) / 100));
+  switch (type) {
+    case 'sale':
+      if (params.storeId) parts.push(params.storeId);
+      if (params.customerId) parts.push(params.customerId);
+      if (params.amount !== undefined) parts.push(String(Math.round(params.amount * 100) / 100));
+      if (params.products?.length) {
+        const sig = params.products
+          .map(p => `${p.product_id}:${p.quantity}`)
+          .sort()
+          .join(',');
+        parts.push(sig);
+      }
+      break;
 
-  // For sales, include product signature
-  if (type === 'sale' && params.products?.length) {
-    const productSig = params.products
-      .map(p => `${p.product_id}:${p.quantity}`)
-      .sort()
-      .join(',');
-    parts.push(productSig);
+    case 'transaction':
+      if (params.storeId) parts.push(params.storeId);
+      if (params.customerId) parts.push(params.customerId);
+      if (params.amount !== undefined) parts.push(String(Math.round(params.amount * 100) / 100));
+      break;
+
+    case 'visit':
+      if (params.userId) parts.push(params.userId);
+      if (params.storeId) parts.push(params.storeId);
+      break;
+
+    case 'customer':
+      if (params.phone) parts.push(params.phone);
+      break;
+
+    case 'store':
+      if (params.name) parts.push(params.name);
+      if (params.customerId) parts.push(params.customerId);
+      break;
+
+    case 'order':
+      if (params.storeId) parts.push(params.storeId);
+      if (params.orderType) parts.push(params.orderType);
+      break;
+
+    case 'transaction_edit':
+      if (params.storeId) parts.push(params.storeId);
+      if (params.customerId) parts.push(params.customerId);
+      parts.push('edit');
+      break;
+
+    case 'payment_return':
+      if (params.storeId) parts.push(params.storeId);
+      if (params.customerId) parts.push(params.customerId);
+      if (params.amount !== undefined) parts.push(String(Math.round(params.amount * 100) / 100));
+      parts.push('return');
+      break;
+
+    default:
+      if (params.storeId) parts.push(params.storeId);
+      if (params.customerId) parts.push(params.customerId);
+      break;
   }
 
-  // Use millisecond precision with random salt to prevent collisions
+  // Round to 10-second precision to prevent accidental double-taps
+  // while allowing legitimate separate transactions within the same minute
   const ts = params.timestamp || Date.now();
   const timestampMs = typeof ts === 'string'
     ? new Date(ts).getTime()
     : ts;
-
-  // Add random salt for uniqueness (2 random hex characters)
-  const salt = Math.floor(Math.random() * 256).toString(16).padStart(2, '0');
-  parts.push(`${timestampMs}-${salt}`);
+  const tenSecKey = Math.floor(timestampMs / 10000);
+  parts.push(String(tenSecKey));
 
   return parts.join(':');
 }
@@ -344,6 +404,26 @@ export async function getFailedActions(): Promise<PendingAction[]> {
   return actions.filter((action) => (action.retryCount || 0) >= MAX_RETRIES);
 }
 
+/**
+ * Get queued actions ordered by createdAt (FCFS - oldest first)
+ */
+export async function getQueuedActionsOrdered(): Promise<PendingAction[]> {
+  const actions = await getQueuedActions();
+  return actions.sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  );
+}
+
+/**
+ * Get retryable actions ordered by createdAt (FCFS - oldest first)
+ */
+export async function getRetryableActionsOrdered(): Promise<PendingAction[]> {
+  const actions = await getRetryableActions();
+  return actions.sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // FILE UPLOAD QUEUE FUNCTIONS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -473,19 +553,6 @@ export function arrayBufferToBlob(buffer: ArrayBuffer, contentType: string): Blo
 // ─────────────────────────────────────────────────────────────────────────────
 // CONFLICT RESOLUTION FUNCTIONS
 // ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Add action to queue with context tracking for conflict detection
- */
-export async function addToQueueWithContext(
-  action: PendingAction,
-  context: OperationContext
-): Promise<void> {
-  return addToQueue({
-    ...action,
-    context,
-  });
-}
 
 /**
  * Get all actions that have conflicts
