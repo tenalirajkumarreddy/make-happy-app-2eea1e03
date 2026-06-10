@@ -59,6 +59,7 @@ interface Profile {
 export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void }) {
   const { user, role } = useAuth();
   const { allowed: canCancelSales } = usePermission("cancel_sales");
+  const { allowed: canEditSales } = usePermission("edit_sales" as any);
   const { currentWarehouse } = useWarehouse();
   const qc = useQueryClient();
 
@@ -142,6 +143,7 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
       if (error) throw error;
       return { sales: (data || []) as Sale[], total: count || 0 };
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   // Filter options
@@ -152,6 +154,7 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
       return data || [];
     },
     enabled: !!currentWarehouse,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: customers = [] } = useQuery({
@@ -160,6 +163,7 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
       const { data } = await supabase.from("customers").select("id, name").order("name").limit(100);
       return data || [];
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: agentProfiles = [] } = useQuery({
@@ -177,6 +181,7 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
       return data || [];
     },
     enabled: canCancelSales,
+    staleTime: 5 * 60 * 1000,
   });
 
   const allSales = sales?.sales || [];
@@ -199,6 +204,7 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
       });
       return map;
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   // Fetch items for editing sale
@@ -212,6 +218,7 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
       return data || [];
     },
     enabled: !!editingSaleId,
+    staleTime: 5 * 60 * 1000,
   });
 
   useEffect(() => {
@@ -400,7 +407,7 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
           <Button
             variant="ghost"
             size="sm"
-            className="w-full h-8 text-xs text-muted-foreground"
+            className="w-full h-10 text-xs text-muted-foreground"
             onClick={() => {
               setPaymentFilter("all");
               setDateFilter("all");
@@ -458,7 +465,7 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <p className={`text-sm font-mono font-semibold ${isReturned ? "line-through text-slate-400" : "text-primary"}`}>{sale.display_id}</p>
                         {isReturned && (
-                          <span className="text-[9px] font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800 rounded px-1.5 py-0">
+                          <span className="text-xs font-bold bg-warning/20 text-warning border border-warning/30 dark:bg-warning/30 rounded px-1.5 py-0">
                             Returned
                           </span>
                         )}
@@ -484,7 +491,7 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
                         </div>
                       ))}
                       {sale.sale_items.length > 2 && (
-                        <p className="text-[10px] text-muted-foreground">
+                        <p className="text-xs text-muted-foreground">
                           +{sale.sale_items.length - 2} more items
                         </p>
                       )}
@@ -494,17 +501,17 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
                   {/* Payment Badges */}
                   <div className="flex items-center gap-1.5 mb-2">
                     {sale.cash_amount > 0 && (
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${isReturned ? "bg-slate-100 text-slate-400 line-through" : "bg-green-100 text-green-700"}`}>
+                      <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${isReturned ? "bg-slate-100 text-slate-400 line-through dark:bg-slate-800" : "bg-success/20 text-success dark:bg-success/30"}`}>
                         Cash {fmtINR(sale.cash_amount)}
                       </span>
                     )}
                     {sale.upi_amount > 0 && (
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${isReturned ? "bg-slate-100 text-slate-400 line-through" : "bg-purple-100 text-purple-700"}`}>
+                      <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${isReturned ? "bg-slate-100 text-slate-400 line-through dark:bg-slate-800" : "bg-info/20 text-info dark:bg-info/30"}`}>
                         UPI {fmtINR(sale.upi_amount)}
                       </span>
                     )}
                     {sale.outstanding_amount > 0 && (
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${isReturned ? "bg-slate-100 text-slate-400 line-through" : "bg-red-100 text-red-700"}`}>
+                      <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${isReturned ? "bg-slate-100 text-slate-400 line-through dark:bg-slate-800" : "bg-destructive/20 text-destructive dark:bg-destructive/30"}`}>
                         Due {fmtINR(sale.outstanding_amount)}
                       </span>
                     )}
@@ -515,11 +522,11 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
                     <div className="flex items-center gap-1.5">
                       <Avatar className="h-5 w-5">
                         <AvatarImage src={getRecorderAvatar(sale.recorded_by) || undefined} />
-                        <AvatarFallback className="text-[9px] bg-primary/10">
+                        <AvatarFallback className="text-xs bg-primary/10">
                           {getRecorderName(sale.recorded_by).charAt(0).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
-                      <span className="text-[10px] text-muted-foreground truncate max-w-[80px]">
+                      <span className="text-xs text-muted-foreground truncate max-w-[80px]">
                         {getRecorderName(sale.recorded_by)}
                       </span>
                     </div>
@@ -555,7 +562,7 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
                     <Printer className="h-3.5 w-3.5 shrink-0" />
                     <span className="truncate">Receipt</span>
                   </button>
-                  {!isReturned && (
+                  {!isReturned && canEditSales && (
                     <button
                       onClick={() => openEditSale(sale)}
                       className="flex-1 py-2.5 min-w-0 flex items-center justify-center gap-1 text-xs font-medium text-blue-600 hover:bg-blue-50 active:bg-blue-100 transition-colors border-r border-border/50"
@@ -685,7 +692,7 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
               <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50">
                 <Avatar className="h-6 w-6">
                   <AvatarImage src={getRecorderAvatar(selectedSale.recorded_by) || undefined} />
-                  <AvatarFallback className="text-[10px] bg-primary/10">
+                  <AvatarFallback className="text-xs bg-primary/10">
                     {getRecorderName(selectedSale.recorded_by).charAt(0).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
@@ -897,7 +904,7 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
                     <div className="flex items-center gap-1">
                       <button
                         type="button"
-                        className="h-6 w-6 rounded-md border flex items-center justify-center text-xs hover:bg-muted"
+                        className="h-10 w-10 rounded-md border flex items-center justify-center text-xs hover:bg-muted"
                         onClick={() => {
                           const next = [...editingItems];
                           next[idx] = { ...next[idx], quantity: Math.max(0, (next[idx].quantity || 0) - 1) };
@@ -909,7 +916,7 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
                       <span className="w-6 text-center text-xs font-semibold">{item.quantity}</span>
                       <button
                         type="button"
-                        className="h-6 w-6 rounded-md border flex items-center justify-center text-xs hover:bg-muted"
+                        className="h-10 w-10 rounded-md border flex items-center justify-center text-xs hover:bg-muted"
                         onClick={() => {
                           const next = [...editingItems];
                           next[idx] = { ...next[idx], quantity: (next[idx].quantity || 0) + 1 };

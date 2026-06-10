@@ -148,6 +148,7 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
       return (data || []) as (Handover & { profiles: { full_name: string; avatar_url: string | null } | null; handed_to_profile: { full_name: string; avatar_url: string | null } | null })[];
     },
     enabled: !!user,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: staffProfiles = [] } = useQuery({
@@ -172,6 +173,7 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
         roleLabel: roleLabel[roleMap.get(p.user_id) || ""] || "Staff",
       })).sort((a: any, b: any) => a.full_name.localeCompare(b.full_name));
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: expenseClaims = [], isLoading: loadingExpenses } = useQuery({
@@ -190,6 +192,7 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
       return (data || []) as (ExpenseClaim & { profiles: { full_name: string; avatar_url: string | null } | null })[];
     },
     enabled: !!user && canApproveExpenses,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: staffBalances = [] } = useQuery({
@@ -210,6 +213,7 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
       })) as (StaffBalance & { avatar_url: string | null })[];
     },
     enabled: !!user && canSeeBalances,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: profileMap } = useQuery({
@@ -220,6 +224,7 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
       (data ?? []).forEach((p: any) => { map[p.user_id] = { name: p.full_name, avatar: p.avatar_url }; });
       return map;
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: expenseCategories = [] } = useQuery({
@@ -233,6 +238,7 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
       if (error) throw error;
       return (data || []) as Array<{ id: string; name: string; color: string; icon: string | null }>;
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: finalizerIncome, isLoading: finalizerIncomeLoading } = useQuery({
@@ -249,6 +255,7 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
       return data || [];
     },
     enabled: !!user && (isFinalizer || isAdmin),
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: finalizerAccount } = useQuery({
@@ -265,6 +272,7 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
       return data as { cash_amount: number; upi_amount: number; last_reset_at: string } | null;
     },
     enabled: !!user && isFinalizer,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: finalizerHoldings } = useQuery({
@@ -285,6 +293,7 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
       })) as Array<{ user_id: string; full_name: string; cash_amount: number; upi_amount: number; total_balance: number; last_reset_at: string }>;
     },
     enabled: !!user && isAdmin,
+    staleTime: 5 * 60 * 1000,
   });
 
   const getName = (userId: string | null) => profileMap?.[userId || ""]?.name || "Unknown";
@@ -642,7 +651,7 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
                 <AlertCircle className="h-4 w-4" />
                 Claims
                 {pendingExpenseCount > 0 && (
-                  <span className="ml-1 h-5 w-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">{pendingExpenseCount}</span>
+                  <span className="ml-1 h-5 w-5 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center">{pendingExpenseCount}</span>
                 )}
               </Button>
             )}
@@ -716,7 +725,7 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
             {(canSubmitExpenses || canApproveExpenses) && (
               <TabsTrigger value="expenses" className="flex-1 text-xs relative">
                 <Receipt className="h-3.5 w-3.5 mr-1" />Expenses
-                {pendingExpenseCount > 0 && <span className="ml-1 h-4 w-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">{pendingExpenseCount}</span>}
+                {pendingExpenseCount > 0 && <span className="ml-1 h-4 w-4 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center">{pendingExpenseCount}</span>}
               </TabsTrigger>
             )}
             {(isAdmin || isFinalizer) && (
@@ -729,7 +738,7 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
             <div className="flex items-center justify-between">
               <p className="text-xs text-muted-foreground">{handovers?.length || 0} handovers</p>
               <div className="flex gap-1">
-                <Button size="sm" variant="ghost" className="h-7 text-[10px]" onClick={exportHandoversCSV}>
+                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={exportHandoversCSV}>
                   <Download className="h-3 w-3 mr-1" /> CSV
                 </Button>
               </div>
@@ -771,11 +780,11 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 min-w-0">
                           <Avatar className="h-7 w-7 shrink-0">
-                            <AvatarFallback className="text-[10px]">{fromProfile?.full_name?.[0] || "?"}</AvatarFallback>
+                            <AvatarFallback className="text-xs">{fromProfile?.full_name?.[0] || "?"}</AvatarFallback>
                           </Avatar>
                           <div className="min-w-0">
                             <p className="text-sm font-medium truncate">{fromProfile?.full_name || "Staff"}</p>
-                            <p className="text-[10px] text-muted-foreground">{handover.handover_type === "collection" ? "Collection" : "Transfer"}</p>
+                            <p className="text-xs text-muted-foreground">{handover.handover_type === "collection" ? "Collection" : "Transfer"}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -796,7 +805,7 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
                         )}
                       </div>
 
-                      <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
                         <span>Cash: ₹{fmtINR(Number(handover.cash_amount))} | UPI: ₹{fmtINR(Number(handover.upi_amount))}</span>
                         <span>{format(new Date(handover.created_at), "dd MMM")}</span>
                       </div>
@@ -815,7 +824,7 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
             )}
             <div className="flex items-center justify-between">
               <p className="text-xs text-muted-foreground">{expenseClaims.length} claims</p>
-              <Button size="sm" variant="ghost" className="h-7 text-[10px]" onClick={exportExpensesCSV}>
+              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={exportExpensesCSV}>
                 <Download className="h-3 w-3 mr-1" /> CSV
               </Button>
             </div>
@@ -850,7 +859,7 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-semibold text-muted-foreground">Finalizer Holdings</h3>
-                  <Button size="sm" variant="outline" className="h-7 text-[10px] gap-1" disabled={dailyResetLoading}
+                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1" disabled={dailyResetLoading}
                     onClick={() => setShowResetAllConfirm(true)}>
                     <RefreshCw className="h-3 w-3" /> Reset All
                   </Button>
@@ -862,21 +871,21 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
                     {finalizerHoldings.map((f: any) => (
                       <div key={f.user_id} className="flex items-center gap-2 rounded-2xl border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm px-3 py-2">
                         <Avatar className="h-7 w-7 shrink-0">
-                          <AvatarFallback className="text-[10px]">{f.full_name?.[0] || "?"}</AvatarFallback>
+                          <AvatarFallback className="text-xs">{f.full_name?.[0] || "?"}</AvatarFallback>
                         </Avatar>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">{f.full_name}</p>
-                          <div className="flex gap-2 text-[10px] text-muted-foreground">
+                          <div className="flex gap-2 text-xs text-muted-foreground">
                             <span>Cash: ₹{Number(f.cash_amount || 0).toLocaleString()}</span>
                             <span>UPI: ₹{Number(f.upi_amount || 0).toLocaleString()}</span>
                           </div>
                           {f.last_reset_at && (
-                            <p className="text-[9px] text-muted-foreground">Reset: {format(new Date(f.last_reset_at), "dd MMM, hh:mm a")}</p>
+                            <p className="text-xs text-muted-foreground">Reset: {format(new Date(f.last_reset_at), "dd MMM, hh:mm a")}</p>
                           )}
                         </div>
                         <div className="text-right shrink-0">
                           <p className="text-sm font-bold text-emerald-600">₹{Number(f.total_balance || 0).toLocaleString()}</p>
-                          <Button size="sm" variant="ghost" className="h-6 text-[9px] mt-0.5 gap-1" disabled={dailyResetLoading}
+                          <Button size="sm" variant="ghost" className="h-6 text-xs mt-0.5 gap-1" disabled={dailyResetLoading}
                             onClick={() => handleDailyReset(f.user_id)}>
                             <RefreshCw className="h-3 w-3" /> Reset
                           </Button>
@@ -896,8 +905,8 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
                   <h3 className="text-sm font-semibold">My Income Log</h3>
                   <div className="flex items-center gap-2">
                     <Input type="date" value={incomeFilterDate} onChange={(e) => setIncomeFilterDate(e.target.value)}
-                      className="h-7 text-[10px] w-28" max={today} />
-                    <Button size="sm" variant="outline" className="h-7 text-[10px] gap-1" disabled={dailyResetLoading}
+                      className="h-7 text-xs w-28" max={today} />
+                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1" disabled={dailyResetLoading}
                       onClick={() => handleDailyReset()}>
                       {dailyResetLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
                       Reset
@@ -907,18 +916,18 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
                 {finalizerAccount && (
                   <Card className="bg-emerald-50 dark:bg-emerald-950 border-emerald-200">
                     <CardContent className="p-3">
-                      <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium uppercase">Holding</p>
+                      <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium uppercase">Holding</p>
                       <p className="text-lg font-bold text-emerald-700 dark:text-emerald-300">
                         ₹{(Number(finalizerAccount.cash_amount) + Number(finalizerAccount.upi_amount)).toLocaleString()}
                       </p>
-                      <p className="text-[9px] text-muted-foreground mt-0.5">Income since last reset</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Income since last reset</p>
                     </CardContent>
                   </Card>
                 )}
                 <div className="grid grid-cols-2 gap-2">
                   <Card>
                     <CardContent className="p-3">
-                      <p className="text-[10px] text-muted-foreground">Total Income</p>
+                      <p className="text-xs text-muted-foreground">Total Income</p>
                       <p className="text-base font-bold text-emerald-600">
                         ₹{(finalizerIncome || []).reduce((s: number, e: any) => s + Number(e.amount || 0), 0).toLocaleString()}
                       </p>
@@ -926,7 +935,7 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
                   </Card>
                   <Card>
                     <CardContent className="p-3">
-                      <p className="text-[10px] text-muted-foreground">Entries</p>
+                      <p className="text-xs text-muted-foreground">Entries</p>
                       <p className="text-base font-bold">{(finalizerIncome || []).length}</p>
                     </CardContent>
                   </Card>
@@ -941,8 +950,8 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
                       <div key={entry.id} className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2">
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium capitalize">{(entry.entry_type || "collection").replace(/_/g, " ")}</p>
-                          {entry.description && <p className="text-[10px] text-muted-foreground truncate">{entry.description}</p>}
-                          <p className="text-[9px] text-muted-foreground">{format(new Date(entry.created_at), "dd MMM, hh:mm a")}</p>
+                          {entry.description && <p className="text-xs text-muted-foreground truncate">{entry.description}</p>}
+                          <p className="text-xs text-muted-foreground">{format(new Date(entry.created_at), "dd MMM, hh:mm a")}</p>
                         </div>
                         <p className="text-sm font-bold text-emerald-600 shrink-0">+₹{Number(entry.amount || 0).toLocaleString()}</p>
                       </div>
@@ -1177,7 +1186,7 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
                   {expenseCategories.map((cat) => (
                     <SelectItem key={cat.id} value={cat.id}>
                       <div className="flex items-center gap-2">
-                        <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: cat.color || "#6b7280" }} />
+                        <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: cat.color || `hsl(var(--muted-foreground))` }} />
                         {cat.name}
                       </div>
                     </SelectItem>

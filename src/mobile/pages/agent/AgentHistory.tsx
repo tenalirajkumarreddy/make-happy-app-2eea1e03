@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, startOfDay } from "date-fns";
 import {
@@ -46,13 +46,16 @@ import { usePermission } from "@/hooks/usePermission";
 import { supabase } from "@/integrations/supabase/client";
 import { afterSaleEdited, afterSaleReturned, afterPaymentReturned } from "@/lib/mutationHelpers";
 import { ReturnPaymentDialog } from "@/mobile/components/ReturnPaymentDialog";
-import { addToQueue, generateBusinessKey } from "@/lib/offlineQueue";
+import { enqueueWithContext } from "@/lib/conflictResolver";
+import { generateBusinessKey } from "@/lib/offlineQueue";
 import { sendNotification, getAdminUserIds, sendNotificationToMany } from "@/lib/notifications";
 import { logActivity } from "@/lib/activityLogger";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { BillImages } from "@/mobile/components/BillImageUpload";
 import { SaleReceipt } from "@/components/shared/SaleReceipt";
+import { usePullToRefresh } from "@/mobile/hooks/usePullToRefresh";
+import { PullRefreshIndicator } from "@/mobile/components/PullRefreshIndicator";
 
 type TimelineItem = {
   id: string;
@@ -179,12 +182,14 @@ export function AgentHistory() {
         .from("handovers")
         .select("id, user_id, handed_to, cash_amount, upi_amount, status, created_at, notes")
         .or(`user_id.eq.${user!.id},handed_to.eq.${user!.id}`)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(200);
       if (error) throw error;
       return (data as any[]) || [];
     },
     enabled: !!user,
     refetchInterval: 60_000,
+    staleTime: 60_000,
   });
 
   const { data: salesForBalance } = useQuery({
@@ -200,6 +205,7 @@ export function AgentHistory() {
     },
     enabled: !!user,
     refetchInterval: 60_000,
+    staleTime: 60_000,
   });
 
   const { data: salesTimeline, isLoading: loadingSalesTimeline } = useQuery({
@@ -210,12 +216,13 @@ export function AgentHistory() {
         .select("id, display_id, total_amount, cash_amount, upi_amount, outstanding_amount, is_fully_returned, created_at, updated_at, store_id, customer_id, stores(name)")
         .eq("recorded_by", user!.id)
         .order("created_at", { ascending: false })
-        .limit(500);
+        .limit(200);
       if (error) throw error;
       return (data as any[]) || [];
     },
     enabled: !!user,
     refetchInterval: 60_000,
+    staleTime: 60_000,
   });
 
   const { data: transactionsForBalance } = useQuery({
@@ -248,6 +255,7 @@ export function AgentHistory() {
     },
     enabled: !!user,
     refetchInterval: 60_000,
+    staleTime: 60_000,
   });
 
   // Expense categories for submission
@@ -262,6 +270,7 @@ export function AgentHistory() {
       if (error) throw error;
       return data || [];
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   // Fetch expense claims directed at this user (for managers approving staff expenses)
@@ -282,6 +291,7 @@ export function AgentHistory() {
     },
     enabled: !!user,
     refetchInterval: 60_000,
+    staleTime: 60_000,
   });
 
   const { data: transactionsTimeline, isLoading: loadingTransactionsTimeline } = useQuery({
@@ -292,12 +302,13 @@ export function AgentHistory() {
         .select("id, display_id, total_amount, cash_amount, upi_amount, created_at, updated_at, store_id, customer_id, notes, is_fully_returned, stores(id, name)")
         .eq("recorded_by", user!.id)
         .order("created_at", { ascending: false })
-        .limit(500);
+        .limit(200);
       if (error) throw error;
       return (data as any[]) || [];
     },
     enabled: !!user,
     refetchInterval: 60_000,
+    staleTime: 60_000,
   });
 
   const { data: staffUsers } = useQuery({
@@ -342,6 +353,7 @@ export function AgentHistory() {
         .sort((a: any, b: any) => a.full_name.localeCompare(b.full_name));
     },
     enabled: !!user,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: profiles } = useQuery({
@@ -355,6 +367,7 @@ export function AgentHistory() {
       return (data || []) as Array<{ user_id: string; full_name: string | null }>;
     },
     enabled: !!user,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: editingSaleItems } = useQuery({
@@ -369,6 +382,7 @@ export function AgentHistory() {
       return (data as any[]) || [];
     },
     enabled: !!editingSale?.id,
+    staleTime: 30_000,
   });
 
   useEffect(() => {
@@ -400,6 +414,7 @@ export function AgentHistory() {
       return (data as any[]) || [];
     },
     enabled: !!returningSale?.id,
+    staleTime: 30_000,
   });
 
   useEffect(() => {
@@ -914,7 +929,7 @@ export function AgentHistory() {
         customerId: editingTransaction.customer_id,
         timestamp: new Date().toISOString(),
       });
-      await addToQueue({
+      await enqueueWithContext({
         id: crypto.randomUUID(),
         type: "transaction_edit",
         payload: {
@@ -1034,6 +1049,22 @@ export function AgentHistory() {
 
   const timelineLoading = loadingSalesTimeline || loadingTransactionsTimeline;
 
+  const onRefresh = useCallback(async () => {
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["mobile-history-sales-timeline"] }),
+      qc.invalidateQueries({ queryKey: ["mobile-history-transactions-timeline"] }),
+      qc.invalidateQueries({ queryKey: ["mobile-history-balance-sales"] }),
+      qc.invalidateQueries({ queryKey: ["mobile-history-balance-transactions"] }),
+      qc.invalidateQueries({ queryKey: ["mobile-history-holding-balance"] }),
+      qc.invalidateQueries({ queryKey: ["handovers"] }),
+      qc.invalidateQueries({ queryKey: ["mobile-expense-claims"] }),
+    ]);
+  }, [qc]);
+
+  const { handlers: pullHandlers, isPulling, isRefreshing, pullDistance, threshold } = usePullToRefresh({
+    onRefresh,
+  });
+
   if (selectedActivityDate) {
     const selectedItems = timelineByDate[selectedActivityDate] || [];
     // Exclude returned sales from totals — they've been reversed
@@ -1043,11 +1074,12 @@ export function AgentHistory() {
     const returnedCount = selectedItems.filter((item) => item._is_fully_returned).length;
 
     return (
-      <div className="pb-6">
+      <div {...pullHandlers} className="pb-6">
+        <PullRefreshIndicator isRefreshing={isRefreshing} isPulling={isPulling} pullDistance={pullDistance} threshold={threshold} />
         <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 dark:from-slate-900 dark:via-blue-950 dark:to-indigo-950 px-4 pt-4 pb-6">
           <button
             type="button"
-            className="h-9 px-3 rounded-xl bg-white/15 text-white text-sm font-semibold flex items-center gap-2"
+            className="h-10 px-3 rounded-xl bg-white/15 text-white text-sm font-semibold flex items-center gap-2"
             onClick={() => setSelectedActivityDate(null)}
           >
             <ArrowLeft className="h-4 w-4" />
@@ -1089,16 +1121,16 @@ export function AgentHistory() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         {isReturned ? (
-                          <Badge className="text-[10px] font-bold bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-md px-1.5 py-0">
+                          <Badge className="text-xs font-bold bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-md px-1.5 py-0">
                             ↩ RETURNED
                           </Badge>
                         ) : (
-                          <Badge variant="outline" className={cn("text-[10px] font-semibold", item.type === "sale" ? "border-blue-200 text-blue-600 dark:border-blue-700 dark:text-blue-400" : "border-emerald-200 text-emerald-600 dark:border-emerald-700 dark:text-emerald-400")}>
+                          <Badge variant="outline" className={cn("text-xs font-semibold", item.type === "sale" ? "border-blue-200 text-blue-600 dark:border-blue-700 dark:text-blue-400" : "border-emerald-200 text-emerald-600 dark:border-emerald-700 dark:text-emerald-400")}>
                             {item.type === "sale" ? "Sale" : "Transaction"}
                           </Badge>
                         )}
                         {item.display_id && (
-                          <span className={cn("text-[11px]", isReturned ? "text-slate-300 dark:text-slate-600 line-through" : "text-slate-400")}>
+                          <span className={cn("text-xs", isReturned ? "text-slate-300 dark:text-slate-600 line-through" : "text-slate-400")}>
                             {item.display_id}
                           </span>
                         )}
@@ -1106,7 +1138,7 @@ export function AgentHistory() {
                       <p className={cn("text-sm font-semibold mt-1", isReturned ? "text-slate-400 dark:text-slate-500" : "text-slate-800 dark:text-white")}>
                         {item.store_name || "Store"}
                       </p>
-                      <div className={cn("flex items-center gap-3 mt-1 text-[11px]", isReturned ? "text-slate-300 dark:text-slate-600" : "text-slate-400")}>
+                      <div className={cn("flex items-center gap-3 mt-1 text-xs", isReturned ? "text-slate-300 dark:text-slate-600" : "text-slate-400")}>
                         <span>{format(new Date(item.created_at), "hh:mm a")}</span>
                         {!isReturned && (
                           <>
@@ -1129,7 +1161,7 @@ export function AgentHistory() {
                       {item.type === "sale" && item._sale_id && (
                         <button
                           onClick={() => setReceiptSaleId(item._sale_id!)}
-                          className="text-xs font-semibold px-2 py-1 rounded-lg transition-colors text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+                          className="text-xs font-semibold px-3 py-2 rounded-lg transition-colors text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
                         >
                           Receipt
                         </button>
@@ -1156,7 +1188,7 @@ export function AgentHistory() {
                               });
                             }}
                             className={cn(
-                              "text-xs font-semibold px-2 py-1 rounded-lg transition-colors",
+                              "text-xs font-semibold px-3 py-2 rounded-lg transition-colors",
                               isPastDate(item.created_at, item._updated_at)
                                 ? "text-slate-300 dark:text-slate-600 cursor-not-allowed"
                                 : "text-blue-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
@@ -1177,7 +1209,7 @@ export function AgentHistory() {
                               stores: { name: item.store_name || "", display_id: item.display_id || "" },
                             })}
                             className={cn(
-                              "text-xs font-semibold px-2 py-1 rounded-lg transition-colors",
+                              "text-xs font-semibold px-3 py-2 rounded-lg transition-colors",
                               isPastDate(item.created_at, item._updated_at)
                                 ? "text-slate-300 dark:text-slate-600 cursor-not-allowed"
                                 : "text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
@@ -1207,7 +1239,7 @@ export function AgentHistory() {
                               });
                             }}
                             className={cn(
-                              "text-xs font-semibold px-2 py-1 rounded-lg transition-colors",
+                              "text-xs font-semibold px-3 py-2 rounded-lg transition-colors",
                               isPastDate(item.created_at, item._updated_at)
                                 ? "text-slate-300 dark:text-slate-600 cursor-not-allowed"
                                 : "text-blue-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
@@ -1228,7 +1260,7 @@ export function AgentHistory() {
                                 created_at: item.created_at,
                               })}
                               className={cn(
-                                "text-xs font-semibold px-2 py-1 rounded-lg transition-colors",
+                                "text-xs font-semibold px-3 py-2 rounded-lg transition-colors",
                                 isPastDate(item.created_at, item._updated_at)
                                   ? "text-slate-300 dark:text-slate-600 cursor-not-allowed"
                                   : "text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
@@ -1251,7 +1283,8 @@ export function AgentHistory() {
   }
 
   return (
-    <div className="pb-6">
+    <div {...pullHandlers} className="pb-6">
+      <PullRefreshIndicator isRefreshing={isRefreshing} isPulling={isPulling} pullDistance={pullDistance} threshold={threshold} />
       <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 dark:from-slate-900 dark:via-blue-950 dark:to-indigo-950 px-4 pt-4 pb-10">
         <p className="text-blue-200 text-xs font-medium uppercase tracking-widest">Overview</p>
         <h2 className="text-white text-xl font-bold mt-0.5">History & Handovers</h2>
@@ -1267,7 +1300,7 @@ export function AgentHistory() {
             <MiniStat icon={Send} label="Transferred Today" value={`₹${transferredToday.toLocaleString("en-IN")}`} subValue={sentPending > 0 ? `₹${sentPending.toLocaleString("en-IN")} pending` : "All transferred"} color="from-orange-500 to-amber-600" />
             <div className="rounded-xl border border-slate-100 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/30 p-3">
               <div className="flex items-start justify-between gap-2">
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium leading-tight">Net Balance</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium leading-tight">Net Balance</p>
                 <div className={cn("h-6 w-6 rounded-md bg-gradient-to-br flex items-center justify-center shrink-0", netBalance > 0 ? "from-red-500 to-rose-600" : netBalance < 0 ? "from-green-500 to-emerald-600" : "from-violet-500 to-purple-600")}>
                   <Wallet className="h-3 w-3 text-white" />
                 </div>
@@ -1275,7 +1308,7 @@ export function AgentHistory() {
               <p className={cn("text-lg font-bold mt-1", netBalance > 0 ? "text-red-600 dark:text-red-400" : netBalance < 0 ? "text-green-600 dark:text-green-400" : "text-slate-900 dark:text-white")}>
                 ₹{Math.abs(netBalance).toLocaleString("en-IN")}
               </p>
-              <p className="text-[11px] mt-0.5 leading-tight font-medium">
+              <p className="text-xs mt-0.5 leading-tight font-medium">
                 {netBalance > 0 ? (
                   <span className="text-red-500">You owe warehouse</span>
                 ) : netBalance < 0 ? (
@@ -1381,7 +1414,7 @@ export function AgentHistory() {
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-sm font-bold text-slate-800 dark:text-white">{formatGroupDate(card.date)}</p>
-                      <p className="text-[11px] text-slate-400 mt-1">
+                      <p className="text-xs text-slate-400 mt-1">
                         {card.items.length} records · {card.salesCount} sales · {card.transactionsCount} txns
                         {card.returnedCount > 0 && (
                           <span className="text-red-400"> · {card.returnedCount} returned</span>
@@ -1434,14 +1467,14 @@ export function AgentHistory() {
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
                             <p className={`text-base font-bold ${amountColor}`}>{amountSign}₹{total.toLocaleString("en-IN")}</p>
-                            <Badge variant="outline" className={cn("text-[10px] font-semibold", getStatusTone(handover.status))}>
+                            <Badge variant="outline" className={cn("text-xs font-semibold", getStatusTone(handover.status))}>
                               {handover.status.replaceAll("_", " ")}
                             </Badge>
                           </div>
                           <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">
                             {getPersonName(handover.user_id)} to {getPersonName(handover.handed_to)}
                           </p>
-                          <div className="flex items-center gap-2 mt-1 text-[11px] text-slate-400 flex-wrap">
+                          <div className="flex items-center gap-2 mt-1 text-xs text-slate-400 flex-wrap">
                             <span>{format(new Date(handover.created_at), "dd MMM yyyy, hh:mm a")}</span>
                             {isOwnSent && <span>Sent</span>}
                             {isOwnReceived && <span>Received</span>}
@@ -1454,11 +1487,11 @@ export function AgentHistory() {
 
                       {waitingForYou && (
                         <div className="grid grid-cols-2 gap-2 mt-3">
-                          <Button size="sm" className="h-9 rounded-xl" onClick={() => handleConfirm(handover)}>
+                          <Button size="sm" className="h-10 rounded-xl" onClick={() => handleConfirm(handover)}>
                             <CheckCircle2 className="h-4 w-4 mr-1.5" />
                             Confirm
                           </Button>
-                          <Button size="sm" variant="outline" className="h-9 rounded-xl" onClick={() => handleReject(handover)}>
+                          <Button size="sm" variant="outline" className="h-10 rounded-xl" onClick={() => handleReject(handover)}>
                             <XCircle className="h-4 w-4 mr-1.5" />
                             Reject
                           </Button>
@@ -1470,7 +1503,7 @@ export function AgentHistory() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-8 rounded-xl text-[11px] text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                            className="h-10 rounded-xl text-xs text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
                             onClick={() => handleCancelHandover(handover)}
                             disabled={submitting}
                           >
@@ -1518,16 +1551,16 @@ export function AgentHistory() {
                               <div className="flex items-center gap-1.5">
                                 <div
                                   className="h-2 w-2 rounded-full"
-                                  style={{ backgroundColor: category.color || "#6366f1" }}
+                                  style={{ backgroundColor: category.color || `hsl(var(--primary))` }}
                                 />
-                                <span className="text-[11px] text-slate-500 dark:text-slate-400">{category.name}</span>
+                                <span className="text-xs text-slate-500 dark:text-slate-400">{category.name}</span>
                               </div>
                             )}
                           </div>
                           {claim.description && (
                             <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">{claim.description}</p>
                           )}
-                          <div className="flex items-center gap-2 mt-1 text-[11px] text-slate-400 flex-wrap">
+                          <div className="flex items-center gap-2 mt-1 text-xs text-slate-400 flex-wrap">
                             <span>{claim.display_id || claim.id.slice(0, 8)}</span>
                             <span>·</span>
                             <span>{format(new Date(claim.created_at), "dd MMM yyyy")}</span>
@@ -1539,13 +1572,13 @@ export function AgentHistory() {
                             )}
                           </div>
                           {claim.bill_urls && claim.bill_urls.length > 0 && (
-                            <p className="text-[11px] text-blue-500 mt-1">📎 {claim.bill_urls.length} attachment(s)</p>
+                            <p className="text-xs text-blue-500 mt-1">📎 {claim.bill_urls.length} attachment(s)</p>
                           )}
                         </div>
                         <Badge
                           variant="outline"
                           className={cn(
-                            "text-[10px] font-semibold capitalize shrink-0",
+                            "text-xs font-semibold capitalize shrink-0",
                             claim.status === "approved"
                               ? "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-700"
                               : claim.status === "rejected"
@@ -1572,7 +1605,7 @@ export function AgentHistory() {
                         <div className="flex items-center gap-2 mt-3">
                           <button
                             onClick={() => handleCancelExpenseClaim(claim.id)}
-                            className="h-8 rounded-lg px-3 text-[11px] font-semibold bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-700 flex items-center gap-1"
+                            className="h-10 rounded-lg px-3 text-xs font-semibold bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-700 flex items-center gap-1"
                           >
                             <XCircle className="h-3 w-3" />
                             Cancel
@@ -1809,7 +1842,7 @@ export function AgentHistory() {
 
                       <div className="flex items-center gap-1.5 shrink-0">
                         <div className="flex items-center gap-1">
-                          <span className="text-[10px] text-muted-foreground">₹</span>
+                          <span className="text-xs text-muted-foreground">₹</span>
                           <Input
                             type="number"
                             min="0"
@@ -1821,7 +1854,7 @@ export function AgentHistory() {
                         <button
                           type="button"
                           onClick={() => updateEditingItemQty(item.product_id, -1)}
-                          className="h-9 w-9 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                          className="h-10 w-10 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                         >
                           <Minus className="h-4 w-4 text-slate-500" />
                         </button>
@@ -1837,7 +1870,7 @@ export function AgentHistory() {
                         <button
                           type="button"
                           onClick={() => updateEditingItemQty(item.product_id, 1)}
-                          className="h-9 w-9 bg-blue-600 rounded-xl flex items-center justify-center hover:bg-blue-700 transition-colors text-white"
+                          className="h-10 w-10 bg-blue-600 rounded-xl flex items-center justify-center hover:bg-blue-700 transition-colors text-white"
                         >
                           <Plus className="h-4 w-4" />
                         </button>
@@ -2095,7 +2128,7 @@ export function AgentHistory() {
             <div className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 p-3 shadow-sm bg-slate-50/10">
               <div className="space-y-0.5 max-w-[80%]">
                 <Label className="text-xs font-semibold text-slate-700 dark:text-slate-200">Mark returned items as damaged?</Label>
-                <p className="text-[10px] text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   If toggled, stock will go strictly to wastage and will NOT be added back to agent or warehouse stock.
                 </p>
               </div>

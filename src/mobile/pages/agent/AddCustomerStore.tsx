@@ -92,6 +92,7 @@ export default function AddCustomerStore({ onClose }: { onClose: () => void }) {
       return types;
     },
     enabled: step === "store",
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: routes } = useQuery({
@@ -109,6 +110,7 @@ export default function AddCustomerStore({ onClose }: { onClose: () => void }) {
       return fetchedRoutes;
     },
     enabled: step === "store",
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: customers } = useQuery({
@@ -118,6 +120,7 @@ export default function AddCustomerStore({ onClose }: { onClose: () => void }) {
       return data || [];
     },
     enabled: step === "customer" && mode === "store",
+    staleTime: 5 * 60 * 1000,
   });
 
   const handleNext = () => {

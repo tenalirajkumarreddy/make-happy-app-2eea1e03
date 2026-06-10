@@ -322,7 +322,7 @@ export function RawMaterialInventoryView({
             <TabsTrigger value="low" className="gap-2 py-2 px-4 rounded-xl border-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-background data-[state=active]:text-foreground bg-transparent hover:bg-muted/50 data-[state=active]:shadow-sm">
               Low Stock
               {stats.low > 0 && (
-                <Badge variant="destructive" className="ml-1 text-[10px] px-1 h-4">
+                <Badge variant="destructive" className="ml-1 text-2xs px-1 h-4">
                   {stats.low}
                 </Badge>
               )}
@@ -330,7 +330,7 @@ export function RawMaterialInventoryView({
             <TabsTrigger value="out" className="gap-2 py-2 px-4 rounded-xl border-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-background data-[state=active]:text-foreground bg-transparent hover:bg-muted/50 data-[state=active]:shadow-sm">
               Out of Stock
               {stats.out > 0 && (
-                <Badge variant="destructive" className="ml-1 text-[10px] px-1 h-4">
+                <Badge variant="destructive" className="ml-1 text-2xs px-1 h-4">
                   {stats.out}
                 </Badge>
               )}

@@ -115,7 +115,7 @@ const handleSave = async () => {
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium truncate">{p.name}</p>
                   <div className="flex items-center gap-2 mt-0.5">
-                    <Badge variant="outline" className="text-[10px]">{p.sku}</Badge>
+                    <Badge variant="outline" className="text-2xs">{p.sku}</Badge>
                     <span className="text-xs text-muted-foreground">{getEffectivePrice(p)}</span>
                   </div>
                 </div>

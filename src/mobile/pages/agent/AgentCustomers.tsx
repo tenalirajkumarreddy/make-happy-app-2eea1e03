@@ -67,7 +67,7 @@ interface StoreListItem {
 }
 
 export function AgentCustomers({ onOpenStore, onGoRecord, onGoVisit }: Props) {
-  const { user, role } = useAuth();
+  const { user, role, profile } = useAuth();
   const qc = useQueryClient();
   const { canAccessRoute, loading: loadingRouteAccess } = useRouteAccess(user?.id, role);
   const [query, setQuery] = useState("");
@@ -90,6 +90,7 @@ export function AgentCustomers({ onOpenStore, onGoRecord, onGoVisit }: Props) {
       return (data as unknown as StoreListItem[]) || [];
     },
     enabled: !!user,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: routes } = useQuery({
@@ -98,6 +99,7 @@ export function AgentCustomers({ onOpenStore, onGoRecord, onGoVisit }: Props) {
       const { data } = await supabase.from("routes").select("id, name").eq("is_active", true).order("name");
       return (data as RouteItem[]) || [];
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: storeTypes } = useQuery({
@@ -106,6 +108,7 @@ export function AgentCustomers({ onOpenStore, onGoRecord, onGoVisit }: Props) {
       const { data } = await supabase.from("store_types").select("id, name").order("name");
       return (data as StoreTypeItem[]) || [];
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   const filtered = (stores || []).filter((s) => {
@@ -138,7 +141,15 @@ export function AgentCustomers({ onOpenStore, onGoRecord, onGoVisit }: Props) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-4 pt-4 pb-3 space-y-2">
+      <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 dark:from-slate-900 dark:via-blue-950 dark:to-indigo-950 px-4 pt-4 pb-8">
+        <p className="text-blue-200 text-sm font-medium">My Stores</p>
+        <h2 className="text-white text-2xl font-bold mt-0.5">{(profile?.full_name ?? "Agent").split(" ")[0]} 👋</h2>
+        <p className="text-blue-200/80 text-xs mt-1">
+          {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}
+        </p>
+      </div>
+
+      <div className="px-4 -mt-5 pb-3 space-y-2">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -282,7 +293,7 @@ const StoreCard = memo(({ s, onOpenStore, onGoRecord, onGoVisit, handleNavigate,
               <button className="text-left w-full" onClick={() => onOpenStore(storeOption)}>
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="text-sm font-bold text-slate-900 dark:text-white leading-tight truncate">{s.name}</span>
-                  <span className="text-[10px] text-muted-foreground font-mono">({s.display_id})</span>
+                  <span className="text-xs text-muted-foreground font-mono">({s.display_id})</span>
                 </div>
               </button>
               {s.customers?.name && (
@@ -293,10 +304,10 @@ const StoreCard = memo(({ s, onOpenStore, onGoRecord, onGoVisit, handleNavigate,
               )}
               <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                 {typeName && (
-                  <Badge variant="outline" className="text-[10px] h-4.5 px-1.5 font-semibold">{typeName}</Badge>
+                  <Badge variant="outline" className="text-xs h-4.5 px-1.5 font-semibold">{typeName}</Badge>
                 )}
                 {s.routes?.name && (
-                  <span className="text-[10px] text-muted-foreground/80 font-medium">{s.routes.name}</span>
+                  <span className="text-xs text-muted-foreground/80 font-medium">{s.routes.name}</span>
                 )}
               </div>
             </div>
@@ -306,7 +317,7 @@ const StoreCard = memo(({ s, onOpenStore, onGoRecord, onGoVisit, handleNavigate,
                 ₹{Number(s.outstanding).toLocaleString("en-IN")}
               </p>
               {s.outstanding > 0 && (
-                <p className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider mt-0.5">Outstanding</p>
+                <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider mt-0.5">Outstanding</p>
               )}
             </div>
           </div>

@@ -49,7 +49,7 @@ const CustomerSales = () => {
             {row.display_id}
           </span>
           {row.is_fully_returned && (
-            <Badge variant="outline" className="text-[9px] border-amber-300 text-amber-600 bg-amber-50 rounded px-1 py-0">Returned</Badge>
+            <Badge variant="outline" className="text-4xs border-amber-300 text-amber-600 bg-amber-50 rounded px-1 py-0">Returned</Badge>
           )}
         </div>
       )

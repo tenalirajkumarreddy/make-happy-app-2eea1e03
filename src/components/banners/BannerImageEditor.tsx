@@ -153,7 +153,7 @@ export function BannerImageEditor({
     <div className="space-y-3">
       {/* Display Window Preview */}
       <div className="relative">
-        <div className="absolute top-2 left-2 z-10 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded">
+        <div className="absolute left-2 top-2 z-10 rounded bg-black/60 px-2 py-1 text-2xs text-white">
           Display Preview ({aspectRatio === 3 ? "3:1" : `${aspectRatio}:1`})
         </div>
         <div

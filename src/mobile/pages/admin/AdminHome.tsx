@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
+import { usePermission } from "@/hooks/usePermission";
 import {
   ShoppingCart, ClipboardList, TrendingUp, TrendingDown, Wallet,
   Users, Store, Package, ArrowRight, AlertCircle, Receipt, Loader2,
@@ -40,10 +41,14 @@ export function AdminHome({
     ? (q: any) => q.eq("warehouse_id", currentWarehouse!.id)
     : (q: any) => q;
 
+  const { allowed: canApproveExpenses } = usePermission("approve_expenses");
+
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ["mobile-admin-dashboard", currentWarehouse?.id, role],
     queryFn: async () => {
-      const today = new Date().toISOString().split("T")[0];
+      // Use local date instead of UTC to avoid timezone issues
+      const now = new Date();
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
       const [todaySalesRes, storesRes, stockRes, ordersCountRes] = await Promise.all([
         warehouseFilter(supabase.from("sales").select("total_amount, cash_amount, upi_amount"))
           .gte("created_at", `${today}T00:00:00`).lte("created_at", `${today}T23:59:59`),
@@ -63,6 +68,7 @@ export function AdminHome({
       } as DashboardStats;
     },
     refetchInterval: 60_000,
+    staleTime: 60_000,
   });
 
   const { data: recentActivity } = useQuery({
@@ -76,31 +82,41 @@ export function AdminHome({
         store: s.stores?.name ?? null, date: s.created_at,
       }));
     },
+    staleTime: 30_000,
   });
 
   const { data: pendingExpenses = [] } = useQuery({
     queryKey: ["mobile-pending-expense-widget", currentWarehouse?.id],
     queryFn: async () => {
-      const { data } = await supabase
+      let query = supabase
         .from("expense_claims")
         .select("id, display_id, amount, description, status, created_at, bill_urls, expense_categories(name, color), profiles(full_name)")
         .eq("status", "pending")
         .order("created_at", { ascending: false })
         .limit(5);
+      // Apply warehouse filter for managers
+      if (role === "manager" && currentWarehouse?.id) {
+        query = query.eq("warehouse_id", currentWarehouse.id);
+      }
+      const { data } = await query;
       return data || [];
     },
     refetchInterval: 30_000,
+    staleTime: 30_000,
   });
 
   const { data: opsMetrics } = useQuery({
     queryKey: ["mobile-admin-ops", currentWarehouse?.id, role],
     queryFn: async () => {
-      const today = new Date().toISOString().split("T")[0];
-      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+      // Use local date instead of UTC
+      const now = new Date();
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const thirtyDaysAgoStr = `${thirtyDaysAgo.getFullYear()}-${String(thirtyDaysAgo.getMonth() + 1).padStart(2, "0")}-${String(thirtyDaysAgo.getDate()).padStart(2, "0")}`;
 
       const [ordersRes, salesRes] = await Promise.all([
         warehouseFilter(supabase.from("orders").select("status"))
-          .gte("created_at", thirtyDaysAgo).limit(5000),
+          .gte("created_at", thirtyDaysAgoStr).limit(5000),
         warehouseFilter(supabase.from("sales").select("total_amount, outstanding_amount"))
           .gte("created_at", today).limit(1000),
       ]);
@@ -118,6 +134,7 @@ export function AdminHome({
       return { fulfillmentRate, collectionEfficiency };
     },
     refetchInterval: 60_000,
+    staleTime: 60_000,
   });
 
   const qc = useQueryClient();
@@ -322,12 +339,12 @@ export function AdminHome({
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       {exp.expense_categories && (
-                        <div className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: exp.expense_categories.color || "#6366f1" }} />
+                        <div className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: exp.expense_categories.color || `hsl(var(--primary))` }} />
                       )}
                       <p className="text-sm font-bold text-slate-800 dark:text-white truncate">
                         ₹{Number(exp.amount).toLocaleString("en-IN")}
                       </p>
-                      <span className="text-[10px] text-slate-400 truncate">
+                      <span className="text-xs text-slate-400 truncate">
                         {exp.expense_categories?.name || "Unknown"}
                       </span>
                     </div>
@@ -335,35 +352,41 @@ export function AdminHome({
                       {exp.profiles?.full_name || "Unknown"} · {format(new Date(exp.created_at), "dd MMM hh:mm a")}
                     </p>
                     {exp.description && (
-                      <p className="text-[11px] text-slate-400 mt-0.5 truncate">{exp.description}</p>
+                      <p className="text-xs text-slate-400 mt-0.5 truncate">{exp.description}</p>
                     )}
                     {exp.bill_urls && exp.bill_urls.length > 0 && (
-                      <p className="text-[10px] text-blue-500 mt-0.5">📎 {exp.bill_urls.length} attachment(s)</p>
+                      <p className="text-xs text-blue-500 mt-0.5">📎 {exp.bill_urls.length} attachment(s)</p>
                     )}
                   </div>
                   <div className="flex gap-1.5 shrink-0">
-                    <button
-                      onClick={() => setPendingExpenseAction({ id: exp.id, amount: exp.amount, name: exp.profiles?.full_name ?? "Staff", action: "approve" })}
-                      disabled={isProcessingExpense}
-                      className="h-8 w-8 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center hover:bg-emerald-100 dark:hover:bg-emerald-900/50 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
-                    >
-                      {isProcessingExpense && pendingExpenseAction?.id === exp.id ? (
-                        <Loader2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 animate-spin" />
-                      ) : (
-                        <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                      )}
-                    </button>
-                    <button
-                      onClick={() => setPendingExpenseAction({ id: exp.id, amount: exp.amount, name: exp.profiles?.full_name ?? "Staff", action: "reject" })}
-                      disabled={isProcessingExpense}
-                      className="h-8 w-8 rounded-lg bg-red-50 dark:bg-red-900/30 flex items-center justify-center hover:bg-red-100 dark:hover:bg-red-900/50 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
-                    >
-                      {isProcessingExpense && pendingExpenseAction?.id === exp.id ? (
-                        <Loader2 className="h-4 w-4 text-red-600 dark:text-red-400 animate-spin" />
-                      ) : (
-                        <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
-                      )}
-                    </button>
+                    {canApproveExpenses ? (
+                      <>
+                        <button
+                          onClick={() => setPendingExpenseAction({ id: exp.id, amount: exp.amount, name: exp.profiles?.full_name ?? "Staff", action: "approve" })}
+                          disabled={isProcessingExpense}
+                          className="h-8 w-8 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center hover:bg-emerald-100 dark:hover:bg-emerald-900/50 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+                        >
+                          {isProcessingExpense && pendingExpenseAction?.id === exp.id ? (
+                            <Loader2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 animate-spin" />
+                          ) : (
+                            <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                          )}
+                        </button>
+                        <button
+                          onClick={() => setPendingExpenseAction({ id: exp.id, amount: exp.amount, name: exp.profiles?.full_name ?? "Staff", action: "reject" })}
+                          disabled={isProcessingExpense}
+                          className="h-8 w-8 rounded-lg bg-red-50 dark:bg-red-900/30 flex items-center justify-center hover:bg-red-100 dark:hover:bg-red-900/50 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+                        >
+                          {isProcessingExpense && pendingExpenseAction?.id === exp.id ? (
+                            <Loader2 className="h-4 w-4 text-red-600 dark:text-red-400 animate-spin" />
+                          ) : (
+                            <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                          )}
+                        </button>
+                      </>
+                    ) : (
+                      <span className="text-xs text-muted-foreground px-2">No access</span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -428,7 +451,7 @@ function MiniStat({ label, value, color, icon: Icon, alert }: { label: string; v
         <Icon className="h-3.5 w-3.5 text-white" />
       </div>
       <div>
-        <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium uppercase tracking-wide leading-none mb-0.5">{label}</p>
+        <p className="text-xs text-slate-400 dark:text-slate-500 font-medium uppercase tracking-wide leading-none mb-0.5">{label}</p>
         <div className="flex items-center gap-1">
           <p className="text-sm font-bold text-slate-800 dark:text-white leading-tight">{value}</p>
           {alert && <AlertCircle className="h-3 w-3 text-orange-500" />}

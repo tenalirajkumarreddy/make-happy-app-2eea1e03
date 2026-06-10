@@ -47,6 +47,7 @@ const Stores = () => {
   const [editData, setEditData] = useState<Record<string, { name: string; phone: string }>>({});
   const [bulkSaving, setBulkSaving] = useState(false);
   const [confirmBulkDeactivate, setConfirmBulkDeactivate] = useState(false);
+  const [confirmBulkActivate, setConfirmBulkActivate] = useState(false);
   const [filters, setFilters] = useState<FilterValues>({});
   const qc = useQueryClient();
   const PAGE_SIZE = 50;
@@ -173,6 +174,7 @@ const Stores = () => {
 
     const { data: results, error } = await supabase.rpc("bulk_update_stores", {
       p_updates: updates,
+      p_user_id: user?.id,
     }) as any;
 
     setBulkSaving(false);
@@ -321,11 +323,11 @@ const Stores = () => {
       <div className="flex items-center gap-2">
         {row.photo_url && <img src={row.photo_url} alt="" loading="lazy" className="h-8 w-8 rounded-md object-cover" />}
         {editMode ? (
-          <input
-            className="border border-input rounded px-2 py-0.5 text-sm bg-background w-36 focus:outline-none focus:ring-1 focus:ring-ring"
+          <Input
+            className="h-8 w-36"
             value={editData[row.id]?.name ?? row.name ?? ""}
             onChange={(e) => setField(row.id, "name", e.target.value)}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e: React.MouseEvent) => e.stopPropagation()}
           />
         ) : (
           <span className="font-medium">{row.name}</span>
@@ -335,11 +337,11 @@ const Stores = () => {
     ...(role === "super_admin" ? [{ header: "Warehouse", accessor: (row: any) => warehouseNameById.get(row.warehouse_id) || "—", className: "hidden xl:table-cell text-sm text-muted-foreground" }] : []),
     { header: "Customer", accessor: (row: any) => row.customers?.name || "—", className: "text-muted-foreground text-sm hidden sm:table-cell" },
     { header: "Phone", accessor: (row: any) => editMode ? (
-      <input
-        className="border border-input rounded px-2 py-0.5 text-sm bg-background w-32 focus:outline-none focus:ring-1 focus:ring-ring"
+      <Input
+        className="h-8 w-32"
         value={editData[row.id]?.phone ?? row.phone ?? ""}
         onChange={(e) => setField(row.id, "phone", e.target.value)}
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e: React.MouseEvent) => e.stopPropagation()}
         placeholder="Add phone"
       />
     ) : (
@@ -423,7 +425,7 @@ const Stores = () => {
   {canBulk && selectMode && selected.size > 0 && (
     <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-accent/50 p-3" role="region" aria-label="Bulk actions">
       <span className="text-sm font-medium">{selected.size} selected</span>
-      <Button variant="outline" size="sm" onClick={() => handleBulkStatus(true)} aria-label={`Activate ${selected.size} stores`}>Activate</Button>
+      <Button variant="outline" size="sm" onClick={() => setConfirmBulkActivate(true)} aria-label={`Activate ${selected.size} stores`}>Activate</Button>
       <Button variant="outline" size="sm" className="text-destructive border-destructive/40" onClick={() => setConfirmBulkDeactivate(true)} aria-label={`Deactivate ${selected.size} stores`}>Deactivate</Button>
       <div className="flex items-center gap-2">
         <label htmlFor="bulk-route-select" className="sr-only">Assign route</label>
@@ -565,7 +567,7 @@ const Stores = () => {
                   <StatusBadge status={row.is_active ? "active" : "inactive"} />
                 </div>
                 {role === "super_admin" && row.warehouse_id && (
-                  <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
+                  <p className="text-3xs text-muted-foreground mt-0.5 truncate">
                     Warehouse: {warehouseNameById.get(row.warehouse_id) || "—"}
                   </p>
                 )}
@@ -575,7 +577,7 @@ const Stores = () => {
                 </div>
                 <div className="flex items-center justify-between mt-1.5">
                   <span className="text-xs text-muted-foreground truncate">{row.customers?.name || "—"}</span>
-                  <p className={`font-bold text-sm ${Number(row.outstanding || 0) > 0 ? 'text-red-600' : 'text-foreground'}`}>₹{Number(row.outstanding || 0).toLocaleString()}</p>
+                  <p className={`font-bold text-sm ${Number(row.outstanding || 0) > 0 ? 'text-destructive' : 'text-foreground'}`}>₹{Number(row.outstanding || 0).toLocaleString()}</p>
                 </div>
               </div>
             </div>
@@ -631,6 +633,21 @@ const Stores = () => {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction className="bg-destructive hover:bg-destructive/90" onClick={() => { setConfirmBulkDeactivate(false); handleBulkStatus(false); }}>Deactivate</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={confirmBulkActivate} onOpenChange={setConfirmBulkActivate}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Activate {selected.size} store(s)?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The selected stores will be activated and available for sales and orders.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setConfirmBulkActivate(false); handleBulkStatus(true); }}>Activate</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

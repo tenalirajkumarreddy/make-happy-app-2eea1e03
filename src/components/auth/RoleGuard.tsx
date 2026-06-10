@@ -1,7 +1,15 @@
+import { Suspense } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Navigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
+import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import type { AppRole } from "@/types/roles";
+
+const PageLoader = () => (
+  <div className="flex min-h-[50vh] items-center justify-center">
+    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+  </div>
+);
 
 interface RoleGuardProps {
   allowed: AppRole[];
@@ -23,5 +31,11 @@ export function RoleGuard({ allowed, children }: RoleGuardProps) {
     return <Navigate to="/" replace />;
   }
 
-  return <>{children}</>;
+  return (
+    <ErrorBoundary>
+      <Suspense fallback={<PageLoader />}>
+        {children}
+      </Suspense>
+    </ErrorBoundary>
+  );
 }

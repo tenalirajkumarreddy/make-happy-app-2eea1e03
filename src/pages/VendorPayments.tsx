@@ -187,7 +187,7 @@ const VendorPayments = () => {
               <div className="flex items-center justify-between mt-1">
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">{formatDate(row.payment_date)}</span>
-                  <Badge variant="outline" className="capitalize text-[10px] h-5">{row.payment_method}</Badge>
+                  <Badge variant="outline" className="capitalize text-2xs h-5">{row.payment_method}</Badge>
                 </div>
                 <span className="font-bold text-green-600">₹{Number(row.amount).toLocaleString()}</span>
               </div>

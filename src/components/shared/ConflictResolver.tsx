@@ -74,23 +74,23 @@ interface ConflictNotificationProps {
 const severityConfig = {
   critical: {
     icon: AlertOctagon,
-    color: "text-red-600",
-    bgColor: "bg-red-50",
-    borderColor: "border-red-200",
+    color: "text-error",
+    bgColor: "bg-error/10",
+    borderColor: "border-error/30",
     badge: "destructive",
   },
   error: {
     icon: AlertCircle,
-    color: "text-orange-600",
-    bgColor: "bg-orange-50",
-    borderColor: "border-orange-200",
+    color: "text-warning",
+    bgColor: "bg-warning/10",
+    borderColor: "border-warning/30",
     badge: "default",
   },
   warning: {
     icon: AlertTriangle,
-    color: "text-yellow-600",
-    bgColor: "bg-yellow-50",
-    borderColor: "border-yellow-200",
+    color: "text-warning",
+    bgColor: "bg-warning/10",
+    borderColor: "border-warning/30",
     badge: "secondary",
   },
 };
@@ -162,8 +162,17 @@ export function ConflictResolver({
       }
     };
     
+    const handleShowResolver = () => {
+      setShowAll(true);
+      loadConflicts();
+    };
+    
     window.addEventListener("offline-queue-changed", handleQueueChanged);
-    return () => window.removeEventListener("offline-queue-changed", handleQueueChanged);
+    window.addEventListener("show-conflict-resolver", handleShowResolver);
+    return () => {
+      window.removeEventListener("offline-queue-changed", handleQueueChanged);
+      window.removeEventListener("show-conflict-resolver", handleShowResolver);
+    };
   }, [autoDetect, loadConflicts]);
 
   // Handle resolve
@@ -223,7 +232,7 @@ export function ConflictResolver({
         <DialogContent className="sm:max-w-2xl max-h-[80vh]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-yellow-500" />
+              <AlertTriangle className="h-5 w-5 text-warning" />
               Resolve Conflicts
             </DialogTitle>
             <DialogDescription>
@@ -257,11 +266,11 @@ export function ConflictResolver({
 
       {/* Inline Summary */}
       {!showAll && conflicts.length > 0 && (
-        <Card className="border-yellow-200 bg-yellow-50/50">
+        <Card className="border-warning/30 bg-warning/10">
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center justify-between">
               <span className="flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                <AlertTriangle className="h-4 w-4 text-warning" />
                 Offline Conflicts
               </span>
               <div className="flex gap-2">
@@ -307,9 +316,9 @@ function ConflictCard({
       "transition-all duration-200",
       config.borderColor,
       isExpanded && "ring-1 ring-offset-1",
-      conflict.severity === "critical" && "ring-red-200",
-      conflict.severity === "error" && "ring-orange-200",
-      conflict.severity === "warning" && "ring-yellow-200"
+      conflict.severity === "critical" && "ring-error/40",
+      conflict.severity === "error" && "ring-warning/40",
+      conflict.severity === "warning" && "ring-warning/40"
     )}>
       <CardHeader 
         className={cn(
@@ -370,7 +379,7 @@ function ConflictCard({
                   <p>Price: ₹{conflict.currentState.productPrice}</p>
                 )}
                 {conflict.currentState.storeIsActive === false && (
-                  <p className="text-red-600 font-medium">Store Inactive</p>
+                  <p className="text-error font-medium">Store Inactive</p>
                 )}
               </div>
             </div>
@@ -386,8 +395,8 @@ function ConflictCard({
                     variant={option.color === "destructive" ? "destructive" : "outline"}
                     onClick={() => onResolve(option.strategy)}
                     className={cn(
-                      option.color === "warning" && "border-yellow-500 text-yellow-700 hover:bg-yellow-50",
-                      option.color === "success" && "border-green-500 text-green-700 hover:bg-green-50"
+                      option.color === "warning" && "border-warning/40 text-warning hover:bg-warning/10",
+                      option.color === "success" && "border-success/40 text-success hover:bg-success/10"
                     )}
                   >
                     {getOptionIcon(option.icon)}
@@ -417,13 +426,13 @@ function ConflictNotification({
   return (
     <Alert className={cn(
       "animate-in slide-in-from-top-2",
-      criticalCount > 0 ? "border-red-200 bg-red-50" : "border-yellow-200 bg-yellow-50"
+      criticalCount > 0 ? "border-error/30 bg-error/10" : "border-warning/30 bg-warning/10"
     )}>
       <div className="flex items-start gap-3">
         {criticalCount > 0 ? (
-          <AlertOctagon className="h-5 w-5 text-red-600 flex-shrink-0" />
+          <AlertOctagon className="h-5 w-5 text-error flex-shrink-0" />
         ) : (
-          <AlertTriangle className="h-5 w-5 text-yellow-600 flex-shrink-0" />
+          <AlertTriangle className="h-5 w-5 text-warning flex-shrink-0" />
         )}
         <div className="flex-1">
           <AlertTitle className="text-sm font-medium">
@@ -541,14 +550,14 @@ export function ConflictBadge({
     )}>
       <AlertTriangle className={cn(
         "h-5 w-5",
-        criticalCount > 0 ? "text-red-500" : "text-yellow-500"
+        criticalCount > 0 ? "text-error" : "text-warning"
       )} />
       {count > 0 && (
         <span className={cn(
-          "absolute -top-1 -right-1 h-4 min-w-[16px] px-1 text-[10px] font-bold rounded-full flex items-center justify-center",
+          "absolute -top-1 -right-1 h-4 min-w-[16px] px-1 text-2xs font-bold rounded-full flex items-center justify-center",
           criticalCount > 0 
-            ? "bg-red-500 text-white" 
-            : "bg-yellow-500 text-white"
+            ? "bg-error text-white" 
+            : "bg-warning text-white"
         )}>
           {count > 99 ? "99+" : count}
         </span>

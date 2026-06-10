@@ -300,7 +300,7 @@ const Inventory = () => {
         <Alert>
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            You don&aoperator;t have permission to view inventory. Contact your administrator.
+            You don't have permission to view inventory. Contact your administrator.
           </AlertDescription>
         </Alert>
       </div>
@@ -404,8 +404,8 @@ const Inventory = () => {
                   <p className="text-sm font-medium text-muted-foreground">Total Products</p>
                   <p className="text-3xl font-bold">{stats.totalProducts}</p>
                 </div>
-                <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
-                  <Package className="h-6 w-6 text-blue-600" />
+                <div className="h-12 w-12 rounded-full bg-info/20 flex items-center justify-center">
+                  <Package className="h-6 w-6 text-info" />
                 </div>
               </CardContent>
             </Card>
@@ -416,8 +416,8 @@ const Inventory = () => {
                   <p className="text-sm font-medium text-muted-foreground">Stock Quantity</p>
                   <p className="text-3xl font-bold">{stats.totalQuantity.toLocaleString("en-IN")}</p>
                 </div>
-                <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
-                  <Boxes className="h-6 w-6 text-green-600" />
+                <div className="h-12 w-12 rounded-full bg-success/20 flex items-center justify-center">
+                  <Boxes className="h-6 w-6 text-success" />
                 </div>
               </CardContent>
             </Card>
@@ -428,24 +428,24 @@ const Inventory = () => {
                   <p className="text-sm font-medium text-muted-foreground">Stock Value</p>
                   <p className="text-3xl font-bold">{formatCurrency(stats.totalStockValue / 1000)}k</p>
                 </div>
-                <div className="h-12 w-12 rounded-full bg-blue-50 flex items-center justify-center">
-                  <TrendingUp className="h-6 w-6 text-blue-600" />
+                <div className="h-12 w-12 rounded-full bg-info/10 flex items-center justify-center">
+                  <TrendingUp className="h-6 w-6 text-info" />
                 </div>
               </CardContent>
             </Card>
 
-            <Card className={`shadow-sm border-none ${stats.lowStockItems > 0 ? "bg-red-50/50" : ""}`}>
+            <Card className={`shadow-sm border-none ${stats.lowStockItems > 0 ? "bg-destructive/10" : ""}`}>
               <CardContent className="p-6 flex items-center justify-between">
                 <div className="space-y-1">
-                  <p className={`text-sm font-medium ${stats.lowStockItems > 0 ? "text-red-600" : "text-muted-foreground"}`}>
+                  <p className={`text-sm font-medium ${stats.lowStockItems > 0 ? "text-destructive" : "text-muted-foreground"}`}>
                     Low Stock Items
                   </p>
-                  <p className={`text-3xl font-bold ${stats.lowStockItems > 0 ? "text-red-600" : ""}`}>
+                  <p className={`text-3xl font-bold ${stats.lowStockItems > 0 ? "text-destructive" : ""}`}>
                     {stats.lowStockItems}
                   </p>
                 </div>
-                <div className={`h-12 w-12 rounded-full flex items-center justify-center ${stats.lowStockItems > 0 ? "bg-red-100" : "bg-amber-100"}`}>
-                  <AlertCircle className={`h-6 w-6 ${stats.lowStockItems > 0 ? "text-red-600" : "text-amber-600"}`} />
+                <div className={`h-12 w-12 rounded-full flex items-center justify-center ${stats.lowStockItems > 0 ? "bg-destructive/20" : "bg-warning/20"}`}>
+                  <AlertCircle className={`h-6 w-6 ${stats.lowStockItems > 0 ? "text-destructive" : "text-warning"}`} />
                 </div>
               </CardContent>
             </Card>

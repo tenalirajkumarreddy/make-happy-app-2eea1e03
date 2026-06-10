@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Home, Map, ScanLine, History, Users, ClipboardList, ReceiptIndianRupee, Plus, HandCoins, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -41,14 +42,7 @@ export const CUSTOMER_TABS: MobileTabItem[] = [
   { id: "profile" as MobileTab, label: "Profile", icon: Users },
 ];
 
-export const POS_TABS: MobileTabItem[] = [
-  { id: "home", label: "Home", icon: Home },
-  { id: "inventory", label: "Inventory", icon: Package, centerAction: true },
-  { id: "staff", label: "Staff", icon: Users },
-  { id: "history", label: "History", icon: History },
-];
-
-export function BottomNav({ tab, onChange, tabs = AGENT_TABS }: Props) {
+export const BottomNav = memo(function BottomNav({ tab, onChange, tabs = AGENT_TABS }: Props) {
   return (
     <nav
       className="fixed bottom-0 left-0 right-0 z-40"
@@ -74,17 +68,17 @@ export function BottomNav({ tab, onChange, tabs = AGENT_TABS }: Props) {
                     className={cn(
                       "h-14 w-14 rounded-full flex items-center justify-center -mt-7 transition-all duration-200",
                       isActive
-                        ? "bg-blue-600 scale-110 shadow-lg shadow-blue-400/40"
-                        : "bg-blue-600 scale-100 shadow-md shadow-blue-300/30"
+                        ? "bg-primary scale-110 shadow-lg shadow-primary/40"
+                        : "bg-primary scale-100 shadow-md shadow-primary/30"
                     )}
                   >
                     <Icon className="h-6 w-6 text-white" />
                   </div>
                   <span
                     className={cn(
-                      "text-[10px] mt-1.5 font-semibold tracking-wide",
+                      "text-xs mt-1.5 font-semibold tracking-wide truncate max-w-full",
                       isActive
-                        ? "text-blue-600 dark:text-blue-400"
+                        ? "text-primary"
                         : "text-muted-foreground"
                     )}
                   >
@@ -106,14 +100,14 @@ export function BottomNav({ tab, onChange, tabs = AGENT_TABS }: Props) {
                 )}
                 {/* Active pill indicator */}
                 {isActive && (
-                  <span className="absolute top-0 left-1/2 -translate-x-1/2 h-0.5 w-8 bg-blue-600 dark:bg-blue-400 rounded-b-full" />
+                  <span className="absolute top-0 left-1/2 -translate-x-1/2 h-0.5 w-8 bg-primary dark:bg-primary rounded-b-full" />
                 )}
 
                 <div
                   className={cn(
                     "flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-all duration-200",
                     isActive
-                      ? "bg-blue-50 dark:bg-blue-900/40"
+                      ? "bg-primary/10 dark:bg-primary/20"
                       : "hover:bg-muted"
                   )}
                 >
@@ -121,15 +115,15 @@ export function BottomNav({ tab, onChange, tabs = AGENT_TABS }: Props) {
                     className={cn(
                       "h-5 w-5 transition-all duration-200",
                       isActive
-                        ? "text-blue-600 dark:text-blue-400 scale-110"
+                        ? "text-primary dark:text-primary scale-110"
                         : "text-muted-foreground"
                     )}
                   />
                   <span
                     className={cn(
-                      "text-[10px] font-semibold tracking-wide leading-none",
+                      "text-xs font-semibold tracking-wide leading-none truncate max-w-[4rem]",
                       isActive
-                        ? "text-blue-600 dark:text-blue-400"
+                        ? "text-primary dark:text-primary"
                         : "text-muted-foreground"
                     )}
                   >
@@ -143,4 +137,4 @@ export function BottomNav({ tab, onChange, tabs = AGENT_TABS }: Props) {
       </div>
     </nav>
   );
-}
+});

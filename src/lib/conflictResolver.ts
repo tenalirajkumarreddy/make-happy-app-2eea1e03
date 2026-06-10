@@ -7,7 +7,7 @@
  */
 
 import { supabase } from "@/integrations/supabase/client";
-import { PendingAction } from "./offlineQueue";
+import { PendingAction, addToQueue } from "./offlineQueue";
 
 // Types for conflict detection
 export interface OperationContext {
@@ -261,6 +261,17 @@ export async function captureOperationContext(
     console.error("Error capturing operation context:", error);
     return context;
   }
+}
+
+/**
+ * Enqueue an action with captured context for conflict detection.
+ * Captures current server state (outstanding, prices, etc.) before queuing.
+ */
+export async function enqueueWithContext(
+  action: PendingAction
+): Promise<void> {
+  const context = await captureOperationContext(action);
+  return addToQueue({ ...action, context });
 }
 
 /**

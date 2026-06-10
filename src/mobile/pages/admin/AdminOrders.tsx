@@ -82,6 +82,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
   const { allowed: canFulfillOrders } = usePermission("fulfill_orders");
   const { allowed: canCancelOrders } = usePermission("cancel_orders");
   const { allowed: canTransferOrders } = usePermission("transfer_orders");
+  const { allowed: canEditOrders } = usePermission("edit_orders" as any);
 
   const [statusFilter, setStatusFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
@@ -139,6 +140,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
       };
     },
     enabled: !!viewProformaId,
+    staleTime: 5 * 60 * 1000,
   });
 
   const PAGE_SIZE = 20;
@@ -176,6 +178,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
       if (error) throw error;
       return { orders: (data || []) as Order[], total: count || 0 };
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   const allOrders = orders?.orders || [];
@@ -190,6 +193,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
       return data || [];
     },
     enabled: !!currentWarehouse,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: stores = [] } = useQuery({
@@ -199,6 +203,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
       return data || [];
     },
     enabled: !!currentWarehouse,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: assignedStaff = [] } = useQuery({
@@ -207,6 +212,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
       const { data } = await supabase.from("profiles").select("user_id, full_name").order("full_name").limit(100);
       return data || [];
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: createProducts = [] } = useQuery({
@@ -220,6 +226,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
       return data || [];
     },
     enabled: showCreate,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { handlers: pullHandlers, isPulling, isRefreshing, pullDistance, threshold } = usePullToRefresh({
@@ -252,7 +259,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
   const filteredOrders = useMemo(() => {
     let list = allOrders.filter((order) =>
       order.display_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.stores?.name.toLowerCase().includes(searchTerm.toLowerCase())
+      order.stores?.name?.toLowerCase().includes(searchTerm.toLowerCase())
     );
     if (filterStoreType !== "all") {
       list = list.filter((o) => o.stores?.store_types?.name === filterStoreType);
@@ -267,11 +274,11 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "pending":   return "bg-yellow-100 text-yellow-800 border-yellow-200";
-      case "confirmed": return "bg-blue-100 text-blue-800 border-blue-200";
-      case "delivered": return "bg-green-100 text-green-800 border-green-200";
-      case "cancelled": return "bg-red-100 text-red-800 border-red-200";
-      default:          return "bg-gray-100 text-gray-800 border-gray-200";
+      case "pending":   return "bg-warning/20 text-warning border-warning/30 dark:bg-warning/30";
+      case "confirmed": return "bg-info/20 text-info border-info/30 dark:bg-info/30";
+      case "delivered": return "bg-success/20 text-success border-success/30 dark:bg-success/30";
+      case "cancelled": return "bg-destructive/20 text-destructive border-destructive/30 dark:bg-destructive/30";
+      default:          return "bg-muted text-muted-foreground border-border";
     }
   };
 
@@ -306,25 +313,44 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
 
     setIsActioning(true);
     try {
+      // Optimistic lock: verify order is still in fulfillable state
+      const { data: currentOrder, error: lockError } = await supabase
+        .from("orders")
+        .select("status")
+        .eq("id", order.id)
+        .single();
+
+      if (lockError) throw lockError;
+      if (currentOrder.status !== "pending" && currentOrder.status !== "confirmed") {
+        toast.error(`Order cannot be fulfilled — current status: ${currentOrder.status}`);
+        setIsActioning(false);
+        setFulfillConfirmOrder(null);
+        return;
+      }
+
       const { data: displayId } = await (supabase as any).rpc("generate_display_id", { prefix: "SALE", seq_name: "sale_display_seq" });
       if (!displayId) throw new Error("Failed to generate sale ID");
 
       const saleItems = (order.order_items || []).map((item: any) => ({
         product_id: item.product_id,
         quantity: item.quantity,
-        unit_price: item.products?.base_price || 0,
+        unit_price: item.unit_price || item.products?.base_price || 0,
       }));
+
+      // Calculate actual outstanding (not hardcoded 0)
+      const orderTotal = saleItems.reduce((sum: number, item: any) => sum + item.quantity * item.unit_price, 0);
+      const outstanding = Math.max(0, orderTotal - cash - upi);
 
       const { error: saleError } = await (supabase as any).rpc("record_sale", {
         p_display_id: displayId,
         p_store_id: order.store_id,
-        p_customer_id: (order as any).customer_id || order.store_id,
+        p_customer_id: (order as any).customer_id || null,
         p_recorded_by: user!.id,
         p_logged_by: null,
-        p_total_amount: total,
+        p_total_amount: orderTotal,
         p_cash_amount: cash,
         p_upi_amount: upi,
-        p_outstanding_amount: 0,
+        p_outstanding_amount: outstanding,
         p_sale_items: saleItems,
         p_created_at: null,
         p_fulfilled_order_id: order.id,
@@ -425,42 +451,29 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
 
     setCreateSaving(true);
     try {
-      const activeOrder = await getActiveOrderForStore(supabase, createStoreId);
-      if (activeOrder) {
-        const store = stores.find((s: any) => s.id === createStoreId);
-        setExistingOrderStoreName(store?.name || "");
-        setExistingOrderForStore(activeOrder);
-        setCreateSaving(false);
-        return;
-      }
-
-      const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "ORD", seq_name: "order_display_seq" }) as any;
-      if (!displayId) throw new Error("Failed to generate order ID");
-
       const store = stores.find((s: any) => s.id === createStoreId);
 
-      const { data: orderRow, error: orderError } = await supabase
-        .from("orders")
-        .insert({
-          display_id: displayId,
-          store_id: createStoreId,
-          customer_id: store?.customer_id || null,
-          order_type: createOrderType,
-          source: "manual",
-          created_by: user!.id,
-          status: "confirmed",
-          warehouse_id: currentWarehouse?.id,
-          requirement_note: createOrderType === "simple" ? createRequirementNote : null,
-        })
-        .select("id")
-        .single();
+      // Use create_order RPC (handles active order check, display ID, auto-confirm setting)
+      const { data: orderResult, error: orderError } = await supabase.rpc("create_order", {
+        p_store_id: createStoreId,
+        p_customer_id: store?.customer_id || null,
+        p_warehouse_id: currentWarehouse?.id || null,
+        p_order_type: createOrderType,
+        p_requirement_note: createOrderType === "simple" ? createRequirementNote : null,
+        p_total_amount: 0,
+        p_created_by: user!.id,
+      }) as any;
 
       if (orderError) throw orderError;
 
+      const orderRow = Array.isArray(orderResult) ? orderResult[0] : orderResult;
+      if (!orderRow?.order_id) throw new Error("Failed to create order");
+
+      // Insert order items for detailed orders
       if (createOrderType === "detailed" && createOrderItems.length > 0) {
         const { error: itemError } = await supabase.from("order_items").insert(
           createOrderItems.map((item) => ({
-            order_id: orderRow.id,
+            order_id: orderRow.order_id,
             product_id: item.product_id,
             quantity: item.quantity,
             unit_price: item.unit_price,
@@ -469,6 +482,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
         if (itemError) throw itemError;
       }
 
+      const displayId = orderRow.display_id;
       toast.success("Order created");
 
       const storeName = store?.name || "store";
@@ -479,7 +493,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
             message: `Order ${displayId} for ${storeName}`,
             type: "order",
             entityType: "order",
-            entityId: orderRow.id,
+            entityId: orderRow.order_id,
           }, { excludeFromBroadcast: [user!.id] });
         }
       });
@@ -490,7 +504,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
             message: `Order ${displayId} for ${storeName}`,
             type: "order",
             entityType: "order",
-            entityId: orderRow.id,
+            entityId: orderRow.order_id,
           }, { excludeFromBroadcast: [user!.id] });
         }
       });
@@ -533,7 +547,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
     try {
       const { error } = await supabase
         .from("orders")
-        .update({ assigned_to: transferToUser, updated_by: user.id })
+        .update({ assigned_to: transferToUser, updated_by: user.id, updated_at: new Date().toISOString() })
         .eq("id", order.id);
       if (error) throw error;
       toast.success(`Order ${order.display_id} transferred`);
@@ -645,7 +659,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
           <Button
             variant="ghost"
             size="sm"
-            className="w-full h-8 text-xs text-muted-foreground"
+            className="w-full h-10 text-xs text-muted-foreground"
             onClick={() => {
               setStatusFilter("all");
               setDateFrom("");
@@ -775,7 +789,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
                         </div>
                       ))}
                       {order.order_items.length > 2 && (
-                        <p className="text-[10px] text-muted-foreground">
+                        <p className="text-xs text-muted-foreground">
                           +{order.order_items.length - 2} more items
                         </p>
                       )}
@@ -790,7 +804,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
 
                   <div className="flex items-center justify-between pt-2 border-t border-border/50">
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className="text-xs text-muted-foreground">
                         {itemCount > 0 ? `${itemCount} items` : order.order_type}
                       </span>
                       <span className="text-xs text-muted-foreground">
@@ -806,7 +820,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
                 {/* Audit trail */}
                 {(order.creator_profile || order.updater_profile || order.fulfiller_profile) && (
                   <div className="border-t border-border/50 px-3 py-1.5">
-                    <div className="flex items-center gap-1 text-[10px] text-muted-foreground flex-wrap">
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground flex-wrap">
                       {order.creator_profile && <span>Created by {order.creator_profile.full_name}</span>}
                       {order.updater_profile && order.updater_profile.full_name !== order.creator_profile?.full_name && (
                         <>
@@ -843,7 +857,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
                     <Printer className="h-3.5 w-3.5 shrink-0" />
                     <span className="truncate">Proforma</span>
                   </button>
-                  {(order.status === "pending" || order.status === "confirmed") && (
+                  {(order.status === "pending" || order.status === "confirmed") && canEditOrders && (
                     <button
                       onClick={() => setEditOrder(order)}
                       className="flex-1 py-2.5 min-w-0 flex items-center justify-center gap-1 text-xs font-medium text-amber-600 hover:bg-amber-50 active:bg-amber-100 transition-colors border-r border-border/50"
@@ -986,7 +1000,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
                   variant="outline"
                   size="sm"
                   className="text-xs"
-                  disabled={isActioning}
+                  disabled={isActioning || !canTransferOrders}
                   onClick={() => { setShowDetailModal(false); setTransferOrder(selectedOrder); }}
                 >
                   <ArrowRightLeft className="h-3 w-3 mr-1" /> Transfer
@@ -1180,7 +1194,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
                           className={`w-full text-left px-3 py-2.5 text-sm transition-colors hover:bg-accent ${createStoreId === s.id ? "bg-primary/10 font-semibold text-primary" : "text-foreground"}`}
                         >
                           <span className="font-medium">{s.name}</span>
-                          <span className="ml-2 font-mono text-[10px] text-muted-foreground">{s.display_id}</span>
+                          <span className="ml-2 font-mono text-xs text-muted-foreground">{s.display_id}</span>
                         </button>
                       ))}
                   </div>

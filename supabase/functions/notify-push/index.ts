@@ -1,32 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SignJWT, importPKCS8 } from "npm:jose@5";
-
-const ALLOWED_ORIGINS = [
-  "https://aquaprimesales.vercel.app",
-  "http://localhost:5000",
-  "http://localhost:5173",
-  "http://localhost:8100",
-  "capacitor://localhost",
-  "ionic://localhost",
-];
-
-function getCorsHeaders(req: Request): Record<string, string> {
-  const origin = req.headers.get("Origin") || "";
-  const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
-  return {
-    "Access-Control-Allow-Origin": allowed,
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Vary": "Origin",
-  };
-}
-
-function handleCorsPreflightOrError(req: Request): Response | null {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: getCorsHeaders(req) });
-  }
-  return null;
-}
+import { getCorsHeaders, handleCorsPreflightOrError, getIdempotencyKey, generateIdempotencyKey, getIdempotencyResponse, setIdempotencyResponse } from "../_shared/cors.ts";
 
 interface FcmServiceAccount {
   type: string;
@@ -54,6 +28,19 @@ Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
 
   try {
+    // Idempotency check
+    let idempotencyKey = getIdempotencyKey(req);
+    if (!idempotencyKey) {
+      idempotencyKey = await generateIdempotencyKey(req);
+    }
+    const cachedResponse = getIdempotencyResponse(idempotencyKey);
+    if (cachedResponse) {
+      return new Response(JSON.stringify(cachedResponse), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json", "X-Idempotency-Reused": "true" },
+      });
+    }
+
     const bodyJson = await req.json();
     const payload: NotifPayload = bodyJson;
     if (!payload.user_id || !payload.title || !payload.message) {
@@ -129,11 +116,15 @@ Deno.serve(async (req) => {
       })
     );
 
+    const responseData = {
+      sent: results.filter((r) => r.success).length,
+      failed: results.filter((r) => !r.success).length,
+    };
+
+    setIdempotencyResponse(idempotencyKey!, responseData);
+
     return new Response(
-      JSON.stringify({
-        sent: results.filter((r) => r.success).length,
-        failed: results.filter((r) => !r.success).length,
-      }),
+      JSON.stringify(responseData),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {

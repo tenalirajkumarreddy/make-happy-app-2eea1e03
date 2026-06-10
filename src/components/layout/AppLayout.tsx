@@ -2,6 +2,7 @@ import { Outlet } from "react-router-dom";
 import { AppSidebar } from "./AppSidebar";
 import { TopBar } from "./TopBar";
 import { GlobalSearch } from "@/components/shared/GlobalSearch";
+import { ConflictResolver } from "@/components/shared/ConflictResolver";
 import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 
@@ -54,6 +55,7 @@ export function AppLayout() {
         </main>
       </div>
       <GlobalSearch />
+      <ConflictResolver />
     </div>
   );
 }

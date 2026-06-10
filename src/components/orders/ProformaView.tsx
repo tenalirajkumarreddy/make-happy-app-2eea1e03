@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { PROFORMA_CSS } from "@/lib/printTokens";
 import { Printer } from "lucide-react";
 import { toast } from "sonner";
 
@@ -23,11 +24,11 @@ interface ProformaData {
 
 function invoiceHTML(proforma: ProformaData, copyLabel: string) {
   const rows = proforma.items.map((item, i) => `
-    <tr${i % 2 === 0 ? ' style="background:#f8fafc"' : ''}>
-      <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:12px;color:#1f2937">${item.product_name}</td>
-      <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:12px;color:#1f2937;text-align:center">${item.quantity}</td>
-      <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:12px;color:#1f2937;text-align:right">₹${item.unit_price.toLocaleString("en-IN")}</td>
-      <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:12px;color:#1f2937;text-align:right">₹${(item.quantity * item.unit_price).toLocaleString("en-IN")}</td>
+    <tr${i % 2 === 0 ? ' style="background:var(--pf-bg)"' : ''}>
+      <td style="padding:10px 12px;border-bottom:1px solid var(--pf-border);font-size:12px;color:var(--pf-text)">${item.product_name}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid var(--pf-border);font-size:12px;color:var(--pf-text);text-align:center">${item.quantity}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid var(--pf-border);font-size:12px;color:var(--pf-text);text-align:right">₹${item.unit_price.toLocaleString("en-IN")}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid var(--pf-border);font-size:12px;color:var(--pf-text);text-align:right">₹${(item.quantity * item.unit_price).toLocaleString("en-IN")}</td>
     </tr>
   `).join("");
 
@@ -35,73 +36,73 @@ function invoiceHTML(proforma: ProformaData, copyLabel: string) {
   const totalWords = "Rupees " + (total > 0 ? total.toLocaleString("en-IN") : "Zero") + " Only";
 
   return `
-    <div style="width:100%;max-width:800px;margin:0 auto;padding:0;font-family:'Inter','Segoe UI',Arial,sans-serif;color:#1f2937;box-sizing:border-box;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.08)">
+    <div style="width:100%;max-width:800px;margin:0 auto;padding:0;font-family:'Inter','Segoe UI',Arial,sans-serif;color:var(--pf-text);box-sizing:border-box;background:var(--pf-white);box-shadow:0 1px 3px rgba(0,0,0,0.08)">
       <!-- Watermark -->
       <div style="position:absolute;top:45%;left:50%;transform:translate(-50%,-50%) rotate(-25deg);font-size:70px;font-weight:900;color:${copyLabel === "ORIGINAL" ? "rgba(37,99,235,0.04)" : "rgba(220,38,38,0.04)"};letter-spacing:8px;pointer-events:none;white-space:nowrap">${copyLabel}</div>
 
       <!-- Top Border Accent -->
-      <div style="height:5px;background:linear-gradient(90deg,#1e40af,#3b82f6,#60a5fa)"></div>
+      <div style="height:5px;background:linear-gradient(90deg,var(--pf-primary),var(--pf-primary-light),var(--pf-primary-lighter))"></div>
 
       <div style="padding:35px 40px 30px;position:relative">
 
         <!-- Header: Company + Invoice Title -->
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:30px">
           <div>
-            <h2 style="margin:0 0 2px;font-size:20px;font-weight:800;color:#1e3a5f;letter-spacing:-0.3px">Your Company Name</h2>
-            <p style="margin:0;font-size:10px;color:#94a3b8">123 Business Street, City - 000000</p>
-            <p style="margin:1px 0 0;font-size:10px;color:#94a3b8">Phone: +91 98765 43210 | Email: company@email.com</p>
-            <p style="margin:1px 0 0;font-size:10px;color:#94a3b8">GSTIN: 00AAAAA0000A1Z0</p>
+            <h2 style="margin:0 0 2px;font-size:20px;font-weight:800;color:var(--pf-primary-dark);letter-spacing:-0.3px">Your Company Name</h2>
+            <p style="margin:0;font-size:10px;color:var(--pf-text-light)">123 Business Street, City - 000000</p>
+            <p style="margin:1px 0 0;font-size:10px;color:var(--pf-text-light)">Phone: +91 98765 43210 | Email: company@email.com</p>
+            <p style="margin:1px 0 0;font-size:10px;color:var(--pf-text-light)">GSTIN: 00AAAAA0000A1Z0</p>
           </div>
           <div style="text-align:right">
-            <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 16px">
-              <p style="margin:0 0 2px;font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:1px;font-weight:600">Proforma Invoice</p>
-              <p style="margin:0;font-size:16px;font-weight:800;color:#1e40af;letter-spacing:-0.3px">${proforma.display_id}</p>
-              <p style="margin:2px 0 0;font-size:10px;color:#64748b">Date: ${new Date(proforma.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</p>
+            <div style="background:var(--pf-bg-light);border:1px solid var(--pf-border-light);border-radius:8px;padding:10px 16px">
+              <p style="margin:0 0 2px;font-size:9px;color:var(--pf-text-muted);text-transform:uppercase;letter-spacing:1px;font-weight:600">Proforma Invoice</p>
+              <p style="margin:0;font-size:16px;font-weight:800;color:var(--pf-primary);letter-spacing:-0.3px">${proforma.display_id}</p>
+              <p style="margin:2px 0 0;font-size:10px;color:var(--pf-text-muted)">Date: ${new Date(proforma.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</p>
             </div>
           </div>
         </div>
 
         <!-- Billing & Customer Details -->
         <div style="display:flex;gap:25px;margin-bottom:25px">
-          <div style="flex:1;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;background:#f8fafc">
-            <p style="margin:0 0 6px;font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:1px;font-weight:700;border-bottom:1px solid #e5e7eb;padding-bottom:6px">Bill To</p>
-            <p style="margin:0;font-size:13px;font-weight:600;color:#1f2937">${proforma.customer_name}</p>
-            <p style="margin:1px 0 0;font-size:11px;color:#64748b">Phone: ${proforma.customer_phone}</p>
+          <div style="flex:1;border:1px solid var(--pf-border);border-radius:8px;padding:14px 16px;background:var(--pf-bg)">
+            <p style="margin:0 0 6px;font-size:9px;color:var(--pf-text-muted);text-transform:uppercase;letter-spacing:1px;font-weight:700;border-bottom:1px solid var(--pf-border);padding-bottom:6px">Bill To</p>
+            <p style="margin:0;font-size:13px;font-weight:600;color:var(--pf-text)">${proforma.customer_name}</p>
+            <p style="margin:1px 0 0;font-size:11px;color:var(--pf-text-muted)">Phone: ${proforma.customer_phone}</p>
           </div>
-          <div style="flex:1;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;background:#f8fafc">
-            <p style="margin:0 0 6px;font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:1px;font-weight:700;border-bottom:1px solid #e5e7eb;padding-bottom:6px">Ship To</p>
-            <p style="margin:0;font-size:13px;font-weight:600;color:#1f2937">${proforma.store_name}</p>
+          <div style="flex:1;border:1px solid var(--pf-border);border-radius:8px;padding:14px 16px;background:var(--pf-bg)">
+            <p style="margin:0 0 6px;font-size:9px;color:var(--pf-text-muted);text-transform:uppercase;letter-spacing:1px;font-weight:700;border-bottom:1px solid var(--pf-border);padding-bottom:6px">Ship To</p>
+            <p style="margin:0;font-size:13px;font-weight:600;color:var(--pf-text)">${proforma.store_name}</p>
           </div>
         </div>
 
         <!-- Items Table -->
         <table style="width:100%;border-collapse:collapse;margin-bottom:20px;border-radius:8px;overflow:hidden">
           <thead>
-            <tr style="background:linear-gradient(135deg,#1e40af,#3b82f6)">
-              <th style="padding:11px 14px;font-size:10px;color:#fff;text-align:left;text-transform:uppercase;letter-spacing:0.8px;font-weight:600">#</th>
-              <th style="padding:11px 14px;font-size:10px;color:#fff;text-align:left;text-transform:uppercase;letter-spacing:0.8px;font-weight:600">Description</th>
-              <th style="padding:11px 14px;font-size:10px;color:#fff;text-align:center;text-transform:uppercase;letter-spacing:0.8px;font-weight:600;width:70px">Qty</th>
-              <th style="padding:11px 14px;font-size:10px;color:#fff;text-align:right;text-transform:uppercase;letter-spacing:0.8px;font-weight:600;width:120px">Rate</th>
-              <th style="padding:11px 14px;font-size:10px;color:#fff;text-align:right;text-transform:uppercase;letter-spacing:0.8px;font-weight:600;width:130px">Amount</th>
+            <tr style="background:linear-gradient(135deg,var(--pf-primary),var(--pf-primary-light))">
+              <th style="padding:11px 14px;font-size:10px;color:var(--pf-white);text-align:left;text-transform:uppercase;letter-spacing:0.8px;font-weight:600">#</th>
+              <th style="padding:11px 14px;font-size:10px;color:var(--pf-white);text-align:left;text-transform:uppercase;letter-spacing:0.8px;font-weight:600">Description</th>
+              <th style="padding:11px 14px;font-size:10px;color:var(--pf-white);text-align:center;text-transform:uppercase;letter-spacing:0.8px;font-weight:600;width:70px">Qty</th>
+              <th style="padding:11px 14px;font-size:10px;color:var(--pf-white);text-align:right;text-transform:uppercase;letter-spacing:0.8px;font-weight:600;width:120px">Rate</th>
+              <th style="padding:11px 14px;font-size:10px;color:var(--pf-white);text-align:right;text-transform:uppercase;letter-spacing:0.8px;font-weight:600;width:130px">Amount</th>
             </tr>
           </thead>
           <tbody>
-            ${rows || "<tr><td colspan='5' style='padding:30px;text-align:center;color:#94a3b8;font-size:13px'>No items</td></tr>"}
+            ${rows || "<tr><td colspan='5' style='padding:30px;text-align:center;color:var(--pf-text-light);font-size:13px'>No items</td></tr>"}
           </tbody>
         </table>
 
         <!-- Summary -->
         <div style="display:flex;justify-content:flex-end;margin-bottom:20px">
-          <div style="width:320px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
-            <div style="display:flex;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #e5e7eb;background:#f8fafc">
-              <span style="font-size:12px;color:#64748b">Subtotal</span>
-              <span style="font-size:12px;font-weight:600;color:#1f2937">₹${total.toLocaleString("en-IN")}</span>
+          <div style="width:320px;border:1px solid var(--pf-border);border-radius:8px;overflow:hidden">
+            <div style="display:flex;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--pf-border);background:var(--pf-bg)">
+              <span style="font-size:12px;color:var(--pf-text-muted)">Subtotal</span>
+              <span style="font-size:12px;font-weight:600;color:var(--pf-text)">₹${total.toLocaleString("en-IN")}</span>
             </div>
-            <div style="display:flex;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #e5e7eb;background:#f8fafc">
-              <span style="font-size:12px;color:#64748b">GST (0%)</span>
-              <span style="font-size:12px;font-weight:600;color:#1f2937">₹0</span>
+            <div style="display:flex;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--pf-border);background:var(--pf-bg)">
+              <span style="font-size:12px;color:var(--pf-text-muted)">GST (0%)</span>
+              <span style="font-size:12px;font-weight:600;color:var(--pf-text)">₹0</span>
             </div>
-            <div style="display:flex;justify-content:space-between;padding:12px 14px;background:#1e40af;color:#fff">
+            <div style="display:flex;justify-content:space-between;padding:12px 14px;background:var(--pf-primary);color:var(--pf-white)">
               <span style="font-size:13px;font-weight:700">Total Amount</span>
               <span style="font-size:15px;font-weight:800">₹${total.toLocaleString("en-IN")}</span>
             </div>
@@ -109,26 +110,26 @@ function invoiceHTML(proforma: ProformaData, copyLabel: string) {
         </div>
 
         <!-- Amount in Words -->
-        <div style="margin-bottom:15px;padding:10px 14px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:6px">
-          <p style="margin:0;font-size:10px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Amount in Words</p>
-          <p style="margin:3px 0 0;font-size:13px;font-weight:600;color:#1f2937">${totalWords}</p>
+        <div style="margin-bottom:15px;padding:10px 14px;background:var(--pf-bg);border:1px solid var(--pf-border);border-radius:6px">
+          <p style="margin:0;font-size:10px;color:var(--pf-text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Amount in Words</p>
+          <p style="margin:3px 0 0;font-size:13px;font-weight:600;color:var(--pf-text)">${totalWords}</p>
         </div>
 
         <!-- Terms & Footer -->
-        <div style="border-top:1px solid #e5e7eb;padding-top:14px">
-          <div style="display:flex;justify-content:space-between;font-size:9px;color:#94a3b8">
+        <div style="border-top:1px solid var(--pf-border);padding-top:14px">
+          <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--pf-text-light)">
             <div>
-              <p style="margin:0 0 2px;font-weight:600;color:#64748b;font-size:10px">Terms & Conditions:</p>
+              <p style="margin:0 0 2px;font-weight:600;color:var(--pf-text-muted);font-size:10px">Terms & Conditions:</p>
               <p style="margin:0">1. This is a proforma invoice — not a tax invoice.</p>
               <p style="margin:0">2. Prices are subject to change without notice.</p>
               <p style="margin:0">3. Payment terms: As agreed.</p>
             </div>
             <div style="text-align:right">
-              <p style="margin:0 0 2px;font-weight:600;color:#1e40af;font-size:11px">${proforma.display_id}</p>
-              <p style="margin:0;font-family:monospace;font-size:9px;color:#94a3b8">UID: ${proforma.display_id}-${proforma.id.slice(0,6)}</p>
+              <p style="margin:0 0 2px;font-weight:600;color:var(--pf-primary);font-size:11px">${proforma.display_id}</p>
+              <p style="margin:0;font-family:monospace;font-size:9px;color:var(--pf-text-light)">UID: ${proforma.display_id}-${proforma.id.slice(0,6)}</p>
             </div>
           </div>
-          <div style="margin-top:12px;text-align:center;font-size:8px;color:#cbd5e1;border-top:1px solid #f1f5f9;padding-top:8px">
+          <div style="margin-top:12px;text-align:center;font-size:8px;color:var(--pf-text-lighter);border-top:1px solid var(--pf-bg-print);padding-top:8px">
             This is a computer-generated document. No signature required. | ${proforma.display_id}
           </div>
         </div>
@@ -148,11 +149,12 @@ export function ProformaView({ proforma }: { proforma: ProformaData }) {
         <head>
           <title>Proforma - ${proforma.display_id}</title>
           <style>
+            ${PROFORMA_CSS}
             @media print {
               body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
               @page { margin: 5mm; size: A4; }
             }
-            body { margin:0; padding:20px 0; background:#f1f5f9; }
+            body { margin:0; padding:20px 0; background:var(--pf-bg-print); }
           </style>
         </head>
         <body onload="window.print()">
@@ -180,11 +182,11 @@ export function ProformaView({ proforma }: { proforma: ProformaData }) {
         <table className="w-full">
           <thead>
             <tr className="bg-primary text-primary-foreground">
-              <th className="text-left px-3 py-2 text-[10px] font-semibold uppercase tracking-wider w-8">#</th>
-              <th className="text-left px-3 py-2 text-[10px] font-semibold uppercase tracking-wider">Product</th>
-              <th className="text-center px-3 py-2 text-[10px] font-semibold uppercase tracking-wider w-16">Qty</th>
-              <th className="text-right px-3 py-2 text-[10px] font-semibold uppercase tracking-wider w-24">Rate</th>
-              <th className="text-right px-3 py-2 text-[10px] font-semibold uppercase tracking-wider w-28">Amount</th>
+              <th className="text-left px-3 py-2 text-2xs font-semibold uppercase tracking-wider w-8">#</th>
+              <th className="text-left px-3 py-2 text-2xs font-semibold uppercase tracking-wider">Product</th>
+              <th className="text-center px-3 py-2 text-2xs font-semibold uppercase tracking-wider w-16">Qty</th>
+              <th className="text-right px-3 py-2 text-2xs font-semibold uppercase tracking-wider w-24">Rate</th>
+              <th className="text-right px-3 py-2 text-2xs font-semibold uppercase tracking-wider w-28">Amount</th>
             </tr>
           </thead>
           <tbody className="divide-y">

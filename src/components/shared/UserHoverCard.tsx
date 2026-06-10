@@ -19,7 +19,7 @@ export function UserHoverCard({ userId, profileMap, children, size = "sm" }: Use
   if (!userId) return <span>{children || name}</span>;
 
   const cls = size === "lg" ? "h-10 w-10" : size === "md" ? "h-9 w-9" : "h-7 w-7";
-  const textCls = size === "lg" ? "text-sm" : size === "md" ? "text-xs" : "text-[10px]";
+  const textCls = size === "lg" ? "text-sm" : size === "md" ? "text-xs" : "text-2xs";
 
   return (
     <HoverCard>

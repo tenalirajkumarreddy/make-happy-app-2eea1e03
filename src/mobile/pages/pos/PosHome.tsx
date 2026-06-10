@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { Loader2, ShoppingCart, TrendingUp, ArrowRightLeft, ClipboardList, Store, Banknote, Smartphone, ArrowDownToLine, ArrowUpFromLine, Factory, Package, Users } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -13,6 +14,7 @@ type Props = {
 
 export function PosHome({ onOpenRecord, onOpenHistory, onOpenInventory }: Props) {
   const { user, profile } = useAuth();
+  const navigate = useNavigate();
   const { warehouse, posStore, isLoading: warehouseLoading } = useOperatorWarehouse(user?.id) as any;
 
   // Today's sales stats for the POS store
@@ -36,6 +38,7 @@ export function PosHome({ onOpenRecord, onOpenHistory, onOpenInventory }: Props)
     },
     enabled: !!posStore,
     refetchInterval: 60_000,
+    staleTime: 60_000,
   });
 
   // Orders for the warehouse's stores
@@ -79,6 +82,7 @@ export function PosHome({ onOpenRecord, onOpenHistory, onOpenInventory }: Props)
     },
     enabled: !!warehouse,
     refetchInterval: 60_000,
+    staleTime: 60_000,
   });
 
   // Stock movements for the warehouse
@@ -96,6 +100,7 @@ export function PosHome({ onOpenRecord, onOpenHistory, onOpenInventory }: Props)
     },
     enabled: !!warehouse,
     refetchInterval: 60_000,
+    staleTime: 60_000,
   });
 
   // Production runs today
@@ -119,6 +124,7 @@ export function PosHome({ onOpenRecord, onOpenHistory, onOpenInventory }: Props)
     },
     enabled: !!warehouse,
     refetchInterval: 60_000,
+    staleTime: 60_000,
   });
 
   // Worker attendance today
@@ -145,6 +151,7 @@ export function PosHome({ onOpenRecord, onOpenHistory, onOpenInventory }: Props)
     },
     enabled: !!warehouse,
     refetchInterval: 120_000,
+    staleTime: 120_000,
   });
 
   // Pending invoices for this warehouse
@@ -171,6 +178,7 @@ export function PosHome({ onOpenRecord, onOpenHistory, onOpenInventory }: Props)
     },
     enabled: !!warehouse,
     refetchInterval: 120_000,
+    staleTime: 120_000,
   });
 
   const greeting = () => {
@@ -253,7 +261,7 @@ export function PosHome({ onOpenRecord, onOpenHistory, onOpenInventory }: Props)
               className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 shadow-lg active:scale-95 transition-all"
             >
               <ShoppingCart className="h-6 w-6 text-white" />
-              <span className="text-[11px] font-bold text-white">Record Sale</span>
+              <span className="text-xs font-bold text-white">Record Sale</span>
             </button>
             <button
               onClick={() => onOpenHistory()}
@@ -262,16 +270,16 @@ export function PosHome({ onOpenRecord, onOpenHistory, onOpenInventory }: Props)
               <div className="h-8 w-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
                 <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
               </div>
-              <span className="text-[11px] font-bold text-slate-800 dark:text-white">View History</span>
+              <span className="text-xs font-bold text-slate-800 dark:text-white">View History</span>
             </button>
             <button
-              onClick={() => window.location.href = "/production"}
+              onClick={() => navigate("/production")}
               className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm active:scale-95 transition-all"
             >
               <div className="h-8 w-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center">
                 <Factory className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
               </div>
-              <span className="text-[11px] font-bold text-slate-800 dark:text-white">Production</span>
+              <span className="text-xs font-bold text-slate-800 dark:text-white">Production</span>
             </button>
             <button
               onClick={() => onOpenInventory()}
@@ -280,7 +288,7 @@ export function PosHome({ onOpenRecord, onOpenHistory, onOpenInventory }: Props)
               <div className="h-8 w-8 rounded-lg bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center">
                 <Package className="h-4 w-4 text-amber-600 dark:text-amber-400" />
               </div>
-              <span className="text-[11px] font-bold text-slate-800 dark:text-white">Inventory</span>
+              <span className="text-xs font-bold text-slate-800 dark:text-white">Inventory</span>
             </button>
           </div>
         )}
@@ -300,7 +308,7 @@ export function PosHome({ onOpenRecord, onOpenHistory, onOpenInventory }: Props)
                     <p className="text-xs text-slate-400">₹{Number(order.total_amount || 0).toLocaleString("en-IN")}</p>
                   </div>
                   {order.display_id && (
-                    <span className="text-[10px] font-mono text-slate-400">{order.display_id}</span>
+                    <span className="text-xs font-mono text-slate-400">{order.display_id}</span>
                   )}
                 </div>
               ))}
@@ -323,9 +331,9 @@ export function PosHome({ onOpenRecord, onOpenHistory, onOpenInventory }: Props)
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-slate-800 dark:text-white truncate">{run.products?.name ?? "Product"}</p>
-                    <p className="text-[10px] text-slate-400">Qty: {run.quantity ?? run.quantity_produced ?? 0}</p>
+                    <p className="text-xs text-slate-400">Qty: {run.quantity ?? run.quantity_produced ?? 0}</p>
                   </div>
-                  <p className="text-[10px] text-slate-400">
+                  <p className="text-xs text-slate-400">
                     {new Date(run.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
                   </p>
                 </div>
@@ -358,13 +366,13 @@ export function PosHome({ onOpenRecord, onOpenHistory, onOpenInventory }: Props)
                       <p className="text-xs font-semibold text-slate-800 dark:text-white truncate">
                         {mov.products?.name ?? "Product"}
                       </p>
-                      <p className="text-[10px] text-slate-400 truncate">{mov.remarks || (isIncoming ? "Stock received" : "Stock dispatched")}</p>
+                      <p className="text-xs text-slate-400 truncate">{mov.remarks || (isIncoming ? "Stock received" : "Stock dispatched")}</p>
                     </div>
                     <div className="text-right shrink-0">
                       <p className={cn("text-xs font-bold", isIncoming ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400")}>
                         {isIncoming ? "+" : "-"}{mov.quantity}
                       </p>
-                      <p className="text-[9px] text-slate-400">
+                      <p className="text-xs text-slate-400">
                         {new Date(mov.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
                       </p>
                     </div>
@@ -390,10 +398,10 @@ export function PosHome({ onOpenRecord, onOpenHistory, onOpenInventory }: Props)
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-slate-800 dark:text-white truncate">{order.stores?.name ?? "Unknown"}</p>
-                    <p className="text-[10px] text-slate-400">₹{Number(order.total_amount || 0).toLocaleString("en-IN")}</p>
+                    <p className="text-xs text-slate-400">₹{Number(order.total_amount || 0).toLocaleString("en-IN")}</p>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", order.status === "completed" || order.status === "delivered" ? "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400" : "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400")}>
+                    <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full", order.status === "completed" || order.status === "delivered" ? "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400" : "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400")}>
                       {order.status}
                     </span>
                   </div>
@@ -411,13 +419,13 @@ function MiniStat({ icon: Icon, label, value, subValue, color }: { icon: React.E
   return (
     <div className="rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-3 flex flex-col gap-1.5">
       <div className="flex items-start justify-between gap-2">
-        <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wide leading-none">{label}</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wide leading-none">{label}</p>
         <div className={cn("h-7 w-7 rounded-lg bg-gradient-to-br flex items-center justify-center shrink-0", color)}>
           <Icon className="h-3.5 w-3.5 text-white" />
         </div>
       </div>
       <p className="text-sm font-bold text-slate-800 dark:text-white leading-tight">{value}</p>
-      {subValue && <p className="text-[10px] text-slate-400 mt-0.5">{subValue}</p>}
+      {subValue && <p className="text-xs text-slate-400 mt-0.5">{subValue}</p>}
     </div>
   );
 }

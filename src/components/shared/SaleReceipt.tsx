@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { memo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useQuery } from "@tanstack/react-query";
@@ -6,10 +6,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { Loader2, Printer, MessageCircle, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import html2canvas from "html2canvas";
 import { Share } from "@capacitor/share";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { isNativeApp } from "@/lib/capacitorUtils";
+import { SALE_RECEIPT_CSS } from "@/lib/printTokens";
 
 // Simple HTML escape function to prevent XSS
 const escapeHtml = (str: string): string => {
@@ -24,7 +24,7 @@ interface SaleReceiptProps {
   onClose: () => void;
 }
 
-export const SaleReceipt = ({ saleId, open, onClose }: SaleReceiptProps) => {
+export const SaleReceipt = memo(function SaleReceipt({ saleId, open, onClose }: SaleReceiptProps) {
   const printRef = useRef<HTMLDivElement>(null);
 
   // Fetch sale details
@@ -70,7 +70,6 @@ export const SaleReceipt = ({ saleId, open, onClose }: SaleReceiptProps) => {
   });
 
   // Calculate amounts - show SNAPSHOT balance (old_outstanding + outstanding_amount = Total Due after this sale)
-  const amountPaid = Number(sale?.cash_amount || 0) + Number(sale?.upi_amount || 0);
   const previousBalance = Number(sale?.old_outstanding || 0); // Balance BEFORE this sale
   const totalDue = previousBalance + Number(sale?.outstanding_amount || 0); // Balance AFTER this sale (snapshot)
 
@@ -89,8 +88,7 @@ export const SaleReceipt = ({ saleId, open, onClose }: SaleReceiptProps) => {
         <div style="display: flex; justify-content: space-between;">
           <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 8px;">${escapeHtml(item.products?.name || "Unknown")}</span>
           <span style="font-weight: 600;">₹${Number(item.total_price || 0).toLocaleString()}</span>
-        </div>
-        <div style="font-size: 10px; color: #666;">
+        </div>            <div style="font-size: 10px; color: var(--receipt-muted);">
           ${item.quantity} x ₹${Number(item.unit_price).toLocaleString()}
         </div>
       </div>
@@ -103,6 +101,7 @@ export const SaleReceipt = ({ saleId, open, onClose }: SaleReceiptProps) => {
           <title>Receipt ${escapeHtml(sale.display_id || "")}</title>
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
+            ${SALE_RECEIPT_CSS}
             body { 
               font-family: 'Courier New', monospace; 
               font-size: 12px; 
@@ -110,11 +109,11 @@ export const SaleReceipt = ({ saleId, open, onClose }: SaleReceiptProps) => {
               max-width: 80mm;
             }
             .center { text-align: center; }
-            .divider { border-top: 1px dashed #000; margin: 12px 0; }
+            .divider { border-top: 1px dashed var(--receipt-divider); margin: 12px 0; }
             .row { display: flex; justify-content: space-between; margin: 4px 0; }
             .bold { font-weight: bold; }
             h1 { font-size: 16px; margin-bottom: 4px; }
-            .small { font-size: 10px; color: #666; }
+            .small { font-size: 10px; color: var(--receipt-muted); }
           </style>
         </head>
         <body>
@@ -168,7 +167,7 @@ export const SaleReceipt = ({ saleId, open, onClose }: SaleReceiptProps) => {
               <span>₹${Number(sale.upi_amount || 0).toLocaleString()}</span>
             </div>
             ${previousBalance > 0 ? `<div class="row"><span>Previous Balance:</span><span>₹${previousBalance.toLocaleString()}</span></div>` : ""}
-${totalDue > previousBalance ? `<div class="row bold" style="color: #c00;"><span>Total Due:</span><span>₹${totalDue.toLocaleString()}</span></div>` : ""}
+${totalDue > previousBalance ? `<div class="row bold" style="color: var(--receipt-danger);"><span>Total Due:</span><span>₹${totalDue.toLocaleString()}</span></div>` : ""}
           </div>
           
           <div class="divider"></div>
@@ -186,44 +185,6 @@ ${totalDue > previousBalance ? `<div class="row bold" style="color: #c00;"><span
     printWindow.document.close();
     printWindow.print();
     printWindow.close();
-  };
-
-  const handleShare = async () => {
-    if (!sale) return;
-
-    const receiptText = `
-Receipt: ${sale.display_id}
-Date: ${new Date(sale.created_at).toLocaleDateString("en-IN")}
-Customer: ${sale.customers?.name || "Walk-in"}
-${sale.stores?.name ? `Store: ${sale.stores.name}` : ""}
-
-Items:
-${sale.sale_items?.map((item: any) => 
-  `${item.products?.name} x${item.quantity} = ₹${Number(item.total_price || 0).toLocaleString()}`
-).join("\n")}
-
-Total: ₹${Number(sale.total_amount).toLocaleString()}
-Paid: ₹${amountPaid.toLocaleString()}
-${previousBalance > 0 ? `Previous Balance: ₹${previousBalance.toLocaleString()}` : ""}
-${totalDue > previousBalance ? `Total Due: ₹${totalDue.toLocaleString()}` : ""}
-
-Thank you for your business!
-${settings.business_name || ""}
-    `.trim();
-
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: `Receipt ${sale.display_id}`,
-          text: receiptText,
-        });
-      } catch (err) {
-        // User cancelled
-      }
-    } else {
-      navigator.clipboard.writeText(receiptText);
-      toast.success("Receipt copied to clipboard");
-    }
   };
 
   const fmtDec = (n: number) => `₹${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -283,9 +244,14 @@ ${settings.business_name || ""}
     }
     const toastId = toast.loading("Capturing receipt…");
     try {
+      const html2canvas = (await import("html2canvas")).default;
       const canvas = await html2canvas(printRef.current, {
         scale: 2,
         backgroundColor: "#ffffff",
+        useCORS: true,
+        logging: false,
+        width: printRef.current.scrollWidth,
+        height: printRef.current.scrollHeight,
       });
       const dataUrl = canvas.toDataURL("image/png");
       const base64Data = dataUrl.replace(/^data:image\/\w+;base64,/, "");
@@ -359,10 +325,10 @@ ${settings.business_name || ""}
           </div>
         ) : sale ? (
           <>
-          <div ref={printRef} className="font-mono text-sm">
+          <div ref={printRef} className="font-mono text-sm bg-card p-5 rounded-lg border shadow-sm">
             {/* Header */}
             <div className="text-center mb-4">
-              <h1 className="font-bold text-lg">{settings.business_name || "BizManager"}</h1>
+              <h1 className="font-bold text-lg text-foreground">{settings.business_name || "BizManager"}</h1>
               {settings.business_address && (
                 <p className="text-xs text-muted-foreground">{settings.business_address}</p>
               )}
@@ -374,94 +340,94 @@ ${settings.business_name || ""}
               )}
             </div>
 
-            <div className="border-t border-dashed border-gray-400 my-3" />
+            <div className="border-t border-dashed border-border my-3" />
 
             {/* Receipt Info */}
             <div className="space-y-1 text-xs">
-              <div className="flex justify-between">
-                <span>Receipt No:</span>
+              <div className="flex justify-between items-baseline">
+                <span className="text-muted-foreground">Receipt No:</span>
                 <span className="font-bold">{sale.display_id}</span>
               </div>
-              <div className="flex justify-between">
-                <span>Date:</span>
+              <div className="flex justify-between items-baseline">
+                <span className="text-muted-foreground">Date:</span>
                 <span>{new Date(sale.created_at).toLocaleDateString("en-IN", {
                   day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit"
                 })}</span>
               </div>
               {sale.customers && (
-                <div className="flex justify-between">
-                  <span>Customer:</span>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-muted-foreground">Customer:</span>
                   <span>{sale.customers.name}</span>
                 </div>
               )}
               {sale.stores?.name && (
-                <div className="flex justify-between">
-                  <span>Store:</span>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-muted-foreground">Store:</span>
                   <span>{sale.stores.name}</span>
                 </div>
               )}
             </div>
 
-            <div className="border-t border-dashed border-gray-400 my-3" />
+            <div className="border-t border-dashed border-border my-3" />
 
             {/* Items */}
             <div className="space-y-2">
-              <div className="flex justify-between text-xs font-bold">
+              <div className="flex justify-between text-xs font-bold border-b border-border pb-1">
                 <span>Item</span>
                 <span>Amount</span>
               </div>
               {sale.sale_items?.map((item: any) => (
-                <div key={item.id} className="text-xs">
-                  <div className="flex justify-between">
-                    <span className="flex-1 truncate pr-2">{item.products?.name || "Unknown"}</span>
-                    <span className="font-semibold">₹{Number(item.total_price || 0).toLocaleString()}</span>
+                <div key={item.id} className="text-xs py-0.5">
+                  <div className="flex justify-between items-baseline">
+                    <span className="flex-1 truncate pr-3 text-foreground">{item.products?.name || "Unknown"}</span>
+                    <span className="font-semibold tabular-nums text-right">₹{Number(item.total_price || 0).toLocaleString()}</span>
                   </div>
-                  <div className="text-muted-foreground text-[10px]">
+                  <div className="text-muted-foreground text-2xs tabular-nums">
                     {item.quantity} x ₹{Number(item.unit_price || 0).toLocaleString()}
                   </div>
                 </div>
               ))}
             </div>
 
-            <div className="border-t border-dashed border-gray-400 my-3" />
+            <div className="border-t border-dashed border-border my-3" />
 
             {/* Totals */}
             <div className="space-y-1 text-xs">
-              <div className="flex justify-between font-bold text-base pt-1 border-t">
+              <div className="flex justify-between font-bold text-base pt-1 border-t border-border">
                 <span>TOTAL:</span>
-                <span>₹{Number(sale.total_amount).toLocaleString()}</span>
+                <span className="tabular-nums">₹{Number(sale.total_amount).toLocaleString()}</span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex justify-between tabular-nums">
                 <span>Cash:</span>
                 <span>₹{Number(sale.cash_amount || 0).toLocaleString()}</span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex justify-between tabular-nums">
                 <span>UPI:</span>
                 <span>₹{Number(sale.upi_amount || 0).toLocaleString()}</span>
               </div>
               {previousBalance > 0 && (
-                <div className="flex justify-between">
+                <div className="flex justify-between tabular-nums">
                   <span>Previous Balance:</span>
                   <span>₹{previousBalance.toLocaleString()}</span>
                 </div>
               )}
               {totalDue > previousBalance && (
-                <div className="flex justify-between text-red-600 font-semibold">
+                <div className="flex justify-between text-destructive font-semibold tabular-nums">
                   <span>Total Due:</span>
                   <span>₹{totalDue.toLocaleString()}</span>
                 </div>
               )}
             </div>
 
-            <div className="border-t border-dashed border-gray-400 my-3" />
+            <div className="border-t border-dashed border-border my-3" />
 
             {/* Footer */}
-            <div className="text-center text-xs space-y-1">
-              <p className="font-semibold">Thank you for your business!</p>
+            <div className="text-center text-xs space-y-1 pt-1">
+              <p className="font-semibold text-foreground">Thank you for your business!</p>
               {sale.recorded_by?.full_name && (
                 <p className="text-muted-foreground">Served by: {sale.recorded_by.full_name}</p>
               )}
-              <p className="text-[10px] text-muted-foreground mt-2">
+              <p className="text-2xs text-muted-foreground/60 mt-2">
                 This is a computer generated receipt
               </p>
             </div>
@@ -506,6 +472,6 @@ ${settings.business_name || ""}
       </DialogContent>
     </Dialog>
   );
-};
+});
 
 export default SaleReceipt;

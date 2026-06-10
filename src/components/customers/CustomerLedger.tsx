@@ -120,7 +120,7 @@ export const CustomerLedger = memo(({ customerId, customerName }: CustomerLedger
             <Badge
               variant={row.transaction_type === "SALE" ? "destructive"
                 : row.transaction_type === "PAYMENT" ? "default" : "secondary"}
-              className={`text-[10px] ${row.transaction_type === "PAYMENT" ? "bg-green-500" : ""}`}
+              className={`text-2xs ${row.transaction_type === "PAYMENT" ? "bg-green-500" : ""}`}
             >
               {row.transaction_type}
             </Badge>

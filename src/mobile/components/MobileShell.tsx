@@ -1,4 +1,4 @@
-import { Suspense, type ReactNode } from "react";
+import { memo, Suspense, type ReactNode } from "react";
 import { MobileHeader } from "./MobileHeader";
 import { BottomNav, type MobileTab, type MobileTabItem } from "./BottomNav";
 
@@ -8,7 +8,7 @@ const PageLoader = () => (
   </div>
 );
 
-export function MobileShell({
+export const MobileShell = memo(function MobileShell({
   title,
   tabs,
   tab,
@@ -38,4 +38,4 @@ export function MobileShell({
       <BottomNav tab={tab} onChange={onTabChange} tabs={tabs} />
     </div>
   );
-}
+});

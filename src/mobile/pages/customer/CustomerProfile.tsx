@@ -23,7 +23,7 @@ interface StoreRow {
 }
 
 export function CustomerProfile() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [linking, setLinking] = useState(false);
 
   const { data: liveAuthUser, refetch: refetchLiveAuthUser } = useQuery({
@@ -34,6 +34,7 @@ export function CustomerProfile() {
       return data.user;
     },
     enabled: !!user,
+    staleTime: 5 * 60 * 1000,
   });
 
   const googleIdentity = liveAuthUser?.identities?.find((identity) => identity.provider === "google");
@@ -43,6 +44,7 @@ export function CustomerProfile() {
     queryKey: ["mobile-customer-profile", user?.id],
     queryFn: async () => (await resolveCustomer(user!.id, "id, name, display_id, phone, email, address")) as CustomerRow | null,
     enabled: !!user,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: stores } = useQuery({
@@ -58,6 +60,7 @@ export function CustomerProfile() {
       return (data as StoreRow[]) || [];
     },
     enabled: !!customer,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: customerCare } = useQuery({
@@ -71,6 +74,7 @@ export function CustomerProfile() {
       if (error) throw error;
       return data?.value || "";
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: appSettings } = useQuery({
@@ -83,6 +87,7 @@ export function CustomerProfile() {
         .maybeSingle();
       return data;
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   const googleLinkingEnabled = appSettings?.value === "true";
@@ -164,7 +169,16 @@ export function CustomerProfile() {
   const totalOutstanding = (stores || []).reduce((sum, store) => sum + Number(store.outstanding || 0), 0);
 
   return (
-    <div className="px-4 pt-4 pb-6 space-y-3">
+    <div className="pb-6">
+      <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 dark:from-slate-900 dark:via-blue-950 dark:to-indigo-950 px-4 pt-4 pb-8">
+        <p className="text-blue-200 text-sm font-medium">My Profile</p>
+        <h2 className="text-white text-2xl font-bold mt-0.5">{(profile?.full_name ?? customer?.name ?? "Customer").split(" ")[0]} 👋</h2>
+        <p className="text-blue-200/80 text-xs mt-1">
+          {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}
+        </p>
+      </div>
+
+      <div className="px-4 -mt-5 space-y-3">
       <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-4 shadow-sm">
         <p className="text-base font-bold text-slate-900 dark:text-white">{customer.name}</p>
         <p className="text-xs text-slate-500 mt-0.5">{customer.display_id}</p>
@@ -280,6 +294,7 @@ export function CustomerProfile() {
           Call Support
         </button>
       )}
+      </div>
     </div>
   );
 }

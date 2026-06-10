@@ -56,12 +56,13 @@ interface LedgerEntry {
 }
 
 export function CustomerTransactions({ selectedStoreId }: Props) {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
 
   const { data: customer } = useQuery({
     queryKey: ["mobile-customer-ledger-self", user?.id],
     queryFn: async () => (await resolveCustomer(user!.id, "id")) as CustomerRow | null,
     enabled: !!user,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: stores } = useQuery({
@@ -75,6 +76,7 @@ export function CustomerTransactions({ selectedStoreId }: Props) {
       return (data as StoreOutstandingRow[]) || [];
     },
     enabled: !!customer,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: sales } = useQuery({
@@ -89,6 +91,7 @@ export function CustomerTransactions({ selectedStoreId }: Props) {
       return (data as unknown as SaleLedgerRow[]) || [];
     },
     enabled: !!customer,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: transactions, isLoading } = useQuery({
@@ -103,6 +106,7 @@ export function CustomerTransactions({ selectedStoreId }: Props) {
       return (data as unknown as TransactionLedgerRow[]) || [];
     },
     enabled: !!customer,
+    staleTime: 5 * 60 * 1000,
   });
 
   const ledger = useMemo(() => {
@@ -143,7 +147,16 @@ export function CustomerTransactions({ selectedStoreId }: Props) {
   }, [stores]);
 
   return (
-    <div className="px-4 pt-4 pb-6 space-y-3">
+    <div className="pb-6">
+      <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 dark:from-slate-900 dark:via-blue-950 dark:to-indigo-950 px-4 pt-4 pb-8">
+        <p className="text-blue-200 text-sm font-medium">My Ledger</p>
+        <h2 className="text-white text-2xl font-bold mt-0.5">{(profile?.full_name ?? customer?.name ?? "Customer").split(" ")[0]} 👋</h2>
+        <p className="text-blue-200/80 text-xs mt-1">
+          {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}
+        </p>
+      </div>
+
+      <div className="px-4 -mt-5 space-y-3">
       <div className="grid grid-cols-3 gap-2">
         <SummaryCard label="Outstanding" value={`₹${totalOutstanding.toLocaleString("en-IN")}`} />
         <SummaryCard label="Deliveries" value={String((sales || []).length)} />
@@ -165,12 +178,12 @@ export function CustomerTransactions({ selectedStoreId }: Props) {
                   <p className="text-sm font-bold text-slate-900 dark:text-white">{entry.displayId}</p>
                   <p className="text-xs text-slate-500 mt-0.5">{entry.storeName}</p>
                 </div>
-                <span className={`px-2 py-1 rounded-lg text-[10px] font-semibold ${entry.type === "delivery" ? "bg-blue-50 text-blue-700" : "bg-emerald-50 text-emerald-700"}`}>
+                <span className={`px-2 py-1 rounded-lg text-xs font-semibold ${entry.type === "delivery" ? "bg-blue-50 text-blue-700" : "bg-emerald-50 text-emerald-700"}`}>
                   {entry.type === "delivery" ? "Delivery" : "Payment"}
                 </span>
               </div>
 
-              <div className="mt-2 text-[11px] text-slate-500 space-y-1">
+              <div className="mt-2 text-xs text-slate-500 space-y-1">
                 <div className="flex items-center justify-between"><span>Sale Amount</span><span>{entry.saleAmount > 0 ? `₹${entry.saleAmount.toLocaleString("en-IN")}` : "—"}</span></div>
                 <div className="flex items-center justify-between"><span>Paid</span><span>₹{entry.paidAmount.toLocaleString("en-IN")}</span></div>
                 <div className="flex items-center justify-between"><span>Old Balance</span><span>₹{entry.oldOutstanding.toLocaleString("en-IN")}</span></div>
@@ -181,6 +194,7 @@ export function CustomerTransactions({ selectedStoreId }: Props) {
           ))}
         </div>
       )}
+      </div>
     </div>
   );
 }
@@ -188,7 +202,7 @@ export function CustomerTransactions({ selectedStoreId }: Props) {
 function SummaryCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-3 shadow-sm">
-      <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">{label}</p>
+      <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">{label}</p>
       <p className="text-sm font-bold text-slate-900 dark:text-white mt-1 flex items-center gap-1">
         <Wallet className="h-3.5 w-3.5 text-slate-400" />
         <span>{value}</span>

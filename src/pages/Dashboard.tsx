@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, lazy, Suspense } from "react";
 import { StatCard } from "@/components/shared/StatCard";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { useAuth } from "@/contexts/AuthContext";
@@ -24,18 +24,12 @@ import {
   Receipt,
 } from "lucide-react";
 import { DashboardSkeleton } from "@/components/shared/DashboardSkeleton";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
+
+// Lazy-load recharts (~433KB) — only needed after data loads
+const DashboardBarChart = lazy(() => import("@/components/dashboard/DashboardBarChart"));
 
 // ==================== Super Admin Dashboard ====================
 
@@ -355,22 +349,9 @@ const SuperAdminDashboard = () => {
        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
          <div className="lg:col-span-2 rounded-xl border bg-card p-5">
            <h3 className="text-sm font-semibold mb-4">Sales Trend (Last 7 Days)</h3>
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={s.weeklySales}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="day" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
-              <YAxis tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "hsl(var(--card))",
-                  border: "1px solid hsl(var(--border))",
-                  borderRadius: "8px",
-                  fontSize: "12px",
-                }}
-              />
-              <Bar dataKey="sales" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          <Suspense fallback={<div className="h-[260px] animate-pulse rounded bg-muted/30" />}>
+            <DashboardBarChart data={s.weeklySales} height={260} />
+          </Suspense>
         </div>
 
         <div className="rounded-xl border bg-card p-5">
@@ -623,22 +604,9 @@ const ManagerDashboard = () => {
           {s.salesByStaff.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-6">No sales recorded today</p>
           ) : (
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={s.salesByStaff} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis type="number" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
-                <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} width={80} stroke="hsl(var(--muted-foreground))" />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "hsl(var(--card))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: "8px",
-                    fontSize: "12px",
-                  }}
-                />
-                <Bar dataKey="sales" fill="hsl(var(--primary))" radius={[0, 6, 6, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            <Suspense fallback={<div className="h-[200px] animate-pulse rounded bg-muted/30" />}>
+              <DashboardBarChart data={s.salesByStaff} layout="vertical" height={200} />
+            </Suspense>
           )}
         </div>
 

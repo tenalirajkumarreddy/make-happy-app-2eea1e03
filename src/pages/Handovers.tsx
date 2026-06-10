@@ -26,6 +26,16 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner";
 import { sendNotification, sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { useState, useMemo, useEffect, useRef } from "react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format, startOfDay } from "date-fns";
@@ -51,6 +61,9 @@ const Handovers = () => {
   const [submitting, setSubmitting] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null);
+  const [expenseCancelConfirmOpen, setExpenseCancelConfirmOpen] = useState(false);
+  const [expenseCancelConfirmId, setExpenseCancelConfirmId] = useState<string | null>(null);
+  const [resetAllConfirmOpen, setResetAllConfirmOpen] = useState(false);
   const [highlightExpenseId, setHighlightExpenseId] = useState<string | null>(null);
   const highlightedRef = useRef<Record<string, HTMLDivElement | null>>({});
 
@@ -856,6 +869,27 @@ const Handovers = () => {
         throw new Error(`Insufficient holding balance.`);
       }
 
+      // Re-check balance right before insert to reduce race condition window
+      const { data: recheckProfile } = await supabase
+        .from("profiles")
+        .select("holding_balance")
+        .eq("user_id", user!.id)
+        .maybeSingle();
+      const recheckHolding = Number(recheckProfile?.holding_balance) || 0;
+
+      const { data: recheckPending } = await supabase
+        .from("expense_claims")
+        .select("amount")
+        .eq("user_id", user!.id)
+        .eq("status", "pending");
+      const recheckLocked = (recheckPending || []).reduce((sum: number, r: any) => sum + Number(r.amount), 0);
+      const recheckAvailable = recheckHolding - recheckLocked;
+
+      if (recheckAvailable < requestedAmount) {
+        toast.error(`Insufficient balance — another claim may have been submitted. Available: ₹${recheckAvailable.toLocaleString()}`);
+        throw new Error(`Insufficient holding balance (re-check failed).`);
+      }
+
       const { data: displayId } = await supabase.rpc("generate_display_id", {
         prefix: "EXC",
         seq_name: "expenses_display_id_seq"
@@ -913,50 +947,19 @@ const Handovers = () => {
 
     try {
       const originalAmount = Number(reviewExpense.amount);
-      const approvedAmount = Number(reviewAmount) || originalAmount;
+      const approvedAmount = action === "approve" ? (Number(reviewAmount) || originalAmount) : null;
 
-      const updates: any = {
-        status: action === "approve" ? "approved" : "rejected",
-        reviewed_by: user!.id,
-        reviewed_at: new Date().toISOString(),
-        reviewer_notes: reviewNotes.trim() || null,
-      };
+      // Use atomic RPC for expense approval - handles both status update AND holding deduction
+      const { data: rpcResult, error: rpcError } = await supabase.rpc("approve_expense_claim" as any, {
+        p_claim_id: reviewExpense.id,
+        p_reviewer_id: user!.id,
+        p_status: action === "approve" ? "approved" : "rejected",
+        p_approved_amount: approvedAmount,
+        p_category_id: reviewCategory && reviewCategory !== reviewExpense.category_id ? reviewCategory : null,
+        p_reviewer_notes: reviewNotes.trim() || null,
+      } as any);
 
-      if (action === "approve") {
-        if (reviewCategory && reviewCategory !== reviewExpense.category_id) {
-          updates.category_id = reviewCategory;
-        }
-        updates.approved_amount = approvedAmount;
-
-        // Deduct from user's holding balance at approval time
-        // Try profiles first, then fallback to staff_cash_accounts
-        const { error: holdingError } = await supabase.rpc("deduct_expense_from_holding", {
-          p_user_id: reviewExpense.user_id,
-          p_amount: approvedAmount,
-        }) as any;
-        if (holdingError) {
-          // Fallback: update staff_cash_accounts directly
-          const { data: cashData } = await supabase
-            .from("staff_cash_accounts")
-            .select("cash_amount")
-            .eq("user_id", reviewExpense.user_id)
-            .maybeSingle();
-          if (cashData) {
-            const newAmount = Number(cashData.cash_amount) - approvedAmount;
-            await supabase
-              .from("staff_cash_accounts")
-              .update({ cash_amount: newAmount })
-              .eq("user_id", reviewExpense.user_id);
-          }
-        }
-      }
-
-      const { error } = await supabase
-         .from("expense_claims")
-         .update(updates)
-         .eq("id", reviewExpense.id);
-
-      if (error) throw error;
+      if (rpcError) throw rpcError;
 
       toast.success(`Expense claim ${action === "approve" ? "approved" : "rejected"}`);
 
@@ -964,7 +967,7 @@ const Handovers = () => {
         userId: reviewExpense.user_id,
         title: `Expense Claim ${action === "approve" ? "Approved" : "Rejected"}`,
         message: action === "approve"
-          ? `Your ₹${Number(updates.approved_amount).toLocaleString()} expense claim was approved`
+          ? `Your ₹${(rpcResult as any)?.amount?.toLocaleString() || approvedAmount?.toLocaleString()} expense claim was approved`
           : `Your ₹${Number(reviewExpense.amount).toLocaleString()} expense claim was rejected`,
         type: "system",
         entityType: "expense_claim",
@@ -992,13 +995,22 @@ const Handovers = () => {
 
   // Cancel own expense claim (before approval)
   const handleCancelExpenseClaim = async (claimId: string) => {
-    if (!confirm("Cancel this expense claim?")) return;
+    setExpenseCancelConfirmId(claimId);
+    setExpenseCancelConfirmOpen(true);
+  };
+
+  const confirmCancelExpenseClaim = async () => {
+    if (!expenseCancelConfirmId || !user?.id) return;
+    const claimId = expenseCancelConfirmId;
+    setExpenseCancelConfirmOpen(false);
+    setExpenseCancelConfirmId(null);
     setActionLoading(claimId);
     try {
       const { error } = await supabase
         .from("expense_claims")
         .update({ status: "cancelled" })
-        .eq("id", claimId);
+        .eq("id", claimId)
+        .eq("user_id", user.id); // Ownership check: only cancel own claims
 
       if (error) throw error;
 
@@ -1018,7 +1030,7 @@ const Handovers = () => {
 
   const getCategoryColor = (categoryId: string | null) => {
     const cat = expenseCategories.find((c) => c.id === categoryId);
-    return cat?.color || "#6b7280";
+    return cat?.color || "hsl(var(--muted-foreground))";
   };
 
   const getProfile = (userId: string | null) => profileMap?.[userId || ""] || { name: "Unknown", avatar: null };
@@ -1045,10 +1057,10 @@ const Handovers = () => {
     };
     const badge = statusToBadge[item.status] || statusToBadge.awaiting_confirmation;
 
-    const borderAccent = item.status === "confirmed" ? "border-l-green-500"
-      : item.status === "rejected" ? "border-l-red-500"
+    const borderAccent = item.status === "confirmed" ? "border-l-success"
+      : item.status === "rejected" ? "border-l-destructive"
       : item.status === "cancelled" ? "border-l-gray-400"
-      : "border-l-amber-500";
+      : "border-l-warning";
 
     const isHighlighted = highlightId === item.id;
 
@@ -1153,10 +1165,10 @@ const Handovers = () => {
       : item.status === "cancelled" ? "cancelled"
       : "pending";
 
-    const borderAccent = item.status === "approved" ? "border-l-green-500"
-      : item.status === "rejected" ? "border-l-red-500"
+    const borderAccent = item.status === "approved" ? "border-l-success"
+      : item.status === "rejected" ? "border-l-destructive"
       : item.status === "cancelled" ? "border-l-gray-400"
-      : "border-l-amber-500";
+      : "border-l-warning";
 
     return (
       <div
@@ -1184,23 +1196,23 @@ const Handovers = () => {
           </p>
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             <span
-              className="text-[10px] font-medium px-1.5 py-px rounded"
+              className="text-2xs font-medium px-1.5 py-px rounded"
               style={{ backgroundColor: `${getCategoryColor(item.category_id)}20`, color: getCategoryColor(item.category_id) }}
             >
               {getCategoryName(item.category_id)}
               {wasCategoryChanged && " (changed)"}
             </span>
-            <span className="text-[11px] text-muted-foreground">
+            <span className="text-3xs text-muted-foreground">
               {format(new Date(item.expense_date), "dd MMM yyyy")}
             </span>
             {!isOwner && (
-              <span className="text-[10px] font-medium bg-primary/8 text-primary px-1.5 py-px rounded">
+              <span className="text-2xs font-medium bg-primary/8 text-primary px-1.5 py-px rounded">
                 by <UserHoverCard userId={item.user_id} profileMap={profileMap}>{getName(item.user_id)}</UserHoverCard>
               </span>
             )}
           </div>
           {item.reviewer_notes && item.status !== "pending" && (
-            <p className="text-[11px] text-muted-foreground/70 italic mt-1 truncate">Note: "{item.reviewer_notes}"</p>
+            <p className="text-3xs text-muted-foreground/70 italic mt-1 truncate">Note: "{item.reviewer_notes}"</p>
           )}
         </div>
 
@@ -1429,44 +1441,44 @@ const Handovers = () => {
       {!isAdminOrManager && (
         <div className="space-y-4 mb-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Card className="border-l-4 border-l-blue-500">
+            <Card className="border-l-4 border-l-info">
               <CardHeader className="p-4 pb-2">
                 <CardTitle className="text-xs font-medium text-muted-foreground">Today's Sales</CardTitle>
               </CardHeader>
               <CardContent className="p-4 pt-0">
-                <CurrencyDisplay amount={dailyData.today_sales || 0} className="text-xl font-bold text-blue-600 dark:text-blue-400" />
+                <CurrencyDisplay amount={dailyData.today_sales || 0} className="text-xl font-bold text-info" />
               </CardContent>
             </Card>
 
-            <Card className="border-l-4 border-l-indigo-500">
+            <Card className="border-l-4 border-l-info">
               <CardHeader className="p-4 pb-2">
                 <CardTitle className="text-xs font-medium text-muted-foreground">Today's Payments</CardTitle>
               </CardHeader>
               <CardContent className="p-4 pt-0">
-                <CurrencyDisplay amount={dailyData.today_payments || 0} className="text-xl font-bold text-indigo-600 dark:text-indigo-400" />
+                <CurrencyDisplay amount={dailyData.today_payments || 0} className="text-xl font-bold text-info" />
               </CardContent>
             </Card>
 
-            <Card className="border-l-4 border-l-emerald-500">
+            <Card className="border-l-4 border-l-success">
               <CardHeader className="p-4 pb-2">
                 <CardTitle className="text-xs font-medium text-muted-foreground">Transferred Today</CardTitle>
               </CardHeader>
               <CardContent className="p-4 pt-0">
-                <CurrencyDisplay amount={dailyData.today_sent_confirmed || 0} className="text-xl font-bold text-emerald-600 dark:text-emerald-400" />
+                <CurrencyDisplay amount={dailyData.today_sent_confirmed || 0} className="text-xl font-bold text-success" />
                 {(dailyData.today_sent_pending || 0) > 0 && (
-                  <p className="text-[10px] text-amber-600 font-medium mt-0.5">
+                    <p className="text-2xs text-warning font-medium mt-0.5">
                     +<CurrencyDisplay amount={dailyData.today_sent_pending || 0} /> pending
                   </p>
                 )}
               </CardContent>
             </Card>
 
-            <Card className="border-l-4 border-l-rose-500">
+            <Card className="border-l-4 border-l-destructive">
               <CardHeader className="p-4 pb-2">
                 <CardTitle className="text-xs font-medium text-muted-foreground">Previous Pending</CardTitle>
               </CardHeader>
               <CardContent className="p-4 pt-0">
-                <CurrencyDisplay amount={dailyData.prev_pending || 0} className="text-xl font-bold text-rose-600 dark:text-rose-400" />
+                <CurrencyDisplay amount={dailyData.prev_pending || 0} className="text-xl font-bold text-destructive" />
               </CardContent>
             </Card>
           </div>
@@ -1487,55 +1499,55 @@ const Handovers = () => {
 
           {/* Pending Actions & Finalizer Account side-by-side */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card className="border-l-4 border-l-amber-500">
+            <Card className="border-l-4 border-l-warning">
               <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between">
                 <CardTitle className="text-sm font-medium">Pending Actions</CardTitle>
-                <span className="flex items-center justify-center h-8 w-8 rounded-lg bg-amber-100 dark:bg-amber-900/30">
-                  <AlertCircle className="h-4 w-4 text-amber-600" />
+                <span className="flex items-center justify-center h-8 w-8 rounded-lg bg-warning/20 dark:bg-warning/10">
+                  <AlertCircle className="h-4 w-4 text-warning" />
                 </span>
               </CardHeader>
               <CardContent className="p-4 pt-2 flex items-center justify-between">
                 <div>
-                  <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{incoming.length}</p>
+                  <p className="text-2xl font-bold text-warning">{incoming.length}</p>
                   <p className="text-xs text-muted-foreground mt-1">Handovers awaiting confirmation</p>
                 </div>
                 {awaitingAmount > 0 && (
                   <div className="text-right">
-                    <CurrencyDisplay amount={awaitingAmount} className="text-sm font-bold text-amber-600 dark:text-amber-400" />
-                    <p className="text-[10px] text-muted-foreground">Sent by you</p>
+                    <CurrencyDisplay amount={awaitingAmount} className="text-sm font-bold text-warning" />
+                    <p className="text-2xs text-muted-foreground">Sent by you</p>
                   </div>
                 )}
               </CardContent>
             </Card>
 
             {isFinalizer ? (
-              <Card className="border-l-4 border-l-emerald-500">
+              <Card className="border-l-4 border-l-success">
                 <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between">
                   <CardTitle className="text-sm font-medium">Holding Balance</CardTitle>
-                  <span className="flex items-center justify-center h-8 w-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
-                    <Wallet className="h-4 w-4 text-emerald-600" />
+                  <span className="flex items-center justify-center h-8 w-8 rounded-lg bg-success/20 dark:bg-success/10">
+                    <Wallet className="h-4 w-4 text-success" />
                   </span>
                 </CardHeader>
                 <CardContent className="p-4 pt-2">
-                  <CurrencyDisplay amount={Number(finalizerAccount?.cash_amount || 0) + Number(finalizerAccount?.upi_amount || 0)} className="text-2xl font-bold text-emerald-600 dark:text-emerald-400" />
+                  <CurrencyDisplay amount={Number(finalizerAccount?.cash_amount || 0) + Number(finalizerAccount?.upi_amount || 0)} className="text-2xl font-bold text-success" />
                   <p className="text-xs text-muted-foreground mt-1">Income since last daily reset</p>
                   {finalizerAccount?.last_reset_at && (
-                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                    <p className="text-2xs text-muted-foreground mt-0.5">
                       Reset: {format(new Date(finalizerAccount.last_reset_at), "dd MMM, hh:mm a")}
                     </p>
                   )}
                 </CardContent>
               </Card>
             ) : (
-              <Card className="border-l-4 border-l-emerald-500">
+              <Card className="border-l-4 border-l-success">
                 <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between">
                   <CardTitle className="text-sm font-medium">Pending Expenses</CardTitle>
-                  <span className="flex items-center justify-center h-8 w-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
-                    <Receipt className="h-4 w-4 text-emerald-600" />
+                  <span className="flex items-center justify-center h-8 w-8 rounded-lg bg-success/20 dark:bg-success/10">
+                    <Receipt className="h-4 w-4 text-success" />
                   </span>
                 </CardHeader>
                 <CardContent className="p-4 pt-2">
-                  <CurrencyDisplay amount={myPendingExpenses || 0} className="text-2xl font-bold text-emerald-600 dark:text-emerald-400" />
+                  <CurrencyDisplay amount={myPendingExpenses || 0} className="text-2xl font-bold text-success" />
                   <p className="text-xs text-muted-foreground mt-1">Claims awaiting approval</p>
                 </CardContent>
               </Card>
@@ -1552,7 +1564,7 @@ const Handovers = () => {
             <span className="flex items-center gap-1">
               Handovers
               {incoming.length > 0 && (
-                <Badge variant="secondary" className="ml-0.5 h-4 min-w-4 px-1 text-[10px]">
+                <Badge variant="secondary" className="ml-0.5 h-4 min-w-4 px-1 text-2xs">
                   {incoming.length}
                 </Badge>
               )}
@@ -1565,7 +1577,7 @@ const Handovers = () => {
               <span className="flex items-center gap-1">
                 Expenses
                 {(isAdminOrManager ? expenseClaims : myExpenseClaims).filter((e: any) => e.status === "pending").length > 0 && (
-                  <Badge variant="secondary" className="ml-0.5 h-4 min-w-4 px-1 text-[10px]">
+                  <Badge variant="secondary" className="ml-0.5 h-4 min-w-4 px-1 text-2xs">
                     {(isAdminOrManager ? expenseClaims : myExpenseClaims).filter((e: any) => e.status === "pending").length}
                   </Badge>
                 )}
@@ -1578,7 +1590,7 @@ const Handovers = () => {
               <Eye className="h-3.5 w-3.5" />
               Balances
               {pendingExpenseClaimsForReview.length > 0 && (
-                <Badge variant="secondary" className="ml-0.5 h-4 min-w-4 px-1 text-[10px]">
+                <Badge variant="secondary" className="ml-0.5 h-4 min-w-4 px-1 text-2xs">
                   {pendingExpenseClaimsForReview.length}
                 </Badge>
               )}
@@ -1590,7 +1602,7 @@ const Handovers = () => {
               <TrendingUp className="h-3.5 w-3.5" />
               Income
               {todayReceivedConfirmed > 0 && (
-                <Badge variant="secondary" className="ml-0.5 h-4 min-w-4 px-1 text-[10px]">
+                <Badge variant="secondary" className="ml-0.5 h-4 min-w-4 px-1 text-2xs">
                   {todayReceivedConfirmed}
                 </Badge>
               )}
@@ -1659,7 +1671,7 @@ const Handovers = () => {
                   <Button variant="ghost" size="sm" className="h-8 text-xs gap-1" onClick={clearHandoverFilters}>
                     <X className="h-3 w-3" />
                     Clear
-                    <Badge variant="secondary" className="h-4 min-w-4 px-1 text-[10px] ml-0.5">
+                    <Badge variant="secondary" className="h-4 min-w-4 px-1 text-2xs ml-0.5">
                       {activeHandoverFilterCount}
                     </Badge>
                   </Button>
@@ -1704,7 +1716,7 @@ const Handovers = () => {
                     <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                       {formatDateGroup(date)}
                     </span>
-                    <Badge variant="outline" className="h-4 px-1.5 text-[10px] font-mono">
+                    <Badge variant="outline" className="h-4 px-1.5 text-2xs font-mono">
                       {items.length}
                     </Badge>
                     <div className="flex-1 h-px bg-border" />
@@ -1726,13 +1738,13 @@ const Handovers = () => {
         {(canSubmitExpenses || isAdminOrManager) && (
           <TabsContent value="expenses" className="space-y-4 mt-3">
             <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-lg border bg-card p-3 border-l-4 border-l-amber-500">
+              <div className="rounded-lg border bg-card p-3 border-l-4 border-l-warning">
                 <p className="text-xs text-muted-foreground">Pending Claims</p>
-                <CurrencyDisplay amount={myPendingExpenses || 0} className="text-xl font-bold text-amber-600 dark:text-amber-400" />
+                <CurrencyDisplay amount={myPendingExpenses || 0} className="text-xl font-bold text-warning" />
               </div>
-              <div className="rounded-lg border bg-card p-3 border-l-4 border-l-emerald-500">
+              <div className="rounded-lg border bg-card p-3 border-l-4 border-l-success">
                 <p className="text-xs text-muted-foreground">Approved (Owed)</p>
-                <CurrencyDisplay amount={myApprovedExpenses || 0} className="text-xl font-bold text-emerald-600 dark:text-emerald-400" />
+                <CurrencyDisplay amount={myApprovedExpenses || 0} className="text-xl font-bold text-success" />
               </div>
             </div>
 
@@ -1834,16 +1846,16 @@ const Handovers = () => {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <p className="text-sm font-semibold truncate">{bal.full_name}</p>
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground capitalize">{bal.role}</span>
+                            <span className="text-2xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground capitalize">{bal.role}</span>
                           </div>
-                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-0.5 text-[11px] text-muted-foreground">
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-0.5 text-3xs text-muted-foreground">
                             <span>Today Sales: <CurrencyDisplay amount={Number(bal.today_sales || 0) + Number(bal.today_payments || 0)} /></span>
                             <span>Prev Pending: <CurrencyDisplay amount={Number(bal.prev_pending || 0)} /></span>
                           </div>
                         </div>
                         <div className="text-right shrink-0">
                           <CurrencyDisplay amount={Math.max(0, Number(bal.holding_balance) || 0)} className={`text-base font-bold ${(Number(bal.holding_balance) || 0) > 0 ? "text-destructive" : "text-success"}`} />
-                          <p className="text-[10px] text-muted-foreground">Holding</p>
+                          <p className="text-2xs text-muted-foreground">Holding</p>
                         </div>
                       </div>
                     </Link>
@@ -1862,11 +1874,7 @@ const Handovers = () => {
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Finalizer Holdings</h3>
                   <Button size="sm" variant="outline" className="h-8 text-xs gap-1" disabled={dailyResetLoading}
-                    onClick={() => {
-                      if (confirm("Trigger daily reset for ALL finalizers? This creates income entries and zeros their balances.")) {
-                        (finalizerHoldings || []).forEach((f: any) => handleDailyReset(f.user_id));
-                      }
-                    }}>
+                    onClick={() => setResetAllConfirmOpen(true)}>
                     <RefreshCw className="h-3 w-3" /> Reset All
                   </Button>
                 </div>
@@ -1879,17 +1887,17 @@ const Handovers = () => {
                         <UserHoverCard userId={f.user_id} profileMap={profileMap} size="md" />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold truncate">{f.full_name}</p>
-                          <div className="flex gap-3 text-[11px] text-muted-foreground mt-0.5">
+                          <div className="flex gap-3 text-3xs text-muted-foreground mt-0.5">
                             <span>Cash: ₹{Number(f.cash_amount || 0).toLocaleString()}</span>
                             <span>UPI: ₹{Number(f.upi_amount || 0).toLocaleString()}</span>
                           </div>
                           {f.last_reset_at && (
-                            <p className="text-[10px] text-muted-foreground">Reset: {format(new Date(f.last_reset_at), "dd MMM, hh:mm a")}</p>
+                            <p className="text-2xs text-muted-foreground">Reset: {format(new Date(f.last_reset_at), "dd MMM, hh:mm a")}</p>
                           )}
                         </div>
                         <div className="text-right shrink-0">
-                          <p className="text-base font-bold text-emerald-600">₹{Number(f.total_balance || 0).toLocaleString()}</p>
-                          <Button size="sm" variant="ghost" className="h-7 text-[10px] text-muted-foreground mt-1 gap-1" disabled={dailyResetLoading}
+                          <p className="text-base font-bold text-success">₹{Number(f.total_balance || 0).toLocaleString()}</p>
+                          <Button size="sm" variant="ghost" className="h-7 text-2xs text-muted-foreground mt-1 gap-1" disabled={dailyResetLoading}
                             onClick={() => handleDailyReset(f.user_id)}>
                             <RefreshCw className="h-3 w-3" /> Reset
                           </Button>
@@ -1920,9 +1928,9 @@ const Handovers = () => {
 
                 {/* Summary */}
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-lg border bg-card p-3 border-l-4 border-l-emerald-500">
+                  <div className="rounded-lg border bg-card p-3 border-l-4 border-l-success">
                     <p className="text-xs text-muted-foreground">Total Income ({incomeFilterDate === today ? "Today" : format(new Date(incomeFilterDate + "T00:00:00"), "dd MMM")})</p>
-                    <CurrencyDisplay amount={(finalizerIncome || []).reduce((s: number, e: any) => s + Number(e.amount || 0), 0)} className="text-xl font-bold text-emerald-600 mt-1" />
+                    <CurrencyDisplay amount={(finalizerIncome || []).reduce((s: number, e: any) => s + Number(e.amount || 0), 0)} className="text-xl font-bold text-success mt-1" />
                   </div>
                   <div className="rounded-lg border bg-card p-3">
                     <p className="text-xs text-muted-foreground">Entries</p>
@@ -1942,9 +1950,9 @@ const Handovers = () => {
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium capitalize">{(entry.entry_type || 'collection').replace(/_/g, ' ')}</p>
                           {entry.description && <p className="text-xs text-muted-foreground truncate">{entry.description}</p>}
-                          <p className="text-[10px] text-muted-foreground">{format(new Date(entry.created_at), "dd MMM, hh:mm a")}</p>
+                          <p className="text-2xs text-muted-foreground">{format(new Date(entry.created_at), "dd MMM, hh:mm a")}</p>
                         </div>
-                        <p className="text-base font-bold text-emerald-600 shrink-0">+₹{Number(entry.amount || 0).toLocaleString()}</p>
+                        <p className="text-base font-bold text-success shrink-0">+₹{Number(entry.amount || 0).toLocaleString()}</p>
                       </div>
                     ))}
                   </div>
@@ -1987,7 +1995,7 @@ const Handovers = () => {
                       {expenseCategories.map((cat: any) => (
                         <SelectItem key={cat.id} value={cat.id}>
                           <div className="flex items-center gap-2">
-                            <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: cat.color || "#6b7280" }} />
+                            <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: cat.color || `hsl(var(--muted-foreground))` }} />
                             {cat.name}
                           </div>
                         </SelectItem>
@@ -2022,14 +2030,14 @@ const Handovers = () => {
                 <div className="rounded-lg bg-muted/50 p-3 space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-muted-foreground">Your Balance</span>
-                    <span className={`text-lg font-bold ${notHandedOver > 0 ? "text-red-600" : notHandedOver < 0 ? "text-green-600" : "text-blue-600"}`}>
+                    <span className={`text-lg font-bold ${notHandedOver > 0 ? "text-destructive" : notHandedOver < 0 ? "text-success" : "text-info"}`}>
                       Rs{Math.abs(notHandedOver || 0).toLocaleString()}
                     </span>
                   </div>
                   {notHandedOver > 0 ? (
-                    <p className="text-xs text-red-600 font-medium">You owe warehouse Rs{Math.abs(notHandedOver).toLocaleString()} - handover required</p>
+                    <p className="text-xs text-destructive font-medium">You owe warehouse Rs{Math.abs(notHandedOver).toLocaleString()} - handover required</p>
                   ) : notHandedOver < 0 ? (
-                    <p className="text-xs text-green-600 font-medium">Warehouse owes you Rs{Math.abs(notHandedOver).toLocaleString()}</p>
+                    <p className="text-xs text-success font-medium">Warehouse owes you Rs{Math.abs(notHandedOver).toLocaleString()}</p>
                   ) : (
                     <p className="text-xs text-muted-foreground">No pending balance</p>
                   )}
@@ -2133,7 +2141,7 @@ const Handovers = () => {
                   {expenseCategories.map((cat: any) => (
                     <SelectItem key={cat.id} value={cat.id}>
                       <div className="flex items-center gap-2">
-                        <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: cat.color || "#6b7280" }} />
+                        <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: cat.color || `hsl(var(--muted-foreground))` }} />
                         {cat.name}
                       </div>
                     </SelectItem>
@@ -2205,7 +2213,7 @@ const Handovers = () => {
                     {expenseCategories.map((cat: any) => (
                       <SelectItem key={cat.id} value={cat.id}>
                         <div className="flex items-center gap-2">
-                          <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: cat.color || "#6b7280" }} />
+                          <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: cat.color || `hsl(var(--muted-foreground))` }} />
                           {cat.name}
                         </div>
                       </SelectItem>
@@ -2262,7 +2270,7 @@ const Handovers = () => {
                           <span className="font-medium">{p.full_name}</span>
                           <div className="flex items-center gap-2">
                             <span className="text-xs text-muted-foreground">{p.roleLabel}</span>
-                            <span className={`text-xs font-semibold ${(balance || 0) > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                            <span className={`text-xs font-semibold ${(balance || 0) > 0 ? 'text-destructive' : 'text-success'}`}>
                               ₹{(balance || 0).toLocaleString()}
                             </span>
                           </div>
@@ -2275,7 +2283,7 @@ const Handovers = () => {
               {adminTransferFrom && (
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Available Balance:</span>
-                  <span className={`font-bold ${(allStaffBalances?.[adminTransferFrom]?.total || 0) > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                  <span className={`font-bold ${(allStaffBalances?.[adminTransferFrom]?.total || 0) > 0 ? 'text-destructive' : 'text-success'}`}>
                     ₹{((allStaffBalances?.[adminTransferFrom]?.total || 0) + (allStaffBalances?.[adminTransferFrom]?.sentPending || 0)).toLocaleString()}
                   </span>
                 </div>
@@ -2434,6 +2442,41 @@ const Handovers = () => {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Expense Cancel Confirm Dialog */}
+      <AlertDialog open={expenseCancelConfirmOpen} onOpenChange={setExpenseCancelConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel Expense Claim?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will cancel your expense claim. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => { setExpenseCancelConfirmOpen(false); setExpenseCancelConfirmId(null); }}>Keep it</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmCancelExpenseClaim}>Yes, Cancel</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Reset All Finalizers Confirm Dialog */}
+      <AlertDialog open={resetAllConfirmOpen} onOpenChange={setResetAllConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset All Finalizers?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will trigger a daily reset for ALL finalizers. It creates income entries and zeros their balances. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              (finalizerHoldings || []).forEach((f: any) => handleDailyReset(f.user_id));
+              setResetAllConfirmOpen(false);
+            }}>Yes, Reset All</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

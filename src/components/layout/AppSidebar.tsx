@@ -392,13 +392,13 @@ export function AppSidebar() {
               )}
             </button>
             {isExpanded && !collapsed && (
-              <div className="ml-4 mt-1 space-y-0.5 border-l border-sidebar-border pl-3">
+              <div className="ml-4 mt-1 space-y-1 border-l border-sidebar-border pl-3">
                 {item.children!.map((child) => {
                   if (child.isHeader) {
                     return (
                       <div
                         key={child.path}
-                        className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted"
+                        className="px-3 pt-3 pb-1 text-2xs font-semibold uppercase tracking-wider text-sidebar-muted"
                       >
                         {child.label}
                       </div>
@@ -444,7 +444,7 @@ export function AppSidebar() {
             <>
               <span className="truncate">{item.label}</span>
               {item.badge && (
-                <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
+                <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-2 text-2xs font-semibold text-primary-foreground">
                   {item.badge}
                 </span>
               )}
@@ -463,13 +463,13 @@ export function AppSidebar() {
     sections.map((section) => (
       <div key={section.label} className="space-y-1">
         {!collapsed && (
-          <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted">
+          <p className="px-3 pb-1 pt-2 text-2xs font-semibold uppercase tracking-wider text-sidebar-muted">
             {section.label}
           </p>
         )}
         {collapsed && (
           <div className="flex justify-center py-1">
-            <span className="h-1.5 w-1.5 rounded-full bg-sidebar-border" />
+            <span className="h-2 w-2 rounded-full bg-sidebar-border" />
           </div>
         )}
         {renderNavItems(section.items)}
@@ -485,7 +485,7 @@ export function AppSidebar() {
         {!collapsed && (
           <div className="overflow-hidden">
             <h1 className="text-sm font-bold text-sidebar-accent-foreground truncate">Aqua Prime</h1>
-            <p className="text-[11px] text-sidebar-muted truncate">Business Management</p>
+            <p className="text-3xs text-sidebar-muted truncate">Business Management</p>
           </div>
         )}
       </div>
@@ -498,9 +498,9 @@ export function AppSidebar() {
             }}
             className="flex w-full items-center gap-2 rounded-lg bg-sidebar-accent px-3 py-2 text-xs text-sidebar-muted hover:text-sidebar-foreground transition-colors"
           >
-            <Search className="h-3.5 w-3.5" />
+            <Search className="h-4 w-4" />
             <span>Search...</span>
-            <kbd className="ml-auto rounded bg-sidebar-border px-1.5 py-0.5 text-[10px] font-mono">⌘K</kbd>
+            <kbd className="ml-auto rounded bg-sidebar-border px-2 py-1 text-2xs font-mono">⌘K</kbd>
           </button>
         </div>
       )}

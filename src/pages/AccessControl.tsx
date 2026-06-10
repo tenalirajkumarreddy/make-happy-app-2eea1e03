@@ -242,7 +242,7 @@ const AccessControl = () => {
                               </SelectContent>
                             </Select>
                           ) : (
-                            <Badge variant="default" className="uppercase text-[10px]">{userRole.replace("_", " ")}</Badge>
+                            <Badge variant="default" className="uppercase text-2xs">{userRole.replace("_", " ")}</Badge>
                           )}
                         </TableCell>
                         <TableCell>
@@ -321,7 +321,7 @@ const AccessControl = () => {
                         <SelectContent>{STAFF_ROLES.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}</SelectContent>
                       </Select>
                     ) : (
-                      <Badge variant="default" className="uppercase text-[10px]">{userRole.replace("_", " ")}</Badge>
+                      <Badge variant="default" className="uppercase text-2xs">{userRole.replace("_", " ")}</Badge>
                     )}
                   </div>
                   {isAdmin && userRole === "manager" && (
@@ -348,7 +348,7 @@ const AccessControl = () => {
                       const isEnabled = dbPerm ? dbPerm.enabled : isDefault;
                       const isSaving = permSaving === `${row.user_id}-${p.key}`;
                       return (
-                        <label key={p.key} className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer">
+                        <label key={p.key} className="flex items-center gap-1.5 text-3xs text-muted-foreground cursor-pointer">
                           {isSaving ? (
                             <Loader2 className="h-3 w-3 animate-spin" />
                           ) : (
@@ -457,7 +457,7 @@ const AccessControl = () => {
                             {agents.map((a) => (
                               <TableHead key={a.user_id} className="text-center min-w-[100px] text-xs">
                                 <div className="font-medium truncate max-w-[96px]">{a.full_name}</div>
-                                <div className="text-[10px] font-normal text-muted-foreground uppercase">{a._role}</div>
+                                <div className="text-2xs font-normal text-muted-foreground uppercase">{a._role}</div>
                               </TableHead>
                             ))}
                           </TableRow>

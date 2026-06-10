@@ -1,17 +1,20 @@
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable } from "@/components/shared/DataTable";
+import { TransactionReceipt } from "@/components/shared/TransactionReceipt";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { logActivity } from "@/lib/activityLogger";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
-import { addToQueue, generateBusinessKey } from "@/lib/offlineQueue";
+import { enqueueWithContext } from "@/lib/conflictResolver";
+import { generateBusinessKey } from "@/lib/offlineQueue";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
-import { Loader2, X, CalendarIcon, Store as StoreIcon, RotateCcw, Receipt, Printer, Share2, Pencil } from "lucide-react";
+import { Loader2, X, CalendarIcon, Store as StoreIcon, RotateCcw, Receipt, Pencil } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { QrStoreSelector } from "@/components/shared/QrStoreSelector";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { useState, useEffect } from "react";
+import { useDebounce } from "@/hooks/useDebounce";
 import { useSearchParams, Link } from "react-router-dom";
 import { usePermission } from "@/hooks/usePermission";
 import {
@@ -44,6 +47,7 @@ const Transactions = () => {
   const { currentWarehouse } = useWarehouse();
   const isAdmin = role === "super_admin" || role === "manager";
   const { allowed: canRecordBehalf } = usePermission("record_behalf");
+  const { allowed: canModifyTransactions } = usePermission("modify_transactions" as any);
   const qc = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [showAdd, setShowAdd] = useState(false);
@@ -83,16 +87,18 @@ const Transactions = () => {
   const [filterUser, setFilterUser] = useState("all");
   const [filterCustomer, setFilterCustomer] = useState("all");
   const [filterPayment, setFilterPayment] = useState("all");
+  const [filterSearch, setFilterSearch] = useState("");
+  const debouncedSearch = useDebounce(filterSearch);
   const [loadedPages, setLoadedPages] = useState(1);
 
   // Reset to page 1 whenever any filter changes
   useEffect(() => {
     setLoadedPages(1);
      
-  }, [filterFrom, filterTo, filterStore, filterStoreType, filterRoute, filterUser, filterCustomer, filterPayment]);
+  }, [filterFrom, filterTo, filterStore, filterStoreType, filterRoute, filterUser, filterCustomer, filterPayment, debouncedSearch]);
 
    const { data: transactions, isLoading, isError, error: txnError, isFetching } = useQuery({
-      queryKey: ["transactions", currentWarehouse?.id, isAdmin ? "all" : user?.id, filterFrom, filterTo, filterStore, filterStoreType, filterRoute, filterUser, filterCustomer, filterPayment, loadedPages],
+      queryKey: ["transactions", currentWarehouse?.id, isAdmin ? "all" : user?.id, filterFrom, filterTo, filterStore, filterStoreType, filterRoute, filterUser, filterCustomer, filterPayment, debouncedSearch, loadedPages],
       queryFn: async () => {
        let query: any = supabase
        .from("transactions")
@@ -116,6 +122,8 @@ const Transactions = () => {
       if (filterRoute !== "all") {
         query = query.eq("stores.route_id", filterRoute);
       }
+      if (debouncedSearch.trim()) query = query.ilike("display_id", `%${debouncedSearch.trim()}%`);
+
       // Cursor pagination
       query = query.range(0, loadedPages * PAGE_SIZE - 1);
       const { data, error } = await query;
@@ -249,7 +257,7 @@ const Transactions = () => {
           customerId: editingTransaction.customer_id,
           timestamp: new Date().toISOString(),
         });
-        await addToQueue({
+        await enqueueWithContext({
           id: crypto.randomUUID(),
           type: "transaction_edit",
           payload: {
@@ -318,7 +326,7 @@ const Transactions = () => {
         amount: totalPayment,
         timestamp: txnDate || new Date().toISOString(),
       });
-      await addToQueue({
+      await enqueueWithContext({
         id: crypto.randomUUID(),
         type: "transaction",
         payload: {
@@ -420,6 +428,7 @@ const Transactions = () => {
 
   // State for transaction receipt dialog
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
+  const [receiptTxnId, setReceiptTxnId] = useState<string | null>(null);
 
   // State for payment return dialog
   const [showReturnDialog, setShowReturnDialog] = useState(false);
@@ -449,7 +458,7 @@ const Transactions = () => {
     { header: "Payment ID", accessor: (row: any) => (
       <span className={`font-mono text-xs ${row.is_fully_returned ? "line-through text-muted-foreground" : ""}`}>
         {row.display_id}
-        {row.is_fully_returned && <span className="ml-1.5 text-[9px] font-bold bg-amber-100 text-amber-600 border border-amber-200 rounded px-1 py-0">Returned</span>}
+        {row.is_fully_returned && <span className="ml-2 text-4xs font-bold bg-warning/20 text-warning border border-warning/30 rounded px-1 py-0">Returned</span>}
       </span>
     ), className: "font-mono text-xs" },
     { header: "Store", accessor: (row: any) => <span className={row.is_fully_returned ? "line-through text-muted-foreground" : ""}>{row.stores?.name || "—"}</span>, className: "font-medium" },
@@ -470,9 +479,9 @@ const Transactions = () => {
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7 text-primary hover:bg-primary/10"
-                onClick={(e) => { e.stopPropagation(); setSelectedTransaction(row); }}
+                onClick={(e) => { e.stopPropagation(); setReceiptTxnId(row.id); }}
               >
-                <Receipt className="h-3.5 w-3.5" />
+                <Receipt className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
             <TooltipContent><p>View Receipt</p></TooltipContent>
@@ -489,7 +498,7 @@ const Transactions = () => {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className={`h-7 w-7 ${canReturn ? "text-green-600 hover:bg-green-50" : "text-muted-foreground/30 cursor-not-allowed"}`}
+                      className={`h-7 w-7 ${canReturn ? "text-success hover:bg-success/10" : "text-muted-foreground/30 cursor-not-allowed"}`}
                       onClick={(e) => {
                         if (!canReturn) return;
                         e.stopPropagation();
@@ -497,7 +506,7 @@ const Transactions = () => {
                         setShowReturnDialog(true);
                       }}
                     >
-                      <RotateCcw className="h-3.5 w-3.5" />
+                      <RotateCcw className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent><p>{canReturn ? "Return (Full / Partial)" : "Only same-day self-returns allowed"}</p></TooltipContent>
@@ -505,20 +514,22 @@ const Transactions = () => {
               );
             })()}
 
-            {/* Edit Transaction */}
+            {/* Edit Transaction - only for users with modify_transactions permission */}
+            {canModifyTransactions && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-7 w-7 text-amber-600 hover:bg-amber-50"
+                  className="h-7 w-7 text-warning hover:bg-warning/10"
                   onClick={(e) => { e.stopPropagation(); startEdit(row); }}
                 >
-                  <Pencil className="h-3.5 w-3.5" />
+                  <Pencil className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent><p>Edit Transaction</p></TooltipContent>
             </Tooltip>
+            )}
           </>}
         </div>
         </TooltipProvider>
@@ -549,7 +560,7 @@ const Transactions = () => {
             {store.outstanding !== undefined && (
               <div className="flex items-center justify-between text-xs py-1 border-t">
                 <span className="text-muted-foreground">Outstanding:</span>
-                <span className={`font-medium ${Number(store.outstanding) > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                <span className={`font-medium ${Number(store.outstanding) > 0 ? 'text-destructive' : 'text-success'}`}>
                   ₹{Number(store.outstanding || 0).toLocaleString()}
                 </span>
               </div>
@@ -570,12 +581,12 @@ const Transactions = () => {
     { header: "Payment ID", accessor: (row: any) => (
       <span className={`font-mono text-xs ${returnedClass(row)}`}>
         {row.display_id}
-        {row.is_fully_returned && <span className="ml-1.5 text-[9px] font-bold bg-amber-100 text-amber-600 border border-amber-200 rounded px-1 py-0">Returned</span>}
+        {row.is_fully_returned && <span className="ml-2 text-4xs font-bold bg-warning/20 text-warning border border-warning/30 rounded px-1 py-0">Returned</span>}
       </span>
     ), className: "font-mono text-xs" },
     { header: "Store", accessor: (row: any) => (
       <div className={`flex items-center gap-2 ${returnedClass(row)}`}>
-        <StoreIcon className={`h-3.5 w-3.5 shrink-0 ${returnedClass(row)}`} />
+        <StoreIcon className={`h-4 w-4 shrink-0 ${returnedClass(row)}`} />
         <StoreHoverCard store={row.stores}>
           <span>{row.stores?.name || "—"}</span>
         </StoreHoverCard>
@@ -616,7 +627,7 @@ const Transactions = () => {
 <div className="flex flex-wrap items-center gap-2 p-3 rounded-lg border bg-muted/30">
       <Popover>
         <PopoverTrigger asChild>
-          <Button variant="outline" className="h-8 text-xs gap-1.5 justify-start font-normal flex-1 min-w-[100px] sm:flex-none">
+          <Button variant="outline" className="h-8 flex-1 min-w-[100px] justify-start gap-2 text-xs font-normal sm:flex-none">
             <CalendarIcon className="h-3 w-3 shrink-0" />
             {filterFrom ? format(new Date(filterFrom + "T00:00:00"), "dd MMM yy") : "From"}
           </Button>
@@ -627,7 +638,7 @@ const Transactions = () => {
       </Popover>
       <Popover>
         <PopoverTrigger asChild>
-          <Button variant="outline" className="h-8 text-xs gap-1.5 justify-start font-normal flex-1 min-w-[100px] sm:flex-none">
+          <Button variant="outline" className="h-8 flex-1 min-w-[100px] justify-start gap-2 text-xs font-normal sm:flex-none">
             <CalendarIcon className="h-3 w-3 shrink-0" />
             {filterTo ? format(new Date(filterTo + "T00:00:00"), "dd MMM yy") : "To"}
           </Button>
@@ -694,18 +705,18 @@ const Transactions = () => {
         searchPlaceholder="Search by payment ID..."
         emptyMessage="No transactions recorded yet."
         renderMobileCard={(row: any) => (
-          <div className={`rounded-lg border bg-card p-3 ${row.is_fully_returned ? "opacity-70 bg-slate-50 dark:bg-slate-900/40 border-dashed border-red-200 dark:border-red-900/40" : ""}`}>
+          <div className={`rounded-lg border bg-card p-3 ${row.is_fully_returned ? "opacity-70 bg-slate-50 dark:bg-slate-900/40 border-dashed border-destructive/30 dark:border-destructive/30" : ""}`}>
             {/* Header row: ID + Date */}
-            <div className="flex items-center justify-between mb-1.5">
+            <div className="mb-2 flex items-center justify-between">
               <span className={`font-mono text-xs font-medium ${row.is_fully_returned ? "line-through text-muted-foreground" : "text-primary"}`}>
                 {row.display_id}
-                {row.is_fully_returned && <span className="ml-1.5 text-[9px] font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800 rounded px-1.5 py-0">Returned</span>}
+                {row.is_fully_returned && <span className="ml-2 text-4xs font-bold bg-warning/20 dark:bg-warning/20 text-warning dark:text-warning border border-warning/30 dark:border-warning/30 rounded px-2 py-0">Returned</span>}
               </span>
-              <span className="text-[10px] text-muted-foreground">{format(new Date(row.created_at), "dd MMM yy, hh:mm a")}</span>
+              <span className="text-2xs text-muted-foreground">{format(new Date(row.created_at), "dd MMM yy, hh:mm a")}</span>
             </div>
             {/* Store name */}
-            <div className={`flex items-center gap-1.5 mb-2 ${returnedClass(row)}`}>
-              <StoreIcon className={`h-3.5 w-3.5 shrink-0 ${returnedClass(row)}`} />
+            <div className={`mb-2 flex items-center gap-2 ${returnedClass(row)}`}>
+              <StoreIcon className={`h-4 w-4 shrink-0 ${returnedClass(row)}`} />
               <span className="font-medium text-sm truncate">{row.stores?.name || "—"}</span>
             </div>
             {/* Amounts row - inline compact */}
@@ -716,16 +727,16 @@ const Transactions = () => {
             </div>
             {/* Footer: Recorder + Balance */}
             <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-2">
                 <Avatar className="h-4 w-4">
                   <AvatarImage src={getRecorderAvatar(row.recorded_by) || undefined} />
-                  <AvatarFallback className="text-[8px] bg-primary/10 text-primary">{getRecorderName(row.recorded_by).charAt(0)}</AvatarFallback>
+                  <AvatarFallback className="text-5xs bg-primary/10 text-primary">{getRecorderName(row.recorded_by).charAt(0)}</AvatarFallback>
                 </Avatar>
-                <span className="text-[10px] text-muted-foreground truncate max-w-[100px]">{getRecorderName(row.recorded_by)}</span>
+                <span className="text-2xs text-muted-foreground truncate max-w-[100px]">{getRecorderName(row.recorded_by)}</span>
               </div>
-              <div className="flex items-center gap-1.5 text-xs">
+              <div className="flex items-center gap-2 text-xs">
                 <span className="text-muted-foreground">Bal:</span>
-                <span className={`${returnedClass(row)} ${!row.is_fully_returned && Number(row.new_outstanding || 0) < Number(row.old_outstanding || 0) ? "font-semibold text-green-600" : ""}`}>
+                <span className={`${returnedClass(row)} ${!row.is_fully_returned && Number(row.new_outstanding || 0) < Number(row.old_outstanding || 0) ? "font-semibold text-success" : ""}`}>
                   ₹{Number(row.new_outstanding || 0).toLocaleString()}
                 </span>
               </div>
@@ -736,8 +747,8 @@ const Transactions = () => {
 
       {hasMoreTransactions && (
         <div className="flex justify-center pt-2">
-          <Button variant="outline" size="sm" onClick={() => setLoadedPages((p) => p + 1)} disabled={isFetching} className="gap-1.5">
-            {isFetching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+          <Button variant="outline" size="sm" onClick={() => setLoadedPages((p) => p + 1)} disabled={isFetching} className="gap-2">
+            {isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             Load more
           </Button>
         </div>
@@ -806,153 +817,12 @@ const Transactions = () => {
       </DialogContent>
     </Dialog>
 
-    {/* Transaction Receipt Dialog */}
-    <Dialog open={!!selectedTransaction} onOpenChange={(v) => { if (!v) setSelectedTransaction(null); }}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle className="flex items-center justify-between">
-            <span>Payment Receipt</span>
-            <div className="flex gap-2">
-              <Button 
-                size="icon" 
-                variant="outline" 
-                onClick={() => {
-                  if (selectedTransaction) {
-                    const printWindow = window.open("", "_blank");
-                    if (printWindow) {
-                      printWindow.document.write(document.getElementById('txn-receipt-content')?.innerHTML || '');
-                      printWindow.document.close();
-                      printWindow.print();
-                    }
-                  }
-                }}
-              >
-                <Printer className="h-4 w-4" />
-              </Button>
-              <Button 
-                size="icon" 
-                variant="outline" 
-                onClick={() => {
-                  if (selectedTransaction) {
-                    const returnedLabel = selectedTransaction.is_fully_returned ? "\nStatus: CANCELLED (Fully Returned)" : "";
-                    const text = `Receipt: ${selectedTransaction.display_id}\nStore: ${selectedTransaction.stores?.name}\nDate: ${new Date(selectedTransaction.created_at).toLocaleDateString('en-IN')}\nAmount: ₹${Number(selectedTransaction.total_amount || 0).toLocaleString()}${returnedLabel}\nPrevious Balance: ₹${Number(selectedTransaction.old_outstanding || 0).toLocaleString()}\nTotal Due: ₹${Number(selectedTransaction.new_outstanding || 0).toLocaleString()}`;
-                    navigator.clipboard.writeText(text);
-                    toast.success("Receipt copied to clipboard");
-                  }
-                }}
-              >
-                <Share2 className="h-4 w-4" />
-              </Button>
-            </div>
-          </DialogTitle>
-        </DialogHeader>
-        {(() => {
-          if (!selectedTransaction) return <p className="text-center text-muted-foreground py-8">Receipt not found</p>;
-          
-          const isReturned = selectedTransaction.is_fully_returned;
-          const amountPaid = Number(selectedTransaction.total_amount || 0);
-          const previousBalance = Number(selectedTransaction.old_outstanding || 0);
-          const totalDue = Number(selectedTransaction.new_outstanding || 0);
-          // Color logic: if totalDue > 0, store owes money (red), if < 0, warehouse owes (green)
-          const balanceColor = totalDue > 0 ? "text-red-600" : totalDue < 0 ? "text-green-600" : "text-muted-foreground";
-          
-          return (
-            <div id="txn-receipt-content" className="font-mono text-sm">
-              {isReturned && (
-                <div className="text-center mb-2">
-                  <span className="inline-block text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 rounded px-2 py-0.5 uppercase tracking-wider">
-                    CANCELLED — Fully Returned
-                  </span>
-                </div>
-              )}
-              {/* Header */}
-              <div className="text-center mb-4">
-                <h1 className="font-bold text-lg">{settings.business_name || "Aqua Prime"}</h1>
-                {settings.business_address && <p className="text-xs text-muted-foreground">{settings.business_address}</p>}
-                {settings.business_phone && <p className="text-xs text-muted-foreground">Tel: {settings.business_phone}</p>}
-              </div>
-
-              <div className="border-t border-dashed border-gray-400 my-3" />
-
-              {/* Receipt Info */}
-              <div className="space-y-1 text-xs">
-                <div className="flex justify-between">
-                  <span>Receipt No:</span>
-                  <span className="font-bold">{selectedTransaction.display_id}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Date:</span>
-                  <span>{new Date(selectedTransaction.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
-                </div>
-                {selectedTransaction.stores?.name && (
-                  <div className="flex justify-between">
-                    <span>Store:</span>
-                    <span>{selectedTransaction.stores.name}</span>
-                  </div>
-                )}
-                {selectedTransaction.customers?.name && (
-                  <div className="flex justify-between">
-                    <span>Customer:</span>
-                    <span>{selectedTransaction.customers.name}</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="border-t border-dashed border-gray-400 my-3" />
-
-              {/* Payment Details */}
-              <div className="space-y-1">
-                <div className="flex justify-between font-bold text-base pt-1 border-t">
-                  <span>AMOUNT PAID:</span>
-                  <span className={isReturned ? "line-through text-muted-foreground" : ""}>₹{amountPaid.toLocaleString()}</span>
-                </div>
-                {Number(selectedTransaction.cash_amount) > 0 && (
-                  <div className="flex justify-between text-xs">
-                    <span>Cash:</span>
-                    <span>₹{Number(selectedTransaction.cash_amount || 0).toLocaleString()}</span>
-                  </div>
-                )}
-                {Number(selectedTransaction.upi_amount || 0) > 0 && (
-                  <div className="flex justify-between text-xs">
-                    <span>UPI:</span>
-                    <span>₹{Number(selectedTransaction.upi_amount || 0).toLocaleString()}</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="border-t border-dashed border-gray-400 my-3" />
-
-              {/* Balance Summary */}
-              <div className="space-y-1 text-xs">
-                <div className="flex justify-between">
-                  <span>Previous Balance:</span>
-                  <span>₹{previousBalance.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between font-semibold">
-                  <span>Amount Paid:</span>
-                  <span className="text-green-600">-₹{amountPaid.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between font-bold border-t pt-1">
-                  <span>Total Due:</span>
-                  <span className={balanceColor}>₹{totalDue.toLocaleString()}</span>
-                </div>
-              </div>
-
-              <div className="border-t border-dashed border-gray-400 my-3" />
-
-              {/* Footer */}
-              <div className="text-center text-xs space-y-1">
-                <p className="font-semibold">{isReturned ? "This payment has been fully returned" : "Thank you for your payment!"}</p>
-                {selectedTransaction.notes && <p className="text-muted-foreground text-[10px]">Note: {selectedTransaction.notes}</p>}
-                <p className="text-[10px] text-muted-foreground mt-2">
-                  This is a computer generated receipt
-                </p>
-              </div>
-            </div>
-          );
-        })()}
-      </DialogContent>
-</Dialog>
+    {/* Transaction Receipt */}
+    <TransactionReceipt
+      transactionId={receiptTxnId || ""}
+      open={!!receiptTxnId}
+      onClose={() => setReceiptTxnId(null)}
+    />
 
       {/* Payment Return Dialog */}
       <Dialog open={showReturnDialog} onOpenChange={(v) => { setShowReturnDialog(v); if (!v) resetReturnForm(); }}>
@@ -992,7 +862,7 @@ const Transactions = () => {
                   amount: fullReturnAmount,
                   timestamp: new Date().toISOString(),
                 });
-                await addToQueue({
+                await enqueueWithContext({
                   id: crypto.randomUUID(),
                   type: "payment_return",
                   payload: {
@@ -1057,10 +927,10 @@ const Transactions = () => {
                     <div className="flex justify-between text-xs text-muted-foreground"><span>Store:</span><span>{txn.stores?.name}</span></div>
                     <div className="flex justify-between text-xs text-muted-foreground"><span>Date:</span><span>{new Date(txn.created_at).toLocaleDateString()}</span></div>
                   </div>
-                  <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm">
+                  <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm">
                     <div className="flex justify-between font-semibold">
-                      <span className="text-red-600">Amount to return:</span>
-                      <span className="text-red-600">{fullReturnAmount === -1 ? "Loading..." : `₹${fullReturnAmount.toLocaleString()}`}</span>
+                      <span className="text-destructive">Amount to return:</span>
+                      <span className="text-destructive">{fullReturnAmount === -1 ? "Loading..." : `₹${fullReturnAmount.toLocaleString()}`}</span>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">Full return — for partial adjustments, edit the transaction instead.</p>
                   </div>
@@ -1075,7 +945,7 @@ const Transactions = () => {
                     </Select>
                   </div>
                   <div>
-                    <Label>Reason <span className="text-red-500">*</span></Label>
+                    <Label>Reason <span className="text-destructive">*</span></Label>
                     <Select value={returnReason} onValueChange={setReturnReason} required>
                       <SelectTrigger className="mt-1"><SelectValue placeholder="Select reason" /></SelectTrigger>
                       <SelectContent>
@@ -1094,7 +964,7 @@ const Transactions = () => {
                   <div className="rounded-lg border bg-muted/30 p-3 text-sm">
                     <div className="flex justify-between font-semibold">
                       <span>Store will be credited:</span>
-                      <span className="text-green-600">{fullReturnAmount === -1 ? "Loading..." : `+₹${fullReturnAmount.toLocaleString()}`}</span>
+                      <span className="text-success">{fullReturnAmount === -1 ? "Loading..." : `+₹${fullReturnAmount.toLocaleString()}`}</span>
                     </div>
                   </div>
                   <Button type="submit" className="w-full" disabled={returnLoading}>

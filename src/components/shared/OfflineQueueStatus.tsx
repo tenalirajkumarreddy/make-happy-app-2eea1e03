@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Cloud, CloudOff, RefreshCw, AlertCircle, CheckCircle, X } from "lucide-react";
+import { Cloud, CloudOff, RefreshCw, AlertCircle, CheckCircle, X, Wifi, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -21,7 +21,7 @@ import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { formatDistanceToNow } from "date-fns";
 
 export function OfflineQueueStatus() {
-  const { isOnline } = useOnlineStatus();
+  const { isOnline, pendingCount, syncing, conflictCount } = useOnlineStatus();
   const [actions, setActions] = useState<PendingAction[]>([]);
   const [files, setFiles] = useState<PendingFileUpload[]>([]);
   const [isOpen, setIsOpen] = useState(false);
@@ -41,14 +41,11 @@ export function OfflineQueueStatus() {
 
   useEffect(() => {
     loadQueue();
-
-    // Listen for queue changes
     const handleQueueChange = () => loadQueue();
     window.addEventListener("offline-queue-changed", handleQueueChange);
     return () => window.removeEventListener("offline-queue-changed", handleQueueChange);
   }, []);
 
-  // Reload when sheet opens
   useEffect(() => {
     if (isOpen) loadQueue();
   }, [isOpen]);
@@ -87,23 +84,25 @@ export function OfflineQueueStatus() {
     }
   };
 
-  // Don't show if online and no pending items
-  if (isOnline && totalPending === 0) {
-    return null;
-  }
-
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
       <SheetTrigger asChild>
         <Button
           variant="ghost"
           size="sm"
-          className={`relative gap-1.5 ${!isOnline ? "text-amber-600" : ""}`}
+          className={`relative gap-1.5 ${!isOnline ? "text-amber-600" : "text-muted-foreground"}`}
+          title={
+            isOnline
+              ? `Online${totalPending > 0 ? ` — ${totalPending} pending sync` : ""}`
+              : "Offline"
+          }
         >
-          {isOnline ? (
-            <Cloud className="h-4 w-4" />
+          {syncing ? (
+            <RefreshCw className="h-4 w-4 animate-spin" />
+          ) : isOnline ? (
+            totalPending > 0 ? <Cloud className="h-4 w-4" /> : <Wifi className="h-4 w-4" />
           ) : (
-            <CloudOff className="h-4 w-4" />
+            <WifiOff className="h-4 w-4" />
           )}
           {totalPending > 0 && (
             <Badge
@@ -113,6 +112,11 @@ export function OfflineQueueStatus() {
               {totalPending}
             </Badge>
           )}
+          {conflictCount > 0 && (
+            <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-warning text-2xs font-bold text-white px-1">
+              {conflictCount}
+            </span>
+          )}
         </Button>
       </SheetTrigger>
 
@@ -121,14 +125,24 @@ export function OfflineQueueStatus() {
           <SheetTitle className="flex items-center gap-2">
             {isOnline ? (
               <>
-                <Cloud className="h-5 w-5 text-green-600" />
-                Online
+                {syncing ? (
+                  <RefreshCw className="h-5 w-5 animate-spin text-info" />
+                ) : (
+                  <Cloud className="h-5 w-5 text-success" />
+                )}
+                {syncing ? "Syncing..." : "Online"}
               </>
             ) : (
               <>
                 <CloudOff className="h-5 w-5 text-amber-600" />
                 Offline
               </>
+            )}
+            {totalPending > 0 && (
+              <Badge variant="secondary" className="ml-1">{totalPending} pending</Badge>
+            )}
+            {conflictCount > 0 && (
+              <Badge variant="destructive" className="ml-1">{conflictCount} conflict{conflictCount > 1 ? "s" : ""}</Badge>
             )}
           </SheetTitle>
         </SheetHeader>
@@ -146,10 +160,22 @@ export function OfflineQueueStatus() {
                 {failedCount} failed after retries
               </div>
             )}
-            {isOnline && totalPending > 0 && (
-              <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+            {conflictCount > 0 && (
+              <div className="mt-2 flex items-center gap-2 text-sm text-warning">
+                <AlertCircle className="h-4 w-4" />
+                {conflictCount} item{conflictCount > 1 ? "s" : ""} with conflicts
+                <button
+                  className="ml-auto text-xs font-medium underline underline-offset-2 hover:text-warning/80"
+                  onClick={() => window.dispatchEvent(new CustomEvent("show-conflict-resolver"))}
+                >
+                  Resolve
+                </button>
+              </div>
+            )}
+            {syncing && (
+              <div className="mt-2 flex items-center gap-2 text-sm text-info">
                 <RefreshCw className="h-4 w-4 animate-spin" />
-                Syncing automatically...
+                Syncing queued items...
               </div>
             )}
             {!isOnline && totalPending > 0 && (
@@ -157,8 +183,8 @@ export function OfflineQueueStatus() {
                 Items will sync when you're back online.
               </p>
             )}
-            {totalPending === 0 && (
-              <div className="mt-2 flex items-center gap-2 text-sm text-green-600">
+            {isOnline && !syncing && totalPending === 0 && (
+              <div className="mt-2 flex items-center gap-2 text-sm text-success">
                 <CheckCircle className="h-4 w-4" />
                 All synced
               </div>
@@ -262,11 +288,19 @@ export function OfflineQueueStatus() {
           )}
 
           {/* Empty state */}
-          {totalPending === 0 && (
+          {totalPending === 0 && !syncing && (
             <div className="py-8 text-center">
-              <CheckCircle className="mx-auto h-12 w-12 text-green-600/50" />
+              <CheckCircle className="mx-auto h-12 w-12 text-success/50" />
               <p className="mt-2 text-sm text-muted-foreground">
                 No pending items to sync
+              </p>
+            </div>
+          )}
+          {totalPending === 0 && syncing && (
+            <div className="py-8 text-center">
+              <RefreshCw className="mx-auto h-12 w-12 animate-spin text-info/50" />
+              <p className="mt-2 text-sm text-muted-foreground">
+                Syncing...
               </p>
             </div>
           )}

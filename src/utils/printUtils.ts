@@ -1,4 +1,5 @@
 import { CompanySettings } from "@/hooks/useCompanySettings";
+import { PRINT_REPORT_CSS } from "@/lib/printTokens";
 
 export interface PrintDocumentConfig {
   title: string;
@@ -54,38 +55,40 @@ export function generatePrintHTML(config: PrintDocumentConfig): string {
       margin: 20mm;
     }
     
+    ${PRINT_REPORT_CSS}
+    
     html { font-size: 12px; }
     
     body {
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       font-size: 12px;
       line-height: 1.5;
-      color: #1A1A1A;
-      background: #FFFFFF;
+      color: var(--print-text);
+      background: var(--print-white);
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
 
     /* ===== PAGE WRAPPER WITH BORDER ===== */
     .page-wrapper {
-      border: 1px solid #E5E7EB;
+      border: 1px solid var(--print-border-light);
       min-height: 100%;
       position: relative;
     }
 
     /* ===== HEADER BAND - Navy with Amber Bottom Border ===== */
     .header-band {
-      background: #1A2B4A;
+      background: var(--print-primary);
       height: 60px;
       display: flex;
       justify-content: space-between;
       align-items: center;
       padding: 0 20px;
-      border-bottom: 3px solid #F5A623;
+      border-bottom: 3px solid var(--print-accent);
     }
 
     .header-left {
-      color: #FFFFFF;
+      color: var(--print-white);
       font-size: 22px;
       font-weight: 700;
       text-transform: uppercase;
@@ -93,7 +96,7 @@ export function generatePrintHTML(config: PrintDocumentConfig): string {
     }
 
     .header-right {
-      color: #FFFFFF;
+      color: var(--print-white);
       font-size: 26px;
       font-weight: 700;
     }
@@ -104,41 +107,41 @@ export function generatePrintHTML(config: PrintDocumentConfig): string {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      border-bottom: 1px solid #D0D5DD;
+      border-bottom: 1px solid var(--print-border);
     }
 
     .sub-header-left {
       font-size: 11px;
-      color: #6B7280;
+      color: var(--print-text-muted);
     }
 
     .sub-header-right {
       font-size: 13px;
       font-weight: 700;
-      color: #1A1A1A;
+      color: var(--print-text);
       text-align: right;
     }
 
     /* ===== INFO ROWS - Two Column ===== */
     .info-row {
-      background: #F5F7FA;
+      background: var(--print-bg-light);
       padding: 12px 20px;
       display: flex;
       justify-content: space-between;
-      border-bottom: 1px solid #D0D5DD;
+      border-bottom: 1px solid var(--print-border);
     }
 
     .info-label {
       flex: 1;
       font-size: 12px;
-      color: #6B7280;
+      color: var(--print-text-muted);
     }
 
     .info-value {
       flex: 1;
       font-size: 12px;
       font-weight: 600;
-      color: #1A1A1A;
+      color: var(--print-text);
       text-align: right;
     }
 
@@ -152,8 +155,8 @@ export function generatePrintHTML(config: PrintDocumentConfig): string {
       font-size: 10px;
       font-weight: 700;
       text-transform: uppercase;
-      color: #1A2B4A;
-      border-left: 3px solid #1A2B4A;
+      color: var(--print-primary);
+      border-left: 3px solid var(--print-primary);
       padding-left: 8px;
       margin: 20px 0 12px 0;
       letter-spacing: 0.5px;
@@ -162,7 +165,7 @@ export function generatePrintHTML(config: PrintDocumentConfig): string {
     h3 {
       font-size: 11px;
       font-weight: 600;
-      color: #1A1A1A;
+      color: var(--print-text);
       margin: 16px 0 8px 0;
     }
 
@@ -175,39 +178,39 @@ export function generatePrintHTML(config: PrintDocumentConfig): string {
 
     .kpi-card {
       flex: 1;
-      background: #F5F7FA;
+      background: var(--print-bg-light);
       border: 1px solid #D0D5DD;
       padding: 12px;
       text-align: center;
     }
 
     .kpi-card.highlight {
-      background: #1A2B4A;
-      border-color: #1A2B4A;
+      background: var(--print-primary);
+      border-color: var(--print-primary);
     }
 
     .kpi-label {
       font-size: 10px;
       font-weight: 600;
       text-transform: uppercase;
-      color: #6B7280;
+      color: var(--print-text-muted);
       margin-bottom: 4px;
       letter-spacing: 0.3px;
     }
 
     .kpi-card.highlight .kpi-label {
-      color: #F5A623;
+      color: var(--print-accent);
     }
 
     .kpi-value {
       font-size: 18px;
       font-weight: 700;
-      color: #1A1A1A;
+      color: var(--print-text);
       font-variant-numeric: tabular-nums;
     }
 
     .kpi-card.highlight .kpi-value {
-      color: #FFFFFF;
+      color: var(--print-white);
     }
 
     /* ===== TABLES ===== */
@@ -220,8 +223,8 @@ export function generatePrintHTML(config: PrintDocumentConfig): string {
     thead { display: table-header-group; }
 
     th {
-      background: #1A2B4A;
-      color: #FFFFFF;
+      background: var(--print-primary);
+      color: var(--print-white);
       font-size: 12px;
       font-weight: 700;
       text-align: left;
@@ -235,27 +238,27 @@ export function generatePrintHTML(config: PrintDocumentConfig): string {
     td {
       padding: 8px 12px;
       height: 32px;
-      border-bottom: 1px solid #D0D5DD;
+      border-bottom: 1px solid var(--print-border);
     }
 
     tbody tr:nth-child(even) {
-      background: #F9FAFB;
+      background: var(--print-bg-subtle);
     }
 
     tbody tr:nth-child(odd) {
-      background: #FFFFFF;
+      background: var(--print-white);
     }
 
     /* Total Row */
     tr.total-row, tfoot tr {
       background: #1A2B4A !important;
-      color: #FFFFFF;
+      color: var(--print-white);
       font-weight: 700;
       font-size: 14px;
     }
 
     tr.total-row td, tfoot td {
-      color: #FFFFFF;
+      color: var(--print-white);
       font-weight: 700;
     }
 
@@ -271,7 +274,7 @@ export function generatePrintHTML(config: PrintDocumentConfig): string {
       display: flex;
       justify-content: space-between;
       padding: 8px 12px;
-      border-bottom: 1px solid #D0D5DD;
+      border-bottom: 1px solid var(--print-border);
     }
 
     .summary-row:last-child {
@@ -280,18 +283,18 @@ export function generatePrintHTML(config: PrintDocumentConfig): string {
 
     .summary-label {
       font-size: 12px;
-      color: #6B7280;
+      color: var(--print-text-muted);
     }
 
     .summary-value {
       font-size: 12px;
       font-weight: 600;
-      color: #1A1A1A;
+      color: var(--print-text);
       text-align: right;
     }
 
     .summary-total {
-      background: #1A2B4A;
+      background: var(--print-primary);
       display: flex;
       justify-content: space-between;
       padding: 10px 12px;
@@ -299,7 +302,7 @@ export function generatePrintHTML(config: PrintDocumentConfig): string {
 
     .summary-total .summary-label,
     .summary-total .summary-value {
-      color: #FFFFFF;
+      color: var(--print-white);
       font-size: 14px;
       font-weight: 700;
     }
@@ -320,12 +323,12 @@ export function generatePrintHTML(config: PrintDocumentConfig): string {
     .text-center { text-align: center; }
     .text-left { text-align: left; }
     
-    .text-pos, .text-success { color: #047857; }
-    .text-neg, .text-danger { color: #DC2626; }
-    .text-warn, .text-warning { color: #F59E0B; }
-    .text-muted { color: #6B7280; }
-    .text-primary { color: #1A2B4A; }
-    .text-accent { color: #F5A623; }
+    .text-pos, .text-success { color: var(--print-success); }
+    .text-neg, .text-danger { color: var(--print-danger); }
+    .text-warn, .text-warning { color: var(--print-warning); }
+    .text-muted { color: var(--print-text-muted); }
+    .text-primary { color: var(--print-primary); }
+    .text-accent { color: var(--print-accent); }
     
     .font-mono {
       font-family: ui-monospace, 'Cascadia Code', 'Courier New', monospace;
@@ -345,11 +348,11 @@ export function generatePrintHTML(config: PrintDocumentConfig): string {
       letter-spacing: 0.3px;
     }
 
-    .pill-success { background: #D1FAE5; color: #047857; }
-    .pill-danger { background: #FEE2E2; color: #DC2626; }
-    .pill-warning { background: #FEF3C7; color: #D97706; }
-    .pill-info { background: #DBEAFE; color: #1D4ED8; }
-    .pill-neutral { background: #F3F4F6; color: #374151; }
+    .pill-success { background: #D1FAE5; color: var(--print-success); }
+    .pill-danger { background: #FEE2E2; color: var(--print-danger); }
+    .pill-warning { background: var(--print-bg-warning); color: var(--print-warning-dark); }
+    .pill-info { background: var(--print-bg-info); color: var(--print-info); }
+    .pill-neutral { background: var(--print-bg-neutral); color: var(--print-text-dark); }
 
     /* ===== BADGE ===== */
     .badge {
@@ -361,25 +364,25 @@ export function generatePrintHTML(config: PrintDocumentConfig): string {
       text-transform: uppercase;
     }
 
-    .badge-success { background: #D1FAE5; color: #047857; }
-    .badge-danger { background: #FEE2E2; color: #DC2626; }
-    .badge-warning { background: #FEF3C7; color: #D97706; }
-    .badge-info { background: #DBEAFE; color: #1D4ED8; }
-    .badge-neutral { background: #F3F4F6; color: #374151; }
+    .badge-success { background: #D1FAE5; color: var(--print-success); }
+    .badge-danger { background: #FEE2E2; color: var(--print-danger); }
+    .badge-warning { background: var(--print-bg-warning); color: var(--print-warning-dark); }
+    .badge-info { background: var(--print-bg-info); color: var(--print-info); }
+    .badge-neutral { background: var(--print-bg-neutral); color: var(--print-text-dark); }
 
     /* ===== EMPTY STATE ===== */
     .empty-state {
       text-align: center;
       padding: 24px;
-      color: #9CA3AF;
+      color: var(--print-text-placeholder);
       font-style: italic;
-      background: #F9FAFB;
-      border: 1px dashed #D0D5DD;
+      background: var(--print-bg-subtle);
+      border: 1px dashed var(--print-border);
     }
 
     /* ===== FOOTER STRIP ===== */
     .footer-strip {
-      background: #F5F7FA;
+      background: var(--print-bg-light);
       padding: 10px 20px;
       display: flex;
       justify-content: space-between;
@@ -389,16 +392,16 @@ export function generatePrintHTML(config: PrintDocumentConfig): string {
       bottom: 0;
       left: 0;
       right: 0;
-      border-top: 1px solid #D0D5DD;
+      border-top: 1px solid var(--print-border);
     }
 
     .footer-left {
       font-style: italic;
-      color: #6B7280;
+      color: var(--print-text-muted);
     }
 
     .footer-right {
-      color: #1A1A1A;
+      color: var(--print-text);
     }
 
     /* ===== PAGE BREAK ===== */
@@ -408,7 +411,7 @@ export function generatePrintHTML(config: PrintDocumentConfig): string {
 
     /* ===== PRINT ADJUSTMENTS ===== */
     @media print {
-      body { background: #FFFFFF; }
+      body { background: var(--print-white); }
       .page-wrapper { border-color: #E5E7EB; }
     }
   </style>

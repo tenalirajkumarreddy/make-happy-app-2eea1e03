@@ -555,19 +555,6 @@ export function arrayBufferToBlob(buffer: ArrayBuffer, contentType: string): Blo
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Add action to queue with context tracking for conflict detection
- */
-export async function addToQueueWithContext(
-  action: PendingAction,
-  context: OperationContext
-): Promise<void> {
-  return addToQueue({
-    ...action,
-    context,
-  });
-}
-
-/**
  * Get all actions that have conflicts
  */
 export async function getConflictedActions(): Promise<PendingAction[]> {

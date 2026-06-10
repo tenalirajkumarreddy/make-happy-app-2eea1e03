@@ -55,10 +55,12 @@ interface SaleReturnDialogProps {
 }
 
 const returnReasons = [
-  "Damage",
-  "Defect",
-  "Expired",
-  "Other",
+  "damaged",
+  "defective",
+  "wrong_item",
+  "not_needed",
+  "expired",
+  "other",
 ];
 
 export function SaleReturnDialog({
@@ -127,6 +129,14 @@ export function SaleReturnDialog({
       });
 
       if (error) throw error;
+
+      // Save notes to the return record (RPC doesn't accept notes parameter)
+      if (notes.trim() && result?.[0]?.return_id) {
+        await supabase
+          .from("sale_returns")
+          .update({ notes: notes.trim() })
+          .eq("id", result[0].return_id);
+      }
       return result;
     },
     onSuccess: (result: any) => {
@@ -249,7 +259,7 @@ export function SaleReturnDialog({
               value={reason} 
               onValueChange={(val) => {
                 setReason(val);
-                if (val === "Damage") {
+                if (val === "damaged") {
                   setIsDamaged(true);
                 }
               }}
@@ -258,9 +268,12 @@ export function SaleReturnDialog({
                 <SelectValue placeholder="Select reason" />
               </SelectTrigger>
               <SelectContent>
-                {returnReasons.map((r) => (
-                  <SelectItem key={r} value={r}>{r}</SelectItem>
-                ))}
+                <SelectItem value="damaged">Damaged Product</SelectItem>
+                <SelectItem value="defective">Defective/Quality Issue</SelectItem>
+                <SelectItem value="wrong_item">Wrong Item Delivered</SelectItem>
+                <SelectItem value="not_needed">Not Needed Anymore</SelectItem>
+                <SelectItem value="expired">Expired Product</SelectItem>
+                <SelectItem value="other">Other</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -278,7 +291,7 @@ export function SaleReturnDialog({
             />
           </div>
 
-          {reason === "Other" && (
+          {reason === "other" && (
             <div className="space-y-1.5">
               <Label>Specify Reason *</Label>
               <input

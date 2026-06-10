@@ -18,8 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import type { StoreOption } from "@/mobile/components/StorePickerSheet";
-import { getCurrentPosition } from "@/lib/capacitorUtils";
-import { addToQueue } from "@/lib/offlineQueue";
+import { useMarkVisit } from "@/mobile/hooks/useMarkVisit";
 
 interface Props {
   store: StoreOption;
@@ -46,7 +45,7 @@ interface StoreProfileRow {
 
 export function AgentStoreProfile({ store, onBack, onGoRecord }: Props) {
   const { user } = useAuth();
-  const [visitLoading, setVisitLoading] = useState(false);
+  const { markVisit, isVisiting } = useMarkVisit();
 
   const { data: storeRow, isLoading } = useQuery({
     queryKey: ["mobile-store-profile", store.id],
@@ -60,6 +59,7 @@ export function AgentStoreProfile({ store, onBack, onGoRecord }: Props) {
       return (data as unknown as StoreProfileRow | null) || null;
     },
     enabled: !!store.id,
+    staleTime: 5 * 60 * 1000,
   });
 
   const currentStore: StoreOption = useMemo(() => ({
@@ -90,6 +90,7 @@ export function AgentStoreProfile({ store, onBack, onGoRecord }: Props) {
       return data || [];
     },
     enabled: !!storeRow,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: typeP } = useQuery({
@@ -101,6 +102,7 @@ export function AgentStoreProfile({ store, onBack, onGoRecord }: Props) {
       return map;
     },
     enabled: !!storeTypeId,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: storeP } = useQuery({
@@ -112,6 +114,7 @@ export function AgentStoreProfile({ store, onBack, onGoRecord }: Props) {
       return map;
     },
     enabled: !!store.id,
+    staleTime: 5 * 60 * 1000,
   });
 
   const getPrice = (productId: string, basePrice: number) => {
@@ -139,60 +142,11 @@ export function AgentStoreProfile({ store, onBack, onGoRecord }: Props) {
 
   const handleMarkVisited = async () => {
     if (!user) return;
-
-    setVisitLoading(true);
-    try {
-      let lat: number | null = null;
-      let lng: number | null = null;
-      const pos = await getCurrentPosition();
-      if (pos) {
-        lat = pos.lat;
-        lng = pos.lng;
-      }
-
-      if (!navigator.onLine) {
-        await addToQueue({
-          id: crypto.randomUUID(),
-          type: "visit",
-          payload: {
-            userId: user.id,
-            storeId: currentStore.id,
-            lat,
-            lng,
-          },
-          createdAt: new Date().toISOString(),
-        });
-        toast.warning(`Offline — visit queued for ${currentStore.name}`);
-        return;
-      }
-
-      const { data: session } = await supabase
-        .from("route_sessions")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("status", "active")
-        .maybeSingle();
-
-      if (!session) {
-        toast.error("No active route session. Start a route first.");
-        setVisitLoading(false);
-        return;
-      }
-
-      const { error } = await supabase.from("store_visits").insert({
-        session_id: session.id,
-        store_id: currentStore.id,
-        lat,
-        lng,
-      });
-
-      if (error) throw error;
-      toast.success(`Visit recorded for ${currentStore.name}`);
-    } catch {
-      toast.error("Failed to record visit");
-    } finally {
-      setVisitLoading(false);
-    }
+    await markVisit({
+      storeId: currentStore.id,
+      storeName: currentStore.name,
+      userId: user.id,
+    });
   };
 
   const phone = currentStore.phone || (currentStore.customers as any)?.phone || null;
@@ -238,10 +192,10 @@ export function AgentStoreProfile({ store, onBack, onGoRecord }: Props) {
 
             <div className="flex gap-2 mt-2 flex-wrap">
               {currentStore.store_types?.name && (
-                <Badge variant="outline" className="text-[10px] font-semibold">{currentStore.store_types.name}</Badge>
+                <Badge variant="outline" className="text-xs font-semibold">{currentStore.store_types.name}</Badge>
               )}
               {currentStore.routes?.name && (
-                <Badge variant="outline" className="text-[10px] font-semibold">{currentStore.routes.name}</Badge>
+                <Badge variant="outline" className="text-xs font-semibold">{currentStore.routes.name}</Badge>
               )}
             </div>
 
@@ -276,22 +230,22 @@ export function AgentStoreProfile({ store, onBack, onGoRecord }: Props) {
                 className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-blue-600 hover:bg-blue-700 active:scale-95 transition-all shadow-sm"
               >
                 <ShoppingCart className="h-5 w-5 text-white" />
-                <span className="text-[11px] font-bold text-white text-center">Record Sale</span>
+                <span className="text-xs font-bold text-white text-center">Record Sale</span>
               </button>
               <button
                 onClick={() => onGoRecord(currentStore, "payment")}
                 className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95 transition-all shadow-sm"
               >
                 <Wallet className="h-5 w-5 text-emerald-500" />
-                <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200 text-center">Record Transaction</span>
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-200 text-center">Record Transaction</span>
               </button>
               <button
                 onClick={handleMarkVisited}
-                disabled={visitLoading}
-                className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-800/40 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 active:scale-95 transition-all shadow-sm disabled:opacity-60"
+                disabled={isVisiting}
+                onClick={handleMarkVisited}
               >
-                {visitLoading ? <Loader2 className="h-5 w-5 text-emerald-500 animate-spin" /> : <CheckCircle2 className="h-5 w-5 text-emerald-500" />}
-                <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 text-center">Mark Visited</span>
+                {isVisiting ? <Loader2 className="h-5 w-5 text-emerald-500 animate-spin" /> : <CheckCircle2 className="h-5 w-5 text-emerald-500" />}
+                <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 text-center">Mark Visited</span>
               </button>
             </div>
           )}
@@ -311,11 +265,11 @@ export function AgentStoreProfile({ store, onBack, onGoRecord }: Props) {
                   <div key={p.id} className="flex items-center justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-slate-800 dark:text-white truncate">{p.name}</p>
-                      <span className="text-[10px] text-slate-400 font-mono">{p.sku}</span>
+                      <span className="text-xs text-slate-400 font-mono">{p.sku}</span>
                     </div>
                     <div className="text-right shrink-0">
                       <p className="text-sm font-bold text-slate-800 dark:text-white">₹{price.toLocaleString("en-IN")}</p>
-                      <span className={`text-[10px] font-semibold capitalize ${
+                      <span className={`text-xs font-semibold capitalize ${
                         label === "store" ? "text-blue-600 dark:text-blue-400" :
                         label === "type" ? "text-violet-600 dark:text-violet-400" :
                         "text-slate-400"

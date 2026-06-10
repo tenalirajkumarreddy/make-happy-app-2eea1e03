@@ -19,7 +19,16 @@ L.Icon.Default.mergeOptions({
   shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
 });
 
-const TYPE_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ef4444", "#06b6d4", "#ec4899", "#84cc16"];
+const TYPE_COLORS = [
+  "hsl(var(--primary))",
+  "hsl(var(--success))",
+  "hsl(var(--warning))",
+  "#8b5cf6",
+  "hsl(var(--destructive))",
+  "hsl(var(--info))",
+  "#ec4899",
+  "#84cc16"
+];
 
 // Escape HTML to prevent XSS in popup content
 function escapeHtml(unsafe: string): string {
@@ -243,13 +252,13 @@ const MapPage = () => {
       // Determine color based on visit status
       let color: string;
       if (!store.is_active) {
-        color = "#94a3b8"; // inactive gray
+        color = "hsl(var(--muted-foreground))";
       } else if (isVisited) {
-        color = "#10b981"; // green - visited
+        color = "hsl(var(--success))";
       } else if (hasPendingOrder) {
-        color = "#f59e0b"; // amber - has pending order
+        color = "hsl(var(--warning))";
       } else {
-        color = storeTypeColorMap.get(typeName) || "#3b82f6";
+        color = storeTypeColorMap.get(typeName) || "hsl(var(--primary))";
       }
 
       const radius = isOnRoute ? 10 : 8;
@@ -257,30 +266,30 @@ const MapPage = () => {
       const marker = L.circleMarker([store.lat!, store.lng!], {
         radius,
         fillColor: color,
-        color: isOnRoute ? "#1d4ed8" : "#fff",
+        color: isOnRoute ? "hsl(var(--primary))" : "hsl(var(--background))",
         weight: isOnRoute ? 3 : 2,
         opacity: 1,
         fillOpacity: 0.85,
       }).addTo(map);
 
-      const statusTag = isVisited ? '<span style="color:#10b981;font-weight:bold;">✓ Visited</span>' :
-        hasPendingOrder ? '<span style="color:#f59e0b;font-weight:bold;">📦 Pending Order</span>' :
-        '<span style="color:#94a3b8;">Not visited</span>';
+      const statusTag = isVisited ? '<span style="color:hsl(var(--success));font-weight:bold;">✓ Visited</span>' :
+        hasPendingOrder ? '<span style="color:hsl(var(--warning));font-weight:bold;">📦 Pending Order</span>' :
+        '<span style="color:hsl(var(--muted-foreground));">Not visited</span>';
 
       marker.bindPopup(`
         <div style="min-width: 200px; font-family: system-ui, sans-serif;">
           <strong style="font-size: 14px;">${escapeHtml(store.name)}</strong>
-          <div style="color: #666; font-size: 11px; margin: 2px 0;">${escapeHtml(store.display_id)}</div>
+          <div style="color: hsl(var(--muted-foreground)); font-size: 11px; margin: 2px 0;">${escapeHtml(store.display_id)}</div>
           <div style="margin-top: 6px; font-size: 12px;">
             <div>${statusTag}</div>
             <div><b>Customer:</b> ${escapeHtml(store.customers?.name) || "—"}</div>
             <div><b>Type:</b> ${escapeHtml(typeName)}</div>
             <div><b>Route:</b> ${escapeHtml(store.routes?.name) || "—"}</div>
-            <div><b>Outstanding:</b> <span style="color: ${Number(store.outstanding) > 0 ? '#ef4444' : '#10b981'};">₹${Number(store.outstanding).toLocaleString()}</span></div>
+            <div><b>Outstanding:</b> <span style="color: ${Number(store.outstanding) > 0 ? 'hsl(var(--destructive))' : 'hsl(var(--success))'};">₹${Number(store.outstanding).toLocaleString()}</span></div>
             ${store.phone ? `<div><b>Phone:</b> ${escapeHtml(store.phone)}</div>` : ""}
-            ${store.address ? `<div style="margin-top:4px; color:#888;">${escapeHtml(store.address)}</div>` : ""}
+            ${store.address ? `<div style="margin-top:4px; color:hsl(var(--muted-foreground));">${escapeHtml(store.address)}</div>` : ""}
           </div>
-          <a href="https://www.google.com/maps?q=${store.lat},${store.lng}" target="_blank" rel="noopener" style="display:inline-block; margin-top:6px; font-size:11px; color:#3b82f6;">Open in Google Maps →</a>
+          <a href="https://www.google.com/maps?q=${store.lat},${store.lng}" target="_blank" rel="noopener" style="display:inline-block; margin-top:6px; font-size:11px; color:hsl(var(--primary));">Open in Google Maps →</a>
         </div>
       `);
 
@@ -290,7 +299,7 @@ const MapPage = () => {
 
     // Draw route line
     if (routePoints.length > 1) {
-      L.polyline(routePoints, { color: "#3b82f6", weight: 3, opacity: 0.6, dashArray: "8 4" }).addTo(map);
+      L.polyline(routePoints, { color: "hsl(var(--primary))", weight: 3, opacity: 0.6, dashArray: "8 4" }).addTo(map);
     }
 
     // Company marker
@@ -298,7 +307,7 @@ const MapPage = () => {
       const label = companySettings?.company_marker_label || companySettings?.company_name || "HQ";
       const companyIcon = L.divIcon({
         className: "",
-        html: `<div style="background:#7c3aed;color:white;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700;white-space:nowrap;box-shadow:0 2px 10px rgba(124,58,237,0.5);border:2px solid white;">${label}</div>`,
+        html: `<div style="background:hsl(var(--primary)/0.85);color:white;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700;white-space:nowrap;box-shadow:0 2px 10px hsl(var(--primary)/0.5);border:2px solid hsl(var(--background));">${label}</div>`,
         iconAnchor: [0, 0],
       });
       L.marker([companyCoords.lat, companyCoords.lng], { icon: companyIcon, zIndexOffset: 1000 })
@@ -306,10 +315,10 @@ const MapPage = () => {
       .bindPopup(`
         <div style="font-family:system-ui;min-width:180px;">
           <strong style="font-size:14px;">${escapeHtml(companySettings?.company_name ?? "") || "Company"}</strong>
-          <div style="color:#7c3aed;font-size:12px;font-weight:600;">${escapeHtml(label)}</div>
-          ${companySettings?.address ? `<div style="margin-top:4px;font-size:12px;color:#666;">${escapeHtml(companySettings.address)}</div>` : ""}
-          ${companySettings?.customer_care_number ? `<div style="font-size:11px;color:#888;">${escapeHtml(companySettings.customer_care_number)}</div>` : ""}
-          <a href="https://www.google.com/maps?q=${companyCoords.lat},${companyCoords.lng}" target="_blank" rel="noopener" style="display:inline-block;margin-top:6px;font-size:11px;color:#7c3aed;">Open in Google Maps →</a>
+          <div style="color:hsl(var(--primary));font-size:12px;font-weight:600;">${escapeHtml(label)}</div>
+          ${companySettings?.address ? `<div style="margin-top:4px;font-size:12px;color:hsl(var(--muted-foreground));">${escapeHtml(companySettings.address)}</div>` : ""}
+          ${companySettings?.customer_care_number ? `<div style="font-size:11px;color:hsl(var(--muted-foreground));">${escapeHtml(companySettings.customer_care_number)}</div>` : ""}
+          <a href="https://www.google.com/maps?q=${companyCoords.lat},${companyCoords.lng}" target="_blank" rel="noopener" style="display:inline-block;margin-top:6px;font-size:11px;color:hsl(var(--primary));">Open in Google Maps →</a>
         </div>
       `);
       bounds.push([companyCoords.lat, companyCoords.lng]);
@@ -336,7 +345,7 @@ const MapPage = () => {
     if (userMarkerRef.current) userMarkerRef.current.remove();
     const icon = L.divIcon({
       className: "",
-      html: `<div style="width:18px;height:18px;background:#3b82f6;border:3px solid white;border-radius:50%;box-shadow:0 0 0 5px rgba(59,130,246,0.25);"></div>`,
+      html: `<div style="width:18px;height:18px;background:hsl(var(--primary));border:3px solid white;border-radius:50%;box-shadow:0 0 0 5px hsl(var(--primary)/0.25);"></div>`,
       iconSize: [18, 18],
       iconAnchor: [9, 9],
     });
@@ -360,13 +369,13 @@ const MapPage = () => {
         : "";
       const icon = L.divIcon({
         className: "",
-        html: `<div style="background:#7c3aed;color:white;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:14px;border:2px solid white;box-shadow:0 2px 8px rgba(124,58,237,0.5);">🚶</div>`,
+        html: `<div style="background:hsl(var(--primary));color:white;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:14px;border:2px solid white;box-shadow:0 2px 8px hsl(var(--primary)/0.5);">🚶</div>`,
         iconSize: [28, 28],
         iconAnchor: [14, 14],
       });
       const marker = L.marker([session.current_lat, session.current_lng], { icon, zIndexOffset: 3000 })
         .addTo(leafletMap.current!)
-        .bindPopup(`<div style="font-family:system-ui;min-width:150px;"><strong>${escapeHtml(agentName)}</strong><div style="color:#7c3aed;font-size:12px;">${escapeHtml(routeName)}</div>${updatedAt ? `<div style="color:#888;font-size:11px;">Updated: ${updatedAt}</div>` : ""}</div>`);
+        .bindPopup(`<div style="font-family:system-ui;min-width:150px;"><strong>${escapeHtml(agentName)}</strong><div style="color:hsl(var(--primary));font-size:12px;">${escapeHtml(routeName)}</div>${updatedAt ? `<div style="color:hsl(var(--muted-foreground));font-size:11px;">Updated: ${updatedAt}</div>` : ""}</div>`);
       agentMarkersRef.current.push(marker);
     });
   }, [activeSessions]);
@@ -409,11 +418,11 @@ const MapPage = () => {
           <p className="text-xs text-muted-foreground">Missing GPS</p>
         </div>
         <div className="rounded-xl border bg-card p-4 text-center hidden sm:block">
-          <p className="text-2xl font-bold text-green-500">{visitedStoreIds?.size || 0}</p>
+          <p className="text-2xl font-bold text-success">{visitedStoreIds?.size || 0}</p>
           <p className="text-xs text-muted-foreground">Visited Today</p>
         </div>
         <div className="rounded-xl border bg-card p-4 text-center hidden sm:block">
-          <p className="text-2xl font-bold text-amber-500">{pendingOrderStoreIds?.size || 0}</p>
+          <p className="text-2xl font-bold text-warning">{pendingOrderStoreIds?.size || 0}</p>
           <p className="text-xs text-muted-foreground">Pending Orders</p>
         </div>
       </div>
@@ -460,26 +469,26 @@ const MapPage = () => {
             </div>
           ))}
           <div className="flex items-center gap-1.5 text-xs">
-            <div className="h-3 w-3 rounded-full border border-white shadow-sm bg-green-500 shrink-0" />
+            <div className="h-3 w-3 rounded-full border border-white shadow-sm bg-success shrink-0" />
             <span className="text-muted-foreground">Visited</span>
           </div>
           <div className="flex items-center gap-1.5 text-xs">
-            <div className="h-3 w-3 rounded-full border border-white shadow-sm bg-amber-500 shrink-0" />
+            <div className="h-3 w-3 rounded-full border border-white shadow-sm bg-warning shrink-0" />
             <span className="text-muted-foreground">Pending Order</span>
           </div>
           <div className="flex items-center gap-1.5 text-xs">
-            <div className="h-3 w-3 rounded-full border border-white shadow-sm bg-slate-400 shrink-0" />
+            <div className="h-3 w-3 rounded-full border border-white shadow-sm bg-muted-foreground shrink-0" />
             <span className="text-muted-foreground">Inactive</span>
           </div>
           {companyCoords && (
             <div className="flex items-center gap-1.5 text-xs">
-              <div className="h-3 w-3 rounded-[3px] border border-white shadow-sm bg-violet-600 shrink-0" />
+              <div className="h-3 w-3 rounded-[3px] border border-white shadow-sm bg-primary shrink-0" />
               <span className="text-muted-foreground">{companySettings?.company_marker_label || "HQ"}</span>
             </div>
           )}
           {userLocation && (
             <div className="flex items-center gap-1.5 text-xs">
-              <div className="h-3 w-3 rounded-full border border-white shadow-sm bg-blue-500 ring-2 ring-blue-200 shrink-0" />
+              <div className="h-3 w-3 rounded-full border border-white shadow-sm bg-primary ring-2 ring-primary/30 shrink-0" />
               <span className="text-muted-foreground">You</span>
             </div>
           )}

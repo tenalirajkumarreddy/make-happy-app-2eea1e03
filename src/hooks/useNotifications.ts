@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from "react";
+import { useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Capacitor } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
@@ -7,6 +7,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { logDebug, logError } from "@/lib/logger";
 import { toast } from "sonner";
+
+// ── Singleton channel state (module-level) ──────────────────────
+// Only ONE Realtime channel per user, shared across all hook consumers.
+let activeChannel: ReturnType<typeof supabase.channel> | null = null;
+let activeUserId: string | null = null;
+let refCount = 0;
+let retryCount = 0;
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+let visibilityThrottle: ReturnType<typeof setTimeout> | null = null;
+const SEEN = new Set<string>();
 
 export interface AppNotification {
   id: string;
@@ -113,26 +123,27 @@ export function useNotifications() {
     },
   });
 
-  // Stable channel name + reconnection logic
+  // ── Singleton Realtime channel (shared across all hook consumers) ──
+  const mountedRef = useRef(true);
+  mountedRef.current = true;
+
   useEffect(() => {
     if (!user) return;
+    mountedRef.current = true;
+    const userId = user.id;
+    const channelName = `notifications-${userId}`;
+    const queryKeyForUser: readonly string[] = ["notifications", userId];
 
-    const SEEN = new Set<string>();
-    let retryCount = 0;
-    let retryTimer: ReturnType<typeof setTimeout> | null = null;
-    let mounted = true;
+    function subscribeToChannel() {
+      if (activeUserId !== userId) return;
+      if (activeChannel) {
+        try { supabase.removeChannel(activeChannel); } catch { /* ignore */ }
+      }
 
-    const channelName = `notifications-${user.id}`;
-    let channel = supabase.channel(channelName);
-
-    function setupChannel() {
-      if (!mounted) return;
-      try { supabase.removeChannel(channel); } catch { /* ignore */ }
-
-      channel = supabase.channel(channelName)
+      activeChannel = supabase.channel(channelName)
         .on(
           "postgres_changes",
-          { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` },
+          { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` },
           (payload) => {
             const newNotif = payload.new as AppNotification;
             if (SEEN.has(newNotif.id)) return;
@@ -142,13 +153,13 @@ export function useNotifications() {
               if (first) SEEN.delete(first);
             }
 
-            queryClient.setQueryData<AppNotification[]>(queryKey, (old) => {
+            queryClient.setQueryData<AppNotification[]>(queryKeyForUser, (old) => {
               if (!old) return [newNotif];
               if (old.some((n) => n.id === newNotif.id)) return old;
               return [newNotif, ...old].slice(0, 50);
             });
 
-            if (!mounted) return;
+            if (!mountedRef.current) return;
             if (!Capacitor.isNativePlatform()) {
               showBrowserNotification(newNotif.title, newNotif.message);
             } else {
@@ -159,30 +170,27 @@ export function useNotifications() {
         )
         .on(
           "postgres_changes",
-          { event: "UPDATE", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` },
+          { event: "UPDATE", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` },
           (payload) => {
             const updated = payload.new as AppNotification;
-            queryClient.setQueryData<AppNotification[]>(queryKey, (old) =>
+            queryClient.setQueryData<AppNotification[]>(queryKeyForUser, (old) =>
               old?.map((n) => (n.id === updated.id ? updated : n))
             );
           }
         )
         .subscribe((status: string) => {
-          if (!mounted) return;
+          if (activeUserId !== userId) return;
           if (status === "SUBSCRIBED") {
             retryCount = 0;
           } else if (status === "CHANNEL_ERROR" || status === "CLOSED" || status === "TIMED_OUT") {
             if (retryCount >= NOTIF_RECONNECT_MAX_RETRIES) return;
             const delay = Math.min(1000 * 2 ** retryCount, NOTIF_RECONNECT_MAX_DELAY_MS);
             retryCount++;
-            retryTimer = setTimeout(setupChannel, delay);
+            retryTimer = setTimeout(subscribeToChannel, delay);
           }
         });
     }
 
-    setupChannel();
-
-    let visibilityThrottle: ReturnType<typeof setTimeout> | null = null;
     function onVisibilityChange() {
       if (document.visibilityState === "visible") {
         if (visibilityThrottle) return;
@@ -190,20 +198,44 @@ export function useNotifications() {
         if (retryCount > 0) {
           retryCount = 0;
           if (retryTimer) clearTimeout(retryTimer);
-          setupChannel();
+          subscribeToChannel();
         }
       }
     }
-    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    // First consumer for this user → create the channel
+    if (refCount === 0 || activeUserId !== userId) {
+      if (activeChannel && activeUserId !== userId) {
+        try { supabase.removeChannel(activeChannel); } catch { /* ignore */ }
+        activeChannel = null;
+        activeUserId = null;
+        SEEN.clear();
+      }
+
+      retryCount = 0;
+      activeUserId = userId;
+      subscribeToChannel();
+      document.addEventListener("visibilitychange", onVisibilityChange);
+    }
+
+    refCount++;
 
     return () => {
-      mounted = false;
-      if (retryTimer) clearTimeout(retryTimer);
-      if (visibilityThrottle) clearTimeout(visibilityThrottle);
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-      try { supabase.removeChannel(channel); } catch { /* ignore */ }
+      mountedRef.current = false;
+      refCount--;
+      if (refCount <= 0) {
+        refCount = 0;
+        if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
+        if (visibilityThrottle) { clearTimeout(visibilityThrottle); visibilityThrottle = null; }
+        document.removeEventListener("visibilitychange", onVisibilityChange);
+        if (activeChannel) {
+          try { supabase.removeChannel(activeChannel); } catch { /* ignore */ }
+          activeChannel = null;
+        }
+        activeUserId = null;
+      }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, queryClient]);
 
   // Handle foreground FCM push notifications (instant, no guard)
@@ -229,23 +261,20 @@ export function useNotifications() {
   }, []);
 
   // Synchronize FCM token to database when user is logged in on native platform
+  // Delay 2s to avoid lock contention with auth session initialization
   useEffect(() => {
     if (!user || !Capacitor.isNativePlatform()) return;
 
     let active = true;
-
-    const syncFCMToken = async () => {
+    const delayTimer = setTimeout(async () => {
       try {
-        // Step 1: If a token was cached by main.tsx, save it immediately
         const cachedToken = localStorage.getItem("last_fcm_token");
-        if (cachedToken) {
+        if (cachedToken && active) {
           await saveFCMTokenToBackend(user.id, cachedToken);
         }
 
-        // Step 2: Check permission, then register to capture any new/refreshed token
         const permResult = await PushNotifications.checkPermissions();
-        if (permResult.receive !== "granted") {
-          logDebug("FCM Sync: Notification permission not granted");
+        if (permResult.receive !== "granted" || !active) {
           return;
         }
 
@@ -261,27 +290,21 @@ export function useNotifications() {
           }
         );
 
-        // register() may not fire 'registration' if token already obtained,
-        // but if it does (first time or token refresh), we catch it above
         await PushNotifications.register();
 
-        if (capturedToken) {
+        if (capturedToken || !active) {
           handler.remove();
           return;
         }
-
-        // Fallback: if register() didn't fire event, token was already
-        // handled in Step 1 from localStorage — no-op
         handler.remove();
       } catch (err) {
         logError("FCM token synchronization failed", err);
       }
-    };
-
-    syncFCMToken();
+    }, 2000);
 
     return () => {
       active = false;
+      clearTimeout(delayTimer);
     };
   }, [user?.id]);
 
@@ -322,7 +345,7 @@ function showBrowserNotification(title: string, body: string) {
     try {
       new Notification(title, {
         body,
-        icon: "/favicon.ico",
+        icon: "/favicon.png",
         tag: "app-notification",
       });
     } catch {

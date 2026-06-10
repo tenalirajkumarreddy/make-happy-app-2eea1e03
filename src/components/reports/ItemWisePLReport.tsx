@@ -14,7 +14,7 @@ import { generatePrintHTML } from "@/utils/printUtils";
 import * as XLSX from "xlsx";
 import { ReportContainer, ReportKPICard } from "@/components/reports/ReportContainer";
 
-const COLORS = ["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#84cc16"];
+const COLORS = ["hsl(142, 72%, 42%)", "hsl(217, 91%, 50%)", "hsl(38, 92%, 50%)", "hsl(0, 72%, 51%)", "hsl(280, 65%, 60%)", "hsl(330, 70%, 50%)", "hsl(190, 80%, 45%)", "hsl(84, 80%, 44%)"];
 
 interface ProductPL {
   id: string;

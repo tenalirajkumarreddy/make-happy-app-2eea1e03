@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Loader2, Minus, Plus, ChevronRight, Store as StoreIcon,
   IndianRupee, Banknote, CreditCard, AlertTriangle, ShoppingCart,
@@ -12,7 +12,9 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermission } from "@/hooks/usePermission";
-import { addToQueue, generateBusinessKey } from "@/lib/offlineQueue";
+import { generateBusinessKey } from "@/lib/offlineQueue";
+import { enqueueWithContext } from "@/lib/conflictResolver";
+import { useStorePendingOrders } from "@/mobile/hooks/useStorePendingOrders";
 import { logActivity } from "@/lib/activityLogger";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { resolveCreditLimit } from "@/lib/creditLimit";
@@ -38,7 +40,6 @@ export function RecordSale({ preselectStore }: { preselectStore?: StoreOption | 
   const { allowed: canRecordBehalf } = usePermission("record_behalf");
   const { allowed: canBackdate } = usePermission("backdate" as any);
   const qc = useQueryClient();
-  const [saving, setSaving] = useState(false);
   const [store, setStore] = useState<StoreOption | null>(null);
   const [storePickerOpen, setStorePickerOpen] = useState(false);
   const [items, setItems] = useState<SaleItem[]>([]);
@@ -96,6 +97,7 @@ export function RecordSale({ preselectStore }: { preselectStore?: StoreOption | 
       return ((profs ?? []).filter((p: any) => p.user_id !== user?.id) as any[]);
     },
     enabled: canRecordBehalf,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: availableProducts, isLoading: loadingProducts } = useQuery({
@@ -155,6 +157,7 @@ export function RecordSale({ preselectStore }: { preselectStore?: StoreOption | 
       });
     },
     enabled: !!store?.store_type_id && !!store?.id && !!user?.id,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: storeTypes } = useQuery({
@@ -165,6 +168,7 @@ export function RecordSale({ preselectStore }: { preselectStore?: StoreOption | 
       return data || [];
     },
     enabled: !!store?.store_type_id,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: customers } = useQuery({
@@ -173,6 +177,7 @@ export function RecordSale({ preselectStore }: { preselectStore?: StoreOption | 
       const { data } = await supabase.from("customers").select("*").limit(100);
       return data || [];
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: allProducts } = useQuery({
@@ -182,23 +187,10 @@ export function RecordSale({ preselectStore }: { preselectStore?: StoreOption | 
       return data || [];
     },
     enabled: showProductSearch,
+    staleTime: 5 * 60 * 1000,
   });
 
-  const { data: pendingOrders } = useQuery({
-    queryKey: ["mobile-pending-orders-for-store", store?.id],
-    queryFn: async () => {
-      if (!store?.id) return [];
-      const { data, error } = await supabase
-        .from("orders")
-        .select("id, display_id, created_at, order_items(product_id, quantity, unit_price, products(name))")
-        .eq("store_id", store.id)
-        .eq("status", "pending")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!store?.id,
-  });
+  const { data: pendingOrders } = useStorePendingOrders(store?.id);
 
   const addItem = (productId: string) => {
     const existing = availableProducts?.find((p) => p.id === productId);
@@ -242,7 +234,130 @@ export function RecordSale({ preselectStore }: { preselectStore?: StoreOption | 
   const creditExceeded = isCreditCheckEnabled && creditLimitInfo ? newOutstanding > creditLimitInfo.limit : false;
   const creditWarning = isCreditCheckEnabled && creditLimitInfo && !creditExceeded ? newOutstanding > creditLimitInfo.limit * 0.8 : false;
 
-  const handleSubmit = async () => {
+  const saleMutation = useMutation<{ queued: boolean; displayId?: string; saleRow?: Record<string, unknown> }, Error>({
+    mutationFn: async () => {
+      const effectiveRecordedBy = recordedFor || user!.id;
+      const loggedBy = recordedFor ? user!.id : null;
+
+      const { data: stockCheck, error: stockError } = await supabase.rpc("check_stock_availability", {
+        p_user_id: user!.id,
+        p_recorded_for: recordedFor || null,
+        p_items: items.map((i) => ({ product_id: i.product_id, quantity: i.quantity })),
+      });
+      if (stockError) {
+        throw new Error("Stock check failed. Please try again.");
+      }
+
+      const stockRows = Array.isArray(stockCheck) ? stockCheck : [];
+      type StockRow = { out_available: boolean; out_product_name: string; out_available_qty: number };
+      const insufficient = stockRows.filter((s) => !(s as StockRow).out_available);
+      if (insufficient.length > 0) {
+        const details = insufficient.map((i) => `${(i as StockRow).out_product_name} (Avail: ${(i as StockRow).out_available_qty})`).join(", ");
+        throw new Error(`Insufficient stock: ${details}`);
+      }
+
+      const saleData = {
+        store_id: store!.id,
+        customer_id: store!.customer_id,
+        recorded_by: effectiveRecordedBy,
+        logged_by: loggedBy,
+        total_amount: totalAmount,
+        cash_amount: cash,
+        upi_amount: upi,
+        outstanding_amount: outstandingFromSale,
+        old_outstanding: oldOutstanding,
+        new_outstanding: newOutstanding,
+        ...(saleDate ? { created_at: new Date(saleDate).toISOString() } : {}),
+      };
+      const saleItems = items.map((i) => ({ product_id: i.product_id, quantity: i.quantity, unit_price: i.unit_price }));
+
+      if (!navigator.onLine) {
+        if (isCreditCheckEnabled) {
+          const offlineCredit = await validateCreditLimitOffline(store!.id, outstandingFromSale, isAdmin);
+          if (!offlineCredit.valid && !isAdmin) {
+            throw new Error(offlineCredit.warning || "Credit limit exceeded. Cannot queue sale offline.");
+          }
+          if (offlineCredit.exceeded && !isAdmin) {
+            throw new Error("Credit limit exceeded. Cannot queue sale offline.");
+          }
+        }
+        const businessKey = generateBusinessKey("sale", {
+          storeId: store!.id,
+          customerId: store!.customer_id,
+          amount: totalAmount,
+          products: saleItems.map((i) => ({ product_id: i.product_id, quantity: i.quantity })),
+          timestamp: new Date().toISOString(),
+        });
+        await enqueueWithContext({
+          id: crypto.randomUUID(),
+          type: "sale",
+          payload: { saleData, saleItems, storeUpdate: { outstanding: newOutstanding } },
+          createdAt: new Date().toISOString(),
+          businessKey,
+        });
+        return { queued: true };
+      }
+
+      const { data: generatedDisplayId, error: displayErr } = await supabase.rpc("generate_display_id", { prefix: "SALE", seq_name: "sale_display_seq" });
+      if (displayErr) throw displayErr;
+
+      const displayId = String(generatedDisplayId ?? "");
+      const { data: saleResult, error } = await supabase.rpc("record_sale", {
+        p_display_id: displayId,
+        p_store_id: store!.id,
+        p_customer_id: store!.customer_id,
+        p_recorded_by: effectiveRecordedBy,
+        p_logged_by: loggedBy,
+        p_total_amount: totalAmount,
+        p_cash_amount: cash,
+        p_upi_amount: upi,
+        p_outstanding_amount: outstandingFromSale,
+        p_sale_items: saleItems,
+        p_created_at: saleDate ? new Date(saleDate).toISOString() : null,
+        p_expected_outstanding: store?.outstanding ?? null,
+      });
+      if (error) throw error;
+
+      return { queued: false, displayId, saleRow: (saleResult as Array<Record<string, unknown>> | null)?.[0] };
+    },
+    onSuccess: ({ queued, displayId, saleRow }) => {
+      if (queued) {
+        toast.warning("Offline — sale queued and will sync automatically");
+        resetSale();
+        return;
+      }
+
+      logActivity(user!.id, "Recorded sale", "sale", String(displayId), String(saleRow?.sale_id ?? ""), { total: totalAmount, store: store!.id });
+      getAdminUserIds().then((ids) => {
+        const others = ids.filter((id) => id !== user!.id);
+        if (others.length > 0) {
+          sendNotificationToMany(others, {
+            title: "New Sale Recorded",
+            message: `₹${totalAmount.toLocaleString()} sale at ${store!.name} (${String(displayId)})`,
+            type: "system",
+            entityType: "sale",
+            entityId: String(displayId),
+          });
+        }
+      });
+
+      const recordedStoreId = store?.id;
+      toast.success("Sale recorded successfully");
+      if (saleRow?.sale_id) setLastSaleId(String(saleRow.sale_id));
+      resetSale();
+      afterSaleSaved(qc, { isMobile: true, storeId: recordedStoreId });
+    },
+    onError: (error) => {
+      const code = extractErrorCode(error);
+      if (code && ErrorMessages[code]) {
+        toast.error(ErrorMessages[code]);
+        return;
+      }
+      toast.error(error.message || "Failed to record sale. Please try again.");
+    },
+  });
+
+  const handleSubmit = () => {
     if (!store) { toast.error("Please select a store"); return; }
     if (items.length === 0) { toast.error("Add at least one product"); return; }
     if (totalAmount === 0) { toast.error("Sale total cannot be zero"); return; }
@@ -254,129 +369,10 @@ export function RecordSale({ preselectStore }: { preselectStore?: StoreOption | 
     if (creditExceeded && !isAdmin) { toast.error("Credit limit exceeded. Increase payment or reduce items."); return; }
     if (!user?.id) { toast.error("Authentication required"); return; }
 
-    setSaving(true);
-
-    // Proximity geofencing is bypassed for sales per business requirements
-
-    const effectiveRecordedBy = recordedFor || user.id;
-    const loggedBy = recordedFor ? user.id : null;
-
-    const { data: stockCheck, error: stockError } = await (supabase.rpc("check_stock_availability", {
-      p_user_id: user.id,
-      p_recorded_for: recordedFor || null,
-      p_items: items.map(i => ({ product_id: i.product_id, quantity: i.quantity }))
-    } as any));
-
-    if (stockError) {
-      toast.error("Stock check failed. Please try again.");
-      setSaving(false);
-      return;
-    }
-
-    const stockRows: any[] = Array.isArray(stockCheck) ? stockCheck : [];
-    type StockRow = { out_available: boolean; out_product_name: string; out_available_qty: number };
-    const insufficient = stockRows.filter((s) => !(s as StockRow).out_available);
-    if (insufficient.length > 0) {
-      const details = insufficient.map((i) => `${(i as StockRow).out_product_name} (Avail: ${(i as StockRow).out_available_qty})`).join(", ");
-      toast.error(`Insufficient stock: ${details}`);
-      setSaving(false);
-      return;
-    }
-
-    const saleData = {
-      store_id: store.id,
-      customer_id: store.customer_id,
-      recorded_by: effectiveRecordedBy,
-      logged_by: loggedBy,
-      total_amount: totalAmount,
-      cash_amount: cash,
-      upi_amount: upi,
-      outstanding_amount: outstandingFromSale,
-      old_outstanding: oldOutstanding,
-      new_outstanding: newOutstanding,
-      ...(saleDate ? { created_at: new Date(saleDate).toISOString() } : {}),
-    };
-    const saleItems = items.map((i) => ({ product_id: i.product_id, quantity: i.quantity, unit_price: i.unit_price }));
-
-    if (!navigator.onLine) {
-      if (isCreditCheckEnabled) {
-        const offlineCredit = await validateCreditLimitOffline(store.id, outstandingFromSale, isAdmin);
-        if (!offlineCredit.valid && !isAdmin) {
-          toast.error(offlineCredit.warning || "Credit limit exceeded. Cannot queue sale offline.");
-          setSaving(false);
-          return;
-        }
-        if (offlineCredit.exceeded && !isAdmin) {
-          toast.error("Credit limit exceeded. Cannot queue sale offline.");
-          setSaving(false);
-          return;
-        }
-      }
-      const businessKey = generateBusinessKey('sale', {
-        storeId: store.id,
-        customerId: store.customer_id,
-        amount: totalAmount,
-        products: saleItems.map(i => ({ product_id: i.product_id, quantity: i.quantity })),
-        timestamp: new Date().toISOString(),
-      });
-      await addToQueue({
-        id: crypto.randomUUID(), type: "sale",
-        payload: { saleData, saleItems, storeUpdate: { outstanding: newOutstanding } },
-        createdAt: new Date().toISOString(),
-        businessKey,
-      });
-      toast.warning("Offline — sale queued and will sync automatically");
-      setSaving(false);
-      resetSale();
-      return;
-    }
-
-    const db = supabase;
-    const { data: displayId } = await (db.rpc("generate_display_id", { prefix: "SALE", seq_name: "sale_display_seq" } as any));
-    const { data: saleResult, error } = await (db.rpc("record_sale", {
-      p_display_id: displayId,
-      p_store_id: store.id,
-      p_customer_id: store.customer_id,
-      p_recorded_by: effectiveRecordedBy,
-      p_logged_by: loggedBy,
-      p_total_amount: totalAmount,
-      p_cash_amount: cash,
-      p_upi_amount: upi,
-      p_outstanding_amount: outstandingFromSale,
-      p_sale_items: saleItems,
-      p_created_at: saleDate ? new Date(saleDate).toISOString() : null,
-      p_expected_outstanding: store?.outstanding ?? null,
-    } as any));
-
-    if (error) {
-      const errorCode = extractErrorCode(error);
-      toast.error(errorCode && ErrorMessages[errorCode] ? ErrorMessages[errorCode] : error.message);
-      setSaving(false);
-      return;
-    }
-
-    const saleRow = (saleResult as Array<Record<string, unknown>> | null)?.[0];
-    logActivity(user.id, "Recorded sale", "sale", String(displayId), String(saleRow?.sale_id ?? ""), { total: totalAmount, store: store.id });
-    getAdminUserIds().then((ids) => {
-      const others = ids.filter((id) => id !== user.id);
-      if (others.length > 0) {
-        sendNotificationToMany(others, {
-          title: "New Sale Recorded",
-          message: `₹${totalAmount.toLocaleString()} sale at ${store.name} (${String(displayId)})`,
-          type: "system",
-          entityType: "sale",
-          entityId: String(displayId),
-        });
-      }
-    });
-
-    const recordedStoreId = store?.id;
-    toast.success("Sale recorded successfully");
-    setSaving(false);
-    if (saleRow?.sale_id) setLastSaleId(saleRow.sale_id as string);
-    resetSale();
-    afterSaleSaved(qc, { isMobile: true, storeId: recordedStoreId });
+    saleMutation.mutate();
   };
+
+  const saving = saleMutation.isPending;
 
   const resetSale = () => {
     setStore(null);
@@ -423,14 +419,14 @@ export function RecordSale({ preselectStore }: { preselectStore?: StoreOption | 
         <div className="px-4">
           <div className="rounded-2xl bg-card dark:bg-slate-800 border border-border dark:border-border p-3.5 flex justify-between items-center">
             <div>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Current Balance</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold">Current Balance</p>
               <p className={cn("text-xl font-bold mt-0.5", oldOutstanding > 0 ? "text-red-500" : "text-emerald-500")}>
                 ₹{oldOutstanding.toLocaleString("en-IN")}
               </p>
             </div>
             {store.customers?.name && (
               <div className="text-right">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Customer</p>
+                <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold">Customer</p>
                 <p className="text-sm font-bold text-slate-700 dark:text-slate-200 mt-0.5">{store.customers.name}</p>
               </div>
             )}
@@ -469,7 +465,7 @@ export function RecordSale({ preselectStore }: { preselectStore?: StoreOption | 
               <div key={ord.id} className="rounded-xl border border-border dark:border-border p-3 mb-2">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-bold text-slate-600 dark:text-slate-300">{ord.display_id}</span>
-                  <span className="text-[10px] text-muted-foreground">{new Date(ord.created_at).toLocaleDateString()}</span>
+                  <span className="text-xs text-muted-foreground">{new Date(ord.created_at).toLocaleDateString()}</span>
                 </div>
                 <div className="space-y-1 mb-2">
                   {ord.order_items?.map((item) => (
@@ -561,11 +557,11 @@ export function RecordSale({ preselectStore }: { preselectStore?: StoreOption | 
                           <p className="text-xs text-muted-foreground">
                             ₹{product.effectivePrice.toLocaleString("en-IN")}
                           </p>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-muted-foreground font-medium">
+                          <span className="text-xs px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-muted-foreground font-medium">
                             Stock: {product.stock}
                           </span>
                           {product.pending_out > 0 && (
-                            <span className="text-[10px] text-amber-500 font-medium">
+                            <span className="text-xs text-amber-500 font-medium">
                               ({product.pending_out} pending)
                             </span>
                           )}
@@ -674,7 +670,7 @@ export function RecordSale({ preselectStore }: { preselectStore?: StoreOption | 
                             = ₹{(item.quantity * item.unit_price).toLocaleString("en-IN")}
                           </span>
                           <div className="flex items-center gap-1">
-                            <span className="text-[10px]">₹</span>
+                            <span className="text-xs">₹</span>
                             <Input
                               type="number"
                               min="0"
@@ -690,7 +686,7 @@ export function RecordSale({ preselectStore }: { preselectStore?: StoreOption | 
                         </span>
                       )}
                     </div>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">× {item.quantity}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">× {item.quantity}</p>
                   </div>
                 );
               })}

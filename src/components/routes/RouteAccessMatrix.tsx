@@ -153,7 +153,7 @@ export function RouteAccessMatrix() {
                   group.routes.map((route: any, routeIndex: number) => (
                     <th
                       key={route.id}
-                      className={`px-3 py-2 text-center text-[11px] font-medium text-muted-foreground min-w-[120px] whitespace-nowrap ${
+                      className={`px-3 py-2 text-center text-3xs font-medium text-muted-foreground min-w-[120px] whitespace-nowrap ${
                         routeIndex === group.routes.length - 1 && groupIndex < groupedRoutes.length - 1
                           ? "border-r"
                           : routeIndex < group.routes.length - 1
@@ -180,7 +180,7 @@ export function RouteAccessMatrix() {
                   >
                     <div className="min-w-0">
                       <p className="text-sm font-medium leading-tight truncate max-w-[140px]">{staff.full_name || "—"}</p>
-                      <span className={`mt-0.5 inline-block text-[10px] uppercase font-bold px-1.5 py-0.5 rounded leading-none ${ROLE_BADGE[staff.role] || ""}`}>
+                      <span className={`mt-1 inline-block rounded px-2 py-1 text-2xs font-bold uppercase leading-none ${ROLE_BADGE[staff.role] || ""}`}>
                         {staff.role}
                       </span>
                     </div>
@@ -203,7 +203,7 @@ export function RouteAccessMatrix() {
                         >
                           <div className="flex items-center justify-center">
                             {busy ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                              <Loader2 className="h-4 w-4 animate-spin text-primary" />
                             ) : (
                               <Checkbox
                                 checked={isEnabled(staff.user_id, route.id)}

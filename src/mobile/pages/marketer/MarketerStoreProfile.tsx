@@ -51,6 +51,7 @@ export function MarketerStoreProfile({ store, onBack, onGoRecord, onGoOrders }: 
       return (data as unknown as StoreProfileRow | null) || null;
     },
     enabled: !!store.id,
+    staleTime: 5 * 60 * 1000,
   });
 
   const currentStore: StoreOption = useMemo(() => ({
@@ -120,8 +121,8 @@ export function MarketerStoreProfile({ store, onBack, onGoRecord, onGoOrders }: 
             </div>
 
             <div className="flex gap-2 mt-2 flex-wrap">
-              {currentStore.store_types?.name && <Badge variant="outline" className="text-[10px] font-semibold">{currentStore.store_types.name}</Badge>}
-              {currentStore.routes?.name && <Badge variant="outline" className="text-[10px] font-semibold">{currentStore.routes.name}</Badge>}
+              {currentStore.store_types?.name && <Badge variant="outline" className="text-xs font-semibold">{currentStore.store_types.name}</Badge>}
+              {currentStore.routes?.name && <Badge variant="outline" className="text-xs font-semibold">{currentStore.routes.name}</Badge>}
             </div>
 
             {currentStore.address && (
@@ -152,7 +153,7 @@ export function MarketerStoreProfile({ store, onBack, onGoRecord, onGoOrders }: 
               className="flex flex-col items-center gap-1.5 p-3 rounded-2xl bg-blue-600 hover:bg-blue-700 active:scale-95 transition-all shadow-sm"
             >
               <ClipboardList className="h-5 w-5 text-white" />
-              <span className="text-[10px] font-bold text-white text-center">Create Order</span>
+              <span className="text-xs font-bold text-white text-center">Create Order</span>
             </button>
 
             <button
@@ -160,7 +161,7 @@ export function MarketerStoreProfile({ store, onBack, onGoRecord, onGoOrders }: 
               className="flex flex-col items-center gap-1.5 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95 transition-all shadow-sm"
             >
               <Wallet className="h-5 w-5 text-emerald-500" />
-              <span className="text-[10px] font-bold text-slate-700 dark:text-slate-200 text-center">Payment</span>
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-200 text-center">Payment</span>
             </button>
           </div>
         </div>

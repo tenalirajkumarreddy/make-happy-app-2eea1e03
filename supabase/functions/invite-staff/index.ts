@@ -1,21 +1,12 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { 
   getCorsHeaders, 
+  handleCorsPreflightOrError,
   getIdempotencyKey, 
   generateIdempotencyKey,
   getIdempotencyResponse, 
   setIdempotencyResponse 
 } from "../_shared/cors.ts";
-
-const ALLOWED_ORIGINS = [
-  "https://aquaprimesales.vercel.app",
-  // Local development origins - only allow in development environment
-  ...(Deno.env.get("DENO_ENV") === "development" ? [
-    "http://localhost:5000",
-    "http://localhost:5173",
-    "http://localhost:8100",
-  ] : []),
-];
 
 // Rate limiting configuration
 const RATE_LIMIT_WINDOW = 60 * 60 * 1000; // 1 hour
@@ -84,10 +75,9 @@ async function findStaffByEmail(supabaseAdmin: any, normalizedEmail: string) {
 }
 
 Deno.serve(async (req) => {
+  const corsResponse = handleCorsPreflightOrError(req);
+  if (corsResponse) return corsResponse;
   const corsHeaders = getCorsHeaders(req);
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
 
   try {
     // Idempotency check

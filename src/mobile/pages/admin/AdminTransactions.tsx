@@ -2,15 +2,15 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
-import { Loader2, Plus, Eye, CreditCard, ChevronRight, Receipt, Calendar, Filter } from "lucide-react";
-import { SaleReceipt } from "@/components/shared/SaleReceipt";
+import { Loader2, Plus, Eye, CreditCard, Receipt, Calendar, Filter } from "lucide-react";
+import { TransactionReceipt } from "@/components/shared/TransactionReceipt";
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { format, startOfWeek } from "date-fns";
+import { format, startOfWeek, startOfMonth } from "date-fns";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { fmtINR } from "@/lib/utils";
 import { usePullToRefresh } from "@/mobile/hooks/usePullToRefresh";
@@ -93,6 +93,7 @@ export function AdminTransactions({ onNavigate }: { onNavigate: (path: string) =
       if (error) throw error;
       return { transactions: (data || []) as Transaction[], total: count || 0 };
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   // Filter options
@@ -103,6 +104,7 @@ export function AdminTransactions({ onNavigate }: { onNavigate: (path: string) =
       return data || [];
     },
     enabled: !!currentWarehouse,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: customers = [] } = useQuery({
@@ -112,6 +114,7 @@ export function AdminTransactions({ onNavigate }: { onNavigate: (path: string) =
       return data || [];
     },
     enabled: !!currentWarehouse,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: agents = [] } = useQuery({
@@ -120,6 +123,7 @@ export function AdminTransactions({ onNavigate }: { onNavigate: (path: string) =
       const { data } = await supabase.from("profiles").select("user_id, full_name").order("full_name").limit(100);
       return data || [];
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   const allTxns = transactions?.transactions || [];
@@ -146,6 +150,7 @@ export function AdminTransactions({ onNavigate }: { onNavigate: (path: string) =
       });
       return map;
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   // Filter by search
@@ -334,7 +339,7 @@ export function AdminTransactions({ onNavigate }: { onNavigate: (path: string) =
                     <div className="flex items-center gap-1.5">
                       <p className={`text-sm font-mono font-semibold ${isReturned ? "line-through text-muted-foreground" : "text-primary"}`}>{txn.display_id}</p>
                       {isReturned && (
-                        <Badge variant="outline" className="text-[9px] h-4 border-amber-300 text-amber-600 bg-amber-50 rounded px-1 py-0">Returned</Badge>
+                        <Badge variant="outline" className="text-xs h-4 border-amber-300 text-amber-600 bg-amber-50 rounded px-1 py-0">Returned</Badge>
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">
@@ -347,12 +352,12 @@ export function AdminTransactions({ onNavigate }: { onNavigate: (path: string) =
                 {/* Payment Badges */}
                 <div className="flex items-center gap-1.5 mb-2">
                   {txn.cash_amount > 0 && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">
+                    <span className="text-xs px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">
                       Cash {fmtINR(txn.cash_amount)}
                     </span>
                   )}
                   {txn.upi_amount > 0 && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">
+                    <span className="text-xs px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">
                       UPI {fmtINR(txn.upi_amount)}
                     </span>
                   )}
@@ -360,7 +365,7 @@ export function AdminTransactions({ onNavigate }: { onNavigate: (path: string) =
 
                 {/* Balance Change Indicator */}
                 <div className="flex items-center gap-2 mb-2">
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${
                     txn.new_outstanding > txn.old_outstanding 
                       ? "bg-red-100 text-red-700" 
                       : txn.new_outstanding < txn.old_outstanding 
@@ -376,11 +381,11 @@ export function AdminTransactions({ onNavigate }: { onNavigate: (path: string) =
                   <div className="flex items-center gap-1.5">
                     <Avatar className="h-5 w-5">
                       <AvatarImage src={getRecorderAvatar(txn.recorded_by) || undefined} />
-                      <AvatarFallback className="text-[9px] bg-primary/10">
+                      <AvatarFallback className="text-xs bg-primary/10">
                         {getRecorderName(txn.recorded_by).charAt(0).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
-                    <span className="text-[10px] text-muted-foreground truncate max-w-[80px]">
+                    <span className="text-xs text-muted-foreground truncate max-w-[80px]">
                       {getRecorderName(txn.recorded_by)}
                     </span>
                   </div>
@@ -400,7 +405,7 @@ export function AdminTransactions({ onNavigate }: { onNavigate: (path: string) =
                   <span className="truncate">View</span>
                 </button>
                 <button
-                  onClick={() => { setSelectedTxn(txn); setShowDetailModal(true); }}
+                  onClick={() => setReceiptTxnId(txn.id)}
                   className="flex-1 py-2.5 min-w-0 flex items-center justify-center gap-1 text-xs font-medium text-muted-foreground hover:bg-muted active:bg-muted/80 transition-colors"
                 >
                   <Receipt className="h-3.5 w-3.5 shrink-0" />
@@ -503,7 +508,7 @@ export function AdminTransactions({ onNavigate }: { onNavigate: (path: string) =
               <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50">
                 <Avatar className="h-6 w-6">
                   <AvatarImage src={getRecorderAvatar(selectedTxn.recorded_by) || undefined} />
-                  <AvatarFallback className="text-[10px] bg-primary/10">
+                  <AvatarFallback className="text-xs bg-primary/10">
                     {getRecorderName(selectedTxn.recorded_by).charAt(0).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
@@ -545,8 +550,8 @@ export function AdminTransactions({ onNavigate }: { onNavigate: (path: string) =
           )}
         </DialogContent>
       </Dialog>
-      <SaleReceipt
-        saleId={receiptTxnId || ""}
+      <TransactionReceipt
+        transactionId={receiptTxnId || ""}
         open={!!receiptTxnId}
         onClose={() => setReceiptTxnId(null)}
       />

@@ -145,7 +145,7 @@ export function PricingTab({ isAdmin }: { isAdmin: boolean }) {
                 />
                 <div>
                   <span className="text-sm font-medium">{p.name}</span>
-                  <Badge variant="outline" className="ml-2 text-[10px]">{p.sku}</Badge>
+                  <Badge variant="outline" className="ml-2 text-2xs">{p.sku}</Badge>
                 </div>
                 <span className="text-sm text-muted-foreground">₹{Number(p.base_price).toLocaleString()}</span>
                 <Input

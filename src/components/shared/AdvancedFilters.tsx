@@ -57,7 +57,7 @@ export function AdvancedFilters({ config, values, onChange }: Props) {
           <Filter className="h-3.5 w-3.5" />
           Filters
           {activeCount > 0 && (
-            <span className="ml-1 rounded-full bg-primary text-primary-foreground text-[10px] h-4 w-4 flex items-center justify-center">
+            <span className="ml-1 rounded-full bg-primary text-primary-foreground text-2xs h-4 w-4 flex items-center justify-center">
               {activeCount}
             </span>
           )}

@@ -263,7 +263,7 @@ const SmartInsightsReport = () => {
                                         </TableCell>
                                         <TableCell className="font-bold text-red-600">₹{store.outstanding.toLocaleString()}</TableCell>
                                         <TableCell className="text-xs text-muted-foreground">
-                                            {store.last_payment_date ? formatDistanceToNow(new Date(store.last_payment_date), { addSuffix: true }) : <Badge variant="destructive" className="text-[10px]">Never</Badge>}
+                                            {store.last_payment_date ? formatDistanceToNow(new Date(store.last_payment_date), { addSuffix: true }) : <Badge variant="destructive" className="text-2xs">Never</Badge>}
                                         </TableCell>
                                         <TableCell>
                                             <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => navigate(`/stores/${store.id}`)}>

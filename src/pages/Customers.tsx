@@ -14,15 +14,17 @@ import { logActivity } from "@/lib/activityLogger";
 import { generateDisplayId } from "@/lib/displayId";
 import { validatePhone, validateEmail, normalizePhone } from "@/lib/validation";
 import { sanitizeString, sanitizeObject } from "@/lib/sanitization";
-import { Loader2, User, Upload, AlertCircle, Phone, Mail, Store as StoreIcon } from "lucide-react";
+import { Loader2, User, Upload, AlertCircle, Phone, Mail, Store as StoreIcon, Plus } from "lucide-react";
 import { usePermission } from "@/hooks/usePermission";
-import { addToQueue, generateBusinessKey } from "@/lib/offlineQueue";
+import { enqueueWithContext } from "@/lib/conflictResolver";
+import { generateBusinessKey } from "@/lib/offlineQueue";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useDebounce } from "@/hooks/useDebounce";
 
 // Set page title
 const usePageTitle = (title: string) => {
@@ -70,6 +72,8 @@ const Customers = () => {
   const [editData, setEditData] = useState<Record<string, { name: string; phone: string; email: string }>>({});
   const [bulkSaving, setBulkSaving] = useState(false);
   const [confirmBulkDeactivate, setConfirmBulkDeactivate] = useState(false);
+  const [searchInput, setSearchInput] = useState("");
+  const debouncedSearch = useDebounce(searchInput);
   const [filters, setFilters] = useState<FilterValues>({});
   const [duplicateCustomer, setDuplicateCustomer] = useState<any>(null);
   const qc = useQueryClient();
@@ -88,9 +92,20 @@ const Customers = () => {
     isError,
     error: queryError
   } = useInfiniteQuery({
-    queryKey: ["customers", currentWarehouse?.id, user?.id, role],
+    queryKey: ["customers", currentWarehouse?.id, user?.id, role, debouncedSearch],
     queryFn: async ({ pageParam = 0 }) => {
-      // Use database function that handles route access filtering
+      if (debouncedSearch.trim()) {
+        const term = `%${debouncedSearch.trim()}%`;
+        const { data, error } = await supabase
+          .from("customers")
+          .select("id, display_id, name, phone, email, kyc_status, is_active, created_at, photo_url, address, credit_limit_override, credit_used")
+          .or(`name.ilike.${term},display_id.ilike.${term},phone.ilike.${term}`)
+          .eq("warehouse_id", currentWarehouse?.id || "")
+          .order("created_at", { ascending: false })
+          .range(pageParam * PAGE_SIZE, (pageParam + 1) * PAGE_SIZE - 1);
+        if (error) throw error;
+        return (data || []).map((c: any) => ({ ...c, stores: [] }));
+      }
       const { data, error } = await (supabase as any).rpc("get_accessible_customers", {
         p_user_id: user?.id,
         p_warehouse_id: currentWarehouse?.id || null,
@@ -98,14 +113,11 @@ const Customers = () => {
         p_offset: pageParam * PAGE_SIZE,
       });
       if (error) throw error;
-      // Transform data to match expected format
       return (data || []).map((c: any) => ({
         ...c,
         stores: c.store_count > 0 ? [{ 
           id: c.id, 
           outstanding: c.total_outstanding,
-          // Note: route_id and store_type_id are not returned by the function
-          // These are used for filtering which is now done server-side
         }] : [],
       }));
     },
@@ -171,7 +183,7 @@ const Customers = () => {
         phone: normalizedPhone || undefined,
         timestamp: new Date().toISOString(),
       });
-      await addToQueue({
+      await enqueueWithContext({
         id: crypto.randomUUID(),
         type: "customer",
         payload: {
@@ -349,6 +361,7 @@ const Customers = () => {
     
     const { data: results, error } = await supabase.rpc("bulk_update_customers", {
       p_updates: updates,
+      p_user_id: user?.id,
     }) as any;
     
     setBulkSaving(false);
@@ -617,8 +630,22 @@ const Customers = () => {
             })}
           </div>
           {filteredCustomers.length === 0 && (
-            <div className="text-center py-12 text-muted-foreground">
-              No customers found.
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <div className="rounded-full bg-muted p-4 mb-4">
+                <User className="h-8 w-8 text-muted-foreground" />
+              </div>
+              <h3 className="text-lg font-semibold mb-2">No customers found</h3>
+              <p className="text-muted-foreground mb-4 max-w-sm">
+                {Object.keys(filters).length > 0
+                  ? "No customers match your current filters. Try adjusting them."
+                  : "Add your first customer to start managing accounts and KYC verification."}
+              </p>
+              {canCreateCustomers && (
+                <Button onClick={() => setShowAdd(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Customer
+                </Button>
+              )}
             </div>
           )}
         </div>
@@ -629,6 +656,8 @@ const Customers = () => {
           searchKey="name"
           searchPlaceholder="Search customers..."
           onRowClick={(row) => { if (!editMode) navigate(`/customers/${row.id}`); }}
+          onSearch={setSearchInput}
+          searchValue={searchInput}
           height="calc(100vh - 240px)"
           renderMobileCard={(row: any) => (
             <div className={`entity-card-mobile ${!row.is_active ? "entity-card-inactive" : ""}`}>

@@ -587,8 +587,8 @@ export default function PaymentOutstandingReport() {
                       <TableCell className="text-right">{fmt(s.openingBalance)}</TableCell>
                       <TableCell className="text-right">{s.daysSinceLastPayment < 999 ? s.daysSinceLastPayment + "d" : "-"}</TableCell>
                       <TableCell>
-                        {s.isDanger && <Badge variant="destructive" className="text-[10px]">Danger</Badge>}
-                        {s.isInactive && !s.isDanger && <Badge variant="secondary" className="text-[10px]">Inactive</Badge>}
+                        {s.isDanger && <Badge variant="destructive" className="text-2xs">Danger</Badge>}
+                        {s.isInactive && !s.isDanger && <Badge variant="secondary" className="text-2xs">Inactive</Badge>}
                       </TableCell>
                     </TableRow>
                   ))}

@@ -166,7 +166,7 @@ export function GlobalSearch() {
       >
         <Search className="h-3.5 w-3.5" />
         <span>Search...</span>
-        <kbd className="ml-1 hidden lg:inline-flex h-5 items-center gap-0.5 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium opacity-60">
+        <kbd className="ml-1 hidden lg:inline-flex h-5 items-center gap-0.5 rounded border bg-muted px-1.5 font-mono text-2xs font-medium opacity-60">
           <span className="text-xs">⌘</span>K
         </kbd>
       </button>

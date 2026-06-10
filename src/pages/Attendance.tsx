@@ -240,10 +240,10 @@ export default function Attendance() {
       const startDate = new Date(year, month - 1, 1).toISOString().split("T")[0];
       const endDate = new Date(year, month, 0).toISOString().split("T")[0];
       
-      // Get attendance records for the month
+      // Get attendance records with entries aggregated in a single query (no N+1)
       const { data: records } = await supabase
         .from("attendance_records")
-        .select("*, attendance_entries(count, is_present)")
+        .select("*, attendance_entries(is_present, amount_earned, worker_id, user_id)")
         .gte("attendance_date", startDate)
         .lte("attendance_date", endDate)
         .order("attendance_date");
@@ -254,7 +254,7 @@ export default function Attendance() {
         return;
       }
       
-      // Calculate stats
+      // Calculate stats from the already-fetched data
       let daysWorked = 0;
       let workersPresent = 0;
       let staffPresent = 0;
@@ -266,15 +266,12 @@ export default function Attendance() {
         
         daysWorked++;
         
-        // Get entries for this record
-        const { data: entries } = await supabase
-          .from("attendance_entries")
-          .select("is_present, amount_earned, worker_id, user_id")
-          .eq("attendance_id", record.id);
+        // Use entries from the joined query instead of making a separate query
+        const entries = (record as any).attendance_entries || [];
         
-        const dayWorkers = entries?.filter(e => e.worker_id && e.is_present).length || 0;
-        const dayStaff = entries?.filter(e => e.user_id && e.is_present).length || 0;
-        const dayCost = entries?.reduce((sum, e) => sum + (Number(e.amount_earned) || 0), 0) || 0;
+        const dayWorkers = entries.filter((e: any) => e.worker_id && e.is_present).length;
+        const dayStaff = entries.filter((e: any) => e.user_id && e.is_present).length;
+        const dayCost = entries.reduce((sum: number, e: any) => sum + (Number(e.amount_earned) || 0), 0);
         
         workersPresent += dayWorkers;
         staffPresent += dayStaff;
@@ -837,10 +834,24 @@ export default function Attendance() {
         ? workers.find(w => w.id === paymentPersonId)?.name
         : staffUsers.find(s => s.user_id === paymentPersonId)?.profiles?.full_name || "Unknown";
 
+      // Verify expense category exists before recording
+      const salaryCategoryId = "8792d094-d08b-48fc-a487-cb0d0986ff5f";
+      const { data: categoryExists } = await supabase
+        .from("expense_categories")
+        .select("id")
+        .eq("id", salaryCategoryId)
+        .maybeSingle();
+
+      if (!categoryExists) {
+        console.error("Salary expense category not found:", salaryCategoryId);
+        toast.error("Salary expense category is missing. Please contact admin.");
+        return;
+      }
+
       const { error: expenseError } = await supabase.from("expenses" as any).insert({
         display_id: expenseIdData,
         amount: parseFloat(paymentAmount),
-        expense_category_id: "8792d094-d08b-48fc-a487-cb0d0986ff5f",
+        expense_category_id: salaryCategoryId,
         payment_method: paymentMethod,
         notes: `Worker/Staff payment: ${personName} - ${paymentNotes || "Wages"}`,
         expense_date: new Date().toISOString().split("T")[0],

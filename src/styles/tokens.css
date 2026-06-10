@@ -1,0 +1,98 @@
+:root {
+  /* Brand */
+  --color-primary: hsl(var(--primary));
+  --color-primary-hover: hsl(217 91% 45%);
+  --color-primary-active: hsl(217 91% 40%);
+
+  /* Neutral */
+  --color-gray-50: hsl(var(--background));
+  --color-gray-100: hsl(var(--secondary));
+  --color-gray-200: hsl(var(--muted));
+  --color-gray-400: hsl(var(--border));
+  --color-gray-600: hsl(var(--muted-foreground));
+  --color-gray-900: hsl(var(--foreground));
+
+  /* Semantic */
+  --color-success: hsl(var(--success));
+  --color-warning: hsl(var(--warning));
+  --color-error: hsl(var(--destructive));
+  --color-info: hsl(var(--info));
+
+  /* Typography */
+  --text-5xs: 8px;
+  --text-4xs: 9px;
+  --text-2xs: 10px;
+  --text-3xs: 11px;
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-base: 16px;
+  --text-lg: 18px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 30px;
+
+  /* Weights */
+  --font-regular: 400;
+  --font-medium: 500;
+  --font-bold: 600;
+
+  /* Spacing (4px grid) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* Radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* Keep legacy variable for compatibility */
+  --radius: var(--radius-lg);
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.1);
+
+  /* Z-index */
+  --z-dropdown: 100;
+  --z-modal: 200;
+  --z-toast: 300;
+
+  /* Reusable state tokens */
+  --state-success-bg: hsl(var(--success) / 0.12);
+  --state-success-border: hsl(var(--success) / 0.35);
+  --state-success-fg: hsl(var(--success));
+  --state-info-bg: hsl(var(--info) / 0.12);
+  --state-info-border: hsl(var(--info) / 0.35);
+  --state-info-fg: hsl(var(--info));
+  --state-warning-bg: hsl(var(--warning) / 0.12);
+  --state-warning-border: hsl(var(--warning) / 0.35);
+  --state-warning-fg: hsl(var(--warning));
+  --state-error-bg: hsl(var(--destructive) / 0.12);
+  --state-error-border: hsl(var(--destructive) / 0.35);
+  --state-error-fg: hsl(var(--destructive));
+}
+
+[data-theme="dark"],
+.dark {
+  --color-gray-50: hsl(222 25% 8%);
+  --color-gray-100: hsl(222 25% 11%);
+  --color-gray-200: hsl(217 20% 17%);
+  --color-gray-400: hsl(217 20% 24%);
+  --color-gray-600: hsl(215 20% 65%);
+  --color-gray-900: hsl(210 40% 98%);
+
+  --state-success-bg: hsl(var(--success) / 0.18);
+  --state-info-bg: hsl(var(--info) / 0.18);
+  --state-warning-bg: hsl(var(--warning) / 0.18);
+  --state-error-bg: hsl(var(--destructive) / 0.2);
+}

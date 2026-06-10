@@ -192,6 +192,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
       return result;
     },
     enabled: !!user,
+    staleTime: 5 * 60 * 1000,
   });
 
   const routeList = (((routes as RouteRow[] | undefined) || [])
@@ -221,6 +222,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
       return data;
     },
     enabled: !!user,
+    staleTime: 30_000,
   });
 
   const { data: pendingOrderStoreIds } = useQuery({
@@ -230,11 +232,12 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
         .from("orders")
         .select("store_id")
         .in("store_id", allStoreIds)
-        .in("status", ["pending", "active"]);
+        .in("status", ["pending", "confirmed"]);
       if (error) throw error;
       return new Set((data || []).map((row) => row.store_id));
     },
     enabled: allStoreIds.length > 0,
+    staleTime: 30_000,
   });
 
   // Orders: assigned to agent, created by agent, or for stores on their routes
@@ -256,6 +259,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
       return (data as unknown as OrderRow[]) || [];
     },
     enabled: view === "orders" && !!user,
+    staleTime: 30_000,
   });
 
   const storeTypeOptions = useMemo(() => {
@@ -314,6 +318,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
       return visitMap;
     },
     enabled: !!user,
+    staleTime: 30_000,
   });
 
   const { data: sessionPosition } = useQuery({
@@ -332,6 +337,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
     },
     enabled: !!activeSession,
     refetchInterval: 15_000,
+    staleTime: 15_000,
   });
 
   const [selectedOrder, setSelectedOrder] = useState<OrderRow | null>(null);
@@ -374,6 +380,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
       return (data as any[]) || [];
     },
     enabled: allStoreIds.length > 0,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: createStoreProducts } = useQuery({
@@ -409,6 +416,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
       }));
     },
     enabled: !!createSelectedStoreTypeId && !!createStoreId,
+    staleTime: 5 * 60 * 1000,
   });
 
   const handleCancelOrder = async () => {
@@ -680,6 +688,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
       };
     },
     enabled: !!viewProformaId,
+    staleTime: 5 * 60 * 1000,
   });
 
   const calculateItemTotal = (item: OrderItemRow) =>
@@ -941,19 +950,19 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
                               </div>
 
                               <div className="flex-1 min-w-0">
-                                <p className="font-semibold text-slate-800 dark:text-white text-[15px] leading-snug truncate">
+                                <p className="font-semibold text-slate-800 dark:text-white text-sm leading-snug truncate">
                                   {route.name}
                                 </p>
                                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
-                                  <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                                  <span className="text-xs text-slate-500 dark:text-slate-400">
                                     <Store className="h-3 w-3 inline mr-0.5 align-middle" />
                                     {storeCount} {storeCount === 1 ? "store" : "stores"}
                                   </span>
-                                  <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                                  <span className="text-xs text-slate-500 dark:text-slate-400">
                                     <span className="font-medium text-slate-800 dark:text-white">₹{totalOutstanding.toLocaleString("en-IN")}</span> outstanding
                                   </span>
                                   {pendingOrders > 0 && (
-                                    <span className="text-[11px] text-amber-600 dark:text-amber-400">
+                                    <span className="text-xs text-amber-600 dark:text-amber-400">
                                       <ShoppingBag className="h-3 w-3 inline mr-0.5 align-middle" />
                                       {pendingOrders} active
                                     </span>
@@ -961,16 +970,16 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
                                 </div>
 
                                 <div className="flex items-center gap-2 mt-2.5">
-                                  <span className="text-[10px] font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded-full">
+                                  <span className="text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded-full">
                                     {visitedCount}/{storeCount} visited
                                   </span>
                                   {route.store_types?.name && (
-                                    <span className="text-[10px] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-full">
+                                    <span className="text-xs text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-full">
                                       {route.store_types.name}
                                     </span>
                                   )}
                                   {activeSession?.route_id === route.id && (
-                                    <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                    <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded-full flex items-center gap-1">
                                       <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                                       Active
                                     </span>
@@ -980,7 +989,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
 
                               <div className="flex items-center gap-1.5 shrink-0 mt-1">
                                 {pendingOrders > 0 && (
-                                  <span className="h-5 min-w-[20px] px-1 rounded-md bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center">
+                                  <span className="h-5 min-w-[20px] px-1 rounded-md bg-amber-500 text-white text-xs font-bold flex items-center justify-center">
                                     {pendingOrders}
                                   </span>
                                 )}
@@ -1013,7 +1022,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
                                           <div className="flex items-start justify-between gap-2">
                                             <div className="min-w-0 flex-1">
                                               <div className="flex items-center gap-2">
-                                                <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded shrink-0">
+                                                <span className="text-xs font-mono text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded shrink-0">
                                                   {store.display_id}
                                                 </span>
                                                 <p className="text-sm font-semibold text-slate-800 dark:text-white truncate">
@@ -1022,27 +1031,27 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
                                               </div>
 
                                               {store.customers?.name && (
-                                                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">{store.customers.name}</p>
+                                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{store.customers.name}</p>
                                               )}
 
                                               {store.address && (
-                                                <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 line-clamp-1">{store.address}</p>
+                                                <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 line-clamp-1">{store.address}</p>
                                               )}
 
                                               <div className="flex items-center gap-2 mt-2 flex-wrap">
                                                 <span className={cn(
-                                                  "text-[10px] font-medium px-2 py-0.5 rounded-full",
+                                                  "text-xs font-medium px-2 py-0.5 rounded-full",
                                                   visited
                                                     ? "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30"
                                                     : "bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400"
                                                 )}>
                                                   {visited ? "Visited" : "Pending"}
                                                 </span>
-                                                <span className="text-[10px] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-full">
+                                                <span className="text-xs text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-full">
                                                   O/s ₹{Number(store.outstanding || 0).toLocaleString("en-IN")}
                                                 </span>
                                                 {pendingOrderStoreIds?.has(store.id) && (
-                                                  <span className="text-[10px] font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-2 py-0.5 rounded-full">
+                                                  <span className="text-xs font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-2 py-0.5 rounded-full">
                                                     Order pending
                                                   </span>
                                                 )}
@@ -1314,7 +1323,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
                               </div>
                             ))}
                             {order.order_items.length > 2 && (
-                              <p className="text-[10px] text-slate-400 dark:text-slate-500">
+                              <p className="text-xs text-slate-400 dark:text-slate-500">
                                 +{order.order_items.length - 2} more items
                               </p>
                             )}
@@ -1329,10 +1338,10 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
 
                         <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-700">
                           <div className="flex items-center gap-2">
-                            <span className="text-[10px] text-slate-400 dark:text-slate-500">
+                            <span className="text-xs text-slate-400 dark:text-slate-500">
                               {itemCount > 0 ? `${itemCount} items` : order.order_type}
                             </span>
-                            <span className="text-[10px] text-slate-400 dark:text-slate-500">
+                            <span className="text-xs text-slate-400 dark:text-slate-500">
                               {format(new Date(order.created_at), "dd MMM, hh:mm a")}
                             </span>
                           </div>
@@ -1344,7 +1353,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
 
                       {(order.creator_profile || order.updater_profile || order.fulfiller_profile || (order.status === "cancelled" && order.canceller_profile)) && (
                         <div className="border-t border-slate-100 dark:border-slate-700 px-3 py-1.5">
-                          <div className="flex items-center gap-1 text-[10px] text-slate-500 dark:text-slate-400 flex-wrap">
+                          <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 flex-wrap">
                             {order.creator_profile && <span>Created by {order.creator_profile.full_name}</span>}
                             {order.updater_profile && order.updater_profile.full_name !== order.creator_profile?.full_name && (
                               <>

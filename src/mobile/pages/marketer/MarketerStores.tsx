@@ -65,7 +65,7 @@ interface Props {
 }
 
 export function MarketerStores({ onOpenStore, onGoRecord, onGoOrders }: Props) {
-  const { user, role } = useAuth();
+  const { user, role, profile } = useAuth();
   const qc = useQueryClient();
   const { canAccessRoute, loading: loadingRouteAccess } = useRouteAccess(user?.id, role);
   const [query, setQuery] = useState("");
@@ -88,6 +88,7 @@ export function MarketerStores({ onOpenStore, onGoRecord, onGoOrders }: Props) {
       return (data as unknown as StoreListItem[]) || [];
     },
     enabled: !!user,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: routes } = useQuery({
@@ -96,6 +97,7 @@ export function MarketerStores({ onOpenStore, onGoRecord, onGoOrders }: Props) {
       const { data } = await supabase.from("routes").select("id, name").eq("is_active", true).order("name");
       return (data as RouteItem[]) || [];
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: storeTypes } = useQuery({
@@ -104,6 +106,7 @@ export function MarketerStores({ onOpenStore, onGoRecord, onGoOrders }: Props) {
       const { data } = await supabase.from("store_types").select("id, name").order("name");
       return (data as StoreTypeItem[]) || [];
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   const filtered = (stores || []).filter((store) => {
@@ -136,7 +139,15 @@ export function MarketerStores({ onOpenStore, onGoRecord, onGoOrders }: Props) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-4 pt-4 pb-3 space-y-2">
+      <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 dark:from-slate-900 dark:via-blue-950 dark:to-indigo-950 px-4 pt-4 pb-8">
+        <p className="text-blue-200 text-sm font-medium">My Stores</p>
+        <h2 className="text-white text-2xl font-bold mt-0.5">{(profile?.full_name ?? "Marketer").split(" ")[0]} 👋</h2>
+        <p className="text-blue-200/80 text-xs mt-1">
+          {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}
+        </p>
+      </div>
+
+      <div className="px-4 -mt-5 pb-3 space-y-2">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input
@@ -243,7 +254,7 @@ export function MarketerStores({ onOpenStore, onGoRecord, onGoOrders }: Props) {
                           <button className="text-left w-full" onClick={() => onOpenStore(storeOption)}>
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="text-sm font-semibold truncate">{store.name}</span>
-                              <span className="text-[10px] text-slate-500 dark:text-slate-400">({store.display_id})</span>
+                              <span className="text-xs text-slate-500 dark:text-slate-400">({store.display_id})</span>
                             </div>
                           </button>
                           {store.customers?.name && (
@@ -253,9 +264,9 @@ export function MarketerStores({ onOpenStore, onGoRecord, onGoOrders }: Props) {
                             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1">{store.address}</p>
                           )}
                           <div className="flex items-center gap-2 mt-1 flex-wrap">
-                            {typeName && <Badge variant="outline" className="text-[10px] h-4 px-1.5">{typeName}</Badge>}
+                            {typeName && <Badge variant="outline" className="text-xs h-4 px-1.5">{typeName}</Badge>}
                             {store.routes?.name && (
-                              <span className="text-[10px] text-slate-400 dark:text-slate-500">{store.routes.name}</span>
+                              <span className="text-xs text-slate-400 dark:text-slate-500">{store.routes.name}</span>
                             )}
                           </div>
                         </div>
@@ -264,7 +275,7 @@ export function MarketerStores({ onOpenStore, onGoRecord, onGoOrders }: Props) {
                           <p className={cn("text-sm font-bold", store.outstanding > 0 ? "text-destructive" : "text-green-600")}>
                             ₹{Number(store.outstanding).toLocaleString("en-IN")}
                           </p>
-                          {store.outstanding > 0 && <p className="text-[10px] text-slate-500 dark:text-slate-400">Outstanding</p>}
+                          {store.outstanding > 0 && <p className="text-xs text-slate-500 dark:text-slate-400">Outstanding</p>}
                         </div>
                       </div>
 

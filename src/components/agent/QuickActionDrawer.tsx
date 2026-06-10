@@ -16,7 +16,17 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Html5Qrcode } from "html5-qrcode";
+import type { Html5Qrcode as Html5QrcodeType } from "html5-qrcode";
+
+let Html5QrcodeClass: (new (elementId: string) => Html5QrcodeType) | null = null;
+
+async function getHtml5Qrcode() {
+  if (!Html5QrcodeClass) {
+    const mod = await import("html5-qrcode");
+    Html5QrcodeClass = mod.Html5Qrcode;
+  }
+  return Html5QrcodeClass;
+}
 
 const SCANNER_ID = "quick-action-qr-reader";
 
@@ -62,7 +72,7 @@ export function QuickActionDrawer() {
   const [allStores, setAllStores] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
 
-  const scannerRef = useRef<Html5Qrcode | null>(null);
+  const scannerRef = useRef<Html5QrcodeType | null>(null);
   const onScanRef = useRef<(data: string) => void>();
 
   // ── scanner controls ──────────────────────────────────────────────────────
@@ -82,6 +92,7 @@ export function QuickActionDrawer() {
         await scannerRef.current.stop().catch(() => {});
         scannerRef.current = null;
       }
+      const Html5Qrcode = await getHtml5Qrcode();
       const scanner = new Html5Qrcode(SCANNER_ID);
       scannerRef.current = scanner;
       await scanner.start(
@@ -295,12 +306,12 @@ export function QuickActionDrawer() {
                     <div className="relative w-52 h-52">
                       <div className="absolute inset-0 rounded-lg" />
                       {/* corner brackets */}
-                      <span className="absolute top-0 left-0 w-8 h-8 border-t-[3px] border-l-[3px] border-white rounded-tl-lg" />
-                      <span className="absolute top-0 right-0 w-8 h-8 border-t-[3px] border-r-[3px] border-white rounded-tr-lg" />
-                      <span className="absolute bottom-0 left-0 w-8 h-8 border-b-[3px] border-l-[3px] border-white rounded-bl-lg" />
-                      <span className="absolute bottom-0 right-0 w-8 h-8 border-b-[3px] border-r-[3px] border-white rounded-br-lg" />
+                      <span className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-white rounded-tl-lg" />
+                      <span className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-white rounded-tr-lg" />
+                      <span className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-white rounded-bl-lg" />
+                      <span className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-white rounded-br-lg" />
                       {/* animated scan line */}
-                      <span className="absolute left-1 right-1 h-px bg-primary shadow-[0_0_6px_2px] shadow-primary/60 animate-[scan_2s_ease-in-out_infinite]" />
+                      <span className="absolute left-1 right-1 h-px bg-primary shadow-md animate-[scan_2s_ease-in-out_infinite]" />
                     </div>
                     <p className="mt-4 text-xs text-white/70 tracking-wide">Align QR code within the frame</p>
                   </div>
@@ -325,7 +336,7 @@ export function QuickActionDrawer() {
                       onClick={startScanner}
                       className="gap-2 bg-white/10 border-white/30 text-white hover:bg-white/20 hover:text-white"
                     >
-                      <RefreshCw className="h-3.5 w-3.5" /> Retry
+                      <RefreshCw className="h-4 w-4" /> Retry
                     </Button>
                   </div>
                 )}
@@ -341,7 +352,7 @@ export function QuickActionDrawer() {
                 {/* Bottom label */}
                 {scannerStarted && (
                   <div className="absolute bottom-0 inset-x-0 py-2 text-center bg-gradient-to-t from-black/80 to-transparent">
-                    <p className="text-[11px] text-white/60 font-medium uppercase tracking-widest">Store QR Scanner</p>
+                    <p className="text-xs text-white/60 font-medium uppercase tracking-widest">Store QR Scanner</p>
                   </div>
                 )}
               </div>
@@ -369,15 +380,15 @@ export function QuickActionDrawer() {
                 {/* Store info overlay at bottom */}
                 <div className="absolute bottom-0 inset-x-0 px-4 pb-4 pt-12">
                   {scannedStore.store_type && (
-                    <Badge variant="secondary" className="mb-1.5 text-[10px] bg-white/20 text-white border-white/30 backdrop-blur-sm">
+                    <Badge variant="secondary" className="mb-2 text-xs bg-white/20 text-white border-white/30 backdrop-blur-sm">
                       {scannedStore.store_type}
                     </Badge>
                   )}
                   <h2 className="text-xl font-bold text-white leading-tight">{scannedStore.name}</h2>
-                  <p className="text-xs text-white/70 mt-0.5">{scannedStore.display_id}</p>
+                  <p className="mt-1 text-xs text-white/70">{scannedStore.display_id}</p>
                   {scannedStore.address && (
                     <p className="text-xs text-white/60 mt-1 flex items-start gap-1">
-                      <MapPin className="h-3 w-3 mt-0.5 shrink-0" />
+                      <MapPin className="mt-1 h-3 w-3 shrink-0" />
                       <span className="line-clamp-1">{scannedStore.address}</span>
                     </p>
                   )}
@@ -394,8 +405,8 @@ export function QuickActionDrawer() {
 
                 {/* "Scan again" subtle hint */}
                 <div className="absolute top-3 left-3">
-                  <Badge variant="outline" className="text-[10px] bg-emerald-500/90 text-white border-emerald-400/50 gap-1 backdrop-blur-sm">
-                    <CheckCircle className="h-2.5 w-2.5" /> Scanned
+                  <Badge variant="outline" className="text-xs bg-success/90 text-white border-success/50 gap-1 backdrop-blur-sm">
+                    <CheckCircle className="h-3 w-3" /> Scanned
                   </Badge>
                 </div>
               </div>
@@ -407,16 +418,16 @@ export function QuickActionDrawer() {
           {/* ═══════════════════════════════════════════════════════════════ */}
           <div className="flex-1 overflow-y-auto bg-background">
             {/* Drag handle */}
-            <div className="mx-auto mt-2.5 mb-0.5 h-1 w-10 rounded-full bg-border" />
+            <div className="mx-auto mt-2 mb-1 h-1 w-10 rounded-full bg-border" />
 
             <div className="px-4 pb-safe-area-inset-bottom pb-6 pt-3 space-y-4">
 
               {/* ── Quick action buttons — always visible ── */}
-              <div className="space-y-2.5">
+              <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Quick Actions</p>
                   {scannedStore && (
-                    <span className="flex items-center gap-1 text-[11px] text-emerald-600 font-medium">
+                    <span className="flex items-center gap-1 text-xs text-success font-medium">
                       <CheckCircle className="h-3 w-3" />
                       {scannedStore.name}
                     </span>
@@ -425,7 +436,7 @@ export function QuickActionDrawer() {
 
                 <button
                   onClick={() => handleAction("sale")}
-                  className="w-full flex items-center justify-between rounded-xl bg-primary px-4 py-3.5 text-primary-foreground shadow-sm hover:bg-primary/90 active:scale-[0.98] transition-all"
+                  className="w-full flex items-center justify-between rounded-xl bg-primary px-4 py-3 text-primary-foreground shadow-sm hover:bg-primary/90 active:scale-[0.98] transition-all"
                 >
                   <span className="flex items-center gap-3">
                     <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/20">
@@ -433,7 +444,7 @@ export function QuickActionDrawer() {
                     </div>
                     <div className="text-left">
                       <p className="font-semibold text-sm">Record Sale</p>
-                      <p className="text-[11px] text-primary-foreground/70">
+                      <p className="text-3xs text-primary-foreground/70">
                         {scannedStore ? scannedStore.name : "Tap to go to Sales"}
                       </p>
                     </div>
@@ -443,7 +454,7 @@ export function QuickActionDrawer() {
 
                 <button
                   onClick={() => handleAction("transaction")}
-                  className="w-full flex items-center justify-between rounded-xl border bg-card px-4 py-3.5 shadow-sm hover:bg-accent active:scale-[0.98] transition-all"
+                  className="w-full flex items-center justify-between rounded-xl border bg-card px-4 py-3 shadow-sm hover:bg-accent active:scale-[0.98] transition-all"
                 >
                   <span className="flex items-center gap-3">
                     <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
@@ -451,7 +462,7 @@ export function QuickActionDrawer() {
                     </div>
                     <div className="text-left">
                       <p className="font-semibold text-sm">Record Payment</p>
-                      <p className="text-[11px] text-muted-foreground">
+                      <p className="text-3xs text-muted-foreground">
                         {scannedStore ? scannedStore.name : "Tap to go to Transactions"}
                       </p>
                     </div>
@@ -461,7 +472,7 @@ export function QuickActionDrawer() {
 
                 <button
                   onClick={() => handleAction("visit")}
-                  className="w-full flex items-center justify-between rounded-xl border bg-card px-4 py-3.5 shadow-sm hover:bg-accent active:scale-[0.98] transition-all"
+                  className="w-full flex items-center justify-between rounded-xl border bg-card px-4 py-3 shadow-sm hover:bg-accent active:scale-[0.98] transition-all"
                 >
                   <span className="flex items-center gap-3">
                     <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
@@ -469,7 +480,7 @@ export function QuickActionDrawer() {
                     </div>
                     <div className="text-left">
                       <p className="font-semibold text-sm">Mark Visited</p>
-                      <p className="text-[11px] text-muted-foreground">
+                      <p className="text-3xs text-muted-foreground">
                         {scannedStore ? scannedStore.name : "Requires active route session"}
                       </p>
                     </div>
@@ -481,7 +492,7 @@ export function QuickActionDrawer() {
               {/* Divider */}
               <div className="flex items-center gap-2 pt-1">
                 <div className="flex-1 h-px bg-border" />
-                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Nearby</span>
+                <span className="text-2xs font-semibold text-muted-foreground uppercase tracking-widest">Nearby</span>
                 <div className="flex-1 h-px bg-border" />
               </div>
 
@@ -494,7 +505,7 @@ export function QuickActionDrawer() {
                     size="sm"
                     onClick={findNearbyStores}
                     disabled={loadingNearby}
-                    className="h-7 gap-1.5 text-xs"
+                    className="h-7 gap-2 text-xs"
                   >
                     {loadingNearby
                       ? <Loader2 className="h-3 w-3 animate-spin" />
@@ -504,7 +515,7 @@ export function QuickActionDrawer() {
                 </div>
 
                 {showNearby && (
-                  <div className="space-y-1.5">
+                  <div className="space-y-2">
                     {nearbyStores.length === 0 ? (
                       <p className="text-sm text-muted-foreground text-center py-3 rounded-lg bg-muted/30">
                         No stores found within 100m
@@ -517,7 +528,7 @@ export function QuickActionDrawer() {
                             setScannedStore({ id: store.id, name: store.name, display_id: store.display_id, address: null, photo_url: null, store_type: null });
                             toast.success(`Store selected: ${store.name}`);
                           }}
-                          className="w-full flex items-center justify-between rounded-lg border bg-card px-3 py-2.5 text-left hover:bg-accent transition-colors"
+                          className="w-full flex items-center justify-between rounded-lg border bg-card px-3 py-2 text-left hover:bg-accent transition-colors"
                         >
                           <div>
                             <p className="font-medium text-sm">{store.name}</p>
@@ -543,7 +554,7 @@ export function QuickActionDrawer() {
           </DialogHeader>
           {!linkMode ? (
             <div className="space-y-4">
-              <div className="rounded-lg border bg-muted/40 p-3 text-sm space-y-1.5">
+              <div className="space-y-2 rounded-lg border bg-muted/40 p-3 text-sm">
                 <p><span className="text-muted-foreground text-xs uppercase tracking-wide">UPI ID</span></p>
                 <p className="font-mono text-sm">{scannedUpi.upiId}</p>
                 {scannedUpi.payeeName && (
@@ -576,7 +587,7 @@ export function QuickActionDrawer() {
               <div>
                 <Label>Select Store to Link</Label>
                 <Select value={linkStoreId} onValueChange={setLinkStoreId}>
-                  <SelectTrigger className="mt-1.5"><SelectValue placeholder="Choose a store…" /></SelectTrigger>
+                  <SelectTrigger className="mt-2"><SelectValue placeholder="Choose a store..." /></SelectTrigger>
                   <SelectContent>
                     {allStores.map((s) => (
                       <SelectItem key={s.id} value={s.id}>{s.name} ({s.display_id})</SelectItem>

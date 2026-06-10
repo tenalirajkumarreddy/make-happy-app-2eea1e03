@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 import type { StoreOption } from "@/mobile/components/StorePickerSheet";
 import { useRouteAccess } from "@/hooks/useRouteAccess";
 import { getCurrentPosition } from "@/lib/capacitorUtils";
-import { addToQueue } from "@/lib/offlineQueue";
+import { useMarkVisit } from "@/mobile/hooks/useMarkVisit";
 
 const SCANNER_ID = "mobile-qr-reader";
 
@@ -51,8 +51,9 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
 }
 
 export function AgentScan({ onGoRecord, onGoVisit, onOpenStore }: Props) {
-  const { user, role } = useAuth();
+  const { user, role, profile } = useAuth();
   const { canAccessRoute } = useRouteAccess(user?.id, role);
+  const { markVisit, isVisiting } = useMarkVisit();
 
   const [mode, setMode] = useState<"qr" | "nearby">("qr");
   const [scannerStarted, setScannerStarted] = useState(false);
@@ -60,7 +61,6 @@ export function AgentScan({ onGoRecord, onGoVisit, onOpenStore }: Props) {
   const [processing, setProcessing] = useState(false);
   const [selectedStore, setSelectedStore] = useState<StoreOption | null>(null);
   const [unknownUpi, setUnknownUpi] = useState<{ upiId: string; payeeName: string } | null>(null);
-  const [visitLoading, setVisitLoading] = useState(false);
   const [nearbyLoading, setNearbyLoading] = useState(false);
   const [nearbyStores, setNearbyStores] = useState<Array<StoreOption & { _distKm: number }>>([]);
 
@@ -230,59 +230,12 @@ export function AgentScan({ onGoRecord, onGoVisit, onOpenStore }: Props) {
 
   const handleVisitStore = async (store: StoreOption) => {
     if (!user) return;
-    setVisitLoading(true);
-    try {
-      let lat: number | null = null;
-      let lng: number | null = null;
-      const pos = await getCurrentPosition();
-      if (pos) {
-        lat = pos.lat;
-        lng = pos.lng;
-      }
-
-      if (!navigator.onLine) {
-        await addToQueue({
-          id: crypto.randomUUID(),
-          type: "visit",
-          payload: {
-            userId: user.id,
-            storeId: store.id,
-            lat,
-            lng,
-          },
-          createdAt: new Date().toISOString(),
-        });
-        toast.warning(`Offline — visit queued for ${store.name}`);
-        reset();
-        return;
-      }
-
-      const { data: session } = await supabase
-        .from("route_sessions")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("status", "active")
-        .maybeSingle();
-      if (!session) {
-        toast.error("No active route session. Start a route first.");
-        setVisitLoading(false);
-        return;
-      }
-
-      const { error } = await supabase.from("store_visits").insert({
-        session_id: session.id,
-        store_id: store.id,
-        lat,
-        lng,
-      });
-      if (error) throw error;
-      toast.success(`Visit recorded for ${store.name}`);
-      reset();
-    } catch {
-      toast.error("Failed to record visit");
-    } finally {
-      setVisitLoading(false);
-    }
+    await markVisit({
+      storeId: store.id,
+      storeName: store.name,
+      userId: user.id,
+    });
+    if (navigator.onLine) reset();
   };
 
   const hasResult = selectedStore || unknownUpi;
@@ -306,10 +259,10 @@ export function AgentScan({ onGoRecord, onGoVisit, onOpenStore }: Props) {
       </button>
       <button
         onClick={() => selectedStore ? handleVisitStore(selectedStore) : onGoVisit()}
-        disabled={visitLoading}
-        className="flex flex-col items-center gap-2 p-4 rounded-xl bg-card border hover:bg-emerald-50 dark:hover:bg-emerald-900/20 active:scale-95 transition-all shadow-sm disabled:opacity-60"
+        disabled={isVisiting}
+        onClick={() => selectedStore && handleVisitStore(selectedStore)}
       >
-        {visitLoading ? <Loader2 className="h-6 w-6 text-emerald-500 animate-spin" /> : <CheckCircle2 className="h-6 w-6 text-emerald-500" />}
+        {isVisiting ? <Loader2 className="h-6 w-6 text-emerald-500 animate-spin" /> : <CheckCircle2 className="h-6 w-6 text-emerald-500" />}
         <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 leading-tight text-center">{selectedStore ? "Mark Visited" : "Routes & Visits"}</span>
       </button>
     </div>
@@ -317,7 +270,15 @@ export function AgentScan({ onGoRecord, onGoVisit, onOpenStore }: Props) {
 
   return (
     <div className="flex flex-col min-h-full">
-      <div className="px-4 pt-4 pb-2">
+      <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 dark:from-slate-900 dark:via-blue-950 dark:to-indigo-950 px-4 pt-4 pb-8">
+        <p className="text-blue-200 text-sm font-medium">Quick Action</p>
+        <h2 className="text-white text-2xl font-bold mt-0.5">{(profile?.full_name ?? "Agent").split(" ")[0]} 👋</h2>
+        <p className="text-blue-200/80 text-xs mt-1">
+          {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}
+        </p>
+      </div>
+
+      <div className="px-4 -mt-5 pb-2">
         <div className="grid grid-cols-2 gap-2">
           <Button
             variant={mode === "qr" ? "default" : "outline"}
@@ -452,12 +413,12 @@ export function AgentScan({ onGoRecord, onGoVisit, onOpenStore }: Props) {
                   </div>
                 )}
                 <div className="flex items-center gap-2 mt-2 flex-wrap">
-                  {selectedStore.store_types?.name && <Badge variant="secondary" className="text-[10px] font-semibold bg-blue-50 dark:bg-blue-900/30 text-blue-600 border-0">{selectedStore.store_types.name}</Badge>}
-                  {selectedStore.routes?.name && <Badge variant="secondary" className="text-[10px] font-semibold bg-muted text-muted-foreground border-0">{selectedStore.routes.name}</Badge>}
+                  {selectedStore.store_types?.name && <Badge variant="secondary" className="text-xs font-semibold bg-blue-50 dark:bg-blue-900/30 text-blue-600 border-0">{selectedStore.store_types.name}</Badge>}
+                  {selectedStore.routes?.name && <Badge variant="secondary" className="text-xs font-semibold bg-muted text-muted-foreground border-0">{selectedStore.routes.name}</Badge>}
                 </div>
               </div>
               <div className="text-right shrink-0">
-                <p className="text-[10px] text-muted-foreground/70 mb-0.5">Balance</p>
+                <p className="text-xs text-muted-foreground/70 mb-0.5">Balance</p>
                 <p className={cn("font-bold text-base", selectedStore.outstanding > 0 ? "text-red-500" : "text-emerald-500")}>₹{Number(selectedStore.outstanding).toLocaleString("en-IN")}</p>
               </div>
             </div>
@@ -478,7 +439,7 @@ export function AgentScan({ onGoRecord, onGoVisit, onOpenStore }: Props) {
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Actions</p>
               <p className="text-sm font-semibold text-foreground mt-1">{selectedStore ? `Continue with ${selectedStore.name}` : "Use the same sale and payment flow as the web app"}</p>
             </div>
-            {selectedStore && <Badge variant="outline" className="text-[10px] font-semibold border-emerald-200 text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20">Store selected</Badge>}
+            {selectedStore && <Badge variant="outline" className="text-xs font-semibold border-emerald-200 text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20">Store selected</Badge>}
           </div>
           {renderQuickActions()}
           {!selectedStore && <p className="text-xs text-muted-foreground/70 mt-3 leading-relaxed">If you start before scanning, the next screen lets you choose the store manually.</p>}

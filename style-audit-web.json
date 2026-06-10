@@ -1,0 +1,5026 @@
+{
+  "colors": [
+    {
+      "value": "green",
+      "count": 293,
+      "where": [
+        "src/components/customers/CustomerLedger.tsx:113",
+        "src/components/customers/CustomerLedger.tsx:123",
+        "src/components/customers/CustomerLedger.tsx:159",
+        "src/components/customers/CustomerLedger.tsx:215",
+        "src/components/customers/CustomerLedger.tsx:280"
+      ]
+    },
+    {
+      "value": "red",
+      "count": 264,
+      "where": [
+        "src/components/customers/CustomerLedger.tsx:112",
+        "src/components/customers/CustomerLedger.tsx:147",
+        "src/components/customers/CustomerLedger.tsx:207",
+        "src/components/customers/CustomerLedger.tsx:277",
+        "src/components/customers/CustomerLedger.tsx:322"
+      ]
+    },
+    {
+      "value": "blue",
+      "count": 176,
+      "where": [
+        "src/components/customers/CustomerLedger.tsx:114",
+        "src/components/inventory/bom-columns.tsx:30",
+        "src/components/inventory/InventorySummaryCards.tsx:45",
+        "src/components/inventory/InventorySummaryCards.tsx:46",
+        "src/components/inventory/InventorySummaryCards.tsx:140"
+      ]
+    },
+    {
+      "value": "gray",
+      "count": 103,
+      "where": [
+        "src/components/inventory/StockHistoryView.tsx:58",
+        "src/components/inventory/StockHistoryView.tsx:58",
+        "src/components/inventory/StockHistoryView.tsx:58",
+        "src/components/inventory/StockHistoryView.tsx:68",
+        "src/components/inventory/StockHistoryView.tsx:68"
+      ]
+    },
+    {
+      "value": "white",
+      "count": 91,
+      "where": [
+        "src/components/agent/QuickActionDrawer.tsx:298",
+        "src/components/agent/QuickActionDrawer.tsx:299",
+        "src/components/agent/QuickActionDrawer.tsx:300",
+        "src/components/agent/QuickActionDrawer.tsx:301",
+        "src/components/agent/QuickActionDrawer.tsx:305"
+      ]
+    },
+    {
+      "value": "transparent",
+      "count": 55,
+      "where": [
+        "src/index.css:352",
+        "src/index.css:387",
+        "src/components/agent/QuickActionDrawer.tsx:343",
+        "src/components/agent/QuickActionDrawer.tsx:367",
+        "src/components/banners/BannerCarousel.tsx:88"
+      ]
+    },
+    {
+      "value": "hsl(var(--muted-foreground)",
+      "count": 48,
+      "where": [
+        "src/components/reports/AgentPerformanceReport.tsx:284",
+        "src/components/reports/AgentPerformanceReport.tsx:285",
+        "src/components/reports/OrderReport.tsx:246",
+        "src/components/reports/OrderReport.tsx:247",
+        "src/components/reports/OrderReport.tsx:262"
+      ]
+    },
+    {
+      "value": "hsl(var(--border)",
+      "count": 47,
+      "where": [
+        "src/components/reports/AgentPerformanceReport.tsx:283",
+        "src/components/reports/AgentPerformanceReport.tsx:286",
+        "src/components/reports/OrderReport.tsx:245",
+        "src/components/reports/OrderReport.tsx:261",
+        "src/components/reports/OrderReport.tsx:296"
+      ]
+    },
+    {
+      "value": "#3b82f6",
+      "count": 30,
+      "where": [
+        "src/components/orders/ProformaView.tsx:43",
+        "src/components/orders/ProformaView.tsx:80",
+        "src/components/reports/CustomerReport.tsx:32",
+        "src/components/reports/CustomerReport.tsx:324",
+        "src/components/reports/ItemWisePLReport.tsx:17"
+      ]
+    },
+    {
+      "value": "#ef4444",
+      "count": 24,
+      "where": [
+        "src/components/reports/CustomerReport.tsx:32",
+        "src/components/reports/CustomerRiskReport.tsx:87",
+        "src/components/reports/CustomerRiskReport.tsx:107",
+        "src/components/reports/InventoryTimelineReport.tsx:434",
+        "src/components/reports/InventoryTimelineReport.tsx:455"
+      ]
+    },
+    {
+      "value": "black",
+      "count": 23,
+      "where": [
+        "src/components/agent/QuickActionDrawer.tsx:284",
+        "src/components/agent/QuickActionDrawer.tsx:311",
+        "src/components/agent/QuickActionDrawer.tsx:319",
+        "src/components/agent/QuickActionDrawer.tsx:336",
+        "src/components/agent/QuickActionDrawer.tsx:336"
+      ]
+    },
+    {
+      "value": "#10b981",
+      "count": 22,
+      "where": [
+        "src/components/reports/CustomerReport.tsx:32",
+        "src/components/reports/CustomerReport.tsx:325",
+        "src/components/reports/InventoryTimelineReport.tsx:433",
+        "src/components/reports/InventoryTimelineReport.tsx:454",
+        "src/components/reports/ItemWisePLReport.tsx:17"
+      ]
+    },
+    {
+      "value": "#8377",
+      "count": 17,
+      "where": [
+        "src/components/customers/CustomerLedger.tsx:148",
+        "src/components/customers/CustomerLedger.tsx:160",
+        "src/components/customers/CustomerLedger.tsx:171",
+        "src/components/customers/CustomerLedger.tsx:200",
+        "src/components/customers/CustomerLedger.tsx:208"
+      ]
+    },
+    {
+      "value": "hsl(var(--card)",
+      "count": 16,
+      "where": [
+        "src/components/reports/AgentPerformanceReport.tsx:286",
+        "src/components/reports/PaymentOutstandingReport.tsx:646",
+        "src/components/reports/SalesReport.tsx:346",
+        "src/components/reports/SalesReport.tsx:444",
+        "src/pages/Analytics.tsx:268"
+      ]
+    },
+    {
+      "value": "#f59e0b",
+      "count": 16,
+      "where": [
+        "src/components/reports/CustomerReport.tsx:32",
+        "src/components/reports/CustomerRiskReport.tsx:88",
+        "src/components/reports/CustomerRiskReport.tsx:107",
+        "src/components/reports/ItemWisePLReport.tsx:17",
+        "src/components/reports/PaymentFlowReport.tsx:16"
+      ]
+    },
+    {
+      "value": "hsl(142, 72%, 42%)",
+      "count": 16,
+      "where": [
+        "src/components/reports/OrderReport.tsx:20",
+        "src/components/reports/PaymentOutstandingReport.tsx:21",
+        "src/components/reports/ProductReport.tsx:21",
+        "src/components/reports/ReceivablesAgingReport.tsx:17",
+        "src/components/reports/RouteEfficiencyReport.tsx:150"
+      ]
+    },
+    {
+      "value": "#64748b",
+      "count": 15,
+      "where": [
+        "src/components/orders/ProformaView.tsx:57",
+        "src/components/orders/ProformaView.tsx:59",
+        "src/components/orders/ProformaView.tsx:67",
+        "src/components/orders/ProformaView.tsx:69",
+        "src/components/orders/ProformaView.tsx:72"
+      ]
+    },
+    {
+      "value": "#e5e7eb",
+      "count": 14,
+      "where": [
+        "src/components/orders/ProformaView.tsx:27",
+        "src/components/orders/ProformaView.tsx:28",
+        "src/components/orders/ProformaView.tsx:29",
+        "src/components/orders/ProformaView.tsx:30",
+        "src/components/orders/ProformaView.tsx:66"
+      ]
+    },
+    {
+      "value": "#fff",
+      "count": 12,
+      "where": [
+        "src/index.css:281",
+        "src/components/orders/ProformaView.tsx:38",
+        "src/components/orders/ProformaView.tsx:81",
+        "src/components/orders/ProformaView.tsx:82",
+        "src/components/orders/ProformaView.tsx:83"
+      ]
+    },
+    {
+      "value": "hsl(var(--primary)",
+      "count": 12,
+      "where": [
+        "src/components/reports/AgentPerformanceReport.tsx:288",
+        "src/components/reports/OrderReport.tsx:248",
+        "src/components/reports/OrderReport.tsx:264",
+        "src/components/reports/ProductReport.tsx:332",
+        "src/components/reports/SalesReport.tsx:349"
+      ]
+    },
+    {
+      "value": "hsl(0, 72%, 51%)",
+      "count": 11,
+      "where": [
+        "src/components/reports/OrderReport.tsx:20",
+        "src/components/reports/PaymentOutstandingReport.tsx:21",
+        "src/components/reports/PaymentOutstandingReport.tsx:669",
+        "src/components/reports/ProductReport.tsx:21",
+        "src/components/reports/ReceivablesAgingReport.tsx:17"
+      ]
+    },
+    {
+      "value": "hsl(var(--warning)",
+      "count": 10,
+      "where": [
+        "src/index.css:378",
+        "src/index.css:379",
+        "src/index.css:380",
+        "src/index.css:383",
+        "src/index.css:384"
+      ]
+    },
+    {
+      "value": "#1f2937",
+      "count": 10,
+      "where": [
+        "src/components/orders/ProformaView.tsx:27",
+        "src/components/orders/ProformaView.tsx:28",
+        "src/components/orders/ProformaView.tsx:29",
+        "src/components/orders/ProformaView.tsx:30",
+        "src/components/orders/ProformaView.tsx:38"
+      ]
+    },
+    {
+      "value": "#94a3b8",
+      "count": 10,
+      "where": [
+        "src/components/orders/ProformaView.tsx:51",
+        "src/components/orders/ProformaView.tsx:52",
+        "src/components/orders/ProformaView.tsx:53",
+        "src/components/orders/ProformaView.tsx:89",
+        "src/components/orders/ProformaView.tsx:119"
+      ]
+    },
+    {
+      "value": "hsl(217, 91%, 50%)",
+      "count": 10,
+      "where": [
+        "src/components/reports/OrderReport.tsx:20",
+        "src/components/reports/ProductReport.tsx:21",
+        "src/components/reports/SalesReport.tsx:28",
+        "src/pages/Analytics.tsx:16",
+        "src/pages/Analytics.tsx:84"
+      ]
+    },
+    {
+      "value": "#FFFFFF",
+      "count": 10,
+      "where": [
+        "src/utils/printUtils.ts:64",
+        "src/utils/printUtils.ts:88",
+        "src/utils/printUtils.ts:96",
+        "src/utils/printUtils.ts:210",
+        "src/utils/printUtils.ts:224"
+      ]
+    },
+    {
+      "value": "#8b5cf6",
+      "count": 9,
+      "where": [
+        "src/components/reports/CustomerReport.tsx:32",
+        "src/components/reports/ItemWisePLReport.tsx:17",
+        "src/components/reports/PaymentFlowReport.tsx:16",
+        "src/components/reports/ProfitLossReport.tsx:14",
+        "src/components/reports/PurchaseReport.tsx:28"
+      ]
+    },
+    {
+      "value": "hsl(38, 92%, 50%)",
+      "count": 9,
+      "where": [
+        "src/components/reports/OrderReport.tsx:20",
+        "src/components/reports/PaymentOutstandingReport.tsx:21",
+        "src/components/reports/ProductReport.tsx:21",
+        "src/components/reports/ReceivablesAgingReport.tsx:17",
+        "src/components/reports/SalesReport.tsx:28"
+      ]
+    },
+    {
+      "value": "#6366f1",
+      "count": 9,
+      "where": [
+        "src/pages/CostInsights.tsx:71",
+        "src/pages/Expenses.tsx:84",
+        "src/pages/Expenses.tsx:91",
+        "src/pages/Expenses.tsx:320",
+        "src/pages/Expenses.tsx:866"
+      ]
+    },
+    {
+      "value": "#1A2B4A",
+      "count": 9,
+      "where": [
+        "src/utils/printUtils.ts:78",
+        "src/utils/printUtils.ts:155",
+        "src/utils/printUtils.ts:156",
+        "src/utils/printUtils.ts:185",
+        "src/utils/printUtils.ts:186"
+      ]
+    },
+    {
+      "value": "#ec4899",
+      "count": 8,
+      "where": [
+        "src/components/reports/CustomerReport.tsx:32",
+        "src/components/reports/ItemWisePLReport.tsx:17",
+        "src/components/reports/PaymentFlowReport.tsx:16",
+        "src/components/reports/ProfitLossReport.tsx:14",
+        "src/components/reports/PurchaseReport.tsx:28"
+      ]
+    },
+    {
+      "value": "#D0D5DD",
+      "count": 8,
+      "where": [
+        "src/utils/printUtils.ts:107",
+        "src/utils/printUtils.ts:128",
+        "src/utils/printUtils.ts:179",
+        "src/utils/printUtils.ts:238",
+        "src/utils/printUtils.ts:266"
+      ]
+    },
+    {
+      "value": "#000",
+      "count": 7,
+      "where": [
+        "src/index.css:282",
+        "src/components/shared/SaleReceipt.tsx:111",
+        "src/components/shared/SaleReceipt.tsx:156",
+        "src/components/shared/TransactionReceipt.tsx:99",
+        "src/components/shared/TransactionReceipt.tsx:132"
+      ]
+    },
+    {
+      "value": "#f8fafc",
+      "count": 7,
+      "where": [
+        "src/components/orders/ProformaView.tsx:26",
+        "src/components/orders/ProformaView.tsx:66",
+        "src/components/orders/ProformaView.tsx:71",
+        "src/components/orders/ProformaView.tsx:96",
+        "src/components/orders/ProformaView.tsx:100"
+      ]
+    },
+    {
+      "value": "#06b6d4",
+      "count": 7,
+      "where": [
+        "src/components/reports/CustomerReport.tsx:32",
+        "src/components/reports/ItemWisePLReport.tsx:17",
+        "src/components/reports/ProfitLossReport.tsx:14",
+        "src/components/reports/PurchaseReport.tsx:28",
+        "src/components/reports/VendorReport.tsx:17"
+      ]
+    },
+    {
+      "value": "var(--accent)",
+      "count": 7,
+      "where": [
+        "src/components/reports/CustomerStatement.tsx:313",
+        "src/components/reports/ItemWisePLReport.tsx:256",
+        "src/components/reports/PaymentFlowReport.tsx:270",
+        "src/components/reports/PaymentFlowReport.tsx:301",
+        "src/components/reports/ProductReport.tsx:133"
+      ]
+    },
+    {
+      "value": "#666",
+      "count": 7,
+      "where": [
+        "src/components/reports/PrintPreview.tsx:110",
+        "src/components/reports/PrintPreview.tsx:121",
+        "src/components/shared/SaleReceipt.tsx:91",
+        "src/components/shared/SaleReceipt.tsx:115",
+        "src/components/shared/TransactionReceipt.tsx:103"
+      ]
+    },
+    {
+      "value": "#1A1A1A",
+      "count": 7,
+      "where": [
+        "src/utils/printUtils.ts:63",
+        "src/utils/printUtils.ts:118",
+        "src/utils/printUtils.ts:141",
+        "src/utils/printUtils.ts:165",
+        "src/utils/printUtils.ts:205"
+      ]
+    },
+    {
+      "value": "#ddd",
+      "count": 6,
+      "where": [
+        "src/index.css:313",
+        "src/components/reports/PrintPreview.tsx:87",
+        "src/components/reports/PrintPreview.tsx:107",
+        "src/components/reports/PrintPreview.tsx:108",
+        "src/components/reports/PrintPreview.tsx:117"
+      ]
+    },
+    {
+      "value": "#1e40af",
+      "count": 6,
+      "where": [
+        "src/components/orders/ProformaView.tsx:43",
+        "src/components/orders/ProformaView.tsx:58",
+        "src/components/orders/ProformaView.tsx:80",
+        "src/components/orders/ProformaView.tsx:104",
+        "src/components/orders/ProformaView.tsx:127"
+      ]
+    },
+    {
+      "value": "#84cc16",
+      "count": 6,
+      "where": [
+        "src/components/reports/CustomerReport.tsx:32",
+        "src/components/reports/ItemWisePLReport.tsx:17",
+        "src/components/reports/ProfitLossReport.tsx:14",
+        "src/components/reports/VendorReport.tsx:17",
+        "src/pages/CostInsights.tsx:70"
+      ]
+    },
+    {
+      "value": "hsl(280, 65%, 60%)",
+      "count": 6,
+      "where": [
+        "src/components/reports/PaymentOutstandingReport.tsx:21",
+        "src/components/reports/ProductReport.tsx:21",
+        "src/components/reports/ReceivablesAgingReport.tsx:17",
+        "src/components/reports/SalesReport.tsx:28",
+        "src/pages/Analytics.tsx:16"
+      ]
+    },
+    {
+      "value": "#6B7280",
+      "count": 6,
+      "where": [
+        "src/utils/printUtils.ts:112",
+        "src/utils/printUtils.ts:134",
+        "src/utils/printUtils.ts:193",
+        "src/utils/printUtils.ts:283",
+        "src/utils/printUtils.ts:326"
+      ]
+    },
+    {
+      "value": "#8884d8",
+      "count": 5,
+      "where": [
+        "src/components/reports/CustomerReport.tsx:350",
+        "src/components/reports/ItemWisePLReport.tsx:416",
+        "src/components/reports/PaymentFlowReport.tsx:405",
+        "src/components/reports/PurchaseReport.tsx:413",
+        "src/components/reports/VendorReport.tsx:329"
+      ]
+    },
+    {
+      "value": "#1a1d24",
+      "count": 5,
+      "where": [
+        "src/components/shared/MobileListSkeleton.tsx:29",
+        "src/components/shared/MobileListSkeleton.tsx:67",
+        "src/components/shared/MobileListSkeleton.tsx:95",
+        "src/components/shared/MobileListSkeleton.tsx:115",
+        "src/components/shared/MobileListSkeleton.tsx:143"
+      ]
+    },
+    {
+      "value": "#6b7280",
+      "count": 5,
+      "where": [
+        "src/pages/Handovers.tsx:1042",
+        "src/pages/Handovers.tsx:2007",
+        "src/pages/Handovers.tsx:2153",
+        "src/pages/Handovers.tsx:2225",
+        "src/pages/handovers/ExpenseReviewDialog.tsx:68"
+      ]
+    },
+    {
+      "value": "#7c3aed",
+      "count": 5,
+      "where": [
+        "src/pages/MapPage.tsx:301",
+        "src/pages/MapPage.tsx:309",
+        "src/pages/MapPage.tsx:312",
+        "src/pages/MapPage.tsx:363",
+        "src/pages/MapPage.tsx:369"
+      ]
+    },
+    {
+      "value": "hsl(var(--success)",
+      "count": 5,
+      "where": [
+        "src/styles/tokens.css:16",
+        "src/styles/tokens.css:71",
+        "src/styles/tokens.css:72",
+        "src/styles/tokens.css:73",
+        "src/styles/tokens.css:94"
+      ]
+    },
+    {
+      "value": "hsl(var(--destructive)",
+      "count": 5,
+      "where": [
+        "src/styles/tokens.css:18",
+        "src/styles/tokens.css:80",
+        "src/styles/tokens.css:81",
+        "src/styles/tokens.css:82",
+        "src/styles/tokens.css:97"
+      ]
+    },
+    {
+      "value": "hsl(var(--info)",
+      "count": 5,
+      "where": [
+        "src/styles/tokens.css:19",
+        "src/styles/tokens.css:74",
+        "src/styles/tokens.css:75",
+        "src/styles/tokens.css:76",
+        "src/styles/tokens.css:95"
+      ]
+    },
+    {
+      "value": "#888",
+      "count": 4,
+      "where": [
+        "src/App.css:39",
+        "src/pages/MapPage.tsx:281",
+        "src/pages/MapPage.tsx:311",
+        "src/pages/MapPage.tsx:369"
+      ]
+    },
+    {
+      "value": "hsl(var(--muted)",
+      "count": 4,
+      "where": [
+        "src/index.css:319",
+        "src/components/routes/RouteAccessMatrix.tsx:179",
+        "src/components/stores/StoreTypeAccessMatrix.tsx:211",
+        "src/styles/tokens.css:10"
+      ]
+    },
+    {
+      "value": "var(--shadow-sm)",
+      "count": 3,
+      "where": [
+        "src/index.css:149",
+        "src/index.css:162",
+        "src/index.css:227"
+      ]
+    },
+    {
+      "value": "#f1f5f9",
+      "count": 3,
+      "where": [
+        "src/components/orders/ProformaView.tsx:131",
+        "src/components/orders/ProformaView.tsx:155",
+        "src/components/reports/CustomerStatement.tsx:297"
+      ]
+    },
+    {
+      "value": "hsl(var(--chart-2)",
+      "count": 3,
+      "where": [
+        "src/components/reports/AgentPerformanceReport.tsx:289",
+        "src/components/reports/OrderReport.tsx:299",
+        "src/components/reports/PaymentOutstandingReport.tsx:647"
+      ]
+    },
+    {
+      "value": "#f5f5f5",
+      "count": 3,
+      "where": [
+        "src/components/reports/PrintPreview.tsx:92",
+        "src/pages/Attendance.tsx:61",
+        "src/pages/InvoiceView.tsx:526"
+      ]
+    },
+    {
+      "value": "#374151",
+      "count": 3,
+      "where": [
+        "src/components/reports/PurchaseReport.tsx:183",
+        "src/utils/printUtils.ts:352",
+        "src/utils/printUtils.ts:368"
+      ]
+    },
+    {
+      "value": "#ca8a04",
+      "count": 3,
+      "where": [
+        "src/components/reports/VendorReport.tsx:155",
+        "src/components/reports/VendorReport.tsx:172",
+        "src/components/reports/VendorReport.tsx:198"
+      ]
+    },
+    {
+      "value": "hsl(var(--background)",
+      "count": 3,
+      "where": [
+        "src/components/routes/RouteAccessMatrix.tsx:179",
+        "src/components/stores/StoreTypeAccessMatrix.tsx:212",
+        "src/styles/tokens.css:8"
+      ]
+    },
+    {
+      "value": "#c00",
+      "count": 3,
+      "where": [
+        "src/components/shared/SaleReceipt.tsx:169",
+        "src/components/shared/TransactionReceipt.tsx:105",
+        "src/components/shared/TransactionReceipt.tsx:105"
+      ]
+    },
+    {
+      "value": "#ccc",
+      "count": 3,
+      "where": [
+        "src/components/ui/chart.tsx:48",
+        "src/components/ui/chart.tsx:48",
+        "src/components/ui/chart.tsx:48"
+      ]
+    },
+    {
+      "value": "#F5A623",
+      "count": 3,
+      "where": [
+        "src/utils/printUtils.ts:84",
+        "src/utils/printUtils.ts:199",
+        "src/utils/printUtils.ts:328"
+      ]
+    },
+    {
+      "value": "#F5F7FA",
+      "count": 3,
+      "where": [
+        "src/utils/printUtils.ts:124",
+        "src/utils/printUtils.ts:178",
+        "src/utils/printUtils.ts:382"
+      ]
+    },
+    {
+      "value": "#047857",
+      "count": 3,
+      "where": [
+        "src/utils/printUtils.ts:323",
+        "src/utils/printUtils.ts:348",
+        "src/utils/printUtils.ts:364"
+      ]
+    },
+    {
+      "value": "#DC2626",
+      "count": 3,
+      "where": [
+        "src/utils/printUtils.ts:324",
+        "src/utils/printUtils.ts:349",
+        "src/utils/printUtils.ts:365"
+      ]
+    },
+    {
+      "value": "var(--radius-lg)",
+      "count": 2,
+      "where": [
+        "src/index.css:47",
+        "src/styles/tokens.css:58"
+      ]
+    },
+    {
+      "value": "var(--shadow-md)",
+      "count": 2,
+      "where": [
+        "src/index.css:144",
+        "src/index.css:231"
+      ]
+    },
+    {
+      "value": "var(--shadow-lg)",
+      "count": 2,
+      "where": [
+        "src/index.css:153",
+        "src/index.css:166"
+      ]
+    },
+    {
+      "value": "#22c55e",
+      "count": 2,
+      "where": [
+        "src/components/reports/CustomerRiskReport.tsx:90",
+        "src/components/reports/CustomerRiskReport.tsx:107"
+      ]
+    },
+    {
+      "value": "#fef3c7",
+      "count": 2,
+      "where": [
+        "src/components/reports/CustomerStatement.tsx:303",
+        "src/components/reports/PurchaseReport.tsx:177"
+      ]
+    },
+    {
+      "value": "#2563eb",
+      "count": 2,
+      "where": [
+        "src/components/reports/CustomerStatement.tsx:306",
+        "src/components/reports/VendorReport.tsx:164"
+      ]
+    },
+    {
+      "value": "#16a34a",
+      "count": 2,
+      "where": [
+        "src/components/reports/CustomerStatement.tsx:307",
+        "src/components/reports/CustomerStatement.tsx:308"
+      ]
+    },
+    {
+      "value": "#333",
+      "count": 2,
+      "where": [
+        "src/components/reports/PrintPreview.tsx:112",
+        "src/pages/Attendance.tsx:58"
+      ]
+    },
+    {
+      "value": "hsl(190, 80%, 45%)",
+      "count": 2,
+      "where": [
+        "src/components/reports/ProductReport.tsx:21",
+        "src/components/reports/SalesReport.tsx:28"
+      ]
+    },
+    {
+      "value": "#0f1115",
+      "count": 2,
+      "where": [
+        "src/components/shared/MobileListSkeleton.tsx:27",
+        "src/components/shared/MobileListSkeleton.tsx:93"
+      ]
+    },
+    {
+      "value": "#ffffff",
+      "count": 2,
+      "where": [
+        "src/components/shared/SaleReceipt.tsx:249",
+        "src/components/shared/TransactionReceipt.tsx:194"
+      ]
+    },
+    {
+      "value": "var(--sidebar-width-icon)",
+      "count": 2,
+      "where": [
+        "src/components/ui/sidebar.tsx:189",
+        "src/components/ui/sidebar.tsx:201"
+      ]
+    },
+    {
+      "value": "var(--sidebar-width)",
+      "count": 2,
+      "where": [
+        "src/components/ui/sidebar.tsx:197",
+        "src/components/ui/sidebar.tsx:198"
+      ]
+    },
+    {
+      "value": "rgba(124,58,237,0.5)",
+      "count": 2,
+      "where": [
+        "src/pages/MapPage.tsx:301",
+        "src/pages/MapPage.tsx:363"
+      ]
+    },
+    {
+      "value": "#E5E7EB",
+      "count": 2,
+      "where": [
+        "src/utils/printUtils.ts:71",
+        "src/utils/printUtils.ts:412"
+      ]
+    },
+    {
+      "value": "#F9FAFB",
+      "count": 2,
+      "where": [
+        "src/utils/printUtils.ts:242",
+        "src/utils/printUtils.ts:376"
+      ]
+    },
+    {
+      "value": "#D1FAE5",
+      "count": 2,
+      "where": [
+        "src/utils/printUtils.ts:348",
+        "src/utils/printUtils.ts:364"
+      ]
+    },
+    {
+      "value": "#FEE2E2",
+      "count": 2,
+      "where": [
+        "src/utils/printUtils.ts:349",
+        "src/utils/printUtils.ts:365"
+      ]
+    },
+    {
+      "value": "#FEF3C7",
+      "count": 2,
+      "where": [
+        "src/utils/printUtils.ts:350",
+        "src/utils/printUtils.ts:366"
+      ]
+    },
+    {
+      "value": "#D97706",
+      "count": 2,
+      "where": [
+        "src/utils/printUtils.ts:350",
+        "src/utils/printUtils.ts:366"
+      ]
+    },
+    {
+      "value": "#DBEAFE",
+      "count": 2,
+      "where": [
+        "src/utils/printUtils.ts:351",
+        "src/utils/printUtils.ts:367"
+      ]
+    },
+    {
+      "value": "#1D4ED8",
+      "count": 2,
+      "where": [
+        "src/utils/printUtils.ts:351",
+        "src/utils/printUtils.ts:367"
+      ]
+    },
+    {
+      "value": "#F3F4F6",
+      "count": 2,
+      "where": [
+        "src/utils/printUtils.ts:352",
+        "src/utils/printUtils.ts:368"
+      ]
+    },
+    {
+      "value": "#646cffaa",
+      "count": 1,
+      "where": [
+        "src/App.css:13"
+      ]
+    },
+    {
+      "value": "#61dafbaa",
+      "count": 1,
+      "where": [
+        "src/App.css:16"
+      ]
+    },
+    {
+      "value": "#1a1a2e",
+      "count": 1,
+      "where": [
+        "src/main.tsx:81"
+      ]
+    },
+    {
+      "value": "var(--destructive)",
+      "count": 1,
+      "where": [
+        "src/components/inventory/ProductInventoryCard.tsx:106"
+      ]
+    },
+    {
+      "value": "var(--emerald-600)",
+      "count": 1,
+      "where": [
+        "src/components/inventory/ProductInventoryCard.tsx:106"
+      ]
+    },
+    {
+      "value": "rgba(0,0,0,0.08)",
+      "count": 1,
+      "where": [
+        "src/components/orders/ProformaView.tsx:38"
+      ]
+    },
+    {
+      "value": "rgba(37,99,235,0.04)",
+      "count": 1,
+      "where": [
+        "src/components/orders/ProformaView.tsx:40"
+      ]
+    },
+    {
+      "value": "rgba(220,38,38,0.04)",
+      "count": 1,
+      "where": [
+        "src/components/orders/ProformaView.tsx:40"
+      ]
+    },
+    {
+      "value": "#60a5fa",
+      "count": 1,
+      "where": [
+        "src/components/orders/ProformaView.tsx:43"
+      ]
+    },
+    {
+      "value": "#1e3a5f",
+      "count": 1,
+      "where": [
+        "src/components/orders/ProformaView.tsx:50"
+      ]
+    },
+    {
+      "value": "#eff6ff",
+      "count": 1,
+      "where": [
+        "src/components/orders/ProformaView.tsx:56"
+      ]
+    },
+    {
+      "value": "#bfdbfe",
+      "count": 1,
+      "where": [
+        "src/components/orders/ProformaView.tsx:56"
+      ]
+    },
+    {
+      "value": "#cbd5e1",
+      "count": 1,
+      "where": [
+        "src/components/orders/ProformaView.tsx:131"
+      ]
+    },
+    {
+      "value": "#f8f9fa",
+      "count": 1,
+      "where": [
+        "src/components/reports/CustomerStatement.tsx:281"
+      ]
+    },
+    {
+      "value": "#fff8f8",
+      "count": 1,
+      "where": [
+        "src/components/reports/CustomerStatement.tsx:297"
+      ]
+    },
+    {
+      "value": "#d97706",
+      "count": 1,
+      "where": [
+        "src/components/reports/CustomerStatement.tsx:303"
+      ]
+    },
+    {
+      "value": "#fde68a",
+      "count": 1,
+      "where": [
+        "src/components/reports/CustomerStatement.tsx:303"
+      ]
+    },
+    {
+      "value": "#dc2626",
+      "count": 1,
+      "where": [
+        "src/components/reports/CustomerStatement.tsx:308"
+      ]
+    },
+    {
+      "value": "#10b98133",
+      "count": 1,
+      "where": [
+        "src/components/reports/InventoryTimelineReport.tsx:433"
+      ]
+    },
+    {
+      "value": "#ef444433",
+      "count": 1,
+      "where": [
+        "src/components/reports/InventoryTimelineReport.tsx:434"
+      ]
+    },
+    {
+      "value": "#1a1a1a",
+      "count": 1,
+      "where": [
+        "src/components/reports/PrintPreview.tsx:77"
+      ]
+    },
+    {
+      "value": "hsl(330, 70%, 50%)",
+      "count": 1,
+      "where": [
+        "src/components/reports/ProductReport.tsx:21"
+      ]
+    },
+    {
+      "value": "#f0fdf4",
+      "count": 1,
+      "where": [
+        "src/components/reports/ProfitLossReport.tsx:253"
+      ]
+    },
+    {
+      "value": "#92400e",
+      "count": 1,
+      "where": [
+        "src/components/reports/PurchaseReport.tsx:177"
+      ]
+    },
+    {
+      "value": "#dbeafe",
+      "count": 1,
+      "where": [
+        "src/components/reports/PurchaseReport.tsx:178"
+      ]
+    },
+    {
+      "value": "#dcfce3",
+      "count": 1,
+      "where": [
+        "src/components/reports/PurchaseReport.tsx:179"
+      ]
+    },
+    {
+      "value": "#166534",
+      "count": 1,
+      "where": [
+        "src/components/reports/PurchaseReport.tsx:179"
+      ]
+    },
+    {
+      "value": "#f3f4f6",
+      "count": 1,
+      "where": [
+        "src/components/reports/PurchaseReport.tsx:183"
+      ]
+    },
+    {
+      "value": "hsl(221, 83%, 53%)",
+      "count": 1,
+      "where": [
+        "src/components/reports/RouteEfficiencyReport.tsx:151"
+      ]
+    },
+    {
+      "value": "#3B82F6",
+      "count": 1,
+      "where": [
+        "src/components/routes/RouteMap.tsx:100"
+      ]
+    },
+    {
+      "value": "#0a0",
+      "count": 1,
+      "where": [
+        "src/components/shared/TransactionReceipt.tsx:131"
+      ]
+    },
+    {
+      "value": "var(--radix-navigation-menu-viewport-height)",
+      "count": 1,
+      "where": [
+        "src/components/ui/navigation-menu.tsx:83"
+      ]
+    },
+    {
+      "value": "var(--radix-navigation-menu-viewport-width)",
+      "count": 1,
+      "where": [
+        "src/components/ui/navigation-menu.tsx:83"
+      ]
+    },
+    {
+      "value": "var(--radix-select-trigger-height)",
+      "count": 1,
+      "where": [
+        "src/components/ui/select.tsx:82"
+      ]
+    },
+    {
+      "value": "var(--radix-select-trigger-width)",
+      "count": 1,
+      "where": [
+        "src/components/ui/select.tsx:82"
+      ]
+    },
+    {
+      "value": "var(--radix-toast-swipe-end-x)",
+      "count": 1,
+      "where": [
+        "src/components/ui/toast.tsx:26"
+      ]
+    },
+    {
+      "value": "var(--radix-toast-swipe-move-x)",
+      "count": 1,
+      "where": [
+        "src/components/ui/toast.tsx:26"
+      ]
+    },
+    {
+      "value": "hsl(215, 20%, 65%)",
+      "count": 1,
+      "where": [
+        "src/pages/Analytics.tsx:177"
+      ]
+    },
+    {
+      "value": "#4285F4",
+      "count": 1,
+      "where": [
+        "src/pages/Auth.tsx:613"
+      ]
+    },
+    {
+      "value": "#34A853",
+      "count": 1,
+      "where": [
+        "src/pages/Auth.tsx:614"
+      ]
+    },
+    {
+      "value": "#FBBC05",
+      "count": 1,
+      "where": [
+        "src/pages/Auth.tsx:615"
+      ]
+    },
+    {
+      "value": "#EA4335",
+      "count": 1,
+      "where": [
+        "src/pages/Auth.tsx:616"
+      ]
+    },
+    {
+      "value": "#f97316",
+      "count": 1,
+      "where": [
+        "src/pages/CostInsights.tsx:71"
+      ]
+    },
+    {
+      "value": "#14b8a6",
+      "count": 1,
+      "where": [
+        "src/pages/CostInsights.tsx:71"
+      ]
+    },
+    {
+      "value": "#f43f5e",
+      "count": 1,
+      "where": [
+        "src/pages/CostInsights.tsx:71"
+      ]
+    },
+    {
+      "value": "#039",
+      "count": 1,
+      "where": [
+        "src/pages/MapPage.tsx:32"
+      ]
+    },
+    {
+      "value": "#1d4ed8",
+      "count": 1,
+      "where": [
+        "src/pages/MapPage.tsx:260"
+      ]
+    },
+    {
+      "value": "rgba(59,130,246,0.25)",
+      "count": 1,
+      "where": [
+        "src/pages/MapPage.tsx:339"
+      ]
+    },
+    {
+      "value": "hsl(217 91% 45%)",
+      "count": 1,
+      "where": [
+        "src/styles/tokens.css:4"
+      ]
+    },
+    {
+      "value": "hsl(217 91% 40%)",
+      "count": 1,
+      "where": [
+        "src/styles/tokens.css:5"
+      ]
+    },
+    {
+      "value": "hsl(var(--secondary)",
+      "count": 1,
+      "where": [
+        "src/styles/tokens.css:9"
+      ]
+    },
+    {
+      "value": "hsl(var(--foreground)",
+      "count": 1,
+      "where": [
+        "src/styles/tokens.css:13"
+      ]
+    },
+    {
+      "value": "rgba(0, 0, 0, 0.06)",
+      "count": 1,
+      "where": [
+        "src/styles/tokens.css:61"
+      ]
+    },
+    {
+      "value": "rgba(0, 0, 0, 0.08)",
+      "count": 1,
+      "where": [
+        "src/styles/tokens.css:62"
+      ]
+    },
+    {
+      "value": "rgba(0, 0, 0, 0.1)",
+      "count": 1,
+      "where": [
+        "src/styles/tokens.css:63"
+      ]
+    },
+    {
+      "value": "hsl(222 25% 8%)",
+      "count": 1,
+      "where": [
+        "src/styles/tokens.css:87"
+      ]
+    },
+    {
+      "value": "hsl(222 25% 11%)",
+      "count": 1,
+      "where": [
+        "src/styles/tokens.css:88"
+      ]
+    },
+    {
+      "value": "hsl(217 20% 17%)",
+      "count": 1,
+      "where": [
+        "src/styles/tokens.css:89"
+      ]
+    },
+    {
+      "value": "hsl(217 20% 24%)",
+      "count": 1,
+      "where": [
+        "src/styles/tokens.css:90"
+      ]
+    },
+    {
+      "value": "hsl(215 20% 65%)",
+      "count": 1,
+      "where": [
+        "src/styles/tokens.css:91"
+      ]
+    },
+    {
+      "value": "hsl(210 40% 98%)",
+      "count": 1,
+      "where": [
+        "src/styles/tokens.css:92"
+      ]
+    },
+    {
+      "value": "#F59E0B",
+      "count": 1,
+      "where": [
+        "src/utils/printUtils.ts:325"
+      ]
+    },
+    {
+      "value": "#9CA3AF",
+      "count": 1,
+      "where": [
+        "src/utils/printUtils.ts:374"
+      ]
+    }
+  ],
+  "typography": [
+    {
+      "family": "(inherit)",
+      "line_height": "(inherit)",
+      "size": "xs",
+      "weight": "(inherit)",
+      "count": 712,
+      "where": [
+        "src/components/agent/QuickActionDrawer.tsx:305",
+        "src/components/agent/QuickActionDrawer.tsx:313",
+        "src/components/agent/QuickActionDrawer.tsx:372",
+        "src/components/agent/QuickActionDrawer.tsx:377",
+        "src/components/agent/QuickActionDrawer.tsx:379"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "(inherit)",
+      "size": "sm",
+      "weight": "(inherit)",
+      "count": 560,
+      "where": [
+        "src/components/agent/QuickActionDrawer.tsx:509",
+        "src/components/agent/QuickActionDrawer.tsx:546",
+        "src/components/agent/QuickActionDrawer.tsx:552",
+        "src/components/agent/QuickActionDrawer.tsx:556",
+        "src/components/agent/QuickActionDrawer.tsx:568"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "(inherit)",
+      "size": "sm",
+      "weight": "medium",
+      "count": 232,
+      "where": [
+        "src/components/agent/QuickActionDrawer.tsx:523",
+        "src/components/banners/BannerManagement.tsx:208",
+        "src/components/inventory/InventorySummaryCards.tsx:85",
+        "src/components/inventory/InventorySummaryCards.tsx:137",
+        "src/components/inventory/InventorySummaryCards.tsx:151"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "(inherit)",
+      "size": "(inherit)",
+      "weight": "medium",
+      "count": 217,
+      "where": [
+        "src/components/customers/CustomerLedger.tsx:147",
+        "src/components/customers/CustomerLedger.tsx:159",
+        "src/components/customers/CustomerLedger.tsx:170",
+        "src/components/customers/CustomerLedger.tsx:283",
+        "src/components/customers/CustomerLedger.tsx:365"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "(inherit)",
+      "size": "(inherit)",
+      "weight": "semibold",
+      "count": 180,
+      "where": [
+        "src/components/agent/QuickActionDrawer.tsx:484",
+        "src/components/inventory/RawMaterialInventoryView.tsx:263",
+        "src/components/inventory/RawMaterialInventoryView.tsx:531",
+        "src/components/inventory/RawMaterialInventoryView.tsx:539",
+        "src/components/inventory/RecordPurchaseForm.tsx:358"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "(inherit)",
+      "size": "xs",
+      "weight": "semibold",
+      "count": 161,
+      "where": [
+        "src/components/agent/QuickActionDrawer.tsx:417",
+        "src/components/agent/QuickActionDrawer.tsx:526",
+        "src/components/inventory/ProductInventoryCard.tsx:118",
+        "src/components/inventory/ProductInventoryCard.tsx:140",
+        "src/components/inventory/ProductInventoryCard.tsx:143"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "(inherit)",
+      "size": "sm",
+      "weight": "semibold",
+      "count": 115,
+      "where": [
+        "src/components/agent/QuickActionDrawer.tsx:435",
+        "src/components/agent/QuickActionDrawer.tsx:453",
+        "src/components/agent/QuickActionDrawer.tsx:471",
+        "src/components/banners/BannerCarousel.tsx:90",
+        "src/components/banners/BannerManagement.tsx:173"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "(inherit)",
+      "size": "2xl",
+      "weight": "bold",
+      "count": 93,
+      "where": [
+        "src/App.tsx:156",
+        "src/components/auth/RoleRoute.tsx:31",
+        "src/components/inventory/InventorySummaryCards.tsx:87",
+        "src/components/inventory/InventorySummaryCards.tsx:138",
+        "src/components/inventory/InventorySummaryCards.tsx:152"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "(inherit)",
+      "size": "(inherit)",
+      "weight": "bold",
+      "count": 58,
+      "where": [
+        "src/components/inventory/ProductInventoryCard.tsx:77",
+        "src/components/inventory/ProductInventoryCard.tsx:95",
+        "src/components/inventory/ProductInventoryCard.tsx:99",
+        "src/components/inventory/ProductInventoryCard.tsx:127",
+        "src/components/layout/TopBar.tsx:172"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "(inherit)",
+      "size": "xs",
+      "weight": "medium",
+      "count": 54,
+      "where": [
+        "src/components/agent/QuickActionDrawer.tsx:344",
+        "src/components/agent/QuickActionDrawer.tsx:419",
+        "src/components/customers/KycReviewDialog.tsx:94",
+        "src/components/inventory/ProductInventoryCard.tsx:90",
+        "src/components/products/ProductAccessDialog.tsx:130"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "(inherit)",
+      "size": "lg",
+      "weight": "bold",
+      "count": 40,
+      "where": [
+        "src/components/customers/CustomerLedger.tsx:199",
+        "src/components/customers/CustomerLedger.tsx:207",
+        "src/components/customers/CustomerLedger.tsx:215",
+        "src/components/customers/CustomerLedger.tsx:223",
+        "src/components/customers/CustomerLedger.tsx:316"
+      ]
+    },
+    {
+      "family": "mono",
+      "line_height": "(inherit)",
+      "size": "xs",
+      "weight": "(inherit)",
+      "count": 37,
+      "where": [
+        "src/components/customers/CustomerLedger.tsx:135",
+        "src/components/customers/CustomerLedger.tsx:275",
+        "src/components/customers/CustomerLedger.tsx:358",
+        "src/components/inventory/purchase-columns.tsx:72",
+        "src/components/inventory/purchase-order-columns.tsx:104"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "(inherit)",
+      "size": "xl",
+      "weight": "bold",
+      "count": 32,
+      "where": [
+        "src/components/customers/CustomerLedger.tsx:307",
+        "src/components/inventory/StaffStockView.tsx:188",
+        "src/components/inventory/StaffStockView.tsx:293",
+        "src/components/orders/OrderViewDialog.tsx:428",
+        "src/components/reports/DailyReport.tsx:533"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "(inherit)",
+      "size": "base",
+      "weight": "(inherit)",
+      "count": 30,
+      "where": [
+        "src/components/customers/CustomerLedger.tsx:246",
+        "src/components/layout/TopBar.tsx:209",
+        "src/components/reports/ReceivablesAgingReport.tsx:164",
+        "src/components/reports/ReceivablesAgingReport.tsx:178",
+        "src/components/reports/ReceivablesAgingReport.tsx:198"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "(inherit)",
+      "size": "lg",
+      "weight": "semibold",
+      "count": 30,
+      "where": [
+        "src/components/inventory/PurchaseOrderForm.tsx:290",
+        "src/components/inventory/RawMaterialInventoryView.tsx:236",
+        "src/components/inventory/RecordPurchaseForm.tsx:321",
+        "src/components/inventory/StaffStockView.tsx:77",
+        "src/components/inventory/StaffStockView.tsx:160"
+      ]
+    },
+    {
+      "family": "mono",
+      "line_height": "(inherit)",
+      "size": "(inherit)",
+      "weight": "(inherit)",
+      "count": 29,
+      "where": [
+        "src/components/layout/AppSidebar.tsx:503",
+        "src/components/products/ProductAccessMatrix.tsx:174",
+        "src/components/reports/SalesReport.tsx:383",
+        "src/components/reports/SalesReport.tsx:384",
+        "src/components/reports/SalesReport.tsx:385"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "(inherit)",
+      "size": "lg",
+      "weight": "(inherit)",
+      "count": 27,
+      "where": [
+        "src/components/inventory/RawMaterialInventoryView.tsx:369",
+        "src/components/reports/SmartInsightsReport.tsx:230",
+        "src/components/reports/SmartInsightsReport.tsx:287",
+        "src/components/reports/SmartInsightsReport.tsx:339",
+        "src/components/shared/CurrencySelector.tsx:88"
+      ]
+    },
+    {
+      "family": "mono",
+      "line_height": "(inherit)",
+      "size": "sm",
+      "weight": "(inherit)",
+      "count": 22,
+      "where": [
+        "src/components/agent/QuickActionDrawer.tsx:548",
+        "src/components/reports/CustomerStatement.tsx:470",
+        "src/components/reports/SalesReport.tsx:486",
+        "src/components/sales/SaleDetailsDialog.tsx:57",
+        "src/components/shared/SaleReceipt.tsx:327"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "(inherit)",
+      "size": "sm",
+      "weight": "bold",
+      "count": 21,
+      "where": [
+        "src/components/inventory/RawMaterialInventoryView.tsx:402",
+        "src/components/inventory/StaffStockView.tsx:316",
+        "src/components/layout/AppSidebar.tsx:487",
+        "src/components/reports/CustomerStatement.tsx:489",
+        "src/components/stores/StoreLedger.tsx:252"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "(inherit)",
+      "size": "base",
+      "weight": "semibold",
+      "count": 19,
+      "where": [
+        "src/components/inventory/RawMaterialInventoryView.tsx:489",
+        "src/components/inventory/StaffStockView.tsx:166",
+        "src/components/reports/AgentPerformanceReport.tsx:279",
+        "src/components/reports/CustomerReport.tsx:313",
+        "src/components/reports/CustomerReport.tsx:337"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "(inherit)",
+      "size": "3xl",
+      "weight": "bold",
+      "count": 15,
+      "where": [
+        "src/components/inventory/ProductInventoryCard.tsx:106",
+        "src/components/inventory/RawMaterialInventoryView.tsx:183",
+        "src/components/inventory/RawMaterialInventoryView.tsx:195",
+        "src/components/inventory/RawMaterialInventoryView.tsx:209",
+        "src/components/inventory/RawMaterialInventoryView.tsx:223"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "(inherit)",
+      "size": "xs",
+      "weight": "normal",
+      "count": 12,
+      "where": [
+        "src/components/inventory/RawMaterialInventoryView.tsx:495",
+        "src/components/inventory/StaffStockView.tsx:224",
+        "src/components/reports/CustomerStatement.tsx:435",
+        "src/pages/Analytics.tsx:222",
+        "src/pages/Analytics.tsx:233"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "(inherit)",
+      "size": "base",
+      "weight": "bold",
+      "count": 12,
+      "where": [
+        "src/components/inventory/StaffStockView.tsx:219",
+        "src/components/reports/ProfitLossReport.tsx:420",
+        "src/components/sales/SaleReturnDialog.tsx:239",
+        "src/components/shared/SaleReceipt.tsx:395",
+        "src/components/shared/TransactionReceipt.tsx:323"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "(inherit)",
+      "size": "xs",
+      "weight": "bold",
+      "count": 9,
+      "where": [
+        "src/components/layout/TopBar.tsx:235",
+        "src/components/orders/EditOrderSheet.tsx:155",
+        "src/components/orders/EditOrderSheet.tsx:169",
+        "src/components/orders/EditOrderSheet.tsx:225",
+        "src/components/shared/SaleReceipt.tsx:374"
+      ]
+    },
+    {
+      "family": "mono",
+      "line_height": "(inherit)",
+      "size": "(inherit)",
+      "weight": "medium",
+      "count": 8,
+      "where": [
+        "src/components/layout/GlobalSearch.tsx:169",
+        "src/components/orders/OrderViewDialog.tsx:354",
+        "src/components/orders/TransferOrderDialog.tsx:82",
+        "src/components/stores/StoreLedger.tsx:403",
+        "src/components/ui/chart.tsx:216"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "(inherit)",
+      "size": "xl",
+      "weight": "semibold",
+      "count": 5,
+      "where": [
+        "src/components/reports/CustomerStatement.tsx:368",
+        "src/components/reports/CustomerStatement.tsx:390",
+        "src/components/reports/PrintPreview.tsx:218",
+        "src/components/reports/ReportContainer.tsx:92",
+        "src/pages/StaffProfile.tsx:461"
+      ]
+    },
+    {
+      "family": "mono",
+      "line_height": "(inherit)",
+      "size": "xs",
+      "weight": "medium",
+      "count": 5,
+      "where": [
+        "src/pages/Orders.tsx:1608",
+        "src/pages/RouteDetail.tsx:342",
+        "src/pages/Sales.tsx:235",
+        "src/pages/Sales.tsx:454",
+        "src/pages/Transactions.tsx:708"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "(inherit)",
+      "size": "sm",
+      "weight": "normal",
+      "count": 4,
+      "where": [
+        "src/components/inventory/RawMaterialInventoryView.tsx:304",
+        "src/pages/Expenses.tsx:1103",
+        "src/pages/Inventory.tsx:466",
+        "src/pages/RouteDetail.tsx:329"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "relaxed",
+      "size": "xs",
+      "weight": "(inherit)",
+      "count": 4,
+      "where": [
+        "src/components/shared/NoticeBox.tsx:45",
+        "src/pages/Settings.tsx:419",
+        "src/pages/Settings.tsx:443",
+        "src/pages/Settings.tsx:507"
+      ]
+    },
+    {
+      "family": "mono",
+      "line_height": "(inherit)",
+      "size": "sm",
+      "weight": "semibold",
+      "count": 3,
+      "where": [
+        "src/components/error/ErrorBoundary.tsx:109",
+        "src/pages/InvoiceView.tsx:146",
+        "src/pages/InvoiceView.tsx:306"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "(inherit)",
+      "size": "lg",
+      "weight": "medium",
+      "count": 3,
+      "where": [
+        "src/components/shared/BulkOperationDialog.tsx:456",
+        "src/components/shared/RouteOptimizer.tsx:312",
+        "src/pages/Orders.tsx:1486"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "(inherit)",
+      "size": "2xl",
+      "weight": "(inherit)",
+      "count": 3,
+      "where": [
+        "src/components/shared/CurrencySelector.tsx:134",
+        "src/pages/Handovers.tsx:1504",
+        "src/pages/StaffProfile.tsx:457"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "(inherit)",
+      "size": "(inherit)",
+      "weight": "normal",
+      "count": 3,
+      "where": [
+        "src/pages/AccessControl.tsx:460",
+        "src/pages/AdminStaffDirectory.tsx:429",
+        "src/pages/StockTransfers.tsx:496"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "tight",
+      "size": "xl",
+      "weight": "bold",
+      "count": 2,
+      "where": [
+        "src/components/agent/QuickActionDrawer.tsx:376",
+        "src/pages/StoreDetail.tsx:570"
+      ]
+    },
+    {
+      "family": "mono",
+      "line_height": "(inherit)",
+      "size": "(inherit)",
+      "weight": "semibold",
+      "count": 2,
+      "where": [
+        "src/components/reports/SalesReport.tsx:382",
+        "src/components/reports/SalesReport.tsx:417"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "tight",
+      "size": "sm",
+      "weight": "medium",
+      "count": 2,
+      "where": [
+        "src/components/routes/RouteAccessMatrix.tsx:182",
+        "src/components/stores/StoreTypeAccessMatrix.tsx:217"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "none",
+      "size": "(inherit)",
+      "weight": "bold",
+      "count": 2,
+      "where": [
+        "src/components/routes/RouteAccessMatrix.tsx:183",
+        "src/components/stores/StoreTypeAccessMatrix.tsx:221"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "(inherit)",
+      "size": "4xl",
+      "weight": "bold",
+      "count": 2,
+      "where": [
+        "src/pages/Index.tsx:7",
+        "src/pages/NotFound.tsx:15"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "(inherit)",
+      "size": "xl",
+      "weight": "(inherit)",
+      "count": 2,
+      "where": [
+        "src/pages/Index.tsx:8",
+        "src/pages/NotFound.tsx:16"
+      ]
+    },
+    {
+      "family": "mono",
+      "line_height": "(inherit)",
+      "size": "lg",
+      "weight": "semibold",
+      "count": 2,
+      "where": [
+        "src/pages/InvoiceView.tsx:150",
+        "src/pages/InvoiceView.tsx:312"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "relaxed",
+      "size": "sm",
+      "weight": "(inherit)",
+      "count": 1,
+      "where": [
+        "src/components/agent/QuickActionDrawer.tsx:321"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "tight",
+      "size": "base",
+      "weight": "semibold",
+      "count": 1,
+      "where": [
+        "src/components/inventory/ProductInventoryCard.tsx:89"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "snug",
+      "size": "(inherit)",
+      "weight": "(inherit)",
+      "count": 1,
+      "where": [
+        "src/components/layout/TopBar.tsx:214"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "none",
+      "size": "sm",
+      "weight": "medium",
+      "count": 1,
+      "where": [
+        "src/components/layout/TopBar.tsx:239"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "(inherit)",
+      "size": "base",
+      "weight": "medium",
+      "count": 1,
+      "where": [
+        "src/components/orders/OrderFulfillmentDialog.tsx:724"
+      ]
+    },
+    {
+      "family": "mono",
+      "line_height": "(inherit)",
+      "size": "sm",
+      "weight": "bold",
+      "count": 1,
+      "where": [
+        "src/components/orders/ProformaView.tsx:172"
+      ]
+    },
+    {
+      "family": "mono",
+      "line_height": "(inherit)",
+      "size": "2xl",
+      "weight": "bold",
+      "count": 1,
+      "where": [
+        "src/components/reports/ReportContainer.tsx:222"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "none",
+      "size": "sm",
+      "weight": "semibold",
+      "count": 1,
+      "where": [
+        "src/components/shared/NoticeBox.tsx:44"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "snug",
+      "size": "xs",
+      "weight": "(inherit)",
+      "count": 1,
+      "where": [
+        "src/components/shared/NotificationPanel.tsx:96"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "snug",
+      "size": "sm",
+      "weight": "medium",
+      "count": 1,
+      "where": [
+        "src/pages/Activity.tsx:82"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "none",
+      "size": "lg",
+      "weight": "(inherit)",
+      "count": 1,
+      "where": [
+        "src/pages/Expenses.tsx:877"
+      ]
+    },
+    {
+      "family": "mono",
+      "line_height": "(inherit)",
+      "size": "sm",
+      "weight": "medium",
+      "count": 1,
+      "where": [
+        "src/pages/InvoiceForm.tsx:639"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "(inherit)",
+      "size": "8xl",
+      "weight": "bold",
+      "count": 1,
+      "where": [
+        "src/pages/InvoiceView.tsx:285"
+      ]
+    },
+    {
+      "family": "(inherit)",
+      "line_height": "none",
+      "size": "sm",
+      "weight": "(inherit)",
+      "count": 1,
+      "where": [
+        "src/pages/MapPage.tsx:488"
+      ]
+    }
+  ],
+  "spacing": [
+    {
+      "value": "gap-2",
+      "count": 516,
+      "where": [
+        "src/components/agent/QuickActionDrawer.tsx:268",
+        "src/components/agent/QuickActionDrawer.tsx:326",
+        "src/components/agent/QuickActionDrawer.tsx:482",
+        "src/components/agent/QuickActionDrawer.tsx:497",
+        "src/components/agent/QuickActionDrawer.tsx:557"
+      ]
+    },
+    {
+      "value": "p-3",
+      "count": 305,
+      "where": [
+        "src/components/agent/QuickActionDrawer.tsx:546",
+        "src/components/agent/QuickActionDrawer.tsx:568",
+        "src/components/banners/BannerManagement.tsx:187",
+        "src/components/customers/KycReviewDialog.tsx:93",
+        "src/components/hr/WorkerForm.tsx:172"
+      ]
+    },
+    {
+      "value": "mt-1",
+      "count": 292,
+      "where": [
+        "src/components/agent/QuickActionDrawer.tsx:377",
+        "src/components/agent/QuickActionDrawer.tsx:379",
+        "src/components/agent/QuickActionDrawer.tsx:380",
+        "src/components/banners/BannerManagement.tsx:212",
+        "src/components/banners/BannerManagement.tsx:242"
+      ]
+    },
+    {
+      "value": "space-y-2",
+      "count": 253,
+      "where": [
+        "src/components/agent/QuickActionDrawer.tsx:415",
+        "src/components/agent/QuickActionDrawer.tsx:489",
+        "src/components/agent/QuickActionDrawer.tsx:507",
+        "src/components/agent/QuickActionDrawer.tsx:546",
+        "src/components/customers/KycReviewDialog.tsx:89"
+      ]
+    },
+    {
+      "value": "mr-2",
+      "count": 233,
+      "where": [
+        "src/components/banners/BannerManagement.tsx:306",
+        "src/components/customers/CustomerLedger.tsx:234",
+        "src/components/customers/CustomerLedger.tsx:238",
+        "src/components/customers/KycReviewDialog.tsx:115",
+        "src/components/customers/KycReviewDialog.tsx:115"
+      ]
+    },
+    {
+      "value": "gap-4",
+      "count": 208,
+      "where": [
+        "src/index.css:236",
+        "src/index.css:240",
+        "src/index.css:244",
+        "src/components/agent/QuickActionDrawer.tsx:319",
+        "src/components/customers/CustomerLedger.tsx:313"
+      ]
+    },
+    {
+      "value": "px-4",
+      "count": 202,
+      "where": [
+        "src/App.tsx:160",
+        "src/components/agent/QuickActionDrawer.tsx:268",
+        "src/components/agent/QuickActionDrawer.tsx:370",
+        "src/components/agent/QuickActionDrawer.tsx:412",
+        "src/components/agent/QuickActionDrawer.tsx:428"
+      ]
+    },
+    {
+      "value": "space-y-4",
+      "count": 192,
+      "where": [
+        "src/components/agent/QuickActionDrawer.tsx:412",
+        "src/components/agent/QuickActionDrawer.tsx:545",
+        "src/components/agent/QuickActionDrawer.tsx:575",
+        "src/components/banners/BannerManagement.tsx:171",
+        "src/components/banners/BannerManagement.tsx:241"
+      ]
+    },
+    {
+      "value": "gap-3",
+      "count": 186,
+      "where": [
+        "src/index.css:224",
+        "src/index.css:244",
+        "src/index.css:248",
+        "src/index.css:252",
+        "src/components/agent/QuickActionDrawer.tsx:311"
+      ]
+    },
+    {
+      "value": "py-3",
+      "count": 176,
+      "where": [
+        "src/components/agent/QuickActionDrawer.tsx:428",
+        "src/components/agent/QuickActionDrawer.tsx:446",
+        "src/components/agent/QuickActionDrawer.tsx:464",
+        "src/components/agent/QuickActionDrawer.tsx:509",
+        "src/components/inventory/StaffStockView.tsx:198"
+      ]
+    },
+    {
+      "value": "p-4",
+      "count": 174,
+      "where": [
+        "src/App.tsx:155",
+        "src/index.css:199",
+        "src/index.css:224",
+        "src/index.css:248",
+        "src/components/banners/BannerCarousel.tsx:89"
+      ]
+    },
+    {
+      "value": "gap-1.5",
+      "count": 111,
+      "where": [
+        "src/components/inventory/WarehouseStockView.tsx:81",
+        "src/components/inventory/WarehouseStockView.tsx:88",
+        "src/components/layout/GlobalSearch.tsx:203",
+        "src/components/products/ProductCategories.tsx:129",
+        "src/components/reports/CustomerStatement.tsx:472"
+      ]
+    },
+    {
+      "value": "space-y-6",
+      "count": 109,
+      "where": [
+        "src/components/inventory/RawMaterialInventoryView.tsx:163",
+        "src/components/inventory/RawMaterialInventoryView.tsx:176",
+        "src/components/inventory/StaffStockView.tsx:99",
+        "src/components/inventory/WarehouseStockView.tsx:64",
+        "src/components/orders/OrderFulfillmentDialog.tsx:585"
+      ]
+    },
+    {
+      "value": "gap-1",
+      "count": 108,
+      "where": [
+        "src/components/agent/QuickActionDrawer.tsx:379",
+        "src/components/agent/QuickActionDrawer.tsx:397",
+        "src/components/agent/QuickActionDrawer.tsx:419",
+        "src/components/banners/BannerImageEditor.tsx:229",
+        "src/components/banners/BannerImageEditor.tsx:238"
+      ]
+    },
+    {
+      "value": "mr-1",
+      "count": 95,
+      "where": [
+        "src/components/banners/BannerManagement.tsx:175",
+        "src/components/hr/worker-columns.tsx:54",
+        "src/components/hr/worker-columns.tsx:56",
+        "src/components/inventory/purchase-columns.tsx:57",
+        "src/components/inventory/RawMaterialInventoryView.tsx:575"
+      ]
+    },
+    {
+      "value": "py-2",
+      "count": 93,
+      "where": [
+        "src/App.tsx:160",
+        "src/components/agent/QuickActionDrawer.tsx:343",
+        "src/components/agent/QuickActionDrawer.tsx:520",
+        "src/components/customers/CustomerLedger.tsx:258",
+        "src/components/customers/CustomerLedger.tsx:271"
+      ]
+    },
+    {
+      "value": "mb-2",
+      "count": 85,
+      "where": [
+        "src/App.tsx:156",
+        "src/components/agent/QuickActionDrawer.tsx:372",
+        "src/components/auth/RoleRoute.tsx:31",
+        "src/components/banners/BannerManagement.tsx:181",
+        "src/components/banners/BannerManagement.tsx:271"
+      ]
+    },
+    {
+      "value": "px-3",
+      "count": 85,
+      "where": [
+        "src/index.css:252",
+        "src/components/agent/QuickActionDrawer.tsx:520",
+        "src/components/banners/BannerManagement.tsx:281",
+        "src/components/inventory/StockTransferModal.tsx:601",
+        "src/components/inventory/WarehouseStockView.tsx:81"
+      ]
+    },
+    {
+      "value": "p-0",
+      "count": 81,
+      "where": [
+        "src/components/agent/QuickActionDrawer.tsx:275",
+        "src/components/hr/payroll-columns.tsx:62",
+        "src/components/hr/payroll-item-columns.tsx:91",
+        "src/components/hr/role-columns.tsx:44",
+        "src/components/hr/worker-columns.tsx:71"
+      ]
+    },
+    {
+      "value": "space-y-3",
+      "count": 80,
+      "where": [
+        "src/index.css:199",
+        "src/components/banners/BannerImageEditor.tsx:153",
+        "src/components/banners/BannerManagement.tsx:185",
+        "src/components/inventory/RawMaterialInventoryView.tsx:375",
+        "src/components/inventory/RecordPurchaseForm.tsx:242"
+      ]
+    },
+    {
+      "value": "mb-4",
+      "count": 79,
+      "where": [
+        "src/App.tsx:157",
+        "src/components/inventory/ProductInventoryCard.tsx:93",
+        "src/components/inventory/ProductInventoryCard.tsx:104",
+        "src/components/inventory/RawMaterialInventoryView.tsx:343",
+        "src/components/inventory/StaffStockView.tsx:74"
+      ]
+    },
+    {
+      "value": "pb-2",
+      "count": 79,
+      "where": [
+        "src/components/customers/CustomerLedger.tsx:245",
+        "src/components/inventory/InventorySummaryCards.tsx:28",
+        "src/components/layout/AppSidebar.tsx:494",
+        "src/components/orders/OrderViewDialog.tsx:252",
+        "src/components/orders/OrderViewDialog.tsx:292"
+      ]
+    },
+    {
+      "value": "p-2",
+      "count": 69,
+      "where": [
+        "src/components/inventory/ProductInventoryCard.tsx:94",
+        "src/components/inventory/ProductInventoryCard.tsx:98",
+        "src/components/inventory/ProductInventoryCard.tsx:131",
+        "src/components/inventory/RawMaterialInventoryView.tsx:544",
+        "src/components/inventory/StockTransferModal.tsx:656"
+      ]
+    },
+    {
+      "value": "py-4",
+      "count": 68,
+      "where": [
+        "src/components/customers/CustomerLedger.tsx:313",
+        "src/components/hr/PayrollForm.tsx:112",
+        "src/components/hr/PayrollItemForm.tsx:113",
+        "src/components/hr/WorkerForm.tsx:125",
+        "src/components/inventory/StaffStockView.tsx:154"
+      ]
+    },
+    {
+      "value": "py-8",
+      "count": 67,
+      "where": [
+        "src/components/banners/BannerManagement.tsx:168",
+        "src/components/customers/CustomerLedger.tsx:185",
+        "src/components/inventory/StaffStockView.tsx:278",
+        "src/components/inventory/StockTransferModal.tsx:658",
+        "src/components/inventory/StockTransferModal.tsx:717"
+      ]
+    },
+    {
+      "value": "mt-2",
+      "count": 66,
+      "where": [
+        "src/components/agent/QuickActionDrawer.tsx:410",
+        "src/components/agent/QuickActionDrawer.tsx:579",
+        "src/components/banners/BannerManagement.tsx:274",
+        "src/components/error/ErrorBoundary.tsx:113",
+        "src/components/error/ErrorBoundary.tsx:117"
+      ]
+    },
+    {
+      "value": "space-y-1",
+      "count": 66,
+      "where": [
+        "src/components/inventory/InventorySummaryCards.tsx:84",
+        "src/components/inventory/InventorySummaryCards.tsx:136",
+        "src/components/inventory/InventorySummaryCards.tsx:150",
+        "src/components/inventory/InventorySummaryCards.tsx:164",
+        "src/components/inventory/InventorySummaryCards.tsx:178"
+      ]
+    },
+    {
+      "value": "p-6",
+      "count": 62,
+      "where": [
+        "src/components/inventory/InventorySummaryCards.tsx:82",
+        "src/components/inventory/InventorySummaryCards.tsx:134",
+        "src/components/inventory/InventorySummaryCards.tsx:148",
+        "src/components/inventory/InventorySummaryCards.tsx:162",
+        "src/components/inventory/InventorySummaryCards.tsx:176"
+      ]
+    },
+    {
+      "value": "py-12",
+      "count": 61,
+      "where": [
+        "src/components/inventory/RawMaterialInventoryView.tsx:342",
+        "src/components/orders/OrderFulfillmentDialog.tsx:580",
+        "src/components/orders/OrderViewDialog.tsx:209",
+        "src/components/reports/CustomerReport.tsx:329",
+        "src/components/reports/CustomerReport.tsx:361"
+      ]
+    },
+    {
+      "value": "mt-0.5",
+      "count": 60,
+      "where": [
+        "src/components/banners/BannerCarousel.tsx:92",
+        "src/components/orders/OrderFulfillmentDialog.tsx:645",
+        "src/components/reports/ReportContainer.tsx:79",
+        "src/components/reports/ReportContainer.tsx:94",
+        "src/components/settings/WarehouseManagement.tsx:254"
+      ]
+    },
+    {
+      "value": "px-2",
+      "count": 59,
+      "where": [
+        "src/components/banners/BannerImageEditor.tsx:156",
+        "src/components/inventory/ProductInventoryCard.tsx:125",
+        "src/components/inventory/RecordPurchaseForm.tsx:261",
+        "src/components/inventory/StockTransferModal.tsx:747",
+        "src/components/layout/AppSidebar.tsx:389"
+      ]
+    },
+    {
+      "value": "mt-4",
+      "count": 53,
+      "where": [
+        "src/components/agent/QuickActionDrawer.tsx:305",
+        "src/components/error/ErrorBoundary.tsx:108",
+        "src/components/inventory/ProductInventoryCard.tsx:139",
+        "src/components/inventory/RawMaterialInventoryView.tsx:526",
+        "src/components/inventory/StockAdjustmentModal.tsx:160"
+      ]
+    },
+    {
+      "value": "pt-2",
+      "count": 50,
+      "where": [
+        "src/components/inventory/RawMaterialInventoryView.tsx:292",
+        "src/components/inventory/StockAdjustmentModal.tsx:224",
+        "src/components/inventory/StockTransferModal.tsx:777",
+        "src/components/layout/AppSidebar.tsx:466",
+        "src/components/reports/PaymentOutstandingReport.tsx:565"
+      ]
+    },
+    {
+      "value": "mb-1",
+      "count": 41,
+      "where": [
+        "src/components/agent/QuickActionDrawer.tsx:410",
+        "src/components/inventory/ProductInventoryCard.tsx:105",
+        "src/components/inventory/StaffStockView.tsx:183",
+        "src/components/inventory/StockAdjustmentModal.tsx:187",
+        "src/components/routes/VisitReasonDialog.tsx:78"
+      ]
+    },
+    {
+      "value": "pt-4",
+      "count": 39,
+      "where": [
+        "src/components/inventory/ProductInventoryCard.tsx:139",
+        "src/components/layout/AppSidebar.tsx:494",
+        "src/components/reports/AgentPerformanceReport.tsx:255",
+        "src/components/reports/AgentPerformanceReport.tsx:297",
+        "src/components/reports/DailyReport.tsx:531"
+      ]
+    },
+    {
+      "value": "py-1.5",
+      "count": 36,
+      "where": [
+        "src/components/banners/BannerManagement.tsx:281",
+        "src/components/inventory/WarehouseStockView.tsx:81",
+        "src/components/inventory/WarehouseStockView.tsx:88",
+        "src/components/layout/TopBar.tsx:234",
+        "src/components/reports/ReportContainer.tsx:103"
+      ]
+    },
+    {
+      "value": "space-y-1.5",
+      "count": 34,
+      "where": [
+        "src/components/inventory/ProductInventoryCard.tsx:122",
+        "src/components/orders/OrderStockSummary.tsx:57",
+        "src/components/sales/SaleDetailsDialog.tsx:76",
+        "src/components/sales/SaleReturnDialog.tsx:230",
+        "src/components/sales/SaleReturnDialog.tsx:246"
+      ]
+    },
+    {
+      "value": "p-5",
+      "count": 31,
+      "where": [
+        "src/index.css:148",
+        "src/components/routes/RouteSessionPanel.tsx:304",
+        "src/components/shared/DashboardSkeleton.tsx:12",
+        "src/components/shared/DashboardSkeleton.tsx:24",
+        "src/components/shared/DashboardSkeleton.tsx:31"
+      ]
+    },
+    {
+      "value": "ml-2",
+      "count": 31,
+      "where": [
+        "src/components/customers/CustomerLedger.tsx:249",
+        "src/components/hr/payroll-columns.tsx:40",
+        "src/components/hr/payroll-item-columns.tsx:37",
+        "src/components/hr/payroll-item-columns.tsx:64",
+        "src/components/layout/AppSidebar.tsx:389"
+      ]
+    },
+    {
+      "value": "gap-6",
+      "count": 30,
+      "where": [
+        "src/components/reports/CustomerReport.tsx:309",
+        "src/components/reports/PaymentFlowReport.tsx:370",
+        "src/components/reports/ProfitLossReport.tsx:302",
+        "src/components/reports/PurchaseReport.tsx:351",
+        "src/components/reports/ReceivablesAgingReport.tsx:162"
+      ]
+    },
+    {
+      "value": "px-1.5",
+      "count": 28,
+      "where": [
+        "src/components/inventory/ProductInventoryCard.tsx:90",
+        "src/components/inventory/ProductInventoryCard.tsx:120",
+        "src/components/inventory/ProductInventoryCard.tsx:127",
+        "src/components/layout/GlobalSearch.tsx:169",
+        "src/components/reports/CustomerStatement.tsx:475"
+      ]
+    },
+    {
+      "value": "ml-1",
+      "count": 26,
+      "where": [
+        "src/components/banners/BannerManagement.tsx:222",
+        "src/components/inventory/RawMaterialInventoryView.tsx:325",
+        "src/components/inventory/RawMaterialInventoryView.tsx:333",
+        "src/components/inventory/StockHistoryView.tsx:179",
+        "src/components/inventory/StockHistoryView.tsx:184"
+      ]
+    },
+    {
+      "value": "mb-3",
+      "count": 26,
+      "where": [
+        "src/components/inventory/ProductInventoryCard.tsx:88",
+        "src/components/inventory/StockHistoryView.tsx:99",
+        "src/components/orders/OrderFulfillmentDialog.tsx:726",
+        "src/components/orders/OrderViewDialog.tsx:379",
+        "src/components/orders/OrderViewDialog.tsx:435"
+      ]
+    },
+    {
+      "value": "py-0.5",
+      "count": 24,
+      "where": [
+        "src/components/inventory/ProductInventoryCard.tsx:77",
+        "src/components/inventory/ProductInventoryCard.tsx:90",
+        "src/components/settings/SmsGatewayTab.tsx:89",
+        "src/components/shared/CsvImportDialog.tsx:149",
+        "src/components/shared/CurrencyDisplay.tsx:44"
+      ]
+    },
+    {
+      "value": "px-1",
+      "count": 24,
+      "where": [
+        "src/components/inventory/RawMaterialInventoryView.tsx:325",
+        "src/components/inventory/RawMaterialInventoryView.tsx:333",
+        "src/components/layout/TopBar.tsx:172",
+        "src/components/settings/SmsGatewayTab.tsx:99",
+        "src/components/shared/ConflictResolver.tsx:557"
+      ]
+    },
+    {
+      "value": "py-20",
+      "count": 23,
+      "where": [
+        "src/App.tsx:97",
+        "src/components/products/ProductAccessMatrix.tsx:152",
+        "src/components/products/ProductCategories.tsx:137",
+        "src/pages/AccessControl.tsx:184",
+        "src/pages/Activity.tsx:62"
+      ]
+    },
+    {
+      "value": "py-1",
+      "count": 23,
+      "where": [
+        "src/components/banners/BannerImageEditor.tsx:156",
+        "src/components/inventory/ProductInventoryCard.tsx:125",
+        "src/components/inventory/StockTransferModal.tsx:747",
+        "src/components/layout/AppSidebar.tsx:389",
+        "src/components/layout/AppSidebar.tsx:454"
+      ]
+    },
+    {
+      "value": "pl-8",
+      "count": 22,
+      "where": [
+        "src/components/reports/ProfitLossReport.tsx:378",
+        "src/components/reports/ProfitLossReport.tsx:390",
+        "src/components/reports/ProfitLossReport.tsx:406",
+        "src/components/reports/ProfitLossReport.tsx:414",
+        "src/components/shared/CurrencyDisplay.tsx:98"
+      ]
+    },
+    {
+      "value": "pb-4",
+      "count": 21,
+      "where": [
+        "src/components/agent/QuickActionDrawer.tsx:370",
+        "src/components/customers/CustomerLedger.tsx:306",
+        "src/components/inventory/RawMaterialInventoryView.tsx:235",
+        "src/components/inventory/RawMaterialInventoryView.tsx:502",
+        "src/components/orders/OrderFulfillmentDialog.tsx:585"
+      ]
+    },
+    {
+      "value": "p-1",
+      "count": 21,
+      "where": [
+        "src/components/reports/AgentPerformanceReport.tsx:248",
+        "src/components/reports/DailyReport.tsx:559",
+        "src/components/reports/OrderReport.tsx:222",
+        "src/components/reports/PaymentOutstandingReport.tsx:382",
+        "src/components/reports/ProductReport.tsx:248"
+      ]
+    },
+    {
+      "value": "p-8",
+      "count": 20,
+      "where": [
+        "src/components/banners/BannerManagement.tsx:180",
+        "src/components/layout/TopBar.tsx:195",
+        "src/components/reports/PrintPreview.tsx:170",
+        "src/components/routes/RouteAccessMatrix.tsx:126",
+        "src/components/routes/RouteAccessMatrix.tsx:130"
+      ]
+    },
+    {
+      "value": "mr-1.5",
+      "count": 20,
+      "where": [
+        "src/components/inventory/ProductInventoryCard.tsx:141",
+        "src/components/inventory/ProductInventoryCard.tsx:144",
+        "src/components/inventory/StaffStockView.tsx:248",
+        "src/components/orders/ProformaView.tsx:176",
+        "src/components/shared/QrScanner.tsx:120"
+      ]
+    },
+    {
+      "value": "pl-9",
+      "count": 20,
+      "where": [
+        "src/components/reports/CustomerReport.tsx:271",
+        "src/components/reports/InventoryTimelineReport.tsx:334",
+        "src/components/reports/ItemWisePLReport.tsx:307",
+        "src/components/reports/PriceChangeReport.tsx:229",
+        "src/components/reports/PurchaseReport.tsx:279"
+      ]
+    },
+    {
+      "value": "px-6",
+      "count": 19,
+      "where": [
+        "src/components/agent/QuickActionDrawer.tsx:268",
+        "src/components/inventory/StaffStockView.tsx:154",
+        "src/components/inventory/StaffStockView.tsx:198",
+        "src/components/inventory/StaffStockView.tsx:235",
+        "src/components/layout/TopBar.tsx:120"
+      ]
+    },
+    {
+      "value": "mb-6",
+      "count": 19,
+      "where": [
+        "src/components/inventory/RawMaterialInventoryView.tsx:315",
+        "src/components/reports/PrintPreview.tsx:206",
+        "src/components/shared/MobileListSkeleton.tsx:29",
+        "src/components/shared/MobileListSkeleton.tsx:95",
+        "src/pages/CostInsights.tsx:737"
+      ]
+    },
+    {
+      "value": "pt-0",
+      "count": 18,
+      "where": [
+        "src/components/shared/ConflictResolver.tsx:349",
+        "src/components/shared/RouteOptimizer.tsx:243",
+        "src/components/ui/accordion.tsx:46",
+        "src/components/ui/card.tsx:32",
+        "src/components/ui/card.tsx:38"
+      ]
+    },
+    {
+      "value": "mt-1.5",
+      "count": 18,
+      "where": [
+        "src/components/stores/CreateStoreWizard.tsx:412",
+        "src/components/stores/CreateStoreWizard.tsx:517",
+        "src/components/stores/StoreLedger.tsx:250",
+        "src/components/stores/StoreLedger.tsx:280",
+        "src/components/stores/StoreLedger.tsx:318"
+      ]
+    },
+    {
+      "value": "py-2.5",
+      "count": 17,
+      "where": [
+        "src/index.css:252",
+        "src/components/orders/OrderViewDialog.tsx:446",
+        "src/components/orders/OrderViewDialog.tsx:457",
+        "src/components/products/ProductAccessDialog.tsx:136",
+        "src/components/products/ProductCategories.tsx:219"
+      ]
+    },
+    {
+      "value": "pt-6",
+      "count": 16,
+      "where": [
+        "src/components/banners/BannerManagement.tsx:300",
+        "src/components/reports/PriceChangeReport.tsx:324",
+        "src/components/reports/PriceChangeReport.tsx:337",
+        "src/pages/Attendance.tsx:949",
+        "src/pages/Attendance.tsx:960"
+      ]
+    },
+    {
+      "value": "mt-3",
+      "count": 16,
+      "where": [
+        "src/components/inventory/RawMaterialInventoryView.tsx:544",
+        "src/components/orders/EditOrderSheet.tsx:224",
+        "src/components/orders/OrderViewDialog.tsx:382",
+        "src/components/shared/ConflictResolver.tsx:447",
+        "src/components/shared/MobileListSkeleton.tsx:36"
+      ]
+    },
+    {
+      "value": "mt-6",
+      "count": 16,
+      "where": [
+        "src/components/shared/OfflineQueueStatus.tsx:150",
+        "src/pages/Handovers.tsx:1419",
+        "src/pages/Income.tsx:672",
+        "src/pages/Income.tsx:740",
+        "src/pages/Settings.tsx:166"
+      ]
+    },
+    {
+      "value": "pt-1",
+      "count": 15,
+      "where": [
+        "src/components/agent/QuickActionDrawer.tsx:482",
+        "src/components/agent/QuickActionDrawer.tsx:551",
+        "src/components/routes/RouteSessionPanel.tsx:427",
+        "src/components/routes/VisitReasonDialog.tsx:91",
+        "src/components/shared/SaleReceipt.tsx:395"
+      ]
+    },
+    {
+      "value": "pb-3",
+      "count": 14,
+      "where": [
+        "src/components/shared/ConflictResolver.tsx:270",
+        "src/components/shared/RouteOptimizer.tsx:192",
+        "src/components/shared/RouteOptimizer.tsx:276",
+        "src/components/shared/VirtualDataTable.tsx:136",
+        "src/components/ui/chart.tsx:252"
+      ]
+    },
+    {
+      "value": "pt-3",
+      "count": 12,
+      "where": [
+        "src/index.css:219",
+        "src/components/agent/QuickActionDrawer.tsx:412",
+        "src/components/inventory/ProductInventoryCard.tsx:117",
+        "src/components/layout/AppSidebar.tsx:401",
+        "src/components/settings/WarehouseManagement.tsx:268"
+      ]
+    },
+    {
+      "value": "py-16",
+      "count": 12,
+      "where": [
+        "src/components/inventory/StockHistoryView.tsx:98",
+        "src/components/inventory/StockHistoryView.tsx:193",
+        "src/components/inventory/StockHistoryView.tsx:241",
+        "src/components/products/ProductCategories.tsx:141",
+        "src/components/routes/RouteAccessMatrix.tsx:119"
+      ]
+    },
+    {
+      "value": "px-2.5",
+      "count": 11,
+      "where": [
+        "src/components/inventory/ProductInventoryCard.tsx:77",
+        "src/components/routes/RouteAccessMatrix.tsx:147",
+        "src/components/shared/StatusBadge.tsx:25",
+        "src/components/shared/WarehouseSelector.tsx:14",
+        "src/components/stores/StoreTypeAccessMatrix.tsx:190"
+      ]
+    },
+    {
+      "value": "pr-2",
+      "count": 11,
+      "where": [
+        "src/components/inventory/ProductInventoryCard.tsx:126",
+        "src/components/ui/context-menu.tsx:97",
+        "src/components/ui/context-menu.tsx:120",
+        "src/components/ui/dropdown-menu.tsx:98",
+        "src/components/ui/dropdown-menu.tsx:121"
+      ]
+    },
+    {
+      "value": "my-3",
+      "count": 11,
+      "where": [
+        "src/components/layout/AppSidebar.tsx:513",
+        "src/components/shared/ConflictResolver.tsx:350",
+        "src/components/shared/SaleReceipt.tsx:342",
+        "src/components/shared/SaleReceipt.tsx:370",
+        "src/components/shared/SaleReceipt.tsx:391"
+      ]
+    },
+    {
+      "value": "py-6",
+      "count": 11,
+      "where": [
+        "src/components/shared/BulkActionToolbar.tsx:371",
+        "src/components/shared/BulkOperationDialog.tsx:423",
+        "src/components/ui/command.tsx:73",
+        "src/pages/AgentDashboard.tsx:282",
+        "src/pages/CustomerDetail.tsx:456"
+      ]
+    },
+    {
+      "value": "py-0",
+      "count": 10,
+      "where": [
+        "src/components/reports/CustomerStatement.tsx:475",
+        "src/components/stores/StoreLedger.tsx:173",
+        "src/components/stores/StoreLedger.tsx:273",
+        "src/components/stores/StoreLedger.tsx:306",
+        "src/pages/CustomerSales.tsx:52"
+      ]
+    },
+    {
+      "value": "p-12",
+      "count": 9,
+      "where": [
+        "src/components/inventory/StaffStockView.tsx:73",
+        "src/components/inventory/WarehouseStockView.tsx:113",
+        "src/components/reports/CustomerRiskReport.tsx:57",
+        "src/components/reports/CustomerStatement.tsx:410",
+        "src/components/reports/SmartInsightsReport.tsx:98"
+      ]
+    },
+    {
+      "value": "space-y-0.5",
+      "count": 8,
+      "where": [
+        "src/components/hr/WorkerForm.tsx:173",
+        "src/components/sales/SaleReturnDialog.tsx:269",
+        "src/components/stores/CreateStoreWizard.tsx:537",
+        "src/pages/AdminStaffDirectory.tsx:328",
+        "src/pages/Banners.tsx:395"
+      ]
+    },
+    {
+      "value": "pb-1",
+      "count": 8,
+      "where": [
+        "src/components/inventory/ProductInventoryCard.tsx:117",
+        "src/components/layout/AppSidebar.tsx:401",
+        "src/components/layout/AppSidebar.tsx:466",
+        "src/components/shared/SaleReceipt.tsx:374",
+        "src/components/stores/StoreTypeAccessMatrix.tsx:171"
+      ]
+    },
+    {
+      "value": "ml-0.5",
+      "count": 8,
+      "where": [
+        "src/pages/Handovers.tsx:1576",
+        "src/pages/Handovers.tsx:1589",
+        "src/pages/Handovers.tsx:1602",
+        "src/pages/Handovers.tsx:1614",
+        "src/pages/Handovers.tsx:1683"
+      ]
+    },
+    {
+      "value": "margin:0;",
+      "count": 7,
+      "where": [
+        "src/components/orders/ProformaView.tsx:51",
+        "src/components/orders/ProformaView.tsx:58",
+        "src/components/orders/ProformaView.tsx:68",
+        "src/components/orders/ProformaView.tsx:73",
+        "src/components/orders/ProformaView.tsx:113"
+      ]
+    },
+    {
+      "value": "ml-3",
+      "count": 7,
+      "where": [
+        "src/components/reports/ReportSummaryCards.tsx:81",
+        "src/components/sales/SaleReturnDialog.tsx:221",
+        "src/components/shared/StatCard.tsx:51",
+        "src/pages/Customers.tsx:528",
+        "src/pages/PosDashboard.tsx:159"
+      ]
+    },
+    {
+      "value": "px-5",
+      "count": 7,
+      "where": [
+        "src/components/routes/RouteAccessMatrix.tsx:142",
+        "src/components/routes/RouteAccessMatrix.tsx:178",
+        "src/components/shared/MobileListSkeleton.tsx:29",
+        "src/components/shared/MobileListSkeleton.tsx:95",
+        "src/components/stores/StoreTypeAccessMatrix.tsx:182"
+      ]
+    },
+    {
+      "value": "space-y-5",
+      "count": 7,
+      "where": [
+        "src/pages/Handovers.tsx:1416",
+        "src/pages/Handovers.tsx:1431",
+        "src/pages/Settings.tsx:273",
+        "src/pages/Settings.tsx:337",
+        "src/pages/Settings.tsx:364"
+      ]
+    },
+    {
+      "value": "mt-0",
+      "count": 6,
+      "where": [
+        "src/components/inventory/RawMaterialInventoryView.tsx:340",
+        "src/components/ui/alert-dialog.tsx:86",
+        "src/pages/Inventory.tsx:398",
+        "src/pages/Inventory.tsx:497",
+        "src/pages/Inventory.tsx:514"
+      ]
+    },
+    {
+      "value": "mx-1",
+      "count": 6,
+      "where": [
+        "src/components/shared/EditableCell.tsx:67",
+        "src/components/ui/command.tsx:97",
+        "src/components/ui/context-menu.tsx:153",
+        "src/components/ui/dropdown-menu.tsx:154",
+        "src/components/ui/menubar.tsx:181"
+      ]
+    },
+    {
+      "value": "p-10",
+      "count": 6,
+      "where": [
+        "src/components/stores/StoreLedger.tsx:342",
+        "src/pages/AccessControl.tsx:434",
+        "src/pages/AccessControl.tsx:437",
+        "src/pages/RouteDetail.tsx:414",
+        "src/pages/Routes.tsx:180"
+      ]
+    },
+    {
+      "value": "margin: 0;",
+      "count": 5,
+      "where": [
+        "src/index.css:123",
+        "src/components/reports/PrintPreview.tsx:75",
+        "src/components/shared/SaleReceipt.tsx:103",
+        "src/components/shared/TransactionReceipt.tsx:96",
+        "src/utils/printUtils.ts:49"
+      ]
+    },
+    {
+      "value": "padding:11px 14px;",
+      "count": 5,
+      "where": [
+        "src/components/orders/ProformaView.tsx:81",
+        "src/components/orders/ProformaView.tsx:82",
+        "src/components/orders/ProformaView.tsx:83",
+        "src/components/orders/ProformaView.tsx:84",
+        "src/components/orders/ProformaView.tsx:85"
+      ]
+    },
+    {
+      "value": "gap-8",
+      "count": 5,
+      "where": [
+        "src/components/reports/SalesReport.tsx:464",
+        "src/pages/InvoiceView.tsx:156",
+        "src/pages/InvoiceView.tsx:325",
+        "src/pages/InvoiceView.tsx:437",
+        "src/pages/Reports.tsx:163"
+      ]
+    },
+    {
+      "value": "p-2.5",
+      "count": 5,
+      "where": [
+        "src/components/sales/SaleDetailsDialog.tsx:78",
+        "src/components/stores/CreateStoreWizard.tsx:575",
+        "src/components/stores/StoreLedger.tsx:434",
+        "src/pages/Banners.tsx:360",
+        "src/pages/RouteDetail.tsx:443"
+      ]
+    },
+    {
+      "value": "my-1",
+      "count": 5,
+      "where": [
+        "src/components/ui/chart.tsx:194",
+        "src/components/ui/context-menu.tsx:153",
+        "src/components/ui/dropdown-menu.tsx:154",
+        "src/components/ui/menubar.tsx:181",
+        "src/components/ui/select.tsx:128"
+      ]
+    },
+    {
+      "value": "mb-8",
+      "count": 5,
+      "where": [
+        "src/pages/InvoiceView.tsx:292",
+        "src/pages/InvoiceView.tsx:325",
+        "src/pages/InvoiceView.tsx:388",
+        "src/pages/InvoiceView.tsx:428",
+        "src/pages/InvoiceView.tsx:437"
+      ]
+    },
+    {
+      "value": "p-0.5",
+      "count": 4,
+      "where": [
+        "src/components/inventory/StockTransferModal.tsx:755",
+        "src/components/shared/ImageUpload.tsx:69",
+        "src/components/ui/scroll-area.tsx:27",
+        "src/components/ui/scroll-area.tsx:28"
+      ]
+    },
+    {
+      "value": "ml-4",
+      "count": 4,
+      "where": [
+        "src/components/layout/AppSidebar.tsx:395",
+        "src/components/ui/carousel.tsx:142",
+        "src/pages/StoreDetail.tsx:777",
+        "src/pages/VendorPayments.tsx:218"
+      ]
+    },
+    {
+      "value": "padding:10px 12px;",
+      "count": 4,
+      "where": [
+        "src/components/orders/ProformaView.tsx:27",
+        "src/components/orders/ProformaView.tsx:28",
+        "src/components/orders/ProformaView.tsx:29",
+        "src/components/orders/ProformaView.tsx:30"
+      ]
+    },
+    {
+      "value": "mb-1.5",
+      "count": 4,
+      "where": [
+        "src/components/reports/CustomerStatement.tsx:338",
+        "src/components/reports/CustomerStatement.tsx:350",
+        "src/components/shared/CurrencySelector.tsx:75",
+        "src/pages/Activity.tsx:81"
+      ]
+    },
+    {
+      "value": "mt-8",
+      "count": 4,
+      "where": [
+        "src/components/reports/PrintPreview.tsx:228",
+        "src/components/ui/sidebar.tsx:365",
+        "src/pages/CustomerDetail.tsx:270",
+        "src/pages/RouteDetail.tsx:283"
+      ]
+    },
+    {
+      "value": "padding: 2px 8px;",
+      "count": 4,
+      "where": [
+        "src/components/reports/PurchaseReport.tsx:193",
+        "src/components/reports/SalesReturnReport.tsx:248",
+        "src/components/shared/TransactionReceipt.tsx:105",
+        "src/utils/printUtils.ts:340"
+      ]
+    },
+    {
+      "value": "space-x-2",
+      "count": 4,
+      "where": [
+        "src/components/ui/alert-dialog.tsx:52",
+        "src/components/ui/dialog.tsx:60",
+        "src/components/ui/sheet.tsx:76",
+        "src/pages/admin/AdminVehicles.tsx:258"
+      ]
+    },
+    {
+      "value": "py-10",
+      "count": 4,
+      "where": [
+        "src/pages/Banners.tsx:298",
+        "src/pages/RouteDetail.tsx:409",
+        "src/pages/hr/Payroll.tsx:52",
+        "src/pages/hr/PayrollDetail.tsx:94"
+      ]
+    },
+    {
+      "value": "pb-5",
+      "count": 4,
+      "where": [
+        "src/pages/CustomerDetail.tsx:270",
+        "src/pages/RouteDetail.tsx:283",
+        "src/pages/RouteDetail.tsx:407",
+        "src/pages/StoreDetail.tsx:558"
+      ]
+    },
+    {
+      "value": "pr-1",
+      "count": 4,
+      "where": [
+        "src/pages/Expenses.tsx:864",
+        "src/pages/Orders.tsx:1781",
+        "src/pages/Sales.tsx:355",
+        "src/pages/Sales.tsx:482"
+      ]
+    },
+    {
+      "value": "px-8",
+      "count": 3,
+      "where": [
+        "src/components/agent/QuickActionDrawer.tsx:319",
+        "src/components/ui/button.tsx:23",
+        "src/pages/Settings.tsx:473"
+      ]
+    },
+    {
+      "value": "pb-6",
+      "count": 3,
+      "where": [
+        "src/components/agent/QuickActionDrawer.tsx:412",
+        "src/components/shared/MobileListSkeleton.tsx:29",
+        "src/components/shared/MobileListSkeleton.tsx:95"
+      ]
+    },
+    {
+      "value": "pl-10",
+      "count": 3,
+      "where": [
+        "src/components/inventory/RawMaterialInventoryView.tsx:300",
+        "src/pages/Inventory.tsx:462",
+        "src/pages/Receipts.tsx:363"
+      ]
+    },
+    {
+      "value": "gap-0.5",
+      "count": 3,
+      "where": [
+        "src/components/layout/GlobalSearch.tsx:169",
+        "src/components/stores/StoreLedger.tsx:320",
+        "src/pages/RouteDetail.tsx:466"
+      ]
+    },
+    {
+      "value": "pb-10",
+      "count": 3,
+      "where": [
+        "src/components/orders/EditOrderSheet.tsx:146",
+        "src/components/reports/CustomerRiskReport.tsx:125",
+        "src/components/reports/SmartInsightsReport.tsx:172"
+      ]
+    },
+    {
+      "value": "px-0",
+      "count": 3,
+      "where": [
+        "src/components/orders/EditOrderSheet.tsx:146",
+        "src/components/shared/VirtualDataTable.tsx:96",
+        "src/components/shared/VirtualDataTable.tsx:135"
+      ]
+    },
+    {
+      "value": "my-2",
+      "count": 3,
+      "where": [
+        "src/components/orders/OrderFulfillmentDialog.tsx:782",
+        "src/pages/Expenses.tsx:530",
+        "src/pages/Income.tsx:896"
+      ]
+    },
+    {
+      "value": "gap-0",
+      "count": 3,
+      "where": [
+        "src/components/orders/OrderFulfillmentDialog.tsx:807",
+        "src/pages/Handovers.tsx:2243",
+        "src/pages/handovers/ExpenseReviewDialog.tsx:86"
+      ]
+    },
+    {
+      "value": "margin:1px 0 0;",
+      "count": 3,
+      "where": [
+        "src/components/orders/ProformaView.tsx:52",
+        "src/components/orders/ProformaView.tsx:53",
+        "src/components/orders/ProformaView.tsx:69"
+      ]
+    },
+    {
+      "value": "padding:10px 14px;",
+      "count": 3,
+      "where": [
+        "src/components/orders/ProformaView.tsx:96",
+        "src/components/orders/ProformaView.tsx:100",
+        "src/components/orders/ProformaView.tsx:112"
+      ]
+    },
+    {
+      "value": "padding: 20px;",
+      "count": 3,
+      "where": [
+        "src/components/reports/PrintPreview.tsx:76",
+        "src/pages/Attendance.tsx:57",
+        "src/utils/printUtils.ts:147"
+      ]
+    },
+    {
+      "value": "padding:16px;",
+      "count": 3,
+      "where": [
+        "src/components/reports/SmartInsightsReport.tsx:117",
+        "src/components/reports/SmartInsightsReport.tsx:133",
+        "src/components/reports/SmartInsightsReport.tsx:149"
+      ]
+    },
+    {
+      "value": "padding: 0;",
+      "count": 3,
+      "where": [
+        "src/components/shared/SaleReceipt.tsx:103",
+        "src/components/shared/TransactionReceipt.tsx:96",
+        "src/utils/printUtils.ts:49"
+      ]
+    },
+    {
+      "value": "pl-4",
+      "count": 3,
+      "where": [
+        "src/components/stores/CreateStoreWizard.tsx:537",
+        "src/components/ui/carousel.tsx:160",
+        "src/pages/AccessControl.tsx:469"
+      ]
+    },
+    {
+      "value": "gap-2.5",
+      "count": 3,
+      "where": [
+        "src/components/stores/StoreTypeAccessMatrix.tsx:215",
+        "src/components/ui/breadcrumb.tsx:20",
+        "src/pages/PosDashboard.tsx:152"
+      ]
+    },
+    {
+      "value": "space-x-1",
+      "count": 3,
+      "where": [
+        "src/components/ui/calendar.tsx:20",
+        "src/components/ui/menubar.tsx:23",
+        "src/components/ui/navigation-menu.tsx:29"
+      ]
+    },
+    {
+      "value": "pr-8",
+      "count": 3,
+      "where": [
+        "src/components/ui/sidebar.tsx:415",
+        "src/components/ui/toast.tsx:26",
+        "src/pages/Expenses.tsx:554"
+      ]
+    },
+    {
+      "value": "space-x-3",
+      "count": 3,
+      "where": [
+        "src/pages/hr/PayrollDetail.tsx:111",
+        "src/pages/hr/PayrollDetail.tsx:118",
+        "src/pages/hr/PayrollDetail.tsx:125"
+      ]
+    },
+    {
+      "value": "padding: 8px 12px;",
+      "count": 3,
+      "where": [
+        "src/utils/printUtils.ts:228",
+        "src/utils/printUtils.ts:236",
+        "src/utils/printUtils.ts:273"
+      ]
+    },
+    {
+      "value": "mb-0.5",
+      "count": 2,
+      "where": [
+        "src/components/inventory/ProductInventoryCard.tsx:95",
+        "src/components/inventory/ProductInventoryCard.tsx:99"
+      ]
+    },
+    {
+      "value": "mx-2",
+      "count": 2,
+      "where": [
+        "src/components/inventory/StockTransferModal.tsx:750",
+        "src/components/ui/sidebar.tsx:320"
+      ]
+    },
+    {
+      "value": "pt-0.5",
+      "count": 2,
+      "where": [
+        "src/components/orders/OrderStockSummary.tsx:69",
+        "src/components/staff/StaffCard.tsx:152"
+      ]
+    },
+    {
+      "value": "margin:0 0 2px;",
+      "count": 2,
+      "where": [
+        "src/components/orders/ProformaView.tsx:50",
+        "src/components/orders/ProformaView.tsx:121"
+      ]
+    },
+    {
+      "value": "padding:14px 16px;",
+      "count": 2,
+      "where": [
+        "src/components/orders/ProformaView.tsx:66",
+        "src/components/orders/ProformaView.tsx:71"
+      ]
+    },
+    {
+      "value": "margin:0 0 6px;",
+      "count": 2,
+      "where": [
+        "src/components/orders/ProformaView.tsx:67",
+        "src/components/orders/ProformaView.tsx:72"
+      ]
+    },
+    {
+      "value": "gap: 20pt;",
+      "count": 2,
+      "where": [
+        "src/components/reports/DailyReport.tsx:320",
+        "src/components/reports/SalesReport.tsx:174"
+      ]
+    },
+    {
+      "value": "padding: 8px;",
+      "count": 2,
+      "where": [
+        "src/components/reports/PrintPreview.tsx:88",
+        "src/pages/Attendance.tsx:60"
+      ]
+    },
+    {
+      "value": "my-4",
+      "count": 2,
+      "where": [
+        "src/components/reports/PrintPreview.tsx:247",
+        "src/pages/StoreDetail.tsx:631"
+      ]
+    },
+    {
+      "value": "pb-8",
+      "count": 2,
+      "where": [
+        "src/components/shared/MobileListSkeleton.tsx:27",
+        "src/components/shared/MobileListSkeleton.tsx:93"
+      ]
+    },
+    {
+      "value": "margin: 8px 0;",
+      "count": 2,
+      "where": [
+        "src/components/shared/SaleReceipt.tsx:86",
+        "src/components/shared/TransactionReceipt.tsx:104"
+      ]
+    },
+    {
+      "value": "padding: 10px;",
+      "count": 2,
+      "where": [
+        "src/components/shared/SaleReceipt.tsx:107",
+        "src/components/shared/TransactionReceipt.tsx:97"
+      ]
+    },
+    {
+      "value": "margin: 12px 0;",
+      "count": 2,
+      "where": [
+        "src/components/shared/SaleReceipt.tsx:111",
+        "src/components/shared/TransactionReceipt.tsx:99"
+      ]
+    },
+    {
+      "value": "margin: 4px 0;",
+      "count": 2,
+      "where": [
+        "src/components/shared/SaleReceipt.tsx:112",
+        "src/components/shared/TransactionReceipt.tsx:100"
+      ]
+    },
+    {
+      "value": "py-24",
+      "count": 2,
+      "where": [
+        "src/components/stores/StoreTypeAccessMatrix.tsx:142",
+        "src/pages/RouteDetail.tsx:240"
+      ]
+    },
+    {
+      "value": "space-x-4",
+      "count": 2,
+      "where": [
+        "src/components/ui/calendar.tsx:16",
+        "src/components/ui/toast.tsx:26"
+      ]
+    },
+    {
+      "value": "pr-0",
+      "count": 2,
+      "where": [
+        "src/components/ui/table.tsx:49",
+        "src/components/ui/table.tsx:60"
+      ]
+    },
+    {
+      "value": "mt-10",
+      "count": 2,
+      "where": [
+        "src/pages/CustomerDetail.tsx:270",
+        "src/pages/StoreDetail.tsx:558"
+      ]
+    },
+    {
+      "value": "pb-12",
+      "count": 2,
+      "where": [
+        "src/pages/Reports.tsx:134",
+        "src/pages/Reports.tsx:157"
+      ]
+    },
+    {
+      "value": "padding: 12px 20px;",
+      "count": 2,
+      "where": [
+        "src/utils/printUtils.ts:103",
+        "src/utils/printUtils.ts:125"
+      ]
+    },
+    {
+      "value": "padding: 1.5em;",
+      "count": 1,
+      "where": [
+        "src/App.css:8"
+      ]
+    },
+    {
+      "value": "padding: 2em;",
+      "count": 1,
+      "where": [
+        "src/App.css:35"
+      ]
+    },
+    {
+      "value": "padding: 0 !important;",
+      "count": 1,
+      "where": [
+        "src/index.css:299"
+      ]
+    },
+    {
+      "value": "margin: 0 !important;",
+      "count": 1,
+      "where": [
+        "src/index.css:300"
+      ]
+    },
+    {
+      "value": "padding: 6px 8px !important;",
+      "count": 1,
+      "where": [
+        "src/index.css:314"
+      ]
+    },
+    {
+      "value": "padding: env(safe-area-inset-top)) {\n  .safe-area-top {\n    padding-top: env(safe-area-inset-top);",
+      "count": 1,
+      "where": [
+        "src/index.css:325"
+      ]
+    },
+    {
+      "value": "padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);",
+      "count": 1,
+      "where": [
+        "src/index.css:343"
+      ]
+    },
+    {
+      "value": "pt-12",
+      "count": 1,
+      "where": [
+        "src/components/agent/QuickActionDrawer.tsx:370"
+      ]
+    },
+    {
+      "value": "pl-3",
+      "count": 1,
+      "where": [
+        "src/components/layout/AppSidebar.tsx:395"
+      ]
+    },
+    {
+      "value": "py-5",
+      "count": 1,
+      "where": [
+        "src/components/layout/AppSidebar.tsx:481"
+      ]
+    },
+    {
+      "value": "mx-4",
+      "count": 1,
+      "where": [
+        "src/components/layout/TopBar.tsx:122"
+      ]
+    },
+    {
+      "value": "mb-5",
+      "count": 1,
+      "where": [
+        "src/components/orders/EditOrderSheet.tsx:148"
+      ]
+    },
+    {
+      "value": "mt-5",
+      "count": 1,
+      "where": [
+        "src/components/orders/InvoiceDialog.tsx:700"
+      ]
+    },
+    {
+      "value": "mx-6",
+      "count": 1,
+      "where": [
+        "src/components/orders/OrderFulfillmentDialog.tsx:584"
+      ]
+    },
+    {
+      "value": "margin:0 auto;",
+      "count": 1,
+      "where": [
+        "src/components/orders/ProformaView.tsx:38"
+      ]
+    },
+    {
+      "value": "padding:0;",
+      "count": 1,
+      "where": [
+        "src/components/orders/ProformaView.tsx:38"
+      ]
+    },
+    {
+      "value": "padding:35px 40px 30px;",
+      "count": 1,
+      "where": [
+        "src/components/orders/ProformaView.tsx:45"
+      ]
+    },
+    {
+      "value": "padding:10px 16px\">\n              <p style=\"margin:0 0 2px;",
+      "count": 1,
+      "where": [
+        "src/components/orders/ProformaView.tsx:56"
+      ]
+    },
+    {
+      "value": "margin:2px 0 0;",
+      "count": 1,
+      "where": [
+        "src/components/orders/ProformaView.tsx:59"
+      ]
+    },
+    {
+      "value": "gap:25px;",
+      "count": 1,
+      "where": [
+        "src/components/orders/ProformaView.tsx:65"
+      ]
+    },
+    {
+      "value": "padding:30px;",
+      "count": 1,
+      "where": [
+        "src/components/orders/ProformaView.tsx:89"
+      ]
+    },
+    {
+      "value": "padding:12px 14px;",
+      "count": 1,
+      "where": [
+        "src/components/orders/ProformaView.tsx:104"
+      ]
+    },
+    {
+      "value": "margin:3px 0 0;",
+      "count": 1,
+      "where": [
+        "src/components/orders/ProformaView.tsx:114"
+      ]
+    },
+    {
+      "value": "margin:0\">1. This is a proforma invoice \u2014 not a tax invoice.</p>\n              <p style=\"margin:0\">2. Prices are subject to change without notice.</p>\n              <p style=\"margin:0\">3. Payment terms: As agreed.</p>\n            </div>\n            <div style=\"text-align:right\">\n              <p style=\"margin:0 0 2px;",
+      "count": 1,
+      "where": [
+        "src/components/orders/ProformaView.tsx:122"
+      ]
+    },
+    {
+      "value": "margin: 5mm;",
+      "count": 1,
+      "where": [
+        "src/components/orders/ProformaView.tsx:153"
+      ]
+    },
+    {
+      "value": "padding:20px 0;",
+      "count": 1,
+      "where": [
+        "src/components/orders/ProformaView.tsx:155"
+      ]
+    },
+    {
+      "value": "padding:2px 8px;",
+      "count": 1,
+      "where": [
+        "src/components/reports/CustomerRiskReport.tsx:107"
+      ]
+    },
+    {
+      "value": "padding:12px 16px;",
+      "count": 1,
+      "where": [
+        "src/components/reports/CustomerStatement.tsx:281"
+      ]
+    },
+    {
+      "value": "margin:0 0 4px;",
+      "count": 1,
+      "where": [
+        "src/components/reports/CustomerStatement.tsx:282"
+      ]
+    },
+    {
+      "value": "padding:2px 6px;",
+      "count": 1,
+      "where": [
+        "src/components/reports/CustomerStatement.tsx:303"
+      ]
+    },
+    {
+      "value": "ml-1.5",
+      "count": 1,
+      "where": [
+        "src/components/reports/CustomerStatement.tsx:478"
+      ]
+    },
+    {
+      "value": "gap: 20px;",
+      "count": 1,
+      "where": [
+        "src/components/reports/PaymentOutstandingReport.tsx:216"
+      ]
+    },
+    {
+      "value": "margin: 10mm;",
+      "count": 1,
+      "where": [
+        "src/components/reports/PrintPreview.tsx:70"
+      ]
+    },
+    {
+      "value": "margin: 10px 0;",
+      "count": 1,
+      "where": [
+        "src/components/reports/PrintPreview.tsx:84"
+      ]
+    },
+    {
+      "value": "padding: [50, 50], maxZoom: 15 });",
+      "count": 1,
+      "where": [
+        "src/components/routes/RouteMap.tsx:69"
+      ]
+    },
+    {
+      "value": "pt-1.5",
+      "count": 1,
+      "where": [
+        "src/components/sales/SaleReturnDialog.tsx:239"
+      ]
+    },
+    {
+      "value": "pr-4",
+      "count": 1,
+      "where": [
+        "src/components/shared/ConflictResolver.tsx:244"
+      ]
+    },
+    {
+      "value": "mx-3",
+      "count": 1,
+      "where": [
+        "src/components/shared/DataTable.tsx:104"
+      ]
+    },
+    {
+      "value": "mx-0",
+      "count": 1,
+      "where": [
+        "src/components/shared/DataTable.tsx:104"
+      ]
+    },
+    {
+      "value": "pr-3",
+      "count": 1,
+      "where": [
+        "src/components/shared/SaleReceipt.tsx:381"
+      ]
+    },
+    {
+      "value": "pl-7",
+      "count": 1,
+      "where": [
+        "src/components/ui/alert.tsx:7"
+      ]
+    },
+    {
+      "value": "space-y-0",
+      "count": 1,
+      "where": [
+        "src/components/ui/calendar.tsx:16"
+      ]
+    },
+    {
+      "value": "mt-24",
+      "count": 1,
+      "where": [
+        "src/components/ui/drawer.tsx:34"
+      ]
+    },
+    {
+      "value": "pl-2.5",
+      "count": 1,
+      "where": [
+        "src/components/ui/pagination.tsx:50"
+      ]
+    },
+    {
+      "value": "pr-2.5",
+      "count": 1,
+      "where": [
+        "src/components/ui/pagination.tsx:58"
+      ]
+    },
+    {
+      "value": "m-2",
+      "count": 1,
+      "where": [
+        "src/components/ui/sidebar.tsx:278"
+      ]
+    },
+    {
+      "value": "ml-0",
+      "count": 1,
+      "where": [
+        "src/components/ui/sidebar.tsx:278"
+      ]
+    },
+    {
+      "value": "mx-3.5",
+      "count": 1,
+      "where": [
+        "src/components/ui/sidebar.tsx:567"
+      ]
+    },
+    {
+      "value": "pl-6",
+      "count": 1,
+      "where": [
+        "src/pages/AccessControl.tsx:475"
+      ]
+    },
+    {
+      "value": "pt-8",
+      "count": 1,
+      "where": [
+        "src/pages/BomDetail.tsx:352"
+      ]
+    },
+    {
+      "value": "margin: b.sellingPrice - b.bomCost,\n        marginPct: b.sellingPrice > 0 ? ((b.sellingPrice - b.bomCost) / b.sellingPrice * 100).toFixed(1) : 0,\n        materialCount: b.materialCount,\n      }));",
+      "count": 1,
+      "where": [
+        "src/pages/CostInsights.tsx:245"
+      ]
+    },
+    {
+      "value": "pb-0.5",
+      "count": 1,
+      "where": [
+        "src/pages/CustomerDetail.tsx:279"
+      ]
+    },
+    {
+      "value": "mx-1.5",
+      "count": 1,
+      "where": [
+        "src/pages/Handovers.tsx:1090"
+      ]
+    },
+    {
+      "value": "pb-20",
+      "count": 1,
+      "where": [
+        "src/pages/InvoiceForm.tsx:494"
+      ]
+    },
+    {
+      "value": "space-y-8",
+      "count": 1,
+      "where": [
+        "src/pages/InvoiceView.tsx:485"
+      ]
+    },
+    {
+      "value": "margin: 12mm;",
+      "count": 1,
+      "where": [
+        "src/pages/InvoiceView.tsx:492"
+      ]
+    },
+    {
+      "value": "padding: 6px 8px;",
+      "count": 1,
+      "where": [
+        "src/pages/InvoiceView.tsx:522"
+      ]
+    },
+    {
+      "value": "margin: 2px 0;",
+      "count": 1,
+      "where": [
+        "src/pages/MapPage.tsx:273"
+      ]
+    },
+    {
+      "value": "padding:4px 10px;",
+      "count": 1,
+      "where": [
+        "src/pages/MapPage.tsx:301"
+      ]
+    },
+    {
+      "value": "padding: [40, 40], maxZoom: 14 });",
+      "count": 1,
+      "where": [
+        "src/pages/MapPage.tsx:319"
+      ]
+    },
+    {
+      "value": "ml-7",
+      "count": 1,
+      "where": [
+        "src/pages/Sales.tsx:609"
+      ]
+    },
+    {
+      "value": "pb-0",
+      "count": 1,
+      "where": [
+        "src/pages/Settings.tsx:504"
+      ]
+    },
+    {
+      "value": "my-6",
+      "count": 1,
+      "where": [
+        "src/pages/StaffProfile.tsx:471"
+      ]
+    },
+    {
+      "value": "mt-12",
+      "count": 1,
+      "where": [
+        "src/pages/StoreDetail.tsx:558"
+      ]
+    },
+    {
+      "value": "margin: 20mm;",
+      "count": 1,
+      "where": [
+        "src/utils/printUtils.ts:54"
+      ]
+    },
+    {
+      "value": "padding: 0 20px;",
+      "count": 1,
+      "where": [
+        "src/utils/printUtils.ts:83"
+      ]
+    },
+    {
+      "value": "margin: 20px 0 12px 0;",
+      "count": 1,
+      "where": [
+        "src/utils/printUtils.ts:158"
+      ]
+    },
+    {
+      "value": "margin: 16px 0 8px 0;",
+      "count": 1,
+      "where": [
+        "src/utils/printUtils.ts:166"
+      ]
+    },
+    {
+      "value": "gap: 12px;",
+      "count": 1,
+      "where": [
+        "src/utils/printUtils.ts:172"
+      ]
+    },
+    {
+      "value": "padding: 12px;",
+      "count": 1,
+      "where": [
+        "src/utils/printUtils.ts:180"
+      ]
+    },
+    {
+      "value": "padding: 10px 12px;",
+      "count": 1,
+      "where": [
+        "src/utils/printUtils.ts:297"
+      ]
+    },
+    {
+      "value": "gap: 16px;",
+      "count": 1,
+      "where": [
+        "src/utils/printUtils.ts:310"
+      ]
+    },
+    {
+      "value": "padding: 2px 6px;",
+      "count": 1,
+      "where": [
+        "src/utils/printUtils.ts:357"
+      ]
+    },
+    {
+      "value": "padding: 24px;",
+      "count": 1,
+      "where": [
+        "src/utils/printUtils.ts:373"
+      ]
+    },
+    {
+      "value": "padding: 10px 20px;",
+      "count": 1,
+      "where": [
+        "src/utils/printUtils.ts:383"
+      ]
+    }
+  ],
+  "radius": [
+    {
+      "value": "rounded-lg",
+      "count": 273,
+      "where": [
+        "src/index.css:192",
+        "src/index.css:252",
+        "src/components/agent/QuickActionDrawer.tsx:296",
+        "src/components/agent/QuickActionDrawer.tsx:431",
+        "src/components/agent/QuickActionDrawer.tsx:449"
+      ]
+    },
+    {
+      "value": "rounded-xl",
+      "count": 160,
+      "where": [
+        "src/index.css:148",
+        "src/index.css:159",
+        "src/index.css:224",
+        "src/index.css:248",
+        "src/index.css:303"
+      ]
+    },
+    {
+      "value": "rounded-full",
+      "count": 149,
+      "where": [
+        "src/index.css:185",
+        "src/components/agent/QuickActionDrawer.tsx:268",
+        "src/components/agent/QuickActionDrawer.tsx:336",
+        "src/components/agent/QuickActionDrawer.tsx:389",
+        "src/components/agent/QuickActionDrawer.tsx:410"
+      ]
+    },
+    {
+      "value": "rounded-md",
+      "count": 86,
+      "where": [
+        "src/App.tsx:160",
+        "src/components/error/ErrorBoundary.tsx:108",
+        "src/components/inventory/StockAdjustmentModal.tsx:186",
+        "src/components/inventory/StockTransferModal.tsx:601",
+        "src/components/inventory/StockTransferModal.tsx:656"
+      ]
+    },
+    {
+      "value": "rounded",
+      "count": 66,
+      "where": [
+        "src/components/banners/BannerImageEditor.tsx:156",
+        "src/components/inventory/ProductInventoryCard.tsx:90",
+        "src/components/inventory/ProductInventoryCard.tsx:94",
+        "src/components/inventory/ProductInventoryCard.tsx:98",
+        "src/components/inventory/ProductInventoryCard.tsx:120"
+      ]
+    },
+    {
+      "value": "rounded-sm",
+      "count": 23,
+      "where": [
+        "src/components/ui/chart.tsx:190",
+        "src/components/ui/chart.tsx:267",
+        "src/components/ui/checkbox.tsx:14",
+        "src/components/ui/command.tsx:108",
+        "src/components/ui/context-menu.tsx:28"
+      ]
+    },
+    {
+      "value": "rounded-2xl",
+      "count": 9,
+      "where": [
+        "src/components/routes/RouteMap.tsx:87",
+        "src/components/routes/RouteSessionPanel.tsx:397",
+        "src/components/routes/VisitReasonDialog.tsx:39",
+        "src/components/shared/MobileListSkeleton.tsx:67",
+        "src/components/shared/MobileListSkeleton.tsx:115"
+      ]
+    },
+    {
+      "value": "border-radius:8px;",
+      "count": 6,
+      "where": [
+        "src/components/orders/ProformaView.tsx:56",
+        "src/components/orders/ProformaView.tsx:66",
+        "src/components/orders/ProformaView.tsx:71",
+        "src/components/orders/ProformaView.tsx:78",
+        "src/components/orders/ProformaView.tsx:95"
+      ]
+    },
+    {
+      "value": "rounded-bl",
+      "count": 4,
+      "where": [
+        "src/components/agent/QuickActionDrawer.tsx:300",
+        "src/pages/Expenses.tsx:612",
+        "src/pages/Expenses.tsx:617",
+        "src/pages/Expenses.tsx:1020"
+      ]
+    },
+    {
+      "value": "border-radius: 12px;",
+      "count": 3,
+      "where": [
+        "src/components/reports/PurchaseReport.tsx:193",
+        "src/components/reports/SalesReturnReport.tsx:248",
+        "src/utils/printUtils.ts:341"
+      ]
+    },
+    {
+      "value": "rounded-r-md",
+      "count": 3,
+      "where": [
+        "src/components/ui/calendar.tsx:31",
+        "src/components/ui/calendar.tsx:31",
+        "src/components/ui/input-otp.tsx:35"
+      ]
+    },
+    {
+      "value": "rounded-tl",
+      "count": 2,
+      "where": [
+        "src/components/agent/QuickActionDrawer.tsx:298",
+        "src/components/ui/navigation-menu.tsx:105"
+      ]
+    },
+    {
+      "value": "border-radius:4px;",
+      "count": 2,
+      "where": [
+        "src/components/reports/CustomerRiskReport.tsx:107",
+        "src/components/reports/CustomerStatement.tsx:303"
+      ]
+    },
+    {
+      "value": "rounded-b",
+      "count": 2,
+      "where": [
+        "src/components/shared/MobileListSkeleton.tsx:29",
+        "src/components/shared/MobileListSkeleton.tsx:95"
+      ]
+    },
+    {
+      "value": "rounded-l-md",
+      "count": 2,
+      "where": [
+        "src/components/ui/calendar.tsx:31",
+        "src/components/ui/input-otp.tsx:35"
+      ]
+    },
+    {
+      "value": "border-radius:50%;",
+      "count": 2,
+      "where": [
+        "src/pages/MapPage.tsx:339",
+        "src/pages/MapPage.tsx:363"
+      ]
+    },
+    {
+      "value": "rounded-none",
+      "count": 2,
+      "where": [
+        "src/pages/StaffDirectory.tsx:326",
+        "src/pages/StaffDirectory.tsx:334"
+      ]
+    },
+    {
+      "value": "border-radius: 4px !important;",
+      "count": 1,
+      "where": [
+        "src/index.css:304"
+      ]
+    },
+    {
+      "value": "rounded-tr",
+      "count": 1,
+      "where": [
+        "src/components/agent/QuickActionDrawer.tsx:299"
+      ]
+    },
+    {
+      "value": "rounded-br",
+      "count": 1,
+      "where": [
+        "src/components/agent/QuickActionDrawer.tsx:301"
+      ]
+    },
+    {
+      "value": "rounded-t-3xl",
+      "count": 1,
+      "where": [
+        "src/components/orders/EditOrderSheet.tsx:146"
+      ]
+    },
+    {
+      "value": "border-radius:6px\">\n          <p style=\"margin:0;",
+      "count": 1,
+      "where": [
+        "src/components/orders/ProformaView.tsx:112"
+      ]
+    },
+    {
+      "value": "border-radius:6px;",
+      "count": 1,
+      "where": [
+        "src/components/reports/CustomerStatement.tsx:281"
+      ]
+    },
+    {
+      "value": "rounded-t-xl",
+      "count": 1,
+      "where": [
+        "src/components/ui/drawer.tsx:34"
+      ]
+    },
+    {
+      "value": "rounded-r-xl",
+      "count": 1,
+      "where": [
+        "src/components/ui/sheet.tsx:39"
+      ]
+    },
+    {
+      "value": "rounded-l-xl",
+      "count": 1,
+      "where": [
+        "src/components/ui/sheet.tsx:41"
+      ]
+    },
+    {
+      "value": "border-radius: 3px;",
+      "count": 1,
+      "where": [
+        "src/utils/printUtils.ts:358"
+      ]
+    }
+  ],
+  "shadows": [
+    {
+      "value": "shadow-sm",
+      "count": 151,
+      "where": [
+        "src/components/agent/QuickActionDrawer.tsx:428",
+        "src/components/agent/QuickActionDrawer.tsx:446",
+        "src/components/agent/QuickActionDrawer.tsx:464",
+        "src/components/banners/BannerManagement.tsx:283",
+        "src/components/error/ErrorBoundary.tsx:108"
+      ]
+    },
+    {
+      "value": "shadow-lg",
+      "count": 23,
+      "where": [
+        "src/index.css:185",
+        "src/components/agent/QuickActionDrawer.tsx:268",
+        "src/components/layout/AppSidebar.tsx:389",
+        "src/components/layout/AppSidebar.tsx:454",
+        "src/components/reports/PrintPreview.tsx:168"
+      ]
+    },
+    {
+      "value": "shadow-md",
+      "count": 20,
+      "where": [
+        "src/components/agent/QuickActionDrawer.tsx:303",
+        "src/components/reports/ReportSummaryCards.tsx:62",
+        "src/components/settings/WarehouseManagement.tsx:236",
+        "src/components/ui/card.tsx:6",
+        "src/components/ui/context-menu.tsx:47"
+      ]
+    },
+    {
+      "value": "shadow",
+      "count": 12,
+      "where": [
+        "src/App.css:13",
+        "src/App.css:16",
+        "src/components/reports/ReportSummaryCards.tsx:62",
+        "src/components/routes/RouteMap.tsx:8",
+        "src/components/routes/RouteMap.tsx:25"
+      ]
+    },
+    {
+      "value": "box-shadow: var(--shadow-sm);",
+      "count": 3,
+      "where": [
+        "src/index.css:149",
+        "src/index.css:162",
+        "src/index.css:227"
+      ]
+    },
+    {
+      "value": "shadow-none",
+      "count": 3,
+      "where": [
+        "src/components/layout/TopBar.tsx:132",
+        "src/components/shared/WarehouseSelector.tsx:18",
+        "src/components/ui/sidebar.tsx:294"
+      ]
+    },
+    {
+      "value": "box-shadow: var(--shadow-md);",
+      "count": 2,
+      "where": [
+        "src/index.css:144",
+        "src/index.css:231"
+      ]
+    },
+    {
+      "value": "box-shadow: var(--shadow-lg);",
+      "count": 2,
+      "where": [
+        "src/index.css:153",
+        "src/index.css:166"
+      ]
+    },
+    {
+      "value": "shadow-blue",
+      "count": 2,
+      "where": [
+        "src/components/routes/RouteSessionPanel.tsx:397",
+        "src/components/routes/RouteSessionPanel.tsx:405"
+      ]
+    },
+    {
+      "value": "shadow-primary",
+      "count": 2,
+      "where": [
+        "src/pages/Settings.tsx:237",
+        "src/pages/Settings.tsx:473"
+      ]
+    },
+    {
+      "value": "box-shadow: 0 0 0 4px hsl(var(--warning) / 0.15);",
+      "count": 1,
+      "where": [
+        "src/index.css:380"
+      ]
+    },
+    {
+      "value": "box-shadow: none;",
+      "count": 1,
+      "where": [
+        "src/index.css:389"
+      ]
+    },
+    {
+      "value": "shadow-inner",
+      "count": 1,
+      "where": [
+        "src/components/banners/BannerImageEditor.tsx:161"
+      ]
+    },
+    {
+      "value": "shadow-xs",
+      "count": 1,
+      "where": [
+        "src/components/inventory/ProductInventoryCard.tsx:77"
+      ]
+    },
+    {
+      "value": "box-shadow:0 1px 3px rgba(0,0,0,0.08)\">\n      <!-- Watermark -->\n      <div style=\"position:absolute;",
+      "count": 1,
+      "where": [
+        "src/components/orders/ProformaView.tsx:38"
+      ]
+    },
+    {
+      "value": "shadow-xl",
+      "count": 1,
+      "where": [
+        "src/components/ui/chart.tsx:162"
+      ]
+    },
+    {
+      "value": "box-shadow:0 2px 10px rgba(124,58,237,0.5);",
+      "count": 1,
+      "where": [
+        "src/pages/MapPage.tsx:301"
+      ]
+    },
+    {
+      "value": "box-shadow:0 0 0 5px rgba(59,130,246,0.25);",
+      "count": 1,
+      "where": [
+        "src/pages/MapPage.tsx:339"
+      ]
+    },
+    {
+      "value": "box-shadow:0 2px 8px rgba(124,58,237,0.5);",
+      "count": 1,
+      "where": [
+        "src/pages/MapPage.tsx:363"
+      ]
+    }
+  ],
+  "component_usage": [
+    {
+      "component": "Avatar",
+      "files": 12,
+      "examples": [
+        "src/components/inventory/StaffStockView.tsx",
+        "src/components/orders/OrderFulfillmentDialog.tsx",
+        "src/components/sales/SaleDetailsDialog.tsx",
+        "src/components/shared/UserHoverCard.tsx",
+        "src/components/staff/StaffCard.tsx"
+      ]
+    },
+    {
+      "component": "Badge",
+      "files": 97,
+      "examples": [
+        "src/components/agent/QuickActionDrawer.tsx",
+        "src/components/banners/BannerManagement.tsx",
+        "src/components/customers/CustomerLedger.tsx",
+        "src/components/customers/KycReviewDialog.tsx",
+        "src/components/hr/payroll-item-columns.tsx"
+      ]
+    },
+    {
+      "component": "Button",
+      "files": 141,
+      "examples": [
+        "src/components/agent/QuickActionDrawer.tsx",
+        "src/components/banners/BannerImageEditor.tsx",
+        "src/components/banners/BannerManagement.tsx",
+        "src/components/customers/CustomerLedger.tsx",
+        "src/components/customers/KycReviewDialog.tsx"
+      ]
+    },
+    {
+      "component": "Card",
+      "files": 74,
+      "examples": [
+        "src/components/customers/CustomerLedger.tsx",
+        "src/components/error/ErrorBoundary.tsx",
+        "src/components/inventory/InventorySummaryCards.tsx",
+        "src/components/inventory/ProductInventoryCard.tsx",
+        "src/components/inventory/RawMaterialInventoryView.tsx"
+      ]
+    },
+    {
+      "component": "Checkbox",
+      "files": 17,
+      "examples": [
+        "src/components/access/UserPermissionsPanel.tsx",
+        "src/components/inventory/StockTransferModal.tsx",
+        "src/components/products/ProductAccessDialog.tsx",
+        "src/components/products/ProductAccessMatrix.tsx",
+        "src/components/routes/RouteAccessMatrix.tsx"
+      ]
+    },
+    {
+      "component": "Dialog",
+      "files": 73,
+      "examples": [
+        "src/components/agent/QuickActionDrawer.tsx",
+        "src/components/banners/BannerManagement.tsx",
+        "src/components/customers/CustomerLedger.tsx",
+        "src/components/customers/KycReviewDialog.tsx",
+        "src/components/hr/PayrollForm.tsx"
+      ]
+    },
+    {
+      "component": "DropdownMenu",
+      "files": 13,
+      "examples": [
+        "src/components/hr/payroll-columns.tsx",
+        "src/components/hr/payroll-item-columns.tsx",
+        "src/components/hr/role-columns.tsx",
+        "src/components/hr/worker-columns.tsx",
+        "src/components/inventory/bom-columns.tsx"
+      ]
+    },
+    {
+      "component": "Input",
+      "files": 87,
+      "examples": [
+        "src/components/banners/BannerManagement.tsx",
+        "src/components/hr/PayrollForm.tsx",
+        "src/components/hr/PayrollItemForm.tsx",
+        "src/components/hr/RoleForm.tsx",
+        "src/components/hr/WorkerForm.tsx"
+      ]
+    },
+    {
+      "component": "Select",
+      "files": 62,
+      "examples": [
+        "src/components/agent/QuickActionDrawer.tsx",
+        "src/components/hr/PayrollForm.tsx",
+        "src/components/hr/PayrollItemForm.tsx",
+        "src/components/hr/WorkerForm.tsx",
+        "src/components/inventory/PurchaseOrderForm.tsx"
+      ]
+    },
+    {
+      "component": "Sheet",
+      "files": 4,
+      "examples": [
+        "src/components/orders/EditOrderSheet.tsx",
+        "src/components/shared/OfflineQueueStatus.tsx",
+        "src/components/ui/sidebar.tsx",
+        "src/pages/Expenses.tsx"
+      ]
+    },
+    {
+      "component": "Switch",
+      "files": 12,
+      "examples": [
+        "src/components/banners/BannerManagement.tsx",
+        "src/components/hr/WorkerForm.tsx",
+        "src/components/sales/SaleReturnDialog.tsx",
+        "src/components/settings/WarehouseManagement.tsx",
+        "src/pages/Attendance.tsx"
+      ]
+    },
+    {
+      "component": "Tabs",
+      "files": 26,
+      "examples": [
+        "src/components/inventory/RawMaterialInventoryView.tsx",
+        "src/components/inventory/StockHistoryView.tsx",
+        "src/components/orders/InvoiceDialog.tsx",
+        "src/components/orders/OrderViewDialog.tsx",
+        "src/components/reports/AgentPerformanceReport.tsx"
+      ]
+    },
+    {
+      "component": "Toast",
+      "files": 1,
+      "examples": [
+        "src/components/ui/toaster.tsx"
+      ]
+    },
+    {
+      "component": "Tooltip",
+      "files": 24,
+      "examples": [
+        "src/components/reports/AgentPerformanceReport.tsx",
+        "src/components/reports/CustomerReport.tsx",
+        "src/components/reports/InventoryTimelineReport.tsx",
+        "src/components/reports/ItemWisePLReport.tsx",
+        "src/components/reports/OrderReport.tsx"
+      ]
+    }
+  ],
+  "ui_inventory": [
+    {
+      "component": "accordion",
+      "variants_detected": 0,
+      "shared_component": true,
+      "states": {
+        "hover": true,
+        "focus": false,
+        "active": false,
+        "disabled": false,
+        "loading": false
+      }
+    },
+    {
+      "component": "alert-dialog",
+      "variants_detected": 1,
+      "shared_component": true,
+      "states": {
+        "hover": false,
+        "focus": false,
+        "active": false,
+        "disabled": false,
+        "loading": false
+      }
+    },
+    {
+      "component": "alert",
+      "variants_detected": 3,
+      "shared_component": true,
+      "states": {
+        "hover": false,
+        "focus": false,
+        "active": false,
+        "disabled": false,
+        "loading": false
+      }
+    },
+    {
+      "component": "aspect-ratio",
+      "variants_detected": 0,
+      "shared_component": true,
+      "states": {
+        "hover": false,
+        "focus": false,
+        "active": false,
+        "disabled": false,
+        "loading": false
+      }
+    },
+    {
+      "component": "avatar",
+      "variants_detected": 0,
+      "shared_component": true,
+      "states": {
+        "hover": false,
+        "focus": false,
+        "active": false,
+        "disabled": false,
+        "loading": false
+      }
+    },
+    {
+      "component": "badge",
+      "variants_detected": 3,
+      "shared_component": true,
+      "states": {
+        "hover": true,
+        "focus": true,
+        "active": false,
+        "disabled": true,
+        "loading": false
+      }
+    },
+    {
+      "component": "breadcrumb",
+      "variants_detected": 0,
+      "shared_component": true,
+      "states": {
+        "hover": true,
+        "focus": false,
+        "active": false,
+        "disabled": true,
+        "loading": false
+      }
+    },
+    {
+      "component": "button",
+      "variants_detected": 3,
+      "shared_component": true,
+      "states": {
+        "hover": true,
+        "focus": true,
+        "active": true,
+        "disabled": true,
+        "loading": true
+      }
+    },
+    {
+      "component": "calendar",
+      "variants_detected": 2,
+      "shared_component": true,
+      "states": {
+        "hover": true,
+        "focus": true,
+        "active": false,
+        "disabled": true,
+        "loading": false
+      }
+    },
+    {
+      "component": "card",
+      "variants_detected": 0,
+      "shared_component": true,
+      "states": {
+        "hover": true,
+        "focus": false,
+        "active": false,
+        "disabled": false,
+        "loading": false
+      }
+    },
+    {
+      "component": "carousel",
+      "variants_detected": 0,
+      "shared_component": true,
+      "states": {
+        "hover": false,
+        "focus": false,
+        "active": false,
+        "disabled": true,
+        "loading": false
+      }
+    },
+    {
+      "component": "chart",
+      "variants_detected": 0,
+      "shared_component": true,
+      "states": {
+        "hover": false,
+        "focus": false,
+        "active": false,
+        "disabled": false,
+        "loading": false
+      }
+    },
+    {
+      "component": "checkbox",
+      "variants_detected": 0,
+      "shared_component": true,
+      "states": {
+        "hover": false,
+        "focus": true,
+        "active": false,
+        "disabled": true,
+        "loading": false
+      }
+    },
+    {
+      "component": "collapsible",
+      "variants_detected": 0,
+      "shared_component": true,
+      "states": {
+        "hover": false,
+        "focus": false,
+        "active": false,
+        "disabled": false,
+        "loading": false
+      }
+    },
+    {
+      "component": "command",
+      "variants_detected": 0,
+      "shared_component": true,
+      "states": {
+        "hover": false,
+        "focus": false,
+        "active": false,
+        "disabled": true,
+        "loading": false
+      }
+    },
+    {
+      "component": "context-menu",
+      "variants_detected": 0,
+      "shared_component": true,
+      "states": {
+        "hover": false,
+        "focus": true,
+        "active": false,
+        "disabled": true,
+        "loading": false
+      }
+    },
+    {
+      "component": "dialog",
+      "variants_detected": 0,
+      "shared_component": true,
+      "states": {
+        "hover": true,
+        "focus": true,
+        "active": false,
+        "disabled": true,
+        "loading": false
+      }
+    },
+    {
+      "component": "drawer",
+      "variants_detected": 0,
+      "shared_component": true,
+      "states": {
+        "hover": false,
+        "focus": false,
+        "active": false,
+        "disabled": false,
+        "loading": false
+      }
+    },
+    {
+      "component": "dropdown-menu",
+      "variants_detected": 0,
+      "shared_component": true,
+      "states": {
+        "hover": false,
+        "focus": true,
+        "active": false,
+        "disabled": true,
+        "loading": false
+      }
+    },
+    {
+      "component": "form",
+      "variants_detected": 0,
+      "shared_component": true,
+      "states": {
+        "hover": false,
+        "focus": false,
+        "active": false,
+        "disabled": false,
+        "loading": false
+      }
+    },
+    {
+      "component": "hover-card",
+      "variants_detected": 0,
+      "shared_component": true,
+      "states": {
+        "hover": false,
+        "focus": false,
+        "active": false,
+        "disabled": false,
+        "loading": false
+      }
+    },
+    {
+      "component": "input-otp",
+      "variants_detected": 0,
+      "shared_component": true,
+      "states": {
+        "hover": false,
+        "focus": false,
+        "active": false,
+        "disabled": true,
+        "loading": false
+      }
+    },
+    {
+      "component": "input",
+      "variants_detected": 0,
+      "shared_component": true,
+      "states": {
+        "hover": true,
+        "focus": true,
+        "active": true,
+        "disabled": true,
+        "loading": false
+      }
+    },
+    {
+      "component": "label",
+      "variants_detected": 0,
+      "shared_component": true,
+      "states": {
+        "hover": false,
+        "focus": false,
+        "active": false,
+        "disabled": true,
+        "loading": false
+      }
+    },
+    {
+      "component": "menubar",
+      "variants_detected": 0,
+      "shared_component": true,
+      "states": {
+        "hover": false,
+        "focus": true,
+        "active": false,
+        "disabled": true,
+        "loading": false
+      }
+    },
+    {
+      "component": "navigation-menu",
+      "variants_detected": 0,
+      "shared_component": true,
+      "states": {
+        "hover": true,
+        "focus": true,
+        "active": true,
+        "disabled": true,
+        "loading": false
+      }
+    },
+    {
+      "component": "pagination",
+      "variants_detected": 1,
+      "shared_component": true,
+      "states": {
+        "hover": false,
+        "focus": false,
+        "active": false,
+        "disabled": false,
+        "loading": false
+      }
+    },
+    {
+      "component": "popover",
+      "variants_detected": 0,
+      "shared_component": true,
+      "states": {
+        "hover": false,
+        "focus": false,
+        "active": false,
+        "disabled": false,
+        "loading": false
+      }
+    },
+    {
+      "component": "progress",
+      "variants_detected": 0,
+      "shared_component": true,
+      "states": {
+        "hover": false,
+        "focus": false,
+        "active": false,
+        "disabled": false,
+        "loading": false
+      }
+    },
+    {
+      "component": "radio-group",
+      "variants_detected": 0,
+      "shared_component": true,
+      "states": {
+        "hover": false,
+        "focus": true,
+        "active": false,
+        "disabled": true,
+        "loading": false
+      }
+    },
+    {
+      "component": "resizable",
+      "variants_detected": 0,
+      "shared_component": true,
+      "states": {
+        "hover": false,
+        "focus": true,
+        "active": false,
+        "disabled": false,
+        "loading": false
+      }
+    },
+    {
+      "component": "scroll-area",
+      "variants_detected": 0,
+      "shared_component": true,
+      "states": {
+        "hover": false,
+        "focus": false,
+        "active": false,
+        "disabled": false,
+        "loading": false
+      }
+    },
+    {
+      "component": "select",
+      "variants_detected": 0,
+      "shared_component": true,
+      "states": {
+        "hover": true,
+        "focus": true,
+        "active": true,
+        "disabled": true,
+        "loading": false
+      }
+    },
+    {
+      "component": "separator",
+      "variants_detected": 0,
+      "shared_component": true,
+      "states": {
+        "hover": false,
+        "focus": false,
+        "active": false,
+        "disabled": false,
+        "loading": false
+      }
+    },
+    {
+      "component": "sheet",
+      "variants_detected": 1,
+      "shared_component": true,
+      "states": {
+        "hover": true,
+        "focus": true,
+        "active": false,
+        "disabled": true,
+        "loading": false
+      }
+    },
+    {
+      "component": "sidebar",
+      "variants_detected": 3,
+      "shared_component": true,
+      "states": {
+        "hover": true,
+        "focus": true,
+        "active": true,
+        "disabled": true,
+        "loading": false
+      }
+    },
+    {
+      "component": "skeleton",
+      "variants_detected": 0,
+      "shared_component": true,
+      "states": {
+        "hover": false,
+        "focus": false,
+        "active": false,
+        "disabled": false,
+        "loading": false
+      }
+    },
+    {
+      "component": "slider",
+      "variants_detected": 0,
+      "shared_component": true,
+      "states": {
+        "hover": false,
+        "focus": true,
+        "active": false,
+        "disabled": true,
+        "loading": false
+      }
+    },
+    {
+      "component": "sonner",
+      "variants_detected": 0,
+      "shared_component": true,
+      "states": {
+        "hover": false,
+        "focus": false,
+        "active": false,
+        "disabled": false,
+        "loading": false
+      }
+    },
+    {
+      "component": "switch",
+      "variants_detected": 0,
+      "shared_component": true,
+      "states": {
+        "hover": false,
+        "focus": true,
+        "active": true,
+        "disabled": true,
+        "loading": false
+      }
+    },
+    {
+      "component": "table",
+      "variants_detected": 0,
+      "shared_component": true,
+      "states": {
+        "hover": true,
+        "focus": false,
+        "active": false,
+        "disabled": false,
+        "loading": false
+      }
+    },
+    {
+      "component": "tabs",
+      "variants_detected": 0,
+      "shared_component": true,
+      "states": {
+        "hover": false,
+        "focus": true,
+        "active": true,
+        "disabled": true,
+        "loading": false
+      }
+    },
+    {
+      "component": "textarea",
+      "variants_detected": 0,
+      "shared_component": true,
+      "states": {
+        "hover": true,
+        "focus": true,
+        "active": true,
+        "disabled": true,
+        "loading": false
+      }
+    },
+    {
+      "component": "toast",
+      "variants_detected": 3,
+      "shared_component": true,
+      "states": {
+        "hover": true,
+        "focus": true,
+        "active": false,
+        "disabled": true,
+        "loading": false
+      }
+    },
+    {
+      "component": "toaster",
+      "variants_detected": 0,
+      "shared_component": true,
+      "states": {
+        "hover": false,
+        "focus": false,
+        "active": false,
+        "disabled": false,
+        "loading": false
+      }
+    },
+    {
+      "component": "toggle-group",
+      "variants_detected": 2,
+      "shared_component": true,
+      "states": {
+        "hover": false,
+        "focus": false,
+        "active": false,
+        "disabled": false,
+        "loading": false
+      }
+    },
+    {
+      "component": "toggle",
+      "variants_detected": 3,
+      "shared_component": true,
+      "states": {
+        "hover": true,
+        "focus": true,
+        "active": true,
+        "disabled": true,
+        "loading": false
+      }
+    },
+    {
+      "component": "tooltip",
+      "variants_detected": 0,
+      "shared_component": true,
+      "states": {
+        "hover": false,
+        "focus": false,
+        "active": false,
+        "disabled": false,
+        "loading": false
+      }
+    }
+  ]
+}

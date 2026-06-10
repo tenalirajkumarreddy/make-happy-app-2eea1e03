@@ -483,7 +483,7 @@ export default function StockTransfers() {
                               {t.status === "completed" && "Completed"}
                             </Badge>
                             {t.rejection_reason && (
-                              <span className="text-[10px] text-destructive mt-1 max-w-[100px] truncate" title={t.rejection_reason}>
+                              <span className="text-2xs text-destructive mt-1 max-w-[100px] truncate" title={t.rejection_reason}>
                                 {t.rejection_reason}
                               </span>
                             )}
@@ -493,7 +493,7 @@ export default function StockTransfers() {
                           <div className="flex flex-col">
                             <span>{productsMap[t.product_id] || `Prod:${t.product_id.slice(0, 8)}`}</span>
                             {t.description && (
-                              <span className="text-[10px] text-muted-foreground font-normal italic">
+                              <span className="text-2xs text-muted-foreground font-normal italic">
                                 "{t.description}"
                               </span>
                             )}

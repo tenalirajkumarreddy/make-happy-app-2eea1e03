@@ -76,6 +76,7 @@ const CustomerOrders = () => {
       customer_id: customer!.id,
       order_type: "simple",
       source: "manual",
+      status: "confirmed",
       created_by: user!.id,
       requirement_note: orderNote || null,
       warehouse_id: (store as any)?.warehouse_id || null,

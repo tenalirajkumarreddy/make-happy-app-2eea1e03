@@ -522,7 +522,7 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
                     {obType === "credit" ? "Company owes this store" : "Store owes the company"}
                   </p>
                 ) : (
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                  <p className="text-3xs text-muted-foreground mt-0.5">
                     Credit = company owes store &nbsp;·&nbsp; Debit = store owes company
                   </p>
                 )}
@@ -576,8 +576,8 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium truncate">{p.name}</p>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <Badge variant="outline" className="text-[10px]">{p.sku}</Badge>
-                      <span className="text-[11px] text-muted-foreground">{getEffectivePrice(p)}</span>
+                      <Badge variant="outline" className="text-2xs">{p.sku}</Badge>
+                      <span className="text-3xs text-muted-foreground">{getEffectivePrice(p)}</span>
                     </div>
                   </div>
                   {canEditPricing && (

@@ -62,7 +62,7 @@ export function HandoverCard({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-lg font-bold tabular-nums">₹{(total || 0).toLocaleString()}</span>
-          <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${status.bg} ${status.color}`}>
+          <span className={`text-2xs font-medium px-2 py-0.5 rounded-full ${status.bg} ${status.color}`}>
             {status.label}
           </span>
         </div>

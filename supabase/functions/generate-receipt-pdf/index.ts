@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { encodeBase64 } from "jsr:@std/encoding";
+import { getCorsHeaders, handleCorsPreflightOrError } from "../_shared/cors.ts";
 
 // HTML template for receipt
 const RECEIPT_TEMPLATE = `
@@ -188,25 +189,27 @@ const RECEIPT_TEMPLATE = `
 </html>
 `;
 
-// CORS headers for the edge function
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
-
 Deno.serve(async (req) => {
-  // Handle CORS preflight
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: CORS_HEADERS });
-  }
+  const corsResponse = handleCorsPreflightOrError(req);
+  if (corsResponse) return corsResponse;
+  const corsHeaders = getCorsHeaders(req);
 
   try {
+    // Require authenticated user
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const { receipt_id } = await req.json();
 
     if (!receipt_id) {
       return new Response(
         JSON.stringify({ error: "receipt_id is required" }),
-        { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -217,7 +220,7 @@ Deno.serve(async (req) => {
     if (!supabaseUrl || !supabaseKey) {
       return new Response(
         JSON.stringify({ error: "Supabase configuration missing" }),
-        { status: 500, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -237,7 +240,7 @@ Deno.serve(async (req) => {
     if (receiptError || !receipt) {
       return new Response(
         JSON.stringify({ error: "Receipt not found", details: receiptError }),
-        { status: 404, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -324,14 +327,14 @@ Deno.serve(async (req) => {
         download_url: downloadUrl,
         html_preview: html.substring(0, 1000) + "...", // Preview only
       }),
-      { status: 200, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
   } catch (error) {
     console.error("Error generating receipt:", error);
     return new Response(
       JSON.stringify({ error: "Internal server error", details: error.message }),
-      { status: 500, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });

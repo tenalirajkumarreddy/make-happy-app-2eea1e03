@@ -510,7 +510,7 @@ function buildChannel(role: string | null) {
     });
 
     ch.subscribe((status: string) => {
-      if (isTearingDown && (status === "CLOSED" || status === "TIMED_OUT")) return;
+      if (isTearingDown) return;
       if (status === "SUBSCRIBED") {
         retryAttempt = 0;
         if (import.meta.env.DEV) console.log(`[Realtime] Batch ${idx} subscribed to ${batch.length} tables`); // eslint-disable-line no-console
@@ -534,24 +534,27 @@ function scheduleReconnect(role: string | null) {
     return;
   }
   const delay = Math.min(RETRY.baseDelay * 2 ** retryAttempt, RETRY.maxDelay);
-  retryTimer = setTimeout(() => {
+  retryTimer = setTimeout(async () => {
     retryAttempt++;
-    tearDownChannels();
+    await tearDownChannels();
     buildChannel(role);
   }, delay);
 }
 
-function tearDownChannels() {
+async function tearDownChannels() {
   if (channels.size === 0) return;
   isTearingDown = true;
-  channels.forEach((ch) => supabase.removeChannel(ch));
+  const removals = Array.from(channels.values()).map((ch) =>
+    supabase.removeChannel(ch).catch(() => {})
+  );
+  await Promise.allSettled(removals);
   channels.clear();
   isTearingDown = false;
 }
 
-function maybeTearDown() {
+async function maybeTearDown() {
   if (subscribers.size > 0) return;
-  tearDownChannels();
+  await tearDownChannels();
   if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
 }
 
@@ -565,16 +568,25 @@ export function useRealtimeSync() {
   useEffect(() => {
     if (!role) return;
 
-    // If role changed, tear down existing channels and rebuild
-    if (prevRoleRef.current !== null && prevRoleRef.current !== role) {
-      tearDownChannels();
-    }
-    prevRoleRef.current = role;
-
+    let cancelled = false;
     const id = Symbol("rt-sub");
-    subscribers.set(id, { qc, isAdmin, userId: user?.id, role });
-    buildChannel(role);
+
+    const setup = async () => {
+      // If role changed, tear down existing channels and rebuild
+      if (prevRoleRef.current !== null && prevRoleRef.current !== role) {
+        await tearDownChannels();
+      }
+      if (cancelled) return;
+      prevRoleRef.current = role;
+
+      subscribers.set(id, { qc, isAdmin, userId: user?.id, role });
+      buildChannel(role);
+    };
+
+    setup();
+
     return () => {
+      cancelled = true;
       subscribers.delete(id);
       maybeTearDown();
     };

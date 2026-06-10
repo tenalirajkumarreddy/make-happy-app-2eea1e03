@@ -461,9 +461,9 @@ export default function RouteDetail() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <p className="text-sm font-semibold truncate">{store.name}</p>
-                        <span className="hidden sm:inline text-[10px] font-mono text-muted-foreground shrink-0">{store.display_id}</span>
+                        <span className="hidden sm:inline text-2xs font-mono text-muted-foreground shrink-0">{store.display_id}</span>
                         {visitedToday && (
-                          <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-success/10 text-success shrink-0">
+                          <span className="inline-flex items-center gap-0.5 text-2xs font-semibold px-1.5 py-0.5 rounded-full bg-success/10 text-success shrink-0">
                             <CheckCircle2 className="h-3 w-3" /> Visited
                           </span>
                         )}
@@ -473,7 +473,7 @@ export default function RouteDetail() {
                         {!hasCoords && <span className="ml-1 text-warning">· No GPS</span>}
                       </p>
                       {store.distFromPrev != null && store.store_order != null && (
-                        <p className="text-[10px] text-muted-foreground">
+                        <p className="text-2xs text-muted-foreground">
                           {idx === 0 ? "From depot: " : "From prev: "}
                           {store.distFromPrev < 1000
                             ? `${Math.round(store.distFromPrev)} m`
@@ -485,7 +485,7 @@ export default function RouteDetail() {
                     {/* Outstanding — hidden on mobile */}
                     <div className="hidden sm:block text-right shrink-0">
                       <p className="text-sm font-bold">₹{(Number(store.outstanding) || 0).toLocaleString()}</p>
-                      <p className="text-[10px] text-muted-foreground">outstanding</p>
+                      <p className="text-2xs text-muted-foreground">outstanding</p>
                     </div>
 
                     {/* Nav button */}

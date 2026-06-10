@@ -199,7 +199,7 @@ export function StorePickerSheet({ open, onOpenChange, onSelect, filterRouteId }
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-bold text-foreground">{s.name}</span>
-                      <span className="text-[10px] text-muted-foreground/70 bg-muted px-1.5 py-0.5 rounded-md font-mono">
+                      <span className="text-xs text-muted-foreground/70 bg-muted px-1.5 py-0.5 rounded-md font-mono">
                         {s.display_id}
                       </span>
                     </div>
@@ -208,7 +208,7 @@ export function StorePickerSheet({ open, onOpenChange, onSelect, filterRouteId }
                         <span className="text-xs text-muted-foreground">{s.customers.name}</span>
                       )}
                       {s.store_types?.name && (
-                        <Badge variant="outline" className="text-[9px] h-4 px-1.5 font-semibold">
+                        <Badge variant="outline" className="text-xs h-4 px-1.5 font-semibold">
                           {s.store_types.name}
                         </Badge>
                       )}
@@ -218,7 +218,7 @@ export function StorePickerSheet({ open, onOpenChange, onSelect, filterRouteId }
                   {/* Right: dist + balance */}
                   <div className="text-right shrink-0 flex flex-col items-end gap-1">
                     {s._dist !== null && (
-                      <span className="text-[11px] text-blue-500 flex items-center gap-0.5 font-semibold">
+                      <span className="text-xs text-blue-500 flex items-center gap-0.5 font-semibold">
                         <MapPin className="h-2.5 w-2.5" />
                         {s._dist < 1
                           ? `${(s._dist * 1000).toFixed(0)}m`

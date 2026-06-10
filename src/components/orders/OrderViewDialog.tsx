@@ -448,7 +448,7 @@ export function OrderViewDialog({
                     <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300 flex-1">
                       Order fulfilled — sale recorded
                     </span>
-                    <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => window.open(`/sales`, "_blank")}>
+                    <Button size="sm" variant="outline" className="h-7 text-2xs" onClick={() => window.open(`/sales`, "_blank")}>
                       View Sale
                     </Button>
                   </div>

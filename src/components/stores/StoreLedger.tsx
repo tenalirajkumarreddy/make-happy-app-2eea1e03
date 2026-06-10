@@ -158,7 +158,7 @@ export function StoreLedger({ sales, transactions, paymentReturns = [], balanceA
               </div>
               <div>
                 <p className="font-medium text-sm text-muted-foreground">Opening Balance</p>
-                <p className="text-[11px] text-muted-foreground">Admin</p>
+                <p className="text-3xs text-muted-foreground">Admin</p>
               </div>
             </div>
           );
@@ -170,12 +170,12 @@ export function StoreLedger({ sales, transactions, paymentReturns = [], balanceA
             <p className={`font-medium text-sm ${isSaleReturned || isPaymentReturned ? "line-through text-muted-foreground" : row.type === "return" ? "text-emerald-600 dark:text-emerald-400" : ""}`}>
               {row.description}
               {(isSaleReturned || isPaymentReturned) && (
-                <Badge variant="outline" className="ml-2 text-[9px] border-amber-300 text-amber-600 bg-amber-50 rounded px-1 py-0">Returned</Badge>
+                <Badge variant="outline" className="ml-2 text-4xs border-amber-300 text-amber-600 bg-amber-50 rounded px-1 py-0">Returned</Badge>
               )}
             </p>
-            <p className="text-[11px] text-muted-foreground uppercase">{row.type === "sale" ? "SALE" : row.type === "payment" ? "PAYMENT" : row.type === "return" ? "RETURN" : "ADJUSTMENT"}</p>
+            <p className="text-3xs text-muted-foreground uppercase">{row.type === "sale" ? "SALE" : row.type === "payment" ? "PAYMENT" : row.type === "return" ? "RETURN" : "ADJUSTMENT"}</p>
             {row.notes && (
-              <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1">
+              <p className="text-3xs text-muted-foreground mt-0.5 flex items-center gap-1">
                 <span className="w-0.5 h-3 bg-primary/40 rounded-full inline-block" />
                 <span className="italic">{row.notes}</span>
               </p>
@@ -240,10 +240,10 @@ export function StoreLedger({ sales, transactions, paymentReturns = [], balanceA
       return (
         <div className="rounded-xl border bg-card px-3 py-2.5 shadow-sm">
           <div className="flex items-center justify-between">
-            <Badge variant={isCredit ? "secondary" : "destructive"} className="text-[10px] h-5">
+            <Badge variant={isCredit ? "secondary" : "destructive"} className="text-2xs h-5">
               {isCredit ? "CREDIT" : "DEBIT"}
             </Badge>
-            <span className="text-[11px] text-muted-foreground">
+            <span className="text-3xs text-muted-foreground">
               {formatDate(row.date)}
             </span>
           </div>
@@ -253,7 +253,7 @@ export function StoreLedger({ sales, transactions, paymentReturns = [], balanceA
               {isCredit ? "+" : "-"}₹{displayAmount.toLocaleString()}
             </span>
           </div>
-          <div className="flex items-center justify-between mt-1 text-[11px]">
+          <div className="flex items-center justify-between mt-1 text-3xs">
             <span className={row.outstanding > 0 ? "text-destructive" : row.outstanding < 0 ? "text-success" : "text-muted-foreground"}>
               Bal: {row.outstanding < 0 ? "-" : ""}₹{Math.abs(row.outstanding).toLocaleString()}
             </span>
@@ -270,10 +270,10 @@ export function StoreLedger({ sales, transactions, paymentReturns = [], balanceA
           onClick={() => setSelectedEntryId(row.id)}
         >
           <div className="flex items-center justify-between">
-            <Badge variant="outline" className="text-[10px] h-5 border-amber-300 text-amber-600 bg-amber-50 rounded px-1.5 py-0">
+            <Badge variant="outline" className="text-2xs h-5 border-amber-300 text-amber-600 bg-amber-50 rounded px-1.5 py-0">
               RETURN
             </Badge>
-            <span className="text-[11px] text-muted-foreground">
+            <span className="text-3xs text-muted-foreground">
               {formatDate(row.date)}
             </span>
           </div>
@@ -281,7 +281,7 @@ export function StoreLedger({ sales, transactions, paymentReturns = [], balanceA
             <span className="font-mono text-xs text-muted-foreground">{row.display_id}</span>
             <span className="text-sm font-bold text-success">+₹{row.total_amount.toLocaleString()}</span>
           </div>
-          <div className="flex items-center justify-between mt-1 text-[11px]">
+          <div className="flex items-center justify-between mt-1 text-3xs">
             <span className={row.outstanding > 0 ? "text-destructive" : row.outstanding < 0 ? "text-success" : "text-muted-foreground"}>
               Bal: {row.outstanding < 0 ? "-" : ""}₹{Math.abs(row.outstanding).toLocaleString()}
             </span>
@@ -303,15 +303,15 @@ export function StoreLedger({ sales, transactions, paymentReturns = [], balanceA
       >
         <div className="flex items-center justify-between">
           {isReturned ? (
-            <Badge className="text-[10px] h-5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded px-1.5 py-0">
+            <Badge className="text-2xs h-5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded px-1.5 py-0">
               RETURNED
             </Badge>
           ) : (
-            <Badge variant={row.type === "sale" ? "destructive" : row.type === "correction" ? "outline" : "secondary"} className="text-[10px] h-5">
+            <Badge variant={row.type === "sale" ? "destructive" : row.type === "correction" ? "outline" : "secondary"} className="text-2xs h-5">
               {rowTypeDisplay}
             </Badge>
           )}
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-3xs text-muted-foreground">
             {formatDate(row.date)}
           </span>
         </div>
@@ -326,7 +326,7 @@ export function StoreLedger({ sales, transactions, paymentReturns = [], balanceA
             )}
           </div>
         </div>
-        <div className="flex items-center justify-between mt-1 text-[11px]">
+        <div className="flex items-center justify-between mt-1 text-3xs">
           <span className={row.outstanding > 0 ? "text-destructive" : row.outstanding < 0 ? "text-success" : "text-muted-foreground"}>
             Bal: {row.outstanding < 0 ? "-" : ""}₹{Math.abs(row.outstanding).toLocaleString()}
           </span>
@@ -434,11 +434,11 @@ export function StoreLedger({ sales, transactions, paymentReturns = [], balanceA
                         <div key={item.id} className="flex items-center justify-between rounded-lg border bg-card p-2.5 text-sm">
                           <div>
                             <p className="font-medium">{item.products?.name || "—"}</p>
-                            <p className="text-[11px] text-muted-foreground">{item.products?.sku} · Qty: {Number(item.quantity)}</p>
+                            <p className="text-3xs text-muted-foreground">{item.products?.sku} · Qty: {Number(item.quantity)}</p>
                           </div>
                           <div className="text-right">
                             <p className="font-semibold">₹{Number(item.total_price).toLocaleString()}</p>
-                            <p className="text-[11px] text-muted-foreground">@ ₹{Number(item.unit_price).toLocaleString()}</p>
+                            <p className="text-3xs text-muted-foreground">@ ₹{Number(item.unit_price).toLocaleString()}</p>
                           </div>
                         </div>
                       ))}
@@ -455,7 +455,7 @@ export function StoreLedger({ sales, transactions, paymentReturns = [], balanceA
                   <div className="flex items-center gap-2 pt-2 border-t">
                     <Avatar className="h-5 w-5">
                       <AvatarImage src={p?.avatar_url || undefined} />
-                      <AvatarFallback className="text-[9px] bg-primary/10 text-primary">
+                      <AvatarFallback className="text-4xs bg-primary/10 text-primary">
                         {(p?.full_name || "?").charAt(0)}
                       </AvatarFallback>
                     </Avatar>

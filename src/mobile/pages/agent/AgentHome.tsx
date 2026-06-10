@@ -12,11 +12,11 @@ import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { StoreOption } from "@/mobile/components/StorePickerSheet";
-import { getCurrentPosition } from "@/lib/capacitorUtils";
-import { addToQueue, generateBusinessKey } from "@/lib/offlineQueue";
+import { useMarkVisit } from "@/mobile/hooks/useMarkVisit";
 import { VisitReasonDialog } from "@/components/routes/VisitReasonDialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { MiniStat } from "@/mobile/pages/agent/MiniStat";
+import { getCurrentPosition } from "@/lib/capacitorUtils";
 
 interface Props {
   onOpenStore: (store: StoreOption) => void;
@@ -79,25 +79,11 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
   const { user, profile } = useAuth();
   const today = new Date().toISOString().split("T")[0];
   const [currentPosition, setCurrentPosition] = useState<{ lat: number; lng: number } | null>(null);
-  const [visitLoading, setVisitLoading] = useState(false);
+  const { markVisit, isVisiting } = useMarkVisit();
   const [visitReasonDialog, setVisitReasonDialog] = useState<boolean>(false);
   const [showEndRouteConfirm, setShowEndRouteConfirm] = useState(false);
   const [elapsed, setElapsed] = useState("");
   const qc = useQueryClient();
-
-  useEffect(() => {
-    if (!activeSession?.started_at) return;
-    const update = () => {
-      const start = new Date(activeSession.started_at).getTime();
-      const diff = Date.now() - start;
-      const hrs = Math.floor(diff / 3600000);
-      const mins = Math.floor((diff % 3600000) / 60000);
-      setElapsed(`${hrs}h ${mins}m`);
-    };
-    update();
-    const interval = setInterval(update, 60000);
-    return () => clearInterval(interval);
-  }, [activeSession?.started_at]);
 
   const [queueStatus, setQueueStatus] = useState({
     total: 0,
@@ -152,6 +138,7 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
     },
     enabled: !!user,
     refetchInterval: 60_000,
+    staleTime: 60_000,
   });
 
   const { data: txData } = useQuery({
@@ -166,6 +153,7 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
     },
     enabled: !!user,
     refetchInterval: 60_000,
+    staleTime: 60_000,
   });
 
   const { data: visitCount } = useQuery({
@@ -179,6 +167,7 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
     },
     enabled: !!user,
     refetchInterval: 60_000,
+    staleTime: 60_000,
   });
 
   const { data: activeSession } = useQuery({
@@ -194,7 +183,22 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
     },
     enabled: !!user,
     refetchInterval: 30_000,
+    staleTime: 30_000,
   });
+
+  useEffect(() => {
+    if (!activeSession?.started_at) return;
+    const update = () => {
+      const start = new Date(activeSession.started_at).getTime();
+      const diff = Date.now() - start;
+      const hrs = Math.floor(diff / 3600000);
+      const mins = Math.floor((diff % 3600000) / 60000);
+      setElapsed(`${hrs}h ${mins}m`);
+    };
+    update();
+    const interval = setInterval(update, 60000);
+    return () => clearInterval(interval);
+  }, [activeSession?.started_at]);
 
   const { data: visits } = useQuery({
     queryKey: ["mobile-session-visits", activeSession?.id],
@@ -206,6 +210,7 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
       return new Set((data || []).map((visit) => visit.store_id));
     },
     enabled: !!activeSession,
+    staleTime: 30_000,
   });
 
   const { data: pendingOrders } = useQuery({
@@ -221,6 +226,7 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
     },
     enabled: !!user,
     refetchInterval: 60_000,
+    staleTime: 60_000,
   });
 
   const { data: routePendingOrders } = useQuery({
@@ -237,6 +243,7 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
       return count ?? 0;
     },
     enabled: !!activeSession && routeStores.length > 0,
+    staleTime: 30_000,
   });
 
   // Stock holdings
@@ -254,6 +261,7 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
       }));
     },
     enabled: !!user,
+    staleTime: 30_000,
   });
 
   const totalSales = salesData?.reduce((sum, row) => sum + (row.total_amount ?? 0), 0) ?? 0;
@@ -319,55 +327,14 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
   };
 
   const handleMarkVisited = async (reason?: string) => {
-    if (!user || !nextStore || !activeSession?.id) return;
-
-    setVisitLoading(true);
-    try {
-      let lat: number | null = null;
-      let lng: number | null = null;
-      const pos = await getCurrentPosition();
-      if (pos) {
-        lat = pos.lat;
-        lng = pos.lng;
-      }
-
-      if (!navigator.onLine) {
-        const bizKey = generateBusinessKey('visit', {
-          userId: user.id,
-          storeId: nextStore.id,
-          timestamp: new Date().toISOString(),
-        });
-        await addToQueue({
-          id: crypto.randomUUID(),
-          type: "visit",
-          payload: {
-            userId: user.id,
-            storeId: nextStore.id,
-            lat,
-            lng,
-          },
-          createdAt: new Date().toISOString(),
-          businessKey: bizKey,
-        });
-        toast.warning(`Offline — visit queued for ${nextStore.name}`);
-        return;
-      }
-
-      const { error } = await supabase.from("store_visits").insert({
-        session_id: activeSession.id,
-        store_id: nextStore.id,
-        lat,
-        lng,
-        visit_reason: reason || null,
-      });
-
-      if (error) throw error;
-      toast.success(`Visit recorded for ${nextStore.name}`);
-    } catch {
-      toast.error("Failed to record visit");
-    } finally {
-      setVisitLoading(false);
-    }
+    if (!user || !nextStore) return;
+    await markVisit({
+      storeId: nextStore.id,
+      storeName: nextStore.name,
+      userId: user.id,
+      sessionId: activeSession?.id,
+      reason,
+    });
   };
 
   const handleEndRoute = async () => {
@@ -408,7 +375,7 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-semibold">Syncing Collected Data Offline</p>
-                <p className="text-[11px] text-white/80">
+                <p className="text-xs text-white/80">
                   {queueStatus.pending} pending sync
                   {queueStatus.failed > 0 && ` · ${queueStatus.failed} failures`}
                   {queueStatus.conflicts > 0 && ` · ${queueStatus.conflicts} conflicts`}
@@ -416,9 +383,9 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
               </div>
             </div>
             {navigator.onLine ? (
-              <Badge className="bg-emerald-500 text-white text-[10px] font-semibold px-2 py-0.5 shrink-0 border-0">Online</Badge>
+              <Badge className="bg-emerald-500 text-white text-xs font-semibold px-2 py-0.5 shrink-0 border-0">Online</Badge>
             ) : (
-              <Badge className="bg-slate-600/50 text-slate-200 text-[10px] font-semibold px-2 py-0.5 shrink-0 border-0">Offline</Badge>
+              <Badge className="bg-slate-600/50 text-slate-200 text-xs font-semibold px-2 py-0.5 shrink-0 border-0">Offline</Badge>
             )}
           </div>
         )}
@@ -482,11 +449,11 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
                 <div key={item.id} className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-muted/50 transition-colors">
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-medium text-slate-800 dark:text-white truncate">{item.product?.name || "Unknown"}</p>
-                    <p className="text-[11px] text-slate-500/70 dark:text-slate-400/70 font-mono">{item.product?.sku || ""}{item.product?.unit ? ` · ${item.product.unit}` : ""}</p>
+                    <p className="text-xs text-slate-500/70 dark:text-slate-400/70 font-mono">{item.product?.sku || ""}{item.product?.unit ? ` · ${item.product.unit}` : ""}</p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="text-xs font-bold text-slate-800 dark:text-white">{item.quantity}</span>
-                    <span className="text-[11px] text-slate-500 dark:text-slate-400">₹{Number(item.amount_value || 0).toLocaleString("en-IN")}</span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">₹{Number(item.amount_value || 0).toLocaleString("en-IN")}</span>
                   </div>
                 </div>
               ))}
@@ -519,15 +486,15 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
                 </div>
                 <div className="flex items-center gap-2">
                   {routePendingOrders && routePendingOrders > 0 && (
-                    <span className="h-6 min-w-[24px] px-1.5 rounded-md bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center">
+                    <span className="h-6 min-w-[24px] px-1.5 rounded-md bg-amber-500 text-white text-xs font-bold flex items-center justify-center">
                       {routePendingOrders}
                     </span>
                   )}
-                  <Badge className="bg-blue-600 text-white text-[10px] font-semibold px-2.5 border-0">Active</Badge>
+                  <Badge className="bg-blue-600 text-white text-xs font-semibold px-2.5 border-0">Active</Badge>
                   <Button
                     size="sm"
                     variant="outline"
-                    className="h-7 text-[10px] font-semibold text-red-500 border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 px-2"
+                    className="h-7 text-xs font-semibold text-red-500 border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 px-2"
                     onClick={() => setShowEndRouteConfirm(true)}
                   >
                     <Square className="h-3 w-3 mr-1" />
@@ -579,7 +546,7 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
                   <button className="text-left" onClick={() => onOpenStore(nextStore)}>
                     <p className="font-semibold text-slate-800 dark:text-white leading-tight truncate">{nextStore.name}</p>
                   </button>
-                  <Badge variant="outline" className="text-[10px] shrink-0 border-orange-200 text-orange-600 dark:border-orange-700 bg-orange-50 dark:bg-orange-900/20">Up Next</Badge>
+                  <Badge variant="outline" className="text-xs shrink-0 border-orange-200 text-orange-600 dark:border-orange-700 bg-orange-50 dark:bg-orange-900/20">Up Next</Badge>
                 </div>
                 {nextStore.address && <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1">{nextStore.address}</p>}
               </div>
@@ -594,8 +561,8 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
                 <Phone className="h-4 w-4" />
                 Call
               </Button>
-              <Button size="sm" variant="outline" className="h-10 rounded-xl gap-1.5 text-xs font-semibold" onClick={() => setVisitReasonDialog(true)} disabled={visitLoading}>
-                {visitLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+              <Button size="sm" variant="outline" className="h-10 rounded-xl gap-1.5 text-xs font-semibold" onClick={() => setVisitReasonDialog(true)} disabled={isVisiting}>
+                {isVisiting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                 Visit
               </Button>
             </div>
@@ -666,7 +633,7 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
                   {order.requirement_note && <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{order.requirement_note}</p>}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  <Badge variant="secondary" className="text-[10px] bg-amber-50 dark:bg-amber-900/30 text-amber-600 border-amber-200">{order.display_id}</Badge>
+                  <Badge variant="secondary" className="text-xs bg-amber-50 dark:bg-amber-900/30 text-amber-600 border-amber-200">{order.display_id}</Badge>
                   <ArrowRight className="h-3.5 w-3.5 text-slate-500/30 dark:text-slate-400/30" />
                 </div>
               </div>
@@ -683,7 +650,7 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
           setVisitReasonDialog(false);
           await handleMarkVisited(reason);
         }}
-        loading={visitLoading}
+        loading={isVisiting}
       />
 
       <AlertDialog open={showEndRouteConfirm} onOpenChange={setShowEndRouteConfirm}>

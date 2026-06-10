@@ -80,7 +80,7 @@ export function ImageUpload({ folder, currentUrl, onUploaded, onRemoved, classNa
           disabled={uploading}
         >
           {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Camera className="h-5 w-5 text-muted-foreground" />}
-          <span className="text-[10px] text-muted-foreground">Photo</span>
+          <span className="text-2xs text-muted-foreground">Photo</span>
         </Button>
       )}
     </div>

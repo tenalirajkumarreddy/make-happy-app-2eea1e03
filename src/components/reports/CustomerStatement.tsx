@@ -472,7 +472,7 @@ export function CustomerStatement({ customerId: propCustomerId, customerName: pr
                             <div className="flex items-center gap-1.5">
                               <span className={entry.is_fully_returned ? "line-through text-muted-foreground" : ""}>{entry.description}</span>
                               {entry.is_fully_returned && (
-                                <Badge variant="outline" className="text-[9px] border-amber-300 text-amber-600 bg-amber-50 rounded px-1.5 py-0">Returned</Badge>
+                                <Badge variant="outline" className="text-4xs border-amber-300 text-amber-600 bg-amber-50 rounded px-1.5 py-0">Returned</Badge>
                               )}
                               {entry.payment_method && (
                                 <span className="text-xs text-muted-foreground ml-1.5 capitalize">({entry.payment_method.replace("_", " ")})</span>

@@ -101,7 +101,7 @@
 .mobile-page-wrapper th,
 .mobile-page-wrapper td {
   display: table-cell;
-  padding: 0.625rem 0.75rem;
+  padding: 0.5rem 0.75rem;
   white-space: nowrap;
 }
 
@@ -181,8 +181,8 @@
 .mobile-page-wrapper [role="tab"] {
   white-space: nowrap;
   font-size: 0.8125rem;
-  padding: 0.5rem 0.875rem;
-  border-radius: 0.625rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
   min-height: 2.25rem;
 }
 
@@ -302,5 +302,5 @@
 /* ───────────────── Empty States ───────────────── */
 .mobile-page-wrapper [class*="empty-state"],
 .mobile-page-wrapper .flex.flex-col.items-center.justify-center {
-  padding: 2rem 1rem;
+  padding: var(--space-8) var(--space-4);
 }

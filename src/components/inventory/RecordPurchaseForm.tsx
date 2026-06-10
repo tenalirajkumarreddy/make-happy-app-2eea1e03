@@ -37,7 +37,7 @@ interface RecordPurchaseFormProps {
 }
 
 export const RecordPurchaseForm = ({ open, onOpenChange }: RecordPurchaseFormProps) => {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const { currentWarehouse } = useWarehouse();
   const queryClient = useQueryClient();
 
@@ -168,6 +168,8 @@ export const RecordPurchaseForm = ({ open, onOpenChange }: RecordPurchaseFormPro
         billUrl = await uploadBill(billFile);
       }
 
+      const purchaseStatus = (role === 'super_admin' || role === 'manager') ? 'completed' : 'pending';
+
       const { data, error } = await supabase.rpc('record_purchase', {
         p_vendor_id: vendorId,
         p_warehouse_id: currentWarehouse?.id || null,
@@ -182,6 +184,7 @@ export const RecordPurchaseForm = ({ open, onOpenChange }: RecordPurchaseFormPro
         p_notes: notes.trim() || null,
         p_bill_url: billUrl,
         p_user_id: user?.id || null,
+        p_status: purchaseStatus,
       });
 
       if (error) throw error;
@@ -417,7 +420,7 @@ export const RecordPurchaseForm = ({ open, onOpenChange }: RecordPurchaseFormPro
               type="submit"
               disabled={uploading || !vendorId || itemsTotal === 0}
             >
-              {uploading ? 'Recording...' : 'Record Purchase'}
+              {uploading ? 'Recording...' : (role === 'operator' ? 'Submit for Approval' : 'Record Purchase')}
             </Button>
           </DialogFooter>
         </form>

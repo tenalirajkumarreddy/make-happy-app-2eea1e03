@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef } from "react";
+import { createContext, useContext, useEffect, useState, ReactNode, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
 import { logError } from "@/lib/logger";
@@ -67,12 +67,8 @@ interface AuthContextType {
   profile: { full_name: string; email: string; avatar_url: string | null } | null;
   customer: { id: string; user_id: string | null; name: string; phone: string | null; email: string | null } | null;
   needsOnboarding: boolean;
-  warehouses: string[]; // Warehouse IDs accessible to user
-  warehouse: { id: string; name: string } | null; // Current selected warehouse
   loading: boolean;
   signOut: () => Promise<void>;
-  refreshWarehouses: () => Promise<void>;
-  setWarehouse: (warehouse: { id: string; name: string } | null) => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -82,12 +78,8 @@ const AuthContext = createContext<AuthContextType>({
   profile: null,
   customer: null,
   needsOnboarding: false,
-  warehouses: [],
-  warehouse: null,
   loading: true,
   signOut: async () => {},
-  refreshWarehouses: async () => {},
-  setWarehouse: () => {},
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -97,47 +89,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<AuthContextType["profile"]>(null);
   const [customer, setCustomer] = useState<AuthContextType["customer"]>(null);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
-  const [warehouses, setWarehouses] = useState<string[]>([]);
-  const [warehouse, setWarehouseState] = useState<AuthContextType["warehouse"]>(null);
   const [loading, setLoading] = useState(true);
   const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const refreshWarehouses = async (targetUserId?: string) => {
-    const effectiveUserId = targetUserId ?? user?.id;
-    if (!effectiveUserId) {
-      setWarehouses([]);
-      setWarehouseState(null);
-      return;
-    }
-
-    try {
-      const { data, error } = await supabase
-        .from("user_roles")
-        .select("warehouse_id")
-        .eq("user_id", effectiveUserId)
-        .not("warehouse_id", "is", null);
-      if (error) throw error;
-      
-      const warehouseIds = (data || []).map((r: any) => r.warehouse_id).filter(Boolean);
-      setWarehouses(warehouseIds);
-      
-      // Auto-select first warehouse if none selected
-      if (warehouseIds.length > 0 && !warehouse) {
-        const { data: warehouseData } = await supabase
-          .from("warehouses")
-          .select("id, name")
-          .eq("id", warehouseIds[0])
-          .maybeSingle();
-        if (warehouseData) {
-          setWarehouseState({ id: warehouseData.id, name: warehouseData.name });
-        }
-      }
-    } catch (error) {
-      logError("Error fetching user warehouses", error);
-      setWarehouses([]);
-      setWarehouseState(null);
-    }
-  };
 
   const fetchUserData = async (userId: string) => {
     try {
@@ -202,7 +155,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setCustomer(resolvedCustomer);
       setRole(resolvedRole);
       setNeedsOnboarding(resolvedNeedsOnboarding);
-      await refreshWarehouses(userId);
 
       try {
         await cacheAuthState({
@@ -215,8 +167,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           profile: resolvedProfile,
           customer: resolvedCustomer,
           needsOnboarding: resolvedNeedsOnboarding,
-          warehouses: [],
-          warehouse: null,
           cachedAt: new Date().toISOString(),
         });
       } catch (e) {
@@ -256,8 +206,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setProfile(cached.profile as any);
           setCustomer(cached.customer as any);
           setNeedsOnboarding(cached.needsOnboarding);
-          setWarehouses(cached.warehouses);
-          if (cached.warehouse) setWarehouseState(cached.warehouse);
         }
       } catch (e) {
         logError("Failed to read auth cache", e);
@@ -299,7 +247,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setProfile(null);
           setCustomer(null);
           setNeedsOnboarding(false);
-          setWarehouses([]);
           if (mounted) setLoading(false);
         }
       }
@@ -326,8 +273,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 setProfile(cached.profile as any);
                 setCustomer(cached.customer as any);
                 setNeedsOnboarding(cached.needsOnboarding);
-                setWarehouses(cached.warehouses);
-                if (cached.warehouse) setWarehouseState(cached.warehouse);
               }
             }
           }
@@ -363,16 +308,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile(null);
     setCustomer(null);
     setNeedsOnboarding(false);
-    setWarehouses([]);
-    setWarehouseState(null);
   };
 
-  const setWarehouse = useCallback((w: { id: string; name: string } | null) => {
-    setWarehouseState(w);
-  }, []);
-
   return (
-    <AuthContext.Provider value={{ user, session, role, profile, customer, needsOnboarding, warehouses, warehouse, loading, signOut, refreshWarehouses, setWarehouse }}>
+    <AuthContext.Provider value={{ user, session, role, profile, customer, needsOnboarding, loading, signOut }}>
       {children}
     </AuthContext.Provider>
   );

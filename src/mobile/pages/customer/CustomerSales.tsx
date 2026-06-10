@@ -36,12 +36,13 @@ interface SaleRow {
 }
 
 export function CustomerSales({ selectedStoreId }: Props) {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
 
   const { data: customer } = useQuery({
     queryKey: ["mobile-customer-sales-self", user?.id],
     queryFn: async () => (await resolveCustomer(user!.id, "id")) as CustomerRow | null,
     enabled: !!user,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: sales, isLoading } = useQuery({
@@ -56,6 +57,7 @@ export function CustomerSales({ selectedStoreId }: Props) {
       return (data as unknown as SaleRow[]) || [];
     },
     enabled: !!customer,
+    staleTime: 5 * 60 * 1000,
   });
 
   const filteredSales = useMemo(() => {
@@ -64,7 +66,16 @@ export function CustomerSales({ selectedStoreId }: Props) {
   }, [sales, selectedStoreId]);
 
   return (
-    <div className="px-4 pt-4 pb-6 space-y-3">
+    <div className="pb-6">
+      <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 dark:from-slate-900 dark:via-blue-950 dark:to-indigo-950 px-4 pt-4 pb-8">
+        <p className="text-blue-200 text-sm font-medium">My Purchases</p>
+        <h2 className="text-white text-2xl font-bold mt-0.5">{(profile?.full_name ?? customer?.name ?? "Customer").split(" ")[0]} 👋</h2>
+        <p className="text-blue-200/80 text-xs mt-1">
+          {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}
+        </p>
+      </div>
+
+      <div className="px-4 -mt-5 space-y-3">
       {isLoading ? (
         <div className="flex justify-center py-10">
           <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
@@ -81,7 +92,7 @@ export function CustomerSales({ selectedStoreId }: Props) {
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <p className={`text-sm font-bold font-mono ${sale.is_fully_returned ? "line-through text-slate-400 dark:text-slate-500" : "text-slate-900 dark:text-white"}`}>{sale.display_id}</p>
                   {sale.is_fully_returned && (
-                    <span className="text-[9px] font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800 rounded px-1.5 py-0">
+                    <span className="text-xs font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800 rounded px-1.5 py-0">
                       Returned
                     </span>
                   )}
@@ -100,7 +111,7 @@ export function CustomerSales({ selectedStoreId }: Props) {
               ))}
             </div>
 
-            <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-700 text-[11px] text-slate-500 space-y-1">
+            <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-700 text-xs text-slate-500 space-y-1">
               <div className="flex items-center justify-between"><span>Paid</span><span className={sale.is_fully_returned ? "line-through" : ""}>₹{(Number(sale.cash_amount || 0) + Number(sale.upi_amount || 0)).toLocaleString("en-IN")}</span></div>
               <div className="flex items-center justify-between"><span>Outstanding</span><span className={`font-semibold ${sale.is_fully_returned ? "line-through text-slate-400" : "text-amber-600"}`}>₹{Number(sale.outstanding_amount || 0).toLocaleString("en-IN")}</span></div>
               <div className="flex items-center justify-between"><span>Date</span><span>{new Date(sale.created_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</span></div>
@@ -108,6 +119,7 @@ export function CustomerSales({ selectedStoreId }: Props) {
           </div>
         ))
       )}
+      </div>
     </div>
   );
 }

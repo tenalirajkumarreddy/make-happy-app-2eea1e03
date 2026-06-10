@@ -127,7 +127,7 @@ export function TopBar() {
           <div className="hidden md:flex items-center gap-2 rounded-lg border border-border bg-background/80 px-3 py-2">
             <Building2 className="h-4 w-4 text-muted-foreground" />
             <div className="min-w-0">
-              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Warehouse</p>
+              <p className="text-3xs uppercase tracking-wide text-muted-foreground">Warehouse</p>
               <Select value={currentWarehouse?.id || ""} onValueChange={setActiveWarehouse}>
                 <SelectTrigger className="h-auto w-48 border-0 bg-transparent p-0 text-sm font-medium shadow-none focus:ring-0">
                   <SelectValue placeholder="Select warehouse" />
@@ -144,8 +144,8 @@ export function TopBar() {
           </div>
         )}
         {!canSwitchWarehouse && currentWarehouse && (
-          <Badge variant="secondary" className="hidden md:inline-flex items-center gap-1.5 rounded-lg px-3 py-2 font-medium">
-            <Building2 className="h-3.5 w-3.5" />
+          <Badge variant="secondary" className="hidden md:inline-flex items-center gap-2 rounded-lg px-3 py-2 font-medium">
+            <Building2 className="h-4 w-4" />
             {currentWarehouse.name}
           </Badge>
         )}
@@ -169,18 +169,18 @@ export function TopBar() {
             <button className="relative flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors">
               <Bell className="h-5 w-5" />
               {unreadCount > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground px-1 animate-pulse">
+                <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-2xs font-bold text-destructive-foreground animate-pulse">
                   {unreadCount > 99 ? "99+" : unreadCount}
                 </span>
               )}
             </button>
           </PopoverTrigger>
-          <PopoverContent align="end" className="w-96 p-0">
+          <PopoverContent align="end" className="sm:w-96 w-[calc(100vw-2rem)] p-0">
             <div className="flex items-center justify-between border-b px-4 py-3">
               <div className="flex items-center gap-2">
                 <p className="text-sm font-semibold">Notifications</p>
                 {unreadCount > 0 && (
-                  <Badge variant="secondary" className="text-[10px] h-5">{unreadCount} new</Badge>
+                  <Badge variant="secondary" className="h-5 text-2xs">{unreadCount} new</Badge>
                 )}
               </div>
               {unreadCount > 0 && (
@@ -218,8 +218,8 @@ export function TopBar() {
                             <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />
                           )}
                         </div>
-                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.message}</p>
-                        <p className="text-[11px] text-muted-foreground/70 mt-1">{timeAgo(n.created_at)}</p>
+                        <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{n.message}</p>
+                        <p className="mt-1 text-3xs text-muted-foreground/70">{timeAgo(n.created_at)}</p>
                       </div>
                     </button>
                   ))}
@@ -237,7 +237,7 @@ export function TopBar() {
               </div>
               <div className="hidden sm:block text-left">
                 <p className="text-sm font-medium leading-none">{profile?.full_name || "User"}</p>
-                <p className="text-[11px] text-muted-foreground">{roleName}</p>
+                <p className="text-3xs text-muted-foreground">{roleName}</p>
               </div>
               <ChevronDown className="h-4 w-4 text-muted-foreground hidden sm:block" />
             </button>

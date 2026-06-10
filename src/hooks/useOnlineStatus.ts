@@ -1,8 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   getQueuedActions,
   removeFromQueue,
-  markActionFailed,
   getQueueCount,
   getQueuedFileUploads,
   removeFileUpload,
@@ -24,6 +23,7 @@ export function useOnlineStatus() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [pendingCount, setPendingCount] = useState(0);
   const [syncing, setSyncing] = useState(false);
+  const syncStartRef = useRef(0);
   const [conflictCount, setConflictCount] = useState(0);
 
   useEffect(() => {
@@ -136,12 +136,18 @@ export function useOnlineStatus() {
   }, []);
 
   const syncQueue = useCallback(async () => {
+    // Auto-release stale sync guard after 2 minutes (prevents permanent lock)
+    if (syncing && Date.now() - syncStartRef.current > 120000) {
+      setSyncing(false);
+    }
     if (syncing || !navigator.onLine) return;
     setSyncing(true);
+    syncStartRef.current = Date.now();
 
     let totalSynced = 0;
     let totalFailed = 0;
     let totalConflicts = 0;
+
     const db: any = supabase;
 
     // Sync file uploads first
@@ -180,6 +186,9 @@ export function useOnlineStatus() {
           // For store creation, check current user
           const { data: { user } } = await supabase.auth.getUser();
           userIdToCheck = user?.id ?? null;
+        } else if (action.type === "order") {
+          const { data: { user } } = await supabase.auth.getUser();
+          userIdToCheck = user?.id ?? null;
         } else if (action.type === "transaction_edit" || action.type === "payment_return") {
           const { recordedBy } = action.payload as any;
           userIdToCheck = recordedBy;
@@ -206,6 +215,7 @@ export function useOnlineStatus() {
             p_cash_amount: saleData.cash_amount,
             p_upi_amount: saleData.upi_amount,
             p_outstanding_amount: saleData.outstanding_amount,
+            p_expected_outstanding: saleData.old_outstanding ?? null,
             p_sale_items: saleItems,
             p_created_at: saleData.created_at ?? null,
           }) as any;
@@ -294,6 +304,32 @@ export function useOnlineStatus() {
             warehouse_id: customerData.warehouse_id ?? null,
           } as any));
           if (error) throw error;
+        } else if (action.type === "order") {
+          const { store_id, customer_id, order_type, requirement_note, order_items, assigned_to } = action.payload as any;
+          const { data: order, error: orderError } = await supabase.rpc("create_order", {
+            p_store_id: store_id,
+            p_customer_id: customer_id || null,
+            p_assigned_to: assigned_to || null,
+            p_warehouse_id: null,
+            p_order_type: order_type || "simple",
+            p_requirement_note: requirement_note || null,
+            p_total_amount: 0,
+            p_created_by: userIdToCheck,
+          }) as any;
+          if (orderError) throw orderError;
+          if (order_type === "detailed" && order_items?.length > 0) {
+            const orderId = order?.[0]?.order_id;
+            if (orderId) {
+              const { error: itemsError } = await supabase.from("order_items").insert(
+                order_items.map((item: any) => ({
+                  order_id: orderId,
+                  product_id: item.product_id,
+                  quantity: item.quantity,
+                }))
+              );
+              if (itemsError) throw itemsError;
+            }
+          }
         } else if (action.type === "store") {
           const { storeData } = action.payload as {
             storeData: {
@@ -324,7 +360,11 @@ export function useOnlineStatus() {
            });
           if (error) throw error;
         }
-      await removeFromQueue(action.id);
+      try {
+        await removeFromQueue(action.id);
+      } catch (removeErr) {
+        logError("Failed to remove synced action from queue", removeErr, { context: "useOnlineStatus.syncQueue.removeFromQueue", actionId: action.id, actionType: action.type });
+      }
       totalSynced++;
       } catch (err: any) {
         logError("Sync queue error", err, { context: "useOnlineStatus.syncQueue", actionType: action.type, actionId: action.id });
@@ -337,9 +377,8 @@ export function useOnlineStatus() {
           errorMessage.includes("unauthorized");
 
         if (isPermissionError) {
-          // Permission errors should be treated as non-retryable failures
-          // Remove from queue and log the failure
-           await markActionFailed(action.id, errorMessage);
+          // Permission errors are non-retryable — user's permissions won't change mid-sync
+          await removeFromQueue(action.id);
           logError("Permission denied for action " + action.id, new Error(errorMessage), {
             context: "useOnlineStatus.syncQueue.permissionDenied",
             actionType: action.type,

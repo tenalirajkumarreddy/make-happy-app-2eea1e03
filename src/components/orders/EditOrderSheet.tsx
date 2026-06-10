@@ -110,10 +110,12 @@ export function EditOrderSheet({ order, open, onOpenChange, onSaved }: EditOrder
       if (updateError) throw updateError;
 
       if (order.order_type === "detailed") {
+        // Soft-delete existing items (preserves history)
         const { error: deleteError } = await supabase
           .from("order_items")
-          .delete()
-          .eq("order_id", order.id);
+          .update({ deleted_at: new Date().toISOString() })
+          .eq("order_id", order.id)
+          .is("deleted_at", null);
         if (deleteError) throw deleteError;
 
         const validItems = orderItems.filter((item) => item.product_id);
@@ -125,6 +127,7 @@ export function EditOrderSheet({ order, open, onOpenChange, onSaved }: EditOrder
                 order_id: order.id,
                 product_id: item.product_id,
                 quantity: item.quantity,
+                unit_price: item.unit_price || 0,
               }))
             );
           if (insertError) throw insertError;

@@ -161,15 +161,15 @@ const handleDelete = async () => {
           <h3 className="text-sm font-semibold text-foreground truncate">{row.name}</h3>
           <StatusBadge status={row.is_active ? "active" : "inactive"} />
         </div>
-        <Badge variant="secondary" className="text-[10px] shrink-0">{row.order_type}</Badge>
+        <Badge variant="secondary" className="text-2xs shrink-0">{row.order_type}</Badge>
       </div>
       <div className="grid grid-cols-2 gap-2 mt-2">
         <div className="rounded-lg bg-muted/50 p-2 text-center">
-          <p className="text-[10px] text-muted-foreground uppercase">Credit (KYC)</p>
+          <p className="text-2xs text-muted-foreground uppercase">Credit (KYC)</p>
           <p className="text-sm font-medium">₹{Number(row.credit_limit_kyc || 0).toLocaleString()}</p>
         </div>
         <div className="rounded-lg bg-muted/50 p-2 text-center">
-          <p className="text-[10px] text-muted-foreground uppercase">Credit (No KYC)</p>
+          <p className="text-2xs text-muted-foreground uppercase">Credit (No KYC)</p>
           <p className="text-sm font-medium">₹{Number(row.credit_limit_no_kyc || 0).toLocaleString()}</p>
         </div>
       </div>

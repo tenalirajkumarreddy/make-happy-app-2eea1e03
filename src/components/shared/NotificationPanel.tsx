@@ -96,7 +96,7 @@ export function NotificationPanel() {
                     <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
                       {n.message}
                     </p>
-                    <p className="text-[10px] text-muted-foreground/60 mt-1">
+                    <p className="text-2xs text-muted-foreground/60 mt-1">
                       {timeAgo(n.created_at)}
                     </p>
                   </div>

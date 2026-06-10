@@ -106,7 +106,7 @@ export function DataTable<T extends Record<string, any>>({
           <TableHeader>
             <TableRow className="bg-muted/30 hover:bg-muted/30 border-b border-border/50">
               {columns.map((col, i) => (
-                <TableHead key={i} className={cn("text-[10px] uppercase tracking-wider font-bold text-muted-foreground py-3 h-auto", col.className)}>
+                <TableHead key={i} className={cn("text-2xs uppercase tracking-wider font-bold text-muted-foreground py-3 h-auto", col.className)}>
                   {typeof col.header === "function" ? col.header() : col.header}
                 </TableHead>
               ))}
@@ -185,7 +185,7 @@ export function DataTable<T extends Record<string, any>>({
                     }
                     return (
                       <div key={j} className="min-w-0">
-                        <p className="text-[11px] text-muted-foreground truncate">{label}</p>
+                        <p className="text-3xs text-muted-foreground truncate">{label}</p>
                         <div className="text-sm font-medium truncate">{value}</div>
                       </div>
                     );

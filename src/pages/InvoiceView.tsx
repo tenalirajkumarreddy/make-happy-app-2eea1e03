@@ -490,7 +490,7 @@ const InvoiceView = () => {
       <style>{`
         @media print {
           @page { margin: 12mm; }
-          body { background: white !important; color: black !important; }
+          body { background: hsl(var(--card)) !important; color: hsl(var(--card-foreground)) !important; }
 
           /* Hide all non-print elements */
           .print\\:hidden,
@@ -518,12 +518,12 @@ const InvoiceView = () => {
           }
 
           th, td {
-            border: 1px solid #000 !important;
+            border: 1px solid hsl(var(--border)) !important;
             padding: 6px 8px;
           }
 
           th {
-            background: #f5f5f5 !important;
+            background: hsl(var(--muted)) !important;
           }
         }
       `}</style>

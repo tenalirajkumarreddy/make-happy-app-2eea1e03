@@ -6,7 +6,10 @@
 
 import { type AppRole } from "@/types/roles";
 import { supabase } from "@/integrations/supabase/client";
-import { PermissionKey } from "@/lib/permissions";
+import {
+  PermissionKey,
+  hasRoleDefaultPermission as hasCanonicalDefault,
+} from "@/lib/permissions";
 
 /**
  * Check if a user has a specific permission
@@ -17,7 +20,6 @@ export async function checkUserPermission(
   permission: PermissionKey
 ): Promise<boolean> {
   try {
-    // First get user's role
     const { data: roleData, error: roleError } = await supabase
       .from("user_roles")
       .select("role")
@@ -31,12 +33,10 @@ export async function checkUserPermission(
 
     const role = roleData?.role as AppRole | undefined;
 
-    // Super admin always has all permissions
     if (role === "super_admin") {
       return true;
     }
 
-    // Check for DB override in user_permissions
     const { data: permData, error: permError } = await supabase
       .from("user_permissions")
       .select("enabled")
@@ -49,64 +49,15 @@ export async function checkUserPermission(
       return false;
     }
 
-    // If there's a DB override, use it
     if (permData) {
       return permData.enabled;
     }
 
-    // Fall back to role defaults
-    return hasRoleDefaultPermission(role, permission);
+    return hasCanonicalDefault(role ?? "customer", permission);
   } catch (error) {
     console.error("Error checking permission:", error);
     return false;
   }
-}
-
-/**
- * Check if a user has permission to record sales
- */
-export async function canRecordSale(userId: string): Promise<boolean> {
-  const salePermissions: PermissionKey[] = [
-    "record_sale",
-    "view_sales",
-    "view_stores" as any,
-  ];
-
-  // Check any of the sale-related permissions
-  for (const perm of salePermissions) {
-    if (await checkUserPermission(userId, perm)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-/**
- * Check if a user has permission to record transactions (payments)
- */
-export async function canRecordTransaction(userId: string): Promise<boolean> {
-  return checkUserPermission(userId, "record_transaction" as any);
-}
-
-/**
- * Check if a user has permission to record store visits
- */
-export async function canRecordVisit(userId: string): Promise<boolean> {
-  return checkUserPermission(userId, "record_visit" as any);
-}
-
-/**
- * Check if a user has permission to create customers
- */
-export async function canCreateCustomer(userId: string): Promise<boolean> {
-  return checkUserPermission(userId, "create_customer" as any);
-}
-
-/**
- * Check if a user has permission to create stores
- */
-export async function canCreateStore(userId: string): Promise<boolean> {
-  return checkUserPermission(userId, "create_store" as any);
 }
 
 /**
@@ -136,7 +87,6 @@ export async function getUserRole(userId: string): Promise<AppRole | null> {
  */
 export async function isUserActive(userId: string): Promise<boolean> {
   try {
-    // Check user_roles table - if no record exists, user may be banned
     const { data, error } = await supabase
       .from("user_roles")
       .select("role")
@@ -157,49 +107,29 @@ export async function isUserActive(userId: string): Promise<boolean> {
 
 /**
  * Validate if an action can be performed by the user
- * Combines permission check with user status check
+ * Uses canonical PermissionKey values from ROLE_DEFAULTS
  */
 export async function validateActionPermission(
   userId: string,
   actionType: "sale" | "transaction" | "visit" | "customer" | "store" | "file_upload" | "transaction_edit" | "payment_return"
 ): Promise<{ allowed: boolean; reason?: string }> {
-  // First check if user is active
   const active = await isUserActive(userId);
   if (!active) {
     return { allowed: false, reason: "User account is inactive or banned" };
   }
 
-  // Check specific permission based on action type
-  let hasPermission = false;
-  switch (actionType) {
-    case "sale":
-      hasPermission = await canRecordSale(userId);
-      break;
-    case "transaction":
-      hasPermission = await canRecordTransaction(userId);
-      break;
-    case "visit":
-      hasPermission = await canRecordVisit(userId);
-      break;
-    case "customer":
-      hasPermission = await canCreateCustomer(userId);
-      break;
-    case "store":
-      hasPermission = await canCreateStore(userId);
-      break;
-    case "file_upload":
-      // File uploads are generally allowed if user can perform other actions
-      hasPermission = true;
-      break;
-    case "transaction_edit":
-      hasPermission = await canRecordTransaction(userId);
-      break;
-    case "payment_return":
-      hasPermission = await canRecordTransaction(userId);
-      break;
-    default:
-      hasPermission = false;
-  }
+  const permissionMap: Record<string, PermissionKey> = {
+    sale: "record_sale",
+    transaction: "record_sale",
+    visit: "record_sale",
+    customer: "create_customers",
+    store: "create_stores",
+    transaction_edit: "modify_transactions",
+    payment_return: "modify_transactions",
+  };
+
+  const perm = permissionMap[actionType];
+  const hasPermission = perm ? await checkUserPermission(userId, perm) : actionType === "file_upload";
 
   if (!hasPermission) {
     const role = await getUserRole(userId);
@@ -210,50 +140,4 @@ export async function validateActionPermission(
   }
 
   return { allowed: true };
-}
-
-// Role default permissions — now delegated to the canonical source
-// KEPT HERE for backward compat with callers that pass non-canonical permission keys
-const ROLE_DEFAULT_PERMISSIONS: Record<AppRole, PermissionKey[]> = {
-  super_admin: [
-    "view_dashboard", "view_sales", "view_stores" as any, "view_inventory",
-    "view_collections", "view_reports", "manage_users", "manage_roles",
-    "record_sale", "record_transaction", "record_visit",
-    "create_customer" as any, "create_store" as any, "edit_store", "delete_store",
-    "view_all_warehouses", "switch_warehouse",
-    "view_routes", "assign_routes", "manage_inventory" as any,
-    "approve_expenses", "view_expenses",
-    "export_data", "import_data", "view_settings", "manage_settings",
-  ],
-  manager: [
-    "view_dashboard", "view_sales", "view_stores" as any, "view_inventory",
-    "view_collections", "view_reports",
-    "record_sale", "record_transaction", "record_visit",
-    "create_customer" as any, "create_store" as any, "edit_store",
-    "view_routes", "assign_routes",
-    "view_expenses", "approve_expenses",
-    "export_data",
-  ],
-  agent: [
-    "view_dashboard", "view_sales", "view_stores" as any,
-    "record_sale", "record_transaction", "record_visit",
-    "create_customer" as any, "view_routes", "view_collections",
-  ],
-  marketer: [
-    "view_dashboard", "view_stores" as any, "create_customer" as any, "record_visit", "view_routes",
-  ],
-  operator: [
-    "view_dashboard", "view_sales", "record_sale", "record_transaction", "view_stores" as any,
-  ],
-  customer: [
-    "view_dashboard" as any, "view_orders", "place_order" as any, "view_store" as any,
-  ],
-};
-
-function hasRoleDefaultPermission(
-  role: AppRole | undefined,
-  permission: PermissionKey
-): boolean {
-  if (!role) return false;
-  return ROLE_DEFAULT_PERMISSIONS[role]?.includes(permission) ?? false;
 }

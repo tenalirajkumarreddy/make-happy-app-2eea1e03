@@ -45,7 +45,7 @@ interface SupabaseRpcClient {
 }
 
 export function CustomerOrders({ selectedStoreId, onStoreChange }: Props) {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const qc = useQueryClient();
   const [openCreate, setOpenCreate] = useState(false);
   const [createSaving, setCreateSaving] = useState(false);
@@ -64,6 +64,7 @@ export function CustomerOrders({ selectedStoreId, onStoreChange }: Props) {
       return res as unknown as CustomerRow | null;
     },
     enabled: !!user,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: stores } = useQuery({
@@ -78,6 +79,7 @@ export function CustomerOrders({ selectedStoreId, onStoreChange }: Props) {
       return (data as any[]) || [];
     },
     enabled: !!customer,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: createProducts } = useQuery({
@@ -90,6 +92,7 @@ export function CustomerOrders({ selectedStoreId, onStoreChange }: Props) {
         .order("name");
       return (data || []) as any[];
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: orders, isLoading } = useQuery({
@@ -105,6 +108,7 @@ export function CustomerOrders({ selectedStoreId, onStoreChange }: Props) {
     },
     enabled: !!customer,
     refetchInterval: 60_000,
+    staleTime: 60_000,
   });
 
   useEffect(() => {
@@ -239,7 +243,15 @@ export function CustomerOrders({ selectedStoreId, onStoreChange }: Props) {
 
   return (
     <div className="pb-6">
-      <div className="px-4 pt-4 flex justify-end">
+      <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 dark:from-slate-900 dark:via-blue-950 dark:to-indigo-950 px-4 pt-4 pb-8">
+        <p className="text-blue-200 text-sm font-medium">My Orders</p>
+        <h2 className="text-white text-2xl font-bold mt-0.5">{(profile?.full_name ?? customer?.name ?? "Customer").split(" ")[0]} 👋</h2>
+        <p className="text-blue-200/80 text-xs mt-1">
+          {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}
+        </p>
+      </div>
+
+      <div className="px-4 -mt-5 flex justify-end">
         <Button size="sm" className="rounded-xl" onClick={() => setOpenCreate(true)}>
           <Plus className="h-4 w-4 mr-1" />
           Place Order
@@ -261,10 +273,10 @@ export function CustomerOrders({ selectedStoreId, onStoreChange }: Props) {
                 <div className="min-w-0">
                   <p className="text-sm font-bold text-slate-800 dark:text-white">{order.display_id}</p>
                   <p className="text-xs text-slate-500 mt-0.5">{order.stores?.name || "Store"}</p>
-                  <p className="text-[11px] text-slate-400 mt-1">{new Date(order.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}</p>
+                  <p className="text-xs text-slate-400 mt-1">{new Date(order.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}</p>
                 </div>
                 <span
-                  className={`px-2 py-1 rounded-lg text-[10px] font-semibold capitalize ${
+                  className={`px-2 py-1 rounded-lg text-xs font-semibold capitalize ${
                     order.status === "pending"
                       ? "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400"
                       : order.status === "delivered"
@@ -315,7 +327,7 @@ export function CustomerOrders({ selectedStoreId, onStoreChange }: Props) {
                           className={`w-full text-left px-3 py-2.5 text-sm transition-colors hover:bg-accent ${createStoreId === s.id ? "bg-primary/10 font-semibold text-primary" : "text-foreground"}`}
                         >
                           <span className="font-medium">{s.name}</span>
-                          <span className="ml-2 font-mono text-[10px] text-muted-foreground">{s.display_id}</span>
+                          <span className="ml-2 font-mono text-xs text-muted-foreground">{s.display_id}</span>
                         </button>
                       ))}
                   </div>

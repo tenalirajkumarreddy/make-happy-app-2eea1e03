@@ -53,9 +53,9 @@ export function ExpenseClaimCard({
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-base font-bold tabular-nums">₹{(displayAmount || 0).toLocaleString()}</span>
           {wasAmountChanged && (
-            <span className="text-[10px] text-muted-foreground line-through">₹{Number(item.amount || 0).toLocaleString()}</span>
+            <span className="text-2xs text-muted-foreground line-through">₹{Number(item.amount || 0).toLocaleString()}</span>
           )}
-          <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded-full ${
+          <span className={`text-3xs font-semibold px-1.5 py-0.5 rounded-full ${
             item.status === "approved" ? "bg-success/10 text-success" :
             item.status === "rejected" ? "bg-destructive/10 text-destructive" :
             item.status === "cancelled" ? "bg-muted text-muted-foreground" :
@@ -66,21 +66,21 @@ export function ExpenseClaimCard({
           {item.description}
         </p>
         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-          <span className="text-[10px] font-medium px-1.5 py-px rounded" style={{ backgroundColor: `${getCategoryColor(item.category_id)}20`, color: getCategoryColor(item.category_id) }}>
+          <span className="text-2xs font-medium px-1.5 py-px rounded" style={{ backgroundColor: `${getCategoryColor(item.category_id)}20`, color: getCategoryColor(item.category_id) }}>
             {getCategoryName(item.category_id)}
             {wasCategoryChanged && " (changed)"}
           </span>
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-3xs text-muted-foreground">
             {format(new Date(item.expense_date), "dd MMM yyyy")}
           </span>
           {!isOwner && (
-            <span className="text-[10px] font-medium bg-primary/8 text-primary px-1.5 py-px rounded">
+            <span className="text-2xs font-medium bg-primary/8 text-primary px-1.5 py-px rounded">
               by <UserHoverCard userId={item.user_id} profileMap={profileMap}>{profileMap?.[item.user_id]?.name || "Unknown"}</UserHoverCard>
             </span>
           )}
         </div>
         {item.reviewer_notes && item.status !== "pending" && (
-          <p className="text-[11px] text-muted-foreground/70 italic mt-1 truncate">Note: "{item.reviewer_notes}"</p>
+          <p className="text-3xs text-muted-foreground/70 italic mt-1 truncate">Note: "{item.reviewer_notes}"</p>
         )}
       </div>
 

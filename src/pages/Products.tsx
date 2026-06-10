@@ -14,6 +14,7 @@ import { logActivity } from "@/lib/activityLogger";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2 } from "lucide-react";
 import { useState, useMemo } from "react";
+import { useDebounce } from "@/hooks/useDebounce";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -56,11 +57,12 @@ const Products = () => {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());       
   const [confirmBulkDeactivate, setConfirmBulkDeactivate] = useState(false);    
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const debouncedSearch = useDebounce(searchInput);
   const qc = useQueryClient();
 
    const { data: products, isLoading } = useQuery({
-     queryKey: ["products", currentWarehouse?.id],
+     queryKey: ["products", currentWarehouse?.id, debouncedSearch],
      queryFn: async () => {
        let query = supabase
          .from("products")
@@ -69,6 +71,11 @@ const Products = () => {
 
       if (currentWarehouse?.id) {
         query = query.eq("warehouse_id", currentWarehouse.id);
+      }
+
+      if (debouncedSearch.trim()) {
+        const term = `%${debouncedSearch.trim()}%`;
+        query = query.or(`name.ilike.${term},sku.ilike.${term},category.ilike.${term}`);
       }
 
       const { data, error } = await query;
@@ -89,26 +96,40 @@ const Products = () => {
     },
   });
 
-  // Filter products based on search term
-  const filteredProducts = useMemo(() => {
-    if (!products) return [];
-    if (!searchTerm.trim()) return products;
-    const term = searchTerm.toLowerCase();
-    return products.filter((p: any) =>
-      p.name?.toLowerCase().includes(term) ||
-      p.sku?.toLowerCase().includes(term) ||
-      p.category?.toLowerCase().includes(term)
-    );
-  }, [products, searchTerm]);
+  const productList = products || [];
 
    const handleAdd = async (e: React.FormEvent) => {
      e.preventDefault();
+     if (!name.trim()) {
+       toast.error("Product name is required");
+       return;
+     }
+     if (!sku.trim()) {
+       toast.error("SKU is required");
+       return;
+     }
+     const parsedPrice = parseFloat(price);
+     if (isNaN(parsedPrice) || parsedPrice < 0) {
+       toast.error("Please enter a valid price");
+       return;
+     }
+     // Check SKU uniqueness
+     const { data: existingSku } = await supabase
+       .from("products")
+       .select("id")
+       .eq("sku", sku.trim())
+       .maybeSingle();
+     if (existingSku) {
+       toast.error("A product with this SKU already exists");
+       setSaving(false);
+       return;
+     }
      setSaving(true);
      const { error } = await supabase.from("products").insert({
-       name,
-       sku,
+       name: name.trim(),
+       sku: sku.trim(),
        warehouse_id: currentWarehouse?.id || null,
-       base_price: parseFloat(price) || 0,
+       base_price: parsedPrice,
        unit,
        category: category || null,
        description: description || null,
@@ -145,11 +166,36 @@ const Products = () => {
    const handleEdit = async (e: React.FormEvent) => {
      e.preventDefault();
      if (!editProduct) return;
+     if (!name.trim()) {
+       toast.error("Product name is required");
+       return;
+     }
+     if (!sku.trim()) {
+       toast.error("SKU is required");
+       return;
+     }
+     const parsedPrice = parseFloat(price);
+     if (isNaN(parsedPrice) || parsedPrice < 0) {
+       toast.error("Please enter a valid price");
+       return;
+     }
+     // Check SKU uniqueness (exclude current product)
+     const { data: existingSku } = await supabase
+       .from("products")
+       .select("id")
+       .eq("sku", sku.trim())
+       .neq("id", editProduct.id)
+       .maybeSingle();
+     if (existingSku) {
+       toast.error("A product with this SKU already exists");
+       setSaving(false);
+       return;
+     }
      setSaving(true);
      const { error } = await supabase.from("products").update({
-       name,
-       sku,
-       base_price: parseFloat(price) || 0,
+       name: name.trim(),
+       sku: sku.trim(),
+       base_price: parsedPrice,
        unit,
        category: category || null,
        description: description || null,
@@ -299,13 +345,13 @@ const Products = () => {
           {/* Search bar for desktop */}
           <Input
             placeholder="Search products..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
             className="max-w-sm"
           />
 
           <div className="entity-grid">
-            {filteredProducts.map((row: any) => (
+            {productList.map((row: any) => (
               <div
                 key={row.id}
                 onClick={() => { if (selectMode) { toggleSelect(row.id); } else if (canEdit) { openEdit(row); } }}
@@ -384,7 +430,7 @@ const Products = () => {
               </div>
             ))}
           </div>
-          {filteredProducts.length === 0 && (
+          {productList.length === 0 && (
             <div className="text-center py-12 text-muted-foreground">
               No products found.
             </div>

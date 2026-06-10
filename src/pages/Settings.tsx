@@ -93,18 +93,19 @@ const SettingsPage = () => {
 
   const handleSaveSettings = async () => {
     setSavingSettings(true);
-    for (const [key, value] of Object.entries(settings)) {
-      // Try update first, then insert if not exists
-      const { data } = await supabase.from("company_settings").select("id").eq("key", key).maybeSingle();
-      if (data) {
-        await supabase.from("company_settings").update({ value, updated_at: new Date().toISOString() }).eq("key", key);
-      } else {
-        await supabase.from("company_settings").insert({ key, value });
-      }
+    try {
+      // Use atomic RPC to update all settings in a single transaction
+      const { error } = await supabase.rpc("update_company_settings" as any, {
+        p_settings: settings,
+      } as any);
+      if (error) throw error;
+      toast.success("Settings saved");
+      qc.invalidateQueries({ queryKey: ["company-settings"] });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save settings");
+    } finally {
+      setSavingSettings(false);
     }
-    setSavingSettings(false);
-    toast.success("Settings saved");
-    qc.invalidateQueries({ queryKey: ["company-settings"] });
   };
 
 
@@ -211,8 +212,8 @@ const SettingsPage = () => {
                   Location HQ
                 </h4>
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5"><Label className="text-[10px] uppercase text-muted-foreground">Latitude</Label><Input value={settings.company_lat || ""} onChange={(e) => setSettings({ ...settings, company_lat: e.target.value })} className="h-8 font-mono text-xs" disabled={!isAdmin} placeholder="19.0760" /></div>
-                  <div className="space-y-1.5"><Label className="text-[10px] uppercase text-muted-foreground">Longitude</Label><Input value={settings.company_lng || ""} onChange={(e) => setSettings({ ...settings, company_lng: e.target.value })} className="h-8 font-mono text-xs" disabled={!isAdmin} placeholder="72.8777" /></div>
+                  <div className="space-y-1.5"><Label className="text-2xs uppercase text-muted-foreground">Latitude</Label><Input value={settings.company_lat || ""} onChange={(e) => setSettings({ ...settings, company_lat: e.target.value })} className="h-8 font-mono text-xs" disabled={!isAdmin} placeholder="19.0760" /></div>
+                  <div className="space-y-1.5"><Label className="text-2xs uppercase text-muted-foreground">Longitude</Label><Input value={settings.company_lng || ""} onChange={(e) => setSettings({ ...settings, company_lng: e.target.value })} className="h-8 font-mono text-xs" disabled={!isAdmin} placeholder="72.8777" /></div>
                 </div>
                 {isAdmin && (
                   <Button type="button" variant="outline" size="sm" className="w-full gap-2 text-xs" onClick={async () => {
@@ -322,7 +323,7 @@ const SettingsPage = () => {
                     <div className="space-y-2">
                       <Label className="text-xs font-semibold">State Code</Label>
                       <Input value={settings.business_state_code || ""} onChange={(e) => setSettings({ ...settings, business_state_code: e.target.value })} placeholder="27" className="font-mono" maxLength={2} />
-                      <p className="text-[10px] text-muted-foreground">First 2 digits of GSTIN</p>
+                      <p className="text-2xs text-muted-foreground">First 2 digits of GSTIN</p>
                     </div>
                   </div>
                   <div className="space-y-2">
@@ -370,7 +371,7 @@ const SettingsPage = () => {
                     <div className="space-y-2">
                       <Label className="text-xs font-semibold">Invoice Prefix</Label>
                       <Input value={settings.invoice_prefix || "INV"} onChange={(e) => setSettings({ ...settings, invoice_prefix: e.target.value.toUpperCase() })} placeholder="INV" className="font-mono w-32" maxLength={10} />
-                      <p className="text-[10px] text-muted-foreground">e.g., INV-000001</p>
+                      <p className="text-2xs text-muted-foreground">e.g., INV-000001</p>
                     </div>
                     <div className="space-y-2">
                       <Label className="text-xs font-semibold">Terms & Conditions</Label>

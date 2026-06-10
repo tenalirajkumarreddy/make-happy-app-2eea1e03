@@ -90,7 +90,7 @@ export function ReturnPaymentDialog({ open, onOpenChange, transaction }: Props) 
               <p className="text-sm font-medium">{transaction.display_id}</p>
               <p className="text-xs text-muted-foreground">{transaction.stores?.name}</p>
               <p className="text-sm font-bold text-red-500">Full amount: {fmtINR(returnAmount)}</p>
-              <p className="text-[10px] text-muted-foreground">For partial adjustments, edit the transaction instead.</p>
+              <p className="text-xs text-muted-foreground">For partial adjustments, edit the transaction instead.</p>
             </div>
 
             <div className="space-y-1.5">

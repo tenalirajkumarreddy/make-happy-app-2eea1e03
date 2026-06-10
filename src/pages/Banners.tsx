@@ -257,7 +257,7 @@ const handleDelete = async (id: string) => {
         return (
           <div className="flex flex-wrap gap-1">
             {ids.map((id: string) => (
-              <Badge key={id} variant="secondary" className="text-[10px]">
+              <Badge key={id} variant="secondary" className="text-2xs">
                 {storeTypes?.find((t: any) => t.id === id)?.name || "Unknown"}
               </Badge>
             ))}

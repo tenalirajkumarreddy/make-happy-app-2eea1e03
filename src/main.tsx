@@ -3,16 +3,20 @@ import { Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 import { SplashScreen } from "@capacitor/splash-screen";
 import { StatusBar, Style } from "@capacitor/status-bar";
+import { Keyboard } from "@capacitor/keyboard";
 import * as Sentry from "@sentry/react";
 import App from "./App.tsx";
 import "./index.css";
+
+// Inter + JetBrains Mono fonts loaded via CDN in index.html (faster first-visit via jsdelivr cache)
 import { env } from "@/lib/env";
 import { logDebug, logError } from "@/lib/logger";
 import { supabase } from "@/integrations/supabase/client";
 import { PushNotifications } from "@capacitor/push-notifications";
 
 if (env.VITE_SENTRY_DSN && import.meta.env.PROD) {
-  Sentry.init({
+  // Defer Sentry init to after first paint to reduce main-thread blocking (LCP/TBT)
+  const initSentry = () => Sentry.init({
     dsn: env.VITE_SENTRY_DSN,
     environment: env.VITE_SENTRY_ENVIRONMENT || 'production',
     integrations: [
@@ -26,6 +30,11 @@ if (env.VITE_SENTRY_DSN && import.meta.env.PROD) {
     replaysSessionSampleRate: 0.1,
     replaysOnErrorSampleRate: 1.0,
   });
+  if (typeof requestIdleCallback !== 'undefined') {
+    requestIdleCallback(initSentry, { timeout: 3000 });
+  } else {
+    setTimeout(initSentry, 0);
+  }
 }
 
 // Initialize Capacitor plugins when running as native app
@@ -78,9 +87,22 @@ async function initCapacitor() {
     try {
       // Set status bar style
       await StatusBar.setStyle({ style: Style.Dark });
-      await StatusBar.setBackgroundColor({ color: "#1a1a2e" });
+      await StatusBar.setBackgroundColor({ color: "hsl(222, 25%, 10%)" });
     } catch (e) {
       logDebug("StatusBar plugin not available");
+    }
+
+    try {
+      // Enable keyboard-aware scrolling on Android
+      Keyboard.setScroll({ isScroll: true });
+      Keyboard.addListener("keyboardWillShow", (info) => {
+        document.documentElement.style.setProperty("--keyboard-height", `${info.keyboardHeight}px`);
+      });
+      Keyboard.addListener("keyboardWillHide", () => {
+        document.documentElement.style.removeProperty("--keyboard-height");
+      });
+    } catch (e) {
+      logDebug("Keyboard plugin not available");
     }
 
     try {

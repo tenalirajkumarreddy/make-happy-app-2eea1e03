@@ -237,7 +237,7 @@ const deleteMutation = useMutation({
             } ${!wh.is_active ? "opacity-60" : ""}`}
           >
             {wh.is_default && (
-              <Badge variant="secondary" className="absolute -top-2 -right-2 bg-primary text-primary-foreground text-[10px] px-2">
+              <Badge variant="secondary" className="absolute -top-2 -right-2 bg-primary text-primary-foreground text-2xs px-2">
                 <Star className="h-3 w-3 mr-1" />
                 Default
               </Badge>
@@ -258,7 +258,7 @@ const deleteMutation = useMutation({
                   </div>
                 )}
                 {!wh.is_active && (
-                  <Badge variant="outline" className="mt-2 text-[10px]">
+                  <Badge variant="outline" className="mt-2 text-2xs">
                     Inactive
                   </Badge>
                 )}

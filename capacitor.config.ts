@@ -16,21 +16,21 @@ const config: CapacitorConfig = {
   plugins: {
     SplashScreen: {
       launchShowDuration: 2000,
-      backgroundColor: '#1a1a2e',
+      backgroundColor: 'hsl(222, 25%, 10%)',
       showSpinner: false
     },
     StatusBar: {
       style: 'dark',
-      backgroundColor: '#1a1a2e'
+      backgroundColor: 'hsl(222, 25%, 10%)'
     },
     ShareTarget: {},
     LocalNotifications: {
       smallIcon: 'ic_launcher',
-      iconColor: '#2196F3',
+      iconColor: 'hsl(217, 91%, 50%)',
     },
     PushNotifications: {
       smallIcon: 'ic_launcher',
-      iconColor: '#2196F3',
+      iconColor: 'hsl(217, 91%, 50%)',
     }
   }
 };

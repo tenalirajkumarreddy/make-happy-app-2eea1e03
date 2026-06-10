@@ -25,7 +25,7 @@ export const ROLE_DEFAULTS: Record<AppRole, PermissionKey[]> = {
     "view_assigned_orders", "accept_order_transfers",
     "submit_expenses", "manage_expense_access", "approve_expenses",
     "backdate",
-    "cancel_sales",
+    "cancel_sales", "modify_transactions",
   ],
   manager: [
     "price_override", "record_behalf", "create_customers", "create_stores",
@@ -41,7 +41,7 @@ export const ROLE_DEFAULTS: Record<AppRole, PermissionKey[]> = {
     "view_assigned_orders", "accept_order_transfers",
     "submit_expenses", "manage_expense_access", "approve_expenses",
     "backdate",
-    "cancel_sales",
+    "cancel_sales", "modify_transactions",
   ],
   marketer: [
     "create_customers", "create_stores",
@@ -64,6 +64,7 @@ export const ROLE_DEFAULTS: Record<AppRole, PermissionKey[]> = {
     "view_invoices", "download_invoices",
     "view_attendance", "manage_attendance",
     "record_sale", "see_handover_balance",
+    "view_purchases", "manage_purchases",
   ],
 
   customer: [
@@ -88,7 +89,7 @@ export const ALL_PERMISSION_KEYS: PermissionKey[] = [
   // Handover
   "modify_handovers", "cancel_any_handover", "adjust_holding_balance",
   // Sales
-  "record_sale", "backdate", "cancel_sales",
+  "record_sale", "backdate", "cancel_sales", "modify_transactions",
   // Vendor & Purchase
   "view_vendors", "manage_vendors",
   "view_purchases", "manage_purchases",
@@ -128,6 +129,7 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   record_sale: "Record Sales",
   backdate: "Backdate Sales",
   cancel_sales: "Cancel Sales",
+  modify_transactions: "Edit Transactions",
   create_customers: "Create Customers",
   create_stores: "Create Stores",
   edit_balance: "Edit Customer Balances",
@@ -163,7 +165,7 @@ export const PERMISSION_GROUPS: Record<string, PermissionKey[]> = {
     "view_invoices", "create_invoices", "edit_invoices", "delete_invoices", "download_invoices",
   ],
   "Sales & Pricing": [
-    "record_sale", "backdate", "cancel_sales", "price_override", "record_behalf", "edit_balance",
+    "record_sale", "backdate", "cancel_sales", "modify_transactions", "price_override", "record_behalf", "edit_balance",
     "opening_balance", "finalizer", "see_handover_balance",
   ],
   "Handovers": [

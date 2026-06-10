@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Loader2, ChevronRight, Store as StoreIcon,
   IndianRupee, Banknote, CreditCard, AlertTriangle,
@@ -10,7 +10,8 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermission } from "@/hooks/usePermission";
-import { addToQueue, generateBusinessKey } from "@/lib/offlineQueue";
+import { generateBusinessKey } from "@/lib/offlineQueue";
+import { enqueueWithContext } from "@/lib/conflictResolver";
 import { logActivity } from "@/lib/activityLogger";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { StorePickerSheet, StoreOption } from "@/mobile/components/StorePickerSheet";
@@ -22,7 +23,6 @@ export function RecordPayment({ preselectStore }: { preselectStore?: StoreOption
   const { allowed: canRecordBehalf } = usePermission("record_behalf");
   const { allowed: canBackdate } = usePermission("backdate" as any);
   const qc = useQueryClient();
-  const [saving, setSaving] = useState(false);
   const [store, setStore] = useState<StoreOption | null>(null);
   const [storePickerOpen, setStorePickerOpen] = useState(false);
   const [cashAmount, setCashAmount] = useState("");
@@ -52,6 +52,7 @@ export function RecordPayment({ preselectStore }: { preselectStore?: StoreOption
       return profs?.filter((p) => p.user_id !== user?.id) || [];
     },
     enabled: canRecordBehalf,
+    staleTime: 5 * 60 * 1000,
   });
 
   const cash = parseFloat(cashAmount) || 0;
@@ -60,87 +61,105 @@ export function RecordPayment({ preselectStore }: { preselectStore?: StoreOption
   const oldOutstanding = Number(store?.outstanding ?? 0);
   const newOutstanding = Math.max(0, oldOutstanding - totalPayment);
 
-  const handleSubmit = async () => {
+  const paymentMutation = useMutation<{ queued: boolean; displayId?: string }, Error>({
+    mutationFn: async () => {
+      const effectiveRecordedBy = recordedFor || user!.id;
+      const loggedBy = recordedFor ? user!.id : null;
+
+      const txData = {
+        store_id: store!.id,
+        customer_id: store!.customer_id,
+        recorded_by: effectiveRecordedBy,
+        logged_by: loggedBy,
+        cash_amount: cash,
+        upi_amount: upi,
+        total_amount: totalPayment,
+        old_outstanding: oldOutstanding,
+        new_outstanding: newOutstanding,
+        notes: notes || null,
+        ...(txnDate ? { created_at: new Date(txnDate).toISOString() } : {}),
+      };
+
+      if (!navigator.onLine) {
+        const businessKey = generateBusinessKey("transaction", {
+          storeId: store!.id,
+          customerId: store!.customer_id,
+          amount: totalPayment,
+          timestamp: txnDate || new Date().toISOString(),
+        });
+
+        await enqueueWithContext({
+          id: crypto.randomUUID(),
+          type: "transaction",
+          payload: { txData },
+          businessKey,
+          createdAt: new Date().toISOString(),
+        });
+        return { queued: true };
+      }
+
+      const { data: generatedDisplayId, error: displayErr } = await supabase.rpc("generate_display_id", {
+        prefix: "PAY",
+        seq_name: "pay_display_seq",
+      });
+      if (displayErr) throw displayErr;
+
+      const displayId = String(generatedDisplayId ?? "");
+      const { error } = await supabase.rpc("record_transaction", {
+        p_display_id: displayId,
+        p_store_id: store!.id,
+        p_customer_id: store!.customer_id,
+        p_recorded_by: effectiveRecordedBy,
+        p_logged_by: loggedBy ?? undefined,
+        p_cash_amount: cash,
+        p_upi_amount: upi,
+        p_notes: notes ?? undefined,
+        p_created_at: txnDate ? new Date(txnDate).toISOString() : undefined,
+      });
+      if (error) throw error;
+
+      return { queued: false, displayId };
+    },
+    onSuccess: ({ queued, displayId }) => {
+      if (queued) {
+        toast.warning("Offline — payment queued and will sync automatically");
+        resetPayment();
+        return;
+      }
+
+      logActivity(user!.id, "Recorded transaction", "transaction", String(displayId), undefined, { total: totalPayment, store: store!.id });
+      getAdminUserIds().then((ids) => {
+        const others = ids.filter((id) => id !== user!.id);
+        if (others.length > 0) {
+          sendNotificationToMany(others, {
+            title: "Payment Collected",
+            message: `₹${totalPayment.toLocaleString()} collected from ${store!.name} (${String(displayId)})`,
+            type: "payment",
+            entityType: "transaction",
+            entityId: String(displayId),
+          });
+        }
+      });
+
+      toast.success("Payment recorded");
+      resetPayment();
+      afterTransactionSaved(qc, { isMobile: true });
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to record payment. Please try again.");
+    },
+  });
+
+  const handleSubmit = () => {
     if (!store) { toast.error("Please select a store"); return; }
     if (totalPayment <= 0) { toast.error("Enter payment amount"); return; }
     if (!store.customer_id) { toast.error("Store has no linked customer"); return; }
     if (!user?.id) { toast.error("Authentication required"); return; }
 
-    setSaving(true);
-
-    const effectiveRecordedBy = recordedFor || user.id;
-    const loggedBy = recordedFor ? user.id : null;
-
-    const txData = {
-      store_id: store.id,
-      customer_id: store.customer_id,
-      recorded_by: effectiveRecordedBy,
-      logged_by: loggedBy,
-      cash_amount: cash,
-      upi_amount: upi,
-      total_amount: totalPayment,
-      old_outstanding: oldOutstanding,
-      new_outstanding: newOutstanding,
-      notes: notes || null,
-      ...(txnDate ? { created_at: new Date(txnDate).toISOString() } : {}),
-    };
-
-    if (!navigator.onLine) {
-      const businessKey = generateBusinessKey('transaction', {
-        storeId: store.id,
-        customerId: store.customer_id,
-        amount: totalPayment,
-        timestamp: txnDate || new Date().toISOString(),
-      });
-
-      await addToQueue({
-        id: crypto.randomUUID(),
-        type: "transaction",
-        payload: { txData },
-        businessKey,
-        createdAt: new Date().toISOString(),
-      });
-      toast.warning("Offline — payment queued and will sync automatically");
-      setSaving(false);
-      resetPayment();
-      return;
-    }
-
-    const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "PAY", seq_name: "pay_display_seq" }) as any;
-
-    const { error } = await supabase.rpc("record_transaction", {
-      p_display_id: String(displayId),
-      p_store_id: store.id,
-      p_customer_id: store.customer_id,
-      p_recorded_by: effectiveRecordedBy,
-      p_logged_by: loggedBy ?? undefined,
-      p_cash_amount: cash,
-      p_upi_amount: upi,
-      p_notes: notes ?? undefined,
-      p_created_at: txnDate ? new Date(txnDate).toISOString() : undefined,
-    }) as any;
-
-    if (error) { toast.error(error.message); setSaving(false); return; }
-
-    logActivity(user.id, "Recorded transaction", "transaction", String(displayId), undefined, { total: totalPayment, store: store.id });
-    getAdminUserIds().then((ids) => {
-      const others = ids.filter((id) => id !== user.id);
-      if (others.length > 0) {
-        sendNotificationToMany(others, {
-          title: "Payment Collected",
-          message: `₹${totalPayment.toLocaleString()} collected from ${store.name} (${String(displayId)})`,
-          type: "payment",
-          entityType: "transaction",
-          entityId: String(displayId),
-        });
-      }
-    });
-
-    toast.success("Payment recorded");
-    setSaving(false);
-    resetPayment();
-    afterTransactionSaved(qc, { isMobile: true });
+    paymentMutation.mutate();
   };
+
+  const saving = paymentMutation.isPending;
 
   const resetPayment = () => {
     setStore(null);
@@ -186,14 +205,14 @@ export function RecordPayment({ preselectStore }: { preselectStore?: StoreOption
         <div className="px-4">
           <div className="rounded-2xl bg-card dark:bg-slate-800 border border-border dark:border-border p-3.5 flex justify-between items-center">
             <div>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Outstanding Balance</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold">Outstanding Balance</p>
               <p className={cn("text-xl font-bold mt-0.5", oldOutstanding > 0 ? "text-red-500" : "text-emerald-500")}>
                 ₹{oldOutstanding.toLocaleString("en-IN")}
               </p>
             </div>
             {store.customers?.name && (
               <div className="text-right">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Customer</p>
+                <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold">Customer</p>
                 <p className="text-sm font-bold text-slate-700 dark:text-slate-200 mt-0.5">{store.customers.name}</p>
               </div>
             )}

@@ -1,22 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const ALLOWED_ORIGINS = [
-  "https://aquaprimesales.vercel.app",
-  "http://localhost:5000",
-  "http://localhost:5173",
-  "http://localhost:8100",
-];
-
-function getCorsHeaders(req: Request) {
-  const origin = req.headers.get("Origin") || "";
-  const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
-  return {
-    "Access-Control-Allow-Origin": allowed,
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Vary": "Origin",
-  };
-}
+import { getCorsHeaders, handleCorsPreflightOrError } from "../_shared/cors.ts";
 
 interface QualityIssue {
   table: string;
@@ -172,10 +155,9 @@ async function runQualityChecks(supabase: any): Promise<QualityIssue[]> {
 }
 
 Deno.serve(async (req) => {
+  const corsResponse = handleCorsPreflightOrError(req);
+  if (corsResponse) return corsResponse;
   const corsHeaders = getCorsHeaders(req);
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -185,7 +167,40 @@ Deno.serve(async (req) => {
       throw new Error("Supabase env secrets are not configured");
     }
 
+    // Require authenticated super_admin or manager
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+
+    // Verify JWT
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: "Invalid token" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Check role
+    const { data: roleData } = await supabaseAdmin
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id)
+      .single();
+
+    if (!["super_admin", "manager"].includes(roleData?.role)) {
+      return new Response(
+        JSON.stringify({ error: "Admin access required" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     // Run all quality checks
     const issues = await runQualityChecks(supabaseAdmin);

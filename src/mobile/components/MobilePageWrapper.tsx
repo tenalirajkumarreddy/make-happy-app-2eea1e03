@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 import { ChevronLeft } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import "../styles/mobile-overrides.css";
@@ -17,7 +17,7 @@ interface Props {
  * - Adds a back-navigation breadcrumb for detail pages
  * - Handles safe-area spacing
  */
-export function MobilePageWrapper({ children, showBack }: Props) {
+export const MobilePageWrapper = memo(function MobilePageWrapper({ children, showBack }: Props) {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -42,4 +42,4 @@ export function MobilePageWrapper({ children, showBack }: Props) {
       {children}
     </div>
   );
-}
+});

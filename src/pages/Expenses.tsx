@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -75,6 +76,13 @@ const Expenses = () => {
   // Bill upload state for expense claims
   const [billFiles, setBillFiles] = useState<File[]>([]);
   const [billPreviews, setBillPreviews] = useState<string[]>([]);
+
+  // Cleanup object URLs on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      billPreviews.forEach(url => URL.revokeObjectURL(url));
+    };
+  }, [billPreviews]);
   const [isAdhoc, setIsAdhoc] = useState(false);
 
   // Category form state
@@ -113,12 +121,13 @@ const Expenses = () => {
 
   // Fetch categories
   const { data: categories = [] as any[] } = useQuery({
-    queryKey: ["expense-categories"],
+    queryKey: ["expense-categories", currentWarehouse?.id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("expense_categories")
         .select("*")
         .eq("is_active", true)
+        .or(`warehouse_id.is.null,warehouse_id.eq.${currentWarehouse?.id || ""}`)
         .order("is_system", { ascending: false })
         .order("name");
       if (error) throw error;
@@ -232,11 +241,24 @@ const Expenses = () => {
     setBillPreviews(previews);
   };
 
-  const handleAddExpense = async (e: React.FormEvent) => {
+   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!categoryId || !amount) {
       toast.error("Category and amount are required");
       return;
+    }
+    const parsedAmount = parseFloat(amount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      toast.error("Please enter a valid amount");
+      return;
+    }
+    // Check file size limit (10MB max per file)
+    const MAX_FILE_SIZE = 10 * 1024 * 1024;
+    for (const file of billFiles) {
+      if (file.size > MAX_FILE_SIZE) {
+        toast.error(`File "${file.name}" exceeds 10MB limit`);
+        return;
+      }
     }
     setSaving(true);
 
@@ -316,7 +338,7 @@ const Expenses = () => {
       setEditingCategory(null);
       setCatName("");
       setCatDescription("");
-      setCatColor("#6366f1");
+      setCatColor("hsl(var(--primary))");
       setCatIsOverhead(false);
     } catch (error: any) {
       toast.error(error.message || "Failed to save category");
@@ -349,8 +371,11 @@ const Expenses = () => {
         if (nextDue <= today) {
           nextDue = new Date(today.getFullYear(), today.getMonth() + 1, dueDay);
         }
-      } else if (fcFrequency === "weekly") {
-        nextDue = new Date(today.getTime() + (7 - today.getDay() + dueDay) % 7 * 24 * 60 * 60 * 1000);
+       } else if (fcFrequency === "weekly") {
+        // dueDay for weekly should be day-of-week (0=Sun, 6=Sat)
+        const targetDay = Math.min(dueDay, 6); // Clamp to 0-6
+        const daysUntilTarget = (targetDay - today.getDay() + 7) % 7 || 7;
+        nextDue = new Date(today.getTime() + daysUntilTarget * 24 * 60 * 60 * 1000);
       } else if (fcFrequency === "quarterly") {
         const currentQuarter = Math.floor(today.getMonth() / 3);
         nextDue = new Date(today.getFullYear(), currentQuarter * 3 + 3, dueDay);
@@ -397,24 +422,24 @@ const Expenses = () => {
       toast.error("Amount is required");
       return;
     }
+    const parsedAmount = parseFloat(fcPayAmount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      toast.error("Please enter a valid amount");
+      return;
+    }
     setSaving(true);
 
     try {
-      const { data: idData } = await supabase.rpc("generate_display_id", {
-        prefix: "FCP",
-        seq_name: "fixed_cost_payments_display_id_seq"
-      }) as any;
-
-      const { error } = await supabase.from("fixed_cost_payments").insert({
-        display_id: idData,
-        fixed_cost_id: selectedFixedCost.id,
-        amount: parseFloat(fcPayAmount),
-        payment_date: fcPayDate,
-        payment_method: fcPayMethod,
-        payment_reference: fcPayReference.trim() || null,
-        notes: fcPayNotes.trim() || null,
-        created_by: user!.id,
-      });
+      // Use atomic RPC for fixed cost payment - handles payment insert AND next_due_date advance
+      const { data, error } = await supabase.rpc("pay_fixed_cost" as any, {
+        p_fixed_cost_id: selectedFixedCost.id,
+        p_amount: parsedAmount,
+        p_payment_date: fcPayDate,
+        p_payment_method: fcPayMethod,
+        p_payment_reference: fcPayReference.trim() || null,
+        p_notes: fcPayNotes.trim() || null,
+        p_created_by: user!.id,
+      } as any);
 
       if (error) throw error;
 
@@ -558,10 +583,10 @@ const Expenses = () => {
                     <span className="text-sm font-semibold">₹{cat.total.toLocaleString()}</span>
                   )}
                   {cat.is_system && (
-                    <Badge variant="secondary" className="text-[10px] px-1.5 shrink-0">System</Badge>
+                    <Badge variant="secondary" className="text-2xs px-1.5 shrink-0">System</Badge>
                   )}
                   {cat.is_manufacturing_overhead && !cat.is_system && (
-                    <Badge variant="outline" className="text-[10px] px-1.5 ml-1 border-blue-200 text-blue-700 bg-blue-50 shrink-0">Mfg</Badge>
+                    <Badge variant="outline" className="text-2xs px-1.5 ml-1 border-info/30 text-info bg-info/10 shrink-0">Mfg</Badge>
                   )}
                 </button>
                 {isAdmin && !cat.is_system && (
@@ -606,14 +631,14 @@ const Expenses = () => {
         <ScrollArea className="h-[calc(100vh-200px)]">
           <div className="space-y-3 pr-2">
             {fixedCostsDue.map((fc) => (
-              <Card key={fc.id} className={`relative overflow-hidden ${fc.status === 'overdue' ? 'border-red-300 bg-red-50/50' : fc.status === 'due_soon' ? 'border-amber-300 bg-amber-50/50' : ''}`}>
+              <Card key={fc.id} className={`relative overflow-hidden ${fc.status === 'overdue' ? 'border-destructive/40 bg-destructive/10' : fc.status === 'due_soon' ? 'border-warning/40 bg-warning/10' : ''}`}>
                 {fc.status === 'overdue' && (
-                  <div className="absolute top-0 right-0 bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-bl font-medium">
+                  <div className="absolute top-0 right-0 bg-destructive text-white text-2xs px-2 py-0.5 rounded-bl font-medium">
                     OVERDUE
                   </div>
                 )}
                 {fc.status === 'due_soon' && (
-                  <div className="absolute top-0 right-0 bg-amber-500 text-white text-[10px] px-2 py-0.5 rounded-bl font-medium">
+                  <div className="absolute top-0 right-0 bg-warning text-white text-2xs px-2 py-0.5 rounded-bl font-medium">
                     DUE SOON
                   </div>
                 )}
@@ -623,7 +648,7 @@ const Expenses = () => {
                       <h4 className="font-semibold text-sm">{fc.name}</h4>
                       <p className="text-xs text-muted-foreground mt-0.5">{fc.description || fc.vendor_name || '—'}</p>
                     </div>
-                    <Badge variant="outline" className="capitalize text-[10px]">{fc.frequency}</Badge>
+                    <Badge variant="outline" className="capitalize text-2xs">{fc.frequency}</Badge>
                   </div>
                   
                   <div className="mt-3 space-y-1.5 text-sm">
@@ -633,7 +658,7 @@ const Expenses = () => {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Next Due</span>
-                      <span className={fc.status === 'overdue' ? 'text-red-600 font-medium' : fc.status === 'due_soon' ? 'text-amber-600 font-medium' : ''}>
+                      <span className={fc.status === 'overdue' ? 'text-destructive font-medium' : fc.status === 'due_soon' ? 'text-warning font-medium' : ''}>
                         {formatDate(fc.next_due_date)}
                       </span>
                     </div>
@@ -695,8 +720,8 @@ const Expenses = () => {
                 <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Expenses</p>
                 <p className="text-2xl font-bold mt-1">₹{summary.total.toLocaleString()}</p>
               </div>
-              <div className="h-10 w-10 rounded-full bg-red-100 flex items-center justify-center">
-                <TrendingUp className="h-5 w-5 text-red-600" />
+              <div className="h-10 w-10 rounded-full bg-destructive/20 flex items-center justify-center">
+                <TrendingUp className="h-5 w-5 text-destructive" />
               </div>
             </div>
           </CardContent>
@@ -709,8 +734,8 @@ const Expenses = () => {
                 <p className="text-xs text-muted-foreground uppercase tracking-wider">Salaries</p>
                 <p className="text-2xl font-bold mt-1">₹{summary.salaries.toLocaleString()}</p>
               </div>
-              <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
-                <Users className="h-5 w-5 text-green-600" />
+              <div className="h-10 w-10 rounded-full bg-success/20 flex items-center justify-center">
+                <Users className="h-5 w-5 text-success" />
               </div>
             </div>
           </CardContent>
@@ -723,8 +748,8 @@ const Expenses = () => {
                 <p className="text-xs text-muted-foreground uppercase tracking-wider">Purchases</p>
                 <p className="text-2xl font-bold mt-1">₹{summary.purchases.toLocaleString()}</p>
               </div>
-              <div className="h-10 w-10 rounded-full bg-amber-100 flex items-center justify-center">
-                <Truck className="h-5 w-5 text-amber-600" />
+              <div className="h-10 w-10 rounded-full bg-warning/20 flex items-center justify-center">
+                <Truck className="h-5 w-5 text-warning" />
               </div>
             </div>
           </CardContent>
@@ -737,8 +762,8 @@ const Expenses = () => {
                 <p className="text-xs text-muted-foreground uppercase tracking-wider">Fixed Costs</p>
                 <p className="text-2xl font-bold mt-1">₹{summary.fixedCostPayments.toLocaleString()}</p>
               </div>
-              <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                <Calendar className="h-5 w-5 text-blue-600" />
+              <div className="h-10 w-10 rounded-full bg-info/20 flex items-center justify-center">
+                <Calendar className="h-5 w-5 text-info" />
               </div>
             </div>
           </CardContent>
@@ -747,12 +772,12 @@ const Expenses = () => {
 
       {/* Fixed Costs Due Soon Alert */}
       {fixedCostsDue.filter(fc => fc.status === 'overdue' || fc.status === 'due_soon').length > 0 && (
-        <Card className="border-amber-200 bg-amber-50/50">
+        <Card className="border-warning/30 bg-warning/10">
           <CardContent className="p-4">
             <div className="flex items-start gap-3">
-              <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5" />
+              <AlertCircle className="h-5 w-5 text-warning mt-0.5" />
               <div className="flex-1">
-                <h4 className="font-semibold text-amber-800">Fixed Costs Due Soon</h4>
+                <h4 className="font-semibold text-warning">Fixed Costs Due Soon</h4>
                 <div className="mt-2 space-y-2">
                   {fixedCostsDue.filter(fc => fc.status === 'overdue' || fc.status === 'due_soon').map((fc) => (
                     <div key={fc.id} className="flex items-center justify-between bg-white rounded-lg p-3 border">
@@ -760,7 +785,7 @@ const Expenses = () => {
                         <p className="font-medium">{fc.name}</p>
                         <p className="text-sm text-muted-foreground">
                           {fc.status === 'overdue' ? (
-                            <span className="text-red-600 font-medium">Overdue by {Math.abs(fc.daysUntil)} days</span>
+                            <span className="text-destructive font-medium">Overdue by {Math.abs(fc.daysUntil)} days</span>
                           ) : (
                             <span>Due in {fc.daysUntil} day{fc.daysUntil !== 1 ? 's' : ''}</span>
                           )}
@@ -1016,7 +1041,7 @@ const Expenses = () => {
                             setBillFiles(newFiles);
                             setBillPreviews(newPreviews);
                           }}
-                          className="absolute top-0 right-0 bg-red-500 text-white text-xs p-1 rounded-bl"
+                          className="absolute top-0 right-0 bg-destructive text-white text-xs p-1 rounded-bl"
                         >
                           X
                         </button>
@@ -1030,12 +1055,10 @@ const Expenses = () => {
             {/* Adhoc Checkbox - reduces holding immediately */}
             {isAdmin && (
               <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
+                <Checkbox
                   id="isAdhoc"
                   checked={isAdhoc}
-                  onChange={(e) => setIsAdhoc(e.target.checked)}
-                  className="w-4 h-4"
+                  onCheckedChange={(checked) => setIsAdhoc(checked === true)}
                 />
                 <Label htmlFor="isAdhoc" className="text-sm">
                   Adhoc expense (immediately reduces holding amount)
@@ -1090,18 +1113,16 @@ const Expenses = () => {
                 <Input
                   value={catColor}
                   onChange={(e) => setCatColor(e.target.value)}
-                  placeholder="#6366f1"
+                  placeholder="hsl(var(--primary))"
                   className="font-mono"
                 />
               </div>
             </div>
             <div className="flex items-center gap-2 mt-2">
-              <input
-                type="checkbox"
+              <Checkbox
                 id="catIsOverhead"
                 checked={catIsOverhead}
-                onChange={(e) => setCatIsOverhead(e.target.checked)}
-                className="w-4 h-4 cursor-pointer"
+                onCheckedChange={(checked) => setCatIsOverhead(checked === true)}
               />
               <Label htmlFor="catIsOverhead" className="text-sm font-normal cursor-pointer">
                 Manufacturing Overhead (counts towards product costs)

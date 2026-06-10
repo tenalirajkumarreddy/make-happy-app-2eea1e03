@@ -147,6 +147,7 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
     },
     enabled: !!user,
     refetchInterval: 60_000,
+    staleTime: 60_000,
   });
 
   const storeTypeOptions = useMemo(() => {
@@ -190,6 +191,7 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
       if (error) throw error;
       return ((data as any[]) || []).filter((store) => canAccessRoute(store.route_id));
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: createProducts } = useQuery({
@@ -203,6 +205,7 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
       if (error) throw error;
       return (data as ProductItem[]) || [];
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   const pendingCount = useMemo(() => (orders || []).filter((order) => order.status === "pending").length, [orders]);
@@ -224,6 +227,7 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
       };
     },
     enabled: !!viewProformaId,
+    staleTime: 5 * 60 * 1000,
   });
 
   const addCreateItem = (product: any) => {
@@ -273,48 +277,29 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
 
     setCreateSaving(true);
     try {
-      const activeOrder = await getActiveOrderForStore(supabase, createStoreId);
-      if (activeOrder) {
-        const store = (createStores || []).find((s: any) => s.id === createStoreId);
-        setExistingOrderStoreName(store?.name || "");
-        setExistingOrderForStore(activeOrder);
-        setCreateSaving(false);
-        return;
-      }
-
-      const rpcClient = supabase as unknown as SupabaseRpcClient;
-      const { data: displayId, error: displayError } = await rpcClient.rpc("generate_display_id", {
-        prefix: "ORD",
-        seq_name: "ord_display_seq",
-      });
-      if (displayError) throw displayError;
-      if (!displayId) throw new Error("Failed to generate order ID");
-
       const store = (createStores || []).find((s: any) => s.id === createStoreId);
 
-      const { data: orderRow, error: orderError } = await supabase
-        .from("orders")
-        .insert({
-          display_id: displayId,
-          store_id: createStoreId,
-          customer_id: store?.customer_id || null,
-          order_type: createOrderType,
-          source: "manual",
-          created_by: user!.id,
-          status: "confirmed",
-          requirement_note: createOrderType === "simple" ? createRequirementNote : null,
-        })
-        .select("id")
-        .single();
+      // Use create_order RPC (handles active order check, display ID, auto-confirm setting)
+      const { data: orderResult, error: orderError } = await supabase.rpc("create_order", {
+        p_store_id: createStoreId,
+        p_customer_id: store?.customer_id || null,
+        p_order_type: createOrderType,
+        p_requirement_note: createOrderType === "simple" ? createRequirementNote : null,
+        p_total_amount: 0,
+        p_created_by: user!.id,
+      }) as any;
 
       if (orderError) throw orderError;
+
+      const orderRow = Array.isArray(orderResult) ? orderResult[0] : orderResult;
+      if (!orderRow?.order_id) throw new Error("Failed to create order");
 
       if (createOrderType === "detailed") {
         const validItems = createOrderItems.filter((item) => item.product_id);
         if (validItems.length > 0) {
           const { error: itemError } = await supabase.from("order_items").insert(
             validItems.map((item) => ({
-              order_id: orderRow.id,
+              order_id: orderRow.order_id,
               product_id: item.product_id,
               quantity: item.quantity,
               unit_price: item.unit_price || 0,
@@ -391,8 +376,12 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
       const saleItems = (fulfillOrder.order_items || []).map((item) => ({
         product_id: item.product_id,
         quantity: item.quantity,
-        unit_price: item.products?.base_price || 0,
+        unit_price: item.unit_price || item.products?.base_price || 0,
       }));
+
+      // Calculate actual outstanding (not hardcoded 0)
+      const orderTotal = saleItems.reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
+      const outstanding = Math.max(0, orderTotal - cash - upi);
 
       const { error: saleError } = await (supabase as any).rpc("record_sale", {
         p_display_id: displayId,
@@ -400,10 +389,10 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
         p_customer_id: fulfillOrder.customer_id,
         p_recorded_by: user!.id,
         p_logged_by: null,
-        p_total_amount: total,
+        p_total_amount: orderTotal,
         p_cash_amount: cash,
         p_upi_amount: upi,
-        p_outstanding_amount: 0,
+        p_outstanding_amount: outstanding,
         p_sale_items: saleItems,
         p_created_at: null,
         p_fulfilled_order_id: fulfillOrder.id,
@@ -528,14 +517,14 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold text-primary font-mono">{order.display_id}</span>
-                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                           order.status === "pending" ? "bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-700" :
                           order.status === "delivered" ? "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-700" :
                           "bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-700"
                         }`}>{order.status}</span>
                       </div>
                       <p className="text-sm font-semibold text-foreground mt-1">{order.stores?.name || "Store"}</p>
-                      <p className="text-[11px] text-muted-foreground">{order.order_type} • {new Date(order.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}</p>
+                      <p className="text-xs text-muted-foreground">{order.order_type} • {new Date(order.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}</p>
                     </div>
                   </div>
                   {order.requirement_note && (
@@ -546,7 +535,7 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
                   )}
                   {(order.creator_profile || order.updater_profile || order.fulfiller_profile) && (
                     <div className="border-t border-border/50 pt-2 mt-2">
-                      <div className="flex items-center gap-1 text-[10px] text-muted-foreground flex-wrap">
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground flex-wrap">
                         {order.creator_profile && <span>Created by {order.creator_profile.full_name}</span>}
                         {order.updater_profile && order.updater_profile.full_name !== order.creator_profile?.full_name && (
                           <>
@@ -617,7 +606,7 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
                           className={`w-full text-left px-3 py-2.5 text-sm transition-colors hover:bg-accent ${createStoreId === s.id ? "bg-primary/10 font-semibold text-primary" : "text-foreground"}`}
                         >
                           <span className="font-medium">{s.name}</span>
-                          <span className="ml-2 font-mono text-[10px] text-muted-foreground">{s.display_id}</span>
+                          <span className="ml-2 font-mono text-xs text-muted-foreground">{s.display_id}</span>
                         </button>
                       ))}
                   </div>

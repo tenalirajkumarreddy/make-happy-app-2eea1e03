@@ -1,4 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "./styles/tokens.css";
+/* Fonts self-hosted via @fontsource — loaded in main.tsx */
 
 @tailwind base;
 @tailwind components;
@@ -43,7 +44,7 @@
     --input: 220 13% 91%;
     --ring: 217 91% 50%;
 
-    --radius: 0.625rem;
+    --radius: var(--radius-lg);
 
     --sidebar-background: 220 25% 10%;
     --sidebar-foreground: 220 14% 80%;
@@ -139,19 +140,30 @@
 
 @layer utilities {
   .glass-card {
-    @apply bg-card/60 backdrop-blur-md border border-border/40 shadow-[0_4px_12px_-2px_rgba(0,0,0,0.05)];
+    @apply bg-card/60 backdrop-blur-md border border-border/40;
+    box-shadow: var(--shadow-md);
   }
 
   .stat-card {
-    @apply bg-card rounded-xl border border-border/50 p-5 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.03)] transition-all duration-300 hover:shadow-[0_8px_20px_-6px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 hover:border-primary/20;
+    @apply bg-card rounded-xl border border-border/50 p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/20;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .stat-card:hover {
+    box-shadow: var(--shadow-lg);
   }
 
   /* Standardized entity card for desktop - used in Customers, Products, Stores, Vendors, Inventory */
   /* Note: 'group' class must be added directly in HTML, not via @apply */
   .entity-card {
-    @apply rounded-xl border bg-card shadow-sm overflow-hidden cursor-pointer;
+    @apply rounded-xl border bg-card overflow-hidden cursor-pointer;
     @apply transition-all duration-200 ease-out;
-    @apply hover:shadow-lg hover:-translate-y-0.5 hover:border-primary/20;
+    @apply hover:-translate-y-0.5 hover:border-primary/20;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .entity-card:hover {
+    box-shadow: var(--shadow-lg);
   }
 
   .entity-card-inactive {
@@ -209,9 +221,14 @@
 
   /* Mobile card (compact row style) */
   .entity-card-mobile {
-    @apply flex items-center gap-3 p-4 rounded-xl border bg-card shadow-sm;
+    @apply flex items-center gap-3 p-4 rounded-xl border bg-card;
     @apply transition-all duration-200 ease-out;
-    @apply hover:shadow-md active:bg-muted/30;
+    @apply active:bg-muted/30;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .entity-card-mobile:hover {
+    box-shadow: var(--shadow-md);
   }
 
   /* Standardized grid layouts */
@@ -261,8 +278,8 @@
 /* Print styles for Reports */
 @media print {
   body {
-    background: white !important;
-    color: black !important;
+    background: hsl(var(--card)) !important;
+    color: hsl(var(--card-foreground)) !important;
     font-size: 12px;
   }
 
@@ -293,13 +310,13 @@
   }
 
   th, td {
-    border: 1px solid #ddd !important;
+    border: 1px solid hsl(var(--border)) !important;
     padding: 6px 8px !important;
     text-align: left;
   }
 
   th {
-    background: #f5f5f5 !important;
+    background: hsl(var(--muted)) !important;
     font-weight: 600;
   }
 }
@@ -341,7 +358,7 @@
   scroll-behavior: smooth;
 }
 
-/* Fix for iOS input zoom */
+/* Fix for iOS input zoom — corresponds to src/styles/breakpoints.ts md=768px */
 @media screen and (max-width: 768px) {
   input[type="text"],
   input[type="email"],

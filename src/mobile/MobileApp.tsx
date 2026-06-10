@@ -4,7 +4,6 @@ import { Capacitor } from "@capacitor/core";
 import { matchPath, useLocation, useNavigate } from "react-router-dom";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { useQuery } from "@tanstack/react-query";
 import {
 Menu, LayoutDashboard, Package, Users, Store, Route, ShoppingCart,
 Receipt, ClipboardList, HandCoins, Map, FileText, BarChart3, History,
@@ -16,21 +15,21 @@ import { useAuth } from "@/contexts/AuthContext";
 import { isNativeApp } from "@/lib/capacitorUtils";
 import { logDebug } from "@/lib/logger";
 import { useRealtimeSync } from "@/hooks/useRealtimeSync";
-import { supabase } from "@/integrations/supabase/client";
 import { PermissionSetup } from "./components/PermissionSetup";
 import { MobileHeader } from "./components/MobileHeader";
-import { BottomNav, CUSTOMER_TABS, MARKETER_TABS, MobileTab, POS_TABS, AGENT_TABS, type MobileTabItem } from "./components/BottomNav";
+import { BottomNav, CUSTOMER_TABS, MobileTab, type MobileTabItem } from "./components/BottomNav";
 import { MobileShell } from "./components/MobileShell";
 import { useHardwareBackButton } from "./hooks/useHardwareBackButton";
 import { useHandoverBadge } from "./hooks/useHandoverBadge";
 const AdminExpenseAccess = lazy(() => import("@/pages/admin/AdminExpenseAccess"));
-// Mobile-optimized admin pages (kept only essential ones with native mobile UI)
-import { AdminHome } from "./pages/admin/AdminHome";
-import { AdminOrders } from "./pages/admin/AdminOrders";
-import { AdminSales } from "./pages/admin/AdminSales";
-import { AdminTransactions } from "./pages/admin/AdminTransactions";
-import { AdminInventory } from "./pages/admin/AdminInventory";
-import { AdminPurchases } from "./pages/admin/AdminPurchases";
+// Mobile-optimized admin pages — lazy-loaded per role
+const AdminHome = lazy(() => import("./pages/admin/AdminHome").then(m => ({ default: m.AdminHome })));
+const AdminOrders = lazy(() => import("./pages/admin/AdminOrders").then(m => ({ default: m.AdminOrders })));
+const AdminSales = lazy(() => import("./pages/admin/AdminSales").then(m => ({ default: m.AdminSales })));
+const AdminTransactions = lazy(() => import("./pages/admin/AdminTransactions").then(m => ({ default: m.AdminTransactions })));
+const AdminInventory = lazy(() => import("./pages/admin/AdminInventory").then(m => ({ default: m.AdminInventory })));
+const AdminPurchases = lazy(() => import("./pages/admin/AdminPurchases").then(m => ({ default: m.AdminPurchases })));
+const AdminHandovers = lazy(() => import("./pages/admin/AdminHandovers").then(m => ({ default: m.AdminHandovers })));
 // Web app pages — lazy-loaded (used as fallback for routes without mobile-native pages)
 const Products = lazy(() => import("@/pages/Products"));
 const Customers = lazy(() => import("@/pages/Customers"));
@@ -82,27 +81,27 @@ const BomDetail = lazy(() => import("@/pages/BomDetail"));
 import { cn } from "@/lib/utils";
 import { MobilePageWrapper } from "./components/MobilePageWrapper";
 
-import { AgentHome } from "./pages/agent/AgentHome";
-import { AgentRoutes } from "./pages/agent/AgentRoutes";
-import { AgentScan } from "./pages/agent/AgentScan";
-import { AgentRecord } from "./pages/agent/AgentRecord";
-import { AgentHistory } from "./pages/agent/AgentHistory";
-import { AgentCustomers } from "./pages/agent/AgentCustomers";
-import { AgentStoreProfile } from "./pages/agent/AgentStoreProfile";
-import { AgentProducts } from "./pages/agent/AgentProducts";
-import { StockTransferSheet } from "./components/StockTransferSheet";
-import { MarketerHome } from "./pages/marketer/MarketerHome";
-import { MarketerOrders } from "./pages/marketer/MarketerOrders";
-import { MarketerStores } from "./pages/marketer/MarketerStores";
-import { MarketerStoreProfile } from "./pages/marketer/MarketerStoreProfile";
-import { CustomerHome } from "./pages/customer/CustomerHome";
-import { CustomerSales } from "./pages/customer/CustomerSales";
-import { CustomerOrders } from "./pages/customer/CustomerOrders";
-import { CustomerTransactions } from "./pages/customer/CustomerTransactions";
-import { CustomerProfile } from "./pages/customer/CustomerProfile";
-import { PosHome } from "./pages/pos/PosHome";
+const AgentHome = lazy(() => import("./pages/agent/AgentHome").then(m => ({ default: m.AgentHome })));
+const AgentRoutes = lazy(() => import("./pages/agent/AgentRoutes").then(m => ({ default: m.AgentRoutes })));
+const AgentScan = lazy(() => import("./pages/agent/AgentScan").then(m => ({ default: m.AgentScan })));
+const AgentRecord = lazy(() => import("./pages/agent/AgentRecord").then(m => ({ default: m.AgentRecord })));
+const AgentHistory = lazy(() => import("./pages/agent/AgentHistory").then(m => ({ default: m.AgentHistory })));
+const AgentCustomers = lazy(() => import("./pages/agent/AgentCustomers").then(m => ({ default: m.AgentCustomers })));
+const AgentStoreProfile = lazy(() => import("./pages/agent/AgentStoreProfile").then(m => ({ default: m.AgentStoreProfile })));
+const AgentProducts = lazy(() => import("./pages/agent/AgentProducts").then(m => ({ default: m.AgentProducts })));
+const StockTransferSheet = lazy(() => import("./components/StockTransferSheet").then(m => ({ default: m.StockTransferSheet })));
+const MarketerHome = lazy(() => import("./pages/marketer/MarketerHome").then(m => ({ default: m.MarketerHome })));
+const MarketerOrders = lazy(() => import("./pages/marketer/MarketerOrders").then(m => ({ default: m.MarketerOrders })));
+const MarketerStores = lazy(() => import("./pages/marketer/MarketerStores").then(m => ({ default: m.MarketerStores })));
+const MarketerStoreProfile = lazy(() => import("./pages/marketer/MarketerStoreProfile").then(m => ({ default: m.MarketerStoreProfile })));
+const CustomerHome = lazy(() => import("./pages/customer/CustomerHome").then(m => ({ default: m.CustomerHome })));
+const CustomerSales = lazy(() => import("./pages/customer/CustomerSales").then(m => ({ default: m.CustomerSales })));
+const CustomerOrders = lazy(() => import("./pages/customer/CustomerOrders").then(m => ({ default: m.CustomerOrders })));
+const CustomerTransactions = lazy(() => import("./pages/customer/CustomerTransactions").then(m => ({ default: m.CustomerTransactions })));
+const CustomerProfile = lazy(() => import("./pages/customer/CustomerProfile").then(m => ({ default: m.CustomerProfile })));
+const PosHome = lazy(() => import("./pages/pos/PosHome").then(m => ({ default: m.PosHome })));
 import type { StoreOption } from "./components/StorePickerSheet";
-import AddCustomerStore from "@/mobile/pages/agent/AddCustomerStore";
+const AddCustomerStore = lazy(() => import("@/mobile/pages/agent/AddCustomerStore"));
 
 const PageLoader = () => (
   <div className="flex h-full items-center justify-center py-20">
@@ -253,20 +252,6 @@ function StaffApp({ role }: { role: StaffRole }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
 
-  // Badge: pending expense claims for Handovers tab
-  const { data: pendingExpenseCount = 0 } = useQuery({
-    queryKey: ["mobile-pending-expense-claims", role],
-    queryFn: async () => {
-      const { count } = await supabase
-        .from("expense_claims")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "pending");
-      return count ?? 0;
-    },
-    enabled: role === "super_admin" || role === "manager",
-    refetchInterval: 30_000,
-  });
-
   const menuSections = STAFF_MENU_BY_ROLE[role];
   const allMenuItems = menuSections.flatMap((s) => s.items);
 
@@ -297,7 +282,7 @@ function StaffApp({ role }: { role: StaffRole }) {
     if (path === "/orders") return <AdminOrders onNavigate={handleNavigate} />;
     if (path === "/sales") return <AdminSales onNavigate={handleNavigate} />;
     if (path === "/transactions") return <AdminTransactions onNavigate={handleNavigate} />;
-    if (path === "/handovers") return <MobilePageWrapper><Handovers /></MobilePageWrapper>;
+    if (path === "/handovers") return <AdminHandovers onNavigate={handleNavigate} />;
 
     // Operations - Use web app pages wrapped for mobile
     if (path === "/products") return <MobilePageWrapper><Products /></MobilePageWrapper>;
@@ -420,7 +405,7 @@ function StaffApp({ role }: { role: StaffRole }) {
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-bold text-white truncate">{profile?.full_name ?? "User"}</p>
                   <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-white/15 text-[10px] font-semibold text-blue-100 uppercase tracking-wider">
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-white/15 text-xs font-semibold text-blue-100 uppercase tracking-wider">
                       {role === "super_admin" ? "Admin" : "Manager"}
                     </span>
                   </div>
@@ -432,7 +417,7 @@ function StaffApp({ role }: { role: StaffRole }) {
             <nav className="flex-1 px-3 py-2 overflow-y-auto">
               {menuSections.map((section, si) => (
                 <div key={section.section} className={si > 0 ? "mt-3" : ""}>
-                  <p className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                  <p className="px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-muted-foreground">
                     {section.section}
                   </p>
                   <div className="space-y-0.5">
@@ -742,6 +727,7 @@ function AgentApp() {
 function PosApp() {
   useRealtimeSync();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [tab, setTab] = useState<MobileTab>("home");
   const [posStore, setPosStore] = useState<StoreOption | null>(null);
   const { data: pendingHandoversCount = 0 } = useHandoverBadge(user?.id, "-pos");
@@ -764,7 +750,7 @@ function PosApp() {
   return (
     <MobileShell title={TAB_TITLES[tab]} tabs={posTabs} tab={tab} onTabChange={handlePosTabChange}>
       {tab === "home" && <PosHome onOpenRecord={() => setTab("record")} onOpenHistory={() => setTab("history")} setTab={setTab} activeTab={tab} store={posStore} onStoreChange={setPosStore} />}
-      {tab === "orders" && <AdminOrders onNavigate={(path) => { if (path === "/orders") { setTab("orders"); } else { window.location.href = path; } }} />}
+      {tab === "orders" && <AdminOrders onNavigate={(path) => { if (path === "/orders") { setTab("orders"); } else { navigate(path); } }} />}
       {tab === "record" && <AgentRecord preselectTab="sale" allowPayment={false} onSuccess={() => setTab("history")} />}
       {tab === "handovers" && <AgentHistory />}
       {tab === "products" && <AgentProducts />}
@@ -861,25 +847,25 @@ export function MobileApp() {
     );
   }
 
-  // Role-based routing
+  // Role-based routing — each role lazy-loads only its own pages
   if (role === "agent") {
-    return <AgentApp />;
+    return <Suspense fallback={<PageLoader />}><AgentApp /></Suspense>;
   }
 
   if (role === "super_admin" || role === "manager") {
-    return <StaffApp role={role} />;
+    return <Suspense fallback={<PageLoader />}><StaffApp role={role} /></Suspense>;
   }
 
   if (role === "marketer") {
-    return <MarketerApp />;
+    return <Suspense fallback={<PageLoader />}><MarketerApp /></Suspense>;
   }
 
   if (role === "customer") {
-    return <CustomerApp />;
+    return <Suspense fallback={<PageLoader />}><CustomerApp /></Suspense>;
   }
 
   if (role === "operator") {
-    return <PosApp />;
+    return <Suspense fallback={<PageLoader />}><PosApp /></Suspense>;
   }
 
   // Role is null or unknown - this shouldn't happen if user is authenticated

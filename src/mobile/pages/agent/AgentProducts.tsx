@@ -137,11 +137,11 @@ export function AgentProducts() {
               <div className="flex-1 min-w-0">
                 <h3 className="font-medium text-sm truncate pr-2">{p.name}</h3>
                 <div className="flex items-center gap-2 mt-1">
-                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 font-normal">
+                  <Badge variant="secondary" className="text-xs px-1.5 py-0 h-5 font-normal">
                     {p.sku || "No SKU"}
                   </Badge>
                   {p.category && (
-                    <span className="text-[10px] text-muted-foreground truncate max-w-[80px]">
+                    <span className="text-xs text-muted-foreground truncate max-w-[80px]">
                       {p.category}
                     </span>
                   )}
@@ -149,7 +149,7 @@ export function AgentProducts() {
               </div>
               <div className="text-right">
                 <span className="font-semibold text-sm block">₹{Number(p.base_price).toLocaleString()}</span>
-                <span className="text-[10px] text-muted-foreground">per {p.unit}</span>
+                <span className="text-xs text-muted-foreground">per {p.unit}</span>
               </div>
             </div>
           )}
