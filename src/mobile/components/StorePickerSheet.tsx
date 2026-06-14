@@ -23,6 +23,7 @@ export interface StoreOption {
   phone: string | null;
   route_id: string | null;
   is_active: boolean;
+  last_activity_at?: string | null;
   customers: { name: string } | null;
   store_types: { name: string } | null;
   routes: { name: string } | null;

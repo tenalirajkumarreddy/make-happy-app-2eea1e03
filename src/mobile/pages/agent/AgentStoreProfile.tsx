@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { timeAgo } from "@/lib/utils";
 import type { StoreOption } from "@/mobile/components/StorePickerSheet";
 import { useMarkVisit } from "@/mobile/hooks/useMarkVisit";
 
@@ -38,6 +39,7 @@ interface StoreProfileRow {
   lng: number | null;
   route_id: string | null;
   store_type_id: string | null;
+  last_activity_at: string | null;
   customers: { name: string; phone: string | null } | null;
   store_types: { name: string } | null;
   routes: { name: string } | null;
@@ -52,7 +54,7 @@ export function AgentStoreProfile({ store, onBack, onGoRecord }: Props) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("stores")
-        .select("id, name, display_id, photo_url, outstanding, address, phone, lat, lng, route_id, store_type_id, customers(name, phone), store_types(name), routes(name)")
+        .select("id, name, display_id, photo_url, outstanding, address, phone, lat, lng, route_id, store_type_id, last_activity_at, customers(name, phone), store_types(name), routes(name)")
         .eq("id", store.id)
         .maybeSingle();
       if (error) throw error;
@@ -197,6 +199,7 @@ export function AgentStoreProfile({ store, onBack, onGoRecord }: Props) {
               {currentStore.routes?.name && (
                 <Badge variant="outline" className="text-xs font-semibold">{currentStore.routes.name}</Badge>
               )}
+              {currentStore.last_activity_at && <Badge variant="secondary" className="text-2xs font-medium">{timeAgo(currentStore.last_activity_at)}</Badge>}
             </div>
 
             {currentStore.address && (

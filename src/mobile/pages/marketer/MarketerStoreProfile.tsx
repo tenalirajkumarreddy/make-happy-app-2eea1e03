@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
+import { timeAgo } from "@/lib/utils";
 import type { StoreOption } from "@/mobile/components/StorePickerSheet";
 
 interface Props {
@@ -33,6 +34,7 @@ interface StoreProfileRow {
   lat: number | null;
   lng: number | null;
   route_id: string | null;
+  last_activity_at: string | null;
   customers: { name: string; phone: string | null } | null;
   store_types: { name: string } | null;
   routes: { name: string } | null;
@@ -44,7 +46,7 @@ export function MarketerStoreProfile({ store, onBack, onGoRecord, onGoOrders }: 
     queryFn: async () => {
       const { data, error } = await supabase
         .from("stores")
-        .select("id, name, display_id, photo_url, outstanding, address, phone, lat, lng, route_id, customers(name, phone), store_types(name), routes(name)")
+        .select("id, name, display_id, photo_url, outstanding, address, phone, lat, lng, route_id, last_activity_at, customers(name, phone), store_types(name), routes(name)")
         .eq("id", store.id)
         .maybeSingle();
       if (error) throw error;
@@ -123,6 +125,7 @@ export function MarketerStoreProfile({ store, onBack, onGoRecord, onGoOrders }: 
             <div className="flex gap-2 mt-2 flex-wrap">
               {currentStore.store_types?.name && <Badge variant="outline" className="text-xs font-semibold">{currentStore.store_types.name}</Badge>}
               {currentStore.routes?.name && <Badge variant="outline" className="text-xs font-semibold">{currentStore.routes.name}</Badge>}
+              {currentStore.last_activity_at && <Badge variant="secondary" className="text-2xs font-medium">{timeAgo(currentStore.last_activity_at)}</Badge>}
             </div>
 
             {currentStore.address && (

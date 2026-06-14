@@ -13,7 +13,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { CreateStoreWizard } from "@/components/stores/CreateStoreWizard";
-import { cn } from "@/lib/utils";
+import { cn, timeAgo } from "@/lib/utils";
 import type { StoreOption } from "@/mobile/components/StorePickerSheet";
 import { useRouteAccess } from "@/hooks/useRouteAccess";
 
@@ -53,6 +53,7 @@ interface StoreListItem {
   is_active: boolean;
   store_type_id: string | null;
   customer_id: string | null;
+  last_activity_at: string | null;
   customers: { id: string; name: string; phone: string | null } | null;
   store_types: { id: string; name: string } | null;
   routes: { name: string } | null;
@@ -79,7 +80,7 @@ export function MarketerStores({ onOpenStore, onGoRecord, onGoOrders }: Props) {
       const { data, error } = await supabase
         .from("stores")
         .select(
-          "id, name, display_id, photo_url, outstanding, address, phone, lat, lng, route_id, is_active, store_type_id, customer_id, customers(id, name, phone), store_types(id, name), routes(name)"
+          "id, name, display_id, photo_url, outstanding, address, phone, lat, lng, route_id, is_active, store_type_id, customer_id, last_activity_at, customers(id, name, phone), store_types(id, name), routes(name)"
         )
         .eq("is_active", true)
         .order("name");
@@ -212,6 +213,8 @@ export function MarketerStores({ onOpenStore, onGoRecord, onGoOrders }: Props) {
               const typeName = store.store_types?.name ?? "";
               const colorClass = getTypeColor(typeName);
               const phone = store.phone || store.customers?.phone;
+              const daysSinceActivity = store.last_activity_at ? Math.floor((Date.now() - new Date(store.last_activity_at).getTime()) / 86400000) : null;
+              const inactiveBadgeClass = daysSinceActivity === null ? "" : daysSinceActivity === 0 ? "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-700" : daysSinceActivity < 7 ? "bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-700" : "bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border-red-200 dark:border-red-700";
               const storeOption: StoreOption = {
                 id: store.id,
                 name: store.name,
@@ -226,6 +229,7 @@ export function MarketerStores({ onOpenStore, onGoRecord, onGoOrders }: Props) {
                 phone: store.phone,
                 route_id: store.route_id,
                 is_active: store.is_active,
+                last_activity_at: store.last_activity_at,
                 customers: store.customers,
                 store_types: store.store_types,
                 routes: store.routes,
@@ -267,6 +271,9 @@ export function MarketerStores({ onOpenStore, onGoRecord, onGoOrders }: Props) {
                             {typeName && <Badge variant="outline" className="text-xs h-4 px-1.5">{typeName}</Badge>}
                             {store.routes?.name && (
                               <span className="text-xs text-slate-400 dark:text-slate-500">{store.routes.name}</span>
+                            )}
+                            {daysSinceActivity !== null && (
+                              <span className={`text-2xs font-medium px-1.5 py-0.5 rounded-full border ${inactiveBadgeClass}`}>{timeAgo(store.last_activity_at!)}</span>
                             )}
                           </div>
                         </div>

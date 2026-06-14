@@ -15,7 +15,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { CreateStoreWizard } from "@/components/stores/CreateStoreWizard";
-import { cn } from "@/lib/utils";
+import { cn, timeAgo } from "@/lib/utils";
 import type { StoreOption } from "@/mobile/components/StorePickerSheet";
 import { useRouteAccess } from "@/hooks/useRouteAccess";
 
@@ -61,6 +61,7 @@ interface StoreListItem {
   is_active: boolean;
   store_type_id: string | null;
   customer_id: string | null;
+  last_activity_at: string | null;
   customers: { id: string; name: string; phone: string | null } | null;
   store_types: { id: string; name: string } | null;
   routes: { name: string } | null;
@@ -81,7 +82,7 @@ export function AgentCustomers({ onOpenStore, onGoRecord, onGoVisit }: Props) {
       const { data, error } = await supabase
         .from("stores")
         .select(
-          "id, name, display_id, photo_url, outstanding, address, phone, lat, lng, route_id, is_active, store_type_id, customer_id, customers(id, name, phone), store_types(id, name), routes(name)"
+          "id, name, display_id, photo_url, outstanding, address, phone, lat, lng, route_id, is_active, store_type_id, customer_id, last_activity_at, customers(id, name, phone), store_types(id, name), routes(name)"
         )
         .eq("is_active", true)
         .order("name");
@@ -265,6 +266,7 @@ const StoreCard = memo(({ s, onOpenStore, onGoRecord, onGoVisit, handleNavigate,
     phone: s.phone,
     route_id: s.route_id,
     is_active: s.is_active,
+    last_activity_at: s.last_activity_at,
     customers: s.customers,
     store_types: s.store_types,
     routes: s.routes,
@@ -308,6 +310,9 @@ const StoreCard = memo(({ s, onOpenStore, onGoRecord, onGoVisit, handleNavigate,
                 )}
                 {s.routes?.name && (
                   <span className="text-xs text-muted-foreground/80 font-medium">{s.routes.name}</span>
+                )}
+                {s.last_activity_at && (
+                  <span className="text-2xs text-muted-foreground/60 font-medium">{timeAgo(s.last_activity_at)}</span>
                 )}
               </div>
             </div>

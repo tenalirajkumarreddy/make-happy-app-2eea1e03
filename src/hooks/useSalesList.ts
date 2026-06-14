@@ -40,7 +40,7 @@ export function useSalesList() {
         .select("*, is_fully_returned, stores(id, name, display_id, store_type_id, route_id, address, outstanding, routes(name), store_types(name)), customers(id, name, display_id, phone, email), fulfilled_order_id, invoice_sales(invoice_id)")
         .is("deleted_at", null)
         .order("created_at", { ascending: false });
-      if (currentWarehouse?.id) q = q.eq("warehouse_id", currentWarehouse.id);
+      if (currentWarehouse?.id) q = q.or(`warehouse_id.eq.${currentWarehouse.id},warehouse_id.is.null`);
       if (!isAdmin) q = q.eq("recorded_by", user!.id);
       if (filterFrom) q = q.gte("created_at", filterFrom + "T00:00:00");
       if (filterTo) q = q.lte("created_at", filterTo + "T23:59:59");
@@ -89,7 +89,7 @@ export function useSalesList() {
     queryKey: ["customers-kyc-for-sale", currentWarehouse?.id],
     queryFn: async () => {
       let q = supabase.from("customers").select("id, kyc_status, credit_limit_override");
-      if (currentWarehouse?.id) q = q.eq("warehouse_id", currentWarehouse.id);
+      if (currentWarehouse?.id) q = q.or(`warehouse_id.eq.${currentWarehouse.id},warehouse_id.is.null`);
       const { data } = await q;
       return data || [];
     },
@@ -99,7 +99,7 @@ export function useSalesList() {
     queryKey: ["stores-for-sale", currentWarehouse?.id],
     queryFn: async () => {
       let q = supabase.from("stores").select("id, name, outstanding, display_id, store_type_id, customer_id, lat, lng, is_active").order("is_active", { ascending: false }).order("name");
-      if (currentWarehouse?.id) q = q.eq("warehouse_id", currentWarehouse.id);
+      if (currentWarehouse?.id) q = q.or(`warehouse_id.eq.${currentWarehouse.id},warehouse_id.is.null`);
       const { data } = await q;
       return data || [];
     },

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   getQueuedActions,
   removeFromQueue,
@@ -18,8 +19,10 @@ import { toast } from "sonner";
 import { logError } from "@/lib/logger";
 import { detectConflicts, ConflictType } from "@/lib/conflictResolver";
 import { validateActionPermission, getUserRole } from "@/lib/permissionCheck";
+import { afterTransactionSaved, afterPaymentReturned } from "@/lib/mutationHelpers";
 
 export function useOnlineStatus() {
+  const qc = useQueryClient();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [pendingCount, setPendingCount] = useState(0);
   const [syncing, setSyncing] = useState(false);
@@ -305,7 +308,7 @@ export function useOnlineStatus() {
           } as any));
           if (error) throw error;
         } else if (action.type === "order") {
-          const { store_id, customer_id, order_type, requirement_note, order_items, assigned_to } = action.payload as any;
+          const { store_id, customer_id, order_type, requirement_note, order_items, assigned_to, is_urgent } = action.payload as any;
           const { data: order, error: orderError } = await supabase.rpc("create_order", {
             p_store_id: store_id,
             p_customer_id: customer_id || null,
@@ -315,6 +318,7 @@ export function useOnlineStatus() {
             p_requirement_note: requirement_note || null,
             p_total_amount: 0,
             p_created_by: userIdToCheck,
+            p_is_urgent: is_urgent ?? false,
           }) as any;
           if (orderError) throw orderError;
           if (order_type === "detailed" && order_items?.length > 0) {
@@ -360,6 +364,8 @@ export function useOnlineStatus() {
            });
           if (error) throw error;
         }
+      if (action.type === "transaction") afterTransactionSaved(qc);
+      if (action.type === "payment_return") afterPaymentReturned(qc);
       try {
         await removeFromQueue(action.id);
       } catch (removeErr) {
@@ -442,7 +448,7 @@ export function useOnlineStatus() {
       },
     });
   }
-}, [syncing, refreshCount, syncFileUploads]);
+}, [syncing, qc, refreshCount, syncFileUploads]);
 
   // Auto-sync when coming back online
   useEffect(() => {

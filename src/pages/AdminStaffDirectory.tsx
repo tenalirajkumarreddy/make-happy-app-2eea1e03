@@ -60,6 +60,7 @@ export function AdminStaffDirectory() {
   const [inviteName, setInviteName] = useState("");
   const [inviteRole, setInviteRole] = useState("agent");
   const [inviteNotes, setInviteNotes] = useState("");
+  const [inviteWarehouseId, setInviteWarehouseId] = useState("");
   const [inviteSaving, setInviteSaving] = useState(false);
 
   // Edit form states
@@ -93,12 +94,21 @@ export function AdminStaffDirectory() {
     },
   });
 
+  const { data: warehouses = [] } = useQuery({
+    queryKey: ["warehouses"],
+    queryFn: async () => {
+      const { data } = await supabase.from("warehouses").select("id, name");
+      return data || [];
+    },
+  });
+
   const resetInviteForm = () => {
     setInvitePhone("");
     setInviteEmail("");
     setInviteName("");
     setInviteRole("agent");
     setInviteNotes("");
+    setInviteWarehouseId("");
   };
 
   const handleEditClick = (s: StaffMember) => {
@@ -112,8 +122,8 @@ export function AdminStaffDirectory() {
 
     setFormSaving(true);
     try {
-      // Update existing staff directory entry (role and active status only)
-      const { error } = await supabase
+      // Update staff_directory
+      const { error: dirError } = await supabase
         .from("staff_directory" as any)
         .update({
           role: formRole as any,
@@ -121,10 +131,31 @@ export function AdminStaffDirectory() {
         })
         .eq("id", editingStaff.id);
 
-      if (error) throw error;
+      if (dirError) throw dirError;
+
+      // Sync role to user_roles so auth decisions reflect the change
+      if (editingStaff.user_id) {
+        const { error: roleError } = await supabase
+          .from("user_roles")
+          .upsert(
+            { user_id: editingStaff.user_id, role: formRole },
+            { onConflict: "user_id, role, warehouse_id" }
+          );
+        if (roleError) throw roleError;
+
+        // Sync active status to profiles
+        const { error: profileError } = await supabase
+          .from("profiles")
+          .update({ is_active: formActive })
+          .eq("user_id", editingStaff.user_id);
+        if (profileError) throw profileError;
+      }
+
       toast.success("Staff updated");
 
       qc.invalidateQueries({ queryKey: ["staff-directory"] });
+      qc.invalidateQueries({ queryKey: ["all-users"] });
+      qc.invalidateQueries({ queryKey: ["all-user-permissions"] });
       setEditingStaff(null);
     } catch (err: any) {
       toast.error(err.message || "Error updating staff");
@@ -136,15 +167,38 @@ export function AdminStaffDirectory() {
   const handleDelete = async () => {
     if (!deleteConfirm) return;
 
-try {
-    const { error } = await supabase
-      .from("staff_directory" as any)
-      .update({ deleted_at: new Date().toISOString() })
-      .eq("id", deleteConfirm.id);
+    try {
+      // Find the staff member to get their user_id
+      const { data: staffToDelete } = await supabase
+        .from("staff_directory" as any)
+        .select("user_id")
+        .eq("id", deleteConfirm.id)
+        .single();
 
-    if (error) throw error;
-      toast.success("Staff deleted");
+      // Soft-delete from staff_directory
+      const { error } = await supabase
+        .from("staff_directory" as any)
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", deleteConfirm.id);
+
+      if (error) throw error;
+
+      // Revoke auth access: demote role to customer, deactivate profile
+      if (staffToDelete?.user_id) {
+        await supabase
+          .from("user_roles")
+          .delete()
+          .eq("user_id", staffToDelete.user_id);
+
+        await supabase
+          .from("profiles")
+          .update({ is_active: false })
+          .eq("user_id", staffToDelete.user_id);
+      }
+
+      toast.success("Staff deleted and access revoked");
       qc.invalidateQueries({ queryKey: ["staff-directory"] });
+      qc.invalidateQueries({ queryKey: ["all-users"] });
       setDeleteConfirm(null);
     } catch (err: any) {
       toast.error(err.message || "Error deleting staff");
@@ -174,6 +228,7 @@ try {
         role: inviteRole as any,
         notes: inviteNotes.trim() || null,
         invited_by: user!.id,
+        warehouse_id: inviteWarehouseId || null,
       } as any);
 
       if (error) throw error;
@@ -532,6 +587,21 @@ try {
                     <SelectItem key={r.value} value={r.value}>
                       {r.label}
                     </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="invite-warehouse">Warehouse</Label>
+              <Select value={inviteWarehouseId} onValueChange={setInviteWarehouseId} disabled={inviteSaving}>
+                <SelectTrigger id="invite-warehouse">
+                  <SelectValue placeholder="No warehouse" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">No warehouse</SelectItem>
+                  {warehouses.map((w: any) => (
+                    <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

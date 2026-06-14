@@ -127,7 +127,7 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
         .order("created_at", { ascending: false })
         .range(from, to);
 
-      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+      if (currentWarehouse?.id) query = query.or(`warehouse_id.eq.${currentWarehouse.id},warehouse_id.is.null`);
       if (paymentFilter === "cash") query = query.gt("cash_amount", 0).eq("upi_amount", 0);
       if (paymentFilter === "upi") query = query.gt("upi_amount", 0).eq("cash_amount", 0);
       if (paymentFilter === "outstanding") query = query.gt("outstanding_amount", 0);

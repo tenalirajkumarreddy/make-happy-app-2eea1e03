@@ -64,6 +64,7 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
   const { allowed: canOverridePrice } = usePermission("price_override");
   const { allowed: canRecordBehalf } = usePermission("record_behalf");
   const { allowed: canBackdate } = usePermission("backdate");
+  const { allowed: canRecordSale } = usePermission("record_sale");
   const qc = useQueryClient();
   const [store, setStore] = useState<StoreOption | null>(null);
   const [storePickerOpen, setStorePickerOpen] = useState(false);
@@ -269,6 +270,7 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
 
   const saleMutation = useMutation<SaleMutationResult, Error>({
     mutationFn: async () => {
+      if (!canRecordSale) throw new Error("You don't have permission to record sales");
       const effectiveRecordedBy = recordedFor || user!.id;
       const loggedBy = recordedFor ? user!.id : null;
 

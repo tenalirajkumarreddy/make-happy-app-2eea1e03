@@ -64,6 +64,10 @@ export function afterSaleSaved(qc: QueryClient, options?: { isMobile?: boolean; 
 export function afterTransactionSaved(qc: QueryClient, options?: { isMobile?: boolean; storeId?: string }) {
   invalidateAll(qc, ["transactions"]);
   invalidateAll(qc, ["stores"]);
+  invalidateAll(qc, ["stores-for-txn"]);
+  invalidateAll(qc, ["stores-for-sale"]);
+  invalidateAll(qc, ["store"]);
+  invalidateAll(qc, ["customer-stores"]);
   invalidateAll(qc, ["orders"]);
   invalidateAll(qc, ["pending-orders-for-store"]);
   invalidateAll(qc, ["customer-balances"]);
@@ -78,8 +82,8 @@ export function afterTransactionSaved(qc: QueryClient, options?: { isMobile?: bo
   if (options?.isMobile) {
     invalidateAll(qc, ["mobile-agent-tx-today"]);
     invalidateAll(qc, ["mobile-transactions"]);
-    invalidateAll(qc, ["mobile-history-tx-timeline"]);
-    invalidateAll(qc, ["mobile-history-balance-tx"]);
+    invalidateAll(qc, ["mobile-history-transactions-timeline"]);
+    invalidateAll(qc, ["mobile-history-balance-transactions"]);
   }
 }
 

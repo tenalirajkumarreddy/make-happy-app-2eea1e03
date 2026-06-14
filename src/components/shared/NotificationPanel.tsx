@@ -3,8 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useNotifications } from "@/hooks/useNotifications";
-import { cn } from "@/lib/utils";
-import { format } from "date-fns";
+import { cn, timeAgo } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 
 export function NotificationPanel() {
@@ -23,18 +22,6 @@ export function NotificationPanel() {
     else if (n.entity_type === "expense_request" && n.entity_id) navigate(`/handovers?highlight=${n.entity_id}`);
     else if (n.entity_type === "stock_transfer" && n.entity_id) navigate(`/stock-transfers?highlight=${n.entity_id}`);
     else if (n.entity_type === "customer" && n.entity_id) navigate(`/customers/${n.entity_id}`);
-  };
-
-  const timeAgo = (dateStr: string): string => {
-    const diff = Date.now() - new Date(dateStr).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return "Just now";
-    if (mins < 60) return `${mins}m ago`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}h ago`;
-    const days = Math.floor(hrs / 24);
-    if (days < 7) return `${days}d ago`;
-    return format(new Date(dateStr), "dd MMM");
   };
 
   const typeColor = (type: string) => {

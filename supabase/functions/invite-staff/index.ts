@@ -153,7 +153,7 @@ Deno.serve(async (req) => {
       throw new Error("Invalid JSON request body");
     }
 
-  const { email, phone, full_name, role, avatar_url } = body;
+  const { email, phone, full_name, role, avatar_url, warehouse_id } = body;
 
   // Normalize legacy 'pos' role to canonical 'operator'
   const normalizedRole = role === "pos" ? "operator" : role;
@@ -230,6 +230,7 @@ Deno.serve(async (req) => {
             phone,
             is_active: true,
             email: normalizedEmail,
+            warehouse_id: warehouse_id || null,
             updated_at: new Date().toISOString(),
           })
           .eq("id", matchedStaff.id);
@@ -244,13 +245,23 @@ Deno.serve(async (req) => {
             avatar_url: avatar_url || null,
             is_active: true,
             email: normalizedEmail,
+            warehouse_id: warehouse_id || null,
           });
         if (insertStaffError) throw insertStaffError;
       }
     }
 
-    // If no email, return early (phone-only registration)
+    // If no email, record invitation and return (phone-only registration)
     if (!normalizedEmail) {
+      await supabaseAdmin.from("staff_invitations").insert({
+        phone: String(phone).trim(),
+        full_name: full_name.trim(),
+        role: normalizedRole,
+        invited_by: caller.id,
+        status: "pending",
+        warehouse_id: warehouse_id || null,
+      });
+
       return new Response(JSON.stringify({ success: true, mode: "phone_registered", phone }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -273,11 +284,27 @@ Deno.serve(async (req) => {
     });
     if (createError) throw createError;
 
-    // Assign role
+    // Trigger auto-creates profile + user_roles(customer) — update profile, replace role
+    await supabaseAdmin
+      .from("profiles")
+      .update({
+        full_name: full_name.trim(),
+        email: normalizedEmail,
+        avatar_url: avatar_url || null,
+        is_active: true,
+      })
+      .eq("user_id", newUser.user.id);
+
+    // Remove auto-created customer role, assign staff role
     await supabaseAdmin
       .from("user_roles")
-      .update({ role: normalizedRole })
-      .eq("user_id", newUser.user.id);
+      .delete()
+      .eq("user_id", newUser.user.id)
+      .eq("role", "customer");
+
+    await supabaseAdmin
+      .from("user_roles")
+      .insert({ user_id: newUser.user.id, role: normalizedRole, warehouse_id: warehouse_id || null });
 
     // Link staff directory (indexed lookups instead of full-table scan)
     if (phone) {
@@ -286,7 +313,7 @@ Deno.serve(async (req) => {
       if (staffToLink) {
         await supabaseAdmin
           .from("staff_directory")
-          .update({ user_id: newUser.user.id, email: normalizedEmail })
+          .update({ user_id: newUser.user.id, email: normalizedEmail, warehouse_id: warehouse_id || null })
           .eq("id", staffToLink.id);
       }
     } else {
@@ -301,6 +328,7 @@ Deno.serve(async (req) => {
             role: normalizedRole,
             avatar_url: avatar_url || null,
             is_active: true,
+            warehouse_id: warehouse_id || null,
             updated_at: new Date().toISOString(),
           })
           .eq("id", staffByEmail.id);
@@ -315,6 +343,7 @@ Deno.serve(async (req) => {
             role: normalizedRole,
             avatar_url: avatar_url || null,
             is_active: true,
+            warehouse_id: warehouse_id || null,
           });
         if (insertEmailStaffError) throw insertEmailStaffError;
       }
@@ -329,6 +358,7 @@ Deno.serve(async (req) => {
       invited_by: caller.id,
       status: "accepted",
       accepted_at: new Date().toISOString(),
+      warehouse_id: warehouse_id || null,
     });
 
     // Send password reset

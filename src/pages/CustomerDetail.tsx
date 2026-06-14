@@ -40,6 +40,7 @@ const CustomerDetail = () => {
   const [form, setForm] = useState({
     name: "",
     phone: "",
+    alternate_phone: "",
     email: "",
     address: "",
     gst_number: "",
@@ -97,6 +98,7 @@ const CustomerDetail = () => {
     setForm({
       name: customer.name || "",
       phone: customer.phone || "",
+      alternate_phone: customer.alternate_phone || "",
       email: customer.email || "",
       address: customer.address || "",
       gst_number: customer.gst_number || "",
@@ -113,6 +115,7 @@ const CustomerDetail = () => {
       .update({
         name: form.name,
         phone: form.phone || null as any,
+        alternate_phone: form.alternate_phone || null as any,
         email: form.email || null,
         address: form.address || null,
         gst_number: form.gst_number || null,
@@ -319,6 +322,7 @@ const CustomerDetail = () => {
                 <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1"><Label className="text-xs">Name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
                   <div className="space-y-1"><Label className="text-xs">Phone</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
+                  <div className="space-y-1"><Label className="text-xs">Alt. Phone</Label><Input value={form.alternate_phone} onChange={(e) => setForm({ ...form, alternate_phone: e.target.value })} /></div>
                   <div className="space-y-1"><Label className="text-xs">Email</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
                   <div className="space-y-1"><Label className="text-xs">GST Number</Label><Input value={form.gst_number} onChange={(e) => setForm({ ...form, gst_number: e.target.value })} /></div>
                   <div className="space-y-1 sm:col-span-2"><Label className="text-xs">Address</Label><Textarea value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} rows={2} /></div>
@@ -328,6 +332,7 @@ const CustomerDetail = () => {
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-x-6 gap-y-2">
               <InfoItem label="Phone" value={customer.phone || "Not provided"} />
+              <InfoItem label="Alt. Phone" value={customer.alternate_phone || "Not provided"} />
               <InfoItem label="Email" value={customer.email || "Not provided"} />
               <InfoItem label="Address" value={customer.address || "Not provided"} />
               <InfoItem label="GST" value={customer.gst_number || "—"} />

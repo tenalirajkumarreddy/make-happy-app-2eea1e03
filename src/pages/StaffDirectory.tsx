@@ -34,6 +34,10 @@ import {
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { startOfDay, endOfDay, format } from "date-fns";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 
 const ROLES = [
   { value: "all", label: "All Roles" },
@@ -59,6 +63,72 @@ export function StaffDirectory() {
   const [warehouseFilter, setWarehouseFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("active");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+
+  // Invite dialog state (phone is primary, email is optional)
+  const [showInvite, setShowInvite] = useState(false);
+  const [inviteName, setInviteName] = useState("");
+  const [invitePhone, setInvitePhone] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState("agent");
+  const [inviteWarehouseId, setInviteWarehouseId] = useState("");
+  const [inviteSaving, setInviteSaving] = useState(false);
+
+  const handleInvite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inviteName.trim()) {
+      toast.error("Full name is required");
+      return;
+    }
+    if (!invitePhone.trim()) {
+      toast.error("Phone number is required");
+      return;
+    }
+    let normalizedPhone = invitePhone.trim();
+    if (!normalizedPhone.startsWith('+')) {
+      normalizedPhone = normalizedPhone.length === 10 ? `+91${normalizedPhone}` : normalizedPhone;
+    }
+    const digits = normalizedPhone.replace(/\D/g, '');
+    if (digits.length < 10) {
+      toast.error("Phone number must have at least 10 digits");
+      return;
+    }
+    setInviteSaving(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("invite-staff", {
+        body: {
+          phone: normalizedPhone,
+          email: inviteEmail.trim() || undefined,
+          full_name: inviteName.trim(),
+          role: inviteRole,
+          warehouse_id: inviteWarehouseId || undefined,
+        },
+      });
+      if (error || data?.error) {
+        toast.error(data?.error || error?.message || "Failed to invite staff");
+        return;
+      }
+      toast.success(`Pre-registered ${inviteName.trim()} as ${inviteRole}. They'll get their role when they sign in with this phone.`);
+      setShowInvite(false);
+      setInviteName("");
+      setInvitePhone("");
+      setInviteEmail("");
+      setInviteRole("agent");
+      setInviteWarehouseId("");
+      queryClient.invalidateQueries({ queryKey: ["staff-directory-enriched"] });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to invite staff");
+    } finally {
+      setInviteSaving(false);
+    }
+  };
+
+  const { data: warehouses = [] } = useQuery({
+    queryKey: ["warehouses"],
+    queryFn: async () => {
+      const { data } = await supabase.from("warehouses").select("id, name");
+      return data || [];
+    },
+  });
 
   // Fetch staff with enriched data
   const { data: staff, isLoading } = useQuery({
@@ -345,7 +415,7 @@ export function StaffDirectory() {
         <p className="text-sm text-muted-foreground">
           Showing {filteredStaff?.length || 0} of {staff?.length || 0} staff members
         </p>
-        <Button onClick={() => navigate("/staff/invite")}>
+        <Button onClick={() => setShowInvite(true)}>
           <UserPlus className="h-4 w-4 mr-2" />
           Invite Staff
         </Button>
@@ -374,6 +444,90 @@ export function StaffDirectory() {
           </p>
         </div>
       )}
+
+      {/* Invite Staff Dialog — phone is primary, email is optional */}
+      <Dialog open={showInvite} onOpenChange={setShowInvite}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Pre-register Staff</DialogTitle></DialogHeader>
+          <form onSubmit={handleInvite} className="space-y-4">
+            <div>
+              <Label htmlFor="invite-name">Full Name *</Label>
+              <Input
+                id="invite-name"
+                placeholder="John Doe"
+                value={inviteName}
+                onChange={(e) => setInviteName(e.target.value)}
+                required
+                disabled={inviteSaving}
+              />
+            </div>
+            <div>
+              <Label htmlFor="invite-phone">Phone Number *</Label>
+              <Input
+                id="invite-phone"
+                placeholder="9876543210 or +919876543210"
+                value={invitePhone}
+                onChange={(e) => setInvitePhone(e.target.value)}
+                required
+                disabled={inviteSaving}
+              />
+              <p className="text-xs text-muted-foreground mt-1">Staff will sign in with this phone number via OTP</p>
+            </div>
+            <div>
+              <Label htmlFor="invite-email">Email <span className="text-xs text-muted-foreground">(optional)</span></Label>
+              <Input
+                id="invite-email"
+                type="email"
+                placeholder="staff@example.com"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                disabled={inviteSaving}
+              />
+            </div>
+            <div>
+              <Label htmlFor="invite-role">Role</Label>
+              <Select value={inviteRole} onValueChange={setInviteRole} disabled={inviteSaving}>
+                <SelectTrigger id="invite-role"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="manager">Manager</SelectItem>
+                  <SelectItem value="agent">Agent</SelectItem>
+                  <SelectItem value="marketer">Marketer</SelectItem>
+                  <SelectItem value="operator">Operator</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="invite-warehouse">Warehouse</Label>
+              <Select value={inviteWarehouseId} onValueChange={setInviteWarehouseId} disabled={inviteSaving}>
+                <SelectTrigger id="invite-warehouse">
+                  <SelectValue placeholder="No warehouse" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">No warehouse</SelectItem>
+                  {warehouses.map((w: any) => (
+                    <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Staff will get their assigned role when they sign in via phone OTP. Email is optional — used for password reset if provided.
+            </p>
+            <div className="flex gap-3 pt-2">
+              <Button type="button" variant="outline" onClick={() => setShowInvite(false)} disabled={inviteSaving} className="flex-1">
+                Cancel
+              </Button>
+              <Button type="submit" disabled={inviteSaving} className="flex-1">
+                {inviteSaving ? (
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Registering...</>
+                ) : (
+                  "Register Staff"
+                )}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

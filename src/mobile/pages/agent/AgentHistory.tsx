@@ -99,6 +99,7 @@ export function AgentHistory() {
   const { user, profile, role } = useAuth();
   const isAdmin = role === "super_admin" || role === "manager";
   const { allowed: canReturnSales } = usePermission("create_sale_returns");
+  const { allowed: canSubmitExpenses } = usePermission("submit_expenses");
   const qc = useQueryClient();
   const [view, setView] = useState<"activity" | "handovers" | "claims">("activity");
   const [selectedActivityDate, setSelectedActivityDate] = useState<string | null>(null);
@@ -645,6 +646,10 @@ export function AgentHistory() {
   };
 
   const handleExpenseSubmit = async () => {
+    if (!canSubmitExpenses) {
+      toast.error("You don't have permission to submit expenses");
+      return;
+    }
     if (!expenseCategoryId || !expenseAmount || Number(expenseAmount) <= 0) {
       toast.error("Select a category and enter a valid amount");
       return;
@@ -707,10 +712,10 @@ export function AgentHistory() {
     const handover = (handovers || []).find((h: any) => h.id === handoverId);
     if (!handover) return;
     setSubmitting(true);
-    const { error } = await supabase
-      .from("handovers")
-      .update({ status: "cancelled" })
-      .eq("id", handoverId);
+    const { error } = await supabase.rpc("cancel_handover", {
+      p_handover_id: handoverId,
+      p_cancelled_by: user!.id,
+    });
     setSubmitting(false);
     if (error) {
       toast.error(error.message);
@@ -760,13 +765,10 @@ export function AgentHistory() {
   };
 
   const handleReject = async (handover: any) => {
-    const { error } = await supabase
-      .from("handovers")
-      .update({
-        status: "rejected",
-        rejected_at: new Date().toISOString(),
-      })
-      .eq("id", handover.id);
+    const { error } = await supabase.rpc("reject_handover", {
+      p_handover_id: handover.id,
+      p_rejected_by: user!.id,
+    });
 
     if (error) {
       toast.error(error.message);
@@ -1337,6 +1339,10 @@ export function AgentHistory() {
             </button>
             <button
               onClick={() => {
+                if (!canSubmitExpenses) {
+                  toast.error("You don't have permission to submit expenses");
+                  return;
+                }
                 setExpenseAmount("");
                 setExpenseCategoryId("");
                 setExpenseDate("");

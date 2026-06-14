@@ -82,6 +82,7 @@ GRANT EXECUTE ON FUNCTION public.assert_caller_allowed TO authenticated;
 -- ──────────────────────────────────────────────
 -- 1. Harden record_sale with role + price checks
 -- ──────────────────────────────────────────────
+DROP FUNCTION IF EXISTS public.record_sale(TEXT, UUID, UUID, UUID, UUID, NUMERIC, NUMERIC, NUMERIC, NUMERIC, JSONB, TIMESTAMPTZ, NUMERIC, UUID) CASCADE;
 CREATE OR REPLACE FUNCTION public.record_sale(
   p_display_id            TEXT,
   p_store_id              UUID,
@@ -643,6 +644,7 @@ $$;
 -- ──────────────────────────────────────────────
 -- 4. Create record_purchase RPC (dynamic status)
 -- ──────────────────────────────────────────────
+DROP FUNCTION IF EXISTS public.record_purchase(UUID, UUID, JSONB, NUMERIC, TEXT, DATE, TEXT, TEXT, UUID, TEXT) CASCADE;
 CREATE OR REPLACE FUNCTION public.record_purchase(
   p_vendor_id UUID,
   p_warehouse_id UUID DEFAULT NULL,
@@ -727,6 +729,7 @@ GRANT EXECUTE ON FUNCTION public.record_purchase TO authenticated;
 -- ──────────────────────────────────────────────
 -- 5. Create approve_purchase RPC
 -- ──────────────────────────────────────────────
+DROP FUNCTION IF EXISTS public.approve_purchase(UUID, UUID) CASCADE;
 CREATE OR REPLACE FUNCTION public.approve_purchase(
   p_purchase_id UUID,
   p_user_id UUID DEFAULT NULL
@@ -781,6 +784,7 @@ GRANT EXECUTE ON FUNCTION public.approve_purchase TO authenticated;
 -- ──────────────────────────────────────────────
 -- 6a. Create reject_handover RPC
 -- ──────────────────────────────────────────────
+DROP FUNCTION IF EXISTS public.reject_handover(UUID, UUID, TEXT) CASCADE;
 CREATE OR REPLACE FUNCTION public.reject_handover(
   p_handover_id UUID,
   p_rejected_by UUID
@@ -834,6 +838,7 @@ GRANT EXECUTE ON FUNCTION public.reject_handover TO authenticated;
 -- ──────────────────────────────────────────────
 -- 6b. Create cancel_handover RPC
 -- ──────────────────────────────────────────────
+DROP FUNCTION IF EXISTS public.cancel_handover(UUID, UUID, TEXT) CASCADE;
 CREATE OR REPLACE FUNCTION public.cancel_handover(
   p_handover_id UUID,
   p_cancelled_by UUID

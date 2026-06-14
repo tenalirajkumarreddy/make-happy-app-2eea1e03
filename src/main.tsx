@@ -37,6 +37,16 @@ if (env.VITE_SENTRY_DSN && import.meta.env.PROD) {
   }
 }
 
+// Clear all Cache API caches (service worker precache + runtime caches)
+async function clearAllCaches() {
+  try {
+    const keys = await caches.keys();
+    await Promise.all(keys.map((k) => caches.delete(k)));
+  } catch {
+    // Cache API not available (non-HTTP context)
+  }
+}
+
 // Initialize Capacitor plugins when running as native app
 async function initCapacitor() {
   if (Capacitor.isNativePlatform()) {
@@ -189,8 +199,10 @@ async function saveFCMToken(token: string) {
   }
 }
 
-// Render app first, then initialize native features
-createRoot(document.getElementById("root")!).render(<App />);
-
-// Initialize Capacitor after render
-initCapacitor();
+// Clear stale caches BEFORE rendering — prevents SW from serving old auth responses
+async function startApp() {
+  await clearAllCaches();
+  createRoot(document.getElementById("root")!).render(<App />);
+  initCapacitor();
+}
+startApp();

@@ -41,9 +41,11 @@ Deno.serve(async (req) => {
     if (ban) {
       const { error } = await adminClient.auth.admin.updateUserById(user_id, { ban_duration: "876600h" });
       if (error) throw error;
+      await adminClient.from("profiles").update({ is_active: false }).eq("user_id", user_id);
     } else {
       const { error } = await adminClient.auth.admin.updateUserById(user_id, { ban_duration: "none" });
       if (error) throw error;
+      await adminClient.from("profiles").update({ is_active: true }).eq("user_id", user_id);
     }
 
     return new Response(JSON.stringify({ success: true }), {

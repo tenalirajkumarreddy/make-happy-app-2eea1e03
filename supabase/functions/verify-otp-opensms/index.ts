@@ -58,11 +58,13 @@ async function ensureSupabaseAuthUser(supabase: any, phoneNumber: string): Promi
 }
 
 /**
- * After OTP verification, resolve the user's identity:
- * 1. Check staff_invitations by phone → create staff_directory, assign role
- * 2. Check staff_directory by phone → link user_id, assign role
- * 3. Check customers by phone (and by auth user_id link) → link user_id
- * 4. None found → onboarding_required
+ * After OTP verification, resolve the user's identity.
+ * The handle_new_user trigger auto-creates profile + user_roles(customer).
+ * We only need to:
+ * 1. Check staff_invitations → upgrade role, sync staff_directory
+ * 2. Check staff_directory → upgrade role
+ * 3. Check customers → link user_id (safety; trigger handles this by phone)
+ * 4. → onboarding_required for new customers
  */
 async function resolveIdentity(
   adminClient: any,
@@ -76,14 +78,6 @@ async function resolveIdentity(
 
   if (invErr) {
     console.error("find_staff_invitation_by_phone error:", invErr);
-    // If RPC fails, try direct query as fallback
-    const { data: fallbackInv } = await adminClient
-      .from("staff_invitations")
-      .select("id, phone, email, full_name, role, status, accepted_at")
-      .like("phone", `%${phoneNumber.replace(/\D/g, '').slice(-10)}%`)
-      .in("status", ["pending", "accepted"])
-      .limit(1);
-    if (fallbackInv?.length) matchingInvitations = fallbackInv;
   }
 
   if (matchingInvitations && matchingInvitations.length >= 1) {
@@ -98,12 +92,14 @@ async function resolveIdentity(
       await adminClient.from("staff_directory").update({
         user_id: userId, phone: phoneNumber,
         full_name: invitation.full_name || "Staff", role: invitation.role, is_active: true,
+        warehouse_id: invitation.warehouse_id || null,
       }).eq("id", existingDir.id);
     } else {
       await adminClient.from("staff_directory").insert({
         user_id: userId, phone: phoneNumber, email: userEmail || null,
         full_name: invitation.full_name || "Staff", role: invitation.role,
         avatar_url: null, is_active: true,
+        warehouse_id: invitation.warehouse_id || null,
       });
     }
 
@@ -111,145 +107,55 @@ async function resolveIdentity(
       status: "accepted", accepted_at: invitation.accepted_at || new Date().toISOString(),
     }).eq("id", invitation.id);
 
+    // Remove trigger-created customer role, assign staff role
     await adminClient.from("user_roles").delete().eq("user_id", userId);
-    const { error: roleErr } = await adminClient.from("user_roles").insert({ user_id: userId, role: invitation.role });
-    if (roleErr) {
-      console.error("Failed to insert user role:", roleErr);
-      throw new Error(`Failed to assign staff role: ${roleErr.message}`);
-    }
+    await adminClient.from("user_roles").insert({
+      user_id: userId, role: invitation.role,
+      warehouse_id: invitation.warehouse_id || null,
+    });
 
-    const { error: profileErr } = await adminClient.from("profiles").upsert({
-      user_id: userId, full_name: invitation.full_name || "Staff",
+    // Profile already exists from trigger — just update fields
+    await adminClient.from("profiles").update({
+      full_name: invitation.full_name || "Staff",
       email: userEmail || null, phone: phoneNumber,
-      avatar_url: null, is_active: true, phone_verified: true, onboarding_complete: true,
-    }, { onConflict: "user_id" });
-    if (profileErr) {
-      console.error("Failed to upsert profile:", profileErr);
-      throw new Error(`Failed to create profile: ${profileErr.message}`);
-    }
+      is_active: true, phone_verified: true, onboarding_complete: true,
+    }).eq("user_id", userId);
 
     return { type: "staff", role: invitation.role };
   }
 
-  // STEP 2: Check staff_directory
+  // STEP 2: Check staff_directory (pre-registered staff, no invitation needed)
   const { data: matchingStaff, error: staffErr } = await adminClient
     .rpc("find_staff_by_phone", { p_phone_digits: phoneNumber });
 
   if (staffErr) {
     console.error("find_staff_by_phone error:", staffErr);
-    // Fallback direct query
-    const digits = phoneNumber.replace(/\D/g, '').slice(-10);
-    const { data: fallbackStaff } = await adminClient
-      .from("staff_directory")
-      .select("id, phone, user_id, role, full_name, avatar_url")
-      .eq("is_active", true)
-      .like("phone", `%${digits}%`)
-      .is("user_id", null)
-      .limit(1);
-    if (fallbackStaff?.length) matchingStaff = fallbackStaff;
   }
 
   if (matchingStaff && matchingStaff.length >= 1) {
     const staff = matchingStaff[0];
 
-    const { error: dirErr } = await adminClient.from("staff_directory")
+    await adminClient.from("staff_directory")
       .update({ user_id: userId }).eq("id", staff.id);
-    if (dirErr) {
-      console.error("Failed to update staff_directory:", dirErr);
-      throw new Error(`Failed to link staff record: ${dirErr.message}`);
-    }
 
+    // Remove trigger-created customer role, assign staff role
     await adminClient.from("user_roles").delete().eq("user_id", userId);
-    const { error: roleErr } = await adminClient.from("user_roles").insert({ user_id: userId, role: staff.role });
-    if (roleErr) {
-      console.error("Failed to insert user role:", roleErr);
-      throw new Error(`Failed to assign staff role: ${roleErr.message}`);
-    }
+    await adminClient.from("user_roles").insert({
+      user_id: userId, role: staff.role,
+      warehouse_id: staff.warehouse_id || null,
+    });
 
-    const { error: profileErr } = await adminClient.from("profiles").upsert({
-      user_id: userId, full_name: staff.full_name || "Staff",
+    // Profile already exists from trigger — just update fields
+    await adminClient.from("profiles").update({
+      full_name: staff.full_name || "Staff",
       email: userEmail || null, phone: phoneNumber,
-      avatar_url: staff.avatar_url || null, is_active: true, phone_verified: true, onboarding_complete: true,
-    }, { onConflict: "user_id" });
-    if (profileErr) {
-      console.error("Failed to upsert profile:", profileErr);
-      throw new Error(`Failed to create profile: ${profileErr.message}`);
-    }
+      is_active: true, phone_verified: true, onboarding_complete: true,
+    }).eq("user_id", userId);
 
     return { type: "staff", role: staff.role };
   }
 
-  // STEP 2b: Check existing user_roles for already-linked staff (edge case: staff was created
-  // directly in user_roles/profiles without a staff_directory entry, e.g. invited via admin panel)
-  const { data: existingRole } = await adminClient
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  if (existingRole && existingRole.role !== "customer") {
-    console.log("Staff found via existing user_roles for userId:", userId, "role:", existingRole.role);
-
-    const { error: profileErr } = await adminClient.from("profiles").upsert({
-      user_id: userId, full_name: "Staff",
-      email: userEmail || null, phone: phoneNumber,
-      is_active: true, phone_verified: true, onboarding_complete: true,
-    }, { onConflict: "user_id" });
-    if (profileErr) {
-      console.error("Failed to upsert profile:", profileErr);
-    }
-
-    return { type: "staff", role: existingRole.role };
-  }
-
-  // STEP 2c: Check seeded app_users records by phone.
-  // Some environments seed staff in app_users first, with a separate auth UID created later.
-  const phoneDigits = phoneNumber.replace(/\D/g, '').slice(-10);
-  const { data: appUserMatch, error: appUserErr } = await adminClient
-    .from("app_users")
-    .select("id, phone, google_email, full_name, role, is_active")
-    .eq("is_active", true)
-    .or(`phone.ilike.%${phoneDigits}%,phone.ilike.%${phoneNumber}`)
-    .limit(1);
-
-  if (appUserErr) {
-    console.error("app_users lookup error:", appUserErr);
-  }
-
-  if (appUserMatch && appUserMatch.length >= 1) {
-    const appUser = appUserMatch[0];
-
-    if (appUser.role && appUser.role !== "customer") {
-      await adminClient.from("user_roles").delete().eq("user_id", userId);
-      const { error: roleErr } = await adminClient.from("user_roles").insert({
-        user_id: userId,
-        role: appUser.role,
-      });
-      if (roleErr) {
-        console.error("Failed to insert app_users-derived role:", roleErr);
-        throw new Error(`Failed to assign staff role from app_users: ${roleErr.message}`);
-      }
-
-      const { error: profileErr } = await adminClient.from("profiles").upsert({
-        user_id: userId,
-        full_name: appUser.full_name || "Staff",
-        email: appUser.google_email || userEmail || null,
-        phone: phoneNumber,
-        avatar_url: null,
-        is_active: true,
-        phone_verified: true,
-        onboarding_complete: true,
-      }, { onConflict: "user_id" });
-      if (profileErr) {
-        console.error("Failed to upsert app_users-derived profile:", profileErr);
-        throw new Error(`Failed to create profile from app_users: ${profileErr.message}`);
-      }
-
-      return { type: "staff", role: appUser.role };
-    }
-  }
-
-  // STEP 3: Check customers (by phone + by auth user_id link)
+  // STEP 3: Check customers by phone — link user_id (trigger does this, safety fallback)
   const { data: matchingCustomers, error: custErr } = await adminClient
     .rpc("find_customer_by_phone", { p_phone_digits: phoneNumber });
 
@@ -257,90 +163,20 @@ async function resolveIdentity(
     console.error("find_customer_by_phone error:", custErr);
   }
 
-  // FALLBACK: direct phone lookup in customers table (handles cases where RPC missed due to phone format)
-  if (!matchingCustomers || matchingCustomers.length < 1) {
-    const phoneDigits = phoneNumber.replace(/\D/g, '').slice(-10);
-    const { data: directCustomers } = await adminClient
-      .from("customers")
-      .select("id, name, phone, user_id")
-      .like("phone", `%${phoneDigits}%`)
-      .is("deleted_at", null)
-      .limit(1);
-    if (directCustomers && directCustomers.length >= 1) {
-      matchingCustomers = directCustomers;
-      console.log("Customer found via direct phone lookup for digits:", phoneDigits);
-    }
-  }
-
   if (matchingCustomers && matchingCustomers.length >= 1) {
     const customer = matchingCustomers[0];
 
-    // Safety: if customer has no user_id yet, link it
     if (!customer.user_id || customer.user_id !== userId) {
-      const { error: linkErr } = await adminClient.from("customers")
+      await adminClient.from("customers")
         .update({ user_id: userId }).eq("id", customer.id);
-      if (linkErr) {
-        console.error("Failed to link customer user_id:", linkErr);
-        throw new Error(`Failed to link customer account: ${linkErr.message}`);
-      }
     }
 
-    const { error: roleErr } = await adminClient.from("user_roles").upsert(
-      { user_id: userId, role: "customer" }, { onConflict: "user_id" }
-    );
-    if (roleErr) {
-      console.error("Failed to upsert user_roles:", roleErr);
-      throw new Error(`Failed to assign customer role: ${roleErr.message}`);
-    }
-
-    const { error: profileErr } = await adminClient.from("profiles").upsert({
-      user_id: userId, full_name: "Customer",
-      email: userEmail || null, phone: phoneNumber,
-      is_active: true, phone_verified: true, onboarding_complete: true,
-    }, { onConflict: "user_id" });
-    if (profileErr) {
-      console.error("Failed to upsert profile:", profileErr);
-      throw new Error(`Failed to create profile: ${profileErr.message}`);
-    }
-
+    // Profile + customer role already exist from trigger
     return { type: "existing_customer", customerId: customer.id };
   }
 
-  // STEP 4: Safety fallback — check if user already has a customer linked via user_id
-  // (Edge case: customer exists but find_customer_by_phone didn't match due to phone format)
-  const { data: existingCustomerByUid } = await adminClient
-    .from("customers")
-    .select("id, name, phone, user_id")
-    .eq("user_id", userId)
-    .is("deleted_at", null)
-    .limit(1);
-
-  if (existingCustomerByUid && existingCustomerByUid.length >= 1) {
-    // User already has a customer record linked — treat as existing customer
-    console.log("Safety fallback: customer found via user_id link for user", userId);
-
-    const { error: roleErr } = await adminClient.from("user_roles").upsert(
-      { user_id: userId, role: "customer" }, { onConflict: "user_id" }
-    );
-    if (roleErr) {
-      console.error("Failed to upsert user_roles:", roleErr);
-      throw new Error(`Failed to assign customer role: ${roleErr.message}`);
-    }
-
-    const { error: profileErr } = await adminClient.from("profiles").upsert({
-      user_id: userId, full_name: "Customer",
-      email: userEmail || null, phone: phoneNumber,
-      is_active: true, phone_verified: true, onboarding_complete: true,
-    }, { onConflict: "user_id" });
-    if (profileErr) {
-      console.error("Failed to upsert profile:", profileErr);
-      throw new Error(`Failed to create profile: ${profileErr.message}`);
-    }
-
-    return { type: "existing_customer", customerId: existingCustomerByUid[0].id };
-  }
-
-  // STEP 5: No match - onboarding required
+  // STEP 4: No match - new user, onboarding required
+  // Profile + customer role already created by trigger
   return { type: "onboarding_required" };
 }
 

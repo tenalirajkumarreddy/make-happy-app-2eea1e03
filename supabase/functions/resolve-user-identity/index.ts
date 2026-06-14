@@ -32,7 +32,7 @@ async function findStaffMatch(
   canonicalEmail: string | null,
   canonicalPhone: string | null
 ) {
-  const cols = "id, user_id, full_name, avatar_url, role, email, phone, is_active";
+  const cols = "id, user_id, full_name, avatar_url, role, email, phone, is_active, warehouse_id";
 
   // 1. Try by user_id (exact indexed lookup)
   const { data: byUserId } = await supabaseAdmin
@@ -84,7 +84,7 @@ async function findInvitationMatch(
   canonicalEmail: string | null,
   canonicalPhone: string | null
 ) {
-  const cols = "id, email, phone, full_name, role, status, accepted_at, created_at";
+  const cols = "id, email, phone, full_name, role, status, accepted_at, created_at, warehouse_id";
 
   // 1. Try by email (uses idx_staff_invitations_email)
   if (canonicalEmail) {
@@ -235,6 +235,8 @@ Deno.serve(async (req) => {
         : staffMatch?.role || invitationMatch?.role || null;
 
     if (resolvedStaffRole) {
+      const resolvedWarehouseId = staffMatch?.warehouse_id || invitationMatch?.warehouse_id || null;
+
       const { error: roleDeleteError } = await supabaseAdmin
         .from("user_roles")
         .delete()
@@ -243,7 +245,7 @@ Deno.serve(async (req) => {
 
       const { error: roleInsertError } = await supabaseAdmin
         .from("user_roles")
-        .insert({ user_id: userId, role: resolvedStaffRole });
+        .insert({ user_id: userId, role: resolvedStaffRole, warehouse_id: resolvedWarehouseId });
       if (roleInsertError) throw roleInsertError;
 
       if (staffMatch) {
@@ -254,6 +256,7 @@ Deno.serve(async (req) => {
             email: canonicalEmail || staffMatch.email || null,
             phone: canonicalPhone || staffMatch.phone || null,
             is_active: true,
+            warehouse_id: resolvedWarehouseId,
           })
           .eq("id", staffMatch.id);
         if (linkStaffError) throw linkStaffError;
@@ -273,6 +276,7 @@ Deno.serve(async (req) => {
               full_name: invitationMatch.full_name || null,
               role: invitationMatch.role,
               is_active: true,
+              warehouse_id: resolvedWarehouseId,
             })
             .eq("id", existingDirByUser.id);
           if (updateDirError) throw updateDirError;
@@ -287,6 +291,7 @@ Deno.serve(async (req) => {
               role: invitationMatch.role,
               avatar_url: null,
               is_active: true,
+              warehouse_id: resolvedWarehouseId,
             });
           if (insertDirError) throw insertDirError;
         }

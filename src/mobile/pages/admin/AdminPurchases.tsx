@@ -75,7 +75,7 @@ export function AdminPurchases({ onNavigate }: { onNavigate: (path: string) => v
         .range(from, to);
 
       if (currentWarehouse?.id) {
-        query = query.eq("warehouse_id", currentWarehouse.id);
+        query = query.or(`warehouse_id.eq.${currentWarehouse.id},warehouse_id.is.null`);
       }
 
       if (statusFilter !== "all") {

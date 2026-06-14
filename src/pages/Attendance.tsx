@@ -379,7 +379,7 @@ export default function Attendance() {
       let query = supabase
         .from("workers")
         .select("*");
-      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+      if (currentWarehouse?.id) query = query.or(`warehouse_id.eq.${currentWarehouse.id},warehouse_id.is.null`);
       query = query.order("name");
       const { data, error } = await query;
       if (error) throw error;
@@ -393,7 +393,7 @@ export default function Attendance() {
       let query = supabase
         .from("worker_balances")
         .select("*");
-      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+      if (currentWarehouse?.id) query = query.or(`warehouse_id.eq.${currentWarehouse.id},warehouse_id.is.null`);
       query = query.order("outstanding_balance", { ascending: false });
       const { data, error } = await query;
       if (error) throw error;

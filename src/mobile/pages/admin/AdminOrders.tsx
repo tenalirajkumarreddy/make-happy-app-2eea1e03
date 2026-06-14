@@ -118,6 +118,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
   const [createRequirementNote, setCreateRequirementNote] = useState("");
   const [createOrderItems, setCreateOrderItems] = useState<{ product_id: string; quantity: number; unit_price: number; products?: { name: string; base_price: number } }[]>([]);
   const [createSaving, setCreateSaving] = useState(false);
+  const [createUrgent, setCreateUrgent] = useState(false);
 
   const { data: viewProforma } = useQuery({
     queryKey: ["mobile-view-proforma", viewProformaId],
@@ -165,7 +166,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
         .order("created_at", { ascending: false })
         .range(from, to);
 
-      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+      if (currentWarehouse?.id) query = query.or(`warehouse_id.eq.${currentWarehouse.id},warehouse_id.is.null`);
 
       if (statusFilter !== "all") query = query.eq("status", statusFilter);
       if (dateFrom) query = query.gte("created_at", `${dateFrom}T00:00:00`);
@@ -462,6 +463,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
         p_requirement_note: createOrderType === "simple" ? createRequirementNote : null,
         p_total_amount: 0,
         p_created_by: user!.id,
+        p_is_urgent: createUrgent,
       }) as any;
 
       if (orderError) throw orderError;
@@ -1165,7 +1167,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
       </Dialog>
 
       {/* Create Order Sheet */}
-      <Sheet open={showCreate} onOpenChange={(v) => { if (!v) { setCreateStoreId(""); setCreateStoreSearch(""); setCreateOrderType("simple"); setCreateRequirementNote(""); setCreateOrderItems([]); } setShowCreate(v); }}>
+      <Sheet open={showCreate} onOpenChange={(v) => { if (!v) { setCreateStoreId(""); setCreateStoreSearch(""); setCreateOrderType("simple"); setCreateRequirementNote(""); setCreateOrderItems([]); setCreateUrgent(false); } setShowCreate(v); }}>
         <SheetContent side="bottom" className="rounded-t-3xl pb-10 px-0 max-h-[90vh] overflow-y-auto">
           <div className="px-6">
             <SheetHeader className="mb-5 text-left">
@@ -1293,6 +1295,23 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
                   )}
                 </div>
               )}
+
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <Label htmlFor="mobile-create-urgent" className="text-sm cursor-pointer font-medium">Urgent Order</Label>
+                <div
+                  className="relative w-11 h-6 bg-muted rounded-full cursor-pointer transition-colors after:content-[''] after:absolute after:top-0.5 after:start-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"
+                  style={createUrgent ? { backgroundColor: 'hsl(0 84% 60%)' } : {}}
+                  onClick={() => setCreateUrgent(!createUrgent)}
+                >
+                  <div style={{
+                    position: 'absolute', top: '2px',
+                    left: createUrgent ? '22px' : '2px',
+                    width: '20px', height: '20px',
+                    backgroundColor: 'white', borderRadius: '50%',
+                    transition: 'left 0.2s'
+                  }} />
+                </div>
+              </div>
 
               <Button
                 size="sm"

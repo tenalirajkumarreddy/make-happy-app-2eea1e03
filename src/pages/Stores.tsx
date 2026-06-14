@@ -76,7 +76,7 @@ const Stores = () => {
 
       // Scope all users to selected warehouse context.
       if (currentWarehouse?.id) {
-        query = query.eq("warehouse_id", currentWarehouse.id as any);
+        query = query.or(`warehouse_id.eq.${currentWarehouse.id},warehouse_id.is.null`);
       }
 
       // Apply search and advanced filters

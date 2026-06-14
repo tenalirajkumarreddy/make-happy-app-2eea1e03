@@ -584,12 +584,11 @@ function MarketerApp() {
               onOpenAddEntity={() => setShowAddEntity(true)}
               onOpenStore={handleOpenStoreProfile}
               onGoRecord={handleGoRecord}
-              onGoSale={(store) => { setPreselectStore(store); setRecordAction("sale"); setTab("record"); }}
             />
           )}
           {tab === "products" && <AgentProducts />}
           {tab === "orders" && <MarketerOrders />}
-          {tab === "record" && <AgentRecord preselectStore={preselectStore} preselectTab={recordAction === "sale" ? "sale" : "payment"} allowSale={true} allowPayment={true} onSuccess={() => setTab("history")} />}
+          {tab === "record" && <AgentRecord preselectStore={preselectStore} preselectTab={recordAction === "sale" ? "sale" : "payment"} allowSale={false} allowPayment={true} onSuccess={() => setTab("history")} />}
           {tab === "history" && <AgentHistory />}
           {tab === "customers" && !profileStore && (
             <MarketerStores
@@ -602,7 +601,6 @@ function MarketerApp() {
               store={profileStore}
               onBack={handleCloseStoreProfile}
               onGoRecord={handleGoRecord}
-              onGoSale={(store) => { setPreselectStore(store); setRecordAction("sale"); setTab("record"); }}
             />
           )}
         </MobileShell>

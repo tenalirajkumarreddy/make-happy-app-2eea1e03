@@ -772,6 +772,7 @@ export type Database = {
       customers: {
         Row: {
           address: string | null
+          alternate_phone: string | null
           created_at: string
           created_by: string | null
           credit_limit_override: number | null
@@ -801,6 +802,7 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          alternate_phone?: string | null
           created_at?: string
           created_by?: string | null
           credit_limit_override?: number | null
@@ -830,6 +832,7 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          alternate_phone?: string | null
           created_at?: string
           created_by?: string | null
           credit_limit_override?: number | null
@@ -3014,6 +3017,7 @@ export type Database = {
           fulfilled_by: string | null
           fulfilled_by_sale_id: string | null
           id: string
+          is_urgent: boolean
           order_type: string
           requirement_note: string | null
           source: string
@@ -3040,6 +3044,7 @@ export type Database = {
           fulfilled_by?: string | null
           fulfilled_by_sale_id?: string | null
           id?: string
+          is_urgent?: boolean
           order_type?: string
           requirement_note?: string | null
           source?: string
@@ -3066,6 +3071,7 @@ export type Database = {
           fulfilled_by?: string | null
           fulfilled_by_sale_id?: string | null
           id?: string
+          is_urgent?: boolean
           order_type?: string
           requirement_note?: string | null
           source?: string
@@ -7080,6 +7086,7 @@ export type Database = {
           id: string
           is_active: boolean
           is_default_shop: boolean | null
+          last_activity_at: string | null
           lat: number | null
           latitude: number | null
           lng: number | null
@@ -7118,6 +7125,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           is_default_shop?: boolean | null
+          last_activity_at?: string | null
           lat?: number | null
           latitude?: number | null
           lng?: number | null
@@ -7156,6 +7164,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           is_default_shop?: boolean | null
+          last_activity_at?: string | null
           lat?: number | null
           latitude?: number | null
           lng?: number | null
