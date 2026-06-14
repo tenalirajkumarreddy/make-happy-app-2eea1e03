@@ -787,7 +787,7 @@ const Transactions = () => {
               <Label>Store</Label>
               <div className="flex gap-2 mt-1">
                 <Select value={storeId} onValueChange={setStoreId} disabled={!!editingTransaction}>
-                  <SelectTrigger className="flex-1"><SelectValue placeholder="Select store" /></SelectTrigger>
+                  <SelectTrigger className="flex-1" data-testid="txn-store-select"><SelectValue placeholder="Select store" /></SelectTrigger>
                   <SelectContent>{stores?.map((s) => (
                       <SelectItem key={s.id} value={s.id} disabled={!(s ).is_active}>
                         {s.name} ({s.display_id}){!(s ).is_active ? " — Inactive" : ""}
@@ -801,15 +801,15 @@ const Transactions = () => {
               )}
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div><Label>Cash (₹)</Label><Input type="number" value={cashAmount} onChange={(e) => setCashAmount(e.target.value)} className="mt-1" placeholder="0" /></div>
-              <div><Label>UPI (₹)</Label><Input type="number" value={upiAmount} onChange={(e) => setUpiAmount(e.target.value)} className="mt-1" placeholder="0" /></div>
+              <div><Label>Cash (₹)</Label><Input type="number" value={cashAmount} onChange={(e) => setCashAmount(e.target.value)} className="mt-1" placeholder="0" data-testid="txn-cash-input" /></div>
+               <div><Label>UPI (₹)</Label><Input type="number" value={upiAmount} onChange={(e) => setUpiAmount(e.target.value)} className="mt-1" placeholder="0" data-testid="txn-upi-input" /></div>
             </div>
             <div className="rounded-lg border bg-muted/30 p-3 space-y-1 text-sm">
               <div className="flex justify-between"><span>Total Payment</span><span className="font-semibold">₹{totalPayment.toLocaleString()}</span></div>
               <div className="flex justify-between font-semibold"><span>New Outstanding</span><span className={newOutstanding < oldOutstanding ? "text-success" : ""}>₹{newOutstanding.toLocaleString()}</span></div>
             </div>
             <div><Label>Notes (optional)</Label><Input value={notes} onChange={(e) => setNotes(e.target.value)} className="mt-1" placeholder="Payment reference..." /></div>
-            <Button type="submit" className="w-full" disabled={saving}>
+            <Button type="submit" className="w-full" disabled={saving} data-testid="txn-submit-btn">
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {editingTransaction ? "Update Transaction" : "Record Transaction"}
             </Button>

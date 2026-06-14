@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { VitePWA } from "vite-plugin-pwa";
 import { readFileSync, writeFileSync } from "fs";
+import { visualizer } from "rollup-plugin-visualizer";
 
 /**
  * Performance optimization plugin for production builds:
@@ -88,6 +89,7 @@ export default defineConfig(({ mode }) => ({
           icons: ["lucide-react"],
           charts: ["recharts"],
           maps: ["leaflet", "react-leaflet"],
+          reports: ["xlsx"],
           radix: [
             "@radix-ui/react-dialog",
             "@radix-ui/react-dropdown-menu",
@@ -104,6 +106,12 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     performanceOptimizer(),
     react(),
+    visualizer({
+      filename: "dist/stats.html",
+      open: false,
+      gzipSize: true,
+      brotliSize: true,
+    }),
     VitePWA({
       registerType: "autoUpdate",
       devOptions: {
@@ -142,7 +150,24 @@ export default defineConfig(({ mode }) => ({
       workbox: {
         globPatterns: ["**/*.{js,css,html,png,svg,woff2,woff,ttf}"],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
-        runtimeCaching: [],
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/.*\.supabase\.co\/rest\/v1\/.*/,
+            handler: "StaleWhileRevalidate",
+            options: {
+              cacheName: "supabase-api",
+              expiration: { maxEntries: 500, maxAgeSeconds: 86400 },
+            },
+          },
+          {
+            urlPattern: /^https:\/\/.*\.supabase\.co\/storage\/v1\/object\/public\/.*/,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "supabase-storage",
+              expiration: { maxEntries: 200, maxAgeSeconds: 604800 }, // 7 days
+            },
+          },
+        ],
       },
     }),
   ].filter(Boolean),

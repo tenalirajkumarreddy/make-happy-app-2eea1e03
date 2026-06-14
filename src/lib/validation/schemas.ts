@@ -79,6 +79,11 @@ export const validateSaleData = (data: {
     errors.push("Sale total cannot be zero");
   }
 
+  // ✅ FIXED: Prevent payment > total
+  if (data.cash_amount + data.upi_amount > data.total_amount) {
+    errors.push("Payment cannot exceed total amount");
+  }
+
   // POS users: payment must equal total (no outstanding allowed)
   if (data.isPosUser && (data.cash_amount + data.upi_amount) !== data.total_amount) {
     errors.push("POS sales require full payment. Cash + UPI must equal Total.");

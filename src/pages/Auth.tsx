@@ -532,6 +532,7 @@ const Auth = () => {
                 <Input
                   id="phone"
                   type="tel"
+                  data-testid="phone-input"
                   placeholder="+91XXXXXXXXXX or 10-digit number"
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(e.target.value)}
@@ -543,7 +544,7 @@ const Auth = () => {
                   Enter with country code (e.g., +91) or a 10-digit mobile number
                 </p>
               </div>
-              <Button type="submit" className="w-full" disabled={loading}>
+              <Button type="submit" className="w-full" disabled={loading} data-testid="send-otp-btn">
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Send OTP
               </Button>
@@ -555,6 +556,7 @@ const Auth = () => {
                 <Input
                   id="otp"
                   type="text"
+                  data-testid="otp-input"
                   placeholder="6-digit code"
                   value={otpCode}
                   onChange={(e) => setOtpCode(e.target.value)}
@@ -567,7 +569,7 @@ const Auth = () => {
                   Sent to {phoneNumber}
                 </p>
               </div>
-              <Button type="submit" className="w-full" disabled={loading}>
+              <Button type="submit" className="w-full" disabled={loading} data-testid="verify-otp-btn">
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Verify OTP
               </Button>

@@ -29,7 +29,11 @@ test.describe('Simplified Cross-Role Tests - Working', () => {
           actions: [
             { type: 'navigate', target: '/' },
             { type: 'wait', delay: 5000 },
-            { type: 'screenshot', value: 'super_admin_dashboard' },
+            {
+              type: 'screenshot', 
+              value: 'super_admin_dashboard',
+              description: 'Super admin dashboard screenshot'
+            }
           ],
         },
         {
@@ -37,7 +41,11 @@ test.describe('Simplified Cross-Role Tests - Working', () => {
           actions: [
             { type: 'navigate', target: '/' },
             { type: 'wait', delay: 5000 },
-            { type: 'screenshot', value: 'manager_dashboard' },
+            {
+              type: 'screenshot', 
+              value: 'manager_dashboard', 
+              description: 'Manager dashboard screenshot'
+            }
           ],
         },
         {
@@ -45,7 +53,35 @@ test.describe('Simplified Cross-Role Tests - Working', () => {
           actions: [
             { type: 'navigate', target: '/' },
             { type: 'wait', delay: 5000 },
-            { type: 'screenshot', value: 'agent_dashboard' },
+            {
+              type: 'screenshot',
+              value: 'agent_dashboard',
+              description: 'Agent dashboard screenshot using testids'
+            },
+            // Test record sale flow with modern selectors
+            {
+              type: 'click',
+              description: 'Click Record Sale button (modernized selector)',
+              selector: '[data-testid="record-sale-btn"], button:has-text("Record Sale"), button >> nth=0'
+            },
+            { type: 'wait', delay: 2500 },
+            {
+              type: 'click', 
+              description: 'Click store selector trigger',
+              selector: '[data-testid="sale-store-select"] [data-slot="select-trigger"], [data-slot="select-trigger"] >> nth=0'
+            },
+            { type: 'wait', delay: 2000 },
+            {
+              type: 'click',
+              description: 'Select first store option',
+              selector: '[role="option"] >> nth=0'
+            },
+            { type: 'wait', delay: 2000 },
+            {
+              type: 'screenshot',
+              value: 'agent_sale_dialog_open',
+              description: 'Sale dialog open screenshot'
+            }
           ],
         },
         {

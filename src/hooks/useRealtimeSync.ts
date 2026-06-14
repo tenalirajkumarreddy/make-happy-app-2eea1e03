@@ -3,6 +3,7 @@ import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { logError } from "@/lib/logger";
+import { useLocation } from "react-router-dom";
 
 // ── Shared query key groups (reused across tables to avoid duplication) ──────
 const DASHBOARD = [
@@ -404,6 +405,107 @@ const ROLE_TABLE_MAP: Record<string, string[]> = {
 
 const STAFF_ROLES = ["super_admin", "manager", "agent", "marketer", "operator"];
 
+// ── Page/Route → Tables mapping ─────────────────────────────────────────────────
+// Maps route patterns to the tables they need realtime updates for.
+// Only these tables will be subscribed to when on that page.
+const PAGE_TABLE_MAP: Record<string, string[]> = {
+  // Dashboard pages
+  "/": ["sales", "transactions", "orders", "handovers", "product_stock", "stores"],
+  "/dashboard": ["sales", "transactions", "orders", "handovers", "product_stock", "stores"],
+  
+  // Sales pages
+  "/sales": ["sales", "sale_items", "sale_returns", "stores", "customers", "products"],
+  "/sale-returns": ["sale_returns", "sale_return_items", "sales", "products"],
+  
+  // Transactions
+  "/transactions": ["transactions", "payment_returns", "stores", "customers"],
+  
+  // Orders
+  "/orders": ["orders", "order_items", "stores", "customers", "products", "routes"],
+  
+  // Handovers
+  "/handovers": ["handovers", "handover_snapshots", "handover_requests", "expense_claims"],
+  
+  // Customers/Stores
+  "/customers": ["customers", "stores", "store_types", "store_pricing"],
+  "/stores": ["stores", "store_types", "store_pricing", "customers", "routes"],
+  "/store-types": ["store_types", "store_type_pricing", "store_type_products"],
+  
+  // Routes
+  "/routes": ["routes", "route_sessions", "agent_routes", "store_visits", "stores"],
+  "/routes/": ["routes", "route_sessions", "agent_routes", "store_visits", "stores"],
+  
+  // Inventory
+  "/inventory": ["product_stock", "stock_movements", "staff_stock", "stock_transfers", "stock_requests", "warehouses", "products"],
+  "/inventory/raw-materials": ["raw_materials", "raw_material_stock", "raw_material_adjustments", "vendor_raw_materials"],
+  "/inventory/boms": ["bill_of_materials"],
+  "/production": ["production_log", "production_runs", "wac_cost_history"],
+  
+  // Purchases/Vendors
+  "/vendors": ["vendors", "vendor_payments", "vendor_transactions", "purchases", "purchase_returns"],
+  "/purchases": ["purchases", "purchase_items", "purchase_returns", "vendors", "products"],
+  "/vendor-payments": ["vendor_payments", "vendors"],
+  
+  // Reports/Analytics
+  "/reports": ["sales", "transactions", "orders", "purchases", "sale_returns", "purchase_returns", "expenses", "product_stock"],
+  "/analytics": ["sales", "transactions", "orders", "product_stock"],
+  
+  // Staff/HR
+  "/staff": ["user_roles", "profiles", "staff_directory", "staff_invitations"],
+  "/hr/staff": ["workers", "worker_roles", "worker_balances", "worker_payments", "attendance_records"],
+  "/hr/payroll": ["payrolls", "payroll_items", "workers"],
+  "/attendance": ["attendance_records", "attendance_entries", "workers"],
+  
+  // Invoices
+  "/invoices": ["invoices", "invoice_items", "invoice_sales", "sales", "customers"],
+  
+  // Expenses
+  "/expenses": ["expenses", "expense_claims", "expense_categories", "fixed_costs", "fixed_cost_payments"],
+  
+  // Settings/Admin
+  "/settings": ["company_settings", "business_info", "promotional_banners", "user_roles", "profiles"],
+  "/admin": ["user_roles", "profiles", "staff_directory", "company_settings", "vehicles"],
+  
+  // Stock Transfers
+  "/stock-transfers": ["stock_transfers", "stock_requests", "staff_stock", "product_stock", "warehouses"],
+  
+  // Activity
+  "/activity": ["activity_logs"],
+  
+  // Mobile-specific routes (agent/marketer/pos)
+  "/mobile": ["sales", "transactions", "orders", "handovers", "stores", "products"],
+  "/agent": ["sales", "transactions", "orders", "handovers", "stores", "products", "routes", "route_sessions"],
+  "/marketer": ["orders", "transactions", "handovers", "stores", "products", "customers"],
+  "/pos": ["sales", "transactions", "orders", "handovers", "product_stock", "invoices"],
+};
+
+// Default tables for pages not explicitly mapped
+const DEFAULT_PAGE_TABLES = [
+  "sales", "transactions", "orders", "handovers", "stores", "customers", 
+  "products", "notifications", "profiles"
+];
+
+function getTablesForRoute(pathname: string, role: string | null): string[] {
+  // Exact match first
+  if (PAGE_TABLE_MAP[pathname]) {
+    return PAGE_TABLE_MAP[pathname];
+  }
+  
+  // Pattern match for dynamic routes
+  for (const [pattern, tables] of Object.entries(PAGE_TABLE_MAP)) {
+    if (pattern.endsWith("/") && pathname.startsWith(pattern)) {
+      return tables;
+    }
+    if (pattern.includes(":") && pathname.match(pattern.replace(":id", "[^/]+"))) {
+      return tables;
+    }
+  }
+  
+  // Role-based defaults
+  const roleTables = ROLE_TABLE_MAP[role ?? ""] ?? [];
+  return roleTables.length > 0 ? roleTables.slice(0, 20) : DEFAULT_PAGE_TABLES;
+}
+
 type RealtimeSubscriber = {
   qc: QueryClient;
   isAdmin: boolean;
@@ -480,17 +582,42 @@ const subscribers = new Map<symbol, RealtimeSubscriber>();
 let isTearingDown = false;
 
 const RETRY = { maxRetries: 5, baseDelay: 1000, maxDelay: 30000 };
+const DEBOUNCE_MS = 500;
 let retryAttempt = 0;
+let invalidateTimer: ReturnType<typeof setTimeout> | null = null;
+const pendingInvalidations = new Map<string, Set<string>>();
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+function flushInvalidations(subscriberId: symbol) {
+  const sub = subscribers.get(subscriberId);
+  if (!sub || !pendingInvalidations.has(String(subscriberId))) return;
+  const keys = pendingInvalidations.get(String(subscriberId));
+  if (!keys || keys.size === 0) return;
+  keys.forEach((key) => {
+    sub.qc.invalidateQueries({ queryKey: [key], refetchType: "active" });
+  });
+  pendingInvalidations.delete(String(subscriberId));
+}
 
 function handlePayload(table: string, payload: any) {
   const keys = TABLE_QUERY_MAP[table];
   if (!keys?.length) return;
-  subscribers.forEach((sub) => {
+  subscribers.forEach((sub, subscriberId) => {
     const roleTables = ROLE_TABLE_MAP[sub.role ?? ""] ?? [];
     if (!roleTables.includes(table)) return;
     if (shouldSkipForSubscriber(sub, table, payload)) return;
-    keys.forEach((key) => sub.qc.invalidateQueries({ queryKey: [key] }));
+
+    // Debounce invalidations to reduce query storm
+    const subKey = String(subscriberId);
+    if (!pendingInvalidations.has(subKey)) {
+      pendingInvalidations.set(subKey, new Set());
+    }
+    keys.forEach((key) => pendingInvalidations.get(subKey)?.add(key));
+
+    if (invalidateTimer) clearTimeout(invalidateTimer);
+    invalidateTimer = setTimeout(() => {
+      flushInvalidations(subscriberId);
+    }, DEBOUNCE_MS);
   });
 }
 
@@ -573,6 +700,7 @@ export function useRealtimeSync() {
 
     let cancelled = false;
     const id = Symbol("rt-sub");
+    const subscriberId = String(id);
 
     const setup = async () => {
       // If role changed, tear down existing channels and rebuild
@@ -591,7 +719,153 @@ export function useRealtimeSync() {
     return () => {
       cancelled = true;
       subscribers.delete(id);
+      // Flush any pending invalidations before unsubscribing
+      flushInvalidations(id);
+      pendingInvalidations.delete(subscriberId);
       maybeTearDown();
     };
   }, [qc, isAdmin, user?.id, role]);
+}
+
+// ── Per-page realtime sync hook ────────────────────────────────────────────────
+// Usage: usePageRealtimeSync() — subscribes only to tables relevant to current route
+
+const pageChannels = new Map<string, ReturnType<typeof supabase.channel>>();
+const pageSubscribers = new Map<symbol, RealtimeSubscriber>();
+let pageIsTearingDown = false;
+let pageRetryAttempt = 0;
+let pageRetryTimer: ReturnType<typeof setTimeout> | null = null;
+let pageInvalidateTimer: ReturnType<typeof setTimeout> | null = null;
+const pagePendingInvalidations = new Map<string, Set<string>>();
+const PAGE_DEBOUNCE_MS = 500;
+
+function buildPageChannel(tables: string[], role: string | null) {
+  const channelName = `page-realtime-sync-${tables.join("-").slice(0, 50)}`;
+  if (pageChannels.has(channelName)) return;
+  
+  let ch = supabase.channel(channelName);
+  tables.forEach((table) => {
+    ch = ch.on(
+      "postgres_changes",
+      { event: "*", schema: "public", table },
+      (payload: any) => handlePagePayload(table, payload)
+    );
+  });
+
+  ch.subscribe((status: string) => {
+    if (pageIsTearingDown) return;
+    if (status === "SUBSCRIBED") {
+      pageRetryAttempt = 0;
+      if (import.meta.env.DEV) console.log(`[PageRealtime] Subscribed to ${tables.length} tables`); // eslint-disable-line no-console
+    } else if (status === "CHANNEL_ERROR") {
+      logError("[PageRealtime] Channel error", { context: "usePageRealtimeSync" });
+      schedulePageReconnect(tables, role);
+    } else if (status === "CLOSED" || status === "TIMED_OUT") {
+      if (import.meta.env.DEV) console.warn("[PageRealtime] Connection", status, "— reconnecting…");
+      schedulePageReconnect(tables, role);
+    }
+  });
+
+  pageChannels.set(channelName, ch);
+}
+
+function schedulePageReconnect(tables: string[], role: string | null) {
+  if (pageRetryTimer) clearTimeout(pageRetryTimer);
+  if (pageRetryAttempt >= RETRY.maxRetries) {
+    logError("[PageRealtime] Max retries reached", { context: "usePageRealtimeSync" });
+    return;
+  }
+  const delay = Math.min(RETRY.baseDelay * 2 ** pageRetryAttempt, RETRY.maxDelay);
+  pageRetryTimer = setTimeout(async () => {
+    pageRetryAttempt++;
+    await tearDownPageChannels();
+    buildPageChannel(tables, role);
+  }, delay);
+}
+
+async function tearDownPageChannels() {
+  if (pageChannels.size === 0) return;
+  pageIsTearingDown = true;
+  const removals = Array.from(pageChannels.values()).map((ch) =>
+    supabase.removeChannel(ch).catch(() => {})
+  );
+  await Promise.allSettled(removals);
+  pageChannels.clear();
+  pageIsTearingDown = false;
+}
+
+function handlePagePayload(table: string, payload: any) {
+  const keys = TABLE_QUERY_MAP[table];
+  if (!keys?.length) return;
+  pageSubscribers.forEach((sub, subscriberId) => {
+    const roleTables = ROLE_TABLE_MAP[sub.role ?? ""] ?? [];
+    if (!roleTables.includes(table)) return;
+    if (shouldSkipForSubscriber(sub, table, payload)) return;
+
+    const subKey = String(subscriberId);
+    if (!pagePendingInvalidations.has(subKey)) {
+      pagePendingInvalidations.set(subKey, new Set());
+    }
+    keys.forEach((key) => pagePendingInvalidations.get(subKey)?.add(key));
+
+    if (pageInvalidateTimer) clearTimeout(pageInvalidateTimer);
+    pageInvalidateTimer = setTimeout(() => {
+      flushPageInvalidations(subscriberId);
+    }, PAGE_DEBOUNCE_MS);
+  });
+}
+
+function flushPageInvalidations(subscriberId: symbol) {
+  const sub = pageSubscribers.get(subscriberId);
+  if (!sub || !pagePendingInvalidations.has(String(subscriberId))) return;
+  const keys = pagePendingInvalidations.get(String(subscriberId));
+  if (!keys || keys.size === 0) return;
+  keys.forEach((key) => sub.qc.invalidateQueries({ queryKey: [key], refetchType: "active" }));
+  pagePendingInvalidations.delete(String(subscriberId));
+}
+
+export function usePageRealtimeSync() {
+  const qc = useQueryClient();
+  const { role, user } = useAuth();
+  const location = useLocation();
+  const isAdmin = role === "super_admin" || role === "manager";
+  const prevRouteRef = useRef<string | null>(null);
+  const prevRoleRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!role) return;
+
+    let cancelled = false;
+    const id = Symbol("page-rt-sub");
+    const subscriberId = String(id);
+    const currentPath = location.pathname;
+    const tables = getTablesForRoute(currentPath, role);
+
+    const setup = async () => {
+      // Tear down if route or role changed
+      if (prevRouteRef.current !== null && prevRouteRef.current !== currentPath) {
+        await tearDownPageChannels();
+      }
+      if (prevRoleRef.current !== null && prevRoleRef.current !== role) {
+        await tearDownPageChannels();
+      }
+      if (cancelled) return;
+      prevRouteRef.current = currentPath;
+      prevRoleRef.current = role;
+
+      pageSubscribers.set(id, { qc, isAdmin, userId: user?.id, role });
+      buildPageChannel(tables, role);
+    };
+
+    setup();
+
+    return () => {
+      cancelled = true;
+      pageSubscribers.delete(id);
+      flushPageInvalidations(id);
+      pagePendingInvalidations.delete(subscriberId);
+      // Don't tear down immediately - keep channel for potential quick re-navigation
+      // tearDownPageChannels() is called on route/role change
+    };
+  }, [qc, isAdmin, user?.id, role, location.pathname]);
 }
