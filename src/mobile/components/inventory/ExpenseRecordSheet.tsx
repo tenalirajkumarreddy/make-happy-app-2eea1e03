@@ -20,7 +20,7 @@ interface ExpenseRecordSheetProps {
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 export function ExpenseRecordSheet({ open, onOpenChange }: ExpenseRecordSheetProps) {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const qc = useQueryClient();
 
   const [categoryId, setCategoryId] = useState("");
@@ -174,14 +174,16 @@ export function ExpenseRecordSheet({ open, onOpenChange }: ExpenseRecordSheetPro
               />
             </div>
 
-            {/* Adhoc Toggle */}
-            <div className="flex items-center justify-between rounded-xl border p-3">
-              <div className="space-y-0.5">
-                <Label className="text-sm">Adhoc Expense</Label>
-                <p className="text-xs text-muted-foreground">Immediately reduces holding amount</p>
+            {/* Adhoc Toggle — only visible to admins */}
+            {role === "super_admin" || role === "manager" ? (
+              <div className="flex items-center justify-between rounded-xl border p-3">
+                <div className="space-y-0.5">
+                  <Label className="text-sm">Adhoc Expense</Label>
+                  <p className="text-xs text-muted-foreground">Immediately reduces holding amount</p>
+                </div>
+                <Switch checked={isAdhoc} onCheckedChange={setIsAdhoc} />
               </div>
-              <Switch checked={isAdhoc} onCheckedChange={setIsAdhoc} />
-            </div>
+            ) : null}
 
             {/* Bill Upload */}
             <div className="space-y-1.5">

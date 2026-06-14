@@ -79,7 +79,7 @@ const VendorDetail = () => {
           .eq("id", id!);
 
         if (currentWarehouse?.id) {
-          query = query.eq("warehouse_id", currentWarehouse.id);
+          query = query.or(`warehouse_id.eq.${currentWarehouse.id},warehouse_id.is.null`);
         }
 
         const { data, error } = await query.single();
@@ -98,7 +98,7 @@ const VendorDetail = () => {
           .order("purchase_date", { ascending: false });
 
        if (currentWarehouse?.id) {
-         query = query.eq("warehouse_id", currentWarehouse.id);
+         query = query.or(`warehouse_id.eq.${currentWarehouse.id},warehouse_id.is.null`);
        }
 
        const { data, error } = await query;
@@ -116,7 +116,7 @@ const VendorDetail = () => {
         .eq("vendor_id", id!);
 
       if (currentWarehouse?.id) {
-        query = query.eq("warehouse_id", currentWarehouse.id);
+        query = query.or(`warehouse_id.eq.${currentWarehouse.id},warehouse_id.is.null`);
       }
 
       const { data, error} = await query.order("payment_date", { ascending: false });
@@ -135,7 +135,7 @@ const VendorDetail = () => {
           .order("name");
 
        if (currentWarehouse?.id) {
-         query = query.eq("warehouse_id", currentWarehouse.id);
+         query = query.or(`warehouse_id.eq.${currentWarehouse.id},warehouse_id.is.null`);
        }
 
        const { data, error } = await query;
@@ -155,7 +155,7 @@ const VendorDetail = () => {
           .order("name");
 
         if (currentWarehouse?.id) {
-          query = query.eq("warehouse_id", currentWarehouse.id);
+          query = query.or(`warehouse_id.eq.${currentWarehouse.id},warehouse_id.is.null`);
         }
 
         const { data, error } = await query;

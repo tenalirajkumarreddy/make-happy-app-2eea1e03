@@ -42,6 +42,8 @@ interface DataTableProps<T> {
   emptyMessage?: string;
   /** Custom row class name generator */
   getRowClassName?: (row: T) => string | undefined;
+  onSearch?: (value: string) => void;
+  searchValue?: string;
 }
 
 export function DataTable<T extends Record<string, any>>({
@@ -54,13 +56,17 @@ export function DataTable<T extends Record<string, any>>({
   renderMobileCard,
   emptyMessage,
   getRowClassName,
+  onSearch,
+  searchValue,
 }: DataTableProps<T>) {
-  const [search, setSearch] = useState("");
+  const [internalSearch, setInternalSearch] = useState("");
+  const search = onSearch ? (searchValue ?? "") : internalSearch;
+  const setSearch = onSearch ? onSearch : setInternalSearch;
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(defaultPageSize);
   const resolvedEmptyMessage = emptyMessage ?? "No results found.";
 
-  const filtered = searchKey
+  const filtered = searchKey && !onSearch
     ? data.filter((row) =>
         String(row[searchKey]).toLowerCase().includes(search.toLowerCase())
       )

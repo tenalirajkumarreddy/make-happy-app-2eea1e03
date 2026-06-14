@@ -84,6 +84,9 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
     "daybook-transactions", "statement-transactions", "user-transaction-totals",
     "my-ledger-txns", ...PAYMENT_FLOW,
   ],
+  payment_returns: [
+    "transactions", ...DASHBOARD, ...MOBILE_TX, ...ANALYTICS,
+  ],
   orders: [
     "orders", "my-orders", "my-orders-count", "store-orders",
     ...DASHBOARD, ...MOBILE_ORDERS,

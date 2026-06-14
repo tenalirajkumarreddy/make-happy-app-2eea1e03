@@ -50,7 +50,7 @@ const Routes = () => {
          .from("routes")
          .select("*, store_types(name), stores(id, outstanding)")
          .eq("is_active", true);
-       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+       if (currentWarehouse?.id) query = query.or(`warehouse_id.eq.${currentWarehouse.id},warehouse_id.is.null`);
        const { data, error } = await query;
        if (error) throw error;
 

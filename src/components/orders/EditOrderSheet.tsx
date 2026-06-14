@@ -24,16 +24,18 @@ interface EditOrderSheetProps {
 }
 
 export function EditOrderSheet({ order, open, onOpenChange, onSaved }: EditOrderSheetProps) {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const qc = useQueryClient();
   const [saving, setSaving] = useState(false);
 
   const [requirementNote, setRequirementNote] = useState("");
   const [orderItems, setOrderItems] = useState<EditItem[]>([]);
+  const [isUrgent, setIsUrgent] = useState(false);
 
   useEffect(() => {
     if (!order) return;
     setRequirementNote(order.requirement_note || "");
+    setIsUrgent(order.is_urgent ?? false);
     if (order.order_type === "detailed" && order.order_items) {
       setOrderItems(
         order.order_items.map((item: any) => ({
@@ -99,13 +101,18 @@ export function EditOrderSheet({ order, open, onOpenChange, onSaved }: EditOrder
     }
     setSaving(true);
     try {
+      const updatePayload: Record<string, any> = {
+        requirement_note: order.order_type === "simple" ? requirementNote : (requirementNote || null),
+        updated_by: user.id,
+        updated_at: new Date().toISOString(),
+      };
+      const canEditUrgent = role === "super_admin" || role === "manager" || order.created_by === user.id || order.assigned_to === user.id;
+      if (canEditUrgent) {
+        updatePayload.is_urgent = isUrgent;
+      }
       const { error: updateError } = await supabase
         .from("orders")
-        .update({
-          requirement_note: order.order_type === "simple" ? requirementNote : (requirementNote || null),
-          updated_by: user.id,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updatePayload)
         .eq("id", order.id);
       if (updateError) throw updateError;
 
@@ -238,6 +245,28 @@ export function EditOrderSheet({ order, open, onOpenChange, onSaved }: EditOrder
                 </div>
               </div>
             )}
+
+            {(() => {
+              const canEditUrgent = role === "super_admin" || role === "manager" || order?.created_by === user?.id || order?.assigned_to === user?.id;
+              return canEditUrgent ? (
+                <div className="flex items-center justify-between rounded-lg border p-3">
+                  <Label htmlFor="edit-urgent-sheet" className="text-sm cursor-pointer font-medium">Urgent Order</Label>
+                  <div
+                    className="relative w-11 h-6 bg-muted rounded-full cursor-pointer transition-colors"
+                    style={isUrgent ? { backgroundColor: 'hsl(0 84% 60%)' } : {}}
+                    onClick={() => setIsUrgent(!isUrgent)}
+                  >
+                    <div style={{
+                      position: 'absolute', top: '2px',
+                      left: isUrgent ? '22px' : '2px',
+                      width: '20px', height: '20px',
+                      backgroundColor: 'white', borderRadius: '50%',
+                      transition: 'left 0.2s'
+                    }} />
+                  </div>
+                </div>
+              ) : null;
+            })()}
 
             <Button
               className="w-full h-11 rounded-xl"

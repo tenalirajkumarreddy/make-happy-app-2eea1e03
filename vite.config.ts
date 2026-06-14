@@ -63,7 +63,6 @@ function performanceOptimizer(): Plugin {
 }
 
 const SUPABASE_CACHE_DAYS = 1;
-const AUTH_CACHE_HOURS = 1;
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
@@ -143,36 +142,7 @@ export default defineConfig(({ mode }) => ({
       workbox: {
         globPatterns: ["**/*.{js,css,html,png,svg,woff2,woff,ttf}"],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
-        runtimeCaching: [
-          {
-            urlPattern: /^https?:\/\/.*\.supabase\.co\/rest\/v1\/.*/i,
-            handler: "StaleWhileRevalidate",
-            options: {
-              cacheName: "supabase-api-cache",
-              expiration: {
-                maxEntries: 200,
-                maxAgeSeconds: 60 * 60 * 24 * SUPABASE_CACHE_DAYS,
-              },
-              cacheableResponse: {
-                statuses: [0, 200],
-              },
-            },
-          },
-          {
-            urlPattern: /^https?:\/\/.*\.supabase\.co\/auth\/v1\/.*/i,
-            handler: "StaleWhileRevalidate",
-            options: {
-              cacheName: "supabase-auth-cache",
-              expiration: {
-                maxEntries: 50,
-                maxAgeSeconds: 60 * 60 * AUTH_CACHE_HOURS,
-              },
-              cacheableResponse: {
-                statuses: [0, 200],
-              },
-            },
-          },
-        ],
+        runtimeCaching: [],
       },
     }),
   ].filter(Boolean),

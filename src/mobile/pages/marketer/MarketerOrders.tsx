@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Plus, XCircle, CheckCircle2, Package, ShoppingCart, Edit, FileText, Minus } from "lucide-react";
+import { Loader2, Plus, XCircle, CheckCircle2, Package, ShoppingCart, Edit, FileText, Minus, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -108,14 +108,11 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
   const [createOrderType, setCreateOrderType] = useState<"simple" | "detailed">("simple");
   const [createRequirementNote, setCreateRequirementNote] = useState("");
   const [createOrderItems, setCreateOrderItems] = useState<OrderItemInput[]>([]);
+  const [createUrgent, setCreateUrgent] = useState(false);
 
   const [cancelOrderId, setCancelOrderId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelling, setCancelling] = useState(false);
-  const [deliveringId, setDeliveringId] = useState<string | null>(null);
-  const [fulfillOrder, setFulfillOrder] = useState<OrderRow | null>(null);
-  const [deliverCash, setDeliverCash] = useState("");
-  const [deliverUpi, setDeliverUpi] = useState("");
   const [viewProformaId, setViewProformaId] = useState<string | null>(null);
   const [editOrder, setEditOrder] = useState<OrderRow | null>(null);
   const [existingOrderForStore, setExistingOrderForStore] = useState<ActiveOrderInfo | null>(null);
@@ -259,6 +256,7 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
     setCreateOrderType("simple");
     setCreateRequirementNote("");
     setCreateOrderItems([]);
+    setCreateUrgent(false);
   };
 
   const handleCreateOrder = async () => {
@@ -287,6 +285,7 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
         p_requirement_note: createOrderType === "simple" ? createRequirementNote : null,
         p_total_amount: 0,
         p_created_by: user!.id,
+        p_is_urgent: createUrgent,
       }) as any;
 
       if (orderError) throw orderError;
@@ -361,55 +360,23 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
     }
   };
 
-  const handleFulfillOrder = async () => {
-    if (!fulfillOrder) return;
-    const cash = Number(deliverCash) || 0;
-    const upi = Number(deliverUpi) || 0;
-    const total = cash + upi;
-    if (total <= 0) { toast.error("Enter cash or UPI amount"); return; }
-
-    setDeliveringId(fulfillOrder.id);
-    try {
-      const { data: displayId } = await (supabase as any).rpc("generate_display_id", { prefix: "SALE", seq_name: "sale_display_seq" });
-      if (!displayId) throw new Error("Failed to generate sale ID");
-
-      const saleItems = (fulfillOrder.order_items || []).map((item) => ({
-        product_id: item.product_id,
-        quantity: item.quantity,
-        unit_price: item.unit_price || item.products?.base_price || 0,
-      }));
-
-      // Calculate actual outstanding (not hardcoded 0)
-      const orderTotal = saleItems.reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
-      const outstanding = Math.max(0, orderTotal - cash - upi);
-
-      const { error: saleError } = await (supabase as any).rpc("record_sale", {
-        p_display_id: displayId,
-        p_store_id: fulfillOrder.store_id,
-        p_customer_id: fulfillOrder.customer_id,
-        p_recorded_by: user!.id,
-        p_logged_by: null,
-        p_total_amount: orderTotal,
-        p_cash_amount: cash,
-        p_upi_amount: upi,
-        p_outstanding_amount: outstanding,
-        p_sale_items: saleItems,
-        p_created_at: null,
-        p_fulfilled_order_id: fulfillOrder.id,
-      });
-      if (saleError) throw saleError;
-
-      toast.success(`Order ${fulfillOrder.display_id} fulfilled (${displayId})`);
-      setFulfillOrder(null);
-      setDeliverCash("");
-      setDeliverUpi("");
-      afterSaleSaved(qc, { storeId: fulfillOrder.store_id });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to fulfill order";
-      toast.error(message);
-    } finally {
-      setDeliveringId(null);
+  const handleReorder = (order: OrderRow) => {
+    setCreateStoreId(order.store_id);
+    setCreateOrderType(order.order_type === "detailed" ? "detailed" : "simple");
+    setCreateRequirementNote(order.requirement_note || "");
+    if (order.order_items && order.order_items.length > 0) {
+      setCreateOrderItems(
+        order.order_items.map((item) => ({
+          product_id: item.product_id,
+          quantity: item.quantity,
+          unit_price: item.products?.base_price || 0,
+          products: item.products ? { name: item.products.name, base_price: item.products.base_price } : undefined,
+        }))
+      );
+    } else {
+      setCreateOrderItems([]);
     }
+    setShowCreate(true);
   };
 
   const scrollToOrder = (orderId: string) => {
@@ -561,13 +528,15 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
                         <Button size="sm" variant="outline" className="h-9 rounded-xl flex-1 min-w-[80px]" onClick={() => { setEditOrder(order); }}>
                           <Edit className="h-4 w-4 mr-1.5" /> Edit
                         </Button>
-                        <Button size="sm" className="h-9 rounded-xl flex-1 min-w-[90px]" onClick={() => { setFulfillOrder(order); setDeliverCash(""); setDeliverUpi(""); }}>
-                          <CheckCircle2 className="h-4 w-4 mr-1.5" /> Deliver
-                        </Button>
                         <Button size="sm" variant="outline" className="h-9 rounded-xl flex-1 min-w-[90px]" onClick={() => setCancelOrderId(order.id)}>
                           <XCircle className="h-4 w-4 mr-1.5" /> Cancel
                         </Button>
                       </>
+                    )}
+                    {(order.status === "delivered" || order.status === "cancelled") && (
+                      <Button size="sm" variant="outline" className="h-9 rounded-xl flex-1 min-w-[100px]" onClick={() => handleReorder(order)}>
+                        <Copy className="h-4 w-4 mr-1.5" /> Reorder
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -706,6 +675,23 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
                 </div>
               )}
 
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <Label className="text-sm cursor-pointer font-medium">Urgent Order</Label>
+                <div
+                  className="relative w-11 h-6 bg-muted rounded-full cursor-pointer transition-colors"
+                  style={createUrgent ? { backgroundColor: 'hsl(0 84% 60%)' } : {}}
+                  onClick={() => setCreateUrgent(!createUrgent)}
+                >
+                  <div style={{
+                    position: 'absolute', top: '2px',
+                    left: createUrgent ? '22px' : '2px',
+                    width: '20px', height: '20px',
+                    backgroundColor: 'white', borderRadius: '50%',
+                    transition: 'left 0.2s'
+                  }} />
+                </div>
+              </div>
+
               <button
                 className={`w-full h-11 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all ${
                   createSaving
@@ -722,50 +708,6 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
         </SheetContent>
       </Sheet>
 
-      {/* Fulfillment Sheet */}
-      <Sheet open={!!fulfillOrder} onOpenChange={(open) => { if (!open) { setFulfillOrder(null); setDeliverCash(""); setDeliverUpi(""); } }}>
-        <SheetContent side="bottom" className="rounded-t-3xl pb-10 px-0">
-          <div className="px-4 space-y-4">
-            <SheetHeader className="text-left">
-              <SheetTitle className="text-lg font-bold">Fulfill Order</SheetTitle>
-            </SheetHeader>
-            <div>
-              <p className="text-sm font-bold">{fulfillOrder?.display_id}</p>
-              <p className="text-xs text-muted-foreground">{fulfillOrder?.stores?.name}</p>
-            </div>
-            {fulfillOrder?.order_items && fulfillOrder.order_items.length > 0 && (
-              <div className="border rounded-lg divide-y text-xs">
-                {fulfillOrder.order_items.map((item: any) => (
-                  <div key={item.id} className="flex justify-between px-3 py-2">
-                    <span>{item.products?.name || "Product"} × {item.quantity}</span>
-                    <span className="font-medium">₹{(Number(item.products?.base_price || 0) * item.quantity).toLocaleString("en-IN")}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">Cash Received</label>
-                <Input type="number" min="0" placeholder="0" value={deliverCash} onChange={(e) => setDeliverCash(e.target.value)} />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">UPI Received</label>
-                <Input type="number" min="0" placeholder="0" value={deliverUpi} onChange={(e) => setDeliverUpi(e.target.value)} />
-              </div>
-            </div>
-            <div className="flex justify-between text-sm font-bold pt-2 border-t">
-              <span>Total</span>
-              <span>₹{((Number(deliverCash) || 0) + (Number(deliverUpi) || 0)).toLocaleString("en-IN")}</span>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => { setFulfillOrder(null); setDeliverCash(""); setDeliverUpi(""); }}>Cancel</Button>
-              <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700" disabled={deliveringId === fulfillOrder?.id} onClick={handleFulfillOrder}>
-                {deliveringId === fulfillOrder?.id ? <Loader2 className="h-4 w-4 animate-spin" /> : "Record Sale & Deliver"}
-              </Button>
-            </div>
-          </div>
-        </SheetContent>
-      </Sheet>
 
       <Sheet open={!!cancelOrderId} onOpenChange={(open) => { if (!open) { setCancelOrderId(null); setCancelReason(""); } }}>
         <SheetContent side="bottom" className="rounded-t-3xl pb-10 px-0">

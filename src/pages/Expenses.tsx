@@ -143,7 +143,7 @@ const Expenses = () => {
          .from("expenses")
          .select("*, expense_categories(name, color, icon)")
          .order("expense_date", { ascending: false });
-       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+       if (currentWarehouse?.id) query = query.or(`warehouse_id.eq.${currentWarehouse.id},warehouse_id.is.null`);
 
       // Apply date filter
       const now = new Date();

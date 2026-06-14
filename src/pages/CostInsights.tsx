@@ -107,7 +107,7 @@ export default function CostInsights() {
     queryFn: async () => {
       let query = supabase.from("raw_materials").select("id, name, unit, unit_cost, current_stock").eq("is_active", true);
       if (selectedWarehouse !== "all") {
-        query = query.eq("warehouse_id", selectedWarehouse);
+        query = query.or(`warehouse_id.eq.${selectedWarehouse},warehouse_id.is.null`);
       }
       const { data, error } = await query.order("name");
       if (error) throw error;

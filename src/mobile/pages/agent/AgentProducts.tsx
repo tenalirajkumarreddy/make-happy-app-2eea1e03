@@ -140,6 +140,14 @@ export function AgentProducts() {
                   <Badge variant="secondary" className="text-xs px-1.5 py-0 h-5 font-normal">
                     {p.sku || "No SKU"}
                   </Badge>
+                  {p.stock_quantity !== null && (() => {
+                    const minLevel = p.min_stock_level ?? 0;
+                    const isOut = p.stock_quantity <= 0;
+                    const isLow = !isOut && p.stock_quantity <= minLevel;
+                    const cls = isOut ? "bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border-red-200 dark:border-red-700" : isLow ? "bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-700" : "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-700";
+                    const label = isOut ? "Out of stock" : isLow ? "Low stock" : `${p.stock_quantity} in stock`;
+                    return <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full border ${cls}`}>{label}</span>;
+                  })()}
                   {p.category && (
                     <span className="text-xs text-muted-foreground truncate max-w-[80px]">
                       {p.category}
@@ -213,11 +221,15 @@ export function AgentProducts() {
                     <Badge variant="outline">{selectedProduct.sku}</Badge>
                     <Badge variant="secondary">{selectedProduct.category}</Badge>
                     <Badge variant="outline">Unit: {selectedProduct.unit}</Badge>
-                    {selectedProduct.stock_quantity !== null && (
-                       <Badge variant={selectedProduct.stock_quantity > 0 ? "default" : "destructive"}>
-                         {selectedProduct.stock_quantity > 0 ? `${selectedProduct.stock_quantity} in stock` : "Out of stock"}
-                       </Badge>
-                    )}
+                    {selectedProduct.stock_quantity !== null && (() => {
+                      const qty = selectedProduct.stock_quantity;
+                      const minLevel = selectedProduct.min_stock_level ?? 0;
+                      const isOut = qty <= 0;
+                      const isLow = !isOut && qty <= minLevel;
+                      const cls = isOut ? "bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border-red-200 dark:border-red-700" : isLow ? "bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-700" : "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-700";
+                      const label = isOut ? "Out of stock" : isLow ? `Low stock (${qty})` : `${qty} in stock`;
+                      return <Badge className={cls}>{label}</Badge>;
+                    })()}
                   </div>
                 </div>
 

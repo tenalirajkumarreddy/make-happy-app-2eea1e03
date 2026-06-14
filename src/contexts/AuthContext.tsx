@@ -1,64 +1,12 @@
 import { createContext, useContext, useEffect, useState, ReactNode, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
-import { logError } from "@/lib/logger";
-import { logDebug } from "@/lib/logger";
+import { logError, logDebug } from "@/lib/logger";
 import type { AppRole } from "@/types/roles";
 import { normalizeRole } from "@/types/roles";
 import { cacheAuthState, getCachedAuthState, clearAuthCache } from "@/lib/authCache";
 
-async function resolveUserType(supabaseClient: any, userId: string): Promise<{
-  role: AppRole;
-  isStaff: boolean;
-  isCustomer: boolean;
-  profile: any;
-  customer: any;
-}> {
-  const { data: profileData, error: profileError } = await supabaseClient
-    .from("profiles")
-    .select("full_name, email, avatar_url, is_active")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  if (profileError) throw profileError;
-
-  if (profileData && !profileData.is_active) {
-    throw new Error("USER_DISABLED");
-  }
-
-  const { data: roleData } = await supabaseClient
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  const isStaff = !!roleData?.role && roleData.role !== "customer";
-
-  // Edge case: user has a staff role in user_roles but no staff_directory entry.
-  // This happens when staff are created directly via admin panel invite
-  // (AdminStaffDirectory) rather than through the full onboarding flow.
-  // Treat them as staff so they don't get redirected to /onboarding.
-
-  const { data: customerData } = await supabaseClient
-    .from("customers")
-    .select("id, user_id, name, phone, email")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  const isCustomer = !!customerData;
-
-  const role = isStaff
-    ? normalizeRole(roleData?.role ?? null)
-    : "customer";
-
-  return {
-    role,
-    isStaff,
-    isCustomer,
-    profile: profileData,
-    customer: customerData,
-  };
-}
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 interface AuthContextType {
   user: User | null;
@@ -91,70 +39,100 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [loading, setLoading] = useState(true);
   const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resolvingRef = useRef(false);
+
+  const fallbackToCache = async () => {
+    try {
+      const cached = await getCachedAuthState();
+      if (cached?.role) {
+        const cachedAt = cached.cachedAt ? new Date(cached.cachedAt).getTime() : 0;
+        if (Date.now() - cachedAt < CACHE_TTL_MS) {
+          logDebug("[Auth] Using cached auth state");
+          setRole(cached.role as any);
+          setProfile(cached.profile as any);
+          setCustomer(cached.customer as any);
+          setNeedsOnboarding(cached.needsOnboarding);
+        }
+      }
+    } catch (e) {
+      logError("Failed to read auth cache", e);
+    }
+  };
+
+  const checkGoogleStaff = async (userId: string, email: string | null) => {
+    if (!email) return;
+    try {
+      const { data: staffDir } = await supabase
+        .from("staff_directory")
+        .select("id")
+        .eq("email", email)
+        .eq("is_active", true)
+        .limit(1);
+      if (staffDir && staffDir.length > 0) {
+        logDebug("[Auth] Staff directory record found via Google email — syncing role");
+        await supabase.functions.invoke("google-staff-exchange", {
+          body: { user_id: userId },
+        });
+      }
+    } catch (e) {
+      logError("[Auth] Google staff check failed", e);
+    }
+  };
 
   const fetchUserData = async (userId: string) => {
+    if (resolvingRef.current) return;
+    resolvingRef.current = true;
     try {
-      let resolvedRole: AppRole | null = null;
-      let resolvedCustomer: AuthContextType["customer"] = null;
-      let resolvedNeedsOnboarding = false;
-      let resolvedProfile: AuthContextType["profile"] = null;
+      const resolverCall: any = (supabase as any).rpc("resolve_user_identity", { p_user_id: userId });
+      let resolverData: any = null;
+      let resolverError: any = null;
 
-      // Preferred path: canonical DB resolver for deterministic auth outcomes.
-      try {
-        const resolverCall: any = (supabase as any).rpc("resolve_user_identity", { p_user_id: userId });
-        let resolverData: any = null;
-        let resolverError: any = null;
-
-        if (resolverCall?.single) {
-          const result = await resolverCall.single();
-          resolverData = result.data;
-          resolverError = result.error;
-        } else {
-          const result = await resolverCall;
-          resolverData = Array.isArray(result.data) ? result.data[0] : result.data;
-          resolverError = result.error;
-        }
-
-        if (resolverError) throw resolverError;
-
-        resolvedRole = normalizeRole(resolverData?.role ?? null);
-        resolvedNeedsOnboarding = !!resolverData?.onboarding_required;
-
-        if (resolverData?.has_customer) {
-          const { data: customerData } = await supabase
-            .from("customers")
-            .select("id, user_id, name, phone, email")
-            .eq("user_id", userId)
-            .maybeSingle();
-          resolvedCustomer = customerData ?? null;
-        }
-
-        const { data: profileData, error: profileError } = await supabase
-          .from("profiles")
-          .select("full_name, email, avatar_url, is_active")
-          .eq("user_id", userId)
-          .maybeSingle();
-
-        if (profileError) throw profileError;
-        if (profileData && !profileData.is_active) {
-          throw new Error("USER_DISABLED");
-        }
-
-        resolvedProfile = (profileData ?? null) as any;
-        setProfile(resolvedProfile);
-      } catch (resolverError) {
-        logError("Resolver RPC failed, falling back to legacy user resolution", resolverError);
-        const { role, profile, customer } = await resolveUserType(supabase, userId);
-        resolvedRole = role;
-        resolvedCustomer = customer;
-        resolvedNeedsOnboarding = role === "customer" && !customer;
-        resolvedProfile = profile;
-        setProfile(profile);
+      if (resolverCall?.single) {
+        const result = await resolverCall.single();
+        resolverData = result.data;
+        resolverError = result.error;
+      } else {
+        const result = await resolverCall;
+        resolverData = Array.isArray(result.data) ? result.data[0] : result.data;
+        resolverError = result.error;
       }
 
+      if (resolverError) throw resolverError;
+
+      const resolvedRole = normalizeRole(resolverData?.role ?? null);
+      const resolvedNeedsOnboarding = !!resolverData?.onboarding_required;
+
+      let resolvedCustomer: AuthContextType["customer"] = null;
+      if (resolverData?.has_customer) {
+        const { data: customerData } = await supabase
+          .from("customers")
+          .select("id, user_id, name, phone, email")
+          .eq("user_id", userId)
+          .maybeSingle();
+        resolvedCustomer = customerData ?? null;
+      }
+
+      const { data: profileData, error: profileError } = await supabase
+        .from("profiles")
+        .select("full_name, email, avatar_url, is_active")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (profileError) throw profileError;
+      if (profileData && !profileData.is_active) {
+        throw new Error("USER_DISABLED");
+      }
+
+      const resolvedProfile = (profileData ?? null) as any;
+      setProfile(resolvedProfile);
       setCustomer(resolvedCustomer);
       setRole(resolvedRole);
       setNeedsOnboarding(resolvedNeedsOnboarding);
+
+      // If role is customer but user has staff_directory record via email → staff via Google OAuth
+      if (resolvedRole === "customer" && profileData?.email) {
+        await checkGoogleStaff(userId, profileData.email);
+      }
 
       try {
         await cacheAuthState({
@@ -186,111 +164,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       setNeedsOnboarding(false);
     } finally {
+      resolvingRef.current = false;
       if (loadingTimeoutRef.current) {
         clearTimeout(loadingTimeoutRef.current);
         loadingTimeoutRef.current = null;
       }
+      setLoading(false);
     }
   };
 
   useEffect(() => {
     let mounted = true;
 
-    const fallbackToCache = async () => {
+    // 2-second loading timeout — fallback to cache so app doesn't deadlock
+    loadingTimeoutRef.current = setTimeout(async () => {
       if (!mounted) return;
-      try {
-        const cached = await getCachedAuthState();
-        if (cached?.role && mounted) {
-          logDebug("[Auth] Using cached auth state (offline fallback)");
-          setRole(cached.role as any);
-          setProfile(cached.profile as any);
-          setCustomer(cached.customer as any);
-          setNeedsOnboarding(cached.needsOnboarding);
-        }
-      } catch (e) {
-        logError("Failed to read auth cache", e);
-      }
+      await fallbackToCache();
       if (mounted) setLoading(false);
-    };
+    }, 2000);
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      (event, session) => {
         if (!mounted) return;
-        
-        // Always block the UI from rendering auth-dependent routes 
-        // until we finish resolving the new auth state.
-        setLoading(true);
+
         setSession(session);
         setUser(session?.user ?? null);
 
-        // Set a 2-second loading timeout — if auth resolution takes longer,
-        // fall back to cached state so the app doesn't deadlock
-        if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
-        loadingTimeoutRef.current = setTimeout(fallbackToCache, 2000);
-
         if (session?.user) {
-          // Defer to avoid Supabase deadlock where DB query waits for Auth headers
           setTimeout(async () => {
             if (!mounted) return;
-            try {
-              await fetchUserData(session.user.id);
-            } finally {
-              if (loadingTimeoutRef.current) {
-                clearTimeout(loadingTimeoutRef.current);
-                loadingTimeoutRef.current = null;
-              }
-              if (mounted) setLoading(false);
-            }
+            await fetchUserData(session.user.id);
           }, 0);
         } else {
           setRole(null);
           setProfile(null);
           setCustomer(null);
           setNeedsOnboarding(false);
-          if (mounted) setLoading(false);
+          setLoading(false);
         }
       }
     );
 
-    const initAuth = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!mounted) return;
-        
+    // Read initial session — listener fires INITIAL_SESSION on subscribe
+    // if session exists. This handles fetchUserData. For no-session case
+    // we clear loading here since no event will fire.
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!mounted) return;
+      if (session?.user) {
         setSession(session);
-        setUser(session?.user ?? null);
-
-        if (session?.user) {
-          // It's safe to await here since we aren't in the onAuthStateChange lock
-          try {
-            await fetchUserData(session.user.id);
-          } catch (fetchError) {
-            logError("Auth fetch failed, trying cached state", fetchError);
-            if (mounted) {
-              const cached = await getCachedAuthState();
-              if (cached?.role) {
-                setRole(cached.role as any);
-                setProfile(cached.profile as any);
-                setCustomer(cached.customer as any);
-                setNeedsOnboarding(cached.needsOnboarding);
-              }
-            }
-          }
-        }
-      } catch (error) {
-        logError("Auth context initialization error", error);
-        if (mounted) await fallbackToCache();
-        return;
-      } finally {
-        if (loadingTimeoutRef.current) {
-          clearTimeout(loadingTimeoutRef.current);
-          loadingTimeoutRef.current = null;
-        }
-        if (mounted) setLoading(false);
+        setUser(session.user);
+      } else {
+        setLoading(false);
       }
-    };
-
-    initAuth();
+    });
 
     return () => {
       mounted = false;

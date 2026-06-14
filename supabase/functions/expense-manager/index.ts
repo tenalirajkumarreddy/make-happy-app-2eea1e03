@@ -58,6 +58,14 @@ Deno.serve(async (req) => {
         is_adhoc,
       } = body;
 
+      // Only admins can create ad-hoc expenses (immediately lock holding)
+      if (is_adhoc && !isAdmin) {
+        return new Response(JSON.stringify({ error: "Only admins can create ad-hoc expenses" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       if (!amount || amount <= 0) {
         return new Response(JSON.stringify({ error: "Invalid amount" }), {
           status: 400,

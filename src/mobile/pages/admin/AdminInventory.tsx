@@ -56,7 +56,7 @@ export function AdminInventory({ onNavigate }: { onNavigate: (path: string) => v
         .order("created_at", { ascending: false });
 
       if (currentWarehouse?.id) {
-        query = query.eq("warehouse_id", currentWarehouse.id);
+        query = query.or(`warehouse_id.eq.${currentWarehouse.id},warehouse_id.is.null`);
       }
 
       const { data, error } = await query;

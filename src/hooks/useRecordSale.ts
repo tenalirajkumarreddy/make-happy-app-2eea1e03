@@ -57,7 +57,7 @@ export function useRecordSale() {
     queryKey: ["stores-for-sale", currentWarehouse?.id],
     queryFn: async () => {
       let q = supabase.from("stores").select("id, name, outstanding, display_id, store_type_id, customer_id, lat, lng, is_active").order("is_active", { ascending: false }).order("name");
-      if (currentWarehouse?.id) q = q.eq("warehouse_id", currentWarehouse.id);
+      if (currentWarehouse?.id) q = q.or(`warehouse_id.eq.${currentWarehouse.id},warehouse_id.is.null`);
       const { data } = await q;
       return data || [];
     },
@@ -74,7 +74,7 @@ export function useRecordSale() {
     queryKey: ["all-products-for-sale", currentWarehouse?.id, user?.id, recordedFor],
     queryFn: async () => {
       let q = supabase.from("products").select("id, name, base_price, sku, image_url").eq("is_active", true);
-      if (currentWarehouse?.id) q = q.eq("warehouse_id", currentWarehouse.id);
+      if (currentWarehouse?.id) q = q.or(`warehouse_id.eq.${currentWarehouse.id},warehouse_id.is.null`);
       const { data } = await q;
       if (!data) return [];
       const { data: stockInfo } = await supabase.rpc("check_stock_availability", { p_user_id: user!.id, p_recorded_for: recordedFor || null, p_items: data.map((p: any) => ({ product_id: p.id, quantity: 0 })) } as any) as any;
@@ -138,7 +138,7 @@ export function useRecordSale() {
     queryKey: ["customers-kyc-for-sale", currentWarehouse?.id],
     queryFn: async () => {
       let q = supabase.from("customers").select("id, kyc_status, credit_limit_override");
-      if (currentWarehouse?.id) q = q.eq("warehouse_id", currentWarehouse.id);
+      if (currentWarehouse?.id) q = q.or(`warehouse_id.eq.${currentWarehouse.id},warehouse_id.is.null`);
       const { data } = await q;
       return data || [];
     },

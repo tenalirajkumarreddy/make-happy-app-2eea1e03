@@ -104,7 +104,7 @@ const Transactions = () => {
        .from("transactions")
         .select("*, is_fully_returned, stores(name, display_id, store_type_id, route_id, outstanding, customer_id), customers(id, name, display_id)")
        .order("created_at", { ascending: false });
-       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+       if (currentWarehouse?.id) query = query.or(`warehouse_id.eq.${currentWarehouse.id},warehouse_id.is.null`);
        // Non-admin roles only see their own records
        if (!isAdmin) query = query.eq("recorded_by", user!.id);
        // Server-side filters
@@ -138,7 +138,7 @@ const Transactions = () => {
      queryKey: ["stores-for-txn", currentWarehouse?.id],
      queryFn: async () => {
        let query: any = supabase.from("stores").select("id, name, outstanding, display_id, customer_id, is_active").order("is_active", { ascending: false }).order("name");
-       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+       if (currentWarehouse?.id) query = query.or(`warehouse_id.eq.${currentWarehouse.id},warehouse_id.is.null`);
        const { data } = await query;
        return (data ?? []) as any[];
      },
@@ -167,7 +167,7 @@ const Transactions = () => {
     queryKey: ["customers-for-txn-filter", currentWarehouse?.id],
     queryFn: async () => {
       let query: any = supabase.from("customers").select("id, name").eq("is_active", true).order("name");
-      if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+      if (currentWarehouse?.id) query = query.or(`warehouse_id.eq.${currentWarehouse.id},warehouse_id.is.null`);
       const { data } = await query;
       return (data ?? []) as any[];
     },

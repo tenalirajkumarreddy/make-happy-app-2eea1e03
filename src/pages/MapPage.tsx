@@ -144,7 +144,7 @@ const MapPage = () => {
      queryKey: ["routes-for-map", currentWarehouse?.id],
      queryFn: async () => {
        let query = supabase.from("routes").select("id, name").eq("is_active", true);
-       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+       if (currentWarehouse?.id) query = query.or(`warehouse_id.eq.${currentWarehouse.id},warehouse_id.is.null`);
        const { data } = await query;
        return data || [];
      },

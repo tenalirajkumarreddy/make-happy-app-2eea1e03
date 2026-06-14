@@ -24,6 +24,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { PlusCircle, Trash2, Upload, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
+import { usePermission } from '@/hooks/usePermission';
 
 interface PurchaseItem {
   raw_material_id: string;
@@ -39,6 +40,7 @@ interface RecordPurchaseFormProps {
 export const RecordPurchaseForm = ({ open, onOpenChange }: RecordPurchaseFormProps) => {
   const { user, role } = useAuth();
   const { currentWarehouse } = useWarehouse();
+  const { allowed: canManagePurchases } = usePermission("manage_purchases");
   const queryClient = useQueryClient();
 
   const [vendorId, setVendorId] = useState('');
@@ -143,6 +145,11 @@ export const RecordPurchaseForm = ({ open, onOpenChange }: RecordPurchaseFormPro
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!canManagePurchases) {
+      toast.error('You do not have permission to record purchases');
+      return;
+    }
 
     if (!currentWarehouse?.id) {
       toast.error('No warehouse selected');

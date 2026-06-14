@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Loader2, ShoppingCart, TrendingUp, ArrowRightLeft, ClipboardList, Store, Banknote, Smartphone, ArrowDownToLine, ArrowUpFromLine, Factory, Package, Users } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { cn } from "@/lib/utils";
+import { cn, timeAgo } from "@/lib/utils";
 import { useOperatorWarehouse } from "@/mobile/hooks/useOperatorWarehouse";
 
 type Props = {
@@ -307,9 +307,12 @@ export function PosHome({ onOpenRecord, onOpenHistory, onOpenInventory }: Props)
                     <p className="text-sm font-semibold text-slate-800 dark:text-white truncate">{order.stores?.name ?? "Unknown"}</p>
                     <p className="text-xs text-slate-400">₹{Number(order.total_amount || 0).toLocaleString("en-IN")}</p>
                   </div>
-                  {order.display_id && (
-                    <span className="text-xs font-mono text-slate-400">{order.display_id}</span>
-                  )}
+                  <div className="text-right shrink-0 flex flex-col items-end gap-1">
+                    {order.created_at && <span className="text-2xs text-amber-500 font-medium">{timeAgo(order.created_at)}</span>}
+                    {order.display_id && (
+                      <span className="text-xs font-mono text-slate-400">{order.display_id}</span>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

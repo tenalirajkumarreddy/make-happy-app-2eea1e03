@@ -100,7 +100,7 @@ const Customers = () => {
           .from("customers")
           .select("id, display_id, name, phone, email, kyc_status, is_active, created_at, photo_url, address, credit_limit_override, credit_used")
           .or(`name.ilike.${term},display_id.ilike.${term},phone.ilike.${term}`)
-          .eq("warehouse_id", currentWarehouse?.id || "")
+          .or(currentWarehouse?.id ? `warehouse_id.eq.${currentWarehouse.id},warehouse_id.is.null` : "warehouse_id.is.null,warehouse_id.not.is.null")
           .order("created_at", { ascending: false })
           .range(pageParam * PAGE_SIZE, (pageParam + 1) * PAGE_SIZE - 1);
         if (error) throw error;

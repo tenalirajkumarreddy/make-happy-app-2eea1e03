@@ -88,7 +88,7 @@ const RawMaterials = () => {
         .order("name");
 
       if (currentWarehouse?.id) {
-        query = query.eq("warehouse_id", currentWarehouse.id);
+        query = query.or(`warehouse_id.eq.${currentWarehouse.id},warehouse_id.is.null`);
       }
 
       const { data, error } = await query;
@@ -110,7 +110,7 @@ const RawMaterials = () => {
     queryFn: async () => {
       let query = supabase.from("vendors").select("id, name, display_id").eq("is_active", true);
       if (currentWarehouse?.id) {
-        query = query.eq("warehouse_id", currentWarehouse.id);
+        query = query.or(`warehouse_id.eq.${currentWarehouse.id},warehouse_id.is.null`);
       }
       const { data } = await query;
       return data || [];

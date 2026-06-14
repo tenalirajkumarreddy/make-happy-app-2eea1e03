@@ -92,7 +92,7 @@ const StoreDetail = () => {
          .from("stores")
          .select("*, customers(id, name, is_active, kyc_status, kyc_selfie_url, kyc_aadhar_front_url, kyc_aadhar_back_url, kyc_rejection_reason, kyc_submitted_at, kyc_verified_at), store_types(name, credit_limit_kyc, credit_limit_no_kyc), routes(name)")
          .eq("id", id!);
-       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+       if (currentWarehouse?.id) query = query.or(`warehouse_id.eq.${currentWarehouse.id},warehouse_id.is.null`);
        const { data, error } = await query.maybeSingle();
        if (error) throw error;
        return data;
@@ -105,7 +105,7 @@ const StoreDetail = () => {
      queryKey: ["customers-for-transfer", currentWarehouse?.id],
      queryFn: async () => {
        let query = supabase.from("customers").select("id, name, display_id").eq("is_active", true);
-       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+       if (currentWarehouse?.id) query = query.or(`warehouse_id.eq.${currentWarehouse.id},warehouse_id.is.null`);
        const { data } = await query.order("name");
        return data || [];
      },
@@ -116,7 +116,7 @@ const StoreDetail = () => {
      queryKey: ["routes-for-edit", currentWarehouse?.id],
      queryFn: async () => {
        let query = supabase.from("routes").select("id, name");
-       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+       if (currentWarehouse?.id) query = query.or(`warehouse_id.eq.${currentWarehouse.id},warehouse_id.is.null`);
        const { data } = await query.order("name");
        return data || [];
      },
@@ -138,7 +138,7 @@ const StoreDetail = () => {
     queryFn: async () => {
        if (!store?.store_type_id) {
          let query = supabase.from("products").select("id, name, sku, base_price").eq("is_active", true);
-         if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+         if (currentWarehouse?.id) query = query.or(`warehouse_id.eq.${currentWarehouse.id},warehouse_id.is.null`);
          const { data } = await query.order("name");
          return data || [];
        }
@@ -150,7 +150,7 @@ const StoreDetail = () => {
         return accessData.map((a: any) => a.products).filter(Boolean);
       }
        let query = supabase.from("products").select("id, name, sku, base_price").eq("is_active", true);
-       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
+       if (currentWarehouse?.id) query = query.or(`warehouse_id.eq.${currentWarehouse.id},warehouse_id.is.null`);
        const { data } = await query.order("name");
        return data || [];
     },

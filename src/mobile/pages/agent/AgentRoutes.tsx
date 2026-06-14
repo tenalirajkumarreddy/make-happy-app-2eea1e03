@@ -149,6 +149,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
   const { allowed: canFulfillOrders } = usePermission("fulfill_orders");
   const { allowed: canModifyOrders } = usePermission("modify_orders");
   const { allowed: canCancelOrders } = usePermission("cancel_orders");
+  const { allowed: canRecordSale } = usePermission("record_sale");
   const [view, setView] = useState<"routes" | "orders">("routes");
   const [showMap, setShowMap] = useState(false);
   const [expandedRouteId, setExpandedRouteId] = useState<string | null>(null);
@@ -461,6 +462,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
   };
 
   const handleFulfill = async () => {
+    if (!canRecordSale) { toast.error("You don't have permission to record sales"); return; }
     if (!fulfillOrder) return;
     const cash = Number(fulfillCash) || 0;
     const upi = Number(fulfillUpi) || 0;

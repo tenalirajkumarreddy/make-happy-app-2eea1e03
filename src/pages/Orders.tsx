@@ -568,6 +568,7 @@ const Orders = () => {
       p_requirement_note: requirementNote || null,
       p_total_amount: 0,
       p_created_by: user!.id,
+      p_is_urgent: false,
     });
 
     const orderRow = order?.[0];
@@ -1018,6 +1019,41 @@ const exportCSV = () => {
     return data;
   }, [orders, hasMatrixRestrictions, hasStoreTypeRestrictions, canAccessStore]);
 
+  const columns = [
+    { header: "Order ID", accessor: (row: OrderRecord) => (
+      <span className="font-mono text-xs font-medium text-primary">{row.display_id}</span>
+    ), className: "font-mono text-xs flex-none w-[110px]" },
+    { header: "Store", accessor: (row: OrderRecord) => (
+      <div className="flex items-center gap-2">
+        <StoreIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <StoreHoverCard store={row.stores}>
+          <span className="font-medium truncate">{row.stores?.name || "—"}</span>
+        </StoreHoverCard>
+      </div>
+    ), className: "font-medium flex-[3] min-w-[160px]" },
+    { header: "Customer", accessor: (row: OrderRecord) => (
+      <div className="flex items-center gap-2">
+        <UserCircle className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <CustomerHoverCard customer={row.customers}>
+          <span className="text-sm truncate">{row.customers?.name || "—"}</span>
+        </CustomerHoverCard>
+      </div>
+    ), className: "text-sm flex-[2] min-w-[140px] hidden md:table-cell" },
+    { header: "Type", accessor: (row: OrderRecord) => (
+      <Badge variant="secondary" className="text-xs font-medium whitespace-nowrap">{row.order_type}</Badge>
+    ), className: "text-xs flex-none w-[70px]" },
+    { header: "Source", accessor: (row: OrderRecord) => (
+      <span className="text-xs text-muted-foreground">{row.source}</span>
+    ), className: "text-xs flex-none w-[70px] hidden lg:table-cell" },
+    { header: "Status", accessor: (row: OrderRecord) => (
+      <StatusBadge status={row.status === "delivered" ? "active" : row.status as any} label={row.status} />
+    ), className: "text-xs flex-none w-[95px]" },
+    { header: "Date", accessor: (row: OrderRecord) => (
+      <span className="text-xs text-muted-foreground whitespace-nowrap">{new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}</span>
+    ), className: "text-xs text-muted-foreground flex-none w-[120px] hidden md:table-cell" },
+    { header: "Actions", accessor: (row: OrderRecord) => buildActions(row), className: "flex-none w-[120px] hidden sm:table-cell" },
+  ];
+
   const activeOrderFilterCount = [
     filterCustomer !== "all",
     filterStore !== "all",
@@ -1448,34 +1484,7 @@ const buildActions = (row: OrderRecord) => {
     );
   };
 
-const columns = [
-  { header: "Order ID", accessor: "display_id" as const, className: "font-mono text-xs" },
-  { header: "Store", accessor: (row: OrderRecord) => (
-    <div className="flex items-center gap-2">
-      <StoreIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-      <StoreHoverCard store={row.stores}>
-        <span>{row.stores?.name || "—"}</span>
-      </StoreHoverCard>
-    </div>
-  ), className: "font-medium" },
-  { header: "Type", accessor: (row: OrderRecord) => <Badge variant="secondary">{row.order_type}</Badge>, className: "hidden sm:table-cell" },
-  { header: "Source", accessor: (row: OrderRecord) => <Badge variant="outline">{row.source}</Badge>, className: "hidden md:table-cell" },
-  { header: "Customer", accessor: (row: OrderRecord) => (
-    <div className="flex items-center gap-2">
-      <UserCircle className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-      <CustomerHoverCard customer={row.customers}>
-        <span>{row.customers?.name || "—"}</span>
-      </CustomerHoverCard>
-    </div>
-  ), className: "text-muted-foreground text-sm hidden lg:table-cell" },
-  { header: "Status", accessor: (row: OrderRecord) => <StatusBadge status={row.status === "delivered" ? "active" : row.status as any} label={row.status} /> },
-  { header: "Date", accessor: (row: OrderRecord) => new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }), className: "text-muted-foreground text-xs hidden sm:table-cell" },
-  { header: "Actions", accessor: (row: OrderRecord) => buildActions(row) },
-];
 
-  if (isLoading) {
-    return <TableSkeleton columns={7} />;
-  }
 
   if (!hasOrderAccess) {
     return (
@@ -1601,31 +1610,34 @@ const columns = [
       onSearch={setFilterSearch}
       searchValue={filterSearch}
       renderMobileCard={(row: OrderRecord) => (
-        <div className={`rounded-lg border bg-card p-3 transition-all ${row.id === highlightId ? "animate-highlight" : ""}`}>
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                <span className="font-mono text-xs text-primary font-medium">{row.display_id}</span>
-                <Badge variant="secondary" className="text-xs h-5 px-1.5">{row.order_type}</Badge>
-                <Badge variant="outline" className="text-xs h-5 px-1.5">{row.source}</Badge>
-              </div>
-              <div className="flex items-center gap-1.5 mb-1">
-                <StoreIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                <StoreHoverCard store={row.stores}>
-                  <span className="font-semibold text-sm text-foreground truncate cursor-pointer hover:underline">{row.stores?.name || "—"}</span>
-                </StoreHoverCard>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <UserCircle className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                <CustomerHoverCard customer={row.customers}>
-                  <span className="text-xs text-muted-foreground truncate cursor-pointer hover:underline">{row.customers?.name || "—"}</span>
-                </CustomerHoverCard>
-              </div>
+          <div className={`rounded-lg border bg-card p-3 ${row.id === highlightId ? "animate-highlight" : ""} ${row.status === "cancelled" ? "opacity-70 border-dashed border-destructive/30" : ""}`}>
+            {/* Header row: ID + Status */}
+            <div className="mb-2 flex items-center justify-between">
+              <span className="font-mono text-xs font-medium text-primary">{row.display_id}</span>
+              <StatusBadge status={row.status === "delivered" ? "active" : row.status as any} label={row.status} />
             </div>
-            <StatusBadge status={row.status === "delivered" ? "active" : row.status as any} label={row.status} />
-          </div>
+            {/* Store name */}
+            <div className="mb-1.5 flex items-center gap-2">
+              <StoreIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <StoreHoverCard store={row.stores}>
+                <span className="font-medium text-sm text-foreground truncate cursor-pointer hover:underline">{row.stores?.name || "—"}</span>
+              </StoreHoverCard>
+            </div>
+            {/* Customer */}
+            <div className="mb-2 flex items-center gap-2">
+              <UserCircle className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <CustomerHoverCard customer={row.customers}>
+                <span className="text-xs text-muted-foreground truncate cursor-pointer hover:underline">{row.customers?.name || "—"}</span>
+              </CustomerHoverCard>
+            </div>
+            {/* Type + Source + Date row */}
+            <div className="mb-1.5 flex items-center gap-2 text-xs text-muted-foreground">
+              <Badge variant="secondary" className="text-2xs h-5 px-1.5">{row.order_type}</Badge>
+              <span>{row.source}</span>
+              <span className="ml-auto">{format(new Date(row.created_at), "dd MMM yy, hh:mm a")}</span>
+            </div>
+            {/* Actions footer */}
             <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50 gap-2 flex-wrap">
-              <p className="text-xs text-muted-foreground">{new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}</p>
               {(row.status === "confirmed" || row.status === "pending") && (
                 <div className="flex items-center gap-1.5 flex-wrap">
                   {canFulfillOrders && (
@@ -1665,36 +1677,26 @@ const columns = [
                       <FileText className="h-3 w-3 mr-1" />Invoice
                     </Button>
                   )}
-                  {/* NO CANCEL for delivered - use Sale Return */}
                 </div>
               )}
               {row.status === "cancelled" && row.cancellation_reason && (
-                <span className="text-xs text-muted-foreground italic truncate max-w-[180px]">{row.cancellation_reason}</span>
+                <span className="text-xs text-muted-foreground italic truncate">{row.cancellation_reason}</span>
+              )}
+              {(row.creator_profile || row.updater_profile || row.fulfiller_profile || (row.status === "cancelled" && row.canceller_profile)) && (
+                <div className="flex items-center gap-1 text-2xs text-muted-foreground flex-wrap">
+                  {row.creator_profile && <span>Created by {row.creator_profile.full_name}</span>}
+                  {row.updater_profile && row.updater_profile.full_name !== row.creator_profile?.full_name && (
+                    <><span className="text-muted-foreground/40">•</span><span>Edited by {row.updater_profile.full_name}</span></>
+                  )}
+                  {row.fulfiller_profile && (
+                    <><span className="text-muted-foreground/40">•</span><span>Fulfilled by {row.fulfiller_profile.full_name}</span></>
+                  )}
+                  {row.status === "cancelled" && row.canceller_profile && (
+                    <><span className="text-muted-foreground/40">•</span><span className="text-destructive">Cancelled by {row.canceller_profile.full_name}</span></>
+                  )}
+                </div>
               )}
             </div>
-            {(row.creator_profile || row.updater_profile || row.fulfiller_profile || (row.status === "cancelled" && row.canceller_profile)) && (
-              <div className="flex items-center gap-1 text-2xs text-muted-foreground flex-wrap mt-2 pt-2 border-t border-border/50">
-                {row.creator_profile && <span>Created by {row.creator_profile.full_name}</span>}
-                {row.updater_profile && row.updater_profile.full_name !== row.creator_profile?.full_name && (
-                  <>
-                    <span className="text-muted-foreground/40">•</span>
-                    <span>Edited by {row.updater_profile.full_name}</span>
-                  </>
-                )}
-                {row.fulfiller_profile && (
-                  <>
-                    <span className="text-muted-foreground/40">•</span>
-                    <span>Fulfilled by {row.fulfiller_profile.full_name}</span>
-                  </>
-                )}
-                {row.status === "cancelled" && row.canceller_profile && (
-                  <>
-                    <span className="text-muted-foreground/40">•</span>
-                    <span className="text-destructive">Cancelled by {row.canceller_profile.full_name}</span>
-                  </>
-                )}
-              </div>
-            )}
           </div>
         )}
       />

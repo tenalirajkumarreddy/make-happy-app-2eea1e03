@@ -24,7 +24,7 @@ import {
   HoverCard, HoverCardContent, HoverCardTrigger,
 } from "@/components/ui/hover-card";
 import { PageHeader } from "@/components/shared/PageHeader";
-import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
+import { DataTable } from "@/components/shared/DataTable";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
@@ -151,16 +151,37 @@ const Sales = () => {
     );
   };
 
+  const returnedClass = (row: any) => row.is_fully_returned ? "line-through text-muted-foreground" : "";
+
   const columns = [
-    { header: "Sale ID", accessor: "display_id" as const, className: "font-mono text-xs", hideOnMobile: true },
-    { header: "Store", accessor: (row: any) => <div className="flex items-center gap-2"><StoreIcon className="h-4 w-4 text-muted-foreground shrink-0" /><StoreHoverCard store={row.stores}><span>{row.stores?.name || "—"}</span></StoreHoverCard></div>, className: "font-medium" },
-    { header: "Customer", accessor: (row: any) => <div className="flex items-center gap-2"><UserCircle className="h-4 w-4 text-muted-foreground shrink-0" /><CustomerHoverCard customer={row.customers}><span>{row.customers?.name || "—"}</span></CustomerHoverCard></div>, className: "text-sm hidden md:table-cell" },
-    { header: "Total", accessor: (row: any) => <span className="font-semibold">₹{Number(row.total_amount || 0).toLocaleString()}</span> },
-    { header: "Cash", accessor: (row: any) => `₹${Number(row.cash_amount || 0).toLocaleString()}`, className: "text-sm hidden lg:table-cell" },
-    { header: "UPI", accessor: (row: any) => `₹${Number(row.upi_amount || 0).toLocaleString()}`, className: "text-sm hidden lg:table-cell" },
-    { header: "Outstanding", accessor: (row: any) => <span className={Number(row.outstanding_amount || 0) > 0 ? "text-destructive font-medium" : "text-muted-foreground"}>₹{Number(row.outstanding_amount || 0).toLocaleString()}</span>, className: "text-sm hidden md:table-cell" },
-    { header: "Recorded By", accessor: (row: any) => <div className="flex items-center gap-2"><Avatar className="h-6 w-6"><AvatarImage src={list.getRecorderAvatar(row.recorded_by) || undefined} /><AvatarFallback className="text-2xs bg-primary/10 text-primary">{list.getRecorderName(row.recorded_by).charAt(0)}</AvatarFallback></Avatar><span className="text-xs text-muted-foreground">{list.getRecorderName(row.recorded_by)}</span></div>, className: "hidden lg:table-cell" },
-    { header: "Date", accessor: (row: any) => <span className="text-xs text-muted-foreground">{format(new Date(row.created_at), "dd MMM yy, hh:mm a")}</span>, className: "hidden sm:table-cell" },
+    { header: "Sale ID", accessor: (row: any) => (
+      <span className={`font-mono text-xs ${returnedClass(row)}`}>
+        {row.display_id}
+        {row.is_fully_returned && <span className="ml-2 text-4xs font-bold bg-warning/20 text-warning border border-warning/30 rounded px-1 py-0">Returned</span>}
+      </span>
+    ), className: "font-mono text-xs" },
+    { header: "Store", accessor: (row: any) => (
+      <div className={`flex items-center gap-2 ${returnedClass(row)}`}>
+        <StoreIcon className={`h-4 w-4 text-muted-foreground shrink-0 ${returnedClass(row)}`} />
+        <StoreHoverCard store={row.stores}>
+          <span>{row.stores?.name || "—"}</span>
+        </StoreHoverCard>
+      </div>
+    ), className: "font-medium" },
+    { header: "Customer", accessor: (row: any) => (
+      <div className={`flex items-center gap-2 ${returnedClass(row)}`}>
+        <UserCircle className={`h-4 w-4 text-muted-foreground shrink-0 ${returnedClass(row)}`} />
+        <CustomerHoverCard customer={row.customers}>
+          <span>{row.customers?.name || "—"}</span>
+        </CustomerHoverCard>
+      </div>
+    ), className: "text-sm hidden md:table-cell" },
+    { header: "Total", accessor: (row: any) => <span className={`font-semibold ${returnedClass(row)}`}>₹{Number(row.total_amount || 0).toLocaleString()}</span>, className: "font-semibold" },
+    { header: "Cash", accessor: (row: any) => <span className={`text-sm hidden md:table-cell ${returnedClass(row)}`}>₹{Number(row.cash_amount || 0).toLocaleString()}</span>, className: "text-sm hidden md:table-cell" },
+    { header: "UPI", accessor: (row: any) => <span className={`text-sm hidden md:table-cell ${returnedClass(row)}`}>₹{Number(row.upi_amount || 0).toLocaleString()}</span>, className: "text-sm hidden md:table-cell" },
+    { header: "Outstanding", accessor: (row: any) => <span className={`${Number(row.outstanding_amount || 0) > 0 ? "text-destructive font-medium" : "text-muted-foreground"} ${returnedClass(row)}`}>₹{Number(row.outstanding_amount || 0).toLocaleString()}</span>, className: "text-sm hidden md:table-cell" },
+    { header: "Recorded By", accessor: (row: any) => <div className={`flex items-center gap-2 ${returnedClass(row)}`}><Avatar className="h-6 w-6"><AvatarImage src={list.getRecorderAvatar(row.recorded_by) || undefined} /><AvatarFallback className="text-2xs bg-primary/10 text-primary">{list.getRecorderName(row.recorded_by).charAt(0)}</AvatarFallback></Avatar><span className="text-xs text-muted-foreground">{list.getRecorderName(row.recorded_by)}</span></div>, className: "hidden lg:table-cell" },
+    { header: "Date", accessor: (row: any) => <span className={`text-xs text-muted-foreground ${returnedClass(row)}`}>{format(new Date(row.created_at), "dd MMM yy, hh:mm a")}</span>, className: "hidden sm:table-cell" },
     {
       header: "Actions", accessor: (row: any) => (
         <div className="flex items-center gap-1">
@@ -222,69 +243,56 @@ const Sales = () => {
           <span className="ml-auto text-xs text-muted-foreground">{list.filteredSales.length}{list.hasMoreSales ? "+" : ""} result{list.filteredSales.length !== 1 ? "s" : ""}</span>
         </div>
 
-        <VirtualDataTable
+        <DataTable
           columns={columns}
           data={list.filteredSales}
           searchKey="display_id"
           searchPlaceholder="Search by sale ID..."
           emptyMessage="No sales recorded yet."
-          height="calc(100vh - 320px)"
           onRowClick={(row: any) => setSelectedSaleId(row.id)}
           onSearch={setSearchInput}
           searchValue={searchInput}
-          renderMobileCard={(row: any) => (
-            <div className={`rounded-lg border bg-card p-3 ${row.is_fully_returned ? "opacity-70 bg-muted/50 border-dashed border-destructive/30" : ""}`}>
+          renderMobileCard={(row: any) => {
+            const returnedClass = row.is_fully_returned ? "line-through text-muted-foreground" : "";
+            return (
+            <div className={`rounded-lg border bg-card p-3 ${row.is_fully_returned ? "opacity-70 bg-slate-50 dark:bg-slate-900/40 border-dashed border-destructive/30 dark:border-destructive/30" : ""}`}>
+              {/* Header row: ID + Date */}
               <div className="mb-2 flex items-center justify-between">
+                <span className={`font-mono text-xs font-medium ${row.is_fully_returned ? "line-through text-muted-foreground" : "text-primary"}`}>
+                  {row.display_id}
+                  {row.is_fully_returned && <span className="ml-2 text-4xs font-bold bg-warning/20 dark:bg-warning/20 text-warning dark:text-warning border border-warning/30 dark:border-warning/30 rounded px-2 py-0">Returned</span>}
+                </span>
+                <span className="text-2xs text-muted-foreground">{format(new Date(row.created_at), "dd MMM yy, hh:mm a")}</span>
+              </div>
+              {/* Store name */}
+              <div className={`mb-2 flex items-center gap-2 ${returnedClass}`}>
+                <StoreIcon className={`h-4 w-4 shrink-0 ${returnedClass} text-muted-foreground`} />
+                <span className={`font-medium text-sm truncate ${returnedClass}`}>{row.stores?.name || "—"}</span>
+              </div>
+              {/* Amounts row - inline compact */}
+              <div className="flex items-center gap-3 text-xs">
+                <span className={`font-bold ${returnedClass}`}>₹{Number(row.total_amount || 0).toLocaleString()}</span>
+                <span className={returnedClass}>Cash: ₹{Number(row.cash_amount || 0).toLocaleString()}</span>
+                <span className={returnedClass}>UPI: ₹{Number(row.upi_amount || 0).toLocaleString()}</span>
+              </div>
+              {/* Footer: Recorder + Balance */}
+              <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
                 <div className="flex items-center gap-2">
-                  <span className={`font-mono text-xs font-medium ${row.is_fully_returned ? "text-slate-400 line-through" : "text-primary"}`}>{row.display_id}</span>
-                  {row.is_fully_returned && <Badge className="text-4xs px-1 py-0 h-4 bg-destructive/10 text-destructive border border-destructive/30 font-bold">↩ RETURNED</Badge>}
-                </div>
-                <div className="flex items-center gap-1">
-                  <span className="text-2xs text-muted-foreground mr-1">{format(new Date(row.created_at), "dd MMM yy")}</span>
-                  <Button variant="ghost" size="icon" className="h-9 w-9 text-primary hover:bg-primary/10" onClick={(e) => { e.stopPropagation(); setReceiptSaleId(row.id); }}><Receipt className="h-4 w-4" /></Button>
-                  {list.isAdmin && (row.invoice_sales?.length > 0
-                    ? <Button variant="ghost" size="icon" className="h-9 w-9 text-success hover:bg-success/10" onClick={(e) => { e.stopPropagation(); const invId = row.invoice_sales[0]?.invoice_id; if (invId) navigate(`/invoices/${invId}`); }}><FileText className="h-4 w-4" /></Button>
-                    : <Button variant="ghost" size="icon" className="h-9 w-9 text-info hover:bg-info/10" onClick={(e) => { e.stopPropagation(); navigate("/invoices/new", { state: { saleIds: [row.id] } }); }}><FileText className="h-4 w-4" /></Button>
-                  )}
-                  {!row.is_fully_returned && !list.isPastDate(row.created_at, row.updated_at) && (
-                    <Button variant="ghost" size="icon" className="h-9 w-9 text-info hover:bg-info/10" onClick={(e) => { e.stopPropagation(); edit.openEditSale(row); }}><Pencil className="h-4 w-4" /></Button>
-                  )}
-                  {!row.is_fully_returned && (
-                    <Tooltip><TooltipTrigger asChild><span><Button variant="ghost" size="icon" className="h-9 w-9 text-warning hover:bg-warning/10 disabled:opacity-30" onClick={(e) => { e.stopPropagation(); setReturnSale(row); }} disabled={list.isPastDate(row.created_at, row.updated_at)}><RotateCcw className="h-4 w-4" /></Button></span></TooltipTrigger><TooltipContent><p>{list.isPastDate(row.created_at, row.updated_at) ? "Returns are locked after the day recorded" : "Return Sale"}</p></TooltipContent></Tooltip>
-                  )}
-                  {canCancelSales && !row.is_fully_returned && (
-                    <Tooltip><TooltipTrigger asChild><span><Button variant="ghost" size="icon" className="h-9 w-9 text-destructive hover:bg-destructive/10" onClick={(e) => { e.stopPropagation(); cancel.setCancelSale(row); }}><XCircle className="h-4 w-4" /></Button></span></TooltipTrigger><TooltipContent><p>Cancel Sale</p></TooltipContent></Tooltip>
-                  )}
-                  {row.fulfilled_order_id && (
-                    <Button variant="ghost" size="icon" className="h-9 w-9 text-info hover:bg-info/10" onClick={(e) => { e.stopPropagation(); navigate(`/orders?highlight=${row.fulfilled_order_id}`); }}><ClipboardList className="h-4 w-4" /></Button>
-                  )}
-                </div>
-              </div>
-              <div className="mb-2 flex items-center gap-2">
-                <StoreIcon className="h-4 w-4 text-muted-foreground shrink-0" />
-                <StoreHoverCard store={row.stores}><span className="font-medium text-sm truncate cursor-pointer hover:underline">{row.stores?.name || "—"}</span></StoreHoverCard>
-              </div>
-              {row.customers?.name && (
-                <div className="mb-2 flex items-center gap-2">
-                  <UserCircle className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <CustomerHoverCard customer={row.customers}><span className="text-sm text-muted-foreground truncate cursor-pointer hover:underline">{row.customers.name}</span></CustomerHoverCard>
-                </div>
-              )}
-              <div className="flex items-center gap-3 text-xs cursor-pointer" onClick={() => setSelectedSaleId(row.id)}>
-                <span className="font-bold text-foreground">₹{Number(row.total_amount || 0).toLocaleString()}</span>
-                <span className="text-muted-foreground">Cash: ₹{Number(row.cash_amount || 0).toLocaleString()}</span>
-                <span className="text-muted-foreground">UPI: ₹{Number(row.upi_amount || 0).toLocaleString()}</span>
-              </div>
-              <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50 cursor-pointer" onClick={() => setSelectedSaleId(row.id)}>
-                <div className="flex items-center gap-2">
-                  <Avatar className="h-4 w-4"><AvatarImage src={list.getRecorderAvatar(row.recorded_by) || undefined} /><AvatarFallback className="text-5xs bg-primary/10 text-primary">{list.getRecorderName(row.recorded_by).charAt(0)}</AvatarFallback></Avatar>
+                  <Avatar className="h-4 w-4">
+                    <AvatarImage src={list.getRecorderAvatar(row.recorded_by) || undefined} />
+                    <AvatarFallback className="text-5xs bg-primary/10 text-primary">{list.getRecorderName(row.recorded_by).charAt(0)}</AvatarFallback>
+                  </Avatar>
                   <span className="text-2xs text-muted-foreground truncate max-w-[100px]">{list.getRecorderName(row.recorded_by)}</span>
                 </div>
-                {Number(row.outstanding_amount) > 0 && <span className="text-xs font-semibold text-destructive">Due: ₹{Number(row.outstanding_amount || 0).toLocaleString()}</span>}
-                {row.invoice_sales?.length > 0 && <Badge variant="outline" className="text-xs px-1 py-0 h-4 border-success/40 text-success">Invoiced</Badge>}
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-muted-foreground">Due:</span>
+                  <span className={`${returnedClass} ${!row.is_fully_returned && Number(row.outstanding_amount || 0) > 0 ? "font-semibold text-destructive" : ""}`}>
+                    ₹{Number(row.outstanding_amount || 0).toLocaleString()}
+                  </span>
+                </div>
               </div>
             </div>
-          )}
+          );}}
         />
 
         <div ref={sentinelRef} className="flex justify-center py-4">

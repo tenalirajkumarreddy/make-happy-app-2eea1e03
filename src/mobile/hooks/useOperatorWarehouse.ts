@@ -1,8 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
-const POS_STORE_TYPE_ID = "00000000-0000-0000-0000-000000000001";
-
 export function useOperatorWarehouse(userId?: string) {
   return useQuery({
     queryKey: ["operator-warehouse", userId],
@@ -17,11 +15,19 @@ export function useOperatorWarehouse(userId?: string) {
 
       if (!wh) return { warehouse: null, posStore: null };
 
+      const { data: storeTypes } = await supabase
+        .from("store_types")
+        .select("id")
+        .eq("name", "POS/Counter")
+        .maybeSingle();
+
+      if (!storeTypes) return { warehouse: wh, posStore: null };
+
       const { data: posStore } = await supabase
         .from("stores")
         .select("id, display_id, name, warehouse_id, store_type_id, customer_id, outstanding")
         .eq("warehouse_id", wh.id)
-        .eq("store_type_id", POS_STORE_TYPE_ID)
+        .eq("store_type_id", storeTypes.id)
         .maybeSingle();
 
       return { warehouse: wh, posStore };
