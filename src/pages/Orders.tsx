@@ -263,7 +263,7 @@ const Orders = () => {
   const [orderType, setOrderType] = useState("simple");
   const [requirementNote, setRequirementNote] = useState("");
   const [orderItems, setOrderItems] = useState<OrderItem[]>([{ product_id: "", quantity: 1 }]);
-  const [assignedTo, setAssignedTo] = useState("");
+  const [assignedTo, setAssignedTo] = useState("unassigned");
 
   // Fetch user's order access level
   const { data: orderAccess } = useQuery({
@@ -500,12 +500,15 @@ const Orders = () => {
       setOrderItems(orderItems.map((i) => i.product_id === productId ? { ...i, quantity: newQty } : i));
     }
   };
+  const updateItemPrice = (productId: string, newPrice: number) => {
+    setOrderItems(orderItems.map((i) => i.product_id === productId ? { ...i, unit_price: newPrice } : i));
+  };
   const removeItem = (idx: number) => setOrderItems(orderItems.filter((_, i) => i !== idx));
 
   const resetForm = () => {
     setCustomerId(""); setStoreId(""); setStoreSearch("");
     setOrderType("simple"); setRequirementNote("");
-    setOrderItems([{ product_id: "", quantity: 1 }]); setAssignedTo("");
+    setOrderItems([{ product_id: "", quantity: 1 }]); setAssignedTo("unassigned");
   };
 
   const handleAdd = async (e: React.FormEvent) => {
@@ -608,7 +611,7 @@ const Orders = () => {
       warehouse_id: currentWarehouse?.id || null,
     };
 
-    if (assignedTo) {
+    if (assignedTo && assignedTo !== "unassigned") {
       insertData.assigned_to = assignedTo;
     }
 
@@ -679,7 +682,7 @@ const Orders = () => {
     });
 
   // Notify assigned agent if order is assigned
-  if (assignedTo && assignedTo !== user!.id) {
+  if (assignedTo && assignedTo !== "unassigned" && assignedTo !== user!.id) {
     sendNotificationToMany([assignedTo], {
       title: "Order Assigned to You",
       message: `Order ${displayId} (${orderType}) for ${storeName} has been assigned to you`,
@@ -712,7 +715,7 @@ const Orders = () => {
   };
 
   if (assignedTo !== undefined) {
-    updateData.assigned_to = assignedTo || null;
+    updateData.assigned_to = (assignedTo && assignedTo !== "unassigned") ? assignedTo : null;
   }
 
     const { error } = await supabase
@@ -783,7 +786,7 @@ if (orderType === "detailed" && canModifyPrices) {
       setEditOrder(orderData as unknown as FulfillOrder);
       setOrderType(orderData.order_type);
       setRequirementNote(orderData.requirement_note || "");
-      setAssignedTo(orderData.assigned_to || "");
+      setAssignedTo(orderData.assigned_to || "unassigned");
 
       if (orderData.order_items && orderData.order_items.length > 0) {
         setOrderItems(orderData.order_items.map((item: OrderItemData) => ({
@@ -823,7 +826,7 @@ if (orderType === "detailed" && canModifyPrices) {
       setEditOrder(orderData as unknown as FulfillOrder);
       setOrderType(orderData.order_type);
       setRequirementNote(orderData.requirement_note || "");
-      setAssignedTo(orderData.assigned_to || "");
+      setAssignedTo(orderData.assigned_to || "unassigned");
 
       if (orderData.order_items && orderData.order_items.length > 0) {
         setOrderItems(orderData.order_items.map((item: OrderItemData) => ({
@@ -1577,116 +1580,146 @@ const columns = [
       {/* Create Order Dialog */}
       {canCreateOrders && (
         <Dialog open={showAdd} onOpenChange={(v) => { setShowAdd(v); if (!v) resetForm(); }}>
-          <DialogContent className="max-w-lg h-[80vh] overflow-hidden flex flex-col">
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader><DialogTitle>Create Order</DialogTitle></DialogHeader>
-            <form onSubmit={handleAdd} className="flex-1 overflow-y-auto space-y-4 pr-1">
-            {/* Store search */}
-            <div>
-              <Label>Store</Label>
-              <Input
-                placeholder="Search stores by name or ID..."
-                value={storeSearch}
-                onChange={(e) => setStoreSearch(e.target.value)}
-                className="mt-1"
-              />
-              {storeSearch && (
-                <div className="mt-1 h-36 overflow-y-auto border rounded-lg divide-y">
-                  {(stores || [])
-                    .filter((s: any) => s.name.toLowerCase().includes(storeSearch.toLowerCase()) || s.display_id.toLowerCase().includes(storeSearch.toLowerCase()))
-                    .map((s: any) => (
-                      <button key={s.id} type="button"
-                        onClick={() => { setStoreId(s.id); setCustomerId(s.customer_id || ""); setStoreSearch(""); }}
-                        className={`w-full text-left px-3 py-2.5 text-sm transition-colors hover:bg-accent ${storeId === s.id ? "bg-primary/10 font-semibold text-primary" : "text-foreground"}`}
-                      >
-                        <span className="font-mono text-xs">{s.display_id}</span>
-                        <span className="ml-2">{s.name}</span>
-                      </button>
-                    ))}
-                </div>
-              )}
-              {storeId && (
-                <div className="mt-1.5 rounded-xl bg-primary/5 border border-primary/20 px-3 py-2 flex items-center justify-between">
-                  <span className="text-sm font-medium text-foreground">{(stores as any[])?.find((s: any) => s.id === storeId)?.name || "Store selected"}</span>
-                  <button type="button" onClick={() => { setStoreId(""); setCustomerId(""); }} className="text-xs text-muted-foreground hover:text-foreground">Change</button>
-                </div>
-              )}
-            </div>
+            <form onSubmit={handleAdd} className="space-y-4">
+              <div>
+                <Label>Store</Label>
+                <Input
+                  placeholder="Search stores by name or ID..."
+                  value={storeSearch}
+                  onChange={(e) => setStoreSearch(e.target.value)}
+                  className="mt-1" />
+                {storeSearch && (
+                  <div className="mt-1 max-h-36 overflow-y-auto border rounded-lg divide-y">
+                    {(stores || [])
+                      .filter((s: any) => s.name.toLowerCase().includes(storeSearch.toLowerCase()) || s.display_id.toLowerCase().includes(storeSearch.toLowerCase()))
+                      .map((s: any) => (
+                        <button key={s.id} type="button"
+                          onClick={() => { setStoreId(s.id); setCustomerId(s.customer_id || ""); setStoreSearch(""); }}
+                          className={`w-full text-left px-3 py-2.5 text-sm transition-colors hover:bg-accent ${storeId === s.id ? "bg-primary/10 font-semibold text-primary" : "text-foreground"}`}>
+                          <span className="font-medium">{s.name}</span>
+                          <span className="ml-2 font-mono text-[10px] text-muted-foreground">{s.display_id}</span>
+                        </button>
+                      ))}
+                  </div>
+                )}
+                {storeId && (
+                  <div className="mt-1.5 rounded-xl bg-primary/5 border border-primary/20 px-3 py-2 flex items-center justify-between">
+                    <span className="text-sm font-medium">{(stores as any[])?.find((s: any) => s.id === storeId)?.name || "Store selected"}</span>
+                    <button type="button" onClick={() => { setStoreId(""); setCustomerId(""); }} className="text-xs text-muted-foreground hover:text-foreground">Change</button>
+                  </div>
+                )}
+              </div>
 
-            {storeId && (
-              <>
-                {/* Order Type + Assign row */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label>Type</Label>
-                    <div className="flex mt-1 rounded-xl border overflow-hidden">
-                      <button type="button" onClick={() => setOrderType("simple")}
-                        className={`flex-1 py-2 text-xs font-semibold transition-colors ${orderType === "simple" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>Note</button>
-                      <button type="button" onClick={() => setOrderType("detailed")}
-                        className={`flex-1 py-2 text-xs font-semibold transition-colors ${orderType === "detailed" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>Products</button>
+              {storeId && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Type</Label>
+                      <div className="flex mt-1 rounded-xl border overflow-hidden">
+                        <button type="button" onClick={() => setOrderType("simple")}
+                          className={`flex-1 py-2 text-xs font-semibold transition-colors ${orderType === "simple" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>Note</button>
+                        <button type="button" onClick={() => setOrderType("detailed")}
+                          className={`flex-1 py-2 text-xs font-semibold transition-colors ${orderType === "detailed" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>Products</button>
+                      </div>
+                    </div>
+                    <div>
+                      <Label>Assign To</Label>
+                      <Select value={assignedTo} onValueChange={setAssignedTo}>
+                        <SelectTrigger className="mt-1"><SelectValue placeholder="Unassigned" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="unassigned">Unassigned</SelectItem>
+                          {agents?.map((a: any) => <SelectItem key={a.id} value={a.id}>{a.full_name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
-                  <div>
-                    <Label>Assign To</Label>
-                    <Select value={assignedTo} onValueChange={setAssignedTo}>
-                      <SelectTrigger className="mt-1"><SelectValue placeholder="Unassigned" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">Unassigned</SelectItem>
-                        {agents?.map((a: any) => <SelectItem key={a.id} value={a.id}>{a.full_name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
 
-                {/* Simple: note */}
-                {orderType === "simple" && (
-                  <div>
-                    <Label>Note</Label>
-                    <textarea value={requirementNote} onChange={(e) => setRequirementNote(e.target.value)}
-                      className="mt-1 w-full h-20 rounded-xl border border-border bg-background px-3 py-2 text-xs resize-none"
-                      placeholder="e.g., Need water bottles urgently" />
-                  </div>
-                )}
+                  {orderType === "simple" && (
+                    <div>
+                      <Label>Requirement Note</Label>
+                      <Textarea value={requirementNote} onChange={(e) => setRequirementNote(e.target.value)}
+                        placeholder="e.g., Need water bottles urgently"
+                        className="mt-1 min-h-[80px]" />
+                    </div>
+                  )}
 
-                {/* Detailed: products with +/- */}
-                {orderType === "detailed" && (
-                  <div className="h-48 overflow-y-auto space-y-1.5 border rounded-xl p-2">
-                    {((products as any[]) || []).map((p: any) => {
-                      const inCart = orderItems.find((i) => i.product_id === p.id);
-                      return (
-                        <div key={p.id} className="flex items-center justify-between rounded-xl border border-border px-3 py-2.5">
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-medium text-foreground truncate">{p.name}</p>
-                            <p className="text-[10px] text-muted-foreground">₹{Number(p.base_price).toLocaleString("en-IN")}</p>
-                          </div>
-                          {inCart ? (
-                            <div className="flex items-center gap-2">
-                              <button type="button" onClick={() => updateItemQuantity(p.id, inCart.quantity - 1)}
-                                className="h-8 w-8 rounded-lg border-2 border-border flex items-center justify-center hover:bg-muted active:scale-90 transition-all">
-                                <Minus className="h-3.5 w-3.5" />
-                              </button>
-                              <span className="text-sm font-bold text-foreground w-6 text-center">{inCart.quantity}</span>
-                              <button type="button" onClick={() => updateItemQuantity(p.id, inCart.quantity + 1)}
-                                className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center hover:bg-primary/90 active:scale-90 transition-all">
-                                <Plus className="h-3.5 w-3.5 text-primary-foreground" />
-                              </button>
+                  {orderType === "detailed" && (
+                    <div className="space-y-3">
+                      <Label className="text-base font-semibold">Products</Label>
+                      <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                        {((products as any[]) || []).map((p: any) => {
+                          const inCart = orderItems.find((i) => i.product_id === p.id);
+                          const itemPrice = inCart?.unit_price ?? getProductPrice(p.id);
+                          return (
+                            <div key={p.id} className="flex items-center gap-3 p-2 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
+                              <div className="w-10 h-10 rounded-md bg-muted flex items-center justify-center shrink-0 overflow-hidden">
+                                {p.image_url ? (
+                                  <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" />
+                                ) : (
+                                  <Package className="h-5 w-5 text-muted-foreground" />
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-sm truncate">{p.name}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  ₹{Number(p.base_price).toLocaleString("en-IN")}
+                                  {inCart ? ` × ${inCart.quantity} = ₹${(itemPrice * inCart.quantity).toLocaleString("en-IN")}` : ""}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                {inCart ? (
+                                  <>
+                                    {canModifyPrices && (
+                                      <div className="flex items-center gap-1 shrink-0">
+                                        <span className="text-[10px] text-muted-foreground">₹</span>
+                                        <Input
+                                          type="number"
+                                          min={0}
+                                          value={itemPrice}
+                                          onChange={(e) => updateItemPrice(p.id, Math.max(0, Number(e.target.value) || 0))}
+                                          className="w-16 h-7 text-xs font-semibold px-1"
+                                        />
+                                      </div>
+                                    )}
+                                    <Button type="button" variant="outline" size="icon" className="h-7 w-7"
+                                      onClick={() => updateItemQuantity(p.id, inCart.quantity - 1)}>
+                                      <Minus className="h-3 w-3" />
+                                    </Button>
+                                    <Input type="number" min={0} value={inCart.quantity}
+                                      onChange={(e) => updateItemQuantity(p.id, Math.max(0, Number(e.target.value) || 0))}
+                                      className="w-14 h-7 text-center text-sm px-1" />
+                                    <Button type="button" variant="outline" size="icon" className="h-7 w-7"
+                                      onClick={() => updateItemQuantity(p.id, inCart.quantity + 1)}>
+                                      <Plus className="h-3 w-3" />
+                                    </Button>
+                                  </>
+                                ) : (
+                                  <Button type="button" variant="outline" size="icon" className="h-7 w-7"
+                                    onClick={() => addOrderItem(p.id)}>
+                                    <Plus className="h-3 w-3" />
+                                  </Button>
+                                )}
+                              </div>
                             </div>
-                          ) : (
-                            <button type="button" onClick={() => addOrderItem(p.id)}
-                              className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center hover:bg-primary/90 active:scale-90 transition-all">
-                              <Plus className="h-3.5 w-3.5 text-primary-foreground" />
-                            </button>
-                          )}
+                          );
+                        })}
+                      </div>
+                      {orderItems.filter(i => i.product_id).length > 0 && (
+                        <div className="flex justify-between items-center p-3 rounded-lg border bg-muted/50">
+                          <span className="text-sm font-medium">Order Total ({orderItems.filter(i => i.product_id).length} items)</span>
+                          <span className="text-lg font-bold">₹{orderItems.reduce((sum, i) => sum + (i.quantity * (i.unit_price ?? getProductPrice(i.product_id))), 0).toLocaleString("en-IN")}</span>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </>
-            )}
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
 
-              <Button type="submit" className="w-full" disabled={saving}>
+              <Button type="submit" className="w-full" disabled={saving || !storeId}>
                 {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Create Order
+                {saving ? "Creating..." : "Create Order"}
               </Button>
             </form>
           </DialogContent>
@@ -1710,7 +1743,7 @@ const columns = [
               <Select value={assignedTo} onValueChange={setAssignedTo}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Select agent" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Unassigned</SelectItem>
+                  <SelectItem value="unassigned">Unassigned</SelectItem>
                   {agents?.map((a) => <SelectItem key={a.id} value={a.id}>{a.full_name}</SelectItem>)}
                 </SelectContent>
               </Select>
