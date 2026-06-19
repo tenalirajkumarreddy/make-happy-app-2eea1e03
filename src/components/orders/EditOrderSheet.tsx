@@ -8,12 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Loader2, Plus, XCircle, ShoppingCart } from "lucide-react";
+import { Loader2, Plus, XCircle, ShoppingCart, Package, Minus } from "lucide-react";
 import { toast } from "sonner";
 
-interface EditItem {
+interface OrderItem {
   product_id: string;
   quantity: number;
+  unit_price?: number;
 }
 
 interface EditOrderSheetProps {
@@ -29,22 +30,26 @@ export function EditOrderSheet({ order, open, onOpenChange, onSaved }: EditOrder
   const [saving, setSaving] = useState(false);
 
   const [requirementNote, setRequirementNote] = useState("");
-  const [orderItems, setOrderItems] = useState<EditItem[]>([]);
+  const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [isUrgent, setIsUrgent] = useState(false);
+  const [orderType, setOrderType] = useState<"simple" | "detailed">("simple");
 
   useEffect(() => {
     if (!order) return;
     setRequirementNote(order.requirement_note || "");
     setIsUrgent(order.is_urgent ?? false);
-    if (order.order_type === "detailed" && order.order_items) {
+    setOrderType(order.order_type || "simple");
+
+    if (order.order_type === "detailed" && order.order_items?.length) {
       setOrderItems(
         order.order_items.map((item: any) => ({
           product_id: item.product_id,
           quantity: item.quantity,
+          unit_price: item.unit_price || 0,
         }))
       );
     } else {
-      setOrderItems([{ product_id: "", quantity: 1 }]);
+      setOrderItems([]);
     }
   }, [order]);
 
@@ -63,7 +68,7 @@ export function EditOrderSheet({ order, open, onOpenChange, onSaved }: EditOrder
       if (productIds.length === 0) return [];
       const { data: products } = await supabase
         .from("products")
-        .select("id, name, base_price")
+        .select("id, name, base_price, sku")
         .in("id", productIds)
         .eq("is_active", true)
         .order("name");
@@ -80,29 +85,58 @@ export function EditOrderSheet({ order, open, onOpenChange, onSaved }: EditOrder
       return ((products || []) as any[]).map((p: any) => ({
         id: p.id,
         name: p.name,
+        sku: p.sku,
+        base_price: p.base_price,
         effective_price: storePriceMap.get(p.id) ?? typePriceMap.get(p.id) ?? Number(p.base_price) ?? 0,
       }));
     },
     enabled: open && !!storeTypeId,
   });
 
-  const addItem = () => setOrderItems((prev) => [...prev, { product_id: "", quantity: 1 }]);
-  const removeItem = (index: number) => setOrderItems((prev) => prev.filter((_, i) => i !== index));
+  const addProduct = (productId: string) => {
+    const existing = orderItems.find((i) => i.product_id === productId);
+    if (existing) {
+      setOrderItems(orderItems.map((i) => i.product_id === productId ? { ...i, quantity: i.quantity + 1 } : i));
+    } else {
+      const product = products.find((p: any) => p.id === productId);
+      setOrderItems([...orderItems, { product_id: productId, quantity: 1, unit_price: product?.effective_price || 0 }]);
+    }
+  };
+
+  const removeItem = (idx: number) => setOrderItems(orderItems.filter((_, i) => i !== idx));
+
+  const updateQuantity = (idx: number, qty: number) => {
+    const updated = [...orderItems];
+    updated[idx] = { ...updated[idx], quantity: Math.max(0, qty) };
+    if (qty <= 0) {
+      updated.splice(idx, 1);
+    }
+    setOrderItems(updated);
+  };
+
+  const updatePrice = (idx: number, price: number) => {
+    const updated = [...orderItems];
+    updated[idx] = { ...updated[idx], unit_price: price };
+    setOrderItems(updated);
+  };
+
+  const validItems = orderItems.filter((i) => i.product_id && i.quantity > 0);
+  const totalAmount = validItems.reduce((sum, i) => sum + i.quantity * (i.unit_price || products.find((p: any) => p.id === i.product_id)?.effective_price || 0), 0);
 
   const handleSave = async () => {
     if (!order || !user) return;
-    if (order.order_type === "simple" && !requirementNote.trim()) {
-      toast.error("Requirement note cannot be empty");
-      return;
-    }
-    if (order.order_type === "detailed" && !orderItems.some((item) => item.product_id)) {
-      toast.error("Add at least one product");
+    if (!requirementNote.trim() && validItems.length === 0) {
+      toast.error("Add a requirement note or at least one product");
       return;
     }
     setSaving(true);
     try {
+      // Determine new order type: if products are added, convert to detailed
+      const newOrderType = validItems.length > 0 ? "detailed" : "simple";
+
       const updatePayload: Record<string, any> = {
-        requirement_note: order.order_type === "simple" ? requirementNote : (requirementNote || null),
+        requirement_note: requirementNote || null,
+        order_type: newOrderType,
         updated_by: user.id,
         updated_at: new Date().toISOString(),
       };
@@ -116,32 +150,32 @@ export function EditOrderSheet({ order, open, onOpenChange, onSaved }: EditOrder
         .eq("id", order.id);
       if (updateError) throw updateError;
 
-      if (order.order_type === "detailed") {
-        // Soft-delete existing items (preserves history)
-        const { error: deleteError } = await supabase
-          .from("order_items")
-          .update({ deleted_at: new Date().toISOString() })
-          .eq("order_id", order.id)
-          .is("deleted_at", null);
-        if (deleteError) throw deleteError;
+      // Soft-delete existing items
+      const { error: deleteError } = await supabase
+        .from("order_items")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("order_id", order.id)
+        .is("deleted_at", null);
+      if (deleteError) throw deleteError;
 
-        const validItems = orderItems.filter((item) => item.product_id);
-        if (validItems.length > 0) {
-          const { error: insertError } = await supabase
-            .from("order_items")
-            .insert(
-              validItems.map((item) => ({
-                order_id: order.id,
-                product_id: item.product_id,
-                quantity: item.quantity,
-                unit_price: item.unit_price || 0,
-              }))
-            );
-          if (insertError) throw insertError;
-        }
+      // Insert new items
+      if (validItems.length > 0) {
+        const { error: insertError } = await supabase
+          .from("order_items")
+          .insert(
+            validItems.map((item) => ({
+              order_id: order.id,
+              product_id: item.product_id,
+              quantity: item.quantity,
+              unit_price: item.unit_price || products.find((p: any) => p.id === item.product_id)?.effective_price || 0,
+            }))
+          );
+        if (insertError) throw insertError;
       }
 
-      toast.success("Order updated");
+      toast.success(newOrderType === "detailed" && order.order_type === "simple"
+        ? "Order converted to detailed with products"
+        : "Order updated");
       onSaved();
       onOpenChange(false);
     } catch (err: any) {
@@ -151,6 +185,10 @@ export function EditOrderSheet({ order, open, onOpenChange, onSaved }: EditOrder
     }
   };
 
+  const availableProducts = products.filter(
+    (p: any) => !orderItems.some((item) => item.product_id === p.id)
+  );
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="rounded-t-3xl pb-10 px-0 max-h-[90vh] overflow-y-auto">
@@ -159,93 +197,99 @@ export function EditOrderSheet({ order, open, onOpenChange, onSaved }: EditOrder
             <SheetTitle className="text-lg font-bold">Edit Order {order?.display_id}</SheetTitle>
           </SheetHeader>
 
-          <div className="space-y-4">
-            {order?.order_type === "simple" ? (
-              <div>
-                <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 block">
-                  Requirement Note
+          <div className="space-y-5">
+            {/* Requirement Note — always visible */}
+            <div>
+              <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 block">
+                Requirement Note
+              </Label>
+              <Textarea
+                value={requirementNote}
+                onChange={(e) => setRequirementNote(e.target.value)}
+                placeholder="What does the store need?"
+                rows={2}
+                className="rounded-xl resize-none border-slate-200 dark:border-slate-600"
+              />
+            </div>
+
+            {/* Products section — always visible */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                  Products {validItems.length > 0 && <span className="text-muted-foreground font-normal">({validItems.length} items, ₹{totalAmount.toLocaleString()})</span>}
                 </Label>
-                <Textarea
-                  value={requirementNote}
-                  onChange={(e) => setRequirementNote(e.target.value)}
-                  placeholder="What does the store need?"
-                  rows={3}
-                  className="rounded-xl resize-none border-slate-200 dark:border-slate-600"
-                />
               </div>
-            ) : (
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Products</Label>
-                  <Button size="sm" variant="outline" className="h-8 rounded-lg text-xs" onClick={addItem}>
-                    <Plus className="h-3.5 w-3.5 mr-1" />Add
-                  </Button>
-                </div>
-                {products.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No products available for this store</p>
-                ) : (
-                  <div className="space-y-2">
-                    {orderItems.map((item, index) => (
-                      <div key={index} className="grid grid-cols-[1fr_90px_36px] gap-2">
-                        <Select
-                          value={item.product_id}
-                          onValueChange={(value) => {
-                            setOrderItems((prev) =>
-                              prev.map((row, i) => (i === index ? { ...row, product_id: value } : row))
-                            );
-                          }}
-                        >
-                          <SelectTrigger className="rounded-xl h-10 border-slate-200 dark:border-slate-600">
-                            <SelectValue placeholder="Select product" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {products.map((p: any) => (
-                              <SelectItem key={p.id} value={p.id}>
-                                {p.name} — ₹{p.effective_price}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <Input
-                          type="number"
-                          min={1}
-                          value={item.quantity}
-                          onChange={(e) => {
-                            const qty = Math.max(1, Number(e.target.value || 1));
-                            setOrderItems((prev) =>
-                              prev.map((row, i) => (i === index ? { ...row, quantity: qty } : row))
-                            );
-                          }}
-                          className="h-10 rounded-xl"
-                        />
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          className="h-10 w-9 rounded-xl"
-                          onClick={() => removeItem(index)}
-                          disabled={orderItems.length === 1}
-                        >
+
+              {/* Add product dropdown */}
+              {availableProducts.length > 0 && (
+                <Select onValueChange={(v) => { addProduct(v); }}>
+                  <SelectTrigger className="rounded-xl h-10 border-slate-200 dark:border-slate-600 mb-3">
+                    <SelectValue placeholder="+ Add product" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableProducts.map((p: any) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name} — ₹{p.effective_price}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+
+              {/* Items list */}
+              {orderItems.length > 0 ? (
+                <div className="space-y-2">
+                  {orderItems.map((item, idx) => {
+                    const product = products.find((p: any) => p.id === item.product_id);
+                    const price = item.unit_price || product?.effective_price || 0;
+                    return (
+                      <div key={idx} className="flex items-center gap-2 p-2 rounded-lg border bg-card">
+                        <div className="w-8 h-8 rounded-md bg-muted flex items-center justify-center shrink-0">
+                          <Package className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm truncate">{product?.name || item.product_id}</p>
+                          <p className="text-xs text-muted-foreground">₹{price} × {item.quantity} = ₹{(price * item.quantity).toLocaleString()}</p>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button type="button" variant="outline" size="icon" className="h-7 w-7" onClick={() => updateQuantity(idx, item.quantity - 1)}>
+                            <Minus className="h-3 w-3" />
+                          </Button>
+                          <Input
+                            type="number"
+                            min={0}
+                            value={item.quantity}
+                            onChange={(e) => updateQuantity(idx, Math.max(0, Number(e.target.value) || 0))}
+                            className="w-14 h-7 text-center text-sm px-1"
+                          />
+                          <Button type="button" variant="outline" size="icon" className="h-7 w-7" onClick={() => updateQuantity(idx, item.quantity + 1)}>
+                            <Plus className="h-3 w-3" />
+                          </Button>
+                        </div>
+                        <div className="w-20">
+                          <Input
+                            type="number"
+                            min={0}
+                            value={price}
+                            onChange={(e) => updatePrice(idx, Number(e.target.value) || 0)}
+                            className="h-7 text-xs text-right px-1"
+                          />
+                        </div>
+                        <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => removeItem(idx)}>
                           <XCircle className="h-4 w-4" />
                         </Button>
                       </div>
-                    ))}
-                  </div>
-                )}
-                <div className="mt-3">
-                  <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 block">
-                    Requirement Note (optional)
-                  </Label>
-                  <Textarea
-                    value={requirementNote}
-                    onChange={(e) => setRequirementNote(e.target.value)}
-                    placeholder="Additional notes..."
-                    rows={2}
-                    className="rounded-xl resize-none border-slate-200 dark:border-slate-600"
-                  />
+                    );
+                  })}
                 </div>
-              </div>
-            )}
+              ) : (
+                <p className="text-xs text-muted-foreground text-center py-3 border border-dashed rounded-lg">
+                  No products added. Use the dropdown above to add items.
+                </p>
+              )}
+            </div>
 
+            {/* Urgent toggle */}
             {(() => {
               const canEditUrgent = role === "super_admin" || role === "manager" || order?.created_by === user?.id || order?.assigned_to === user?.id;
               return canEditUrgent ? (
@@ -271,7 +315,7 @@ export function EditOrderSheet({ order, open, onOpenChange, onSaved }: EditOrder
             <Button
               className="w-full h-11 rounded-xl"
               onClick={handleSave}
-              disabled={saving}
+              disabled={saving || (!requirementNote.trim() && validItems.length === 0)}
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <ShoppingCart className="h-4 w-4 mr-1" />}
               {saving ? "Saving..." : "Save Changes"}

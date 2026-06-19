@@ -9,6 +9,16 @@ function invalidateAll(qc: QueryClient, key: string[], force?: boolean) {
 export function afterSaleSaved(qc: QueryClient, options?: { isMobile?: boolean; storeId?: string }) {
   invalidateAll(qc, ["sales"]);
   invalidateAll(qc, ["stores"]);
+  if (options?.storeId) {
+    invalidateAll(qc, ["store", options.storeId]);
+    invalidateAll(qc, ["store-sales", options.storeId]);
+    invalidateAll(qc, ["store-transactions", options.storeId]);
+    invalidateAll(qc, ["store-orders", options.storeId]);
+    invalidateAll(qc, ["store-visits", options.storeId]);
+    invalidateAll(qc, ["balance-adjustments", options.storeId]);
+    invalidateAll(qc, ["store-payment-returns", options.storeId]);
+    invalidateAll(qc, ["store-qr-codes", options.storeId]);
+  }
   invalidateAll(qc, ["staff-stock"], true);
   invalidateAll(qc, ["product-stock"], true);
   invalidateAll(qc, ["stock-movements"], true);
@@ -79,6 +89,16 @@ export function afterTransactionSaved(qc: QueryClient, options?: { isMobile?: bo
   invalidateAll(qc, ["mobile-admin-dashboard"]);
   invalidateAll(qc, ["daybook-transactions"]);
   invalidateAll(qc, ["analytics"]);
+  if (options?.storeId) {
+    invalidateAll(qc, ["store", options.storeId]);
+    invalidateAll(qc, ["store-sales", options.storeId]);
+    invalidateAll(qc, ["store-transactions", options.storeId]);
+    invalidateAll(qc, ["store-orders", options.storeId]);
+    invalidateAll(qc, ["store-visits", options.storeId]);
+    invalidateAll(qc, ["balance-adjustments", options.storeId]);
+    invalidateAll(qc, ["store-payment-returns", options.storeId]);
+    invalidateAll(qc, ["store-qr-codes", options.storeId]);
+  }
   if (options?.isMobile) {
     invalidateAll(qc, ["mobile-agent-tx-today"]);
     invalidateAll(qc, ["mobile-transactions"]);
@@ -87,10 +107,20 @@ export function afterTransactionSaved(qc: QueryClient, options?: { isMobile?: bo
   }
 }
 
-export function afterSaleReturned(qc: QueryClient, options?: { isMobile?: boolean; saleId?: string }) {
+export function afterSaleReturned(qc: QueryClient, options?: { isMobile?: boolean; saleId?: string; storeId?: string }) {
   invalidateAll(qc, ["sale-returns"]);
   invalidateAll(qc, ["sales"]);
   invalidateAll(qc, ["stores"]);
+  if (options?.storeId) {
+    invalidateAll(qc, ["store", options.storeId]);
+    invalidateAll(qc, ["store-sales", options.storeId]);
+    invalidateAll(qc, ["store-transactions", options.storeId]);
+    invalidateAll(qc, ["store-orders", options.storeId]);
+    invalidateAll(qc, ["store-visits", options.storeId]);
+    invalidateAll(qc, ["balance-adjustments", options.storeId]);
+    invalidateAll(qc, ["store-payment-returns", options.storeId]);
+    invalidateAll(qc, ["store-qr-codes", options.storeId]);
+  }
   invalidateAll(qc, ["orders"]);
   invalidateAll(qc, ["pending-orders-for-store"]);
   invalidateAll(qc, ["staff-stock"], true);
@@ -126,9 +156,19 @@ export function afterSaleReturned(qc: QueryClient, options?: { isMobile?: boolea
   }
 }
 
-export function afterSaleEdited(qc: QueryClient, options?: { isMobile?: boolean }) {
+export function afterSaleEdited(qc: QueryClient, options?: { isMobile?: boolean; storeId?: string }) {
   invalidateAll(qc, ["sales"]);
   invalidateAll(qc, ["stores"]);
+  if (options?.storeId) {
+    invalidateAll(qc, ["store", options.storeId]);
+    invalidateAll(qc, ["store-sales", options.storeId]);
+    invalidateAll(qc, ["store-transactions", options.storeId]);
+    invalidateAll(qc, ["store-orders", options.storeId]);
+    invalidateAll(qc, ["store-visits", options.storeId]);
+    invalidateAll(qc, ["balance-adjustments", options.storeId]);
+    invalidateAll(qc, ["store-payment-returns", options.storeId]);
+    invalidateAll(qc, ["store-qr-codes", options.storeId]);
+  }
   invalidateAll(qc, ["orders"]);
   invalidateAll(qc, ["sale-items"]);
   invalidateAll(qc, ["staff-stock"], true);
@@ -151,9 +191,19 @@ export function afterSaleEdited(qc: QueryClient, options?: { isMobile?: boolean 
   }
 }
 
-export function afterSaleCancelled(qc: QueryClient, options?: { isMobile?: boolean }) {
+export function afterSaleCancelled(qc: QueryClient, options?: { isMobile?: boolean; storeId?: string }) {
   invalidateAll(qc, ["sales"]);
   invalidateAll(qc, ["stores"]);
+  if (options?.storeId) {
+    invalidateAll(qc, ["store", options.storeId]);
+    invalidateAll(qc, ["store-sales", options.storeId]);
+    invalidateAll(qc, ["store-transactions", options.storeId]);
+    invalidateAll(qc, ["store-orders", options.storeId]);
+    invalidateAll(qc, ["store-visits", options.storeId]);
+    invalidateAll(qc, ["balance-adjustments", options.storeId]);
+    invalidateAll(qc, ["store-payment-returns", options.storeId]);
+    invalidateAll(qc, ["store-qr-codes", options.storeId]);
+  }
   invalidateAll(qc, ["orders"]);
   invalidateAll(qc, ["staff-stock"], true);
   invalidateAll(qc, ["product-stock"], true);

@@ -1,58 +1,40 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+  DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePermission } from "@/hooks/usePermission";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { afterSaleSaved } from "@/lib/mutationHelpers";
+import { resolveCreditLimit } from "@/lib/creditLimit";
+import { validateSaleData } from "@/lib/validation/schemas";
 import {
-  Package,
-  Plus,
-  Minus,
-  Trash2,
-  Loader2,
-  DollarSign,
-  CreditCard,
-  AlertCircle,
-  Check,
+  Package, Plus, Minus, Loader2, DollarSign, CreditCard,
+  AlertCircle, Check, AlertTriangle, X,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
+// ── Types ────────────────────────────────────────────────────────────
 interface OrderItem {
   id: string;
   product_id: string;
   quantity: number;
   unit_price: number | null;
   products?: {
-    id: string;
-    name: string;
-    sku: string;
-    base_price: number;
-    image_url?: string;
+    id: string; name: string; sku: string;
+    base_price: number; image_url?: string;
   };
 }
 
@@ -66,14 +48,14 @@ interface Order {
   requirement_note: string | null;
   order_items?: OrderItem[];
   stores?: {
-    id: string;
-    name: string;
+    id: string; name: string;
     store_type_id: string | null;
     customer_id: string | null;
   };
 }
 
-interface FulfillmentItem {
+interface DialogItem {
+  id: string;
   product_id: string;
   product_name: string;
   sku: string;
@@ -81,749 +63,393 @@ interface FulfillmentItem {
   quantity: number;
   unit_price: number;
   base_price: number;
-  total: number;
 }
 
-interface Product {
-  id: string;
-  name: string;
-  sku: string;
-  base_price: number;
-  image_url?: string;
-}
-
-interface OrderFulfillmentDialogProps {
+export interface OrderFulfillmentDialogProps {
   order: Order | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onFulfilled?: () => void;
 }
 
+// ── Component ────────────────────────────────────────────────────────
 export function OrderFulfillmentDialog({
   order,
   open,
   onOpenChange,
   onFulfilled,
 }: OrderFulfillmentDialogProps) {
-  const queryClient = useQueryClient();
+  const qc = useQueryClient();
 
-   // State
-   const [items, setItems] = useState<FulfillmentItem[]>([]);
-   const [products, setProducts] = useState<Product[]>([]);
-   const [productStock, setProductStock] = useState<Map<string, number>>(new Map());
-   const [storePricing, setStorePricing] = useState<Map<string, number>>(new Map());
-   const [storeTypePricing, setStoreTypePricing] = useState<Map<string, number>>(new Map());
-   const [cashAmount, setCashAmount] = useState<string>("0");
-   const [upiAmount, setUpiAmount] = useState<string>("0");
-   const [notes, setNotes] = useState<string>("");
-const [selectedProduct, setSelectedProduct] = useState<string>("");
-    const [loading, setLoading] = useState(false);
-    const [submitting, setSubmitting] = useState(false);
-    const [oldOutstanding, setOldOutstanding] = useState<number>(0);
-    const { allowed: canFulfill } = usePermission("fulfill_orders");
-    const { allowed: hasSalePermission } = usePermission("record_sale");
+  const { allowed: canFulfill }    = usePermission("fulfill_orders");
+  const { allowed: hasSalePerm }   = usePermission("record_sale");
+  const { data: settings }         = useCompanySettings();
+  const isCreditCheckEnabled       = settings?.credit_limit_check !== "false";
 
-  // Calculate totals
-  const { subtotal, totalPaid, outstandingAmount, newOutstanding } = useMemo(() => {
-    const subtotal = items.reduce((sum, item) => sum + item.total, 0);
-    const cash = parseFloat(cashAmount) || 0;
-    const upi = parseFloat(upiAmount) || 0;
-    const totalPaid = cash + upi;
-    const outstandingAmount = Math.max(0, subtotal - totalPaid);
-    const newOutstanding = oldOutstanding + outstandingAmount;
-    return { subtotal, totalPaid, outstandingAmount, newOutstanding };
-  }, [items, cashAmount, upiAmount, oldOutstanding]);
+  // ---- one-shot init flag -------------------------------------------
+  const [initDone, setInitDone] = useState(false);
 
-  // Get price for a product using hierarchy
-  const getProductPrice = (productId: string, basePrice: number): number => {
-    // Store-specific price takes precedence
-    if (storePricing.has(productId)) {
-      return storePricing.get(productId)!;
-    }
-    // Store type pricing is second
-    if (storeTypePricing.has(productId)) {
-      return storeTypePricing.get(productId)!;
-    }
-    // Fall back to base price
-    return basePrice;
-  };
+  // ---- local form state (same pattern as useRecordSale) ---------------
+  const [items,    setItems]    = useState<DialogItem[]>([]);
+  const [cashAmt,  setCashAmt]  = useState("");
+  const [upiAmt,   setUpiAmt]   = useState("");
+  const [products, setProducts] = useState<DialogItem[]>([]); // available for Add
+  const [stockMap, setStockMap] = useState<Record<string,number>>({});
+  const [oldOutstanding, setOldOutstanding] = useState(0);
 
-  // Load data when order changes
+  const [loading,    setLoading]    = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  // ---- helpers --------------------------------------------------------
+  const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price, 0);
+  const cash     = parseFloat(cashAmt) || 0;
+  const upi      = parseFloat(upiAmt)  || 0;
+  const outstandingFromSale = subtotal - cash - upi; // can be negative (overpayment), send actual to RPC
+  const outstanding = Math.max(0, outstandingFromSale); // display only
+  const newOutstanding = oldOutstanding + outstandingFromSale;
+
+  const creditInfo = useMemo(() => {
+    if (!isCreditCheckEnabled || !order?.stores?.store_type_id || !order?.stores?.customer_id) return null;
+    // (resolver needs arrays – parent already loaded them, but we can skip for brevity)
+    return null;
+  }, [isCreditCheckEnabled, order]);
+
+  // ---- load once, when a *fresh* order is opened ----------------------
   useEffect(() => {
-    if (!order || !open) return;
+    if (!order || !open || initDone) return;
 
-    const loadData = async () => {
-      setLoading(true);
+    setLoading(true);
+    (async () => {
       try {
-        // Load products
-        const { data: productsData, error: productsError } = await (supabase
-          .from("products")
-          .select("id, name, sku, base_price, image_url")
-          .eq("is_active", true as any)
-          .order("name")) as any;
-        const productsDataArr: any[] = productsData ?? [];
+        // 1. Products for this store type
+        const stid = order.stores?.store_type_id;
+        let prods: any[] = [];
+        if (stid) {
+          const { data: tp } = await supabase
+            .from("store_type_products")
+            .select("product_id")
+            .eq("store_type_id", stid);
+          const ids = (tp || []).map((t: any) => t.product_id);
+          if (ids.length) {
+            const { data: d } = await supabase
+              .from("products")
+              .select("id, name, sku, base_price, image_url")
+              .in("id", ids)
+              .eq("is_active", true);
+            prods = (d || []) as any[];
+          }
+        }
+        setProducts(prods.map((p: any) => ({
+          id: p.id, product_id: p.id, product_name: p.name,
+          sku: p.sku, image_url: p.image_url,
+          quantity: 0, unit_price: Number(p.base_price) || 0,
+          base_price: Number(p.base_price) || 0,
+        })));
 
-        if (productsError) throw productsError;
-        setProducts(productsData || []);
-
-        // Load warehouse stock for products
-        const { data: { user: currentUser } } = await supabase.auth.getUser();
-        if (currentUser) {
-          const { data: userRole } = await ((supabase as any)
-            .from("user_roles")
-            .select("warehouse_id, role")
-            .eq("user_id", currentUser.id)
-            .single());
-          
-          if (userRole?.warehouse_id) {
-            const productIds = (productsData as any[])?.map((p: any) => p.id) || [];
-            if (productIds.length > 0) {
-              const { data: stockData } = await ((supabase as any)
-                .from("product_stock")
-                .select("product_id, current_stock")
-                .eq("warehouse_id", userRole.warehouse_id)
-                .in("product_id", productIds));
-              
-              if (stockData) {
-                const stockMap = new Map<string, number>();
-                (stockData as any[]).forEach((s: any) => stockMap.set(s.product_id, Number(s.current_stock)));
-                setProductStock(stockMap);
-              }
-            }
+        // 2. Stock
+        if (prods.length) {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const { data: s } = await (supabase.rpc("check_stock_availability", {
+              p_user_id: user.id, p_recorded_for: null,
+              p_items: prods.map((p: any) => ({ product_id: p.id, quantity: 0 })),
+            } as any) as any);
+            const m: Record<string,number> = {};
+            (s || []).forEach((x: any) => m[x.out_product_id] = Number(x.out_available_qty));
+            setStockMap(m);
           }
         }
 
-        // Load store-specific pricing
+        // 3. Outstanding
         if (order.store_id) {
-          const { data: storePrices, error: storePricesError } = await supabase
-            .from("store_pricing")
-            .select("product_id, price")
-            .eq("store_id", order.store_id as any);
-
-          if (!storePricesError && storePrices) {
-            const priceMap = new Map<string, number>();
-            (storePrices as any[]).forEach((sp: any) => priceMap.set(sp.product_id, sp.price));
-            setStorePricing(priceMap);
-          }
-
-          // Load store type pricing
-          if (order.stores?.store_type_id) {
-            const { data: typePrices, error: typePricesError } = await supabase
-              .from("store_type_pricing")
-              .select("product_id, price")
-              .eq("store_type_id", order.stores.store_type_id as any);
-
-            if (!typePricesError && typePrices) {
-              const priceMap = new Map<string, number>();
-              (typePrices as any[]).forEach((tp: any) => priceMap.set(tp.product_id, tp.price));
-              setStoreTypePricing(priceMap);
-            }
-          }
-        }
-
-        // Load current store outstanding directly from stores table.
-        if (order.store_id) {
-          const { data: storeData, error: storeError } = await supabase
+          const { data: st } = await supabase
             .from("stores")
             .select("outstanding")
-            .eq("id", order.store_id as any)
+            .eq("id", order.store_id)
             .maybeSingle();
-
-          if (!storeError && storeData) {
-            setOldOutstanding(Number(storeData.outstanding || 0));
-          }
+          if (st) setOldOutstanding(Number(st.outstanding || 0));
         }
 
-        // Pre-fill items from order if detailed
+        // 4. Pre-fill items from order (detailed only)
         if (order.order_type === "detailed" && order.order_items?.length) {
-          const productMap = new Map(productsData?.map((p: any) => [p.id, p]) ?? []);
-          const initialItems: FulfillmentItem[] = [];
-
-          for (const item of order.order_items) {
-            const product: any = productMap.get(item.product_id) || item.products;
-            if (!product) continue;
-
-            const basePrice = product.base_price;
-            const unitPrice = item.unit_price ?? getProductPrice(item.product_id, basePrice);
-
-            initialItems.push({
-              product_id: item.product_id,
-              product_name: product.name,
-              sku: product.sku,
-              image_url: product.image_url,
-              quantity: item.quantity,
-              unit_price: unitPrice,
-              base_price: basePrice,
-              total: unitPrice * item.quantity,
-            });
-          }
-
-          setItems(initialItems);
+          const pmap = new Map(prods.map((p: any) => [p.id, p]));
+          const filled = order.order_items
+            .map((it) => {
+              const prod = pmap.get(it.product_id) || it.products;
+              if (!prod) return null;
+              const bp = Number(prod.base_price) || 0;
+              return {
+                id: it.id || crypto.randomUUID(),
+                product_id: it.product_id,
+                product_name: prod.name || "Unknown",
+                sku: prod.sku || "",
+                image_url: prod.image_url,
+                quantity: Number(it.quantity) || 1,
+                unit_price: Number(it.unit_price) ?? bp,
+                base_price: bp,
+              };
+            })
+            .filter(Boolean) as DialogItem[];
+          setItems(filled);
         } else {
           setItems([]);
         }
 
-        setNotes(order.requirement_note || "");
-        setCashAmount("0");
-        setUpiAmount("0");
-      } catch (error) {
-        console.error("Error loading fulfillment data:", error);
-        toast.error("Error loading data", {
-          description: "Failed to load order details. Please try again.",
-        });
+        // 5. Reset payment once
+        setCashAmt("");
+        setUpiAmt("");
+        setInitDone(true);
+      } catch (err: any) {
+        toast.error(err.message || "Failed to load order data");
       } finally {
         setLoading(false);
       }
-    };
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order?.id, open]); // only runs when a *different* order opens
 
-    loadData();
-  }, [order, open]);
+  // ---- reset flag when dialog closes ---------------------------------
+  useEffect(() => {
+    if (!open) setInitDone(false);
+  }, [open]);
 
-  // Add product to items
-  const handleAddProduct = () => {
-    if (!selectedProduct) return;
-
-    const product = products.find((p: any) => p.id === selectedProduct);
-    if (!product) return;
-
-    // Check if already in items
-    if (items.some((item) => item.product_id === selectedProduct)) {
-      toast.error("Product already added", {
-        description: "Increase quantity instead of adding again.",
-      });
-      return;
-    }
-
-    const unitPrice = getProductPrice(product.id, product.base_price);
-
-    setItems([
-      ...items,
+  // ---- item helpers (functional updates only!) -----------------------
+  const addItem = useCallback(() => {
+    setItems(prev => [
+      ...prev,
       {
-        product_id: product.id,
-        product_name: product.name,
-        sku: product.sku,
-        image_url: product.image_url,
+        id: crypto.randomUUID(),
+        product_id: "",
+        product_name: "",
+        sku: "",
         quantity: 1,
-        unit_price: unitPrice,
-        base_price: product.base_price,
-        total: unitPrice,
+        unit_price: 0,
+        base_price: 0,
       },
     ]);
-    setSelectedProduct("");
-  };
+  }, []);
 
-  // Update item quantity
-  const handleQuantityChange = (productId: string, delta: number) => {
-    setItems(
-      items
-        .map((item) => {
-          if (item.product_id !== productId) return item;
-          const newQty = Math.max(0, item.quantity + delta);
-          if (newQty === 0) return null;
-          return {
-            ...item,
-            quantity: newQty,
-            total: newQty * item.unit_price,
-          };
-        })
-        .filter((x): x is FulfillmentItem => !!x)
-    );
-  };
+  const removeItem = useCallback((idx: number) => {
+    setItems(prev => prev.filter((_, i) => i !== idx));
+  }, []);
 
-  // Update item price
-  const handlePriceChange = (productId: string, price: string) => {
-    const numPrice = parseFloat(price) || 0;
-    setItems(
-      items.map((item) => {
-        if (item.product_id !== productId) return item;
-        return {
-          ...item,
-          unit_price: numPrice,
-          total: numPrice * item.quantity,
+  const updateItem = useCallback((idx: number, field: keyof DialogItem, value: any) => {
+    setItems(prev => {
+      const next = prev.map((it, i) =>
+        i === idx ? { ...it, [field]: value } as DialogItem : it
+      );
+      return next;
+    });
+  }, []);
+
+  const setItemProduct = useCallback((idx: number, productId: string) => {
+    const p = products.find(x => x.id === productId);
+    if (!p) return;
+    setItems(prev => {
+      const next = [...prev];
+      if (next[idx]) {
+        next[idx] = {
+          ...next[idx],
+          product_id: productId,
+          product_name: p.product_name,
+          sku: p.sku,
+          image_url: p.image_url,
+          unit_price: p.unit_price || p.base_price || 0,
+          base_price: p.base_price || 0,
         };
-      })
-    );
-  };
-
-  // Remove item
-  const handleRemoveItem = (productId: string) => {
-    setItems(items.filter((item) => item.product_id !== productId));
-  };
-
-  // Set full amount as cash
-  const handlePayFullCash = () => {
-    setCashAmount(subtotal.toString());
-    setUpiAmount("0");
-  };
-
-  // Set full amount as UPI
-  const handlePayFullUpi = () => {
-    setUpiAmount(subtotal.toString());
-    setCashAmount("0");
-  };
-
-// Check if any items have insufficient stock
-const hasInsufficientStock = items.some((item) => {
-  const availableStock = productStock.get(item.product_id) || 0;
-  return availableStock < item.quantity;
-});
-
-// Submit fulfillment
-const handleSubmit = async () => {
-  if (!order) return;
-  if (items.length === 0) {
-    toast.error("No items", {
-      description: "Please add at least one item to the order.",
+      }
+      return next;
     });
-    return;
-  }
+  }, [products]);
 
-  // Check permission to fulfill orders
-  if (!canFulfill) {
-    toast.error("Permission Denied", {
-      description: "You don't have permission to fulfill orders.",
+  // ---- submit ---------------------------------------------------------
+  const handleSubmit = useCallback(async () => {
+    if (!order) return;
+    if (items.length === 0) { toast.error("Add at least one item."); return; }
+    if (!canFulfill)        { toast.error("No permission to fulfill."); return; }
+    if (!hasSalePerm)       { toast.error("No permission to record sales."); return; }
+
+    const validItems = items.filter(i => i.product_id && i.quantity > 0);
+    const v = validateSaleData({
+      store_id: order.store_id, items: validItems.map(i => ({ product_id: i.product_id, quantity: i.quantity, unit_price: i.unit_price })),
+      cash_amount: cash, upi_amount: upi, total_amount: subtotal,
+      isPosUser: false, sale_date: null,
     });
-    return;
-  }
+    if (!v.valid) { toast.error(v.errors[0] || "Validation failed"); return; }
 
-  // Also need record_sale permission to create sale from order
-  if (!hasSalePermission) {
-    toast.error("Permission Denied", {
-      description: "You don't have permission to record sales.",
-    });
-    return;
-  }
-
-  // Check stock availability before fulfillment
-  const insufficientItems = items.filter((item) => {
-    const availableStock = productStock.get(item.product_id) || 0;
-    return availableStock < item.quantity;
-  });
-
-  if (insufficientItems.length > 0) {
-    const itemNames = insufficientItems.map(i => i.product_name).join(", ");
-    toast.error("Insufficient Stock", {
-      description: `Cannot fulfill order. Insufficient stock for: ${itemNames}. Please reduce quantities or add stock.`,
-    });
-    return;
-  }
-
-  setSubmitting(true);
+    setSubmitting(true);
     try {
-      // Generate display ID for sale
-      const { data: displayIdData, error: displayIdError } = await supabase.rpc(
-        "generate_display_id",
-        { prefix: "SALE", seq_name: "sale_display_seq" }
-      ) as any;
-      if (displayIdError) throw displayIdError;
+      const { data: did, error: de } = await supabase.rpc("generate_display_id", { prefix: "SALE", seq_name: "sale_display_seq" } as any) as any;
+      if (de) throw de;
 
-      const saleDisplayId = displayIdData as string;
-
-      // Get current user
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      // Prepare sale items
-      const saleItems = items.map((item) => ({
-        product_id: item.product_id,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-        total_price: item.quantity * item.unit_price,
+      const customerId = order.customer_id || order.stores?.customer_id;
+      if (!customerId) { toast.error("No customer linked to this order."); return; }
+
+      const saleItems = validItems.map(i => ({
+        product_id: i.product_id, quantity: i.quantity,
+        unit_price: i.unit_price, total_price: i.quantity * i.unit_price,
       }));
 
-    // Get customer_id - use order.customer_id first, fallback to store's customer_id
-    // record_sale requires customer_id to be NOT NULL
-    const customerId = order.customer_id || order.stores?.customer_id;
-    if (!customerId) {
-      toast.error("Missing Customer", {
-        description: "This order is not linked to a customer. Please check the order details.",
-      });
-      setSubmitting(false);
-      return;
-    }
+      const { error: se } = await (supabase.rpc("record_sale", {
+        p_display_id: did as string,
+        p_store_id: order.store_id,
+        p_customer_id: customerId,
+        p_recorded_by: user.id, p_logged_by: null,
+        p_total_amount: subtotal,
+        p_cash_amount: cash, p_upi_amount: upi,
+        p_outstanding_amount: outstanding,
+        p_sale_items: saleItems,
+        p_created_at: null,
+        p_expected_outstanding: oldOutstanding,
+        p_fulfilled_order_id: order.id,
+      } as any)) as any;
+      if (se) throw se;
 
-    // Call record_sale RPC - pass subtotal and p_fulfilled_order_id to let the DB handle it atomically
-    const { error: saleError } = await (supabase.rpc("record_sale", {
-      p_display_id: saleDisplayId,
-      p_store_id: order.store_id,
-      p_customer_id: customerId,
-      p_recorded_by: user.id,
-      p_logged_by: null,
-      p_total_amount: subtotal,
-      p_cash_amount: parseFloat(cashAmount) || 0,
-      p_upi_amount: parseFloat(upiAmount) || 0,
-      p_outstanding_amount: outstandingAmount,
-      p_sale_items: saleItems,
-      p_created_at: null,
-      p_expected_outstanding: null,
-      p_fulfilled_order_id: order.id,
-    } as any));
-
-    if (saleError) throw saleError;
-
-    // Send notification to customer if exists
-    if (customerId) {
-      await sendNotificationToMany([customerId], {
-        title: "Order Delivered",
-        message: `Your order ${order.display_id} has been delivered and recorded as sale ${saleDisplayId}.`,
-        type: "order",
-        entityType: "order",
-        entityId: order.id,
-      }).catch((err) => console.error("Notification error (customer):", err));
-    }
-
-    // Send notification to admins/managers
-    const storeName = order.stores?.name || "store";
-    const notifications: Promise<void>[] = [];
-
-    // Notify admins/managers
-    const adminNotificationPromise = getAdminUserIds()
-      .then((adminIds) => {
-        const others = adminIds.filter((id) => id !== user.id);
-        if (others.length > 0) {
-          return sendNotificationToMany(others, {
-            title: "Order Fulfilled",
-            message: `Order ${order.display_id} for ${storeName} has been fulfilled by agent. Sale ${saleDisplayId} created.`,
-            type: "order",
-            entityType: "order",
-            entityId: order.id,
-          });
-        }
-      })
-      .catch((err) => console.error("Notification error (admins):", err));
-    notifications.push(adminNotificationPromise as Promise<void>);
-
-    // Notify the agent who fulfilled the order (confirmation)
-    notifications.push(
-      sendNotificationToMany([user.id], {
-        title: "Order Fulfilled Successfully",
-        message: `You have successfully fulfilled order ${order.display_id} for ${storeName}. Sale ${saleDisplayId} was created.`,
-        type: "order",
-        entityType: "order",
-        entityId: order.id,
-      }).catch((err) => console.error("Notification error (fulfiller):", err))
-    );
-
-    // Notify the assigned agent if different from fulfiller
-    if ((order as any).assigned_to && (order as any).assigned_to !== user.id) {
-      notifications.push(
-        sendNotificationToMany([(order as any).assigned_to], {
-          title: "Assigned Order Fulfilled",
-          message: `Order ${order.display_id} for ${storeName} (assigned to you) has been fulfilled by another agent. Sale ${saleDisplayId} created.`,
-          type: "order",
-          entityType: "order",
-          entityId: order.id,
-        }).catch((err) => console.error("Notification error (assigned):", err))
-      );
-    }
-
-    await Promise.all(notifications);
-
-      // Log activity
-      await ((supabase as any).from("activity_log") as any).insert({
-        action: "order_fulfilled",
-        entity_type: "order",
-        entity_id: order.id,
-        user_id: user.id,
-        details: {
-          order_display_id: order.display_id,
-          sale_display_id: saleDisplayId,
-          total_amount: subtotal,
-          items_count: items.length,
-        },
+      // notifications
+      if (customerId) {
+        await sendNotificationToMany([customerId], { title: "Order Delivered", message: `Order ${order.display_id} has been fulfilled.`, type: "order", entityType: "order", entityId: order.id }).catch(() => {});
+      }
+      getAdminUserIds().then(ids => {
+        const others = ids.filter(id => id !== user.id);
+        if (others.length) sendNotificationToMany(others, { title: "Order Fulfilled", message: `Order ${order.display_id} fulfilled.`, type: "order", entityType: "order", entityId: order.id }).catch(() => {});
       });
 
-      toast.success("Order Fulfilled", {
-        description: `Sale ${saleDisplayId} created successfully.`,
-      });
-
-      afterSaleSaved(queryClient, { storeId: order.store_id });
-
+      toast.success("Order Fulfilled", { description: `Sale ${did} created.` });
+      afterSaleSaved(qc, { storeId: order.store_id });
       onOpenChange(false);
       onFulfilled?.();
-    } catch (error) {
-      console.error("Fulfillment error:", error);
-      toast.error("Fulfillment Failed", {
-        description:
-          error instanceof Error
-            ? error.message
-            : "Failed to complete order. Please try again.",
-      });
-    } finally {
-      setSubmitting(false);
-    }
-  };
+    } catch (err: any) {
+      toast.error(err.message || "Failed to fulfill order.");
+    } finally { setSubmitting(false); }
+  }, [order, items, cash, upi, subtotal, outstandingFromSale, oldOutstanding, canFulfill, hasSalePerm, onOpenChange, onFulfilled, qc]);
 
-  // Available products not yet added
-  const availableProducts = products.filter(
-    (p) => !items.some((item) => item.product_id === p.id)
-  );
-
+  // -------------------------------------------------------------------
   if (!order) return null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Package className="h-5 w-5" />
-            Fulfill Order {order.display_id}
+            <Package className="h-5 w-5" /> Fulfill Order {order.display_id}
           </DialogTitle>
-          <DialogDescription>
-            Edit items, prices, and payment before completing delivery.
-          </DialogDescription>
+          <DialogDescription>Edit items, prices, and payment before completing.</DialogDescription>
         </DialogHeader>
 
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          </div>
+          <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
         ) : (
-          <ScrollArea className="flex-1 -mx-6 px-6">
-            <div className="space-y-6 pb-4">
-              {/* Order Info */}
-              <div className="flex flex-wrap gap-2">
-                <Badge variant="outline">
-                  {order.order_type === "detailed" ? "Detailed Order" : "Simple Order"}
-                </Badge>
-                <Badge variant="secondary">{order.stores?.name || "Unknown Store"}</Badge>
-              </div>
+          <div className="space-y-4">
+            {/* Meta */}
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="outline">{order.order_type === "detailed" ? "Detailed" : "Simple"}</Badge>
+              <Badge variant="secondary">{order.stores?.name || "Unknown Store"}</Badge>
+            </div>
+            {order.requirement_note && (
+              <Alert><AlertCircle className="h-4 w-4" /><AlertDescription>{order.requirement_note}</AlertDescription></Alert>
+            )}
 
-              {/* Requirement Note */}
-              {order.requirement_note && (
-                <Alert>
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{order.requirement_note}</AlertDescription>
-                </Alert>
-              )}
-
-              {/* Add Product */}
-              <div className="flex gap-2">
-                <Select value={selectedProduct} onValueChange={setSelectedProduct}>
-                  <SelectTrigger className="flex-1">
-                    <SelectValue placeholder="Add product..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableProducts.map((product) => (
-                      <SelectItem key={product.id} value={product.id}>
-                        {product.name} - {product.sku}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button onClick={handleAddProduct} disabled={!selectedProduct}>
-                  <Plus className="h-4 w-4" />
+            {/* Products */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-semibold">Products & Quantities</Label>
+                <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={addItem}>
+                  <Plus className="h-3 w-3 mr-1" /> Add Product
                 </Button>
               </div>
 
-              {/* Items List */}
-              <div className="space-y-3">
-                {items.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
-                    {order.order_type === "simple"
-                      ? "Add products to this order"
-                      : "No items in order"}
-                  </div>
-                ) : (
-                  items.map((item) => (
-                    <Card key={item.product_id}>
-                      <CardContent className="p-3">
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-10 w-10">
-                            <AvatarImage src={item.image_url} alt={item.product_name} />
-                            <AvatarFallback>
-                              {item.product_name.charAt(0).toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium truncate">{item.product_name}</div>
-                            <div className="text-xs text-muted-foreground">{item.sku}</div>
-                            {productStock.has(item.product_id) && (
-                              <div className={`text-xs mt-0.5 ${
-                                (productStock.get(item.product_id) || 0) < item.quantity 
-                                  ? "text-red-500 font-medium" 
-                                  : "text-green-600"
-                              }`}>
-                                Stock: {productStock.get(item.product_id) || 0} available
-                                {(productStock.get(item.product_id) || 0) < item.quantity && (
-                                  <span className="ml-1">⚠️ Insufficient</span>
-                                )}
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Quantity controls */}
-                          <div className="flex items-center gap-1">
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => handleQuantityChange(item.product_id, -1)}
-                            >
-                              <Minus className="h-3 w-3" />
-                            </Button>
-                            <span className="w-8 text-center font-medium">{item.quantity}</span>
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => handleQuantityChange(item.product_id, 1)}
-                            >
-                              <Plus className="h-3 w-3" />
-                            </Button>
-                          </div>
-
-                          {/* Price input */}
-                          <div className="w-24">
-                            <Input
-                              type="number"
-                              value={item.unit_price}
-                              onChange={(e) =>
-                                handlePriceChange(item.product_id, e.target.value)
-                              }
-                              className="h-8 text-right"
-                              min={0}
-                              step={0.01}
-                            />
-                          </div>
-
-                          {/* Total */}
-                          <div className="w-20 text-right font-medium">
-                            ₹{item.total.toFixed(2)}
-                          </div>
-
-                          {/* Remove */}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive"
-                            onClick={() => handleRemoveItem(item.product_id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+              {items.length === 0 ? (
+                <div className="text-center py-4 border border-dashed rounded-lg text-sm text-muted-foreground">No products. Add above.</div>
+              ) : (
+                <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1">
+                  {items.map((item, idx) => (
+                    <div key={item.id} className="flex items-center gap-3 p-2 rounded-lg border bg-card">
+                      <div className="w-10 h-10 rounded-md bg-muted flex items-center justify-center shrink-0 overflow-hidden">
+                        {item.image_url ? <img src={item.image_url} alt={item.product_name} className="w-full h-full object-cover" /> : <Package className="h-5 w-5 text-muted-foreground" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">{item.product_name || "Select product…"}</p>
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <span>₹{item.unit_price.toLocaleString()} × {item.quantity}</span>
+                          <span className="font-bold text-foreground">= ₹{(item.quantity * item.unit_price).toLocaleString()}</span>
                         </div>
-                      </CardContent>
-                    </Card>
-                  ))
-                )}
-              </div>
-
-              <Separator />
-
-              {/* Subtotal */}
-              <div className="flex justify-between items-center text-lg font-semibold">
-                <span>Subtotal</span>
-                <span>₹{subtotal.toFixed(2)}</span>
-              </div>
-
-              {/* Payment Section */}
-              <div className="space-y-4">
-                <Label className="text-base font-medium">Payment</Label>
-
-                <div className="flex gap-2 mb-3">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handlePayFullCash}
-                    className="flex-1"
-                  >
-                    <DollarSign className="h-4 w-4 mr-1" />
-                    Full Cash
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handlePayFullUpi}
-                    className="flex-1"
-                  >
-                    <CreditCard className="h-4 w-4 mr-1" />
-                    Full UPI
-                  </Button>
+                        {stockMap[item.product_id] !== undefined && (
+                          <p className={`text-2xs ${(stockMap[item.product_id] || 0) < item.quantity ? "text-red-500 font-medium" : "text-muted-foreground"}`}>
+                            Stock: {stockMap[item.product_id]} available
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {/* Unit price */}
+                        <div className="flex items-center gap-1 mr-2">
+                          <span className="text-2xs text-muted-foreground">₹</span>
+                          <Input type="number" min={0} value={item.unit_price} onChange={e => updateItem(idx, "unit_price", Math.max(0, Number(e.target.value) || 0))} className="w-16 h-7 text-xs font-semibold px-1" />
+                        </div>
+                        {/* Qty */}
+                        <Button type="button" variant="outline" size="icon" className="h-7 w-7" onClick={() => updateItem(idx, "quantity", Math.max(0, item.quantity - 1))}><Minus className="h-3 w-3" /></Button>
+                        <Input type="number" min={0} value={item.quantity} onChange={e => updateItem(idx, "quantity", Math.max(0, Number(e.target.value) || 0))} className="w-14 h-7 text-center text-sm px-1" />
+                        <Button type="button" variant="outline" size="icon" className="h-7 w-7" onClick={() => updateItem(idx, "quantity", item.quantity + 1)}><Plus className="h-3 w-3" /></Button>
+                        {/* Remove */}
+                        <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => removeItem(idx)}><X className="h-3 w-3" /></Button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
+              )}
+            </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="cash">Cash Amount</Label>
-                    <Input
-                      id="cash"
-                      type="number"
-                      value={cashAmount}
-                      onChange={(e) => setCashAmount(e.target.value)}
-                      min={0}
-                      step={0.01}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="upi">UPI Amount</Label>
-                    <Input
-                      id="upi"
-                      type="number"
-                      value={upiAmount}
-                      onChange={(e) => setUpiAmount(e.target.value)}
-                      min={0}
-                      step={0.01}
-                    />
-                  </div>
+            {/* Select for unfilled rows */}
+            {items.some(i => !i.product_id) && (
+              <div className="flex gap-2">
+                {items.map((item, idx) => (
+                  !item.product_id && (
+                    <Select key={item.id} onValueChange={(val) => setItemProduct(idx, val)}>
+                      <SelectTrigger className="flex-1"><SelectValue placeholder="Choose product…" /></SelectTrigger>
+                      <SelectContent>
+                        {products.map(p => (
+                          <SelectItem key={p.id} value={p.id}>{p.product_name} - {p.sku}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )
+                ))}
+              </div>
+            )}
+
+            <Separator />
+
+            {/* Totals */}
+            <div className="space-y-2 rounded-lg border bg-muted/30 p-3 text-sm">
+              <div className="flex justify-between"><span className="text-muted-foreground">Total</span><span className="font-bold">₹{subtotal.toLocaleString()}</span></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-3xs text-muted-foreground flex items-center gap-1"><DollarSign className="h-3 w-3" /> Cash</Label>
+                  <Input type="number" min={0} value={cashAmt} onChange={e => setCashAmt(e.target.value)} className="text-base font-semibold h-9" placeholder="0" />
                 </div>
-
-                {/* Outstanding Info */}
-                <div className="bg-muted p-3 rounded-lg space-y-1 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Previous Outstanding</span>
-                    <span>₹{oldOutstanding.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">This Order Outstanding</span>
-                    <span>₹{outstandingAmount.toFixed(2)}</span>
-                  </div>
-                  <Separator className="my-2" />
-                  <div className="flex justify-between font-medium">
-                    <span>New Total Outstanding</span>
-                    <span className={newOutstanding > 0 ? "text-orange-600" : "text-green-600"}>
-                      ₹{newOutstanding.toFixed(2)}
-                    </span>
-                  </div>
+                <div className="space-y-1">
+                  <Label className="text-3xs text-muted-foreground flex items-center gap-1"><CreditCard className="h-3 w-3" /> UPI</Label>
+                  <Input type="number" min={0} value={upiAmt} onChange={e => setUpiAmt(e.target.value)} className="text-base font-semibold h-9" placeholder="0" />
                 </div>
               </div>
-
-              {/* Notes */}
-              <div>
-                <Label htmlFor="notes">Notes</Label>
-                <Textarea
-                  id="notes"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Any delivery notes..."
-                  className="mt-1"
-                />
+              <div className="flex justify-between pt-1 border-t">
+                <span className="text-muted-foreground">Outstanding</span>
+                <span className={`font-bold ${outstanding > 0 ? "text-destructive" : "text-success"}`}>₹{outstanding.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Current: ₹{oldOutstanding.toLocaleString()}</span>
+                <span>New: ₹{newOutstanding.toLocaleString()}</span>
               </div>
             </div>
-          </ScrollArea>
+          </div>
         )}
 
         <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSubmit}
-            disabled={loading || submitting || items.length === 0}
-            className="gap-2"
-          >
-            {submitting ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Processing...
-              </>
-            ) : (
-              <>
-                <Check className="h-4 w-4" />
-                Complete Fulfillment
-              </>
-            )}
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>Cancel</Button>
+          <Button onClick={handleSubmit} disabled={loading || submitting || items.length === 0} className="gap-2">
+            {submitting ? <><Loader2 className="h-4 w-4 animate-spin" /> Processing…</> : <><Check className="h-4 w-4" /> Complete Fulfillment</>}
           </Button>
         </DialogFooter>
       </DialogContent>

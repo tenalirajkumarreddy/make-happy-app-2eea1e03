@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Loader2, Minus, Plus, ChevronRight, Store as StoreIcon,
   IndianRupee, Banknote, CreditCard, AlertTriangle, ShoppingCart,
@@ -12,18 +12,14 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermission } from "@/hooks/usePermission";
-import { generateBusinessKey } from "@/lib/offlineQueue";
-import { enqueueWithContext } from "@/lib/conflictResolver";
-import { useStorePendingOrders } from "@/mobile/hooks/useStorePendingOrders";
+import { addToQueue } from "@/lib/offlineQueue";
 import { logActivity } from "@/lib/activityLogger";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
-import { resolveCreditLimit, type CustomerCredit, type StoreTypeCredit } from "@/lib/creditLimit";
+import { resolveCreditLimit } from "@/lib/creditLimit";
 import { validateCreditLimitOffline } from "@/lib/offlineCreditValidation";
 import { StorePickerSheet, StoreOption } from "@/mobile/components/StorePickerSheet";
 import { cn } from "@/lib/utils";
-import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { SaleReceipt } from "@/components/shared/SaleReceipt";
-import { afterSaleSaved, afterTransactionSaved } from "@/lib/mutationHelpers";
 
 interface SaleItem {
   product_id: string;
@@ -31,41 +27,14 @@ interface SaleItem {
   unit_price: number;
 }
 
-interface StaffUserOption {
-  user_id: string;
-  full_name: string | null;
-}
-
-interface StockAvailabilityRow {
-  out_available: boolean;
-  out_product_name: string;
-  out_available_qty: number;
-}
-
-interface SaleResultRow {
-  sale_id: string;
-}
-
-interface SaleMutationResult {
-  queued: boolean;
-  displayId?: string;
-  saleRow?: SaleResultRow;
-}
-
-interface PaymentMutationResult {
-  queued: boolean;
-  displayId?: string;
-}
-
 // ─── Record Sale ─────────────────────────────────────────────────────────────
-function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOption | null; onSuccess?: () => void }) {
+function RecordSale({ preselectStore }: { preselectStore?: StoreOption | null }) {
   const { user, role } = useAuth();
   const isAdmin = role === "super_admin" || role === "manager";
   const { allowed: canOverridePrice } = usePermission("price_override");
   const { allowed: canRecordBehalf } = usePermission("record_behalf");
-  const { allowed: canBackdate } = usePermission("backdate");
-  const { allowed: canRecordSale } = usePermission("record_sale");
   const qc = useQueryClient();
+  const [saving, setSaving] = useState(false);
   const [store, setStore] = useState<StoreOption | null>(null);
   const [storePickerOpen, setStorePickerOpen] = useState(false);
   const [items, setItems] = useState<SaleItem[]>([]);
@@ -75,8 +44,7 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
   const [saleDate, setSaleDate] = useState("");
   const [showProductSearch, setShowProductSearch] = useState(false);
   const [showOrders, setShowOrders] = useState(false);
-  const [fulfilledOrderId, setFulfilledOrderId] = useState<string | null>(null);
-  const [receiptSaleId, setReceiptSaleId] = useState<string | null>(null);
+  const [lastSaleId, setLastSaleId] = useState<string | null>(null);
 
   useEffect(() => {
     if (preselectStore) {
@@ -108,24 +76,23 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
             .limit(1)
             .then(({ data: posStores }) => {
               if (posStores && posStores.length > 0) {
-                setStore(posStores[0] as StoreOption);
+                setStore(posStores[0] as any);
               }
             });
         });
     }
   }, [role, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const { data: staffUsers = [] } = useQuery<StaffUserOption[]>({
+  const { data: staffUsers } = useQuery({
     queryKey: ["mobile-staff-for-behalf-sale", user?.id],
     queryFn: async () => {
       const { data: roles } = await supabase.from("user_roles").select("user_id, role").neq("role", "customer");
       const staffIds = roles?.map((r) => r.user_id) || [];
       if (staffIds.length === 0) return [];
       const { data: profs } = await supabase.from("profiles").select("user_id, full_name").in("user_id", staffIds);
-      return (profs?.filter((p) => p.user_id !== user?.id) ?? []) as StaffUserOption[];
+      return profs?.filter((p) => p.user_id !== user?.id) || [];
     },
     enabled: canRecordBehalf,
-    staleTime: 5 * 60 * 1000,
   });
 
   const { data: availableProducts, isLoading: loadingProducts } = useQuery({
@@ -162,9 +129,8 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
         p_items: productIds.map(id => ({ product_id: id, quantity: 0 })) // Check for 0 to just get available counts
       });
 
-      const stockRows = (stockInfo ?? []) as Array<{ out_product_id: string; out_available_qty: number; out_physical_qty: number; out_pending_outgoing: number }>;
-      const stockMap: Record<string, (typeof stockRows)[number]> = {};
-      stockRows.forEach(s => {
+      const stockMap: Record<string, any> = {};
+      (stockInfo as any[])?.forEach(s => {
         stockMap[s.out_product_id] = s;
       });
 
@@ -182,7 +148,6 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
       });
     },
     enabled: !!store?.store_type_id && !!store?.id && !!user?.id,
-    staleTime: 5 * 60 * 1000,
   });
 
   const addItem = (productId: string) => {
@@ -199,15 +164,9 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
     setItems(items.map((i) => {
       if (i.product_id !== productId) return i;
       const newQty = Math.max(0, i.quantity + delta);
+      if (newQty === 0) return null as any;
       return { ...i, quantity: newQty };
-    }));
-  };
-
-  const setQtyDirect = (productId: string, value: string) => {
-    const parsed = parseInt(value, 10);
-    if (value === "") { setItems(items.filter((i) => i.product_id !== productId)); return; }
-    if (!Number.isFinite(parsed) || parsed < 0) return;
-    setItems(items.map((i) => i.product_id === productId ? { ...i, quantity: parsed || 0 } : i));
+    }).filter(Boolean));
   };
 
   const totalAmount = items.reduce((s, i) => s + i.quantity * i.unit_price, 0);
@@ -223,7 +182,6 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
       const { data } = await supabase.from("store_types").select("id, credit_limit_kyc, credit_limit_no_kyc");
       return data || [];
     },
-    staleTime: 5 * 60 * 1000,
   });
 
   const { data: customers } = useQuery({
@@ -232,7 +190,6 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
       const { data } = await supabase.from("customers").select("id, kyc_status, credit_limit_override");
       return data || [];
     },
-    staleTime: 5 * 60 * 1000,
   });
 
   const { data: allProducts = [] } = useQuery({
@@ -246,21 +203,29 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
       return data || [];
     },
     enabled: showProductSearch,
-    staleTime: 5 * 60 * 1000,
   });
 
-  const pendingOrdersResult = useStorePendingOrders(store?.id);
-  const pendingOrders = pendingOrdersResult.data ?? [];
+  const { data: pendingOrders = [] } = useQuery({
+    queryKey: ["mobile-pending-orders-for-store", store?.id],
+    queryFn: async () => {
+      if (!store?.id) return [];
+      const { data: orders } = await supabase
+        .from("orders")
+        .select("id, display_id, created_at, order_items(id, product_id, quantity, unit_price, products(id, name))")
+        .eq("store_id", store.id)
+        .eq("status", "pending")
+        .order("created_at", { ascending: false });
+      return orders || [];
+    },
+    enabled: !!store?.id,
+  });
 
   const creditLimitInfo = store && storeTypes && customers
-    ? resolveCreditLimit(store, storeTypes as StoreTypeCredit[], customers as CustomerCredit[])
+    ? resolveCreditLimit(store, storeTypes as any[], customers as any[])
     : null;
 
-  const { data: settings } = useCompanySettings();
-  const isCreditCheckEnabled = settings?.credit_limit_check !== "false";
-
-  const creditExceeded = isCreditCheckEnabled && !!(creditLimitInfo && creditLimitInfo.limit > 0 && newOutstanding > creditLimitInfo.limit);
-  const creditWarning = isCreditCheckEnabled && !!(creditLimitInfo && creditLimitInfo.limit > 0 && newOutstanding > creditLimitInfo.limit * 0.8 && !creditExceeded);
+  const creditExceeded = !!(creditLimitInfo && creditLimitInfo.limit > 0 && newOutstanding > creditLimitInfo.limit);
+  const creditWarning = !!(creditLimitInfo && creditLimitInfo.limit > 0 && newOutstanding > creditLimitInfo.limit * 0.8 && !creditExceeded);
 
   const updateUnitPrice = (productId: string, value: string) => {
     const parsed = Number(value);
@@ -268,151 +233,7 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
     setItems(items.map((item) => item.product_id === productId ? { ...item, unit_price: parsed } : item));
   };
 
-  const saleMutation = useMutation<SaleMutationResult, Error>({
-    mutationFn: async () => {
-      if (!canRecordSale) throw new Error("You don't have permission to record sales");
-      const effectiveRecordedBy = recordedFor || user!.id;
-      const loggedBy = recordedFor ? user!.id : null;
-
-      const { data: stockCheck, error: stockError } = await supabase.rpc("check_stock_availability", {
-        p_user_id: user!.id,
-        p_recorded_for: recordedFor || null,
-        p_items: items.map((i) => ({ product_id: i.product_id, quantity: i.quantity })),
-      });
-
-      if (stockError) {
-        throw new Error("stock_check_failed");
-      }
-
-      const stockRows = (Array.isArray(stockCheck) ? stockCheck : []) as StockAvailabilityRow[];
-      const insufficient = stockRows.filter((s) => !s.out_available);
-      if (insufficient.length > 0) {
-        const details = insufficient.map((i) => `${i.out_product_name} (Avail: ${i.out_available_qty})`).join(", ");
-        throw new Error(`insufficient_stock_details:${details}`);
-      }
-
-      const saleData = {
-        store_id: store!.id,
-        customer_id: store!.customer_id,
-        recorded_by: effectiveRecordedBy,
-        logged_by: loggedBy,
-        total_amount: totalAmount,
-        cash_amount: cash,
-        upi_amount: upi,
-        outstanding_amount: outstandingFromSale,
-        old_outstanding: oldOutstanding,
-        new_outstanding: newOutstanding,
-        ...(saleDate ? { created_at: new Date(saleDate).toISOString() } : {}),
-        ...(fulfilledOrderId ? { fulfilled_order_id: fulfilledOrderId } : {}),
-      };
-      const saleItems = items.map((i) => ({ product_id: i.product_id, quantity: i.quantity, unit_price: i.unit_price, total_price: i.quantity * i.unit_price }));
-
-      if (!navigator.onLine) {
-        if (isCreditCheckEnabled) {
-          const offlineCredit = await validateCreditLimitOffline(store!.id, outstandingFromSale, isAdmin);
-          if (!offlineCredit.valid && !isAdmin) {
-            throw new Error(offlineCredit.warning || "Credit limit exceeded. Cannot queue sale offline.");
-          }
-          if (offlineCredit.exceeded && !isAdmin) {
-            throw new Error("Credit limit exceeded. Cannot queue sale offline.");
-          }
-        }
-        const businessKey = generateBusinessKey("sale", {
-          storeId: store!.id,
-          customerId: store!.customer_id,
-          amount: totalAmount,
-          products: saleItems.map((i) => ({ product_id: i.product_id, quantity: i.quantity })),
-          timestamp: saleDate || new Date().toISOString(),
-        });
-        await enqueueWithContext({
-          id: crypto.randomUUID(),
-          type: "sale",
-          payload: { saleData, saleItems, storeUpdate: { outstanding: newOutstanding } },
-          createdAt: new Date().toISOString(),
-          businessKey,
-        });
-        return { queued: true };
-      }
-
-      const { data: generatedDisplayId, error: displayErr } = await supabase.rpc("generate_display_id", {
-        prefix: "SALE",
-        seq_name: "sale_display_seq",
-      });
-      if (displayErr) throw displayErr;
-
-      const displayId = String(generatedDisplayId ?? "");
-      const { data: saleResult, error: saleErr } = await supabase.rpc("record_sale", {
-        p_display_id: displayId,
-        p_store_id: store!.id,
-        p_customer_id: store!.customer_id,
-        p_recorded_by: effectiveRecordedBy,
-        p_logged_by: loggedBy,
-        p_total_amount: totalAmount,
-        p_cash_amount: cash,
-        p_upi_amount: upi,
-        p_outstanding_amount: Math.max(outstandingFromSale, 0),
-        p_sale_items: saleItems,
-        p_created_at: saleDate ? new Date(saleDate).toISOString() : null,
-        p_expected_outstanding: store?.outstanding ?? null,
-        p_fulfilled_order_id: fulfilledOrderId,
-      });
-      if (saleErr) throw saleErr;
-
-      const saleRow = ((saleResult ?? []) as SaleResultRow[])[0];
-      return { queued: false, displayId, saleRow };
-    },
-    onSuccess: ({ queued, displayId, saleRow }) => {
-      if (queued) {
-        toast.warning("Offline — sale queued and will sync automatically");
-        resetSale();
-        return;
-      }
-
-      logActivity(user!.id, "Recorded sale", "sale", String(displayId), saleRow?.sale_id, { total: totalAmount, store: store!.id });
-      getAdminUserIds().then((ids) => {
-        const others = ids.filter((id) => id !== user!.id);
-        if (others.length > 0) {
-          sendNotificationToMany(others, {
-            title: "New Sale Recorded",
-            message: `₹${totalAmount.toLocaleString()} sale at ${store!.name} (${String(displayId)})`,
-            type: "system",
-            entityType: "sale",
-            entityId: String(displayId),
-          });
-        }
-      });
-
-      toast.success("Sale recorded successfully");
-      resetSale();
-      afterSaleSaved(qc, { isMobile: true, storeId: store?.id });
-      if (saleRow?.sale_id) {
-        setReceiptSaleId(saleRow.sale_id);
-      } else {
-        onSuccess?.();
-      }
-    },
-    onError: (err) => {
-      if (err.message === "stock_check_failed") {
-        toast.error("Stock check failed. Please try again.");
-        return;
-      }
-      if (err.message.startsWith("insufficient_stock_details:")) {
-        toast.error(`Insufficient stock: ${err.message.replace("insufficient_stock_details:", "")}`);
-        return;
-      }
-      if (err.message.includes("credit_limit_exceeded")) {
-        toast.error("Credit limit exceeded. Increase payment or reduce items.");
-        return;
-      }
-      if (err.message.includes("insufficient_stock")) {
-        toast.error("Insufficient stock. Please check inventory.");
-        return;
-      }
-      toast.error(err.message || "Failed to record sale. Please try again.");
-    },
-  });
-
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!store) { toast.error("Please select a store"); return; }
     if (items.length === 0) { toast.error("Add at least one product"); return; }
     if (totalAmount === 0) { toast.error("Sale total cannot be zero"); return; }
@@ -423,10 +244,120 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
     }
     if (creditExceeded && !isAdmin) { toast.error("Credit limit exceeded. Increase payment or reduce items."); return; }
 
-    saleMutation.mutate();
-  };
+    setSaving(true);
 
-  const saving = saleMutation.isPending;
+    const effectiveRecordedBy = recordedFor || user!.id;
+    const loggedBy = recordedFor ? user!.id : null;
+
+    // Check stock availability before sale
+    const { data: stockCheck, error: stockError } = await supabase.rpc("check_stock_availability", {
+      p_user_id: user!.id,
+      p_recorded_for: recordedFor || null,
+      p_items: items.map(i => ({ product_id: i.product_id, quantity: i.quantity }))
+    });
+
+    if (stockError) {
+      toast.error("Stock check failed. Please try again.");
+      setSaving(false);
+      return;
+    }
+
+    const stockRows = Array.isArray(stockCheck) ? stockCheck : [];
+    const insufficient = stockRows.filter((s: any) => !s.out_available);
+    if (insufficient.length > 0) {
+      const details = insufficient.map((i: any) => `${i.out_product_name} (Avail: ${i.out_available_qty})`).join(", ");
+      toast.error(`Insufficient stock: ${details}`);
+      setSaving(false);
+      return;
+    }
+
+    const saleData = {
+      store_id: store.id,
+      customer_id: store.customer_id,
+      recorded_by: effectiveRecordedBy,
+      logged_by: loggedBy,
+      total_amount: totalAmount,
+      cash_amount: cash,
+      upi_amount: upi,
+      outstanding_amount: outstandingFromSale,
+      old_outstanding: oldOutstanding,
+      new_outstanding: newOutstanding,
+      ...(saleDate ? { created_at: new Date(saleDate).toISOString() } : {}),
+    };
+    const saleItems = items.map((i) => ({ product_id: i.product_id, quantity: i.quantity, unit_price: i.unit_price }));
+
+    if (!navigator.onLine) {
+      const offlineCredit = await validateCreditLimitOffline(store.id, outstandingFromSale, isAdmin);
+      if (!offlineCredit.valid && !isAdmin) {
+        toast.error(offlineCredit.warning || "Credit limit exceeded. Cannot queue sale offline.");
+        setSaving(false);
+        return;
+      }
+      if (offlineCredit.exceeded && !isAdmin) {
+        toast.error("Credit limit exceeded. Cannot queue sale offline.");
+        setSaving(false);
+        return;
+      }
+      await addToQueue({
+        id: crypto.randomUUID(), type: "sale",
+        payload: { saleData, saleItems, storeUpdate: { outstanding: newOutstanding } },
+        createdAt: new Date().toISOString(),
+      });
+      toast.warning("Offline — sale queued and will sync automatically");
+      setSaving(false);
+      resetSale();
+      return;
+    }
+
+    const { data: displayId } = await (supabase as any).rpc("generate_display_id", { prefix: "SALE", seq_name: "sale_display_seq" });
+    const { data: saleResult, error } = await (supabase as any).rpc("record_sale", {
+      p_display_id: displayId,
+      p_store_id: store.id,
+      p_customer_id: store.customer_id,
+      p_recorded_by: effectiveRecordedBy,
+      p_logged_by: loggedBy,
+      p_total_amount: totalAmount,
+      p_cash_amount: cash,
+      p_upi_amount: upi,
+      p_outstanding_amount: outstandingFromSale,
+      p_sale_items: saleItems,
+      p_created_at: saleDate ? new Date(saleDate).toISOString() : null,
+    });
+
+    if (error) {
+      if (error.message.includes("credit_limit_exceeded")) {
+        toast.error("Credit limit exceeded. Increase payment or reduce items.");
+      } else if (error.message.includes("insufficient_stock")) {
+        toast.error("Insufficient stock. Please check inventory.");
+      } else {
+        toast.error(error.message);
+      }
+      setSaving(false);
+      return;
+    }
+
+    const saleRow = (saleResult as any)?.[0];
+    logActivity(user!.id, "Recorded sale", "sale", String(displayId), saleRow?.sale_id, { total: totalAmount, store: store.id });
+    getAdminUserIds().then((ids) => {
+      const others = ids.filter((id) => id !== user!.id);
+      if (others.length > 0) {
+        sendNotificationToMany(others, {
+          title: "New Sale Recorded",
+          message: `₹${totalAmount.toLocaleString()} sale at ${store.name} (${String(displayId)})`,
+          type: "system",
+          entityType: "sale",
+          entityId: String(displayId),
+        });
+      }
+    });
+
+    toast.success("Sale recorded successfully");
+    setSaving(false);
+    if (saleRow?.sale_id) setLastSaleId(saleRow.sale_id);
+    resetSale();
+    qc.invalidateQueries({ queryKey: ["sales"] });
+    qc.invalidateQueries({ queryKey: ["mobile-agent-sales-today"] });
+  };
 
   const resetSale = () => {
     setStore(null);
@@ -435,7 +366,6 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
     setUpiAmount("");
     setRecordedFor("");
     setSaleDate("");
-    setFulfilledOrderId(null);
   };
 
   return (
@@ -476,14 +406,14 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
         <div className="px-4">
           <div className="rounded-xl bg-card border border-border border p-3.5 flex justify-between items-center">
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold">Current Balance</p>
-              <p className={cn("text-xl font-bold mt-0.5", oldOutstanding > 0 ? "text-red-500" : oldOutstanding < 0 ? "text-emerald-500" : "text-muted-foreground")}>
-                {oldOutstanding > 0 ? `-₹${oldOutstanding.toLocaleString("en-IN")}` : oldOutstanding < 0 ? `+₹${Math.abs(oldOutstanding).toLocaleString("en-IN")}` : "₹0"}
+              <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Current Balance</p>
+              <p className={cn("text-xl font-bold mt-0.5", oldOutstanding > 0 ? "text-red-500" : "text-emerald-500")}>
+                ₹{oldOutstanding.toLocaleString("en-IN")}
               </p>
             </div>
             {store.customers?.name && (
               <div className="text-right">
-                <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold">Customer</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Customer</p>
                 <p className="text-sm font-bold text-foreground mt-0.5">{store.customers.name}</p>
               </div>
             )}
@@ -522,7 +452,7 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
               <div key={order.id} className="rounded-xl border border-border border p-3 mb-2">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-bold text-muted-foreground">{order.display_id}</span>
-                  <span className="text-xs text-muted-foreground">{new Date(order.created_at).toLocaleDateString()}</span>
+                  <span className="text-[10px] text-muted-foreground">{new Date(order.created_at).toLocaleDateString()}</span>
                 </div>
                 <div className="space-y-1 mb-2">
                   {order.order_items?.map((item: any) => (
@@ -540,7 +470,6 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
                       unit_price: Number(item.unit_price) || 0,
                     })) || [];
                     setItems(orderItems);
-                    setFulfilledOrderId(order.id);
                     setShowOrders(false);
                     toast.success(`Order ${order.display_id} items added to cart`);
                   }}
@@ -566,13 +495,13 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
                 className="mt-1 w-full h-10 rounded-xl border border-border border bg-card px-3 text-sm"
               >
                 <option value="self">Self</option>
-                {staffUsers.map((member) => (
+                {(staffUsers as any[])?.map((member: any) => (
                   <option key={member.user_id} value={member.user_id}>{member.full_name || "Staff"}</option>
                 ))}
               </select>
             </div>
           )}
-          {canBackdate && (
+          {isAdmin && (
             <div>
               <Label className="text-xs text-muted-foreground dark:text-muted-foreground font-semibold">Sale Date (optional)</Label>
               <Input
@@ -616,62 +545,42 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
                           <p className="text-xs text-muted-foreground">
                             ₹{product.effectivePrice.toLocaleString("en-IN")}
                           </p>
-                          <span className="text-xs px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
                             Stock: {product.stock}
                           </span>
                           {product.pending_out > 0 && (
-                            <span className="text-xs text-amber-500 font-medium">
+                            <span className="text-[10px] text-amber-500 font-medium">
                               ({product.pending_out} pending)
                             </span>
                           )}
                         </div>
                       </div>
                       {inCart ? (
-                        <div className="flex flex-col items-end gap-1 shrink-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs text-muted-foreground font-medium mr-1">
-                              ₹{(inCart.quantity * inCart.unit_price).toLocaleString("en-IN")}
-                            </span>
-                            <button
-                              className="h-10 w-10 rounded-xl border-2 border-border border flex items-center justify-center hover:bg-muted/80 transition-colors active:scale-90"
-                              onClick={() => updateQty(product.id, -1)}
-                              aria-label={`Decrease ${product.name} quantity`}
-                            >
-                              <Minus className="h-4.5 w-4.5 text-muted-foreground" />
-                            </button>
-                          <Input
-                            type="number"
-                            inputMode="numeric"
-                            pattern="[0-9]*"
-                            min="0"
-                            value={inCart.quantity}
-                            onChange={(e) => setQtyDirect(product.id, e.target.value)}
-                            className="h-10 w-14 text-sm font-bold text-center rounded-xl border-border border"
-                          />
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-xs text-muted-foreground font-medium">
+                            ₹{(inCart.quantity * inCart.unit_price).toLocaleString("en-IN")}
+                          </span>
                           <button
-                            className="h-10 w-10 rounded-xl bg-blue-600 flex items-center justify-center hover:bg-blue-700 active:scale-90 transition-all text-white"
+                            className="h-10 w-10 rounded-xl border-2 border-border border flex items-center justify-center hover:bg-muted/80 transition-colors active:scale-90"
+                            onClick={() => updateQty(product.id, -1)}
+                            aria-label={`Decrease ${product.name} quantity`}
+                          >
+                            <Minus className="h-4.5 w-4.5 text-muted-foreground" />
+                          </button>
+                          <span className="text-sm font-bold text-foreground dark:text-white w-7 text-center">
+                            {inCart.quantity}
+                          </span>
+                          <button
+                            className="h-10 w-10 rounded-xl bg-blue-600 flex items-center justify-center hover:bg-blue-700 active:scale-90 transition-all"
                             onClick={() => updateQty(product.id, 1)}
                             aria-label={`Increase ${product.name} quantity`}
                           >
-                            <Plus className="h-4.5 w-4.5" />
+                            <Plus className="h-4.5 w-4.5 text-white" />
                           </button>
                         </div>
-                        {canOverridePrice && (
-                          <div className="flex items-center gap-1">
-                            <span className="text-xs text-muted-foreground">₹</span>
-                            <Input
-                              type="number"
-                              min="0"
-                              value={inCart.unit_price}
-                              onChange={(e) => updateUnitPrice(product.id, e.target.value)}
-                              className="h-8 w-20 text-xs text-center font-semibold rounded-xl border-border border"
-                            />
-                          </div>
-                        )}
-                      </div>
                       ) : (
                         <button
-                          className="h-10 w-10 rounded-xl bg-blue-600 flex items-center justify-center hover:bg-blue-700 active:scale-90 transition-all shadow-sm"
+                          className="h-9 w-9 rounded-xl bg-blue-600 flex items-center justify-center hover:bg-blue-700 active:scale-90 transition-all shadow-sm"
                           onClick={() => addItem(product.id)}
                           aria-label={`Add ${product.name} to cart`}
                         >
@@ -740,9 +649,19 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
                 return (
                   <div key={item.product_id} className="flex justify-between items-center gap-2 text-xs text-muted-foreground dark:text-muted-foreground">
                     <span className="flex-1">{p?.name ?? "Product"} × {item.quantity}</span>
-                    <span className="font-semibold text-foreground">
-                      ₹{(item.quantity * item.unit_price).toLocaleString("en-IN")}
-                    </span>
+                    {canOverridePrice ? (
+                      <Input
+                        type="number"
+                        min="0"
+                        value={item.unit_price}
+                        onChange={(e) => updateUnitPrice(item.product_id, e.target.value)}
+                        className="h-7 w-24 text-xs rounded-lg"
+                      />
+                    ) : (
+                      <span className="font-semibold text-foreground">
+                        ₹{(item.quantity * item.unit_price).toLocaleString("en-IN")}
+                      </span>
+                    )}
                   </div>
                 );
               })}
@@ -800,20 +719,18 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
             <div className="space-y-2">
               <div className="flex justify-between text-xs text-muted-foreground dark:text-muted-foreground">
                 <span>Existing balance</span>
-                <span className={cn("font-semibold", oldOutstanding > 0 ? "text-red-500" : oldOutstanding < 0 ? "text-emerald-500" : "text-muted-foreground")}>
-                  {oldOutstanding > 0 ? `-₹${oldOutstanding.toLocaleString("en-IN")}` : oldOutstanding < 0 ? `+₹${Math.abs(oldOutstanding).toLocaleString("en-IN")}` : "₹0"}
-                </span>
+                <span className="font-semibold">₹{oldOutstanding.toLocaleString("en-IN")}</span>
               </div>
               <div className="flex justify-between text-xs">
                 <span className="text-muted-foreground dark:text-muted-foreground">From this sale</span>
-                <span className={cn("font-semibold", outstandingFromSale > 0 ? "text-red-500" : outstandingFromSale < 0 ? "text-emerald-500" : "text-muted-foreground")}>
-                  {outstandingFromSale > 0 ? `-₹${outstandingFromSale.toLocaleString("en-IN")}` : outstandingFromSale < 0 ? `+₹${Math.abs(outstandingFromSale).toLocaleString("en-IN")}` : "₹0"}
+                <span className={cn("font-semibold", outstandingFromSale > 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400")}>
+                  {outstandingFromSale >= 0 ? "+" : ""}₹{outstandingFromSale.toLocaleString("en-IN")}
                 </span>
               </div>
               <div className="flex justify-between text-sm font-bold border-t border-border border pt-2 mt-1">
                 <span className="text-foreground">New balance</span>
-                <span className={cn("text-base", newOutstanding > 0 ? "text-red-500" : newOutstanding < 0 ? "text-emerald-500" : "text-muted-foreground")}>
-                  {newOutstanding > 0 ? `-₹${newOutstanding.toLocaleString("en-IN")}` : newOutstanding < 0 ? `+₹${Math.abs(newOutstanding).toLocaleString("en-IN")}` : "₹0"}
+                <span className={cn("text-base", newOutstanding > 0 ? "text-red-500" : "text-emerald-500")}>
+                  ₹{newOutstanding.toLocaleString("en-IN")}
                 </span>
               </div>
             </div>
@@ -870,15 +787,6 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
           setUpiAmount("");
         }}
       />
-
-      <SaleReceipt
-        saleId={receiptSaleId || ""}
-        open={!!receiptSaleId}
-        onClose={() => {
-          setReceiptSaleId(null);
-          onSuccess?.();
-        }}
-      />
     </div>
   );
 }
@@ -888,6 +796,7 @@ function RecordPayment({ preselectStore }: { preselectStore?: StoreOption | null
   const { user } = useAuth();
   const { allowed: canRecordBehalf } = usePermission("record_behalf");
   const qc = useQueryClient();
+  const [saving, setSaving] = useState(false);
   const [store, setStore] = useState<StoreOption | null>(null);
   const [storePickerOpen, setStorePickerOpen] = useState(false);
   const [cashAmount, setCashAmount] = useState("");
@@ -907,17 +816,16 @@ function RecordPayment({ preselectStore }: { preselectStore?: StoreOption | null
     }
   }, [preselectStore?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const { data: staffUsers = [] } = useQuery<StaffUserOption[]>({
+  const { data: staffUsers } = useQuery({
     queryKey: ["mobile-staff-for-behalf-payment", user?.id],
     queryFn: async () => {
       const { data: roles } = await supabase.from("user_roles").select("user_id, role").neq("role", "customer");
       const staffIds = roles?.map((r) => r.user_id) || [];
       if (staffIds.length === 0) return [];
       const { data: profs } = await supabase.from("profiles").select("user_id, full_name").in("user_id", staffIds);
-      return (profs?.filter((p) => p.user_id !== user?.id) ?? []) as StaffUserOption[];
+      return profs?.filter((p) => p.user_id !== user?.id) || [];
     },
     enabled: canRecordBehalf,
-    staleTime: 5 * 60 * 1000,
   });
 
   const cash = parseFloat(cashAmount) || 0;
@@ -926,107 +834,83 @@ function RecordPayment({ preselectStore }: { preselectStore?: StoreOption | null
   const oldOutstanding = Number(store?.outstanding ?? 0);
   const newOutstanding = Math.max(0, oldOutstanding - totalPayment);
 
-  const paymentMutation = useMutation<PaymentMutationResult, Error>({
-    mutationFn: async () => {
-      const effectiveRecordedBy = recordedFor || user!.id;
-      const loggedBy = recordedFor ? user!.id : null;
-
-      const txData = {
-        store_id: store!.id,
-        customer_id: store!.customer_id,
-        recorded_by: effectiveRecordedBy,
-        logged_by: loggedBy,
-        cash_amount: cash,
-        upi_amount: upi,
-        total_amount: totalPayment,
-        old_outstanding: oldOutstanding,
-        new_outstanding: newOutstanding,
-        notes: notes || null,
-        ...(txnDate ? { created_at: new Date(txnDate).toISOString() } : {}),
-      };
-
-      if (!navigator.onLine) {
-        const txBusinessKey = generateBusinessKey("transaction", {
-          storeId: store!.id,
-          customerId: store!.customer_id,
-          amount: totalPayment,
-          timestamp: txnDate || new Date().toISOString(),
-        });
-        await enqueueWithContext({
-          id: crypto.randomUUID(),
-          type: "transaction",
-          payload: { txData, storeUpdate: { outstanding: newOutstanding } },
-          createdAt: new Date().toISOString(),
-          businessKey: txBusinessKey,
-        });
-        return { queued: true };
-      }
-
-      const { data: generatedDisplayId, error: displayErr } = await supabase.rpc("generate_display_id", {
-        prefix: "PAY",
-        seq_name: "pay_display_seq",
-      });
-      if (displayErr) throw displayErr;
-
-      const displayId = String(generatedDisplayId ?? "");
-      const { error } = await supabase.rpc("record_transaction", {
-        p_display_id: displayId,
-        p_store_id: store!.id,
-        p_customer_id: store!.customer_id,
-        p_recorded_by: effectiveRecordedBy,
-        p_logged_by: loggedBy ?? undefined,
-        p_cash_amount: cash,
-        p_upi_amount: upi,
-        p_notes: notes ?? undefined,
-        p_created_at: txnDate ? new Date(txnDate).toISOString() : undefined,
-      });
-      if (error) throw error;
-
-      if (txnDate) {
-        await supabase.rpc("recalc_running_balances", { p_store_id: store!.id });
-      }
-
-      return { queued: false, displayId };
-    },
-    onSuccess: ({ queued, displayId }) => {
-      if (queued) {
-        toast.warning("Offline — payment queued and will sync automatically");
-        resetPayment();
-        return;
-      }
-
-      logActivity(user!.id, "Recorded transaction", "transaction", String(displayId), undefined, { total: totalPayment, store: store!.id });
-      getAdminUserIds().then((ids) => {
-        const others = ids.filter((id) => id !== user!.id);
-        if (others.length > 0) {
-          sendNotificationToMany(others, {
-            title: "Payment Collected",
-            message: `₹${totalPayment.toLocaleString()} collected from ${store!.name} (${String(displayId)})`,
-            type: "payment",
-            entityType: "transaction",
-            entityId: String(displayId),
-          });
-        }
-      });
-
-      toast.success("Payment recorded");
-      resetPayment();
-      afterTransactionSaved(qc, { isMobile: true, storeId: store?.id });
-    },
-    onError: (err) => {
-      toast.error(err.message || "Failed to record payment. Please try again.");
-    },
-  });
-
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!store) { toast.error("Please select a store"); return; }
     if (totalPayment <= 0) { toast.error("Enter payment amount"); return; }
     if (!store.customer_id) { toast.error("Store has no linked customer"); return; }
 
-    paymentMutation.mutate();
-  };
+    setSaving(true);
 
-  const saving = paymentMutation.isPending;
+    const effectiveRecordedBy = recordedFor || user!.id;
+    const loggedBy = recordedFor ? user!.id : null;
+
+    const txData = {
+      store_id: store.id,
+      customer_id: store.customer_id,
+      recorded_by: effectiveRecordedBy,
+      logged_by: loggedBy,
+      cash_amount: cash,
+      upi_amount: upi,
+      total_amount: totalPayment,
+      old_outstanding: oldOutstanding,
+      new_outstanding: newOutstanding,
+      notes: notes || null,
+      ...(txnDate ? { created_at: new Date(txnDate).toISOString() } : {}),
+    };
+
+    if (!navigator.onLine) {
+      await addToQueue({
+        id: crypto.randomUUID(),
+        type: "transaction",
+        payload: { txData, storeUpdate: { outstanding: newOutstanding } },
+        createdAt: new Date().toISOString(),
+      });
+      toast.warning("Offline — payment queued and will sync automatically");
+      setSaving(false);
+      resetPayment();
+      return;
+    }
+
+    const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "PAY", seq_name: "pay_display_seq" }) as any;
+
+    const { error } = await supabase.rpc("record_transaction", {
+      p_display_id: String(displayId),
+      p_store_id: store.id,
+      p_customer_id: store.customer_id,
+      p_recorded_by: effectiveRecordedBy,
+      p_logged_by: loggedBy ?? undefined,
+      p_cash_amount: cash,
+      p_upi_amount: upi,
+      p_notes: notes ?? undefined,
+      p_created_at: txnDate ? new Date(txnDate).toISOString() : undefined,
+    }) as any;
+
+    if (error) { toast.error(error.message); setSaving(false); return; }
+
+    if (txnDate) {
+      await supabase.rpc("recalc_running_balances", { p_store_id: store.id });
+    }
+
+    logActivity(user!.id, "Recorded transaction", "transaction", String(displayId), undefined, { total: totalPayment, store: store.id });
+    getAdminUserIds().then((ids) => {
+      const others = ids.filter((id) => id !== user!.id);
+      if (others.length > 0) {
+        sendNotificationToMany(others, {
+          title: "Payment Collected",
+          message: `₹${totalPayment.toLocaleString()} collected from ${store.name} (${String(displayId)})`,
+          type: "payment",
+          entityType: "transaction",
+          entityId: String(displayId),
+        });
+      }
+    });
+
+    toast.success("Payment recorded");
+    setSaving(false);
+    resetPayment();
+    qc.invalidateQueries({ queryKey: ["transactions"] });
+    qc.invalidateQueries({ queryKey: ["mobile-agent-tx-today"] });
+  };
 
   const resetPayment = () => {
     setStore(null);
@@ -1074,14 +958,14 @@ function RecordPayment({ preselectStore }: { preselectStore?: StoreOption | null
         <div className="px-4">
           <div className="rounded-xl bg-card border border-border border p-3.5 flex justify-between items-center">
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold">Outstanding Balance</p>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Outstanding Balance</p>
               <p className={cn("text-xl font-bold mt-0.5", oldOutstanding > 0 ? "text-red-500" : "text-emerald-500")}>
                 ₹{oldOutstanding.toLocaleString("en-IN")}
               </p>
             </div>
             {store.customers?.name && (
               <div className="text-right">
-                <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold">Customer</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Customer</p>
                 <p className="text-sm font-bold text-foreground mt-0.5">{store.customers.name}</p>
               </div>
             )}
@@ -1150,7 +1034,7 @@ function RecordPayment({ preselectStore }: { preselectStore?: StoreOption | null
                 className="mt-1 w-full h-10 rounded-xl border border-border border bg-card px-3 text-sm"
               >
                 <option value="self">Self</option>
-                {staffUsers.map((member) => (
+                {(staffUsers as any[])?.map((member: any) => (
                   <option key={member.user_id} value={member.user_id}>{member.full_name || "Staff"}</option>
                 ))}
               </select>
@@ -1188,7 +1072,14 @@ function RecordPayment({ preselectStore }: { preselectStore?: StoreOption | null
             </div>
           </div>
 
-          
+          {totalPayment > oldOutstanding && oldOutstanding > 0 && (
+            <div className="flex items-center gap-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/40 rounded-xl px-4 py-3">
+              <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
+              <span className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                Payment exceeds outstanding balance
+              </span>
+            </div>
+          )}
 
           <button
             className={cn(
@@ -1227,7 +1118,6 @@ interface AgentRecordProps {
   preselectTab?: "sale" | "payment";
   allowSale?: boolean;
   allowPayment?: boolean;
-  onSuccess?: () => void;
 }
 
 export function AgentRecord({
@@ -1235,7 +1125,6 @@ export function AgentRecord({
   preselectTab,
   allowSale = true,
   allowPayment = true,
-  onSuccess,
 }: AgentRecordProps) {
   const initialTab = !allowSale ? "payment" : (preselectTab ?? "sale");
   const [activeTab, setActiveTab] = useState<string>(initialTab);
@@ -1290,7 +1179,7 @@ export function AgentRecord({
       </div>
 
       <div className="mt-4">
-        {allowSale && activeTab === "sale" && <RecordSale preselectStore={preselectStore} onSuccess={onSuccess} />}
+        {allowSale && activeTab === "sale" && <RecordSale preselectStore={preselectStore} />}
         {allowPayment && activeTab === "payment" && <RecordPayment preselectStore={preselectStore} />}
       </div>
     </div>

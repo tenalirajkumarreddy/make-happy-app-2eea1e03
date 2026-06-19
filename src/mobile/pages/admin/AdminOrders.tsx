@@ -76,7 +76,7 @@ interface Profile {
 }
 
 export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void }) {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { currentWarehouse } = useWarehouse();
   const qc = useQueryClient();
   const { allowed: canFulfillOrders } = usePermission("fulfill_orders");
@@ -159,9 +159,9 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
           customers(name, display_id),
           order_items(id, product_id, quantity, products(name, sku, base_price)),
           updater_profile:profiles!orders_updated_by_fkey(full_name),
-          creator_profile:profiles!orders_created_by_fkey(full_name),
-          fulfiller_profile:profiles!orders_fulfilled_by_fkey(full_name),
-          canceller_profile:profiles!orders_cancelled_by_fkey(full_name)
+          creator_profile:profiles!orders_created_by_profiles_fkey_temp(full_name),
+          fulfiller_profile:profiles!orders_fulfilled_by_profiles_fkey(full_name),
+          canceller_profile:profiles!orders_cancelled_by_profiles_fkey(full_name)
         `, { count: "exact" })
         .order("created_at", { ascending: false })
         .range(from, to);
@@ -309,8 +309,8 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
     if (!order.store_id) { toast.error("Order has no store"); return; }
     const cash = Number(fulfillCash) || 0;
     const upi = Number(fulfillUpi) || 0;
-    const total = cash + upi;
-    if (total <= 0) { toast.error("Enter cash or UPI amount"); return; }
+    const totalPaid = cash + upi;
+    if (totalPaid <= 0) { toast.error("Enter cash or UPI amount"); return; }
 
     setIsActioning(true);
     try {
@@ -338,20 +338,47 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
         unit_price: item.unit_price || item.products?.base_price || 0,
       }));
 
-      // Calculate actual outstanding (not hardcoded 0)
       const orderTotal = saleItems.reduce((sum: number, item: any) => sum + item.quantity * item.unit_price, 0);
-      const outstanding = Math.max(0, orderTotal - cash - upi);
+      if (totalPaid > orderTotal) { toast.error("Payment exceeds order total. Reduce payment."); setIsActioning(false); return; }
+      const outstanding = orderTotal - totalPaid;
+
+      // Stock check
+      const saleItemPayload = saleItems.filter((i: any) => i.quantity > 0);
+      if (saleItemPayload.length > 0) {
+        const { data: stockCheck, error: stockErr } = await supabase.rpc("check_stock_availability", {
+          p_user_id: user!.id,
+          p_recorded_for: null,
+          p_items: saleItemPayload.map((i: any) => ({ product_id: i.product_id, quantity: i.quantity })),
+        } as any) as any;
+        if (stockErr) throw new Error("Stock check failed. Please try again.");
+        const insufficient = (Array.isArray(stockCheck) ? stockCheck : []).filter((s: any) => !s.out_available);
+        if (insufficient.length > 0) {
+          const details = insufficient.map((s: any) => `${s.out_product_name} (Avail: ${s.out_available_qty})`).join(", ");
+          toast.error(`Insufficient stock: ${details}`);
+          setIsActioning(false);
+          return;
+        }
+      }
+
+      // Get customer_id and store outstanding for p_expected_outstanding
+      const customerId = (order as any).customer_id || null;
+      let storeOutstanding = 0;
+      const { data: storeData } = await supabase.from("stores").select("outstanding, customer_id").eq("id", order.store_id).maybeSingle();
+      storeOutstanding = Number(storeData?.outstanding || 0);
+      const finalCustomerId = customerId || storeData?.customer_id;
+      if (!finalCustomerId) { toast.error("Cannot determine customer for this order"); setIsActioning(false); return; }
 
       const { error: saleError } = await (supabase as any).rpc("record_sale", {
         p_display_id: displayId,
         p_store_id: order.store_id,
-        p_customer_id: (order as any).customer_id || null,
+        p_customer_id: finalCustomerId,
         p_recorded_by: user!.id,
         p_logged_by: null,
         p_total_amount: orderTotal,
         p_cash_amount: cash,
         p_upi_amount: upi,
         p_outstanding_amount: outstanding,
+        p_expected_outstanding: storeOutstanding,
         p_sale_items: saleItems,
         p_created_at: null,
         p_fulfilled_order_id: order.id,
@@ -378,29 +405,17 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
     }
     setIsActioning(true);
     try {
-      const { error } = await supabase
-        .from("orders")
-        .update({
-          status: "cancelled",
-          cancellation_reason: cancelReason,
-          cancelled_by: user!.id,
-          cancelled_at: new Date().toISOString(),
-          updated_by: user!.id,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", order.id)
-        .in("status", ["pending", "confirmed"]);
+      const { data: result, error } = await (supabase as any).rpc("cancel_order", {
+        p_order_id: order.id,
+        p_reason: cancelReason,
+      });
       if (error) throw error;
-
-      try {
-        await supabase
-          .from("proforma_invoices")
-          .update({ status: "cancelled", deleted_at: new Date().toISOString() })
-          .eq("order_id", order.id);
-      } catch { /* best-effort */ }
+      if (!result?.success) throw new Error(result?.error || "Failed to cancel order");
 
       toast.success(`Order ${order.display_id} cancelled`);
       qc.invalidateQueries({ queryKey: ["mobile-orders"] });
+      qc.invalidateQueries({ queryKey: ["orders"] });
+      qc.invalidateQueries({ queryKey: ["proforma-invoices"] });
       setCancelConfirmOrder(null);
       setCancelReason("");
       setShowDetailModal(false);
@@ -462,7 +477,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
         p_order_type: createOrderType,
         p_requirement_note: createOrderType === "simple" ? createRequirementNote : null,
         p_total_amount: 0,
-        p_created_by: user!.id,
+        p_created_by: profile!.id,
         p_is_urgent: createUrgent,
       }) as any;
 

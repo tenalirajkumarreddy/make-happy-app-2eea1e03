@@ -79,11 +79,7 @@ interface Order {
     email?: string;
   };
   order_items?: OrderItem[];
-  assigned_to_user?: {
-    id: string;
-    full_name: string;
-    email: string;
-  };
+  assigned_to?: string;
   fulfilled_by_sale?: {
     id: string;
     display_id: string;
@@ -144,8 +140,7 @@ export function OrderViewDialog({
             unit_price,
             products(id, name, sku, base_price, image_url)
           ),
-          fulfilled_by_sale:fulfilled_by_sale_id(id, display_id, total_amount),
-          assigned_to_user:assigned_to(id, full_name, email)
+          fulfilled_by_sale:fulfilled_by_sale_id(id, display_id, total_amount)
         `)
         .eq("id", id)
         .single();
@@ -305,10 +300,10 @@ export function OrderViewDialog({
                     <p className="text-xs text-muted-foreground">Created At</p>
                     <p className="text-sm">{formatDate(order.created_at)}</p>
                   </div>
-                  {order.assigned_to_user && (
+                  {order.assigned_to && (
                     <div>
                       <p className="text-xs text-muted-foreground">Assigned To</p>
-                      <p className="text-sm">{order.assigned_to_user.full_name}</p>
+                      <p className="text-sm">{order.assigned_to.slice(0, 8)}…</p>
                     </div>
                   )}
                 </div>
@@ -357,15 +352,6 @@ export function OrderViewDialog({
                     <span className="text-muted-foreground">Amount:</span>{" "}
                     <span className="font-medium">₹{order.fulfilled_by_sale.total_amount.toLocaleString()}</span>
                   </p>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="mt-2 border-green-600 text-green-700 hover:bg-green-100"
-                    onClick={() => onViewSale?.(order.fulfilled_by_sale!.id)}
-                  >
-                    <ShoppingCart className="h-4 w-4 mr-1" />
-                    View Sale
-                  </Button>
                 </CardContent>
               </Card>
             )}
@@ -446,11 +432,9 @@ export function OrderViewDialog({
                   <div className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded-xl px-4 py-2.5">
                     <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                     <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300 flex-1">
-                      Order fulfilled — sale recorded
+                      Order fulfilled — Sale {order.fulfilled_by_sale?.display_id || order.fulfilled_by_sale_id.slice(0, 8)}
+                      {order.fulfilled_by_sale?.total_amount != null && ` • ₹${order.fulfilled_by_sale.total_amount.toLocaleString()}`}
                     </span>
-                    <Button size="sm" variant="outline" className="h-7 text-2xs" onClick={() => window.open(`/sales`, "_blank")}>
-                      View Sale
-                    </Button>
                   </div>
                 )}
                 {proforma.status === "cancelled" && (
@@ -549,7 +533,7 @@ export function OrderViewDialog({
         </Tabs>
 
         <DialogFooter className="flex justify-between items-center">
-          <div>
+          <div className="flex items-center gap-2">
             {order.status === "delivered" && !order.fulfilled_by_sale_id && (
               <Button
                 variant="outline"

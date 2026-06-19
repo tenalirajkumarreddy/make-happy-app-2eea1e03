@@ -182,7 +182,7 @@ export function SaleReturnDialog({
       }
 
       onOpenChange(false);
-      afterSaleReturned(qc, { saleId: sale.id });
+      afterSaleReturned(qc, { saleId: sale.id, storeId: sale.store_id });
       onSuccess?.();
     },
     onError: (error: any) => {

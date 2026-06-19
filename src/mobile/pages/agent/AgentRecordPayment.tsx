@@ -143,7 +143,7 @@ export function RecordPayment({ preselectStore }: { preselectStore?: StoreOption
 
       toast.success("Payment recorded");
       resetPayment();
-      afterTransactionSaved(qc, { isMobile: true });
+      afterTransactionSaved(qc, { isMobile: true, storeId: store?.id });
     },
     onError: (err) => {
       toast.error(err.message || "Failed to record payment. Please try again.");
@@ -302,31 +302,26 @@ export function RecordPayment({ preselectStore }: { preselectStore?: StoreOption
 
       {store && totalPayment > 0 && (
         <div className="px-4 space-y-3">
-          <div className="rounded-2xl bg-emerald-50/50 dark:bg-emerald-900/10 border-2 border-emerald-200 dark:border-emerald-700/40 p-4 space-y-2">
+            <div className="rounded-2xl bg-emerald-50/50 dark:bg-emerald-900/10 border-2 border-emerald-200 dark:border-emerald-700/40 p-4 space-y-2">
             <div className="flex justify-between text-xs text-muted-foreground dark:text-muted-foreground">
               <span>Collecting</span>
               <span className="font-bold text-emerald-600 dark:text-emerald-400">₹{totalPayment.toLocaleString("en-IN")}</span>
             </div>
             <div className="flex justify-between text-xs text-muted-foreground dark:text-muted-foreground">
               <span>Current balance</span>
-              <span className="font-semibold">₹{oldOutstanding.toLocaleString("en-IN")}</span>
+              <span className={cn("font-semibold", oldOutstanding > 0 ? "text-red-500" : oldOutstanding < 0 ? "text-emerald-500" : "text-muted-foreground")}>
+                {oldOutstanding > 0 ? `-₹${oldOutstanding.toLocaleString("en-IN")}` : oldOutstanding < 0 ? `+₹${Math.abs(oldOutstanding).toLocaleString("en-IN")}` : "₹0"}
+              </span>
             </div>
             <div className="flex justify-between text-sm font-bold border-t border-emerald-200 dark:border-emerald-700/40 pt-2">
               <span className="text-slate-700 dark:text-slate-200">New balance</span>
-              <span className={cn("text-base", newOutstanding > 0 ? "text-red-500" : "text-emerald-500")}>
-                ₹{newOutstanding.toLocaleString("en-IN")}
+              <span className={cn("text-base", newOutstanding > 0 ? "text-red-500" : newOutstanding < 0 ? "text-emerald-500" : "text-muted-foreground")}>
+                {newOutstanding > 0 ? `-₹${newOutstanding.toLocaleString("en-IN")}` : newOutstanding < 0 ? `+₹${Math.abs(newOutstanding).toLocaleString("en-IN")}` : "₹0"}
               </span>
             </div>
           </div>
 
-          {totalPayment > oldOutstanding && oldOutstanding > 0 && (
-            <div className="flex items-center gap-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/40 rounded-2xl px-4 py-3">
-              <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
-              <span className="text-xs font-medium text-amber-700 dark:text-amber-400">
-                Payment exceeds outstanding balance
-              </span>
-            </div>
-          )}
+          
 
           <button
             className={cn(

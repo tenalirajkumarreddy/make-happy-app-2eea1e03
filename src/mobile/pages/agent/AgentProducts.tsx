@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +11,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 export function AgentProducts() {
+  const { user } = useAuth();
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
@@ -29,19 +31,22 @@ export function AgentProducts() {
       
       if (error) throw error;
 
-      // Fetch stock levels
-      const { data: stockData } = await supabase
-        .from("product_stock")
-        .select("product_id, quantity");
-
-      // Map stock to products (sum quantity across warehouses if multiple)
+      // Fetch stock via RPC (warehouse-scoped, role-aware)
+      const productIds = (productsData || []).map((p: any) => p.id);
       const stockMap: Record<string, number> = {};
-      stockData?.forEach((item) => {
-        stockMap[item.product_id] = (stockMap[item.product_id] || 0) + Number(item.quantity);
-      });
+      if (productIds.length > 0 && user?.id) {
+        const { data: stockData } = await supabase.rpc("check_stock_availability", {
+          p_user_id: user.id,
+          p_recorded_for: null,
+          p_items: productIds.map((id: string) => ({ product_id: id, quantity: 0 })),
+        } as any) as any;
+        (stockData as any[])?.forEach((s: any) => {
+          stockMap[s.out_product_id] = Number(s.out_available_qty);
+        });
+      }
 
       // Merge
-      return productsData.map(p => ({
+      return (productsData || []).map((p: any) => ({
         ...p,
         stock_quantity: stockMap[p.id] || 0
       }));

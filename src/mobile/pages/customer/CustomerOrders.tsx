@@ -184,7 +184,7 @@ export function CustomerOrders({ selectedStoreId, onStoreChange }: Props) {
           customer_id: customer!.id,
           order_type: createOrderType,
           source: "manual",
-          created_by: user!.id,
+          created_by: profile!.id,
           status: "confirmed",
           requirement_note: createOrderType === "simple" ? createNote.trim() || null : null,
           warehouse_id: store?.warehouse_id || null,

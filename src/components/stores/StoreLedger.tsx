@@ -56,7 +56,7 @@ export function StoreLedger({ sales, transactions, paymentReturns = [], balanceA
         total_amount: Number(s.total_amount),
         cash_amount: Number(s.cash_amount),
         upi_amount: Number(s.upi_amount),
-        outstanding: Number(s.new_outstanding),
+        outstanding: Number(s.new_outstanding), // fallback, will be recomputed
         notes: s.notes,
         recorded_by: s.recorded_by,
         raw: s,
@@ -102,11 +102,29 @@ export function StoreLedger({ sales, transactions, paymentReturns = [], balanceA
       });
     }
 
-    // Sort newest first
-    entries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    // Sort OLDEST first for running balance calculation
+    entries.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-    // Add opening balance as the very last (oldest) entry
-    entries.push({
+    // Compute running balance from opening balance forward (like a bank statement)
+    let runningBalance = openingBalance;
+    for (const entry of entries) {
+      if (entry.type === "sale") {
+        // Sale adds outstanding (debit to customer, credit to us = outstanding increases)
+        runningBalance += entry.total_amount - entry.cash_amount - entry.upi_amount;
+      } else if (entry.type === "payment") {
+        // Payment reduces outstanding (credit from customer)
+        if (!entry.raw?.is_fully_returned) {
+          runningBalance -= entry.total_amount;
+        }
+      } else if (entry.type === "correction" && entry.id !== "__opening_balance__") {
+        // Balance adjustment directly sets the balance
+        runningBalance = entry.outstanding;
+      }
+      entry.outstanding = runningBalance;
+    }
+
+    // Add opening balance as the very first (oldest) entry
+    entries.unshift({
       id: "__opening_balance__",
       type: "correction" as const,
       date: storeCreatedAt,
@@ -120,6 +138,9 @@ export function StoreLedger({ sales, transactions, paymentReturns = [], balanceA
       recorded_by: "",
       raw: null,
     });
+
+    // Now sort newest first for display
+    entries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     return entries;
   }, [sales, transactions, paymentReturns, balanceAdjustments, openingBalance]);

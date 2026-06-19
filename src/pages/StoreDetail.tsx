@@ -726,8 +726,8 @@ const handleDeleteQr = async (qrId: string) => {
         <StatCard title="Collections" value={`₹${totalCollected.toLocaleString()}`} icon={Banknote} iconColor="success" />
         <StatCard 
         title="Outstanding" 
-        value={`₹${Number(store.outstanding).toLocaleString()}`} 
-        icon={Banknote} 
+        value={`${Number(store.outstanding) < 0 ? '-' : ''}₹${Math.abs(Number(store.outstanding)).toLocaleString()}`}
+        icon={Banknote}
         iconColor={Number(store.outstanding) > 0 ? "destructive" : Number(store.outstanding) < 0 ? "success" : "warning"}
         className={Number(store.outstanding) > 0 ? "border-l-4 border-l-destructive" : Number(store.outstanding) < 0 ? "border-l-4 border-l-success" : ""}
       />

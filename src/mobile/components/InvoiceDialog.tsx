@@ -49,7 +49,7 @@ export function InvoiceDialog({ open, onOpenChange, sale }: Props) {
   const [success, setSuccess] = useState(false)
   const [invoiceId, setInvoiceId] = useState("")
   const qc = useQueryClient()
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
 
   // Reset state when dialog opens with a new sale
   useEffect(() => {
@@ -109,7 +109,7 @@ export function InvoiceDialog({ open, onOpenChange, sale }: Props) {
           total_amount: totalAmount,
           notes: notes.trim() || null,
           status: "active",
-          created_by: user.id,
+          created_by: profile!.id,
           store_id: sale.store_id || null,
         })
         .select("id")

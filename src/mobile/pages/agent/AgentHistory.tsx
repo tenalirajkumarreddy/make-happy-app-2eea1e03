@@ -433,7 +433,7 @@ export function AgentHistory() {
         if (item.product_id !== productId) return item;
         const newQty = Math.max(0, item.quantity + delta);
         return { ...item, quantity: newQty, total_price: newQty * item.unit_price };
-      }).filter((item) => item.quantity > 0)
+      })
     );
   };
 
@@ -872,7 +872,8 @@ export function AgentHistory() {
     setSubmittingEdit(true);
     try {
       const editedTotalAmount = editingItemsState.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
-      const editedOutstanding = Math.max(editedTotalAmount - (Number(editCash) || 0) - (Number(editUpi) || 0), 0);
+      const editedOutstanding = editedTotalAmount - (Number(editCash) || 0) - (Number(editUpi) || 0);
+      if (editedOutstanding < 0) { toast.error("Payment exceeds sale total. Reduce payment amount."); setSubmittingEdit(false); return; }
 
       const { data: saleData } = await supabase
         .from("sales")
@@ -909,7 +910,7 @@ export function AgentHistory() {
       setEditCash("");
       setEditUpi("");
       setEditingItemsState([]);
-      afterSaleEdited(qc, { isMobile: true });
+      afterSaleEdited(qc, { isMobile: true, storeId: editingSale.store_id });
     } catch (err: any) {
       toast.error(err.message || "Failed to edit sale");
     } finally {
@@ -1040,8 +1041,9 @@ export function AgentHistory() {
         });
       }
 
+      const returnStoreId = returningSale?.store_id;
       setReturningSale(null);
-      afterSaleReturned(qc, { isMobile: true, saleId: returningSale?.id });
+      afterSaleReturned(qc, { isMobile: true, saleId: returningSale?.id, storeId: returnStoreId });
     } catch (err: any) {
       toast.error(err.message || "Failed to process return");
     } finally {
@@ -1868,7 +1870,7 @@ export function AgentHistory() {
                           type="number"
                           inputMode="numeric"
                           pattern="[0-9]*"
-                          min="1"
+                          min="0"
                           value={item.quantity}
                           onChange={(e) => setEditingItemQtyDirect(item.product_id, e.target.value)}
                           className="h-9 w-12 text-sm text-center font-bold rounded-xl border border-slate-200 dark:border-slate-700"

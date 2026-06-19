@@ -107,8 +107,8 @@ export function DataTable<T extends Record<string, any>>({
       )}
 
       {/* Desktop table view */}
-      <div className="rounded-xl border bg-card overflow-x-auto -mx-3 sm:mx-0 hidden md:block">
-        <Table>
+      <div className="rounded-xl border bg-card hidden md:block overflow-hidden">
+        <Table className="table-fixed overflow-hidden">
           <TableHeader>
             <TableRow className="bg-muted/30 hover:bg-muted/30 border-b border-border/50">
               {columns.map((col, i) => (

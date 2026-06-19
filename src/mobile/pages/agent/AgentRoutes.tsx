@@ -108,6 +108,7 @@ interface OrderItemRow {
   id: string;
   product_id: string;
   quantity: number;
+  unit_price: number;
   products?: { name: string; sku: string; base_price: number };
 }
 
@@ -115,12 +116,13 @@ interface OrderRow {
   id: string;
   display_id: string;
   store_id: string;
+  customer_id: string;
   status: string;
   order_type: "simple" | "detailed";
   requirement_note: string | null;
   total_amount: number;
   created_at: string;
-  stores: { id: string; name: string; display_id: string; address: string | null; phone: string | null; lat: number | null; lng: number | null; route_id: string | null; store_type_id: string | null; routes: { name: string } | null; store_types: { name: string } | null } | null;
+  stores: { id: string; name: string; display_id: string; address: string | null; phone: string | null; lat: number | null; lng: number | null; route_id: string | null; store_type_id: string | null; customer_id: string | null; outstanding: number; routes: { name: string } | null; store_types: { name: string } | null } | null;
   customers?: { name: string; display_id: string } | null;
   order_items?: OrderItemRow[];
   creator_profile?: { full_name: string } | null;
@@ -144,7 +146,7 @@ const toStoreOption = (s: RouteStore): StoreOption => ({
 });
 
 export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) {
-  const { user, role } = useAuth();
+  const { user, role, profile } = useAuth();
   const qc = useQueryClient();
   const { allowed: canFulfillOrders } = usePermission("fulfill_orders");
   const { allowed: canModifyOrders } = usePermission("modify_orders");
@@ -247,7 +249,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
     queryFn: async () => {
       let query = supabase
         .from("orders")
-        .select("*, stores(id, name, display_id, address, phone, lat, lng, route_id, store_type_id, routes(name), store_types(name)), customers(name, display_id), order_items(id, product_id, quantity, products(name, sku, base_price)), creator_profile:profiles!orders_created_by_profiles_fkey(full_name), updater_profile:profiles!orders_updated_by_fkey(full_name), fulfiller_profile:profiles!orders_fulfilled_by_profiles_fkey(full_name), canceller_profile:profiles!orders_cancelled_by_profiles_fkey(full_name)")
+        .select("*, stores(id, name, display_id, address, phone, lat, lng, route_id, store_type_id, customer_id, outstanding, routes(name), store_types(name)), customers(name, display_id), order_items(id, product_id, quantity, unit_price, products(name, sku, base_price)), creator_profile:profiles!orders_created_by_profiles_fkey_temp(full_name), updater_profile:profiles!orders_updated_by_fkey(full_name), fulfiller_profile:profiles!orders_fulfilled_by_profiles_fkey(full_name), canceller_profile:profiles!orders_cancelled_by_profiles_fkey(full_name)")
         .order("created_at", { ascending: false })
         .limit(50);
       if (allStoreIds.length > 0) {
@@ -427,33 +429,19 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
     }
     setCancelling(true);
     try {
-      const { error } = await supabase
-        .from("orders")
-        .update({
-          status: "cancelled",
-          cancellation_reason: cancelReason,
-          cancelled_by: user!.id,
-          cancelled_at: new Date().toISOString(),
-          updated_by: user!.id,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", cancelOrderId)
-        .in("status", ["pending", "confirmed"]);
+      const { data: result, error } = await (supabase as any).rpc("cancel_order", {
+        p_order_id: cancelOrderId,
+        p_reason: cancelReason,
+      });
       if (error) throw error;
-
-      try {
-        await supabase
-          .from("proforma_invoices")
-          .update({ status: "cancelled", deleted_at: new Date().toISOString() })
-          .eq("order_id", cancelOrderId);
-      } catch {
-        // proforma cleanup is best-effort
-      }
+      if (!result?.success) throw new Error(result?.error || "Failed to cancel order");
 
       toast.success("Order cancelled");
       setCancelOrderId(null);
       setCancelReason("");
       qc.invalidateQueries({ queryKey: ["mobile-agent-all-orders"] });
+      qc.invalidateQueries({ queryKey: ["orders"] });
+      qc.invalidateQueries({ queryKey: ["proforma-invoices"] });
     } catch (err: any) {
       toast.error(err.message || "Failed to cancel order");
     } finally {
@@ -466,28 +454,54 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
     if (!fulfillOrder) return;
     const cash = Number(fulfillCash) || 0;
     const upi = Number(fulfillUpi) || 0;
-    const total = cash + upi;
-    if (total <= 0) { toast.error("Enter cash or UPI amount"); return; }
+    const totalPaid = cash + upi;
+    const saleItems = (fulfillOrder.order_items || []).map((item: any) => ({
+      product_id: item.product_id,
+      quantity: item.quantity,
+      unit_price: item.unit_price || item.products?.base_price || 0,
+      total_price: item.quantity * (item.unit_price || item.products?.base_price || 0),
+    }));
+    const subtotal = saleItems.reduce((s: number, i: any) => s + i.total_price, 0);
+    if (subtotal <= 0) { toast.error("Order has no items with valid prices"); return; }
+    if (totalPaid <= 0) { toast.error("Enter cash or UPI amount"); return; }
+    if (totalPaid > subtotal) { toast.error("Payment exceeds order total. Reduce payment."); return; }
+    const outstandingFromSale = subtotal - totalPaid;
+    const customerId = fulfillOrder.customer_id || fulfillOrder.stores?.customer_id;
+    if (!customerId) { toast.error("Cannot determine customer for this order"); return; }
+    const oldOutstanding = Number(fulfillOrder.stores?.outstanding || 0);
     setIsFulfilling(true);
     try {
+      // Stock check via RPC
+      const saleItemPayload = saleItems.filter((i: any) => i.quantity > 0);
+      if (saleItemPayload.length > 0) {
+        const { data: stockCheck, error: stockErr } = await supabase.rpc("check_stock_availability", {
+          p_user_id: user!.id,
+          p_recorded_for: null,
+          p_items: saleItemPayload.map((i: any) => ({ product_id: i.product_id, quantity: i.quantity })),
+        } as any) as any;
+        if (stockErr) throw new Error("Stock check failed. Please try again.");
+        const insufficient = (Array.isArray(stockCheck) ? stockCheck : []).filter((s: any) => !s.out_available);
+        if (insufficient.length > 0) {
+          const details = insufficient.map((s: any) => `${s.out_product_name} (Avail: ${s.out_available_qty})`).join(", ");
+          toast.error(`Insufficient stock: ${details}`);
+          setIsFulfilling(false);
+          return;
+        }
+      }
+
       const { data: displayId } = await (supabase as any).rpc("generate_display_id", { prefix: "SALE", seq_name: "sale_display_seq" });
       if (!displayId) throw new Error("Failed to generate sale ID");
-      const saleItems = (fulfillOrder.order_items || []).map((item: any) => ({
-        product_id: item.product_id,
-        quantity: item.quantity,
-        unit_price: item.products?.base_price || 0,
-        total_price: item.quantity * (item.products?.base_price || 0),
-      }));
       const { error: saleError } = await (supabase as any).rpc("record_sale", {
         p_display_id: displayId,
         p_store_id: fulfillOrder.store_id,
-        p_customer_id: (fulfillOrder as any).customer_id || fulfillOrder.store_id,
+        p_customer_id: customerId,
         p_recorded_by: user!.id,
         p_logged_by: null,
-        p_total_amount: total,
+        p_total_amount: subtotal,
         p_cash_amount: cash,
         p_upi_amount: upi,
-        p_outstanding_amount: 0,
+        p_outstanding_amount: Math.max(outstandingFromSale, 0),
+        p_expected_outstanding: oldOutstanding,
         p_sale_items: saleItems,
         p_created_at: null,
         p_fulfilled_order_id: fulfillOrder.id,
@@ -625,7 +639,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
             customer_id: storeData?.customer_id || null,
             order_type: createOrderType,
             source: "manual",
-            created_by: user!.id,
+            created_by: profile!.id,
             status: "confirmed",
             requirement_note: createOrderType === "simple" ? createRequirementNote : null,
           })

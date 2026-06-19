@@ -77,6 +77,8 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
     "inventory-timeline-sale-returns", "daybook-sale-returns",
     "mobile-history-sales-timeline",
     ...PL,
+    "store-sales", "store-transactions", "store-orders", "store-visits",
+    "balance-adjustments", "store-payment-returns",
   ],
   sale_return_items: ["sale-returns", "return-details", "pl-returns"],
   transactions: [
@@ -84,9 +86,13 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
     ...DASHBOARD, ...MOBILE_TX, ...ANALYTICS,
     "daybook-transactions", "statement-transactions", "user-transaction-totals",
     "my-ledger-txns", ...PAYMENT_FLOW,
+    "store-sales", "store-transactions", "store-orders", "store-visits",
+    "balance-adjustments", "store-payment-returns",
   ],
   payment_returns: [
     "transactions", ...DASHBOARD, ...MOBILE_TX, ...ANALYTICS,
+    "store-sales", "store-transactions", "store-orders", "store-visits",
+    "balance-adjustments", "store-payment-returns",
   ],
   orders: [
     "orders", "my-orders", "my-orders-count", "store-orders",
@@ -94,6 +100,8 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
     "order-report", "pending-orders-for-store", "mobile-pending-orders-for-store",
     "pending-order-stores", "pending-orders-map", "routes-for-orders",
     "daybook-sales", "mobile-admin-ops",
+    "store-sales", "store-transactions", "store-orders", "store-visits",
+    "balance-adjustments", "store-payment-returns",
   ],
   order_items: ["orders", "order-items", "mobile-marketer-orders"],
   stores: [
@@ -107,6 +115,8 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
     "stores-with-location", "store-qr-codes", "route-stores",
     "routes-with-stores", "statement-customer-stores",
     "mobile-marketer-order-stores",
+    "store-sales", "store-transactions", "store-orders", "store-visits",
+    "balance-adjustments", "store-payment-returns",
   ],
   store_pricing: [
     "store-pricing", "store-pricing-tab", "stores",
@@ -195,7 +205,11 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
     "agent-store-types-matrix", "mobile-marketer-store-types",
     "mobile-store-types-credit",
   ],
-  balance_adjustments: ["balance-adjustments", "stores", "customer-balances"],
+  balance_adjustments: [
+    "balance-adjustments", "stores", "customer-balances",
+    "store-sales", "store-transactions", "store-orders", "store-visits",
+    "store-payment-returns",
+  ],
   activity_logs: ["activity-logs", "mobile-recent-activity"],
   user_roles: [
     "user-roles", "all-staff-roles", "all-users",
