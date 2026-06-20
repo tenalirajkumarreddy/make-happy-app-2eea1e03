@@ -66,6 +66,7 @@ interface Order {
   cancelled_at: string | null;
   cancelled_by: string | null;
   cancellation_reason: string | null;
+  canceller_profile?: { full_name: string } | null;
   stores?: {
     id: string;
     name: string;
@@ -80,11 +81,16 @@ interface Order {
   };
   order_items?: OrderItem[];
   assigned_to?: string;
+  assigned_to_profile?: { full_name: string } | null;
   fulfilled_by_sale?: {
     id: string;
     display_id: string;
     total_amount: number;
   };
+  creator_profile?: { full_name: string; avatar_url?: string } | null;
+  updater_profile?: { full_name: string } | null;
+  fulfiller_profile?: { full_name: string } | null;
+  canceller_profile?: { full_name: string } | null;
 }
 
 interface OrderViewDialogProps {
@@ -140,7 +146,12 @@ export function OrderViewDialog({
             unit_price,
             products(id, name, sku, base_price, image_url)
           ),
-          fulfilled_by_sale:fulfilled_by_sale_id(id, display_id, total_amount)
+          fulfilled_by_sale:fulfilled_by_sale_id(id, display_id, total_amount),
+          assigned_to_profile:profiles!orders_assigned_to_profiles_fkey(full_name),
+          creator_profile:profiles!orders_created_by_profiles_fkey_temp(full_name, avatar_url),
+          updater_profile:profiles!orders_updated_by_fkey(full_name),
+          fulfiller_profile:profiles!orders_fulfilled_by_profiles_fkey(full_name),
+          canceller_profile:profiles!orders_cancelled_by_profiles_fkey(full_name)
         `)
         .eq("id", id)
         .single();
@@ -303,7 +314,7 @@ export function OrderViewDialog({
                   {order.assigned_to && (
                     <div>
                       <p className="text-xs text-muted-foreground">Assigned To</p>
-                      <p className="text-sm">{order.assigned_to.slice(0, 8)}…</p>
+                      <p className="text-sm">{order.assigned_to_profile?.full_name || order.assigned_to.slice(0, 8) + "…"}</p>
                     </div>
                   )}
                 </div>
@@ -478,8 +489,36 @@ export function OrderViewDialog({
                       <Calendar className="h-3 w-3 inline mr-1" />
                       {formatDate(order.created_at)}
                     </p>
+                    {order.creator_profile?.full_name && (
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        <User className="h-3 w-3 inline mr-1" />
+                        by {order.creator_profile.full_name}
+                      </p>
+                    )}
                   </div>
                 </div>
+
+                {order.updated_at !== order.created_at && (
+                  <div className="flex gap-3">
+                    <div className="flex flex-col items-center">
+                      <div className="h-2 w-2 rounded-full bg-amber-500" />
+                      <div className="w-px h-full bg-border" />
+                    </div>
+                    <div className="flex-1 pb-4">
+                      <p className="font-medium">Order Updated</p>
+                      <p className="text-sm text-muted-foreground">
+                        <Calendar className="h-3 w-3 inline mr-1" />
+                        {formatDate(order.updated_at)}
+                      </p>
+                      {order.updater_profile?.full_name && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          <User className="h-3 w-3 inline mr-1" />
+                          by {order.updater_profile.full_name}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {order.confirmed_at && (
                   <div className="flex gap-3">
@@ -493,6 +532,12 @@ export function OrderViewDialog({
                         <Calendar className="h-3 w-3 inline mr-1" />
                         {formatDate(order.confirmed_at)}
                       </p>
+                      {order.updater_profile?.full_name && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          <User className="h-3 w-3 inline mr-1" />
+                          by {order.updater_profile.full_name}
+                        </p>
+                      )}
                     </div>
                   </div>
                 )}
@@ -509,6 +554,12 @@ export function OrderViewDialog({
                         <Calendar className="h-3 w-3 inline mr-1" />
                         {formatDate(order.delivered_at)}
                       </p>
+                      {order.fulfiller_profile?.full_name && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          <User className="h-3 w-3 inline mr-1" />
+                          by {order.fulfiller_profile.full_name}
+                        </p>
+                      )}
                     </div>
                   </div>
                 )}
@@ -524,6 +575,12 @@ export function OrderViewDialog({
                         <Calendar className="h-3 w-3 inline mr-1" />
                         {formatDate(order.cancelled_at)}
                       </p>
+                      {order.canceller_profile?.full_name && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          <User className="h-3 w-3 inline mr-1" />
+                          by {order.canceller_profile.full_name}
+                        </p>
+                      )}
                     </div>
                   </div>
                 )}

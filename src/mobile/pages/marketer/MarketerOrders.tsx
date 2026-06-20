@@ -311,6 +311,27 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
       toast.success("Order created");
       setShowCreate(false);
       resetForm();
+
+      // Optimistic update: prepend the new order so it appears immediately
+      const storeName = (createStores || []).find((s: any) => s.id === createStoreId)?.name || "";
+      const newOrder = {
+        id: orderRow.order_id,
+        display_id: orderRow.display_id || "ORD-???",
+        store_id: createStoreId,
+        status: "pending",
+        order_type: createOrderType,
+        requirement_note: createOrderType === "simple" ? createRequirementNote : null,
+        created_at: new Date().toISOString(),
+        stores: { name: storeName, store_type_id: null, store_types: null, routes: null } as any,
+        customers: null as any,
+        creator_profile: { full_name: profile?.full_name || "You" } as any,
+      };
+      const allOrderKeys = qc.getQueriesData({ queryKey: ["mobile-marketer-orders"], exact: false });
+      for (const [queryKey, oldData] of allOrderKeys) {
+        if (!oldData || !Array.isArray(oldData)) continue;
+        qc.setQueryData(queryKey, [newOrder, ...oldData]);
+      }
+
       qc.invalidateQueries({ queryKey: ["mobile-marketer-orders"] });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to create order";
@@ -337,6 +358,19 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
       toast.success("Order cancelled");
       setCancelOrderId(null);
       setCancelReason("");
+
+      // Optimistic update: mark the order as cancelled immediately in the UI
+      const allOrderKeys = qc.getQueriesData({ queryKey: ["mobile-marketer-orders"], exact: false });
+      for (const [queryKey, oldData] of allOrderKeys) {
+        if (!oldData || !Array.isArray(oldData)) continue;
+        const newData = (oldData as any[]).map((o: any) =>
+          o.id === cancelOrderId
+            ? { ...o, status: "cancelled", cancellation_reason: cancelReason }
+            : o
+        );
+        qc.setQueryData(queryKey, newData);
+      }
+
       qc.invalidateQueries({ queryKey: ["mobile-marketer-orders"] });
       qc.invalidateQueries({ queryKey: ["orders"] });
       qc.invalidateQueries({ queryKey: ["proforma-invoices"] });

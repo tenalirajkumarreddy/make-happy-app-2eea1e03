@@ -230,7 +230,7 @@ const Orders = () => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [orderSearch, setOrderSearch] = useState("");
   const [cancelOrderId, setCancelOrderId] = useState<string | null>(null);
-  const [cancelReason, setCancelReason] = useState("");
+  const [cancelReason, setCancelReason] = useState(CANCEL_REASONS[0].value);
   const [cancelling, setCancelling] = useState(false);
   const [fulfillOrder, setFulfillOrder] = useState<FulfillOrder | null>(null);
   const [editOrder, setEditOrder] = useState<FulfillOrder | null>(null);
@@ -277,12 +277,12 @@ const Orders = () => {
     staleTime: 60_000,
   });
 
-  const { data: orders, isLoading, isFetching } = useQuery({
+  const { data: orders, isLoading, isFetching, refetch: refetchOrders } = useQuery({
     queryKey: ["orders", currentWarehouse?.id, statusFilter, filterFrom, filterTo, filterCustomer, filterStore, filterStoreType, filterRoute, filterAssignedTo, loadedPages, user?.id, role, orderAccess],
     queryFn: async () => {
       let query = supabase
         .from("orders")
-        .select("*, stores(id, name, display_id, route_id, store_type_id, address, outstanding), customers(id, name, display_id, phone, email), assigned_to, fulfilled_by_sale_id, creator_profile:profiles!orders_created_by_profiles_fkey_temp(full_name, avatar_url), updater_profile:profiles!orders_updated_by_fkey(full_name), fulfiller_profile:profiles!orders_fulfilled_by_profiles_fkey(full_name)")
+        .select("*, stores(id, name, display_id, route_id, store_type_id, address, outstanding), customers(id, name, display_id, phone, email), assigned_to, fulfilled_by_sale_id, creator_profile:profiles!orders_created_by_profiles_fkey_temp(full_name, avatar_url), updater_profile:profiles!orders_updated_by_fkey(full_name), fulfiller_profile:profiles!orders_fulfilled_by_profiles_fkey(full_name), assigned_to_profile:profiles!orders_assigned_to_profiles_fkey(full_name)")
         .order("created_at", { ascending: false });
 
       if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
@@ -296,10 +296,10 @@ const Orders = () => {
           .maybeSingle();
         const routeIds = ((userAccess as any)?.route_ids || []) as string[];
         const orParts = [`assigned_to.eq.${user!.id}`, `created_by.eq.${user!.id}`];
-        if (routeIds.length > 0) {
-          orParts.push(`stores.route_id.in.(${routeIds.join(",")})`);
-        }
         query = query.or(orParts.join(","));
+        if (routeIds.length > 0) {
+          query = query.in("stores.route_id", routeIds);
+        }
       }
 
       // Server-side filters
@@ -553,7 +553,7 @@ const Orders = () => {
         createdAt: new Date().toISOString(),
         businessKey: bizKey,
       });
-      qc.invalidateQueries({ queryKey: ["orders"] });
+      qc.invalidateQueries({ queryKey: ["orders"], refetchType: "all" });
       setShowAdd(false);
       toast.warning("Offline — order queued and will sync automatically");
       setSaving(false);
@@ -660,45 +660,88 @@ const Orders = () => {
     })();
 
   logActivity(user!.id, "Created order", "order", displayId, order.id);
-  toast.success("Order created");
+    toast.success("Order created");
 
-  // Notify admins/managers
-  const storeName = stores?.find((s) => s.id === storeId)?.name || "store";
-  getAdminUserIds()
-    .then((ids) => {
-      const others = ids.filter((id) => id !== user!.id);
-      if (others.length > 0) {
-        sendNotificationToMany(others, {
-          title: "New Order Created",
-          message: `Order ${displayId} (${orderType}) placed for ${storeName}`,
-          type: "order",
-          entityType: "order",
-          entityId: order.id,
-        });
-      }
-    })
-    .catch((error) => {
-      console.error("Failed to notify admins about new order:", error);
-    });
+    // Notify admins/managers
+    const storeName = stores?.find((s) => s.id === storeId)?.name || "store";
+    getAdminUserIds()
+      .then((ids) => {
+        const others = ids.filter((id) => id !== user!.id);
+        if (others.length > 0) {
+          sendNotificationToMany(others, {
+            title: "New Order Created",
+            message: `Order ${displayId} (${orderType}) placed for ${storeName}`,
+            type: "order",
+            entityType: "order",
+            entityId: order.id,
+          });
+        }
+      })
+      .catch((error) => {
+        console.error("Failed to notify admins about new order:", error);
+      });
 
-  // Notify assigned agent if order is assigned
-  if (assignedTo && assignedTo !== "unassigned" && assignedTo !== user!.id) {
-    sendNotificationToMany([assignedTo], {
-      title: "Order Assigned to You",
-      message: `Order ${displayId} (${orderType}) for ${storeName} has been assigned to you`,
-      type: "order",
-      entityType: "order",
-      entityId: order.id,
-    }).catch((error) => {
-      console.error("Failed to notify assigned agent:", error);
-    });
-  }
+    // Notify assigned agent if order is assigned
+    if (assignedTo && assignedTo !== "unassigned" && assignedTo !== user!.id) {
+      sendNotificationToMany([assignedTo], {
+        title: "Order Assigned to You",
+        message: `Order ${displayId} (${orderType}) for ${storeName} has been assigned to you`,
+        type: "order",
+        entityType: "order",
+        entityId: order.id,
+      }).catch((error) => {
+        console.error("Failed to notify assigned agent:", error);
+      });
+    }
 
     setSaving(false);
     setShowAdd(false);
     resetForm();
-    // Invalidate all orders queries to refresh the list
-    qc.invalidateQueries({ queryKey: ["orders"], exact: false });
+
+    // Optimistically add the new order to all cached "orders" queries so it appears immediately
+    const storeRecord = (stores as any[])?.find((s: any) => s.id === storeId);
+    const newOrder = {
+      id: order.id,
+      display_id: displayId,
+      store_id: storeId,
+      customer_id: customerId || null,
+      order_type: orderType,
+      source: "manual",
+      status: "pending",
+      requirement_note: requirementNote || null,
+      assigned_to: (assignedTo && assignedTo !== "unassigned") ? assignedTo : null,
+      created_by: user!.id,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      stores: storeRecord
+        ? {
+            id: storeRecord.id,
+            name: storeRecord.name,
+            display_id: storeRecord.display_id || "",
+            store_type_id: storeRecord.store_type_id || null,
+            customer_id: storeRecord.customer_id || null,
+            route_id: storeRecord.route_id || null,
+          }
+        : undefined,
+      customers:
+        customerId && (customers as any[])?.find((c: any) => c.id === customerId)
+          ? { ...((customers as any[])?.find((c: any) => c.id === customerId) as any) }
+          : undefined,
+    };
+
+    const allOrderKeys = qc.getQueriesData({ queryKey: ["orders"], exact: false });
+    for (const [queryKey, oldData] of allOrderKeys) {
+      if (!oldData || !Array.isArray(oldData)) continue;
+      // Prepend new order to the existing list, and enforce max PAGE_SIZE per query
+      const currentData = oldData as any[];
+      const newData = [newOrder, ...currentData].slice(0, PAGE_SIZE * loadedPages);
+      qc.setQueryData(queryKey, newData);
+    }
+
+    // We do NOT call invalidateQueries here — the optimistic setQueryData above
+    // already updated the UI. Triggering a refetch can race with read-replica
+    // lag and overwrite the optimistic update with stale data. The realtime
+    // subscription (useRealtimeSync) will eventually refetch when the DB event fires.
   };
 
   // Handle order edit
@@ -753,7 +796,7 @@ if (orderType === "detailed" && canModifyPrices) {
     setSaving(false);
     setShowEdit(false);
     setEditOrder(null);
-    qc.invalidateQueries({ queryKey: ["orders"] });
+    qc.invalidateQueries({ queryKey: ["orders"], refetchType: "all" });
   };
 
 // Open edit dialog with order details
@@ -917,7 +960,7 @@ if (orderType === "detailed" && canModifyPrices) {
     toast.success("Order transferred");
     setShowTransfer(false);
     setTransferOrder(null);
-    qc.invalidateQueries({ queryKey: ["orders"] });
+    qc.invalidateQueries({ queryKey: ["orders"], refetchType: "all" });
   };
 
   // Handle invoice button click
@@ -1005,44 +1048,87 @@ const exportCSV = () => {
 
   const handleCancel = async () => {
     if (!cancelOrderId || !cancelReason.trim()) { toast.error("Please provide a reason"); return; }
-    setCancelling(true);
-    const { error } = await supabase
-      .from("orders")
-      .update({
-        status: "cancelled",
-        cancellation_reason: cancelReason,
-        cancelled_by: user!.id,
-        cancelled_at: new Date().toISOString(),
-      })
-      .eq("id", cancelOrderId)
-      .in("status", ["pending", "confirmed"]);
-    setCancelling(false);
-    if (error) { toast.error(error.message); return; }
 
-    const order = orders?.find((o) => o.id === cancelOrderId);
-    logActivity(user!.id, "Cancelled order", "order", order?.display_id || "", cancelOrderId, { reason: cancelReason });
-
-    // Notify customer if linked
-    if (order?.customers && order.customer_id) {
-      const { data: custData } = await supabase.from("customers").select("user_id").eq("id", order.customer_id).single();
-      if (custData?.user_id) {
-        sendNotificationToMany([custData.user_id], {
-          title: "Order Cancelled",
-          message: `Order ${order?.display_id} was cancelled. Reason: ${cancelReason}`,
-          type: "order",
-          entityType: "order",
-          entityId: cancelOrderId,
-        });
-      }
+    // Optimistic read from local cache (which may be stale, but we also verify server-side)
+    const target = orders?.find((o) => o.id === cancelOrderId);
+    if (!target || (target.status !== "pending" && target.status !== "confirmed")) {
+      toast.error("Order cannot be cancelled in its current state");
+      setCancelOrderId(null);
+      setCancelReason(CANCEL_REASONS[0].value);
+      return;
     }
 
-    // Soft-delete associated proforma
-    await supabase.from("proforma_invoices").update({ status: "cancelled", deleted_at: new Date().toISOString() }).eq("order_id", cancelOrderId);
+    setCancelling(true);
+    try {
+      const { data: updated, error } = await supabase
+        .from("orders")
+        .update({
+          status: "cancelled",
+          cancellation_reason: cancelReason,
+          cancelled_by: user!.id,
+          cancelled_at: new Date().toISOString(),
+        })
+        .eq("id", cancelOrderId)
+        .eq("status", "pending") // atomic guard: skip if already cancelled by another process
+        .select("id, status")
+        .maybeSingle();
 
-    toast.success("Order cancelled");
-    setCancelOrderId(null);
-    setCancelReason("");
-    qc.invalidateQueries({ queryKey: ["orders"] });
+      if (error) throw error;
+      if (!updated || updated.status !== "cancelled") {
+        toast.error("Order was already cancelled or state changed");
+        return;
+      }
+
+      toast.success("Order cancelled");
+      setCancelOrderId(null);
+      setCancelReason(CANCEL_REASONS[0].value);
+
+      // Optimistic stale query cache update so UI changes immediately
+      const allOrderKeys = qc.getQueriesData({ queryKey: ["orders"], exact: false });
+      for (const [queryKey, oldData] of allOrderKeys) {
+        if (!oldData || !Array.isArray(oldData)) continue;
+        const newData = (oldData as any[]).map((o: any) =>
+          o.id === cancelOrderId
+            ? {
+                ...o,
+                status: "cancelled",
+                cancellation_reason: cancelReason,
+                cancelled_by: user!.id,
+                cancelled_at: new Date().toISOString(),
+              }
+            : o
+        );
+        qc.setQueryData(queryKey, newData);
+      }
+
+    // Background: activity log, notifications, proforma cleanup
+      logActivity(user!.id, "Cancelled order", "order", target?.display_id || "", cancelOrderId, { reason: cancelReason });
+
+      if (target?.customers && target.customer_id) {
+        supabase.from("customers").select("user_id").eq("id", target.customer_id).single().then(({ data: custData }) => {
+          if (custData?.user_id) {
+            sendNotificationToMany([custData.user_id], {
+              title: "Order Cancelled",
+              message: `Order ${target?.display_id} was cancelled. Reason: ${cancelReason}`,
+              type: "order",
+              entityType: "order",
+              entityId: cancelOrderId,
+            });
+          }
+        }).catch(() => {});
+      }
+
+      supabase.from("proforma_invoices").update({ status: "cancelled", deleted_at: new Date().toISOString() }).eq("order_id", cancelOrderId).then().catch(() => {});
+
+      // We do NOT call invalidateQueries here — the optimistic setQueryData above
+      // already updated the UI. Triggering a refetch can race with read-replica
+      // lag and overwrite the optimistic update with stale data. The realtime
+      // subscription (useRealtimeSync) will eventually refetch when the DB event fires.
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to cancel order");
+    } finally {
+      setCancelling(false);
+    }
   };
 
   // Filtering with matrix restrictions
@@ -1810,7 +1896,7 @@ const columns = [
         order={fulfillOrder}
         open={!!fulfillOrder}
         onOpenChange={(open) => { if (!open) setFulfillOrder(null); }}
-        onFulfilled={() => qc.invalidateQueries({ queryKey: ["orders"] })}
+        onFulfilled={() => qc.invalidateQueries({ queryKey: ["orders"], refetchType: "all" })}
       />
 
       {/* Transfer Order Dialog */}
@@ -1823,7 +1909,7 @@ const columns = [
       />
 
       {/* Cancel Order Dialog */}
-      <Dialog open={!!cancelOrderId} onOpenChange={(v) => { if (!v) { setCancelOrderId(null); setCancelReason(""); } }}>
+      <Dialog open={!!cancelOrderId} onOpenChange={(v) => { if (!v) { setCancelOrderId(null); setCancelReason(CANCEL_REASONS[0].value); } }}>
         <DialogContent>
           <DialogHeader><DialogTitle>Cancel Order</DialogTitle></DialogHeader>
           <div className="space-y-4">
@@ -1851,7 +1937,7 @@ const columns = [
               />
             )}
             <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={() => { setCancelOrderId(null); setCancelReason(""); }}>Back</Button>
+              <Button variant="outline" onClick={() => { setCancelOrderId(null); setCancelReason(CANCEL_REASONS[0].value); }}>Back</Button>
               <Button variant="destructive" onClick={handleCancel} disabled={cancelling || !cancelReason}>
                 {cancelling && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Confirm Cancel

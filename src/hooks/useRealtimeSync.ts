@@ -553,11 +553,6 @@ function shouldSkipForSubscriber(sub: RealtimeSubscriber, table: string, payload
   if (table === "orders") {
     const assigned = payload.new?.assigned_to ?? payload.old?.assigned_to;
     const created = payload.new?.created_by ?? payload.old?.created_by;
-    const fulfilled = payload.new?.fulfilled_by ?? payload.old?.fulfilled_by;
-    if (sub.role === "agent") {
-      if (assigned === userId || created === userId || fulfilled === userId) return false;
-      return true;
-    }
     if (assigned === userId || created === userId) return false;
     return true;
   }
@@ -598,7 +593,7 @@ let isTearingDown = false;
 const RETRY = { maxRetries: 5, baseDelay: 1000, maxDelay: 30000 };
 const DEBOUNCE_MS = 500;
 let retryAttempt = 0;
-let invalidateTimer: ReturnType<typeof setTimeout> | null = null;
+const invalidateTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const pendingInvalidations = new Map<string, Set<string>>();
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -608,7 +603,10 @@ function flushInvalidations(subscriberId: symbol) {
   const keys = pendingInvalidations.get(String(subscriberId));
   if (!keys || keys.size === 0) return;
   keys.forEach((key) => {
-    sub.qc.invalidateQueries({ queryKey: [key], refetchType: "active" });
+    // Mark stale but do NOT force an eager refetch — it can hit a stale read-replica
+    // and overwrite optimistic updates before the write has replicated.
+    // Active observers will refetch naturally on their next tick (focus, interval, etc.)
+    sub.qc.invalidateQueries({ queryKey: [key] });
   });
   pendingInvalidations.delete(String(subscriberId));
 }
@@ -621,17 +619,17 @@ function handlePayload(table: string, payload: any) {
     if (!roleTables.includes(table)) return;
     if (shouldSkipForSubscriber(sub, table, payload)) return;
 
-    // Debounce invalidations to reduce query storm
     const subKey = String(subscriberId);
     if (!pendingInvalidations.has(subKey)) {
       pendingInvalidations.set(subKey, new Set());
     }
     keys.forEach((key) => pendingInvalidations.get(subKey)?.add(key));
 
-    if (invalidateTimer) clearTimeout(invalidateTimer);
-    invalidateTimer = setTimeout(() => {
+    if (invalidateTimers.has(subKey)) clearTimeout(invalidateTimers.get(subKey));
+    invalidateTimers.set(subKey, setTimeout(() => {
       flushInvalidations(subscriberId);
-    }, DEBOUNCE_MS);
+      invalidateTimers.delete(subKey);
+    }, DEBOUNCE_MS));
   });
 }
 
@@ -749,7 +747,7 @@ const pageSubscribers = new Map<symbol, RealtimeSubscriber>();
 let pageIsTearingDown = false;
 let pageRetryAttempt = 0;
 let pageRetryTimer: ReturnType<typeof setTimeout> | null = null;
-let pageInvalidateTimer: ReturnType<typeof setTimeout> | null = null;
+const pageInvalidateTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const pagePendingInvalidations = new Map<string, Set<string>>();
 const PAGE_DEBOUNCE_MS = 500;
 
@@ -822,10 +820,11 @@ function handlePagePayload(table: string, payload: any) {
     }
     keys.forEach((key) => pagePendingInvalidations.get(subKey)?.add(key));
 
-    if (pageInvalidateTimer) clearTimeout(pageInvalidateTimer);
-    pageInvalidateTimer = setTimeout(() => {
+    if (pageInvalidateTimers.has(subKey)) clearTimeout(pageInvalidateTimers.get(subKey));
+    pageInvalidateTimers.set(subKey, setTimeout(() => {
       flushPageInvalidations(subscriberId);
-    }, PAGE_DEBOUNCE_MS);
+      pageInvalidateTimers.delete(subKey);
+    }, PAGE_DEBOUNCE_MS));
   });
 }
 
@@ -834,7 +833,10 @@ function flushPageInvalidations(subscriberId: symbol) {
   if (!sub || !pagePendingInvalidations.has(String(subscriberId))) return;
   const keys = pagePendingInvalidations.get(String(subscriberId));
   if (!keys || keys.size === 0) return;
-  keys.forEach((key) => sub.qc.invalidateQueries({ queryKey: [key], refetchType: "active" }));
+  keys.forEach((key) => {
+    // Mark stale but do NOT force an eager refetch — same as flushInvalidations above
+    sub.qc.invalidateQueries({ queryKey: [key] });
+  });
   pagePendingInvalidations.delete(String(subscriberId));
 }
 

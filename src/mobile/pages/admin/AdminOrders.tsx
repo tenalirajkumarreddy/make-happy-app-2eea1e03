@@ -413,6 +413,19 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
       if (!result?.success) throw new Error(result?.error || "Failed to cancel order");
 
       toast.success(`Order ${order.display_id} cancelled`);
+
+      // Optimistic update: mark the order as cancelled immediately in the UI
+      const allOrderKeys = qc.getQueriesData({ queryKey: ["mobile-orders"], exact: false });
+      for (const [queryKey, oldData] of allOrderKeys) {
+        if (!oldData || !Array.isArray(oldData)) continue;
+        const newData = (oldData as any[]).map((o: any) =>
+          o.id === order.id
+            ? { ...o, status: "cancelled", cancellation_reason: cancelReason }
+            : o
+        );
+        qc.setQueryData(queryKey, newData);
+      }
+
       qc.invalidateQueries({ queryKey: ["mobile-orders"] });
       qc.invalidateQueries({ queryKey: ["orders"] });
       qc.invalidateQueries({ queryKey: ["proforma-invoices"] });
@@ -502,7 +515,27 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
       const displayId = orderRow.display_id;
       toast.success("Order created");
 
+      // Optimistic update: prepend the new order so it appears immediately
       const storeName = store?.name || "store";
+      const newOrder = {
+        id: orderRow.order_id,
+        display_id: orderRow.display_id || "ORD-???",
+        store_id: createStoreId,
+        customer_id: store?.customer_id || null,
+        status: "pending",
+        order_type: createOrderType,
+        requirement_note: createOrderType === "simple" ? createRequirementNote : null,
+        created_at: new Date().toISOString(),
+        stores: { name: storeName } as any,
+        customers: null as any,
+        creator_profile: { full_name: profile?.full_name || "You" } as any,
+      };
+      const allOrderKeys = qc.getQueriesData({ queryKey: ["mobile-orders"], exact: false });
+      for (const [queryKey, oldData] of allOrderKeys) {
+        if (!oldData || !Array.isArray(oldData)) continue;
+        qc.setQueryData(queryKey, [newOrder, ...oldData]);
+      }
+
       getApproverUserIds().then((ids) => {
         if (ids.length > 0) {
           sendNotificationToMany(ids, {
