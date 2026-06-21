@@ -591,7 +591,7 @@ const subscribers = new Map<symbol, RealtimeSubscriber>();
 let isTearingDown = false;
 
 const RETRY = { maxRetries: 5, baseDelay: 1000, maxDelay: 30000 };
-const DEBOUNCE_MS = 500;
+const DEBOUNCE_MS = 250;
 let retryAttempt = 0;
 const invalidateTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const pendingInvalidations = new Map<string, Set<string>>();
@@ -749,7 +749,7 @@ let pageRetryAttempt = 0;
 let pageRetryTimer: ReturnType<typeof setTimeout> | null = null;
 const pageInvalidateTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const pagePendingInvalidations = new Map<string, Set<string>>();
-const PAGE_DEBOUNCE_MS = 500;
+const PAGE_DEBOUNCE_MS = 250;
 
 function buildPageChannel(tables: string[], role: string | null) {
   const channelName = `page-realtime-sync-${tables.join("-").slice(0, 50)}`;

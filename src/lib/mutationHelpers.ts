@@ -3,12 +3,29 @@ import { QueryClient } from "@tanstack/react-query";
 const FORCE = { refetchType: 'all' as const };
 
 function invalidateAll(qc: QueryClient, key: string[], force?: boolean) {
-  qc.invalidateQueries({ queryKey: key, ...(force ? FORCE : undefined) });
+  qc.invalidateQueries({ queryKey: key, exact: false, ...(force ? FORCE : undefined) });
 }
 
-export function afterSaleSaved(qc: QueryClient, options?: { isMobile?: boolean; storeId?: string }) {
+export function afterSaleSaved(qc: QueryClient, options?: { isMobile?: boolean; storeId?: string; saleData?: any }) {
+  // Optimistically add the sale to the cache before invalidation triggers a refetch
+  if (options?.saleData) {
+    const saleKey = ["sales"];
+    const current = qc.getQueryData<any[]>(saleKey);
+    if (current && Array.isArray(current)) {
+      qc.setQueryData(saleKey, [options.saleData, ...current]);
+    }
+    if (options.storeId) {
+      const storeSaleKey = ["store-sales", options.storeId];
+      const storeCurrent = qc.getQueryData<any[]>(storeSaleKey);
+      if (storeCurrent && Array.isArray(storeCurrent)) {
+        qc.setQueryData(storeSaleKey, [options.saleData, ...storeCurrent]);
+      }
+    }
+  }
   invalidateAll(qc, ["sales"]);
   invalidateAll(qc, ["stores"]);
+  invalidateAll(qc, ["stores-for-sale"]);
+  invalidateAll(qc, ["stores-for-txn"]);
   if (options?.storeId) {
     invalidateAll(qc, ["store", options.storeId]);
     invalidateAll(qc, ["store-sales", options.storeId]);
@@ -107,10 +124,32 @@ export function afterTransactionSaved(qc: QueryClient, options?: { isMobile?: bo
   }
 }
 
-export function afterSaleReturned(qc: QueryClient, options?: { isMobile?: boolean; saleId?: string; storeId?: string }) {
+export function afterSaleReturned(qc: QueryClient, options?: { isMobile?: boolean; saleId?: string; storeId?: string; returnData?: any }) {
+  // Optimistically update the sale's outstanding and return status in the cache
+  if (options?.saleId) {
+    const updateSaleInCache = (oldData: any[] | undefined) => {
+      if (!oldData || !Array.isArray(oldData)) return oldData;
+      return oldData.map((sale: any) => {
+        if (sale.id === options.saleId) {
+          return { ...sale, outstanding_amount: 0, is_fully_returned: true };
+        }
+        return sale;
+      });
+    };
+    const salesKey = ["sales"];
+    const currentSales = qc.getQueryData<any[]>(salesKey);
+    if (currentSales) qc.setQueryData(salesKey, updateSaleInCache(currentSales));
+    if (options.storeId) {
+      const storeSalesKey = ["store-sales", options.storeId];
+      const storeCurrent = qc.getQueryData<any[]>(storeSalesKey);
+      if (storeCurrent) qc.setQueryData(storeSalesKey, updateSaleInCache(storeCurrent));
+    }
+  }
   invalidateAll(qc, ["sale-returns"]);
   invalidateAll(qc, ["sales"]);
   invalidateAll(qc, ["stores"]);
+  invalidateAll(qc, ["stores-for-sale"]);
+  invalidateAll(qc, ["stores-for-txn"]);
   if (options?.storeId) {
     invalidateAll(qc, ["store", options.storeId]);
     invalidateAll(qc, ["store-sales", options.storeId]);
@@ -159,6 +198,8 @@ export function afterSaleReturned(qc: QueryClient, options?: { isMobile?: boolea
 export function afterSaleEdited(qc: QueryClient, options?: { isMobile?: boolean; storeId?: string }) {
   invalidateAll(qc, ["sales"]);
   invalidateAll(qc, ["stores"]);
+  invalidateAll(qc, ["stores-for-sale"]);
+  invalidateAll(qc, ["stores-for-txn"]);
   if (options?.storeId) {
     invalidateAll(qc, ["store", options.storeId]);
     invalidateAll(qc, ["store-sales", options.storeId]);
@@ -192,8 +233,14 @@ export function afterSaleEdited(qc: QueryClient, options?: { isMobile?: boolean;
 }
 
 export function afterSaleCancelled(qc: QueryClient, options?: { isMobile?: boolean; storeId?: string }) {
+  // Do NOT force an eager refetch on sales — it can hit a stale read-replica
+  // and overwrite optimistic updates before the write has replicated.
+  // The useRealtimeSync hook already subscribes to DB changes and will safely
+  // invalidate / mark stale so active observers refetch on their next tick.
   invalidateAll(qc, ["sales"]);
-  invalidateAll(qc, ["stores"]);
+  invalidateAll(qc, ["stores"], true);
+  invalidateAll(qc, ["stores-for-sale"], true);
+  invalidateAll(qc, ["stores-for-txn"], true);
   if (options?.storeId) {
     invalidateAll(qc, ["store", options.storeId]);
     invalidateAll(qc, ["store-sales", options.storeId]);

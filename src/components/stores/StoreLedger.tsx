@@ -46,7 +46,11 @@ export function StoreLedger({ sales, transactions, paymentReturns = [], balanceA
       returnByTxnId.set(r.original_transaction_id, r);
     }
 
-    for (const s of sales) {
+    // Filter out cancelled/returned entries
+    const activeSales = sales.filter((s: any) => !s.deleted_at && !s.is_fully_returned);
+    const activeTransactions = transactions.filter((t: any) => !t.deleted_at);
+
+    for (const s of activeSales) {
       entries.push({
         id: s.id,
         type: "sale",
@@ -63,7 +67,7 @@ export function StoreLedger({ sales, transactions, paymentReturns = [], balanceA
       });
     }
 
-    for (const t of transactions) {
+    for (const t of activeTransactions) {
       const paymentMethod = Number(t.cash_amount) > 0 && Number(t.upi_amount) > 0
         ? "Cash+UPI"
         : Number(t.upi_amount) > 0 ? "UPI" : "Cash";

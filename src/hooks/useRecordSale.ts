@@ -215,8 +215,11 @@ export function useRecordSale() {
       else if (error.message?.includes("insufficient_stock")) toast.error("Insufficient stock.");
       else toast.error(error.message || "Failed to record sale");
     },
-    onSettled: () => {
-      afterSaleSaved(qc, { storeId });
+    onSettled: (data, variables, context) => {
+      const saleData = data?.data
+        ? { ...data.data, sale_id: data.data?.sale_id, display_id: data.displayId, store_id: storeId, total_amount: totalAmount, outstanding_amount: outstandingFromSale, created_at: new Date().toISOString() }
+        : undefined;
+      afterSaleSaved(qc, { storeId, saleData });
     },
   });
 

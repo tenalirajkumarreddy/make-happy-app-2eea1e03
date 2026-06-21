@@ -42,6 +42,8 @@ interface DataTableProps<T> {
   emptyMessage?: string;
   /** Custom row class name generator */
   getRowClassName?: (row: T) => string | undefined;
+  /** Extract a stable key from each row. If omitted, array index is used (not recommended for variable lists). */
+  getRowId?: (row: T) => string;
   onSearch?: (value: string) => void;
   searchValue?: string;
 }
@@ -56,6 +58,7 @@ export function DataTable<T extends Record<string, any>>({
   renderMobileCard,
   emptyMessage,
   getRowClassName,
+  getRowId,
   onSearch,
   searchValue,
 }: DataTableProps<T>) {
@@ -133,7 +136,7 @@ export function DataTable<T extends Record<string, any>>({
             ) : (
               paged.map((row, i) => (
                 <TableRow 
-                  key={i} 
+                  key={getRowId ? getRowId(row) : i} 
                   className={cn(
                     "group hover:bg-muted/30 transition-all", 
                     onRowClick && "cursor-pointer",
@@ -162,7 +165,7 @@ export function DataTable<T extends Record<string, any>>({
         ) : renderMobileCard ? (
           paged.map((row, i) => (
             <div
-              key={i}
+              key={getRowId ? getRowId(row) : i}
               className={onRowClick ? "cursor-pointer" : ""}
               onClick={() => onRowClick?.(row)}
             >
@@ -172,7 +175,7 @@ export function DataTable<T extends Record<string, any>>({
         ) : (
           paged.map((row, i) => (
             <div
-              key={i}
+              key={getRowId ? getRowId(row) : i}
               className={`rounded-xl border bg-card p-4 ${onRowClick ? "cursor-pointer active:bg-muted/30" : ""}`}
               onClick={() => onRowClick?.(row)}
             >

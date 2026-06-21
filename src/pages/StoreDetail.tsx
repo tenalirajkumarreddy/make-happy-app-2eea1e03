@@ -86,19 +86,20 @@ const StoreDetail = () => {
   });
 
    const { data: store, isLoading } = useQuery({
-     queryKey: ["store", id, currentWarehouse?.id],
-     queryFn: async () => {
-       let query = supabase
-         .from("stores")
-         .select("*, customers(id, name, is_active, kyc_status, kyc_selfie_url, kyc_aadhar_front_url, kyc_aadhar_back_url, kyc_rejection_reason, kyc_submitted_at, kyc_verified_at), store_types(name, credit_limit_kyc, credit_limit_no_kyc), routes(name)")
-         .eq("id", id!);
-       if (currentWarehouse?.id) query = query.or(`warehouse_id.eq.${currentWarehouse.id},warehouse_id.is.null`);
-       const { data, error } = await query.maybeSingle();
-       if (error) throw error;
-       return data;
-     },
-     enabled: !!id,
-   });
+      queryKey: ["store", id, currentWarehouse?.id],
+      queryFn: async () => {
+        let query = supabase
+          .from("stores")
+          .select("*, customers(id, name, is_active, kyc_status, kyc_selfie_url, kyc_aadhar_front_url, kyc_aadhar_back_url, kyc_rejection_reason, kyc_submitted_at, kyc_verified_at), store_types(name, credit_limit_kyc, credit_limit_no_kyc), routes(name)")
+          .eq("id", id!);
+        if (currentWarehouse?.id) query = query.or(`warehouse_id.eq.${currentWarehouse.id},warehouse_id.is.null`);
+        const { data, error } = await query.maybeSingle();
+        if (error) throw error;
+        return data;
+      },
+      enabled: !!id,
+      staleTime: 0, // Always fetch fresh data for live store profile
+    });
 
   // Customer list for transfer
    const { data: allCustomers } = useQuery({

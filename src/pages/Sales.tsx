@@ -3,7 +3,7 @@ import { DataTable } from "@/components/shared/DataTable";
 
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { logActivity } from "@/lib/activityLogger";
 import { sanitizeString } from "@/lib/sanitization";
@@ -15,6 +15,7 @@ import { afterSaleSaved, afterSaleEdited, afterSaleCancelled, afterSaleReturned 
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
 import { Loader2, Plus, Download, Banknote, UserCircle, Store as StoreIcon, Package, X, CalendarIcon, Receipt, FileText, RotateCcw, ShoppingCart, ChevronRight, ClipboardList, Wallet, QrCode, Minus, MapPin, Phone, Mail, AlertCircle, Pencil, XCircle } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { QrStoreSelector } from "@/components/shared/QrStoreSelector";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { SaleReceipt } from "@/components/shared/SaleReceipt";
@@ -237,10 +238,11 @@ const Sales = () => {
     const { data: sales, isLoading, isFetching } = useQuery({
       queryKey: ["sales", currentWarehouse?.id, isAdmin ? "all" : user?.id, filterFrom, filterTo, filterStore, filterStoreType, filterRoute, filterUser, filterPayment, loadedPages],
       queryFn: async () => {
-let query = supabase
+        let query = supabase
         .from("sales")
-    .select("*, is_fully_returned, stores(id, name, display_id, store_type_id, route_id, address, outstanding), customers(id, name, display_id, phone, email), fulfilled_order_id, invoice_sales(invoice_id)")
+    .select("*, is_fully_returned, old_outstanding, stores(id, name, display_id, store_type_id, route_id, address, outstanding), customers(id, name, display_id, phone, email), fulfilled_order_id, invoice_sales(invoice_id), sale_items(*)")
         .is("deleted_at", null)
+        .eq("is_fully_returned", false)
         .order("created_at", { ascending: false });
        if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
        // Non-admin roles (agents, operator, marketer) only see their own records
@@ -259,6 +261,7 @@ let query = supabase
       if (error) throw error;
       return data;
     },
+    placeholderData: keepPreviousData,
   });
 
   const hasMoreSales = (sales?.length || 0) >= loadedPages * PAGE_SIZE;
@@ -1114,180 +1117,263 @@ let query = supabase
 
   const returnedClass = (row: any) => row.is_fully_returned ? "line-through text-muted-foreground" : "";
 
+  // ── Action Button (matches Orders.tsx pattern) ──
+  const ActionBtn = ({ icon: Icon, label, disabledReason, enabled, loading, color, onClick }: {
+    icon: React.ComponentType<{ className?: string }>;
+    label: string;
+    disabledReason?: string | null;
+    enabled: boolean;
+    loading?: boolean;
+    color: string;
+    onClick: () => void;
+  }) => {
+    const isDisabled = !enabled || loading;
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn("h-7 w-7", enabled ? color : "text-muted-foreground/30 cursor-not-allowed")}
+            disabled={isDisabled}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!isDisabled) onClick();
+            }}
+          >
+            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Icon className="h-3.5 w-3.5" />}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" align="center" className="text-xs max-w-[180px]">
+          <p>{disabledReason || label}</p>
+        </TooltipContent>
+      </Tooltip>
+    );
+  };
+
+  // ── Build Actions (matches Orders.tsx) ──
+  const buildActions = (row: SaleRecord) => {
+    const pastDate = isPastDate(row.created_at, row.updated_at);
+    const allActions: any[] = [
+      {
+        key: "receipt",
+        icon: Receipt,
+        label: "View Receipt",
+        disabledReason: null,
+        enabled: true,
+        permission: true,
+        color: "text-primary hover:bg-primary/10",
+        onClick: () => setReceiptSaleId(row.id),
+      },
+      {
+        key: "invoice",
+        icon: FileText,
+        label: row.invoice_sales?.length > 0 ? "View Invoice" : "Generate Invoice",
+        disabledReason: null,
+        enabled: true,
+        permission: isAdmin,
+        color: row.invoice_sales?.length > 0
+          ? "text-green-600 hover:bg-green-50 hover:text-green-700"
+          : "text-blue-600 hover:bg-blue-50 hover:text-blue-700",
+        onClick: () => {
+          if (row.invoice_sales?.length > 0) {
+            const invoiceId = row.invoice_sales[0]?.invoice_id;
+            if (invoiceId) navigate(`/invoices/${invoiceId}`);
+          } else {
+            navigate("/invoices/new", { state: { saleIds: [row.id] } });
+          }
+        },
+      },
+      {
+        key: "edit",
+        icon: Pencil,
+        label: pastDate ? "Edits are locked after the day recorded" : "Edit Sale",
+        disabledReason: pastDate ? "Edits are locked after the day recorded" : null,
+        enabled: !row.is_fully_returned && !pastDate,
+        permission: true,
+        color: "text-blue-600 hover:bg-blue-50 hover:text-blue-700",
+        onClick: () => openEditSale(row),
+      },
+      {
+        key: "return",
+        icon: RotateCcw,
+        label: row.is_fully_returned
+          ? "Sale already returned"
+          : pastDate
+            ? "Returns are locked after the day recorded"
+            : "Return Sale",
+        disabledReason: row.is_fully_returned
+          ? "Sale already returned"
+          : pastDate
+            ? "Returns are locked after the day recorded"
+            : null,
+        enabled: !row.is_fully_returned && !pastDate,
+        permission: isAdmin,
+        color: "text-orange-600 hover:bg-orange-50 hover:text-orange-700",
+        onClick: () => setReturnSale(row),
+      },
+      {
+        key: "cancel",
+        icon: XCircle,
+        label: "Cancel Sale",
+        disabledReason: null,
+        enabled: !row.is_fully_returned,
+        permission: true,
+        color: "text-red-600 hover:bg-red-50 hover:text-red-700",
+        onClick: () => setCancelSale(row),
+      },
+      {
+        key: "view-order",
+        icon: ClipboardList,
+        label: "View Source Order",
+        disabledReason: null,
+        enabled: !!row.fulfilled_order_id,
+        permission: true,
+        color: "text-blue-600 hover:bg-blue-50 hover:text-blue-700",
+        onClick: () => {
+          if (row.fulfilled_order_id) navigate(`/orders?highlight=${row.fulfilled_order_id}`);
+        },
+      },
+    ];
+
+    const permitted = allActions.filter((a: any) => a.permission);
+
+    // 2-column x 3-row grid for compact action buttons (max 6 shown)
+    const chunk = (arr: any[], size: number) => {
+      const out = [];
+      for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+      return out;
+    };
+    const rows = chunk(permitted, 3);
+
+    return (
+      <div className="flex flex-col gap-0.5">
+        {rows.map((r, ri) => (
+          <div key={ri} className="flex items-center gap-0.5">
+            {r.map((a: any) => (
+              <ActionBtn
+                key={a.key}
+                icon={a.icon}
+                label={a.label}
+                disabledReason={a.disabledReason}
+                enabled={a.enabled}
+                color={a.color}
+                onClick={a.onClick}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  // ── Columns with fixed widths ──
+  // Keeping separate columns but tighter widths so Store gets more room
   const columns = [
-    { header: "Sale ID", accessor: (row: any) => (
-      <span className={`font-mono text-xs ${returnedClass(row)}`}>
-        {row.display_id}
-        {row.is_fully_returned && <span className="ml-2 text-4xs font-bold bg-warning/20 text-warning border border-warning/30 rounded px-1 py-0">Returned</span>}
-      </span>
-    ), className: "font-mono text-xs" },
-    { header: "Store", accessor: (row: any) => (
-      <div className={`flex items-center gap-2 ${returnedClass(row)}`}>
-        <StoreIcon className={`h-4 w-4 shrink-0 ${returnedClass(row)}`} />
-        <StoreHoverCard store={row.stores}>
-          <span>{row.stores?.name || "—"}</span>
-        </StoreHoverCard>
-      </div>
-    ), className: "font-medium" },
-    { header: "Total", accessor: (row: any) => <span className={`font-semibold ${returnedClass(row)}`}>₹{Number(row.total_amount || 0).toLocaleString()}</span>, className: "font-semibold" },
-    { header: "Cash", accessor: (row: any) => <span className={`text-sm hidden md:table-cell ${returnedClass(row)}`}>₹{Number(row.cash_amount || 0).toLocaleString()}</span>, className: "text-sm hidden md:table-cell" },
-    { header: "UPI", accessor: (row: any) => <span className={`text-sm hidden md:table-cell ${returnedClass(row)}`}>₹{Number(row.upi_amount || 0).toLocaleString()}</span>, className: "text-sm hidden md:table-cell" },
-    { header: "Outstanding", accessor: (row: any) => (
-      <span className={`text-sm hidden lg:table-cell ${returnedClass(row)} ${Number(row.outstanding_amount || 0) > 0 ? "text-destructive" : Number(row.outstanding_amount || 0) < 0 ? "text-green-600" : "text-muted-foreground"}`}>
-        ₹{Math.abs(Number(row.outstanding_amount || 0)).toLocaleString()}
-      </span>
-    ), className: "text-sm hidden lg:table-cell" },
-    { header: "Recorded By", accessor: (row: any) => (
-      <div className="flex items-center gap-2">
-        <Avatar className="h-5 w-5">
-          <AvatarImage src={getRecorderAvatar(row.recorded_by) || undefined} />
-          <AvatarFallback className="text-[9px] bg-primary/10 text-primary">{getRecorderName(row.recorded_by).charAt(0)}</AvatarFallback>
-        </Avatar>
-        <span className="text-[10px] text-muted-foreground">{getRecorderName(row.recorded_by)}</span>
-      </div>
-    ), className: "hidden lg:table-cell" },
-    { header: "Date", accessor: (row: any) => (
-      <span className="text-muted-foreground text-xs">{format(new Date(row.created_at), "dd MMM yy, hh:mm a")}</span>
-    ), className: "text-muted-foreground text-xs hidden sm:table-cell" },
-  { header: "Actions", accessor: (row: any) => (
-      <div className="flex items-center gap-1">
-        {/* View Receipt */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 text-primary hover:bg-primary/10"
-              onClick={(e) => { e.stopPropagation(); setReceiptSaleId(row.id); }}
-            >
-              <Receipt className="h-3.5 w-3.5" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>View Receipt</p>
-          </TooltipContent>
-        </Tooltip>
-
-              {/* Invoice Button - Blue if no invoice, Green if has invoice */}
-              {isAdmin && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    {row.invoice_sales?.length > 0 ? (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-green-600 hover:bg-green-50 hover:text-green-700"
-                        onClick={(e) => { 
-                          e.stopPropagation(); 
-                          const invoiceId = row.invoice_sales[0]?.invoice_id;
-                          if (invoiceId) navigate(`/invoices/${invoiceId}`);
-                        }}
-                      >
-                        <FileText className="h-3.5 w-3.5" />
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
-                        onClick={(e) => { e.stopPropagation(); navigate("/invoices/new", { state: { saleIds: [row.id] } }); }}
-                      >
-                        <FileText className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>{row.invoice_sales?.length > 0 ? "View Invoice" : "Generate Invoice"}</p>
-                  </TooltipContent>
-                </Tooltip>
-              )}
-
-        {/* Edit Button */}
-        {!row.is_fully_returned && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 text-blue-600 hover:bg-blue-50 hover:text-blue-700 disabled:opacity-30"
-                  onClick={(e) => { e.stopPropagation(); openEditSale(row); }}
-                  disabled={isPastDate(row.created_at, row.updated_at)}
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                </Button>
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>{isPastDate(row.created_at, row.updated_at) ? "Edits are locked after the day recorded" : "Edit Sale"}</p>
-            </TooltipContent>
-          </Tooltip>
-        )}
-
-        {/* Return Button */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className={`h-7 w-7 disabled:opacity-30 ${row.is_fully_returned ? 'text-slate-300 cursor-not-allowed' : 'text-orange-600 hover:bg-orange-50 hover:text-orange-700'}`}
-                onClick={(e) => { e.stopPropagation(); if (!row.is_fully_returned) setReturnSale(row); }}
-                disabled={row.is_fully_returned || isPastDate(row.created_at, row.updated_at)}
-              >
-                <RotateCcw className="h-3.5 w-3.5" />
-              </Button>
+    {
+      header: "Sale ID",
+      accessor: (row: any) => (
+        <span className={`font-mono text-xs ${returnedClass(row)}`}>
+          {row.display_id}
+          {row.is_fully_returned && (
+            <span className="ml-2 text-4xs font-bold bg-warning/20 text-warning border border-warning/30 rounded px-1 py-0">
+              Returned
             </span>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>{row.is_fully_returned ? "Sale already returned" : isPastDate(row.created_at, row.updated_at) ? "Returns are locked after the day recorded" : "Return Sale"}</p>
-          </TooltipContent>
-        </Tooltip>
-
-        {/* Cancel Sale Button — admin/manager only */}
-        {canCancelSales && !row.is_fully_returned && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 text-red-600 hover:bg-red-50 hover:text-red-700"
-                  onClick={(e) => { e.stopPropagation(); setCancelSale(row); }}
-                >
-                  <XCircle className="h-3.5 w-3.5" />
-                </Button>
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Cancel Sale</p>
-            </TooltipContent>
-          </Tooltip>
-        )}
-
-        {/* View Associated Order - if sale was created from order fulfillment */}
-        {row.fulfilled_order_id && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
-                onClick={(e) => { e.stopPropagation(); navigate(`/orders?highlight=${row.fulfilled_order_id}`); }}
-              >
-                <ClipboardList className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>View Source Order</p>
-            </TooltipContent>
-          </Tooltip>
-        )}
-      </div>
-  ), className: "hidden sm:table-cell" },
+          )}
+        </span>
+      ),
+      className: "font-mono text-xs w-[110px]",
+    },
+    {
+      header: "Store",
+      accessor: (row: any) => (
+        <div className={`flex items-center gap-2 ${returnedClass(row)}`}>
+          <StoreIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          <StoreHoverCard store={row.stores}>
+            <span className="truncate block">{row.stores?.name || "—"}</span>
+          </StoreHoverCard>
+        </div>
+      ),
+      className: "font-medium min-w-[140px]",
+    },
+    {
+      header: "Total",
+      accessor: (row: any) => (
+        <span className={`font-semibold ${returnedClass(row)}`}>
+          ₹{Number(row.total_amount || 0).toLocaleString()}
+        </span>
+      ),
+      className: "font-semibold w-[80px]",
+    },
+    {
+      header: "Cash",
+      accessor: (row: any) => (
+        <span className={returnedClass(row)}>
+          ₹{Number(row.cash_amount || 0).toLocaleString()}
+        </span>
+      ),
+      className: "text-sm hidden md:table-cell w-[70px]",
+    },
+    {
+      header: "UPI",
+      accessor: (row: any) => (
+        <span className={returnedClass(row)}>
+          ₹{Number(row.upi_amount || 0).toLocaleString()}
+        </span>
+      ),
+      className: "text-sm hidden md:table-cell w-[70px]",
+    },
+    {
+      header: "Bal",
+      accessor: (row: any) => (
+        <span
+          className={`${returnedClass(row)} ${
+            Number(row.outstanding_amount || 0) > 0
+              ? "text-destructive"
+              : Number(row.outstanding_amount || 0) < 0
+                ? "text-green-600"
+                : "text-muted-foreground"
+          }`}
+        >
+          ₹{Math.abs(Number(row.outstanding_amount || 0)).toLocaleString()}
+        </span>
+      ),
+      className: "text-sm hidden lg:table-cell w-[70px]",
+    },
+    {
+      header: "Recorded By",
+      accessor: (row: any) => (
+        <div className="flex items-center gap-1.5">
+          <Avatar className="h-5 w-5 shrink-0">
+            <AvatarImage src={getRecorderAvatar(row.recorded_by) || undefined} />
+            <AvatarFallback className="text-[9px] bg-primary/10 text-primary">
+              {getRecorderName(row.recorded_by).charAt(0)}
+            </AvatarFallback>
+          </Avatar>
+          <span className="text-[10px] text-muted-foreground truncate max-w-[60px] block leading-tight">
+            {getRecorderName(row.recorded_by)}
+          </span>
+        </div>
+      ),
+      className: "hidden lg:table-cell w-[100px]",
+    },
+    {
+      header: "Date",
+      accessor: (row: any) => (
+        <span className="text-muted-foreground text-xs">
+          {format(new Date(row.created_at), "dd MMM yy, hh:mm a")}
+        </span>
+      ),
+      className: "text-muted-foreground text-xs hidden sm:table-cell w-[130px]",
+    },
+    {
+      header: "Actions",
+      accessor: (row: any) => buildActions(row),
+      className: "hidden sm:table-cell w-[150px]",
+    },
   ];
 
-  if (isLoading) {
+  if (isLoading && !sales) {
     return <TableSkeleton columns={7} />;
   }
 
@@ -1401,6 +1487,7 @@ let query = supabase
       <DataTable
         columns={columns}
         data={filteredSales}
+        getRowId={(row: SaleRecord) => row.id}
           searchKey="display_id"
           searchPlaceholder="Search by sale ID..."
           emptyMessage="No sales recorded yet."
@@ -1538,14 +1625,14 @@ let query = supabase
           </CustomerHoverCard>
         </div>
       )}
-          {/* Amounts row - inline compact */}
-          <div className="flex items-center gap-3 text-xs cursor-pointer" onClick={() => setSelectedSaleId(row.id)}>
+          {/* Amounts row - inline compact (clickable via card wrapper) */}
+          <div className="flex items-center gap-3 text-xs">
             <span className="font-bold text-foreground">₹{Number(row.total_amount || 0).toLocaleString()}</span>
             <span className="text-muted-foreground">Cash: ₹{Number(row.cash_amount || 0).toLocaleString()}</span>
             <span className="text-muted-foreground">UPI: ₹{Number(row.upi_amount || 0).toLocaleString()}</span>
           </div>
-          {/* Footer: Recorder + Outstanding - clickable */}
-          <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50 cursor-pointer" onClick={() => setSelectedSaleId(row.id)}>
+          {/* Footer: Recorder + Outstanding (clickable via card wrapper) */}
+          <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
             <div className="flex items-center gap-1.5">
               <Avatar className="h-4 w-4">
                 <AvatarImage src={getRecorderAvatar(row.recorded_by) || undefined} />
@@ -1745,9 +1832,17 @@ let query = supabase
               if (error) throw error;
               toast.success(`Sale ${cancelSale.display_id} cancelled. Stock restored to ${cancelRestockTarget === "warehouse" ? "warehouse" : "agent"}.`);
               const cancelledStoreId = cancelSale.store_id;
+              const cancelledId = cancelSale.id;
               setCancelSale(null);
               setCancelRestockTarget("agent");
               setCancelSelectedAgentId("");
+              // Optimistically remove cancelled sale from all sales query caches
+              const allSalesQueries = qc.getQueriesData<any[]>({ queryKey: ["sales"] });
+              for (const [key, data] of allSalesQueries) {
+                if (Array.isArray(data)) {
+                  qc.setQueryData(key, (old: any[]) => old ? old.filter((s: any) => s.id !== cancelledId) : old);
+                }
+              }
               afterSaleCancelled(qc, { storeId: cancelledStoreId });
             } catch (err: any) {
               toast.error(err.message || "Failed to cancel sale");

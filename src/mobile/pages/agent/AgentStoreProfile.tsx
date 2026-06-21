@@ -61,7 +61,7 @@ export function AgentStoreProfile({ store, onBack, onGoRecord }: Props) {
       return (data as unknown as StoreProfileRow | null) || null;
     },
     enabled: !!store.id,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0, // Always fetch fresh data for live store profile
   });
 
   const currentStore: StoreOption = useMemo(() => ({
@@ -245,7 +245,7 @@ export function AgentStoreProfile({ store, onBack, onGoRecord }: Props) {
               <button
                 onClick={handleMarkVisited}
                 disabled={isVisiting}
-                onClick={handleMarkVisited}
+                className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-95 transition-all shadow-sm"
               >
                 {isVisiting ? <Loader2 className="h-5 w-5 text-emerald-500 animate-spin" /> : <CheckCircle2 className="h-5 w-5 text-emerald-500" />}
                 <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 text-center">Mark Visited</span>

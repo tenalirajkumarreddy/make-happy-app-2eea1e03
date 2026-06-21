@@ -9,7 +9,7 @@ import { enqueueWithContext } from "@/lib/conflictResolver";
 import { generateBusinessKey } from "@/lib/offlineQueue";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
-import { Loader2, X, CalendarIcon, Store as StoreIcon, RotateCcw, Receipt, Pencil } from "lucide-react";
+import { Loader2, X, CalendarIcon, Store as StoreIcon, RotateCcw, Receipt, Pencil, MapPin, UserCircle } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { QrStoreSelector } from "@/components/shared/QrStoreSelector";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
@@ -102,8 +102,9 @@ const Transactions = () => {
       queryFn: async () => {
        let query: any = supabase
        .from("transactions")
-        .select("*, is_fully_returned, stores(name, display_id, store_type_id, route_id, outstanding, customer_id), customers(id, name, display_id)")
-       .order("created_at", { ascending: false });
+         .select("*, is_fully_returned, stores(id, name, display_id, store_type_id, route_id, address, outstanding, customer_id, customers(name, display_id, phone, email), store_types(name), routes(name)), customers(id, name, display_id)")
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false });
        if (currentWarehouse?.id) query = query.or(`warehouse_id.eq.${currentWarehouse.id},warehouse_id.is.null`);
        // Non-admin roles only see their own records
        if (!isAdmin) query = query.eq("recorded_by", user!.id);
@@ -552,25 +553,76 @@ const Transactions = () => {
             {children}
           </Link>
         </HoverCardTrigger>
-        <HoverCardContent className="w-64 p-0" align="start">
-          <div className="p-3 space-y-2">
-            <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                <StoreIcon className="h-4 w-4 text-primary" />
+        <HoverCardContent className="w-72 p-0" align="start">
+          <div className="p-3 space-y-3">
+            {/* Store Details */}
+            <div className="flex items-start gap-3">
+              <div className="h-14 w-14 rounded-lg bg-primary/10 flex items-center justify-center border">
+                <StoreIcon className="h-6 w-6 text-primary" />
               </div>
-              <div>
-                <p className="font-semibold text-sm">{store.name}</p>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm truncate">{store.name}</p>
                 <p className="text-xs text-muted-foreground">{store.display_id}</p>
+                {store.routes?.name && (
+                  <div className="flex items-center gap-1 mt-1">
+                    <MapPin className="h-3 w-3 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground truncate">{store.routes.name}</span>
+                  </div>
+                )}
               </div>
             </div>
+
+            {/* Type & Address */}
+            <div className="space-y-1.5 text-xs">
+              {store.store_types?.name && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-muted-foreground min-w-[60px]">Type:</span>
+                  <span className="font-medium">{store.store_types.name}</span>
+                </div>
+              )}
+              {store.address && (
+                <div className="flex items-start gap-1.5 text-muted-foreground">
+                  <span className="min-w-[60px]">Address:</span>
+                  <span className="line-clamp-2">{store.address}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Customer Details */}
+            {store.customers && (
+              <div className="space-y-1.5 text-xs border-t pt-2">
+                <div className="flex items-center gap-1.5">
+                  <UserCircle className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{store.customers.name}</p>
+                    <p className="text-xs text-muted-foreground">{store.customers.display_id}</p>
+                  </div>
+                </div>
+                {store.customers.phone && (
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <span className="min-w-[60px]">Phone:</span>
+                    <span className="truncate">{store.customers.phone}</span>
+                  </div>
+                )}
+                {store.customers.email && (
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <span className="min-w-[60px]">Email:</span>
+                    <span className="truncate">{store.customers.email}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Outstanding */}
             {store.outstanding !== undefined && (
-              <div className="flex items-center justify-between text-xs py-1 border-t">
-                <span className="text-muted-foreground">Outstanding:</span>
-                <span className={`font-medium ${Number(store.outstanding) > 0 ? 'text-destructive' : 'text-success'}`}>
-                  ₹{Number(store.outstanding || 0).toLocaleString()}
+              <div className="flex items-center justify-between py-2 border-t text-sm">
+                <span className="text-muted-foreground">Balance:</span>
+                <span className={`font-bold ${Number(store.outstanding) > 0 ? 'text-destructive' : Number(store.outstanding) < 0 ? 'text-green-600' : 'text-muted-foreground'}`}>
+                  {Number(store.outstanding) < 0 ? '-' : ''}₹{Math.abs(Number(store.outstanding || 0)).toLocaleString()}
                 </span>
               </div>
             )}
+
             <Button size="sm" variant="outline" className="w-full text-xs" asChild>
               <Link to={`/stores/${store.id}`}>View Store Profile</Link>
             </Button>

@@ -1002,6 +1002,8 @@ export function AgentHistory() {
         p_returned_by: user!.id,
         p_reason: finalReason,
         p_items: payload,
+        p_created_at: new Date().toISOString(),
+        p_notes: null,
       });
 
       if (error) throw error;
