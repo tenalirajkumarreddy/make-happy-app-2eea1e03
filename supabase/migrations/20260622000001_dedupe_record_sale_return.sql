@@ -94,7 +94,7 @@ BEGIN
         v_total_return_amount := v_total_return_amount + v_subtotal;
 
         -- Insert return item
-        INSERT INTO public.sale_return_items (return_id, product_id, return_qty, damaged_qty, unit_price, total_price, created_at)
+        INSERT INTO public.sale_return_items (return_id, product_id, quantity, damaged_qty, unit_price, total, created_at)
         VALUES (v_return_id, v_product_id, v_return_qty, v_damaged_qty, v_unit_price, v_subtotal, COALESCE(p_created_at, now()));
 
     END LOOP;
