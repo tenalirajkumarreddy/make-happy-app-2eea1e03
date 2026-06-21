@@ -39,6 +39,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { usePermission } from "@/hooks/usePermission";
 import { fmtINR, formatDate } from "@/lib/utils";
 import { toast } from "sonner";
+import { InvoiceTemplate } from "@/components/invoices/InvoiceTemplate";
 
 interface InvoiceItem {
   id?: string;
@@ -175,6 +176,17 @@ export function InvoiceDialog({
   const [terms, setTerms] = useState("Payment due within 15 days");
   const [referenceNumber, setReferenceNumber] = useState("");
   const [items, setItems] = useState<InvoiceItem[]>([]);
+
+  // Fetch company settings for template
+  const { data: settings } = useQuery({
+    queryKey: ["company-settings-invoice-dialog"],
+    queryFn: async () => {
+      const { data } = await supabase.from("company_settings").select("key, value");
+      const map: Record<string, string> = {};
+      data?.forEach((s: any) => { map[s.key] = s.value; });
+      return map;
+    },
+  });
 
   // Fetch sale data if order was fulfilled (for auto-populating invoice from sale)
   const { data: saleData } = useQuery({
@@ -723,97 +735,35 @@ export function InvoiceDialog({
           </TabsContent>
 
           <TabsContent value="preview" className="space-y-4">
-            <Card className="bg-muted/50">
-              <CardHeader>
-                <CardTitle className="text-center">INVOICE</CardTitle>
-                <div className="text-center text-sm text-muted-foreground">
-                  {invoice?.display_id || "Draft Invoice"}
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex justify-between">
-                  <div>
-                    <p className="font-medium">Bill To:</p>
-                    <p className="text-sm">{order?.stores?.name || invoice?.stores?.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {order?.customers?.name || invoice?.customers?.name}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm">
-                      <span className="text-muted-foreground">Date:</span>{" "}
-                      {formatDate(new Date(invoiceDate))}
-                    </p>
-                    {dueDate && (
-                      <p className="text-sm">
-                        <span className="text-muted-foreground">Due:</span>{" "}
-                        {formatDate(new Date(dueDate))}
-                      </p>
-                    )}
-                  </div>
-                </div>
-                
-                <Separator />
-                
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left py-2">Description</th>
-                      <th className="text-right py-2">Qty</th>
-                      <th className="text-right py-2">Price</th>
-                      <th className="text-right py-2">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((item, i) => (
-                      <tr key={i} className="border-b border-muted">
-                        <td className="py-2">{item.description}</td>
-                        <td className="text-right py-2">{item.quantity}</td>
-                        <td className="text-right py-2">{fmtINR(item.unit_price)}</td>
-                        <td className="text-right py-2">{fmtINR(calculateItemTotal(item))}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                
-                <div className="space-y-1 text-right">
-                  <p className="text-sm">
-                    <span className="text-muted-foreground">Subtotal:</span>{" "}
-                    {fmtINR(totals.subtotal)}
-                  </p>
-                  <p className="text-sm">
-                    <span className="text-muted-foreground">Discount:</span>{" "}
-                    {fmtINR(totals.discountAmount)}
-                  </p>
-                  <p className="text-sm">
-                    <span className="text-muted-foreground">Tax:</span>{" "}
-                    {fmtINR(totals.taxAmount)}
-                  </p>
-                  <Separator />
-                  <p className="text-lg font-bold">
-                    <span className="text-muted-foreground">Total:</span>{" "}
-                    {fmtINR(totals.total)}
-                  </p>
-                </div>
-                
-                {notes && (
-                  <>
-                    <Separator />
-                    <div>
-                      <p className="text-sm font-medium">Notes:</p>
-                      <p className="text-sm text-muted-foreground whitespace-pre-wrap">{notes}</p>
-                    </div>
-                  </>
-                )}
-                
-                {terms && (
-                  <div>
-                    <p className="text-sm font-medium">Terms:</p>
-                    <p className="text-sm text-muted-foreground">{terms}</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <InvoiceTemplate
+              businessName={settings?.business_name}
+              businessAddress={settings?.business_address}
+              businessCity={settings?.business_city}
+              businessPincode={settings?.business_pincode}
+              businessPhone={settings?.business_phone}
+              businessEmail={settings?.business_email}
+              businessGstin={settings?.business_gstin}
+              businessLogoUrl={settings?.business_logo_url}
+              invoiceNumber={invoice?.display_id || "Draft Invoice"}
+              invoiceDate={invoiceDate}
+              invoiceType={invoiceType}
+              customerName={order?.customers?.name || invoice?.customers?.name}
+              customerAddress={order?.customers?.email}
+              customerPhone={order?.customers?.phone}
+              storeName={order?.stores?.name || invoice?.stores?.name}
+              items={items.map(item => ({
+                description: item.description,
+                quantity: item.quantity,
+                unit_price: item.unit_price,
+                gst_rate: item.tax_percent,
+              }))}
+              subtotal={totals.subtotal}
+              taxAmount={totals.taxAmount}
+              discountAmount={totals.discountAmount}
+              totalAmount={totals.total}
+              notes={notes}
+              terms={terms}
+            />
           </TabsContent>
         </Tabs>
 

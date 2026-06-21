@@ -12,7 +12,7 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   role: AppRole | null;
-  profile: { full_name: string; email: string; avatar_url: string | null } | null;
+  profile: { id: string; full_name: string; email: string; avatar_url: string | null } | null;
   customer: { id: string; user_id: string | null; name: string; phone: string | null; email: string | null } | null;
   needsOnboarding: boolean;
   loading: boolean;
@@ -114,7 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const { data: profileData, error: profileError } = await supabase
         .from("profiles")
-        .select("full_name, email, avatar_url, is_active")
+        .select("id, full_name, email, avatar_url, is_active")
         .eq("user_id", userId)
         .maybeSingle();
 

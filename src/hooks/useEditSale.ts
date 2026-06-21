@@ -47,7 +47,8 @@ export function useEditSale() {
     setSubmittingEdit(true);
     try {
       const editedTotalAmount = editingItems.reduce((sum: number, item: any) => sum + item.quantity * item.unit_price, 0);
-      const editedOutstanding = Math.max(editedTotalAmount - (Number(editCash) || 0) - (Number(editUpi) || 0), 0);
+      const editedOutstanding = editedTotalAmount - (Number(editCash) || 0) - (Number(editUpi) || 0);
+      if (editedOutstanding < 0) { toast.error("Payment exceeds sale total. Reduce payment amount."); setSubmittingEdit(false); return; }
       const { error } = await (supabase as any).rpc("edit_sale", {
         p_original_sale_id: editingSaleId, p_store_id: editingSale.store_id, p_customer_id: editingSale.customer_id,
         p_display_id: editingSale.display_id, p_total_amount: editedTotalAmount, p_cash_amount: Number(editCash) || 0,

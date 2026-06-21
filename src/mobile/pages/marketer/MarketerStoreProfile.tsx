@@ -53,7 +53,7 @@ export function MarketerStoreProfile({ store, onBack, onGoRecord, onGoOrders }: 
       return (data as unknown as StoreProfileRow | null) || null;
     },
     enabled: !!store.id,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0, // Always fetch fresh data for live store profile
   });
 
   const currentStore: StoreOption = useMemo(() => ({

@@ -126,17 +126,11 @@ export function SaleReturnDialog({
         p_returned_by: authUser?.id,
         p_reason: finalReason,
         p_items: payload,
+        p_created_at: new Date().toISOString(),
+        p_notes: notes.trim() || null,
       });
 
       if (error) throw error;
-
-      // Save notes to the return record (RPC doesn't accept notes parameter)
-      if (notes.trim() && result?.[0]?.return_id) {
-        await supabase
-          .from("sale_returns")
-          .update({ notes: notes.trim() })
-          .eq("id", result[0].return_id);
-      }
       return result;
     },
     onSuccess: (result: any) => {
@@ -182,7 +176,7 @@ export function SaleReturnDialog({
       }
 
       onOpenChange(false);
-      afterSaleReturned(qc, { saleId: sale.id });
+      afterSaleReturned(qc, { saleId: sale.id, storeId: sale.store_id, returnData: result?.[0] });
       onSuccess?.();
     },
     onError: (error: any) => {

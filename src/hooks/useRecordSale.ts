@@ -44,11 +44,16 @@ export function useRecordSale() {
   const [showAddProductDialog, setShowAddProductDialog] = useState(false);
   const [selectedProductToAdd, setSelectedProductToAdd] = useState("");
   const [fulfillOrder, setFulfillOrder] = useState<any>(null);
+  const [fulfilledOrderId, setFulfilledOrderId] = useState<string | null>(null);
   const [loadingOrderId, setLoadingOrderId] = useState<string | null>(null);
 
   useEffect(() => {
     const storeParam = searchParams.get("store");
-    if (storeParam && !isPosUser) {
+    const orderParam = searchParams.get("order");
+    if (orderParam) {
+      handleFulfillOrder(orderParam);
+      setSearchParams({}, { replace: true });
+    } else if (storeParam && !isPosUser) {
       setStoreId(storeParam); setShowAdd(true); setSearchParams({}, { replace: true });
     }
   }, [searchParams, isPosUser, setSearchParams]);
@@ -183,10 +188,11 @@ export function useRecordSale() {
         p_total_amount: payload.totalAmount,
         p_cash_amount: payload.cash,
         p_upi_amount: payload.upi,
-        p_outstanding_amount: payload.outstandingFromSale,
+        p_outstanding_amount: Math.max(payload.outstandingFromSale, 0),
         p_expected_outstanding: oldOutstanding,
         p_sale_items: payload.saleItems,
         p_created_at: payload.saleDate ? new Date(payload.saleDate).toISOString() : null,
+        p_fulfilled_order_id: fulfilledOrderId,
       } as any) as any;
       if (error) throw error;
       return { data: (data as any)?.[0], displayId: payload.displayId };
@@ -201,6 +207,7 @@ export function useRecordSale() {
         if (others.length > 0) sendNotificationToMany(others, { title: "New Sale Recorded", message: `Sale ${result.displayId} of ₹${totalAmount.toLocaleString()} at ${storeName}`, type: "payment", entityType: "sale", entityId: result.data?.sale_id }).catch(() => {});
       });
       setShowAdd(false);
+      setFulfilledOrderId(null);
       resetForm();
     },
     onError: (error: any) => {
@@ -208,8 +215,11 @@ export function useRecordSale() {
       else if (error.message?.includes("insufficient_stock")) toast.error("Insufficient stock.");
       else toast.error(error.message || "Failed to record sale");
     },
-    onSettled: () => {
-      afterSaleSaved(qc, { storeId });
+    onSettled: (data, variables, context) => {
+      const saleData = data?.data
+        ? { ...data.data, sale_id: data.data?.sale_id, display_id: data.displayId, store_id: storeId, total_amount: totalAmount, outstanding_amount: outstandingFromSale, created_at: new Date().toISOString() }
+        : undefined;
+      afterSaleSaved(qc, { storeId, saleData });
     },
   });
 
@@ -249,10 +259,23 @@ export function useRecordSale() {
   const handleFulfillOrder = async (orderId: string) => {
     setLoadingOrderId(orderId);
     try {
-      const { data: orderData, error } = await supabase.from("orders").select("*, stores(id, name, store_type_id, customer_id), order_items(id, product_id, quantity, unit_price, products(id, name, sku, base_price, image_url))").eq("id", orderId).single();
+      const { data: orderData, error } = await supabase.from("orders").select("*, stores(id, name, store_type_id, customer_id, outstanding), order_items(id, product_id, quantity, unit_price, products(id, name, sku, base_price, image_url))").eq("id", orderId).single();
       if (error) throw error;
-      setShowAdd(false);
-      setFulfillOrder(orderData as any);
+      // Pre-fill the sale form with order data
+      setStoreId(orderData.store_id);
+      setFulfilledOrderId(orderId);
+      setShowAdd(true);
+      // Pre-fill items from order
+      if (orderData.order_items && orderData.order_items.length > 0) {
+        const prefilledItems = orderData.order_items.map((item: any) => ({
+          product_id: item.product_id,
+          quantity: item.quantity,
+          unit_price: item.unit_price || item.products?.base_price || 0,
+          product_name: item.products?.name || "",
+          product_image: item.products?.image_url || null,
+        }));
+        setItems(prefilledItems);
+      }
     } catch (error: any) {
       console.error("Error loading order:", error);
       toast.error("Failed to load order details");
@@ -264,7 +287,6 @@ export function useRecordSale() {
     const validation = validateSaleData({ store_id: storeId, items: items.filter(i => i.product_id), cash_amount: cash, upi_amount: upi, total_amount: totalAmount, isPosUser, sale_date: saleDate || null });
     if (!validation.valid) { toast.error(validation.errors[0] || "Validation failed"); return; }
     if (isPosUser && outstandingFromSale !== 0) { toast.error("POS users must record full payment. Outstanding balance not allowed."); return; }
-    if (items.some(i => i.product_id && (!i.quantity || i.quantity <= 0))) { toast.error("All products must have a quantity greater than 0"); return; }
 
     const customerId = selectedStore?.customer_id;
     if (!customerId) { toast.error("Store has no linked customer"); return; }
@@ -311,6 +333,6 @@ export function useRecordSale() {
     creditLimitInfo, creditExceeded, creditWarning,
     showAddProductDialog, setShowAddProductDialog, selectedProductToAdd, setSelectedProductToAdd,
     addItem, removeItem, updateItem, addProductToSale, resetForm, handleStoreChange, handleAdd,
-    handleFulfillOrder, loadingOrderId, fulfillOrder, setFulfillOrder, staffUsers, isAdmin, isPosUser, canRecordBehalf,
+    handleFulfillOrder, loadingOrderId, fulfillOrder, setFulfillOrder, fulfilledOrderId, setFulfilledOrderId, staffUsers, isAdmin, isPosUser, canRecordBehalf,
   };
 }

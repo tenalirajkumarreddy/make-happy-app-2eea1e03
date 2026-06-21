@@ -16,54 +16,54 @@
     --popover: 0 0% 100%;
     --popover-foreground: 220 25% 10%;
 
-    --primary: 217 91% 50%;
+    --primary: 217 70% 45%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 220 14% 96%;
     --secondary-foreground: 220 25% 10%;
 
     --muted: 220 14% 96%;
-    --muted-foreground: 220 10% 46%;
+    --muted-foreground: 220 12% 35%;
 
-    --accent: 217 91% 95%;
-    --accent-foreground: 217 91% 40%;
+    --accent: 217 70% 92%;
+    --accent-foreground: 217 70% 35%;
 
-    --destructive: 0 84% 60%;
+    --destructive: 0 70% 50%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 142 72% 42%;
+    --success: 142 60% 40%;
     --success-foreground: 0 0% 100%;
 
-    --warning: 38 92% 50%;
+    --warning: 38 75% 48%;
     --warning-foreground: 0 0% 100%;
 
-    --info: 199 89% 48%;
+    --info: 199 65% 45%;
     --info-foreground: 0 0% 100%;
 
     --border: 220 13% 91%;
     --input: 220 13% 91%;
-    --ring: 217 91% 50%;
+    --ring: 217 70% 45%;
 
     --radius: var(--radius-lg);
 
     --sidebar-background: 220 25% 10%;
     --sidebar-foreground: 220 14% 80%;
-    --sidebar-primary: 217 91% 60%;
+    --sidebar-primary: 217 70% 55%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 220 20% 16%;
     --sidebar-accent-foreground: 220 14% 90%;
     --sidebar-border: 220 20% 18%;
-    --sidebar-ring: 217 91% 60%;
+    --sidebar-ring: 217 70% 55%;
     --sidebar-muted: 220 14% 40%;
 
-    --chart-1: 217 91% 50%;
-    --chart-2: 142 72% 42%;
-    --chart-3: 38 92% 50%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 0 84% 60%;
+    --chart-1: 217 70% 45%;
+    --chart-2: 142 60% 40%;
+    --chart-3: 38 75% 48%;
+    --chart-4: 280 55% 55%;
+    --chart-5: 0 70% 50%;
 
-    --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-    --font-mono: 'JetBrains Mono', monospace;
+    --font-sans: 'Geist Variable', system-ui, -apple-system, sans-serif;
+    --font-mono: 'Geist Mono Variable', monospace;
   }
 
   .dark {
@@ -73,27 +73,27 @@
     --card-foreground: 210 40% 98%;
     --popover: 222 25% 11%;
     --popover-foreground: 210 40% 98%;
-    --primary: 217 91% 60%;
+    --primary: 217 70% 55%;
     --primary-foreground: 0 0% 100%;
     --secondary: 217 20% 17%;
     --secondary-foreground: 210 40% 98%;
     --muted: 217 20% 17%;
     --muted-foreground: 215 20% 55%;
     --accent: 217 30% 20%;
-    --accent-foreground: 217 91% 70%;
+    --accent-foreground: 217 70% 65%;
     --destructive: 0 62% 30%;
     --destructive-foreground: 210 40% 98%;
     --border: 217 20% 17%;
     --input: 217 20% 17%;
-    --ring: 217 91% 60%;
+    --ring: 217 70% 55%;
     --sidebar-background: 222 30% 6%;
     --sidebar-foreground: 220 14% 75%;
-    --sidebar-primary: 217 91% 60%;
+    --sidebar-primary: 217 70% 55%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 222 25% 12%;
     --sidebar-accent-foreground: 220 14% 90%;
     --sidebar-border: 222 25% 14%;
-    --sidebar-ring: 217 91% 60%;
+    --sidebar-ring: 217 70% 55%;
     --sidebar-muted: 220 10% 40%;
   }
 }
@@ -392,6 +392,38 @@
 
 .animate-highlight {
   animation: highlight-pulse 3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Skip link */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.sr-only:focus {
+  position: absolute;
+  width: auto;
+  height: auto;
+  padding: 0.5rem 1rem;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
+/* Toast live region */
+#toast-live-region {
+  position: fixed;
+  bottom: 1rem;
+  right: 1rem;
+  pointer-events: none;
 }
 
 /* Urgent row: soft red background with smooth blink */

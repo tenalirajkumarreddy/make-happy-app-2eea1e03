@@ -1,4 +1,4 @@
-import { Bell, ChevronDown, LogOut, Moon, Sun, CheckCheck, User, Building2, Settings } from "lucide-react";
+import { Bell, ChevronDown, LogOut, Moon, Sun, CheckCheck, User, Building2, Settings, Maximize, Minimize } from "lucide-react";
 import { timeAgo } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
@@ -71,6 +71,23 @@ export function TopBar() {
   const { dark, toggle } = useTheme();
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
   const [open, setOpen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+  }, []);
+
+  const toggleFullscreen = async () => {
+    if (!document.fullscreenElement) {
+      await document.documentElement.requestFullscreen();
+    } else {
+      await document.exitFullscreen();
+    }
+  };
 
   // Request browser notification permission on first render
   useEffect(() => {
@@ -139,6 +156,15 @@ export function TopBar() {
         )}
       </div>
       <div className="ml-auto flex items-center gap-2">
+        {/* Fullscreen toggle */}
+        <button
+          onClick={toggleFullscreen}
+          className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+          title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+        >
+          {isFullscreen ? <Minimize className="h-5 w-5" /> : <Maximize className="h-5 w-5" />}
+        </button>
+
         {/* Offline queue status indicator */}
         <OfflineQueueStatus />
 

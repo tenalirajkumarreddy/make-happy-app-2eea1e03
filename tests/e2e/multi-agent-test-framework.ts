@@ -107,37 +107,41 @@ export class MultiAgentTestFramework {
     return agent;
   }
 
-  async loginAgent(agent: AgentSession): Promise<boolean> {
-    try {
-      console.log(`[MultiAgent] Logging in ${agent.role} (${agent.phone})`);
+    async loginAgent(agent: AgentSession): Promise<boolean> {
+      try {
+        console.log(`[MultiAgent] Logging in ${agent.role} (${agent.phone})`);
 
-      await agent.page.goto(`${TEST_CONFIG.baseURL}/auth`);
-      await agent.page.waitForLoadState('networkidle');
+        await agent.page.goto(`${TEST_CONFIG.baseURL}/auth`);
+        await agent.page.waitForLoadState('networkidle');
 
-      // Fill phone number
-      await agent.page.fill('input[type="tel"], input[placeholder*="phone"], input[name="phone"]', agent.phone);
-      await agent.page.click('button[type="submit"], button:has-text("Send"), button:has-text("Continue")');
+        // Fill phone number using multiple fallback strategies
+        await agent.page.locator('#phone, [data-testid="phone-input"], input[type="tel"], input[placeholder*="phone"], textarea[name="phone"], input[name="phone"]').first().fill(agent.phone);
+        
+        // Click Send OTP using multiple fallback selectors
+        await agent.page.locator('button[type="submit"], button:has-text("Send OTP"), [data-testid="send-otp-btn"], button:has-text("Send"), button:has-text("Continue")').first().click();
 
-      // Wait for OTP input
-      await agent.page.waitForSelector('input[type="text"][maxlength="6"], input[placeholder*="OTP"], input[name="otp"]', { timeout: 10000 });
+        // Wait for OTP input with multiple fallbacks
+        await agent.page.waitForSelector('#otp, [data-testid="otp-input"], input[placeholder="6-digit code"], input[type="text"][maxlength="6"], input[name="otp"]', { timeout: 10000 });
+        
+        // Fill OTP
+        await agent.page.locator('#otp, [data-testid="otp-input"], input[maxlength="6"], input[placeholder="6-digit code"]').first().fill('000000');
+        
+        // Submit OTP using multiple fallbacks
+        await agent.page.locator('button:has-text("Verify OTP"), [data-testid="verify-otp-btn"], button:has-text("Verify"), button[type="submit"]').first().click();
 
-      // Fill OTP
-      await agent.page.fill('input[type="text"][maxlength="6"], input[placeholder*="OTP"], input[name="otp"]', '000000');
-      await agent.page.click('button:has-text("Verify"), button[type="submit"]');
+        // Wait for dashboard
+        await agent.page.waitForURL(/dashboard|portal|\/$/, { timeout: 30000 });
+        await agent.page.waitForLoadState('networkidle');
 
-      // Wait for dashboard
-      await agent.page.waitForURL(/dashboard|portal|\/$/, { timeout: 30000 });
-      await agent.page.waitForLoadState('networkidle');
-
-      agent.loggedIn = true;
-      console.log(`[MultiAgent] ✓ ${agent.role} logged in successfully`);
-      return true;
-    } catch (error) {
-      console.error(`[MultiAgent] ✗ ${agent.role} login failed:`, error);
-      await this.takeScreenshot(agent, 'login_failed');
-      return false;
+        agent.loggedIn = true;
+        console.log(`[MultiAgent] ✓ ${agent.role} logged in successfully`);
+        return true;
+      } catch (error) {
+        console.error(`[MultiAgent] ✗ ${agent.role} login failed:`, error);
+        await this.takeScreenshot(agent, 'login_failed');
+        return false;
+      }
     }
-  }
 
   async executeAgentActions(agent: AgentSession, actions: AgentAction[]): Promise<AgentResult> {
     const result: AgentResult = {

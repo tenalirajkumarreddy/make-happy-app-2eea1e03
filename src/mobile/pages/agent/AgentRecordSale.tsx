@@ -205,16 +205,16 @@ export function RecordSale({ preselectStore }: { preselectStore?: StoreOption | 
   const updateQty = (productId: string, delta: number) => {
     setItems((prev) => prev.map((i) => {
       if (i.product_id !== productId) return i;
-      const newQty = i.quantity + delta;
-      return newQty <= 0 ? { ...i, quantity: 0 } : { ...i, quantity: newQty };
-    }).filter((i) => i.quantity > 0));
+      const newQty = Math.max(0, i.quantity + delta);
+      return { ...i, quantity: newQty };
+    }));
   };
 
   const setQtyDirect = (productId: string, value: string) => {
     const parsed = parseInt(value, 10);
     if (value === "") { setItems(items.filter((i) => i.product_id !== productId)); return; }
     if (!Number.isFinite(parsed) || parsed < 0) return;
-    setItems(items.map((i) => i.product_id === productId ? { ...i, quantity: parsed || 1 } : i));
+    setItems(items.map((i) => i.product_id === productId ? { ...i, quantity: parsed || 0 } : i));
   };
 
   const updateUnitPrice = (productId: string, value: string) => {
@@ -224,7 +224,7 @@ export function RecordSale({ preselectStore }: { preselectStore?: StoreOption | 
   const totalAmount = items.reduce((s, i) => s + i.quantity * i.unit_price, 0);
   const cash = Number(cashAmount) || 0;
   const upi = Number(upiAmount) || 0;
-  const outstandingFromSale = Math.max(0, totalAmount - cash - upi);
+  const outstandingFromSale = totalAmount - cash - upi;
   const oldOutstanding = Number(store?.outstanding || 0);
   const newOutstanding = oldOutstanding + outstandingFromSale;
 
@@ -313,7 +313,7 @@ export function RecordSale({ preselectStore }: { preselectStore?: StoreOption | 
         p_total_amount: totalAmount,
         p_cash_amount: cash,
         p_upi_amount: upi,
-        p_outstanding_amount: outstandingFromSale,
+        p_outstanding_amount: Math.max(outstandingFromSale, 0),
         p_sale_items: saleItems,
         p_created_at: saleDate ? new Date(saleDate).toISOString() : null,
         p_expected_outstanding: store?.outstanding ?? null,
@@ -364,6 +364,7 @@ export function RecordSale({ preselectStore }: { preselectStore?: StoreOption | 
     if (items.length === 0) { toast.error("Add at least one product"); return; }
     if (totalAmount === 0) { toast.error("Sale total cannot be zero"); return; }
     if (!store.customer_id) { toast.error("Store has no linked customer"); return; }
+    if (outstandingFromSale < 0) { toast.error("Payment exceeds sale total. Reduce payment amount."); return; }
     if (role === "operator" && outstandingFromSale !== 0) {
       toast.error("Operator sales require full payment. Cash + UPI must equal total amount.");
       return;
@@ -422,8 +423,8 @@ export function RecordSale({ preselectStore }: { preselectStore?: StoreOption | 
           <div className="rounded-2xl bg-card dark:bg-slate-800 border border-border dark:border-border p-3.5 flex justify-between items-center">
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold">Current Balance</p>
-              <p className={cn("text-xl font-bold mt-0.5", oldOutstanding > 0 ? "text-red-500" : "text-emerald-500")}>
-                ₹{oldOutstanding.toLocaleString("en-IN")}
+              <p className={cn("text-xl font-bold mt-0.5", oldOutstanding > 0 ? "text-red-500" : oldOutstanding < 0 ? "text-emerald-500" : "text-muted-foreground")}>
+                {oldOutstanding > 0 ? `-₹${oldOutstanding.toLocaleString("en-IN")}` : oldOutstanding < 0 ? `+₹${Math.abs(oldOutstanding).toLocaleString("en-IN")}` : "₹0"}
               </p>
             </div>
             {store.customers?.name && (
@@ -585,7 +586,7 @@ export function RecordSale({ preselectStore }: { preselectStore?: StoreOption | 
                             type="number"
                             inputMode="numeric"
                             pattern="[0-9]*"
-                            min="1"
+                            min="0"
                             value={inCart.quantity}
                             onChange={(e) => setQtyDirect(product.id, e.target.value)}
                             className="h-10 w-14 text-sm font-bold text-center rounded-xl border-border dark:border-border"
@@ -744,18 +745,20 @@ export function RecordSale({ preselectStore }: { preselectStore?: StoreOption | 
             <div className="space-y-2">
               <div className="flex justify-between text-xs text-muted-foreground dark:text-muted-foreground">
                 <span>Existing balance</span>
-                <span className="font-semibold">₹{oldOutstanding.toLocaleString("en-IN")}</span>
+                <span className={cn("font-semibold", oldOutstanding > 0 ? "text-red-500" : oldOutstanding < 0 ? "text-emerald-500" : "text-muted-foreground")}>
+                  {oldOutstanding > 0 ? `-₹${oldOutstanding.toLocaleString("en-IN")}` : oldOutstanding < 0 ? `+₹${Math.abs(oldOutstanding).toLocaleString("en-IN")}` : "₹0"}
+                </span>
               </div>
               <div className="flex justify-between text-xs">
                 <span className="text-muted-foreground dark:text-muted-foreground">From this sale</span>
-                <span className={cn("font-semibold", outstandingFromSale > 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400")}>
-                  {outstandingFromSale >= 0 ? "+" : ""}₹{outstandingFromSale.toLocaleString("en-IN")}
+                <span className={cn("font-semibold", outstandingFromSale > 0 ? "text-red-500" : outstandingFromSale < 0 ? "text-emerald-500" : "text-muted-foreground")}>
+                  {outstandingFromSale > 0 ? `-₹${outstandingFromSale.toLocaleString("en-IN")}` : outstandingFromSale < 0 ? `+₹${Math.abs(outstandingFromSale).toLocaleString("en-IN")}` : "₹0"}
                 </span>
               </div>
               <div className="flex justify-between text-sm font-bold border-t border-border dark:border-border pt-2 mt-1">
                 <span className="text-slate-700 dark:text-slate-200">New balance</span>
-                <span className={cn("text-base", newOutstanding > 0 ? "text-red-500" : "text-emerald-500")}>
-                  ₹{newOutstanding.toLocaleString("en-IN")}
+                <span className={cn("text-base", newOutstanding > 0 ? "text-red-500" : newOutstanding < 0 ? "text-emerald-500" : "text-muted-foreground")}>
+                  {newOutstanding > 0 ? `-₹${newOutstanding.toLocaleString("en-IN")}` : newOutstanding < 0 ? `+₹${Math.abs(newOutstanding).toLocaleString("en-IN")}` : "₹0"}
                 </span>
               </div>
             </div>

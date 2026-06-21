@@ -4,7 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 
 // Roles restricted by the agent route/store-type access matrices.
 // Managers are intentionally NOT scoped: they should retain broad visibility by default.
-const SCOPED_ROLES = new Set(["agent", "marketer", "operator"]);
+// Operator role doesn't exist in this codebase.
+const SCOPED_ROLES = new Set(["agent", "marketer"]);
 
 export function isScopedRole(role?: string | null) {
   return !!role && SCOPED_ROLES.has(role);
@@ -92,10 +93,11 @@ export function useRouteAccess(userId?: string | null, role?: string | null) {
     const routeAccess = computeRouteAccess(routeRows, role);
     const storeTypeAccess = computeStoreTypeAccess(storeTypeRows, role);
 
-    // Combined check: store must satisfy BOTH route AND store-type access
-    const canAccessStore = (routeId: string | null | undefined, storeTypeId: string | null | undefined) => {
-      return routeAccess.canAccessRoute(routeId) && storeTypeAccess.canAccessStoreType(storeTypeId);
-    };
+  // Combined check: store must satisfy BOTH route AND store-type access
+  // Deny-by-default: null/undefined IDs are denied (no access without explicit route + type)
+  const canAccessStore = (routeId: string | null | undefined, storeTypeId: string | null | undefined) => {
+    return routeAccess.canAccessRoute(routeId) && storeTypeAccess.canAccessStoreType(storeTypeId);
+  };
 
     return {
       ...routeAccess,

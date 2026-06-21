@@ -18,12 +18,15 @@ interface OrderStockSummaryProps {
 }
 
 export function OrderStockSummary({ orders }: OrderStockSummaryProps) {
-  const items = useMemo(() => {
-    if (!orders) return [];
+  const { items, activeOrderCount, totalUnits } = useMemo(() => {
+    if (!orders) return { items: [], activeOrderCount: 0, totalUnits: 0 };
     const map = new Map<string, { name: string; totalQty: number }>();
+    let activeOrderCount = 0;
+    let totalUnits = 0;
     for (const order of orders) {
       if (order.status !== "pending" && order.status !== "confirmed") continue;
       if (order.order_type !== "detailed" || !order.order_items) continue;
+      activeOrderCount++;
       for (const item of order.order_items) {
         const key = item.product_id;
         const existing = map.get(key);
@@ -33,45 +36,56 @@ export function OrderStockSummary({ orders }: OrderStockSummaryProps) {
         } else {
           map.set(key, { name, totalQty: item.quantity });
         }
+        totalUnits += item.quantity;
       }
     }
-    return Array.from(map.values()).sort((a, b) => b.totalQty - a.totalQty);
+    return {
+      items: Array.from(map.values()).sort((a, b) => b.totalQty - a.totalQty),
+      activeOrderCount,
+      totalUnits,
+    };
   }, [orders]);
 
   const top = items.slice(0, 5);
   const remaining = items.length - 5;
 
+  if (items.length === 0) return null;
+
   return (
-    <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 shadow-sm">
-      <div className="flex items-center gap-2 mb-2">
-        <Package className="h-4 w-4 text-slate-500" />
-        <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-          Stock needed {items.length > 0 ? `(${items.length} items)` : ""}
-        </span>
-      </div>
-      {items.length === 0 ? (
-        <p className="text-xs text-slate-400 dark:text-slate-500 italic">
-          No pending orders with product requirements
-        </p>
-      ) : (
-        <div className="space-y-1.5">
-          {top.map((item, i) => (
-            <div key={i} className="flex items-center justify-between text-sm">
-              <span className="text-slate-700 dark:text-slate-200 truncate flex-1">
-                {item.name}
-              </span>
-              <span className="font-bold tabular-nums text-amber-700 dark:text-amber-300 ml-2 shrink-0">
-                × {item.totalQty}
-              </span>
-            </div>
-          ))}
-          {remaining > 0 && (
-            <p className="text-xs text-slate-400 dark:text-slate-500 pt-0.5">
-              +{remaining} more items
-            </p>
-          )}
+    <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <Package className="h-4 w-4 text-amber-600" />
+          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            Stock needed
+          </span>
         </div>
-      )}
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded font-medium">
+            {activeOrderCount} order{activeOrderCount !== 1 ? "s" : ""}
+          </span>
+          <span className="bg-muted px-1.5 py-0.5 rounded font-medium">
+            {totalUnits} unit{totalUnits !== 1 ? "s" : ""}
+          </span>
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        {top.map((item, i) => (
+          <div key={i} className="flex items-center justify-between text-sm">
+            <span className="text-foreground truncate flex-1">
+              {item.name}
+            </span>
+            <span className="font-bold tabular-nums text-amber-700 dark:text-amber-300 ml-2 shrink-0">
+              × {item.totalQty}
+            </span>
+          </div>
+        ))}
+        {remaining > 0 && (
+          <p className="text-xs text-muted-foreground pt-0.5">
+            +{remaining} more item{remaining !== 1 ? "s" : ""}
+          </p>
+        )}
+      </div>
     </div>
   );
 }

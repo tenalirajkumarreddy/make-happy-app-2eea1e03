@@ -1427,8 +1427,13 @@ const Handovers = () => {
           isAdminOrManager
             ? { label: "Admin Transfer", icon: Send, onClick: () => setAdminTransferOpen(true) }
             : !isFinalizer
-            ? { label: "Create", icon: Send, onClick: () => { setCreateType("handover"); setCreateOpen(true); } }
-            : undefined
+              ? {
+                  label: "Create", 
+                  icon: Send, 
+                  onClick: () => { setCreateType("handover"); setCreateOpen(true); },
+                  'data-testid': 'create-handover-btn'
+                }
+              : undefined
         }
         actions={
           isAdminOrManager && canAdjustHoldingBalance
@@ -2046,7 +2051,7 @@ const Handovers = () => {
                 <div className="space-y-2">
                   <Label>Send To</Label>
                   <Select value={toUserId} onValueChange={setToUserId}>
-                    <SelectTrigger><SelectValue placeholder="Select recipient" /></SelectTrigger>
+                    <SelectTrigger data-testid="handover-recipient-select"><SelectValue placeholder="Select recipient" /></SelectTrigger>
                     <SelectContent>
                       {staffProfiles?.length === 0 ? (
                         <SelectItem value="__empty__" disabled>No staff available</SelectItem>
@@ -2072,7 +2077,7 @@ const Handovers = () => {
 
                 <div className="space-y-2">
                   <Label>Amount (Rs)</Label>
-                  <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Enter amount" min="1" />
+                  <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Enter amount" min="1" data-testid="handover-amount-input" />
                   {partialSetting === false && !isFinalizer && (
                     <p className="text-xs text-warning flex items-center gap-1">
                       <AlertCircle className="h-3 w-3 shrink-0" />
@@ -2096,7 +2101,7 @@ const Handovers = () => {
                 Submit Request
               </Button>
             ) : (
-              <Button onClick={handleCreate} disabled={submitting}>
+              <Button onClick={handleCreate} disabled={submitting} data-testid="handover-submit-btn">
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
                 Request Transfer
               </Button>

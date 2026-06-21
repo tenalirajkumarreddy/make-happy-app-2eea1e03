@@ -13,6 +13,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
 import { DollarSign, Store, Settings2, Upload, Loader2, Phone, MapPin } from "lucide-react";
 import { usePermission } from "@/hooks/usePermission";
+import { useRouteAccess } from "@/hooks/useRouteAccess";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useState, useMemo, useEffect } from "react";
@@ -56,6 +57,7 @@ const Stores = () => {
   const canBulk = role === "super_admin" || role === "manager";
   const canEdit = role === "super_admin" || role === "manager";
   const warehouseScopeKey = currentWarehouse?.id || "no-warehouse";
+  const { canAccessStore, hasMatrixRestrictions, hasStoreTypeRestrictions, loading: accessLoading } = useRouteAccess(user?.id, role);
 
   useEffect(() => {
     document.title = "Stores";
@@ -365,14 +367,27 @@ const Stores = () => {
   ];
 
   const filteredStores = useMemo(() => {
-    return applyFilters(stores || [], filters, {
+    let result = applyFilters(stores || [], filters, {
       dateField: "created_at",
       routeField: "route_id",
       storeTypeField: "store_type_id",
       statusField: "is_active",
       outstandingField: "outstanding",
     });
-  }, [stores, filters]);
+
+    // Access matrix filtering for scoped roles
+    if (accessLoading && (hasMatrixRestrictions || hasStoreTypeRestrictions)) {
+      return [];
+    }
+    if (hasMatrixRestrictions || hasStoreTypeRestrictions) {
+      result = result.filter((s: any) => {
+        if (!s.route_id && !s.store_type_id) return false;
+        return canAccessStore(s.route_id, s.store_type_id);
+      });
+    }
+
+    return result;
+  }, [stores, filters, hasMatrixRestrictions, hasStoreTypeRestrictions, canAccessStore, accessLoading]);
 
   const warehouseNameById = useMemo(() => {
     return new Map(allWarehouses.map((warehouse) => [warehouse.id, warehouse.name]));

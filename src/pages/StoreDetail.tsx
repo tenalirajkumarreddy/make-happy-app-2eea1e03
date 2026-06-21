@@ -86,19 +86,20 @@ const StoreDetail = () => {
   });
 
    const { data: store, isLoading } = useQuery({
-     queryKey: ["store", id, currentWarehouse?.id],
-     queryFn: async () => {
-       let query = supabase
-         .from("stores")
-         .select("*, customers(id, name, is_active, kyc_status, kyc_selfie_url, kyc_aadhar_front_url, kyc_aadhar_back_url, kyc_rejection_reason, kyc_submitted_at, kyc_verified_at), store_types(name, credit_limit_kyc, credit_limit_no_kyc), routes(name)")
-         .eq("id", id!);
-       if (currentWarehouse?.id) query = query.or(`warehouse_id.eq.${currentWarehouse.id},warehouse_id.is.null`);
-       const { data, error } = await query.maybeSingle();
-       if (error) throw error;
-       return data;
-     },
-     enabled: !!id,
-   });
+      queryKey: ["store", id, currentWarehouse?.id],
+      queryFn: async () => {
+        let query = supabase
+          .from("stores")
+          .select("*, customers(id, name, is_active, kyc_status, kyc_selfie_url, kyc_aadhar_front_url, kyc_aadhar_back_url, kyc_rejection_reason, kyc_submitted_at, kyc_verified_at), store_types(name, credit_limit_kyc, credit_limit_no_kyc), routes(name)")
+          .eq("id", id!);
+        if (currentWarehouse?.id) query = query.or(`warehouse_id.eq.${currentWarehouse.id},warehouse_id.is.null`);
+        const { data, error } = await query.maybeSingle();
+        if (error) throw error;
+        return data;
+      },
+      enabled: !!id,
+      staleTime: 0, // Always fetch fresh data for live store profile
+    });
 
   // Customer list for transfer
    const { data: allCustomers } = useQuery({
@@ -726,8 +727,8 @@ const handleDeleteQr = async (qrId: string) => {
         <StatCard title="Collections" value={`₹${totalCollected.toLocaleString()}`} icon={Banknote} iconColor="success" />
         <StatCard 
         title="Outstanding" 
-        value={`₹${Number(store.outstanding).toLocaleString()}`} 
-        icon={Banknote} 
+        value={`${Number(store.outstanding) < 0 ? '-' : ''}₹${Math.abs(Number(store.outstanding)).toLocaleString()}`}
+        icon={Banknote}
         iconColor={Number(store.outstanding) > 0 ? "destructive" : Number(store.outstanding) < 0 ? "success" : "warning"}
         className={Number(store.outstanding) > 0 ? "border-l-4 border-l-destructive" : Number(store.outstanding) < 0 ? "border-l-4 border-l-success" : ""}
       />

@@ -66,6 +66,7 @@ interface Order {
   cancelled_at: string | null;
   cancelled_by: string | null;
   cancellation_reason: string | null;
+  canceller_profile?: { full_name: string } | null;
   stores?: {
     id: string;
     name: string;
@@ -79,16 +80,17 @@ interface Order {
     email?: string;
   };
   order_items?: OrderItem[];
-  assigned_to_user?: {
-    id: string;
-    full_name: string;
-    email: string;
-  };
+  assigned_to?: string;
+  assigned_to_profile?: { full_name: string } | null;
   fulfilled_by_sale?: {
     id: string;
     display_id: string;
     total_amount: number;
   };
+  creator_profile?: { full_name: string; avatar_url?: string } | null;
+  updater_profile?: { full_name: string } | null;
+  fulfiller_profile?: { full_name: string } | null;
+  canceller_profile?: { full_name: string } | null;
 }
 
 interface OrderViewDialogProps {
@@ -145,7 +147,11 @@ export function OrderViewDialog({
             products(id, name, sku, base_price, image_url)
           ),
           fulfilled_by_sale:fulfilled_by_sale_id(id, display_id, total_amount),
-          assigned_to_user:assigned_to(id, full_name, email)
+          assigned_to_profile:profiles!orders_assigned_to_profiles_fkey(full_name),
+          creator_profile:profiles!orders_created_by_profiles_fkey_temp(full_name, avatar_url),
+          updater_profile:profiles!orders_updated_by_fkey(full_name),
+          fulfiller_profile:profiles!orders_fulfilled_by_profiles_fkey(full_name),
+          canceller_profile:profiles!orders_cancelled_by_profiles_fkey(full_name)
         `)
         .eq("id", id)
         .single();
@@ -305,10 +311,10 @@ export function OrderViewDialog({
                     <p className="text-xs text-muted-foreground">Created At</p>
                     <p className="text-sm">{formatDate(order.created_at)}</p>
                   </div>
-                  {order.assigned_to_user && (
+                  {order.assigned_to && (
                     <div>
                       <p className="text-xs text-muted-foreground">Assigned To</p>
-                      <p className="text-sm">{order.assigned_to_user.full_name}</p>
+                      <p className="text-sm">{order.assigned_to_profile?.full_name || order.assigned_to.slice(0, 8) + "…"}</p>
                     </div>
                   )}
                 </div>
@@ -357,15 +363,6 @@ export function OrderViewDialog({
                     <span className="text-muted-foreground">Amount:</span>{" "}
                     <span className="font-medium">₹{order.fulfilled_by_sale.total_amount.toLocaleString()}</span>
                   </p>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="mt-2 border-green-600 text-green-700 hover:bg-green-100"
-                    onClick={() => onViewSale?.(order.fulfilled_by_sale!.id)}
-                  >
-                    <ShoppingCart className="h-4 w-4 mr-1" />
-                    View Sale
-                  </Button>
                 </CardContent>
               </Card>
             )}
@@ -446,11 +443,9 @@ export function OrderViewDialog({
                   <div className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 rounded-xl px-4 py-2.5">
                     <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                     <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300 flex-1">
-                      Order fulfilled — sale recorded
+                      Order fulfilled — Sale {order.fulfilled_by_sale?.display_id || order.fulfilled_by_sale_id.slice(0, 8)}
+                      {order.fulfilled_by_sale?.total_amount != null && ` • ₹${order.fulfilled_by_sale.total_amount.toLocaleString()}`}
                     </span>
-                    <Button size="sm" variant="outline" className="h-7 text-2xs" onClick={() => window.open(`/sales`, "_blank")}>
-                      View Sale
-                    </Button>
                   </div>
                 )}
                 {proforma.status === "cancelled" && (
@@ -494,8 +489,36 @@ export function OrderViewDialog({
                       <Calendar className="h-3 w-3 inline mr-1" />
                       {formatDate(order.created_at)}
                     </p>
+                    {order.creator_profile?.full_name && (
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        <User className="h-3 w-3 inline mr-1" />
+                        by {order.creator_profile.full_name}
+                      </p>
+                    )}
                   </div>
                 </div>
+
+                {order.updated_at !== order.created_at && (
+                  <div className="flex gap-3">
+                    <div className="flex flex-col items-center">
+                      <div className="h-2 w-2 rounded-full bg-amber-500" />
+                      <div className="w-px h-full bg-border" />
+                    </div>
+                    <div className="flex-1 pb-4">
+                      <p className="font-medium">Order Updated</p>
+                      <p className="text-sm text-muted-foreground">
+                        <Calendar className="h-3 w-3 inline mr-1" />
+                        {formatDate(order.updated_at)}
+                      </p>
+                      {order.updater_profile?.full_name && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          <User className="h-3 w-3 inline mr-1" />
+                          by {order.updater_profile.full_name}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {order.confirmed_at && (
                   <div className="flex gap-3">
@@ -509,6 +532,12 @@ export function OrderViewDialog({
                         <Calendar className="h-3 w-3 inline mr-1" />
                         {formatDate(order.confirmed_at)}
                       </p>
+                      {order.updater_profile?.full_name && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          <User className="h-3 w-3 inline mr-1" />
+                          by {order.updater_profile.full_name}
+                        </p>
+                      )}
                     </div>
                   </div>
                 )}
@@ -525,6 +554,12 @@ export function OrderViewDialog({
                         <Calendar className="h-3 w-3 inline mr-1" />
                         {formatDate(order.delivered_at)}
                       </p>
+                      {order.fulfiller_profile?.full_name && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          <User className="h-3 w-3 inline mr-1" />
+                          by {order.fulfiller_profile.full_name}
+                        </p>
+                      )}
                     </div>
                   </div>
                 )}
@@ -540,6 +575,12 @@ export function OrderViewDialog({
                         <Calendar className="h-3 w-3 inline mr-1" />
                         {formatDate(order.cancelled_at)}
                       </p>
+                      {order.canceller_profile?.full_name && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          <User className="h-3 w-3 inline mr-1" />
+                          by {order.canceller_profile.full_name}
+                        </p>
+                      )}
                     </div>
                   </div>
                 )}
@@ -549,7 +590,7 @@ export function OrderViewDialog({
         </Tabs>
 
         <DialogFooter className="flex justify-between items-center">
-          <div>
+          <div className="flex items-center gap-2">
             {order.status === "delivered" && !order.fulfilled_by_sale_id && (
               <Button
                 variant="outline"

@@ -67,12 +67,10 @@ export const validateSaleData = (data: {
     errors.push("Please fill all required fields");
   }
 
-  if (data.items.some(i => !i.product_id)) {
-    errors.push("Please fill all required fields");
-  }
+  const totalQuantity = data.items.reduce((sum, i) => sum + (i.quantity || 0), 0);
 
-  if (data.items.some(i => i.quantity <= 0)) {
-    errors.push("All item quantities must be greater than zero");
+  if (totalQuantity <= 0) {
+    errors.push("Total quantity of all products must be greater than zero");
   }
 
   if (data.total_amount === 0) {

@@ -75,6 +75,7 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
   const [saleDate, setSaleDate] = useState("");
   const [showProductSearch, setShowProductSearch] = useState(false);
   const [showOrders, setShowOrders] = useState(false);
+  const [fulfilledOrderId, setFulfilledOrderId] = useState<string | null>(null);
   const [receiptSaleId, setReceiptSaleId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -195,11 +196,10 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
   };
 
   const updateQty = (productId: string, delta: number) => {
-    setItems(items.flatMap((i) => {
-      if (i.product_id !== productId) return [i];
+    setItems(items.map((i) => {
+      if (i.product_id !== productId) return i;
       const newQty = Math.max(0, i.quantity + delta);
-      if (newQty === 0) return [];
-      return [{ ...i, quantity: newQty }];
+      return { ...i, quantity: newQty };
     }));
   };
 
@@ -207,13 +207,13 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
     const parsed = parseInt(value, 10);
     if (value === "") { setItems(items.filter((i) => i.product_id !== productId)); return; }
     if (!Number.isFinite(parsed) || parsed < 0) return;
-    setItems(items.map((i) => i.product_id === productId ? { ...i, quantity: parsed || 1 } : i));
+    setItems(items.map((i) => i.product_id === productId ? { ...i, quantity: parsed || 0 } : i));
   };
 
   const totalAmount = items.reduce((s, i) => s + i.quantity * i.unit_price, 0);
   const cash = parseFloat(cashAmount) || 0;
   const upi = parseFloat(upiAmount) || 0;
-  const outstandingFromSale = Math.max(0, totalAmount - cash - upi);
+  const outstandingFromSale = totalAmount - cash - upi;
   const oldOutstanding = Number(store?.outstanding ?? 0);
   const newOutstanding = oldOutstanding + outstandingFromSale;
 
@@ -303,6 +303,7 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
         old_outstanding: oldOutstanding,
         new_outstanding: newOutstanding,
         ...(saleDate ? { created_at: new Date(saleDate).toISOString() } : {}),
+        ...(fulfilledOrderId ? { fulfilled_order_id: fulfilledOrderId } : {}),
       };
       const saleItems = items.map((i) => ({ product_id: i.product_id, quantity: i.quantity, unit_price: i.unit_price, total_price: i.quantity * i.unit_price }));
 
@@ -349,10 +350,11 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
         p_total_amount: totalAmount,
         p_cash_amount: cash,
         p_upi_amount: upi,
-        p_outstanding_amount: outstandingFromSale,
+        p_outstanding_amount: Math.max(outstandingFromSale, 0),
         p_sale_items: saleItems,
         p_created_at: saleDate ? new Date(saleDate).toISOString() : null,
         p_expected_outstanding: store?.outstanding ?? null,
+        p_fulfilled_order_id: fulfilledOrderId,
       });
       if (saleErr) throw saleErr;
 
@@ -433,6 +435,7 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
     setUpiAmount("");
     setRecordedFor("");
     setSaleDate("");
+    setFulfilledOrderId(null);
   };
 
   return (
@@ -474,8 +477,8 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
           <div className="rounded-xl bg-card border border-border border p-3.5 flex justify-between items-center">
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold">Current Balance</p>
-              <p className={cn("text-xl font-bold mt-0.5", oldOutstanding > 0 ? "text-red-500" : "text-emerald-500")}>
-                ₹{oldOutstanding.toLocaleString("en-IN")}
+              <p className={cn("text-xl font-bold mt-0.5", oldOutstanding > 0 ? "text-red-500" : oldOutstanding < 0 ? "text-emerald-500" : "text-muted-foreground")}>
+                {oldOutstanding > 0 ? `-₹${oldOutstanding.toLocaleString("en-IN")}` : oldOutstanding < 0 ? `+₹${Math.abs(oldOutstanding).toLocaleString("en-IN")}` : "₹0"}
               </p>
             </div>
             {store.customers?.name && (
@@ -537,6 +540,7 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
                       unit_price: Number(item.unit_price) || 0,
                     })) || [];
                     setItems(orderItems);
+                    setFulfilledOrderId(order.id);
                     setShowOrders(false);
                     toast.success(`Order ${order.display_id} items added to cart`);
                   }}
@@ -639,7 +643,7 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
                             type="number"
                             inputMode="numeric"
                             pattern="[0-9]*"
-                            min="1"
+                            min="0"
                             value={inCart.quantity}
                             onChange={(e) => setQtyDirect(product.id, e.target.value)}
                             className="h-10 w-14 text-sm font-bold text-center rounded-xl border-border border"
@@ -796,18 +800,20 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
             <div className="space-y-2">
               <div className="flex justify-between text-xs text-muted-foreground dark:text-muted-foreground">
                 <span>Existing balance</span>
-                <span className="font-semibold">₹{oldOutstanding.toLocaleString("en-IN")}</span>
+                <span className={cn("font-semibold", oldOutstanding > 0 ? "text-red-500" : oldOutstanding < 0 ? "text-emerald-500" : "text-muted-foreground")}>
+                  {oldOutstanding > 0 ? `-₹${oldOutstanding.toLocaleString("en-IN")}` : oldOutstanding < 0 ? `+₹${Math.abs(oldOutstanding).toLocaleString("en-IN")}` : "₹0"}
+                </span>
               </div>
               <div className="flex justify-between text-xs">
                 <span className="text-muted-foreground dark:text-muted-foreground">From this sale</span>
-                <span className={cn("font-semibold", outstandingFromSale > 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400")}>
-                  {outstandingFromSale >= 0 ? "+" : ""}₹{outstandingFromSale.toLocaleString("en-IN")}
+                <span className={cn("font-semibold", outstandingFromSale > 0 ? "text-red-500" : outstandingFromSale < 0 ? "text-emerald-500" : "text-muted-foreground")}>
+                  {outstandingFromSale > 0 ? `-₹${outstandingFromSale.toLocaleString("en-IN")}` : outstandingFromSale < 0 ? `+₹${Math.abs(outstandingFromSale).toLocaleString("en-IN")}` : "₹0"}
                 </span>
               </div>
               <div className="flex justify-between text-sm font-bold border-t border-border border pt-2 mt-1">
                 <span className="text-foreground">New balance</span>
-                <span className={cn("text-base", newOutstanding > 0 ? "text-red-500" : "text-emerald-500")}>
-                  ₹{newOutstanding.toLocaleString("en-IN")}
+                <span className={cn("text-base", newOutstanding > 0 ? "text-red-500" : newOutstanding < 0 ? "text-emerald-500" : "text-muted-foreground")}>
+                  {newOutstanding > 0 ? `-₹${newOutstanding.toLocaleString("en-IN")}` : newOutstanding < 0 ? `+₹${Math.abs(newOutstanding).toLocaleString("en-IN")}` : "₹0"}
                 </span>
               </div>
             </div>
@@ -1182,14 +1188,7 @@ function RecordPayment({ preselectStore }: { preselectStore?: StoreOption | null
             </div>
           </div>
 
-          {totalPayment > oldOutstanding && oldOutstanding > 0 && (
-            <div className="flex items-center gap-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/40 rounded-xl px-4 py-3">
-              <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
-              <span className="text-xs font-medium text-amber-700 dark:text-amber-400">
-                Payment exceeds outstanding balance
-              </span>
-            </div>
-          )}
+          
 
           <button
             className={cn(

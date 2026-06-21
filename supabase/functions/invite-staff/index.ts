@@ -306,6 +306,34 @@ Deno.serve(async (req) => {
       .from("user_roles")
       .insert({ user_id: newUser.user.id, role: normalizedRole, warehouse_id: warehouse_id || null });
 
+    // Seed default access matrix for agent/marketer: all routes + all store types enabled
+    if (normalizedRole === "agent" || normalizedRole === "marketer") {
+      const [routesRes, storeTypesRes] = await Promise.all([
+        supabaseAdmin.from("routes").select("id"),
+        supabaseAdmin.from("store_types").select("id"),
+      ]);
+
+      if (routesRes.data && routesRes.data.length > 0) {
+        await supabaseAdmin.from("agent_routes").insert(
+          routesRes.data.map((r: any) => ({
+            user_id: newUser.user.id,
+            route_id: r.id,
+            enabled: true,
+          }))
+        );
+      }
+
+      if (storeTypesRes.data && storeTypesRes.data.length > 0) {
+        await supabaseAdmin.from("agent_store_types").insert(
+          storeTypesRes.data.map((st: any) => ({
+            user_id: newUser.user.id,
+            store_type_id: st.id,
+            enabled: true,
+          }))
+        );
+      }
+    }
+
     // Link staff directory (indexed lookups instead of full-table scan)
     if (phone) {
       const phoneKey = significantPhone(phone);

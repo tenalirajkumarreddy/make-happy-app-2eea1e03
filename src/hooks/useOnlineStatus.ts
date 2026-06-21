@@ -221,6 +221,7 @@ export function useOnlineStatus() {
             p_expected_outstanding: saleData.old_outstanding ?? null,
             p_sale_items: saleItems,
             p_created_at: saleData.created_at ?? null,
+            p_fulfilled_order_id: saleData.fulfilled_order_id ?? null,
           }) as any;
           if (error) throw error;
         } else if (action.type === "transaction") {

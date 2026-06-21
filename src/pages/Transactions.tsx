@@ -9,7 +9,7 @@ import { enqueueWithContext } from "@/lib/conflictResolver";
 import { generateBusinessKey } from "@/lib/offlineQueue";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
-import { Loader2, X, CalendarIcon, Store as StoreIcon, RotateCcw, Receipt, Pencil } from "lucide-react";
+import { Loader2, X, CalendarIcon, Store as StoreIcon, RotateCcw, Receipt, Pencil, MapPin, UserCircle } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { QrStoreSelector } from "@/components/shared/QrStoreSelector";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
@@ -102,8 +102,9 @@ const Transactions = () => {
       queryFn: async () => {
        let query: any = supabase
        .from("transactions")
-        .select("*, is_fully_returned, stores(name, display_id, store_type_id, route_id, outstanding, customer_id), customers(id, name, display_id)")
-       .order("created_at", { ascending: false });
+         .select("*, is_fully_returned, stores(id, name, display_id, store_type_id, route_id, address, outstanding, customer_id, customers(name, display_id, phone, email), store_types(name), routes(name)), customers(id, name, display_id)")
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false });
        if (currentWarehouse?.id) query = query.or(`warehouse_id.eq.${currentWarehouse.id},warehouse_id.is.null`);
        // Non-admin roles only see their own records
        if (!isAdmin) query = query.eq("recorded_by", user!.id);
@@ -291,7 +292,7 @@ const Transactions = () => {
       setSaving(false);
       setShowAdd(false);
       resetForm();
-      afterTransactionSaved(qc);
+      afterTransactionSaved(qc, { storeId });
       return;
     }
 
@@ -303,6 +304,12 @@ const Transactions = () => {
       toast.error("Cash and UPI amounts cannot be negative");
       return;
     }
+
+    // Fresh fetch to ensure we have the latest outstanding before recording
+    const { data: freshStore, error: freshErr } = await supabase
+      .from("stores").select("outstanding").eq("id", storeId).single();
+    if (freshErr) { toast.error("Failed to fetch latest store balance"); setSaving(false); return; }
+    const freshOutstanding = Number(freshStore?.outstanding || 0);
 
     const customerId = selectedStore?.customer_id;
     if (!customerId) {
@@ -398,7 +405,7 @@ const Transactions = () => {
     setSaving(false);
     setShowAdd(false);
     resetForm();
-    afterTransactionSaved(qc);
+    afterTransactionSaved(qc, { storeId });
   };
 
   // Filtering is now done server-side; local array mirrors the fetched page(s)
@@ -546,25 +553,76 @@ const Transactions = () => {
             {children}
           </Link>
         </HoverCardTrigger>
-        <HoverCardContent className="w-64 p-0" align="start">
-          <div className="p-3 space-y-2">
-            <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                <StoreIcon className="h-4 w-4 text-primary" />
+        <HoverCardContent className="w-72 p-0" align="start">
+          <div className="p-3 space-y-3">
+            {/* Store Details */}
+            <div className="flex items-start gap-3">
+              <div className="h-14 w-14 rounded-lg bg-primary/10 flex items-center justify-center border">
+                <StoreIcon className="h-6 w-6 text-primary" />
               </div>
-              <div>
-                <p className="font-semibold text-sm">{store.name}</p>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm truncate">{store.name}</p>
                 <p className="text-xs text-muted-foreground">{store.display_id}</p>
+                {store.routes?.name && (
+                  <div className="flex items-center gap-1 mt-1">
+                    <MapPin className="h-3 w-3 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground truncate">{store.routes.name}</span>
+                  </div>
+                )}
               </div>
             </div>
+
+            {/* Type & Address */}
+            <div className="space-y-1.5 text-xs">
+              {store.store_types?.name && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-muted-foreground min-w-[60px]">Type:</span>
+                  <span className="font-medium">{store.store_types.name}</span>
+                </div>
+              )}
+              {store.address && (
+                <div className="flex items-start gap-1.5 text-muted-foreground">
+                  <span className="min-w-[60px]">Address:</span>
+                  <span className="line-clamp-2">{store.address}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Customer Details */}
+            {store.customers && (
+              <div className="space-y-1.5 text-xs border-t pt-2">
+                <div className="flex items-center gap-1.5">
+                  <UserCircle className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{store.customers.name}</p>
+                    <p className="text-xs text-muted-foreground">{store.customers.display_id}</p>
+                  </div>
+                </div>
+                {store.customers.phone && (
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <span className="min-w-[60px]">Phone:</span>
+                    <span className="truncate">{store.customers.phone}</span>
+                  </div>
+                )}
+                {store.customers.email && (
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <span className="min-w-[60px]">Email:</span>
+                    <span className="truncate">{store.customers.email}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Outstanding */}
             {store.outstanding !== undefined && (
-              <div className="flex items-center justify-between text-xs py-1 border-t">
-                <span className="text-muted-foreground">Outstanding:</span>
-                <span className={`font-medium ${Number(store.outstanding) > 0 ? 'text-destructive' : 'text-success'}`}>
-                  ₹{Number(store.outstanding || 0).toLocaleString()}
+              <div className="flex items-center justify-between py-2 border-t text-sm">
+                <span className="text-muted-foreground">Balance:</span>
+                <span className={`font-bold ${Number(store.outstanding) > 0 ? 'text-destructive' : Number(store.outstanding) < 0 ? 'text-green-600' : 'text-muted-foreground'}`}>
+                  {Number(store.outstanding) < 0 ? '-' : ''}₹{Math.abs(Number(store.outstanding || 0)).toLocaleString()}
                 </span>
               </div>
             )}
+
             <Button size="sm" variant="outline" className="w-full text-xs" asChild>
               <Link to={`/stores/${store.id}`}>View Store Profile</Link>
             </Button>
@@ -595,8 +653,8 @@ const Transactions = () => {
     { header: "Total", accessor: (row: any) => <span className={`font-semibold ${returnedClass(row)}`}>₹{Number(row.total_amount || 0).toLocaleString()}</span>, className: "font-semibold" },
     { header: "Cash", accessor: (row: any) => <span className={`text-sm hidden md:table-cell ${returnedClass(row)}`}>₹{Number(row.cash_amount || 0).toLocaleString()}</span>, className: "text-sm hidden md:table-cell" },
     { header: "UPI", accessor: (row: any) => <span className={`text-sm hidden md:table-cell ${returnedClass(row)}`}>₹{Number(row.upi_amount || 0).toLocaleString()}</span>, className: "text-sm hidden md:table-cell" },
-    { header: "Old Bal.", accessor: (row: any) => <span className={`text-muted-foreground text-sm hidden lg:table-cell ${returnedClass(row)}`}>₹{Number(row.old_outstanding || 0).toLocaleString()}</span>, className: "text-muted-foreground text-sm hidden lg:table-cell" },
-    { header: "New Bal.", accessor: (row: any) => <span className={`text-sm hidden lg:table-cell ${returnedClass(row)}`}>₹{Number(row.new_outstanding || 0).toLocaleString()}</span>, className: "text-sm hidden lg:table-cell" },
+    { header: "Old Bal.", accessor: (row: any) => <span className={`text-sm hidden lg:table-cell ${returnedClass(row)} ${Number(row.old_outstanding || 0) > 0 ? "text-destructive" : Number(row.old_outstanding || 0) < 0 ? "text-green-600" : "text-muted-foreground"}`}>₹{Math.abs(Number(row.old_outstanding || 0)).toLocaleString()}</span>, className: "text-sm hidden lg:table-cell" },
+    { header: "New Bal.", accessor: (row: any) => <span className={`text-sm hidden lg:table-cell ${returnedClass(row)} ${Number(row.new_outstanding || 0) > 0 ? "text-destructive" : Number(row.new_outstanding || 0) < 0 ? "text-green-600" : "text-muted-foreground"}`}>₹{Math.abs(Number(row.new_outstanding || 0)).toLocaleString()}</span>, className: "text-sm hidden lg:table-cell" },
     { header: "Date", accessor: (row: any) => <span className={`text-muted-foreground text-xs hidden sm:table-cell ${returnedClass(row)}`}>{new Date(row.created_at).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}</span>, className: "text-muted-foreground text-xs hidden sm:table-cell" },
     columns[5], // Keep the actions column
   ];
@@ -624,10 +682,10 @@ const Transactions = () => {
 
 
 
-<div className="flex flex-wrap items-center gap-2 p-3 rounded-lg border bg-muted/30">
+<div className="flex flex-wrap md:flex-nowrap items-center gap-2 p-3 rounded-lg border bg-muted/30">
       <Popover>
         <PopoverTrigger asChild>
-          <Button variant="outline" className="h-8 flex-1 min-w-[100px] justify-start gap-2 text-xs font-normal sm:flex-none">
+          <Button variant="outline" className="h-8 w-full sm:w-[90px] md:w-[100px] justify-start gap-2 text-xs font-normal">
             <CalendarIcon className="h-3 w-3 shrink-0" />
             {filterFrom ? format(new Date(filterFrom + "T00:00:00"), "dd MMM yy") : "From"}
           </Button>
@@ -638,7 +696,7 @@ const Transactions = () => {
       </Popover>
       <Popover>
         <PopoverTrigger asChild>
-          <Button variant="outline" className="h-8 flex-1 min-w-[100px] justify-start gap-2 text-xs font-normal sm:flex-none">
+          <Button variant="outline" className="h-8 w-full sm:w-[90px] md:w-[100px] justify-start gap-2 text-xs font-normal">
             <CalendarIcon className="h-3 w-3 shrink-0" />
             {filterTo ? format(new Date(filterTo + "T00:00:00"), "dd MMM yy") : "To"}
           </Button>
@@ -648,42 +706,42 @@ const Transactions = () => {
         </PopoverContent>
       </Popover>
       <Select value={filterStore} onValueChange={setFilterStore}>
-        <SelectTrigger className="h-8 text-xs flex-1 min-w-[120px] sm:flex-none sm:w-40"><SelectValue placeholder="All stores" /></SelectTrigger>
+        <SelectTrigger className="h-8 text-xs w-full sm:w-[110px] md:w-[120px] lg:w-[130px]"><SelectValue placeholder="All stores" /></SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All stores</SelectItem>
           {stores?.map((s: any) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
         </SelectContent>
       </Select>
       <Select value={filterStoreType} onValueChange={setFilterStoreType}>
-        <SelectTrigger className="h-8 text-xs flex-1 min-w-[120px] sm:flex-none sm:w-40"><SelectValue placeholder="All store types" /></SelectTrigger>
+        <SelectTrigger className="h-8 text-xs w-full sm:w-[100px] md:w-[110px] lg:w-[120px]"><SelectValue placeholder="All store types" /></SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All store types</SelectItem>
           {storeTypes?.map((st: any) => <SelectItem key={st.id} value={st.id}>{st.name}</SelectItem>)}
         </SelectContent>
       </Select>
       <Select value={filterRoute} onValueChange={setFilterRoute}>
-        <SelectTrigger className="h-8 text-xs flex-1 min-w-[120px] sm:flex-none sm:w-40"><SelectValue placeholder="All routes" /></SelectTrigger>
+        <SelectTrigger className="h-8 text-xs w-full sm:w-[100px] md:w-[110px] lg:w-[120px]"><SelectValue placeholder="All routes" /></SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All routes</SelectItem>
           {routes?.map((r: any) => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
         </SelectContent>
       </Select>
       <Select value={filterCustomer} onValueChange={setFilterCustomer}>
-        <SelectTrigger className="h-8 text-xs flex-1 min-w-[120px] sm:flex-none sm:w-40"><SelectValue placeholder="All customers" /></SelectTrigger>
+        <SelectTrigger className="h-8 text-xs w-full sm:w-[100px] md:w-[110px] lg:w-[120px]"><SelectValue placeholder="All customers" /></SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All customers</SelectItem>
           {customersForFilter?.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
         </SelectContent>
       </Select>
       <Select value={filterUser} onValueChange={setFilterUser}>
-        <SelectTrigger className="h-8 text-xs flex-1 min-w-[120px] sm:flex-none sm:w-40"><SelectValue placeholder="All users" /></SelectTrigger>
+        <SelectTrigger className="h-8 text-xs w-full sm:w-[100px] md:w-[110px] lg:w-[120px]"><SelectValue placeholder="All users" /></SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All users</SelectItem>
           {allProfiles?.map((p: any) => <SelectItem key={p.user_id} value={p.user_id}>{p.full_name}</SelectItem>)}
         </SelectContent>
       </Select>
       <Select value={filterPayment} onValueChange={setFilterPayment}>
-        <SelectTrigger className="h-8 text-xs flex-1 min-w-[120px] sm:flex-none sm:w-40"><SelectValue placeholder="Payment method" /></SelectTrigger>
+        <SelectTrigger className="h-8 text-xs w-full sm:w-[110px] md:w-[120px] lg:w-[130px]"><SelectValue placeholder="Payment method" /></SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All methods</SelectItem>
           <SelectItem value="cash">Cash only</SelectItem>
@@ -736,8 +794,8 @@ const Transactions = () => {
               </div>
               <div className="flex items-center gap-2 text-xs">
                 <span className="text-muted-foreground">Bal:</span>
-                <span className={`${returnedClass(row)} ${!row.is_fully_returned && Number(row.new_outstanding || 0) < Number(row.old_outstanding || 0) ? "font-semibold text-success" : ""}`}>
-                  ₹{Number(row.new_outstanding || 0).toLocaleString()}
+                <span className={`${returnedClass(row)} ${Number(row.new_outstanding || 0) > 0 ? "text-destructive" : Number(row.new_outstanding || 0) < 0 ? "text-green-600" : "text-muted-foreground"}`}>
+                  ₹{Math.abs(Number(row.new_outstanding || 0)).toLocaleString()}
                 </span>
               </div>
             </div>
@@ -754,7 +812,7 @@ const Transactions = () => {
         </div>
       )}
 
-      <Dialog open={showAdd} onOpenChange={(v) => { setShowAdd(v); if (!v) resetForm(); }}>
+      <Dialog open={showAdd} onOpenChange={(v) => { setShowAdd(v); if (!v) resetForm(); else qc.invalidateQueries({ queryKey: ["stores-for-txn"] }); }}>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>{editingTransaction ? "Edit Transaction" : "Record Transaction"}</DialogTitle></DialogHeader>
           <form onSubmit={handleAdd} className="space-y-4">
@@ -787,7 +845,7 @@ const Transactions = () => {
               <Label>Store</Label>
               <div className="flex gap-2 mt-1">
                 <Select value={storeId} onValueChange={setStoreId} disabled={!!editingTransaction}>
-                  <SelectTrigger className="flex-1"><SelectValue placeholder="Select store" /></SelectTrigger>
+                  <SelectTrigger className="flex-1" data-testid="txn-store-select"><SelectValue placeholder="Select store" /></SelectTrigger>
                   <SelectContent>{stores?.map((s) => (
                       <SelectItem key={s.id} value={s.id} disabled={!(s ).is_active}>
                         {s.name} ({s.display_id}){!(s ).is_active ? " — Inactive" : ""}
@@ -797,19 +855,19 @@ const Transactions = () => {
                 {!editingTransaction && <QrStoreSelector onStoreSelected={setStoreId} />}
               </div>
               {selectedStore && (
-                <p className="text-xs text-muted-foreground mt-1">Current outstanding: ₹{oldOutstanding.toLocaleString()}</p>
+                <p className="text-xs mt-1"><span className="text-muted-foreground">Current outstanding: </span><span className={oldOutstanding > 0 ? "text-destructive font-medium" : oldOutstanding < 0 ? "text-green-600 font-medium" : "text-muted-foreground"}>₹{Math.abs(oldOutstanding).toLocaleString()}</span></p>
               )}
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div><Label>Cash (₹)</Label><Input type="number" value={cashAmount} onChange={(e) => setCashAmount(e.target.value)} className="mt-1" placeholder="0" /></div>
-              <div><Label>UPI (₹)</Label><Input type="number" value={upiAmount} onChange={(e) => setUpiAmount(e.target.value)} className="mt-1" placeholder="0" /></div>
+              <div><Label>Cash (₹)</Label><Input type="number" value={cashAmount} onChange={(e) => setCashAmount(e.target.value)} className="mt-1" placeholder="0" data-testid="txn-cash-input" /></div>
+               <div><Label>UPI (₹)</Label><Input type="number" value={upiAmount} onChange={(e) => setUpiAmount(e.target.value)} className="mt-1" placeholder="0" data-testid="txn-upi-input" /></div>
             </div>
             <div className="rounded-lg border bg-muted/30 p-3 space-y-1 text-sm">
               <div className="flex justify-between"><span>Total Payment</span><span className="font-semibold">₹{totalPayment.toLocaleString()}</span></div>
-              <div className="flex justify-between font-semibold"><span>New Outstanding</span><span className={newOutstanding < oldOutstanding ? "text-success" : ""}>₹{newOutstanding.toLocaleString()}</span></div>
+              <div className="flex justify-between font-semibold"><span>New Outstanding</span><span className={newOutstanding > 0 ? "text-destructive" : newOutstanding < 0 ? "text-green-600" : "text-muted-foreground"}>₹{Math.abs(newOutstanding).toLocaleString()}</span></div>
             </div>
             <div><Label>Notes (optional)</Label><Input value={notes} onChange={(e) => setNotes(e.target.value)} className="mt-1" placeholder="Payment reference..." /></div>
-            <Button type="submit" className="w-full" disabled={saving}>
+            <Button type="submit" className="w-full" disabled={saving} data-testid="txn-submit-btn">
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {editingTransaction ? "Update Transaction" : "Record Transaction"}
             </Button>

@@ -69,9 +69,10 @@ export const SaleReceipt = memo(function SaleReceipt({ saleId, open, onClose }: 
     },
   });
 
-  // Calculate amounts - show SNAPSHOT balance (old_outstanding + outstanding_amount = Total Due after this sale)
+  // Calculate amounts - show SNAPSHOT balance (old_outstanding = Balance BEFORE this sale, outstanding_amount = this sale's balance at time of recording)
   const previousBalance = Number(sale?.old_outstanding || 0); // Balance BEFORE this sale
-  const totalDue = previousBalance + Number(sale?.outstanding_amount || 0); // Balance AFTER this sale (snapshot)
+  const outstandingSnapshot = Number(sale?.outstanding_amount || 0); // Store outstanding at time of recording (could be > 0 or 0)
+  const totalDue = previousBalance + outstandingSnapshot; // Total Due after this sale
 
   const handlePrint = () => {
     if (!sale) return;
@@ -391,7 +392,7 @@ ${totalDue > previousBalance ? `<div class="row bold" style="color: var(--receip
 
             <div className="border-t border-dashed border-border my-3" />
 
-            {/* Totals */}
+            {/* Totals - snapshot at time of sale */}
             <div className="space-y-1 text-xs">
               <div className="flex justify-between font-bold text-base pt-1 border-t border-border">
                 <span>TOTAL:</span>
@@ -405,18 +406,18 @@ ${totalDue > previousBalance ? `<div class="row bold" style="color: var(--receip
                 <span>UPI:</span>
                 <span>₹{Number(sale.upi_amount || 0).toLocaleString()}</span>
               </div>
-              {previousBalance > 0 && (
-                <div className="flex justify-between tabular-nums">
-                  <span>Previous Balance:</span>
-                  <span>₹{previousBalance.toLocaleString()}</span>
-                </div>
-              )}
-              {totalDue > previousBalance && (
-                <div className="flex justify-between text-destructive font-semibold tabular-nums">
-                  <span>Total Due:</span>
-                  <span>₹{totalDue.toLocaleString()}</span>
-                </div>
-              )}
+              <div className="flex justify-between tabular-nums">
+                <span>Previous Balance:</span>
+                <span>₹{previousBalance.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-destructive font-semibold tabular-nums border-t border-border/50 pt-1">
+                <span>Outstanding (snapshot):</span>
+                <span>₹{outstandingSnapshot.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between font-semibold tabular-nums">
+                <span>Total Due:</span>
+                <span>₹{totalDue.toLocaleString()}</span>
+              </div>
             </div>
 
             <div className="border-t border-dashed border-border my-3" />
