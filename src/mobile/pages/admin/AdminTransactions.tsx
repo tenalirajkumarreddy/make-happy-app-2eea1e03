@@ -74,7 +74,8 @@ export function AdminTransactions({ onNavigate }: { onNavigate: (path: string) =
       const to = page * PAGE_SIZE - 1;
       let query = supabase
         .from("transactions")
-        .select("*, stores(name, display_id)", { count: "exact" })
+        .select("*, stores(id, name, display_id)", { count: "exact" })
+        .is("deleted_at", null)
         .order("created_at", { ascending: false })
         .range(from, to);
 

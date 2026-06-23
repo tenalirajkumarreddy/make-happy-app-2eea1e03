@@ -52,7 +52,7 @@ export function MarketerHome({ onOpenOrders, onOpenRecord, onOpenStores, onOpenA
       const [ordersRes, txnRes, customersRes] = await Promise.all([
         supabase.from("orders").select("id, status").eq("created_by", user!.id),
         supabase.from("transactions").select("cash_amount, upi_amount")
-          .eq("recorded_by", user!.id).gte("created_at", `${today}T00:00:00`),
+          .eq("recorded_by", user!.id).is("deleted_at", null).gte("created_at", `${today}T00:00:00`),
         supabase.from("customers").select("id").eq("is_active", true),
       ]);
       const orders: any[] = ordersRes.data || [];

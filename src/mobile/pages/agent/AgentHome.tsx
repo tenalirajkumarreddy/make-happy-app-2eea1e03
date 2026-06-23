@@ -133,6 +133,8 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
         .from("sales")
         .select("total_amount, cash_amount, upi_amount")
         .eq("recorded_by", user!.id)
+        .is("deleted_at", null)
+        .eq("is_fully_returned", false)
         .gte("created_at", today);
       return data || [];
     },
@@ -148,6 +150,7 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
         .from("transactions")
         .select("total_amount, cash_amount, upi_amount")
         .eq("recorded_by", user!.id)
+        .is("deleted_at", null)
         .gte("created_at", today);
       return data || [];
     },
@@ -218,7 +221,7 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
     queryFn: async () => {
       const { data } = await supabase
         .from("orders")
-        .select("id, display_id, requirement_note, stores(name), customers(name)")
+        .select("id, display_id, requirement_note, stores(id, name), customers(name)")
         .eq("status", "pending")
         .order("created_at", { ascending: false })
         .limit(5);

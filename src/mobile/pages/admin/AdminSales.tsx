@@ -120,10 +120,12 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
         .from("sales")
         .select(`
           *,
-          stores(name, display_id),
+          stores(id, name, display_id),
           customers(name, display_id),
           sale_items(id, product_id, quantity, unit_price, total_price, products(name, sku))
         `, { count: "exact" })
+        .is("deleted_at", null)
+        .eq("is_fully_returned", false)
         .order("created_at", { ascending: false })
         .range(from, to);
 

@@ -62,6 +62,22 @@ async function findStaffByPhone(supabaseAdmin: any, phoneKey: string) {
 }
 
 /**
+ * Finds a pending staff_invitations row by phone to prevent duplicate invites.
+ */
+async function findPendingInvitationByPhone(supabaseAdmin: any, phoneKey: string) {
+  const { data, error } = await supabaseAdmin
+    .from("staff_invitations")
+    .select("id, phone, full_name, role, warehouse_id, status")
+    .eq("status", "pending")
+    .limit(100);
+  if (error) throw error;
+
+  return (data || []).find(
+    (row: any) => row.phone && significantPhone(row.phone) === phoneKey
+  ) || null;
+}
+
+/**
  * Finds a staff_directory row by email using an indexed lookup.
  */
 async function findStaffByEmail(supabaseAdmin: any, normalizedEmail: string) {
@@ -253,14 +269,28 @@ Deno.serve(async (req) => {
 
     // If no email, record invitation and return (phone-only registration)
     if (!normalizedEmail) {
-      await supabaseAdmin.from("staff_invitations").insert({
-        phone: String(phone).trim(),
-        full_name: full_name.trim(),
-        role: normalizedRole,
-        invited_by: caller.id,
-        status: "pending",
-        warehouse_id: warehouse_id || null,
-      });
+      const phoneKey = significantPhone(phone);
+      const existingInvite = await findPendingInvitationByPhone(supabaseAdmin, phoneKey);
+
+      if (existingInvite) {
+        await supabaseAdmin
+          .from("staff_invitations")
+          .update({
+            full_name: full_name.trim(),
+            role: normalizedRole,
+            warehouse_id: warehouse_id || null,
+          })
+          .eq("id", existingInvite.id);
+      } else {
+        await supabaseAdmin.from("staff_invitations").insert({
+          phone: String(phone).trim(),
+          full_name: full_name.trim(),
+          role: normalizedRole,
+          invited_by: caller.id,
+          status: "pending",
+          warehouse_id: warehouse_id || null,
+        });
+      }
 
       return new Response(JSON.stringify({ success: true, mode: "phone_registered", phone }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

@@ -200,6 +200,8 @@ export function AgentHistory() {
         .from("sales")
         .select("cash_amount, upi_amount, created_at")
         .eq("recorded_by", user!.id)
+        .is("deleted_at", null)
+        .eq("is_fully_returned", false)
         .gte("created_at", todayStart);
       if (error) throw error;
       return (data as any[]) || [];
@@ -214,8 +216,10 @@ export function AgentHistory() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("sales")
-        .select("id, display_id, total_amount, cash_amount, upi_amount, outstanding_amount, is_fully_returned, created_at, updated_at, store_id, customer_id, stores(name)")
+        .select("id, display_id, total_amount, cash_amount, upi_amount, outstanding_amount, is_fully_returned, created_at, updated_at, store_id, customer_id, stores(id, name)")
         .eq("recorded_by", user!.id)
+        .is("deleted_at", null)
+        .eq("is_fully_returned", false)
         .order("created_at", { ascending: false })
         .limit(200);
       if (error) throw error;
@@ -233,6 +237,7 @@ export function AgentHistory() {
         .from("transactions")
         .select("cash_amount, upi_amount, created_at")
         .eq("recorded_by", user!.id)
+        .is("deleted_at", null)
         .gte("created_at", todayStart);
       if (error) throw error;
       return (data as any[]) || [];
@@ -302,6 +307,7 @@ export function AgentHistory() {
         .from("transactions")
         .select("id, display_id, total_amount, cash_amount, upi_amount, created_at, updated_at, store_id, customer_id, notes, is_fully_returned, stores(id, name)")
         .eq("recorded_by", user!.id)
+        .is("deleted_at", null)
         .order("created_at", { ascending: false })
         .limit(200);
       if (error) throw error;

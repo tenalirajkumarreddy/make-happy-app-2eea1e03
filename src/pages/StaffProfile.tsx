@@ -9,7 +9,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermission } from "@/hooks/usePermission";
-import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -24,7 +23,6 @@ import {
   ArrowLeft,
   Edit,
   Phone,
-  Mail,
   Building2,
   Package,
   Wallet,
@@ -32,125 +30,28 @@ import {
   Users,
   Shield,
   Calendar,
-  MapPin,
-  TrendingUp,
-  TrendingDown,
   Clock,
   CheckCircle,
   XCircle,
   ChevronRight,
   Lock,
-  Unlock,
-  UserCog,
 } from "lucide-react";
 
-// Permission categories with icons
-const PERMISSION_CATEGORIES = [
-  {
-    id: "sales",
-    label: "Sales",
-    icon: Activity,
-    permissions: [
-      { key: "record_sale", label: "Record Sale" },
-      { key: "edit_sale", label: "Edit Sale (Today)" },
-      { key: "edit_sale_past", label: "Edit Past Sales" },
-      { key: "delete_sale", label: "Delete Sales" },
-      { key: "record_on_behalf", label: "Record On Behalf" },
-      { key: "view_all_sales", label: "View All Sales" },
-      { key: "price_override", label: "Price Override" },
-    ],
-  },
-  {
-    id: "payments",
-    label: "Payments",
-    icon: Wallet,
-    permissions: [
-      { key: "record_payment", label: "Record Payment" },
-      { key: "edit_payment", label: "Edit Payment (Today)" },
-      { key: "edit_payment_past", label: "Edit Past Payments" },
-      { key: "delete_payment", label: "Delete Payments" },
-      { key: "view_all_payments", label: "View All Payments" },
-      { key: "approve_handover", label: "Approve Handover" },
-    ],
-  },
-  {
-    id: "inventory",
-    label: "Inventory",
-    icon: Package,
-    permissions: [
-      { key: "view_inventory", label: "View Inventory" },
-      { key: "transfer_stock", label: "Transfer Stock" },
-      { key: "adjust_stock", label: "Adjust Stock" },
-      { key: "approve_returns", label: "Approve Returns" },
-      { key: "view_raw_materials", label: "View Raw Materials" },
-      { key: "manage_raw_materials", label: "Manage Raw Materials" },
-    ],
-  },
-  {
-    id: "customers",
-    label: "Customers & Shops",
-    icon: Users,
-    permissions: [
-      { key: "create_customer", label: "Create Customer" },
-      { key: "edit_customer", label: "Edit Customer" },
-      { key: "create_shop", label: "Create Shop" },
-      { key: "edit_shop", label: "Edit Shop" },
-      { key: "view_all_shops", label: "View All Shops" },
-      { key: "view_assigned_only", label: "View Assigned Only" },
-    ],
-  },
-  {
-    id: "orders",
-    label: "Orders",
-    icon: Package,
-    permissions: [
-      { key: "create_orders", label: "Create Orders" },
-      { key: "modify_orders", label: "Modify Orders" },
-      { key: "fulfill_orders", label: "Fulfill Orders" },
-      { key: "cancel_orders", label: "Cancel Orders" },
-      { key: "view_assigned_orders", label: "View Assigned Orders" },
-      { key: "transfer_orders", label: "Transfer Orders" },
-    ],
-  },
-  {
-    id: "routes",
-    label: "Routes",
-    icon: MapPin,
-    permissions: [
-      { key: "view_routes", label: "View Routes" },
-      { key: "create_route", label: "Create Route" },
-      { key: "assign_route", label: "Assign Route" },
-      { key: "record_visit", label: "Record Visit" },
-      { key: "view_all_routes", label: "View All Routes" },
-    ],
-  },
-  {
-    id: "reports",
-    label: "Reports",
-    icon: TrendingUp,
-    permissions: [
-      { key: "view_sales_report", label: "Sales Reports" },
-      { key: "view_outstanding_report", label: "Outstanding Reports" },
-      { key: "view_inventory_report", label: "Inventory Reports" },
-      { key: "view_collection_report", label: "Collection Reports" },
-      { key: "view_financial_reports", label: "Financial Reports" },
-      { key: "export_reports", label: "Export Reports" },
-    ],
-  },
-  {
-    id: "admin",
-    label: "Administration",
-    icon: Shield,
-    permissions: [
-      { key: "manage_users", label: "Manage Users" },
-      { key: "manage_roles", label: "Manage Roles" },
-      { key: "manage_warehouse", label: "Manage Warehouse" },
-      { key: "manage_settings", label: "Manage Settings" },
-      { key: "view_audit_logs", label: "View Audit Logs" },
-      { key: "delete_records", label: "Delete Records" },
-    ],
-  },
-];
+import { PERMISSION_GROUPS, PERMISSION_LABELS } from "@/lib/permissions";
+
+// Permission icons by group
+const PERMISSION_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  "Sales & Pricing": Activity,
+  "Payments": Wallet,
+  "Handovers": Activity,
+  "Orders": Package,
+  "Invoices": Wallet,
+  "Customers & Stores": Users,
+  "Vendors & Purchases": Building2,
+  "Attendance": Users,
+  "Other": Shield,
+};
+// PERMISSION_CATEGORIES removed — now using canonical PERMISSION_GROUPS from @/lib/permissions
 
 const roleLabels: Record<string, string> = {
   super_admin: "Super Admin",
@@ -173,8 +74,6 @@ export function StaffProfile() {
   const navigate = useNavigate();
   const { user, role } = useAuth();
   const queryClient = useQueryClient();
-  const [savingPermissions, setSavingPermissions] = useState(false);
-
   const canManagePermissions = usePermission("manage_users" as any).allowed;
   const isAdmin = role === "super_admin";
 
@@ -593,31 +492,31 @@ useEffect(() => {
                 </CardHeader>
                 <CardContent className="p-6 pt-0">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {PERMISSION_CATEGORIES.map((category) => {
-                      const Icon = category.icon;
+                    {Object.entries(PERMISSION_GROUPS).map(([groupName, keys]) => {
+                      const Icon = PERMISSION_ICONS[groupName] || Shield;
                       return (
-                        <Card key={category.id} className="border">
+                        <Card key={groupName} className="border">
                           <CardHeader className="pb-3">
                             <CardTitle className="text-sm flex items-center gap-2">
                               <Icon className="h-4 w-4 text-primary" />
-                              {category.label}
+                              {groupName}
                             </CardTitle>
                           </CardHeader>
                           <CardContent className="pt-0">
                             <div className="space-y-2">
-                              {category.permissions.map((perm) => {
-                                const enabled = userPermissions[perm.key] ?? false;
+                              {keys.map((permKey) => {
+                                const enabled = userPermissions[permKey] ?? false;
                                 return (
                                   <div
-                                    key={perm.key}
+                                    key={permKey}
                                     className="flex items-center justify-between py-1.5"
                                   >
-                                    <span className="text-sm">{perm.label}</span>
+                                    <span className="text-sm">{PERMISSION_LABELS[permKey] || permKey}</span>
                                     <Switch
                                       checked={enabled}
                                       disabled={!canManagePermissions}
                                       onCheckedChange={(checked) =>
-                                        handleTogglePermission(perm.key, checked)
+                                        handleTogglePermission(permKey, checked)
                                       }
                                     />
                                   </div>

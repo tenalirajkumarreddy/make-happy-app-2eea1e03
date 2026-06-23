@@ -246,10 +246,12 @@
         <enum name="none" value="0"/>
         <enum name="chain" value="1"/>
         <enum name="aligned" value="2"/>
+        <enum name="chain2" value="3"/>
     </attr>
     <attr format="string" name="fontProviderSystemFontFamily"/>
     <attr format="string" name="fontVariationSettings"/>
     <attr format="integer" name="framePosition"/>
+    <attr format="boolean" name="guidelineUseRtl"/>
     <attr format="reference" name="headerLayout"/>
     <attr format="dimension" name="height"/>
     <attr format="reference" name="hideMotionSpec"/>
@@ -270,6 +272,8 @@
     <attr format="enum" name="layoutDuringTransition">
         <enum name="ignoreRequest" value="0"/>
         <enum name="honorRequest" value="1"/>
+        <enum name="callMeasure" value="2"/>
+
     </attr>
     <attr format="boolean" name="layout_constrainedHeight"/>
     <attr format="boolean" name="layout_constrainedWidth"/>
@@ -524,6 +528,8 @@
         <enum name="startVertical" value="1"/>
         <enum name="startHorizontal" value="2"/>
         <enum name="flip" value="3"/>
+        <enum name="below" value="4"/>
+        <enum name="above" value="5"/>
     </attr>
     <attr format="float" name="path_percent"/>
     <attr format="float" name="perpendicularPath_percent"/>
@@ -12152,6 +12158,7 @@
         <attr name="layout_constraintGuide_begin"/>
         <attr name="layout_constraintGuide_end"/>
         <attr name="layout_constraintGuide_percent"/>
+        <attr name="guidelineUseRtl"/>
         <attr name="layout_constraintLeft_toLeftOf"/>
         <attr name="layout_constraintLeft_toRightOf"/>
         <attr name="layout_constraintRight_toLeftOf"/>
@@ -12314,6 +12321,7 @@
         <attr name="layout_constraintGuide_begin"/>
         <attr name="layout_constraintGuide_end"/>
         <attr name="layout_constraintGuide_percent"/>
+        <attr name="guidelineUseRtl"/>
         <attr name="layout_constraintLeft_toLeftOf"/>
         <attr name="layout_constraintLeft_toRightOf"/>
         <attr name="layout_constraintRight_toLeftOf"/>
@@ -12453,6 +12461,7 @@
         <attr name="layout_constraintGuide_begin"/>
         <attr name="layout_constraintGuide_end"/>
         <attr name="layout_constraintGuide_percent"/>
+        <attr name="guidelineUseRtl"/>
 
         <attr name="layout_goneMarginLeft"/>
         <attr name="layout_goneMarginTop"/>
@@ -12537,7 +12546,8 @@
     </declare-styleable>
     <declare-styleable name="ConstraintSet">
         <attr format="reference" name="deriveConstraintsFrom"/>
-        <attr format="enum" name="ConstraintRotate">
+        <attr format="string" name="stateLabels"/>
+        <attr format="enum" name="constraintRotate">
             <enum name="none" value="0"/>
             <enum name="right" value="1"/>
             <enum name="left" value="2"/>
@@ -12581,6 +12591,8 @@
         <attr name="layout_constraintGuide_begin"/>
         <attr name="layout_constraintGuide_end"/>
         <attr name="layout_constraintGuide_percent"/>
+        <attr name="guidelineUseRtl"/>
+
         <attr name="layout_constraintLeft_toLeftOf"/>
         <attr name="layout_constraintLeft_toRightOf"/>
         <attr name="layout_constraintRight_toLeftOf"/>
@@ -13024,6 +13036,22 @@
         
         <attr name="android:color"/>
     </declare-styleable>
+    <declare-styleable name="Grid">
+        <attr format="integer" name="grid_rows"/>
+        <attr format="integer" name="grid_columns"/>
+        <attr format="string" name="grid_spans"/>
+        <attr format="string" name="grid_skips"/>
+        <attr format="string" name="grid_rowWeights"/>
+        <attr format="string" name="grid_columnWeights"/>
+        <attr format="enum" name="grid_orientation">
+            <enum name="horizontal" value="0"/>
+            <enum name="vertical" value="1"/>
+        </attr>
+        <attr format="dimension" name="grid_horizontalGaps"/>
+        <attr format="dimension" name="grid_verticalGaps"/>
+        <attr format="boolean" name="grid_validateInputs"/>
+        <attr format="boolean" name="grid_useRtl"/>
+    </declare-styleable>
     <declare-styleable name="ImageFilterView">
         <attr format="reference" name="blendSrc"/>
         <attr format="reference" name="altSrc"/>
@@ -13115,6 +13143,7 @@
             <enum name="deltaRelative" value="0"/>
             <enum name="pathRelative" value="1"/>
             <enum name="parentRelative" value="2"/>
+            <enum name="axisRelative" value="3"/>
         </attr>
 
         
@@ -13205,6 +13234,7 @@
         <attr name="layout_constraintGuide_begin"/>
         <attr name="layout_constraintGuide_end"/>
         <attr name="layout_constraintGuide_percent"/>
+        <attr name="guidelineUseRtl"/>
         <attr name="layout_constraintLeft_toLeftOf"/>
         <attr name="layout_constraintLeft_toRightOf"/>
         <attr name="layout_constraintRight_toLeftOf"/>
@@ -15282,7 +15312,7 @@
             <flag name="none" value="0"/>
             <flag name="beginOnFirstDraw" value="1"/>
             <flag name="disableIntraAutoTransition" value="2"/>
-            />
+            <flag name="onInterceptTouchReturnSwipe" value="4"/>
         </attr>
     </declare-styleable>
     <declare-styleable name="Variant">

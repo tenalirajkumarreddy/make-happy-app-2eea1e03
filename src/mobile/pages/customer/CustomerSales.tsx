@@ -50,8 +50,10 @@ export function CustomerSales({ selectedStoreId }: Props) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("sales")
-        .select("id, display_id, created_at, total_amount, cash_amount, upi_amount, outstanding_amount, store_id, is_fully_returned, stores(name), sale_items(id, quantity, unit_price, total_price, products(name, unit))")
+        .select("id, display_id, created_at, total_amount, cash_amount, upi_amount, outstanding_amount, store_id, is_fully_returned, stores(id, name), sale_items(id, quantity, unit_price, total_price, products(name, unit))")
         .eq("customer_id", customer!.id)
+        .is("deleted_at", null)
+        .eq("is_fully_returned", false)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data as unknown as SaleRow[]) || [];

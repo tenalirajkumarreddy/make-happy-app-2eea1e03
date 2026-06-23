@@ -51,6 +51,8 @@ export function AdminHome({
       const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
       const [todaySalesRes, storesRes, stockRes, ordersCountRes] = await Promise.all([
         warehouseFilter(supabase.from("sales").select("total_amount, cash_amount, upi_amount"))
+          .is("deleted_at", null)
+          .eq("is_fully_returned", false)
           .gte("created_at", `${today}T00:00:00`).lte("created_at", `${today}T23:59:59`),
         warehouseFilter(supabase.from("stores").select("outstanding")),
         warehouseFilter(supabase.from("product_stock").select("quantity, reorder_level")),
@@ -75,7 +77,9 @@ export function AdminHome({
     queryKey: ["mobile-recent-activity", currentWarehouse?.id],
     queryFn: async () => {
       const { data } = await warehouseFilter(supabase.from("sales"))
-        .select("id, display_id, total_amount, created_at, stores(name)")
+        .select("id, display_id, total_amount, created_at, stores(id, name)")
+        .is("deleted_at", null)
+        .eq("is_fully_returned", false)
         .order("created_at", { ascending: false }).limit(5);
       return (data || []).map(s => ({
         id: s.id, displayId: s.display_id, amount: s.total_amount,
@@ -118,6 +122,8 @@ export function AdminHome({
         warehouseFilter(supabase.from("orders").select("status"))
           .gte("created_at", thirtyDaysAgoStr).limit(5000),
         warehouseFilter(supabase.from("sales").select("total_amount, outstanding_amount"))
+          .is("deleted_at", null)
+          .eq("is_fully_returned", false)
           .gte("created_at", today).limit(1000),
       ]);
 

@@ -164,7 +164,6 @@ const AppShell = () => {
                 <Route path="/analytics" element={<RoleGuard allowed={["super_admin", "manager"]}><Analytics /></RoleGuard>} />
                 <Route path="/activity" element={<RoleGuard allowed={["super_admin", "manager"]}><Activity /></RoleGuard>} />
                 <Route path="/access-control" element={<RoleGuard allowed={["super_admin", "manager"]}><AccessControl /></RoleGuard>} />
-                <Route path="/admin/staff" element={<AdminStaffDirectory />} />
                 <Route path="/staff" element={<RoleGuard allowed={["super_admin", "manager"]}><StaffDirectory /></RoleGuard>} />
                 <Route path="/staff/:userId" element={<RoleGuard allowed={["super_admin", "manager"]}><StaffProfile /></RoleGuard>} />
                 <Route path="/staff/:userId/edit" element={<RoleGuard allowed={["super_admin", "manager"]}><StaffProfile /></RoleGuard>} />

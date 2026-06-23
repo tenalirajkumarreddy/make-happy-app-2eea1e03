@@ -84,8 +84,10 @@ export function CustomerTransactions({ selectedStoreId }: Props) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("sales")
-        .select("id, created_at, display_id, total_amount, cash_amount, upi_amount, old_outstanding, new_outstanding, store_id, stores(name)")
+        .select("id, created_at, display_id, total_amount, cash_amount, upi_amount, old_outstanding, new_outstanding, store_id, stores(id, name)")
         .eq("customer_id", customer!.id)
+        .is("deleted_at", null)
+        .eq("is_fully_returned", false)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data as unknown as SaleLedgerRow[]) || [];
@@ -99,8 +101,9 @@ export function CustomerTransactions({ selectedStoreId }: Props) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("transactions")
-        .select("id, created_at, display_id, total_amount, old_outstanding, new_outstanding, store_id, stores(name)")
+        .select("id, created_at, display_id, total_amount, old_outstanding, new_outstanding, store_id, stores(id, name)")
         .eq("customer_id", customer!.id)
+        .is("deleted_at", null)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data as unknown as TransactionLedgerRow[]) || [];

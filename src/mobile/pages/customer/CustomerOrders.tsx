@@ -100,7 +100,7 @@ export function CustomerOrders({ selectedStoreId, onStoreChange }: Props) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("orders")
-        .select("id, display_id, store_id, status, requirement_note, created_at, stores(name)")
+        .select("id, display_id, store_id, status, requirement_note, created_at, stores(id, name)")
         .eq("customer_id", customer!.id)
         .order("created_at", { ascending: false });
       if (error) throw error;

@@ -27,6 +27,8 @@ export function PosHome({ onOpenRecord, onOpenHistory, onOpenInventory }: Props)
         .from("sales")
         .select("total_amount, cash_amount, upi_amount")
         .eq("store_id", posStore!.id)
+        .is("deleted_at", null)
+        .eq("is_fully_returned", false)
         .gte("created_at", `${today}T00:00:00`);
       const sales: any[] = data || [];
       return {
@@ -61,14 +63,14 @@ export function PosHome({ onOpenRecord, onOpenHistory, onOpenInventory }: Props)
       const [pendingRes, recentRes] = await Promise.all([
         supabase
           .from("orders")
-          .select("id, display_id, status, total_amount, created_at, stores(name)")
+          .select("id, display_id, status, total_amount, created_at, stores(id, name)")
           .in("store_id", storeIds)
           .eq("status", "pending")
           .order("created_at", { ascending: false })
           .limit(5),
         supabase
           .from("orders")
-          .select("id, display_id, status, total_amount, created_at, stores(name)")
+          .select("id, display_id, status, total_amount, created_at, stores(id, name)")
           .in("store_id", storeIds)
           .gte("created_at", `${today}T00:00:00`)
           .order("created_at", { ascending: false })

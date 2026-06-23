@@ -155,7 +155,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
         .from("orders")
         .select(`
           *,
-          stores(name, display_id, store_type_id, store_types(name), routes(name)),
+          stores(id, name, display_id, store_type_id, store_types(name), routes(name)),
           customers(name, display_id),
           order_items(id, product_id, quantity, products(name, sku, base_price)),
           updater_profile:profiles!orders_updated_by_fkey(full_name),

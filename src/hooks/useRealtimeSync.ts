@@ -250,6 +250,7 @@ const TABLE_QUERY_MAP: Record<string, string[]> = {
     "staff-inventory-summary", "agent-stock-holdings",
     "agent-stock-history", "source-stock-transfer",
     ...INVENTORY, "mobile-agent-stock-holdings",
+    "staff-directory", "staff-directory-enriched", "staff-directory-v2",
   ],
   stock_transfers: [
     "stock-transfers", "agent-stock-requests",

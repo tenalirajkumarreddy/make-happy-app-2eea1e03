@@ -1,15 +1,15 @@
 /**
- * StaffDirectory - Card-based staff listing
- * Replaces table view with modern card layout
+ * StaffDirectory - Refactored page for managing team members.
+ * Enables admin/manager to invite staff, view cards with holdings/permissions/activity,
+ * and navigate to detailed profiles.
  */
 
 import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
+import { useStaffDirectory } from "@/hooks/useStaffDirectory";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { StaffCard } from "@/components/staff/StaffCard";
+import { InvitationCard } from "@/components/staff/InvitationCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -19,8 +19,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import {
   Users,
   Search,
@@ -31,90 +35,85 @@ import {
   Loader2,
   Grid3X3,
   List,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
 } from "lucide-react";
-import { Skeleton } from "@/components/ui/skeleton";
-import { startOfDay, endOfDay, format } from "date-fns";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-
-const ROLES = [
-  { value: "all", label: "All Roles" },
-  { value: "super_admin", label: "Admin" },
-  { value: "manager", label: "Manager" },
-  { value: "agent", label: "Agent" },
-  { value: "marketer", label: "Marketer" },
-  { value: "operator", label: "Operator" },
-];
-
-const WAREHOUSE_FILTER = [
-  { value: "all", label: "All Warehouses" },
-  { value: "assigned", label: "Assigned Only" },
-  { value: "unassigned", label: "Unassigned" },
-];
+import { STAFF_ROLE_OPTIONS, INVITABLE_ROLES } from "@/types/staff";
+import type { AppRole } from "@/types/roles";
+import { cn } from "@/lib/utils";
 
 export function StaffDirectory() {
-  const navigate = useNavigate();
-  const { user, role } = useAuth();
-  const queryClient = useQueryClient();
-  const [searchQuery, setSearchQuery] = useState("");
-  const [roleFilter, setRoleFilter] = useState("all");
-  const [warehouseFilter, setWarehouseFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("active");
+  const {
+    staff,
+    allStaff,
+    pendingInvitations,
+    pendingCount,
+    isLoading,
+    invitesLoading,
+    stats,
+    filters,
+    setFilters,
+    page,
+    totalPages,
+    setPage,
+    PAGE_SIZE,
+    inviteStaff,
+    toggleActive,
+  } = useStaffDirectory();
+
+  // Invite dialog state
+  const [showInvite, setShowInvite] = useState(false);
+  const [inviteForm, setInviteForm] = useState({
+    full_name: "",
+    phone: "",
+    email: "",
+    role: "agent" as AppRole,
+    warehouse_id: "none" as string,
+  });
+  const [inviteSaving, setInviteSaving] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
-  // Invite dialog state (phone is primary, email is optional)
-  const [showInvite, setShowInvite] = useState(false);
-  const [inviteName, setInviteName] = useState("");
-  const [invitePhone, setInvitePhone] = useState("");
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState("agent");
-  const [inviteWarehouseId, setInviteWarehouseId] = useState("");
-  const [inviteSaving, setInviteSaving] = useState(false);
+  // Fetch warehouses for invite form
+  // (In production, use a proper hook; here inline for self-containment)
+  const [warehouses, setWarehouses] = useState<Array<{ id: string; name: string }>>([]);
+  const [warehousesLoading, setWarehousesLoading] = useState(false);
+
+  const loadWarehouses = async () => {
+    if (warehouses.length > 0 || warehousesLoading) return;
+    setWarehousesLoading(true);
+    try {
+      const { data } = await (supabase as any).from("warehouses").select("id, name");
+      setWarehouses(data || []);
+    } finally {
+      setWarehousesLoading(false);
+    }
+  };
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inviteName.trim()) {
+    if (!inviteForm.full_name.trim()) {
       toast.error("Full name is required");
       return;
     }
-    if (!invitePhone.trim()) {
+    if (!inviteForm.phone.trim()) {
       toast.error("Phone number is required");
       return;
     }
-    let normalizedPhone = invitePhone.trim();
-    if (!normalizedPhone.startsWith('+')) {
-      normalizedPhone = normalizedPhone.length === 10 ? `+91${normalizedPhone}` : normalizedPhone;
-    }
-    const digits = normalizedPhone.replace(/\D/g, '');
-    if (digits.length < 10) {
-      toast.error("Phone number must have at least 10 digits");
-      return;
-    }
+
     setInviteSaving(true);
     try {
-      const { data, error } = await supabase.functions.invoke("invite-staff", {
-        body: {
-          phone: normalizedPhone,
-          email: inviteEmail.trim() || undefined,
-          full_name: inviteName.trim(),
-          role: inviteRole,
-          warehouse_id: inviteWarehouseId || undefined,
-        },
+      await inviteStaff({
+        full_name: inviteForm.full_name.trim(),
+        phone: inviteForm.phone.trim(),
+        email: inviteForm.email.trim() || null,
+        role: inviteForm.role,
+        warehouse_id: inviteForm.warehouse_id === "none" ? null : inviteForm.warehouse_id,
       });
-      if (error || data?.error) {
-        toast.error(data?.error || error?.message || "Failed to invite staff");
-        return;
-      }
-      toast.success(`Pre-registered ${inviteName.trim()} as ${inviteRole}. They'll get their role when they sign in with this phone.`);
+
+      toast.success(`Pre-registered ${inviteForm.full_name.trim()} as ${inviteForm.role}. They'll get their role when they sign in with this phone.`);
       setShowInvite(false);
-      setInviteName("");
-      setInvitePhone("");
-      setInviteEmail("");
-      setInviteRole("agent");
-      setInviteWarehouseId("");
-      queryClient.invalidateQueries({ queryKey: ["staff-directory-enriched"] });
+      setInviteForm({ full_name: "", phone: "", email: "", role: "agent", warehouse_id: "none" });
     } catch (err: any) {
       toast.error(err.message || "Failed to invite staff");
     } finally {
@@ -122,193 +121,19 @@ export function StaffDirectory() {
     }
   };
 
-  const { data: warehouses = [] } = useQuery({
-    queryKey: ["warehouses"],
-    queryFn: async () => {
-      const { data } = await supabase.from("warehouses").select("id, name");
-      return data || [];
-    },
-  });
-
-  // Fetch staff with enriched data
-  const { data: staff, isLoading } = useQuery({
-    queryKey: ["staff-directory-enriched", roleFilter, warehouseFilter, statusFilter],
-    queryFn: async () => {
-      // Get all staff users
-      let query: any = (supabase
-        .from("user_roles")
-        .select(`
-          user_id,
-          role,
-          warehouse_id,
-          warehouses(name)
-        ` as any) as any)
-        .in("role", ["super_admin", "manager", "agent", "marketer", "operator"] as any);
-
-      if (roleFilter !== "all") {
-        query = query.eq("role", roleFilter as any);
-      }
-
-      if (warehouseFilter === "assigned") {
-        query = query.not("warehouse_id", "is", null);
-      } else if (warehouseFilter === "unassigned") {
-        query = query.is("warehouse_id", null as any);
-      }
-
-      const { data: userRoles, error: rolesError } = await query;
-      if (rolesError) throw rolesError;
-
-      // Get user profiles
-      const userIds = (userRoles ?? []).map((ur: any) => ur.user_id);
-      const { data: profiles, error: profilesError } = await ((supabase as any)
-        .from("profiles")
-        .select("user_id, full_name, email, phone, avatar_url, is_active, created_at")
-        .in("user_id", userIds)
-        .eq("is_active", (statusFilter === "active" ? true : statusFilter === "inactive" ? false : true))) as any;
-
-      if (profilesError) throw profilesError;
-
-      // Get cash holdings
-      const { data: cashAccounts, error: cashError } = await (supabase as any)
-        .from("staff_cash_accounts")
-        .select("user_id, cash_amount, upi_amount")
-        .in("user_id", userIds);
-
-      if (cashError) throw cashError;
-
-      // Get stock counts
-      const { data: stockData, error: stockError } = await (supabase as any)
-        .from("staff_stock")
-        .select("user_id, quantity")
-        .in("user_id", userIds);
-
-      if (stockError) throw stockError;
-
-      // Get today's activity
-      const today = new Date();
-      const { data: todaySales, error: salesError } = await (supabase as any)
-        .from("sales")
-        .select("recorded_by, id")
-        .gte("created_at", startOfDay(today).toISOString())
-        .lte("created_at", endOfDay(today).toISOString())
-        .in("recorded_by", userIds);
-
-      if (salesError) throw salesError;
-
-      const { data: todayTx, error: txError } = await (supabase as any)
-        .from("transactions")
-        .select("recorded_by, id, total_amount")
-        .gte("created_at", startOfDay(today).toISOString())
-        .lte("created_at", endOfDay(today).toISOString())
-        .in("recorded_by", userIds);
-
-      if (txError) throw txError;
-
-      // Aggregate data
-      const cashMap = new Map();
-      (cashAccounts ?? []).forEach((c: any) => {
-        cashMap.set(c.user_id, {
-          cash_amount: c.cash_amount || 0,
-          upi_amount: c.upi_amount || 0,
-        });
-      });
-
-      const stockMap = new Map();
-      (stockData ?? []).forEach((s: any) => {
-        const current = stockMap.get(s.user_id) || 0;
-        stockMap.set(s.user_id, current + (s.quantity || 0));
-      });
-
-      const salesCountMap = new Map();
-      (todaySales ?? []).forEach((s: any) => {
-        const current = salesCountMap.get(s.recorded_by) || 0;
-        salesCountMap.set(s.recorded_by, current + 1);
-      });
-
-      const collectionsMap = new Map();
-      (todayTx ?? []).forEach((t: any) => {
-        const current = collectionsMap.get(t.recorded_by) || 0;
-        collectionsMap.set(t.recorded_by, current + (t.total_amount || 0));
-      });
-
-      // Merge data
-      const enrichedStaff = (userRoles ?? [])
-        .map((ur: any) => {
-          const profile = (profiles ?? []).find((p: any) => p.user_id === ur.user_id);
-          if (!profile) return null;
-
-          const cash = cashMap.get(ur.user_id) || { cash_amount: 0, upi_amount: 0 };
-
-          return {
-            id: ur.user_id,
-            user_id: ur.user_id,
-            full_name: profile.full_name || "Unknown",
-            email: profile.email,
-            phone: profile.phone,
-            avatar_url: profile.avatar_url,
-            role: ur.role,
-            is_active: profile.is_active ?? true,
-            warehouse_id: ur.warehouse_id,
-            warehouses: ur.warehouses,
-            created_at: profile.created_at,
-            cash_amount: cash.cash_amount,
-            upi_amount: cash.upi_amount,
-            stock_count: stockMap.get(ur.user_id) || 0,
-            today_sales: salesCountMap.get(ur.user_id) || 0,
-            today_collections: collectionsMap.get(ur.user_id) || 0,
-          };
-        })
-        .filter((x: any): x is NonNullable<typeof x> => !!x);
-
-      return enrichedStaff || [];
-    },
-  });
-
-  // Filter by search
-  const filteredStaff = (staff ?? []).filter((s: any) => {
-    if (!searchQuery) return true;
-    const query = searchQuery.toLowerCase();
-    return (
-      s.full_name?.toLowerCase().includes(query) ||
-      s.email?.toLowerCase().includes(query) ||
-      s.phone?.toLowerCase().includes(query)
-    );
-  });
-
-  // Stats
-  const stats = {
-    total: staff?.length || 0,
-    active: (staff ?? []).filter((s: any) => s.is_active).length || 0,
-    withHoldings: (staff ?? []).filter((s: any) => (s.cash_amount || 0) + (s.upi_amount || 0) > 0).length || 0,
-    totalCash: (staff ?? []).reduce((sum: any, s: any) => sum + (s.cash_amount || 0) + (s.upi_amount || 0), 0) || 0,
-  };
-
-  const handleToggleActive = async (userId: string, active: boolean) => {
-    try {
-      const { error } = await supabase
-        .from("profiles")
-        .update({ is_active: active } as any)
-        .eq("user_id", userId as any);
-
-      if (error) throw error;
-
-      toast.success(`Staff ${active ? "activated" : "deactivated"}`);
-      queryClient.invalidateQueries({ queryKey: ["staff-directory-enriched"] });
-    } catch (error) {
-      toast.error("Failed to update status");
-    }
-  };
-
+  // Loading skeleton
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <PageHeader
-          title="Staff Directory"
-          subtitle="Manage team members and their permissions"
-        />
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <PageHeader title="Staff Directory" subtitle="Manage team members and their permissions" />
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 rounded-xl" />
+          ))}
+        </div>
+        <div className={cn("grid gap-4", viewMode === "grid" ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" : "grid-cols-1")}>
           {Array.from({ length: 8 }).map((_, i) => (
-            <Skeleton key={i} className="h-[280px] rounded-xl" />
+            <Skeleton key={i} className="h-[340px] rounded-xl" />
           ))}
         </div>
       </div>
@@ -317,69 +142,45 @@ export function StaffDirectory() {
 
   return (
     <div className="space-y-6">
+      {/* ── Page Header ───────────────────────────────────────────────── */}
       <PageHeader
         title="Staff Directory"
-        subtitle={`${stats.total} team members • ₹${stats.totalCash.toLocaleString("en-IN")} total holdings`}
+        subtitle={`${stats.total} team members • ₹${stats.totalCash.toLocaleString("en-IN")} cash • ₹${stats.totalStockValue.toLocaleString("en-IN")} stock`}
       />
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl border p-4">
-          <div className="flex items-center gap-2 text-muted-foreground mb-1">
-            <Users className="h-4 w-4" />
-            <span className="text-sm font-medium">Total Staff</span>
-          </div>
-          <p className="text-2xl font-bold">{stats.total}</p>
-        </div>
-        <div className="bg-white rounded-xl border p-4">
-          <div className="flex items-center gap-2 text-green-600 mb-1">
-            <UserPlus className="h-4 w-4" />
-            <span className="text-sm font-medium">Active</span>
-          </div>
-          <p className="text-2xl font-bold">{stats.active}</p>
-        </div>
-        <div className="bg-white rounded-xl border p-4">
-          <div className="flex items-center gap-2 text-amber-600 mb-1">
-            <Wallet className="h-4 w-4" />
-            <span className="text-sm font-medium">With Holdings</span>
-          </div>
-          <p className="text-2xl font-bold">{stats.withHoldings}</p>
-        </div>
-        <div className="bg-white rounded-xl border p-4">
-          <div className="flex items-center gap-2 text-blue-600 mb-1">
-            <Building2 className="h-4 w-4" />
-            <span className="text-sm font-medium">Total Cash</span>
-          </div>
-          <p className="text-2xl font-bold">₹{stats.totalCash.toLocaleString("en-IN")}</p>
-        </div>
+      {/* ── Stats Cards ────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+        <StatCard icon={<Users className="h-4 w-4" />} label="Total Staff" value={stats.total} color="text-foreground" />
+        <StatCard icon={<UserPlus className="h-4 w-4" />} label="Active" value={stats.active} color="text-green-600" />
+        <StatCard icon={<Clock className="h-4 w-4" />} label="Pending" value={pendingCount} color="text-amber-600" />
+        <StatCard icon={<Wallet className="h-4 w-4" />} label="With Holdings" value={stats.withHoldings} color="text-amber-600" />
+        <StatCard icon={<Building2 className="h-4 w-4" />} label="Total Cash" value={`₹${stats.totalCash.toLocaleString("en-IN")}`} color="text-blue-600" />
       </div>
 
-      {/* Filters */}
+      {/* ── Filters Bar ────────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row gap-3 bg-white rounded-xl border p-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search by name, email, phone..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            value={filters.search}
+            onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
             className="pl-9"
           />
         </div>
-        <div className="flex gap-2">
-          <Select value={roleFilter} onValueChange={setRoleFilter}>
+        <div className="flex gap-2 flex-wrap">
+          <Select value={filters.role} onValueChange={(v) => setFilters((f) => ({ ...f, role: v as any }))}>
             <SelectTrigger className="w-[140px]">
               <Filter className="h-4 w-4 mr-2" />
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {ROLES.map((r: any) => (
-                <SelectItem key={r.value} value={r.value}>
-                  {r.label}
-                </SelectItem>
+              {STAFF_ROLE_OPTIONS.map((r) => (
+                <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <Select value={statusFilter} onValueChange={(v: any) => setStatusFilter(v)}>
+          <Select value={filters.status} onValueChange={(v) => setFilters((f) => ({ ...f, status: v as any }))}>
             <SelectTrigger className="w-[130px]">
               <SelectValue />
             </SelectTrigger>
@@ -390,73 +191,115 @@ export function StaffDirectory() {
             </SelectContent>
           </Select>
           <div className="flex border rounded-lg overflow-hidden">
-            <Button
-              variant={viewMode === "grid" ? "default" : "ghost"}
-              size="icon"
-              className="rounded-none"
-              onClick={() => setViewMode("grid")}
-            >
+            <Button variant={viewMode === "grid" ? "default" : "ghost"} size="icon" className="rounded-none" onClick={() => setViewMode("grid")}>
               <Grid3X3 className="h-4 w-4" />
             </Button>
-            <Button
-              variant={viewMode === "list" ? "default" : "ghost"}
-              size="icon"
-              className="rounded-none"
-              onClick={() => setViewMode("list")}
-            >
+            <Button variant={viewMode === "list" ? "default" : "ghost"} size="icon" className="rounded-none" onClick={() => setViewMode("list")}>
               <List className="h-4 w-4" />
             </Button>
           </div>
         </div>
       </div>
 
-      {/* Results Count */}
+      {/* ── Results + Invite Button ──────────────────────────────────── */}
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          Showing {filteredStaff?.length || 0} of {staff?.length || 0} staff members
+          Showing {allStaff.length} staff{allStaff.length !== 1 ? "" : ""}
+          {pendingInvitations.length > 0 && ` + ${pendingInvitations.length} pending`}
+          {filters.search && ` matching "${filters.search}"`}
         </p>
-        <Button onClick={() => setShowInvite(true)}>
+        <Button onClick={() => { setShowInvite(true); loadWarehouses(); }}>
           <UserPlus className="h-4 w-4 mr-2" />
           Invite Staff
         </Button>
       </div>
 
-      {/* Staff Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {(filteredStaff ?? []).map((s: any) => (
-          <StaffCard
-            key={s.user_id}
-            staff={s}
-            onToggleActive={handleToggleActive}
-          />
-        ))}
-      </div>
+      {/* ── Pending Invitations Section ──────────────────────────────── */}
+      {!invitesLoading && pendingInvitations.length > 0 && (
+        <div>
+          <h4 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
+            <Clock className="h-4 w-4" />
+            Pending Invitations ({pendingInvitations.length})
+          </h4>
+          <div className={cn(
+            "gap-4",
+            viewMode === "grid"
+              ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+              : "flex flex-col"
+          )}>
+            {pendingInvitations.map((inv) => (
+              <InvitationCard key={inv.id} invitation={inv} />
+            ))}
+          </div>
+        </div>
+      )}
 
-      {/* Empty State */}
-      {filteredStaff?.length === 0 && (
+      {/* ── Staff Grid / List ────────────────────────────────────────── */}
+      {staff.length > 0 && (
+        <div>
+          {pendingInvitations.length > 0 && (
+            <h4 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Active Staff ({allStaff.length})
+            </h4>
+          )}
+          <div className={cn(
+            "gap-4",
+            viewMode === "grid"
+              ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+              : "flex flex-col"
+          )}>
+            {staff.map((s) => (
+              <StaffCard key={s.user_id} staff={s} onToggleActive={toggleActive} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Empty State ────────────────────────────────────────────────── */}
+      {allStaff.length === 0 && pendingInvitations.length === 0 && (
         <div className="text-center py-12">
           <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
           <h3 className="text-lg font-semibold mb-2">No staff found</h3>
           <p className="text-muted-foreground">
-            {searchQuery
-              ? "Try adjusting your search or filters"
-              : "Invite your first team member"}
+            {filters.search ? "Try adjusting your search or filters" : "Invite your first team member"}
           </p>
         </div>
       )}
 
-      {/* Invite Staff Dialog — phone is primary, email is optional */}
+      {/* ── Pagination ─────────────────────────────────────────────────── */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between pt-4">
+          <p className="text-sm text-muted-foreground">
+            Page {page} of {totalPages}
+          </p>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>
+              <ChevronLeft className="h-4 w-4 mr-1" />
+              Previous
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages}>
+              Next
+              <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Invite Dialog ──────────────────────────────────────────────── */}
       <Dialog open={showInvite} onOpenChange={setShowInvite}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Pre-register Staff</DialogTitle></DialogHeader>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Pre-register Staff</DialogTitle>
+          </DialogHeader>
           <form onSubmit={handleInvite} className="space-y-4">
             <div>
               <Label htmlFor="invite-name">Full Name *</Label>
               <Input
                 id="invite-name"
                 placeholder="John Doe"
-                value={inviteName}
-                onChange={(e) => setInviteName(e.target.value)}
+                value={inviteForm.full_name}
+                onChange={(e) => setInviteForm((f) => ({ ...f, full_name: e.target.value }))}
                 required
                 disabled={inviteSaving}
               />
@@ -466,10 +309,11 @@ export function StaffDirectory() {
               <Input
                 id="invite-phone"
                 placeholder="9876543210 or +919876543210"
-                value={invitePhone}
-                onChange={(e) => setInvitePhone(e.target.value)}
+                value={inviteForm.phone}
+                onChange={(e) => setInviteForm((f) => ({ ...f, phone: e.target.value }))}
                 required
                 disabled={inviteSaving}
+                type="tel"
               />
               <p className="text-xs text-muted-foreground mt-1">Staff will sign in with this phone number via OTP</p>
             </div>
@@ -479,32 +323,31 @@ export function StaffDirectory() {
                 id="invite-email"
                 type="email"
                 placeholder="staff@example.com"
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
+                value={inviteForm.email}
+                onChange={(e) => setInviteForm((f) => ({ ...f, email: e.target.value }))}
                 disabled={inviteSaving}
               />
             </div>
             <div>
               <Label htmlFor="invite-role">Role</Label>
-              <Select value={inviteRole} onValueChange={setInviteRole} disabled={inviteSaving}>
+              <Select value={inviteForm.role} onValueChange={(v) => setInviteForm((f) => ({ ...f, role: v as AppRole }))} disabled={inviteSaving}>
                 <SelectTrigger id="invite-role"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="manager">Manager</SelectItem>
-                  <SelectItem value="agent">Agent</SelectItem>
-                  <SelectItem value="marketer">Marketer</SelectItem>
-                  <SelectItem value="operator">Operator</SelectItem>
+                  {INVITABLE_ROLES.map((r) => (
+                    <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
             <div>
               <Label htmlFor="invite-warehouse">Warehouse</Label>
-              <Select value={inviteWarehouseId} onValueChange={setInviteWarehouseId} disabled={inviteSaving}>
+              <Select value={inviteForm.warehouse_id} onValueChange={(v) => setInviteForm((f) => ({ ...f, warehouse_id: v }))} disabled={inviteSaving}>
                 <SelectTrigger id="invite-warehouse">
                   <SelectValue placeholder="No warehouse" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">No warehouse</SelectItem>
-                  {warehouses.map((w: any) => (
+                  <SelectItem value="none">No warehouse</SelectItem>
+                  {warehouses.map((w) => (
                     <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
                   ))}
                 </SelectContent>
@@ -528,6 +371,29 @@ export function StaffDirectory() {
           </form>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+// ── Helper: Stat Card ──────────────────────────────────────────────────────
+function StatCard({
+  icon,
+  label,
+  value,
+  color,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string | number;
+  color: string;
+}) {
+  return (
+    <div className="bg-white rounded-xl border p-4">
+      <div className={cn("flex items-center gap-2 mb-1", color)}>
+        {icon}
+        <span className="text-sm font-medium">{label}</span>
+      </div>
+      <p className="text-2xl font-bold">{value}</p>
     </div>
   );
 }

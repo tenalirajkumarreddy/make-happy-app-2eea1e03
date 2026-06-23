@@ -60,8 +60,11 @@ export function CustomerHome({ selectedStoreId, onStoreChange, onOpenSales, onOp
     queryKey: ["mobile-customer-home-sales", customer?.id],
     queryFn: async () => {
       const { data, error } = await supabase.from("sales")
-        .select("id, display_id, created_at, total_amount, cash_amount, upi_amount, store_id, stores(name)")
-        .eq("customer_id", customer!.id).order("created_at", { ascending: false }).limit(3);
+        .select("id, display_id, created_at, total_amount, cash_amount, upi_amount, store_id, stores(id, name)")
+        .eq("customer_id", customer!.id)
+        .is("deleted_at", null)
+        .eq("is_fully_returned", false)
+        .order("created_at", { ascending: false }).limit(3);
       if (error) throw error;
       return (data as unknown as SaleRow[]) || [];
     },
