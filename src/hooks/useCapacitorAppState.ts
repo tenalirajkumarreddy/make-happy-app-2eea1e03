@@ -42,34 +42,29 @@ export function useCapacitorAppState() {
             if (cancelled) return;
 
             const coreKeys = [
-              "sales",
-              "transactions",
-              "orders",
-              "stores",
-              "customers",
-              "inventory",
-              "product-stock",
-              "staff-stock",
-              "stock-movements",
-              "handovers",
-              "expenses",
-              "agent-dashboard-stats",
-              "manager-dashboard",
-              "agent-dashboard",
-              "customer-dashboard",
-              "pos-dashboard",
-              "marketer-dashboard",
-              "operator-dashboard",
-              "mobile-agent-sales-today",
-              "mobile-agent-tx-today",
-              "mobile-sales",
-              "mobile-transactions",
-              "mobile-history-sales-timeline",
-              "mobile-history-transactions-timeline",
+              "sales", "transactions", "orders", "stores", "customers",
+              "inventory", "product-stock", "staff-stock", "stock-movements",
+              "handovers", "expenses",
+              // Dashboards
+              "agent-dashboard-stats", "manager-dashboard", "agent-dashboard",
+              "customer-dashboard", "pos-dashboard", "marketer-dashboard", "operator-dashboard",
+              "super-admin-dashboard-stats", "mobile-admin-dashboard",
+              // Mobile tabs
+              "mobile-agent-sales-today", "mobile-agent-tx-today",
+              "mobile-sales", "mobile-transactions",
+              "mobile-history-sales-timeline", "mobile-history-transactions-timeline",
+              "mobile-history-balance-sales", "mobile-history-balance-transactions",
+              "mobile-agent-stock-holdings", "mobile-products-for-sale", "mobile-inventory",
+              "mobile-customer-sales", "mobile-customer-ledger-self", "mobile-customer-orders",
+              // Lists
+              "my-sales", "my-orders", "pending-orders-for-store",
+              "store-transactions", "store-sales", "store-visits",
+              "staff-directory", "profiles", "all-staff-balances",
             ];
 
             coreKeys.forEach((key) => {
-              qc.invalidateQueries({ queryKey: [key], refetchType: "all" });
+              qc.invalidateQueries({ queryKey: [key] });
+              qc.refetchQueries({ queryKey: [key], exact: false, type: "all" });
             });
 
             window.dispatchEvent(new CustomEvent("app-resumed"));

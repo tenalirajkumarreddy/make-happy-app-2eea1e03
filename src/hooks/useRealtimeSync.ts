@@ -604,12 +604,18 @@ function flushInvalidations(subscriberId: symbol) {
   const keys = pendingInvalidations.get(String(subscriberId));
   if (!keys || keys.size === 0) return;
   keys.forEach((key) => {
-    // Mark stale but do NOT force an eager refetch — it can hit a stale read-replica
-    // and overwrite optimistic updates before the write has replicated.
-    // Active observers will refetch naturally on their next tick (focus, interval, etc.)
+    // Invalidate + eagerly refetch all active observers so the UI
+    // updates in real time.  The 150 ms micro-delay protects against
+    // a very brief read-replica lag while keeping the app feeling instant.
     sub.qc.invalidateQueries({ queryKey: [key] });
   });
-  pendingInvalidations.delete(String(subscriberId));
+  // Aggressive refetch after a short, safe delay
+  setTimeout(() => {
+    keys.forEach((key) => {
+      sub.qc.refetchQueries({ queryKey: [key], exact: false, type: "all" });
+    });
+    pendingInvalidations.delete(String(subscriberId));
+  }, 150);
 }
 
 function handlePayload(table: string, payload: any) {
@@ -835,10 +841,18 @@ function flushPageInvalidations(subscriberId: symbol) {
   const keys = pagePendingInvalidations.get(String(subscriberId));
   if (!keys || keys.size === 0) return;
   keys.forEach((key) => {
-    // Mark stale but do NOT force an eager refetch — same as flushInvalidations above
+    // Invalidate + eagerly refetch all active observers so the UI
+    // updates in real time.  The 150 ms micro-delay protects against
+    // a very brief read-replica lag while keeping the app feeling instant.
     sub.qc.invalidateQueries({ queryKey: [key] });
   });
-  pagePendingInvalidations.delete(String(subscriberId));
+  // Aggressive refetch after a short, safe delay
+  setTimeout(() => {
+    keys.forEach((key) => {
+      sub.qc.refetchQueries({ queryKey: [key], exact: false, type: "all" });
+    });
+    pagePendingInvalidations.delete(String(subscriberId));
+  }, 150);
 }
 
 export function usePageRealtimeSync() {

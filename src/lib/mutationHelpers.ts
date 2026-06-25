@@ -1,9 +1,11 @@
-import { QueryClient } from "@tanstack/react-query";
+﻿import { QueryClient } from "@tanstack/react-query";
 
 const FORCE = { refetchType: 'all' as const };
 
-function invalidateAll(qc: QueryClient, key: string[], force?: boolean) {
-  qc.invalidateQueries({ queryKey: key, exact: false, ...(force ? FORCE : undefined) });
+function invalidateAll(qc: QueryClient, key: string[]) {
+  qc.invalidateQueries({ queryKey: key, exact: false, refetchType: "all" });
+  // Always aggressively refetch so every screen shows the latest data immediately.
+  qc.refetchQueries({ queryKey: key, exact: false, type: "all" });
 }
 
 export function afterSaleSaved(qc: QueryClient, options?: { isMobile?: boolean; storeId?: string; saleData?: any }) {
@@ -36,30 +38,30 @@ export function afterSaleSaved(qc: QueryClient, options?: { isMobile?: boolean; 
     invalidateAll(qc, ["store-payment-returns", options.storeId]);
     invalidateAll(qc, ["store-qr-codes", options.storeId]);
   }
-  invalidateAll(qc, ["staff-stock"], true);
-  invalidateAll(qc, ["product-stock"], true);
-  invalidateAll(qc, ["stock-movements"], true);
+  invalidateAll(qc, ["staff-stock"]);
+  invalidateAll(qc, ["product-stock"]);
+  invalidateAll(qc, ["stock-movements"]);
   invalidateAll(qc, ["orders"]);
   invalidateAll(qc, ["pending-orders-for-store"]);
   invalidateAll(qc, ["mobile-pending-orders-for-store"]);
-  invalidateAll(qc, ["agent-stock"], true);
-  invalidateAll(qc, ["agent-stock-holdings"], true);
-  invalidateAll(qc, ["agent-stock-requests"], true);
-  invalidateAll(qc, ["agent-stock-history"], true);
+  invalidateAll(qc, ["agent-stock"]);
+  invalidateAll(qc, ["agent-stock-holdings"]);
+  invalidateAll(qc, ["agent-stock-requests"]);
+  invalidateAll(qc, ["agent-stock-history"]);
   invalidateAll(qc, ["agent-dashboard"]);
   invalidateAll(qc, ["stock-summary"]);
   invalidateAll(qc, ["stock-summary-products"]);
   invalidateAll(qc, ["stock-summary-stock"]);
   invalidateAll(qc, ["stock-summary-warehouses"]);
-  invalidateAll(qc, ["warehouse-stock"], true);
+  invalidateAll(qc, ["warehouse-stock"]);
   invalidateAll(qc, ["staff-stock-by-warehouse"]);
-  invalidateAll(qc, ["inventory"], true);
+  invalidateAll(qc, ["inventory"]);
   invalidateAll(qc, ["inventory-pending-returns"]);
   invalidateAll(qc, ["inventory-timeline-sales"]);
   invalidateAll(qc, ["inventory-timeline-purchases"]);
   invalidateAll(qc, ["inventory-timeline-sale-returns"]);
   invalidateAll(qc, ["inventory-timeline-purchase-returns"]);
-  invalidateAll(qc, ["stock-transfers"], true);
+  invalidateAll(qc, ["stock-transfers"]);
   invalidateAll(qc, ["store-pricing"]);
   invalidateAll(qc, ["store-type-pricing"]);
   invalidateAll(qc, ["store_type_products"]);
@@ -73,15 +75,15 @@ export function afterSaleSaved(qc: QueryClient, options?: { isMobile?: boolean; 
   invalidateAll(qc, ["daybook-sales"]);
   if (options?.isMobile) {
     invalidateAll(qc, ["mobile-agent-sales-today"]);
-    invalidateAll(qc, ["mobile-agent-stock-holdings"], true);
-    invalidateAll(qc, ["mobile-products-for-sale"], true);
+    invalidateAll(qc, ["mobile-agent-stock-holdings"]);
+    invalidateAll(qc, ["mobile-products-for-sale"]);
     invalidateAll(qc, ["mobile-products"]);
-    invalidateAll(qc, ["mobile-inventory"], true);
+    invalidateAll(qc, ["mobile-inventory"]);
     invalidateAll(qc, ["mobile-sales"]);
     invalidateAll(qc, ["mobile-history-sales-timeline"]);
     invalidateAll(qc, ["mobile-history-balance-sales"]);
     invalidateAll(qc, ["mobile-agent-pending-orders"]);
-    invalidateAll(qc, ["operator-stock"], true);
+    invalidateAll(qc, ["operator-stock"]);
   }
   if (options?.storeId) {
     invalidateAll(qc, ["sale-items-for-store", options.storeId]);
@@ -162,18 +164,18 @@ export function afterSaleReturned(qc: QueryClient, options?: { isMobile?: boolea
   }
   invalidateAll(qc, ["orders"]);
   invalidateAll(qc, ["pending-orders-for-store"]);
-  invalidateAll(qc, ["staff-stock"], true);
-  invalidateAll(qc, ["product-stock"], true);
-  invalidateAll(qc, ["stock-movements"], true);
-  invalidateAll(qc, ["agent-stock-holdings"], true);
-  invalidateAll(qc, ["warehouse-stock"], true);
+  invalidateAll(qc, ["staff-stock"]);
+  invalidateAll(qc, ["product-stock"]);
+  invalidateAll(qc, ["stock-movements"]);
+  invalidateAll(qc, ["agent-stock-holdings"]);
+  invalidateAll(qc, ["warehouse-stock"]);
   invalidateAll(qc, ["inventory-pending-returns"]);
   invalidateAll(qc, ["inventory-timeline-sales"]);
   invalidateAll(qc, ["inventory-timeline-purchases"]);
   invalidateAll(qc, ["inventory-timeline-sale-returns"]);
   invalidateAll(qc, ["inventory-timeline-purchase-returns"]);
   invalidateAll(qc, ["balance-adjustments"]);
-  invalidateAll(qc, ["inventory"], true);
+  invalidateAll(qc, ["inventory"]);
   invalidateAll(qc, ["stock-summary-products"]);
   invalidateAll(qc, ["stock-summary-stock"]);
   invalidateAll(qc, ["stock-summary-warehouses"]);
@@ -185,9 +187,9 @@ export function afterSaleReturned(qc: QueryClient, options?: { isMobile?: boolea
     invalidateAll(qc, ["mobile-history-sales-timeline"]);
     invalidateAll(qc, ["mobile-history-balance-sales"]);
     invalidateAll(qc, ["mobile-sales"]);
-    invalidateAll(qc, ["mobile-agent-stock-holdings"], true);
-    invalidateAll(qc, ["mobile-products-for-sale"], true);
-    invalidateAll(qc, ["mobile-inventory"], true);
+    invalidateAll(qc, ["mobile-agent-stock-holdings"]);
+    invalidateAll(qc, ["mobile-products-for-sale"]);
+    invalidateAll(qc, ["mobile-inventory"]);
     invalidateAll(qc, ["mobile-agent-pending-orders"]);
   }
   if (options?.saleId) {
@@ -212,12 +214,12 @@ export function afterSaleEdited(qc: QueryClient, options?: { isMobile?: boolean;
   }
   invalidateAll(qc, ["orders"]);
   invalidateAll(qc, ["sale-items"]);
-  invalidateAll(qc, ["staff-stock"], true);
-  invalidateAll(qc, ["product-stock"], true);
-  invalidateAll(qc, ["stock-movements"], true);
-  invalidateAll(qc, ["agent-stock"], true);
-  invalidateAll(qc, ["agent-stock-holdings"], true);
-  invalidateAll(qc, ["warehouse-stock"], true);
+  invalidateAll(qc, ["staff-stock"]);
+  invalidateAll(qc, ["product-stock"]);
+  invalidateAll(qc, ["stock-movements"]);
+  invalidateAll(qc, ["agent-stock"]);
+  invalidateAll(qc, ["agent-stock-holdings"]);
+  invalidateAll(qc, ["warehouse-stock"]);
   invalidateAll(qc, ["super-admin-dashboard-stats"]);
   invalidateAll(qc, ["manager-dashboard"]);
   invalidateAll(qc, ["analytics"]);
@@ -226,21 +228,21 @@ export function afterSaleEdited(qc: QueryClient, options?: { isMobile?: boolean;
     invalidateAll(qc, ["mobile-history-balance-sales"]);
     invalidateAll(qc, ["mobile-agent-sales-today"]);
     invalidateAll(qc, ["mobile-sales"]);
-    invalidateAll(qc, ["mobile-agent-stock-holdings"], true);
-    invalidateAll(qc, ["mobile-products-for-sale"], true);
-    invalidateAll(qc, ["mobile-inventory"], true);
+    invalidateAll(qc, ["mobile-agent-stock-holdings"]);
+    invalidateAll(qc, ["mobile-products-for-sale"]);
+    invalidateAll(qc, ["mobile-inventory"]);
   }
 }
 
 export function afterSaleCancelled(qc: QueryClient, options?: { isMobile?: boolean; storeId?: string }) {
-  // Do NOT force an eager refetch on sales — it can hit a stale read-replica
+  // Do NOT force an eager refetch on sales â€” it can hit a stale read-replica
   // and overwrite optimistic updates before the write has replicated.
   // The useRealtimeSync hook already subscribes to DB changes and will safely
   // invalidate / mark stale so active observers refetch on their next tick.
   invalidateAll(qc, ["sales"]);
-  invalidateAll(qc, ["stores"], true);
-  invalidateAll(qc, ["stores-for-sale"], true);
-  invalidateAll(qc, ["stores-for-txn"], true);
+  invalidateAll(qc, ["stores"]);
+  invalidateAll(qc, ["stores-for-sale"]);
+  invalidateAll(qc, ["stores-for-txn"]);
   if (options?.storeId) {
     invalidateAll(qc, ["store", options.storeId]);
     invalidateAll(qc, ["store-sales", options.storeId]);
@@ -252,11 +254,11 @@ export function afterSaleCancelled(qc: QueryClient, options?: { isMobile?: boole
     invalidateAll(qc, ["store-qr-codes", options.storeId]);
   }
   invalidateAll(qc, ["orders"]);
-  invalidateAll(qc, ["staff-stock"], true);
-  invalidateAll(qc, ["product-stock"], true);
-  invalidateAll(qc, ["stock-movements"], true);
-  invalidateAll(qc, ["agent-stock"], true);
-  invalidateAll(qc, ["agent-stock-holdings"], true);
+  invalidateAll(qc, ["staff-stock"]);
+  invalidateAll(qc, ["product-stock"]);
+  invalidateAll(qc, ["stock-movements"]);
+  invalidateAll(qc, ["agent-stock"]);
+  invalidateAll(qc, ["agent-stock-holdings"]);
   invalidateAll(qc, ["analytics"]);
   invalidateAll(qc, ["super-admin-dashboard-stats"]);
   invalidateAll(qc, ["manager-dashboard"]);
@@ -264,9 +266,9 @@ export function afterSaleCancelled(qc: QueryClient, options?: { isMobile?: boole
   if (options?.isMobile) {
     invalidateAll(qc, ["mobile-sales"]);
     invalidateAll(qc, ["mobile-recent-activity"]);
-    invalidateAll(qc, ["mobile-agent-stock-holdings"], true);
-    invalidateAll(qc, ["mobile-products-for-sale"], true);
-    invalidateAll(qc, ["mobile-inventory"], true);
+    invalidateAll(qc, ["mobile-agent-stock-holdings"]);
+    invalidateAll(qc, ["mobile-products-for-sale"]);
+    invalidateAll(qc, ["mobile-inventory"]);
   }
 }
 

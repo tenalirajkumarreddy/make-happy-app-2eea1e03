@@ -27,6 +27,9 @@ export function invalidateQueries(qc: QueryClient, ...keys: (QueryKey[] | QueryK
       // exact:false → all queries whose key *starts with* this prefix
       // refetchType:"all" → both active and inactive observers refetch
       qc.invalidateQueries({ queryKey: singleKey, exact: false, refetchType: "all" });
+      // Aggressive refetch: trigger a background refetch for ALL observers
+      // so the UI updates in real time even when the window isn't focused.
+      qc.refetchQueries({ queryKey: singleKey, exact: false, type: "all" });
     });
   });
 }

@@ -10,6 +10,7 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { logDebug, logError } from "@/lib/logger";
 import { Loader2 } from "lucide-react";
 import { useCapacitorAppState } from "@/hooks/useCapacitorAppState";
+import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 import Auth from "./pages/Auth";
 
 const Onboarding = lazy(() => import("./pages/Onboarding"));
@@ -26,13 +27,16 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
-      // Reactive data layer: data becomes stale immediately so mutations
-      // trigger refetches across all subscribed components.
-      staleTime: 0,
+      // Reactive data layer: data is fresh for 2 s so repeated mounts
+      // within the same interaction do not thrash, but mutations and
+      // realtime events still trigger immediate background refetches.
+      staleTime: 2_000,
       // Refetch when window/tab regains focus (keeps cross-tab data in sync)
       refetchOnWindowFocus: true,
       // Always refetch on reconnect (critical for offline-first behaviour)
       refetchOnReconnect: true,
+      // Background poll every 30 s to keep dashboards current
+      refetchInterval: 30_000,
     },
     mutations: {
       onError: (error) => {
@@ -50,6 +54,8 @@ const indexedDbPersister = createIndexedDbPersister();
  * must live here or deeper in the tree.
  */
 function AppContent() {
+  // Global realtime sync: ensures every screen always sees fresh data
+  useRealtimeSync();
   // Activate Capacitor foreground invalidation (no-op on web)
   useCapacitorAppState();
 

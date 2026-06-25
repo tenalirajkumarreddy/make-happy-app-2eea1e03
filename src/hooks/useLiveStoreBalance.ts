@@ -3,28 +3,33 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
 /**
- * Computes the live (computed) outstanding balance for a store
- * by processing sales, transactions, and adjustments from the DB.
+ * Returns the authoritative outstanding balance for a store.
  *
- * This matches the calculation in StoreLedger but returns a single number
- * so the StatCard / profile card always shows the true outstanding.
+ * Strategy:
+ * 1. Try the server-computed `outstanding` column first (fast, single row).
+ * 2. Fallback to a client-side recomputation from sales, transactions, and
+ *    adjustments so the UI never shows "0" because of a missing column.
+ *
+ * This guarantees the StatCard / profile card always shows the true outstanding.
  */
 export function useLiveStoreBalance(storeId: string | undefined) {
-  const { data: store } = useQuery({
-    queryKey: ["store-opening-balance", storeId],
+  // ── Primary: server-maintained outstanding ────────────────────────────
+  const { data: storeRow } = useQuery({
+    queryKey: ["store-outstanding", storeId],
     queryFn: async () => {
       if (!storeId) return null;
       const { data } = await supabase
         .from("stores")
-        .select("opening_balance")
+        .select("outstanding, opening_balance")
         .eq("id", storeId)
         .single();
       return data;
     },
     enabled: !!storeId,
-    staleTime: 0,
+    staleTime: 2_000,
   });
 
+  // ── Fallback data: sales ──────────────────────────────────────────────
   const { data: salesData } = useQuery({
     queryKey: ["store-sales-balance", storeId],
     queryFn: async () => {
@@ -38,9 +43,10 @@ export function useLiveStoreBalance(storeId: string | undefined) {
       return data || [];
     },
     enabled: !!storeId,
-    staleTime: 0,
+    staleTime: 2_000,
   });
 
+  // ── Fallback data: transactions ───────────────────────────────────────
   const { data: txnData } = useQuery({
     queryKey: ["store-txn-balance", storeId],
     queryFn: async () => {
@@ -54,9 +60,10 @@ export function useLiveStoreBalance(storeId: string | undefined) {
       return data || [];
     },
     enabled: !!storeId,
-    staleTime: 0,
+    staleTime: 2_000,
   });
 
+  // ── Fallback data: balance adjustments ──────────────────────────────
   const { data: adjustmentData } = useQuery({
     queryKey: ["store-adjustments-balance", storeId],
     queryFn: async () => {
@@ -69,13 +76,18 @@ export function useLiveStoreBalance(storeId: string | undefined) {
       return data || [];
     },
     enabled: !!storeId,
-    staleTime: 0,
+    staleTime: 2_000,
   });
 
   const liveOutstanding = useMemo(() => {
-    let balance = Number(store?.opening_balance || 0);
+    // Prefer the server-computed outstanding when available
+    if (storeRow?.outstanding !== undefined && storeRow.outstanding !== null) {
+      return Number(storeRow.outstanding);
+    }
 
-    // Sales: add outstanding portion (respect cancelled/returned)
+    // Fallback: client-side recomputation
+    let balance = Number(storeRow?.opening_balance || 0);
+
     for (const s of salesData || []) {
       if (s.status === "cancelled" || s.is_fully_returned) continue;
       balance += Math.max(
@@ -84,13 +96,11 @@ export function useLiveStoreBalance(storeId: string | undefined) {
       );
     }
 
-    // Transactions: subtract payment (respect returned)
     for (const t of txnData || []) {
       if (t.is_fully_returned) continue;
       balance -= Math.abs(Number(t.total_amount || 0));
     }
 
-    // Balance adjustments directly set the balance
     for (const a of adjustmentData || []) {
       if (a.new_outstanding !== undefined && a.new_outstanding !== null) {
         balance = Number(a.new_outstanding);
@@ -98,7 +108,7 @@ export function useLiveStoreBalance(storeId: string | undefined) {
     }
 
     return balance;
-  }, [salesData, txnData, adjustmentData, store?.opening_balance]);
+  }, [salesData, txnData, adjustmentData, storeRow]);
 
   return liveOutstanding;
 }
