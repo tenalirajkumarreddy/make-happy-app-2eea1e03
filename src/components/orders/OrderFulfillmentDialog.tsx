@@ -279,11 +279,23 @@ export function OrderFulfillmentDialog({
 
     setSubmitting(true);
     try {
-      const { data: did, error: de } = await supabase.rpc("generate_display_id", { prefix: "SALE", seq_name: "sale_display_seq" } as any) as any;
-      if (de) throw de;
-
+      // Step 1: Atomically transition order to 'fulfilling' to prevent double-fulfillment
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
+
+      const { data: lockResult, error: lockError } = await supabase.rpc("begin_order_fulfillment", {
+        p_order_id: order.id,
+        p_user_id: user.id,
+      });
+
+      if (lockError || !lockResult) {
+        throw new Error("This order is already being fulfilled by another user. Please refresh and try again.");
+      }
+
+      let did: string;
+      const { data: didData, error: de } = await supabase.rpc("generate_display_id", { prefix: "SALE", seq_name: "sale_display_seq" } as any) as any;
+      if (de) throw de;
+      did = didData;
 
       const customerId = order.customer_id || order.stores?.customer_id;
       if (!customerId) { toast.error("No customer linked to this order."); return; }
@@ -293,20 +305,34 @@ export function OrderFulfillmentDialog({
         unit_price: i.unit_price, total_price: i.quantity * i.unit_price,
       }));
 
-      const { error: se } = await (supabase.rpc("record_sale", {
-        p_display_id: did as string,
-        p_store_id: order.store_id,
-        p_customer_id: customerId,
-        p_recorded_by: user.id, p_logged_by: null,
-        p_total_amount: subtotal,
-        p_cash_amount: cash, p_upi_amount: upi,
-        p_outstanding_amount: outstanding,
-        p_sale_items: saleItems,
-        p_created_at: null,
-        p_expected_outstanding: oldOutstanding,
-        p_fulfilled_order_id: order.id,
-      } as any)) as any;
-      if (se) throw se;
+      let saleResult: any;
+      try {
+        const { data: saleData, error: se } = await (supabase.rpc("record_sale", {
+          p_display_id: did as string,
+          p_store_id: order.store_id,
+          p_customer_id: customerId,
+          p_recorded_by: user.id, p_logged_by: null,
+          p_total_amount: subtotal,
+          p_cash_amount: cash, p_upi_amount: upi,
+          p_outstanding_amount: outstanding,
+          p_sale_items: saleItems,
+          p_created_at: null,
+          p_expected_outstanding: oldOutstanding,
+          p_fulfilled_order_id: order.id,
+        } as any)) as any;
+        if (se) throw se;
+        saleResult = saleData;
+      } catch (saleError: any) {
+        // If sale fails, revert order back to pending
+        await supabase.rpc("cancel_order_fulfillment", { p_order_id: order.id });
+        throw saleError;
+      }
+
+      // Step 3: Complete the fulfillment - mark order as delivered
+      await supabase.rpc("complete_order_fulfillment", {
+        p_order_id: order.id,
+        p_sale_id: saleResult?.[0]?.sale_id || saleResult?.sale_id,
+      });
 
       // notifications
       if (customerId) {

@@ -20,6 +20,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { timeAgo } from "@/lib/utils";
 import type { StoreOption } from "@/mobile/components/StorePickerSheet";
 import { useMarkVisit } from "@/mobile/hooks/useMarkVisit";
+import { useLiveStoreBalance } from "@/hooks/useLiveStoreBalance";
 
 interface Props {
   store: StoreOption;
@@ -48,6 +49,7 @@ interface StoreProfileRow {
 export function AgentStoreProfile({ store, onBack, onGoRecord }: Props) {
   const { user } = useAuth();
   const { markVisit, isVisiting } = useMarkVisit();
+  const liveOutstanding = useLiveStoreBalance(store.id);
 
   const { data: storeRow, isLoading } = useQuery({
     queryKey: ["mobile-store-profile", store.id],
@@ -187,8 +189,8 @@ export function AgentStoreProfile({ store, onBack, onGoRecord }: Props) {
                 <p className="text-base font-bold text-slate-800 dark:text-white">{currentStore.name}</p>
                 <p className="text-xs text-slate-400 mt-0.5">{currentStore.display_id}</p>
               </div>
-              <p className={`text-base font-bold ${Number(currentStore.outstanding || 0) > 0 ? "text-red-500" : "text-emerald-500"}`}>
-                ₹{Number(currentStore.outstanding || 0).toLocaleString("en-IN")}
+              <p className={`text-base font-bold ${liveOutstanding > 0 ? "text-red-500" : liveOutstanding < 0 ? "text-emerald-500" : "text-slate-500"}`}>
+                {liveOutstanding < 0 ? '-' : ''}₹{Math.abs(liveOutstanding).toLocaleString("en-IN")}
               </p>
             </div>
 

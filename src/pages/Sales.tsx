@@ -21,6 +21,7 @@ import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { SaleReceipt } from "@/components/shared/SaleReceipt";
 import { OrderFulfillmentDialog } from "@/components/orders/OrderFulfillmentDialog";
 import { SaleReturnDialog } from "@/components/sales/SaleReturnDialog";
+import { AddProductDialog } from "@/components/sales/AddProductDialog";
 import { useState, useMemo, useEffect } from "react";
 import { useSearchParams, useNavigate, Link } from "react-router-dom";
 import { usePermission } from "@/hooks/usePermission";
@@ -203,6 +204,8 @@ const Sales = () => {
       setSearchParams({}, { replace: true });
     }
   }, [searchParams, isPosUser, setSearchParams]);
+  
+  // NOTE: Optimistic locking useEffect moved below selectedStore declaration
 
   const [cashAmount, setCashAmount] = useState("");
   const [upiAmount, setUpiAmount] = useState("");
@@ -240,9 +243,8 @@ const Sales = () => {
       queryFn: async () => {
         let query = supabase
         .from("sales")
-    .select("*, is_fully_returned, old_outstanding, stores(id, name, display_id, store_type_id, route_id, address, outstanding), customers(id, name, display_id, phone, email), fulfilled_order_id, invoice_sales(invoice_id), sale_items(*)")
+    .select("*, is_fully_returned, old_outstanding, status, stores(id, name, display_id, store_type_id, route_id, address, outstanding), customers(id, name, display_id, phone, email), fulfilled_order_id, invoice_sales(invoice_id), sale_items(*)")
         .is("deleted_at", null)
-        .eq("is_fully_returned", false)
         .order("created_at", { ascending: false });
        if (currentWarehouse?.id) query = query.eq("warehouse_id", currentWarehouse.id);
        // Non-admin roles (agents, operator, marketer) only see their own records
@@ -366,6 +368,13 @@ const Sales = () => {
 
   const selectedStore = stores?.find((s) => s.id === storeId);
   const selectedStoreTypeId = selectedStore?.store_type_id;
+
+  // Capture store outstanding when opening the sale dialog (for optimistic locking)
+  useEffect(() => {
+    if (showAdd && selectedStore) {
+      setStoredAtOpen(Number(selectedStore.outstanding || 0));
+    }
+  }, [showAdd, selectedStore]);
 
   // Fetch all products for adding non-associated items
    const { data: allProducts } = useQuery({
@@ -596,6 +605,10 @@ const Sales = () => {
   const outstandingFromSale = totalAmount - cash - upi;
   const oldOutstanding = Number(selectedStore?.outstanding || 0);
   const newOutstanding = oldOutstanding + outstandingFromSale;
+
+  // ── Optimistic locking: warn if store outstanding changed ────────────
+  const [storedAtOpen, setStoredAtOpen] = useState<number | null>(null);
+  const outstandingChanged = storedAtOpen !== null && storedAtOpen !== oldOutstanding;
 
   // Credit limit calculation
   const creditLimitInfo = selectedStore && storeTypes && customers
@@ -858,7 +871,19 @@ const Sales = () => {
       .from("orders").select("id").eq("store_id", storeId).eq("status", "pending");
     const pendingCount = pendingOrders?.length || 0;
 
+    // Fresh fetch latest outstanding right before RPC to avoid stale-read race
+    let currentOutstanding = oldOutstanding;
+    try {
+      const { data: freshStore } = await supabase.from("stores").select("outstanding").eq("id", storeId).single();
+      if (freshStore) {
+        currentOutstanding = Number(freshStore.outstanding);
+      }
+    } catch (_e) {
+      // fallback to cached value if fetch fails
+    }
+
     // Single atomic RPC — insert sale + items, enforce credit limit, deliver orders, fix balance
+    // Pass expected_outstanding for optimistic concurrency control (prevents race conditions)
     const { data: result, error } = await supabase.rpc("record_sale", {
       p_display_id: displayId,
       p_store_id: storeId,
@@ -871,6 +896,7 @@ const Sales = () => {
       p_outstanding_amount: Math.max(outstandingFromSale, 0),
       p_sale_items: saleItems,
       p_created_at: saleDate ? new Date(saleDate).toISOString() : null,
+      p_expected_outstanding: currentOutstanding,
     } as any) as any;
 
   if (error) {
@@ -1115,7 +1141,7 @@ const Sales = () => {
     return saleDay < todayDay;
   };
 
-  const returnedClass = (row: any) => row.is_fully_returned ? "line-through text-muted-foreground" : "";
+  const returnedClass = (row: any) => (row.is_fully_returned || row.status === 'cancelled') ? "line-through text-muted-foreground" : "";
 
   // ── Action Button (matches Orders.tsx pattern) ──
   const ActionBtn = ({ icon: Icon, label, disabledReason, enabled, loading, color, onClick }: {
@@ -1187,9 +1213,9 @@ const Sales = () => {
       {
         key: "edit",
         icon: Pencil,
-        label: pastDate ? "Edits are locked after the day recorded" : "Edit Sale",
-        disabledReason: pastDate ? "Edits are locked after the day recorded" : null,
-        enabled: !row.is_fully_returned && !pastDate,
+        label: row.status === 'cancelled' ? "Cannot edit cancelled sale" : pastDate ? "Edits are locked after the day recorded" : "Edit Sale",
+        disabledReason: row.status === 'cancelled' ? "Cannot edit cancelled sale" : pastDate ? "Edits are locked after the day recorded" : null,
+        enabled: row.status !== 'cancelled' && !row.is_fully_returned && !pastDate,
         permission: true,
         color: "text-blue-600 hover:bg-blue-50 hover:text-blue-700",
         onClick: () => openEditSale(row),
@@ -1197,17 +1223,21 @@ const Sales = () => {
       {
         key: "return",
         icon: RotateCcw,
-        label: row.is_fully_returned
-          ? "Sale already returned"
-          : pastDate
-            ? "Returns are locked after the day recorded"
-            : "Return Sale",
-        disabledReason: row.is_fully_returned
-          ? "Sale already returned"
-          : pastDate
-            ? "Returns are locked after the day recorded"
-            : null,
-        enabled: !row.is_fully_returned && !pastDate,
+        label: row.status === 'cancelled'
+          ? "Cannot return cancelled sale"
+          : row.is_fully_returned
+            ? "Sale already returned"
+            : pastDate
+              ? "Returns are locked after the day recorded"
+              : "Return Sale",
+        disabledReason: row.status === 'cancelled'
+          ? "Cannot return cancelled sale"
+          : row.is_fully_returned
+            ? "Sale already returned"
+            : pastDate
+              ? "Returns are locked after the day recorded"
+              : null,
+        enabled: row.status !== 'cancelled' && !row.is_fully_returned && !pastDate,
         permission: isAdmin,
         color: "text-orange-600 hover:bg-orange-50 hover:text-orange-700",
         onClick: () => setReturnSale(row),
@@ -1215,9 +1245,9 @@ const Sales = () => {
       {
         key: "cancel",
         icon: XCircle,
-        label: "Cancel Sale",
-        disabledReason: null,
-        enabled: !row.is_fully_returned,
+        label: row.status === 'cancelled' ? "Sale already cancelled" : "Cancel Sale",
+        disabledReason: row.status === 'cancelled' ? "Sale already cancelled" : null,
+        enabled: row.status !== 'cancelled' && !row.is_fully_returned,
         permission: true,
         color: "text-red-600 hover:bg-red-50 hover:text-red-700",
         onClick: () => setCancelSale(row),
@@ -1278,6 +1308,11 @@ const Sales = () => {
           {row.is_fully_returned && (
             <span className="ml-2 text-4xs font-bold bg-warning/20 text-warning border border-warning/30 rounded px-1 py-0">
               Returned
+            </span>
+          )}
+          {row.status === 'cancelled' && (
+            <span className="ml-2 text-4xs font-bold bg-red-100 text-red-600 border border-red-200 rounded px-1 py-0">
+              Cancelled
             </span>
           )}
         </span>
@@ -1493,14 +1528,19 @@ const Sales = () => {
           emptyMessage="No sales recorded yet."
           onRowClick={(row: SaleRecord) => setSelectedSaleId(row.id)}
           renderMobileCard={(row: any) => (
-        <div className={`rounded-lg border bg-card p-3 ${row.is_fully_returned ? 'opacity-70 bg-slate-50 dark:bg-slate-900/40 border-dashed border-red-200 dark:border-red-900/40' : ''}`}>
+        <div className={`rounded-lg border bg-card p-3 ${(row.is_fully_returned || row.status === 'cancelled') ? 'opacity-70 bg-slate-50 dark:bg-slate-900/40 border-dashed border-red-200 dark:border-red-900/40' : ''}`}>
           {/* Header row: ID + Date + Actions */}
           <div className="flex items-center justify-between mb-1.5">
             <div className="flex items-center gap-2">
-              <span className={`font-mono text-xs font-medium ${row.is_fully_returned ? 'text-slate-400 line-through' : 'text-primary'}`}>{row.display_id}</span>
+              <span className={`font-mono text-xs font-medium ${(row.is_fully_returned || row.status === 'cancelled') ? 'text-slate-400 line-through' : 'text-primary'}`}>{row.display_id}</span>
               {row.is_fully_returned && (
                 <Badge className="text-[9px] px-1 py-0 h-4 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 font-bold">
                   ↩ RETURNED
+                </Badge>
+              )}
+              {row.status === 'cancelled' && (
+                <Badge className="text-[9px] px-1 py-0 h-4 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 font-bold">
+                  ✕ CANCELLED
                 </Badge>
               )}
             </div>
@@ -1542,8 +1582,8 @@ const Sales = () => {
                   </Button>
                 )
               )}
-              {/* Edit button for non-returned sales */}
-              {!row.is_fully_returned && !isPastDate(row.created_at, row.updated_at) && (
+              {/* Edit button for non-returned, non-cancelled sales */}
+              {row.status !== 'cancelled' && !row.is_fully_returned && !isPastDate(row.created_at, row.updated_at) && (
                 <Button
                   variant="ghost"
                   size="icon"
@@ -1554,8 +1594,8 @@ const Sales = () => {
                   <Pencil className="h-4 w-4" />
                 </Button>
               )}
-              {/* No return button on already-returned sales */}
-              {!row.is_fully_returned && (
+              {/* No return button on already-returned or cancelled sales */}
+              {row.status !== 'cancelled' && !row.is_fully_returned && (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <span>
@@ -1576,7 +1616,7 @@ const Sales = () => {
                   </TooltipContent>
                 </Tooltip>
               )}
-              {canCancelSales && !row.is_fully_returned && (
+              {canCancelSales && row.status !== 'cancelled' && !row.is_fully_returned && (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <span>
@@ -2352,37 +2392,19 @@ const Sales = () => {
       />
 
       {/* Add Product Dialog - for non-associated products */}
-      <Dialog open={showAddProductDialog} onOpenChange={setShowAddProductDialog}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Add Product</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Select a product to add to this sale. This product is not normally associated with this store type.
-            </p>
-            <Select value={selectedProductToAdd} onValueChange={setSelectedProductToAdd}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select product" />
-              </SelectTrigger>
-              <SelectContent className="max-h-60">
-                {allProducts?.filter((p: any) => !items.some((i: any) => i.product_id === p.id)).map((p: any) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    <div className="flex items-center gap-2">
-                      <span>{p.name}</span>
-                      <span className="text-muted-foreground">- ₹{Number(p.base_price || 0).toLocaleString()}</span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => setShowAddProductDialog(false)}>Cancel</Button>
-              <Button className="flex-1" disabled={!selectedProductToAdd} onClick={addProductToSale}>Add Product</Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <AddProductDialog
+        open={showAddProductDialog}
+        onOpenChange={setShowAddProductDialog}
+        products={allProducts || []}
+        selectedItems={items}
+        onAddProduct={(productId) => {
+          const product = allProducts?.find((p: any) => p.id === productId);
+          if (product) {
+            addItem({ product_id: product.id, quantity: 1, unit_price: Number(product.base_price || 0) });
+            setShowAddProductDialog(false);
+          }
+        }}
+      />
     </div>
     </TooltipProvider>
   );

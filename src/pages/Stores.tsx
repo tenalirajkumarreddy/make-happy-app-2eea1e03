@@ -592,7 +592,7 @@ const Stores = () => {
                 </div>
                 <div className="flex items-center justify-between mt-1.5">
                   <span className="text-xs text-muted-foreground truncate">{row.customers?.name || "—"}</span>
-                  <p className={`font-bold text-sm ${Number(row.outstanding || 0) > 0 ? 'text-destructive' : 'text-foreground'}`}>₹{Number(row.outstanding || 0).toLocaleString()}</p>
+                  <p className={`font-bold text-sm ${Number(row.outstanding || 0) > 0 ? 'text-destructive' : Number(row.outstanding || 0) < 0 ? 'text-green-600' : 'text-foreground'}`}>{Number(row.outstanding || 0) < 0 ? '-' : ''}₹{Math.abs(Number(row.outstanding || 0)).toLocaleString()}</p>
                 </div>
               </div>
             </div>

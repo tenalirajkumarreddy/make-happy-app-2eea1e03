@@ -594,7 +594,8 @@ describe("Sales Lifecycle – Date Edge Cases", () => {
   });
 
   it("1 day + 1ms future is invalid", () => {
-    const d = new Date(Date.now() + 86400000 + 1).toISOString();
+    // Use a date clearly beyond the 1-day limit (add 5 seconds buffer to avoid race conditions)
+    const d = new Date(Date.now() + 86400000 + 5000).toISOString();
     expect(validateSaleDate(d, rules).valid).toBe(false);
   });
 

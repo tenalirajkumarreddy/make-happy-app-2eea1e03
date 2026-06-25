@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { timeAgo } from "@/lib/utils";
+import { useLiveStoreBalance } from "@/hooks/useLiveStoreBalance";
 import type { StoreOption } from "@/mobile/components/StorePickerSheet";
 
 interface Props {
@@ -41,6 +42,8 @@ interface StoreProfileRow {
 }
 
 export function MarketerStoreProfile({ store, onBack, onGoRecord, onGoOrders }: Props) {
+  const liveOutstanding = useLiveStoreBalance(store.id);
+
   const { data: storeRow } = useQuery({
     queryKey: ["mobile-marketer-store-profile", store.id],
     queryFn: async () => {
@@ -117,8 +120,8 @@ export function MarketerStoreProfile({ store, onBack, onGoRecord, onGoOrders }: 
                 <p className="text-base font-bold text-slate-800 dark:text-white">{currentStore.name}</p>
                 <p className="text-xs text-slate-400 mt-0.5">{currentStore.display_id}</p>
               </div>
-              <p className={`text-base font-bold ${Number(currentStore.outstanding || 0) > 0 ? "text-red-500" : "text-emerald-500"}`}>
-                ₹{Number(currentStore.outstanding || 0).toLocaleString("en-IN")}
+              <p className={`text-base font-bold ${liveOutstanding > 0 ? "text-red-500" : liveOutstanding < 0 ? "text-emerald-500" : "text-slate-500"}`}>
+                {liveOutstanding < 0 ? '-' : ''}₹{Math.abs(liveOutstanding).toLocaleString("en-IN")}
               </p>
             </div>
 

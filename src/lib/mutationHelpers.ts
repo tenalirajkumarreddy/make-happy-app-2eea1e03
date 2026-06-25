@@ -286,3 +286,27 @@ export function afterPaymentReturned(qc: QueryClient, options?: { isMobile?: boo
     invalidateAll(qc, ["mobile-agent-tx-today"]);
   }
 }
+
+export function afterHandoverChanged(qc: QueryClient, options?: { isMobile?: boolean; userId?: string }) {
+  invalidateAll(qc, ["handovers"]);
+  invalidateAll(qc, ["agent-cash-holding"]);
+  invalidateAll(qc, ["user-holding-balance"]);
+  invalidateAll(qc, ["all-staff-balances"]);
+  invalidateAll(qc, ["user-sales-totals"]);
+  invalidateAll(qc, ["user-transaction-totals"]);
+  invalidateAll(qc, ["user-daily-balance"]);
+  invalidateAll(qc, ["finalizer-account"]);
+  invalidateAll(qc, ["finalizer-holdings"]);
+  invalidateAll(qc, ["income-entries"]);
+  invalidateAll(qc, ["stores"]);
+  invalidateAll(qc, ["agent-dashboard"]);
+  invalidateAll(qc, ["mobile-admin-dashboard"]);
+  if (options?.userId) {
+    invalidateAll(qc, ["user-handover-history", options.userId]);
+    invalidateAll(qc, ["user-cash-summary", options.userId]);
+  }
+  if (options?.isMobile) {
+    invalidateAll(qc, ["mobile-agent-tx-today"]);
+    invalidateAll(qc, ["mobile-agent-sales-today"]);
+  }
+}

@@ -371,6 +371,10 @@ const Transactions = () => {
       p_upi_amount: upi,
       p_notes: notes || null,
       p_created_at: txnDate ? new Date(txnDate).toISOString() : undefined,
+    }, { // Using a unique request ID for idempotency at the RPC level
+      headers: {
+        'x-Idempotency-Key': `txn-${displayId}-${effectiveRecordedBy}`
+      }
     });
 
     if (txnError) {

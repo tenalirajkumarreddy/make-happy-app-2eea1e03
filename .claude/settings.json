@@ -1,9 +1,12 @@
 {
   "env": {
-    "ANTHROPIC_BASE_URL": "https://opencode.ai/zen",
-    "ANTHROPIC_MODEL": "minimax-m2.5-free",
-    "ANTHROPIC_API_KEY": "sk-KuOhs7KuVp0c5PMgqadMICL12DVWSJ4LwtVezLbJ4DleBnXvy5fdFqBQDx6fEEOw",
-    "ENABLE_TOOL_SEARCH": "true"
+    "ANTHROPIC_BASE_URL": "https://cc.freemodel.dev/",
+    "ANTHROPIC_API_KEY": "fe_oa_65559581451143db8881f33faf48b720c49d9b323c8ff358",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-opus-4-8",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-sonnet-4-6",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "glm-5.2",
+    "API_TIMEOUT_MS": "300000",
+    "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "128000"
   },
   "permissions": {
     "allow": [
@@ -62,8 +65,5 @@
       "url": "https://mcp.supabase.com/mcp",
       "project_ref": "vrhptrtgrpftycvojaqo"
     }
-  },
-  "model": "minimax-m2.5-free",
-  "autoUpdatesChannel": "latest",
-  "theme": "dark"
+  }
 }

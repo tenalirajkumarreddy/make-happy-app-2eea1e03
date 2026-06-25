@@ -10,6 +10,7 @@ import { validateSaleData } from "@/lib/validation/schemas";
 import { resolveCreditLimit } from "@/lib/creditLimit";
 import { addToQueue, generateBusinessKey } from "@/lib/offlineQueue";
 import { afterSaleSaved } from "@/lib/mutationHelpers";
+import { invalidateQueries, invalidateAllDashboards, invalidateStoreGraph } from "@/lib/invalidateQueries";
 import { logActivity } from "@/lib/activityLogger";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { toast } from "sonner";

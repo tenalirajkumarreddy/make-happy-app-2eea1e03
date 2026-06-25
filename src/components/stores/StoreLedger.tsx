@@ -19,7 +19,8 @@ type LedgerEntry = {
   total_amount: number;
   cash_amount: number;
   upi_amount: number;
-  outstanding: number; // new_outstanding = running balance
+  outstanding: number; // running balance after this transaction
+  delta: number; // how much this entry changes the balance (+ for sale outstanding, - for payment, etc.)
   notes: string | null;
   recorded_by: string;
   raw: any;
@@ -46,11 +47,12 @@ export function StoreLedger({ sales, transactions, paymentReturns = [], balanceA
       returnByTxnId.set(r.original_transaction_id, r);
     }
 
-    // Filter out cancelled/returned entries
-    const activeSales = sales.filter((s: any) => !s.deleted_at && !s.is_fully_returned);
+    // Include cancelled and returned sales in the ledger (they will be shown with badges)
+    const activeSales = sales.filter((s: any) => !s.deleted_at);
     const activeTransactions = transactions.filter((t: any) => !t.deleted_at);
 
     for (const s of activeSales) {
+      const isCancelled = s.status === 'cancelled';
       entries.push({
         id: s.id,
         type: "sale",
@@ -64,6 +66,8 @@ export function StoreLedger({ sales, transactions, paymentReturns = [], balanceA
         notes: s.notes,
         recorded_by: s.recorded_by,
         raw: s,
+        // delta: how this sale affects the running balance
+        delta: (isCancelled || s.is_fully_returned) ? 0 : (Number(s.total_amount) - Number(s.cash_amount || 0) - Number(s.upi_amount || 0)),
       });
     }
 
@@ -86,10 +90,12 @@ export function StoreLedger({ sales, transactions, paymentReturns = [], balanceA
         notes: isReturned ? (ret?.reason === "full_return" ? "Full return" : ret?.reason === "duplicate_payment" ? "Duplicate payment" : ret?.reason === "wrong_amount" ? "Wrong amount" : ret?.reason?.replace(/_/g, " ") || t.notes) : t.notes,
         recorded_by: t.recorded_by,
         raw: { ...t, returnInfo: ret || null },
+        delta: isReturned ? 0 : -Number(t.total_amount),
       });
     }
 
     for (const adj of balanceAdjustments) {
+      // For corrections, delta is the TARGET balance (new_outstanding), not the change
       entries.push({
         id: adj.id,
         type: "correction",
@@ -99,10 +105,11 @@ export function StoreLedger({ sales, transactions, paymentReturns = [], balanceA
         total_amount: Number(adj.adjustment_amount),
         cash_amount: 0,
         upi_amount: 0,
-        outstanding: Number(adj.new_outstanding),
+        outstanding: 0, // will be computed
         notes: adj.reason,
         recorded_by: adj.adjusted_by,
         raw: adj,
+        delta: Number(adj.new_outstanding), // target balance for correction
       });
     }
 
@@ -112,17 +119,11 @@ export function StoreLedger({ sales, transactions, paymentReturns = [], balanceA
     // Compute running balance from opening balance forward (like a bank statement)
     let runningBalance = openingBalance;
     for (const entry of entries) {
-      if (entry.type === "sale") {
-        // Sale adds outstanding (debit to customer, credit to us = outstanding increases)
-        runningBalance += entry.total_amount - entry.cash_amount - entry.upi_amount;
-      } else if (entry.type === "payment") {
-        // Payment reduces outstanding (credit from customer)
-        if (!entry.raw?.is_fully_returned) {
-          runningBalance -= entry.total_amount;
-        }
-      } else if (entry.type === "correction" && entry.id !== "__opening_balance__") {
-        // Balance adjustment directly sets the balance
-        runningBalance = entry.outstanding;
+      if (entry.type === "correction") {
+        // Balance correction: delta IS the new target balance (not a change)
+        runningBalance = entry.delta;
+      } else {
+        runningBalance += entry.delta;
       }
       entry.outstanding = runningBalance;
     }
@@ -141,6 +142,7 @@ export function StoreLedger({ sales, transactions, paymentReturns = [], balanceA
       notes: null,
       recorded_by: "",
       raw: null,
+      delta: 0,
     });
 
     // Now sort newest first for display
@@ -190,12 +192,18 @@ export function StoreLedger({ sales, transactions, paymentReturns = [], balanceA
         }
         const isSaleReturned = row.type === "sale" && row.raw?.is_fully_returned;
         const isPaymentReturned = row.type === "payment" && row.raw?.is_fully_returned;
+        const isSaleCancelled = row.type === "sale" && row.raw?.status === 'cancelled';
+        const isPaymentCancelled = row.type === "payment" && row.raw?.status === 'cancelled';
+        const isInactive = isSaleReturned || isPaymentReturned || isSaleCancelled || isPaymentCancelled;
         return (
           <div>
-            <p className={`font-medium text-sm ${isSaleReturned || isPaymentReturned ? "line-through text-muted-foreground" : row.type === "return" ? "text-emerald-600 dark:text-emerald-400" : ""}`}>
+            <p className={`font-medium text-sm ${isInactive ? "line-through text-muted-foreground" : row.type === "return" ? "text-emerald-600 dark:text-emerald-400" : ""}`}>
               {row.description}
               {(isSaleReturned || isPaymentReturned) && (
                 <Badge variant="outline" className="ml-2 text-4xs border-amber-300 text-amber-600 bg-amber-50 rounded px-1 py-0">Returned</Badge>
+              )}
+              {(isSaleCancelled || isPaymentCancelled) && (
+                <Badge variant="outline" className="ml-2 text-4xs border-red-300 text-red-600 bg-red-50 rounded px-1 py-0">Cancelled</Badge>
               )}
             </p>
             <p className="text-3xs text-muted-foreground uppercase">{row.type === "sale" ? "SALE" : row.type === "payment" ? "PAYMENT" : row.type === "return" ? "RETURN" : "ADJUSTMENT"}</p>
@@ -213,7 +221,7 @@ export function StoreLedger({ sales, transactions, paymentReturns = [], balanceA
       header: "Debit (-)",
       accessor: (row: LedgerEntry) =>
         row.type === "sale" ? (
-          <span className={`font-medium ${row.raw?.is_fully_returned ? "line-through text-muted-foreground opacity-50" : "text-destructive"}`}>₹{row.total_amount.toLocaleString()}</span>
+          <span className={`font-medium ${(row.raw?.is_fully_returned || row.raw?.status === 'cancelled') ? "line-through text-muted-foreground opacity-50" : "text-destructive"}`}>₹{row.total_amount.toLocaleString()}</span>
         ) : row.id === "__opening_balance__" && row.total_amount > 0 ? (
           <span className="text-destructive font-medium">₹{row.total_amount.toLocaleString()}</span>
         ) : row.type === "correction" && row.id !== "__opening_balance__" && row.total_amount > 0 ? (
@@ -229,7 +237,7 @@ export function StoreLedger({ sales, transactions, paymentReturns = [], balanceA
           return <span className="text-success font-medium">₹{Math.abs(row.total_amount).toLocaleString()}</span>;
         }
         if (row.id !== "__opening_balance__" && row.type === "payment") {
-          if (row.raw?.is_fully_returned) {
+          if (row.raw?.is_fully_returned || row.raw?.status === 'cancelled') {
             return <span className="text-muted-foreground line-through">₹{row.total_amount.toLocaleString()}</span>;
           }
           return <span className="text-success font-medium">₹{row.total_amount.toLocaleString()}</span>;
@@ -237,7 +245,7 @@ export function StoreLedger({ sales, transactions, paymentReturns = [], balanceA
         if (row.type === "return") {
           return <span className="text-success font-semibold">₹{row.total_amount.toLocaleString()}</span>;
         }
-        if (row.type === "sale" && !row.raw?.is_fully_returned && (row.cash_amount + row.upi_amount) > 0) {
+        if (row.type === "sale" && !row.raw?.is_fully_returned && row.raw?.status !== 'cancelled' && (row.cash_amount + row.upi_amount) > 0) {
           return <span className="text-success font-medium">₹{(row.cash_amount + row.upi_amount).toLocaleString()}</span>;
         }
         if (row.type === "correction" && row.id !== "__opening_balance__" && row.total_amount < 0) {
@@ -318,18 +326,22 @@ export function StoreLedger({ sales, transactions, paymentReturns = [], balanceA
 
     const isSaleReturned = row.type === "sale" && row.raw?.is_fully_returned;
     const isPaymentReturned = row.type === "payment" && row.raw?.is_fully_returned;
+    const isSaleCancelled = row.type === "sale" && row.raw?.status === 'cancelled';
+    const isPaymentCancelled = row.type === "payment" && row.raw?.status === 'cancelled';
     const isReturned = isSaleReturned || isPaymentReturned;
-    const rowTypeDisplay = isReturned ? "RETURNED" : row.type === "sale" ? "SALE" : row.type === "correction" ? "ADJUSTMENT" : "PAYMENT";
+    const isCancelled = isSaleCancelled || isPaymentCancelled;
+    const isInactive = isReturned || isCancelled;
+    const rowTypeDisplay = isInactive ? (isCancelled ? "CANCELLED" : "RETURNED") : row.type === "sale" ? "SALE" : row.type === "correction" ? "ADJUSTMENT" : "PAYMENT";
 
     return (
       <div
-        className={`rounded-xl border bg-card px-3 py-2.5 shadow-sm cursor-pointer ${isReturned ? "opacity-60 bg-slate-50 dark:bg-slate-900/40 border-dashed border-red-200 dark:border-red-900/40" : ""}`}
+        className={`rounded-xl border bg-card px-3 py-2.5 shadow-sm cursor-pointer ${isInactive ? "opacity-60 bg-slate-50 dark:bg-slate-900/40 border-dashed border-red-200 dark:border-red-900/40" : ""}`}
         onClick={() => setSelectedEntryId(row.id)}
       >
         <div className="flex items-center justify-between">
-          {isReturned ? (
-            <Badge className="text-2xs h-5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded px-1.5 py-0">
-              RETURNED
+          {isInactive ? (
+            <Badge className={`text-2xs h-5 ${isCancelled ? "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800" : "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800"} border rounded px-1.5 py-0`}>
+              {isCancelled ? "CANCELLED" : "RETURNED"}
             </Badge>
           ) : (
             <Badge variant={row.type === "sale" ? "destructive" : row.type === "correction" ? "outline" : "secondary"} className="text-2xs h-5">
@@ -341,12 +353,12 @@ export function StoreLedger({ sales, transactions, paymentReturns = [], balanceA
           </span>
         </div>
         <div className="flex items-center justify-between mt-1.5">
-          <span className={`font-mono text-xs text-muted-foreground ${isReturned ? "line-through text-slate-400 dark:text-slate-500" : ""}`}>{row.display_id}</span>
+          <span className={`font-mono text-xs text-muted-foreground ${isInactive ? "line-through text-slate-400 dark:text-slate-500" : ""}`}>{row.display_id}</span>
           <div className="flex flex-col items-end gap-0.5">
-            <span className={`text-sm font-bold ${isReturned ? "line-through text-slate-400 dark:text-slate-500" : row.type === "payment" ? "text-success" : "text-destructive"}`}>
+            <span className={`text-sm font-bold ${isInactive ? "line-through text-slate-400 dark:text-slate-500" : row.type === "payment" ? "text-success" : "text-destructive"}`}>
               {row.type === "payment" ? "+" : "-"}₹{row.total_amount.toLocaleString()}
             </span>
-            {!isReturned && row.type === "sale" && (row.cash_amount + row.upi_amount) > 0 && (
+            {!isInactive && row.type === "sale" && (row.cash_amount + row.upi_amount) > 0 && (
               <span className="text-xs font-medium text-success">+₹{(row.cash_amount + row.upi_amount).toLocaleString()}</span>
             )}
           </div>
@@ -391,7 +403,14 @@ export function StoreLedger({ sales, transactions, paymentReturns = [], balanceA
           {selectedEntry && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <span className="font-mono text-sm text-muted-foreground">{selectedEntry.display_id}</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-sm text-muted-foreground">{selectedEntry.display_id}</span>
+                  {(selectedEntry.raw?.is_fully_returned || selectedEntry.raw?.status === 'cancelled') && (
+                    <Badge className="text-2xs h-5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded px-1.5 py-0">
+                      {selectedEntry.raw?.status === 'cancelled' ? "CANCELLED" : "RETURNED"}
+                    </Badge>
+                  )}
+                </div>
                 <span className="text-xs text-muted-foreground">
                   {new Date(selectedEntry.date).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
                 </span>

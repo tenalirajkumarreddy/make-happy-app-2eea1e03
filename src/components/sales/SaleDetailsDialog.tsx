@@ -1,4 +1,5 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -21,6 +22,7 @@ interface SaleRecord {
   updated_at: string;
   fulfilled_order_id?: string;
   is_fully_returned?: boolean;
+  status?: string;
   stores?: { name: string } | null;
 }
 
@@ -54,7 +56,19 @@ export function SaleDetailsDialog({
         <DialogHeader><DialogTitle>Sale Details</DialogTitle></DialogHeader>
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <span className="font-mono text-sm text-muted-foreground">{sale.display_id}</span>
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-sm text-muted-foreground">{sale.display_id}</span>
+              {(sale as any).status === 'cancelled' && (
+                <Badge className="text-2xs h-5 bg-red-100 text-red-600 border border-red-200 rounded px-1.5 py-0">
+                  CANCELLED
+                </Badge>
+              )}
+              {(sale as any).is_fully_returned && (
+                <Badge className="text-2xs h-5 bg-amber-100 text-amber-600 border border-amber-200 rounded px-1.5 py-0">
+                  RETURNED
+                </Badge>
+              )}
+            </div>
             <span className="text-xs text-muted-foreground">{format(new Date(sale.created_at), "dd MMM yy, hh:mm a")}</span>
           </div>
           <div className="flex items-center gap-2">
@@ -115,7 +129,7 @@ export function SaleDetailsDialog({
             </div>
           )}
 
-          {isAdmin && !(sale as any).is_fully_returned && (
+          {isAdmin && (sale as any).status !== 'cancelled' && !(sale as any).is_fully_returned && (
             <div className="pt-2 border-t">
               <Button variant="outline" className="w-full" onClick={() => onReturn(sale)}>
                 <RotateCcw className="mr-2 h-4 w-4" /> Process Return
@@ -123,7 +137,7 @@ export function SaleDetailsDialog({
             </div>
           )}
 
-          {canCancelSales && !(sale as any).is_fully_returned && (
+          {canCancelSales && (sale as any).status !== 'cancelled' && !(sale as any).is_fully_returned && (
             <div className="pt-2 border-t">
               <Button variant="outline" className="w-full text-red-600 border-red-200 hover:bg-red-50" onClick={() => onCancel(sale)}>
                 <XCircle className="mr-2 h-4 w-4" /> Cancel Sale
@@ -131,7 +145,7 @@ export function SaleDetailsDialog({
             </div>
           )}
 
-          {!(sale as any).is_fully_returned && !isPastDate(sale.created_at, sale.updated_at) && (
+          {(sale as any).status !== 'cancelled' && !(sale as any).is_fully_returned && !isPastDate(sale.created_at, sale.updated_at) && (
             <div className="pt-2 border-t">
               <Button variant="outline" className="w-full" onClick={() => onEdit(sale)}>
                 <Pencil className="mr-2 h-4 w-4" /> Edit Sale

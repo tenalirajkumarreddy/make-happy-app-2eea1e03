@@ -24,7 +24,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 
 // Set page title hook
 const usePageTitle = (title: string) => {
@@ -310,7 +310,7 @@ const handleDeleteQr = async (qrId: string) => {
     if (!store || !id || !user) return;
     const newBal = parseFloat(newBalanceInput);
     if (isNaN(newBal)) { toast.error("Enter a valid amount"); return; }
-    const oldBal = Number(store.outstanding);
+    const oldBal = Number(liveOutstanding);
     if (newBal === oldBal) { toast.error("New balance is the same as current"); return; }
 
     setAdjustSaving(true);
@@ -420,6 +420,48 @@ const handleDeleteQr = async (qrId: string) => {
   const isInactive = !store.is_active;
   const totalSales = sales?.reduce((s, r) => s + Number(r.total_amount), 0) || 0;
   const totalCollected = transactions?.reduce((s, r) => s + Number(r.total_amount), 0) || 0;
+
+  // Compute live outstanding from fetched entries (mirrors StoreLedger logic)
+  const liveOutstanding = useMemo(() => {
+    let balance = Number(store.opening_balance || 0);
+    
+    // Process sales (oldest first)
+    const salesEntries = (sales || []).filter((s: any) => !s.deleted_at).sort(
+      (a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+    for (const s of salesEntries) {
+      const isCancelled = s.status === 'cancelled';
+      const isReturned = s.is_fully_returned === true;
+      if (!isCancelled && !isReturned) {
+        balance += Math.max(0, Number(s.total_amount || 0) - Number(s.cash_amount || 0) - Number(s.upi_amount || 0));
+      }
+    }
+    
+    // Process transactions (oldest first)
+    const txnEntries = (transactions || []).filter((t: any) => !t.deleted_at).sort(
+      (a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+    for (const t of txnEntries) {
+      if (!t.is_fully_returned) {
+        balance -= Math.abs(Number(t.total_amount || 0));
+      }
+    }
+    
+    // Process balance adjustments
+    const adjEntries = (balanceAdjustments || []).sort(
+      (a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+    for (const adj of adjEntries) {
+      // Balance adjustment sets the balance directly (not delta-based)
+      // Using new_outstanding which is the target balance
+      if (adj.new_outstanding !== undefined) {
+        balance = Number(adj.new_outstanding);
+      }
+    }
+    
+    return balance;
+  }, [sales, transactions, balanceAdjustments, store.opening_balance]);
+
   const fullAddress = [store.street, store.area, store.city, store.district, store.state, store.pincode].filter(Boolean).join(", ") || store.address || "Not provided";
 
 
@@ -463,8 +505,8 @@ const handleDeleteQr = async (qrId: string) => {
               {row.is_fully_returned ? (
                 <Badge variant="outline" className="text-2xs border-amber-300 text-amber-600 bg-amber-50 rounded-md">Returned</Badge>
               ) : (
-                <span className={`text-xs font-medium ${Number(row.outstanding_amount) > 0 ? "text-destructive" : "text-muted-foreground"}`}>
-                  Due: ₹{Number(row.outstanding_amount).toLocaleString()}
+                <span className={`text-xs font-medium ${Number(row.outstanding_amount) > 0 ? "text-destructive" : Number(row.outstanding_amount) < 0 ? "text-green-600" : "text-muted-foreground"}`}>
+                  {Number(row.outstanding_amount) < 0 ? 'Adv: -₹' : 'Due: ₹'}{Math.abs(Number(row.outstanding_amount)).toLocaleString()}
                 </span>
               )}
             </div>
@@ -727,10 +769,10 @@ const handleDeleteQr = async (qrId: string) => {
         <StatCard title="Collections" value={`₹${totalCollected.toLocaleString()}`} icon={Banknote} iconColor="success" />
         <StatCard 
         title="Outstanding" 
-        value={`${Number(store.outstanding) < 0 ? '-' : ''}₹${Math.abs(Number(store.outstanding)).toLocaleString()}`}
+        value={`${liveOutstanding < 0 ? '-' : ''}₹${Math.abs(liveOutstanding).toLocaleString()}`}
         icon={Banknote}
-        iconColor={Number(store.outstanding) > 0 ? "destructive" : Number(store.outstanding) < 0 ? "success" : "warning"}
-        className={Number(store.outstanding) > 0 ? "border-l-4 border-l-destructive" : Number(store.outstanding) < 0 ? "border-l-4 border-l-success" : ""}
+        iconColor={liveOutstanding > 0 ? "destructive" : liveOutstanding < 0 ? "success" : "warning"}
+        className={liveOutstanding > 0 ? "border-l-4 border-l-destructive" : liveOutstanding < 0 ? "border-l-4 border-l-success" : ""}
       />
         <StatCard title="Orders" value={String(orders?.length || 0)} icon={ShoppingCart} iconColor="info" />
       </div>

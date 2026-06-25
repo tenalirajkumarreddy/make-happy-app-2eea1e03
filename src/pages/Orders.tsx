@@ -203,6 +203,10 @@ const Orders = () => {
   const [showInvoice, setShowInvoice] = useState(false);
   const [viewProformaId, setViewProformaId] = useState<string | null>(null);
 
+  // ── Optimistic locking state ───────────────────────────────────────────────
+  // Tracks updated_at when order is opened for edit; used for version check
+  const [editOrderVersion, setEditOrderVersion] = useState<string | null>(null);
+
   const { data: viewProforma } = useQuery({
     queryKey: ["view-proforma", viewProformaId],
     queryFn: async () => {
@@ -738,10 +742,13 @@ const Orders = () => {
       qc.setQueryData(queryKey, newData);
     }
 
-    // We do NOT call invalidateQueries here — the optimistic setQueryData above
-    // already updated the UI. Triggering a refetch can race with read-replica
-    // lag and overwrite the optimistic update with stale data. The realtime
-    // subscription (useRealtimeSync) will eventually refetch when the DB event fires.
+    // Mark queries stale so observers refetch on next tick (safer than forced refetch
+    // which can race with read-replica lag). The optimistic setQueryData above has
+    // already updated the active UI, so the user sees immediate feedback.
+    qc.invalidateQueries({ queryKey: ["orders"] });
+    qc.invalidateQueries({ queryKey: ["stores"] });
+    qc.invalidateQueries({ queryKey: ["store-orders", storeId] });
+    qc.invalidateQueries({ queryKey: ["pending-orders-for-store", storeId] });
   };
 
   // Handle order edit
@@ -761,13 +768,22 @@ const Orders = () => {
     updateData.assigned_to = (assignedTo && assignedTo !== "unassigned") ? assignedTo : null;
   }
 
-    const { error } = await supabase
+    const { error, data: updatedOrder } = await supabase
       .from("orders")
       .update(updateData)
-      .eq("id", editOrder.id);
+      .eq("id", editOrder.id)
+      .eq("updated_at", editOrderVersion) // optimistic lock: fails if changed since open
+      .select("id, updated_at")
+      .maybeSingle();
 
     if (error) {
-      toast.error(error.message);
+      if (error.message?.includes("updated_at") || !updatedOrder) {
+        toast.error("This order was modified by another user while you were editing. Please refresh and try again.", {
+          action: { label: "Refresh", onClick: () => window.location.reload() }
+        });
+      } else {
+        toast.error(error.message);
+      }
       setSaving(false);
       return;
     }
@@ -827,6 +843,8 @@ if (orderType === "detailed" && canModifyPrices) {
       }
 
       setEditOrder(orderData as unknown as FulfillOrder);
+      // Capture version timestamp for order-level conflict detection
+      setEditOrderVersion(orderData.updated_at);
       setOrderType(orderData.order_type);
       setRequirementNote(orderData.requirement_note || "");
       setAssignedTo(orderData.assigned_to || "unassigned");
@@ -1120,10 +1138,14 @@ const exportCSV = () => {
 
       supabase.from("proforma_invoices").update({ status: "cancelled", deleted_at: new Date().toISOString() }).eq("order_id", cancelOrderId).then().catch(() => {});
 
-      // We do NOT call invalidateQueries here — the optimistic setQueryData above
-      // already updated the UI. Triggering a refetch can race with read-replica
-      // lag and overwrite the optimistic update with stale data. The realtime
-      // subscription (useRealtimeSync) will eventually refetch when the DB event fires.
+      // Mark queries stale so observers refetch on next tick, preserving the
+      // optimistic setQueryData above so the UI remains responsive.
+      qc.invalidateQueries({ queryKey: ["orders"] });
+      qc.invalidateQueries({ queryKey: ["stores"] });
+      if (target?.store_id) {
+        qc.invalidateQueries({ queryKey: ["store-orders", target.store_id] });
+        qc.invalidateQueries({ queryKey: ["pending-orders-for-store", target.store_id] });
+      }
     } catch (err: any) {
       toast.error(err?.message || "Failed to cancel order");
     } finally {

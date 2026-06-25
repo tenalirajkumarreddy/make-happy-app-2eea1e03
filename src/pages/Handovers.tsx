@@ -36,6 +36,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { afterHandoverChanged } from "@/lib/mutationHelpers";
 import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format, startOfDay } from "date-fns";
@@ -256,6 +257,21 @@ const Handovers = () => {
     enabled: !!user && isStaff,
   });
 
+  // Get live calculated holding balance (source of truth)
+  const { data: liveHoldingBalance } = useQuery({
+    queryKey: ["live-holding-balance", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("calculate_holding_balance", {
+        p_user_id: user!.id,
+      });
+      if (error) throw error;
+      return Number(data || 0);
+    },
+    enabled: !!user && isStaff,
+    // Refresh every 30 seconds for active users
+    refetchInterval: 30000,
+  });
+
   // Fetch finalizer income entries (today)
   const { data: finalizerIncome, isLoading: finalizerIncomeLoading } = useQuery({
     queryKey: ["income-entries", user?.id, incomeFilterDate],
@@ -349,6 +365,9 @@ const Handovers = () => {
     .filter((h) => h.handed_to === user?.id && h.status === "confirmed" && h.created_at >= todayStart)
     .reduce((s, h) => s + Number(h.cash_amount) + Number(h.upi_amount), 0);
 
+  // Use live calculated balance as primary source of truth (falls back to materialized)
+  const effectiveHolding = liveHoldingBalance !== undefined ? liveHoldingBalance : Number(userProfile?.holding_balance || 0);
+
   // Get materialized balance from profile
   const materializedHolding = Number(userProfile?.holding_balance || 0);
 
@@ -360,12 +379,12 @@ const Handovers = () => {
     today_sent_confirmed: 0,
     today_sent_pending: 0,
     prev_pending: 0,
-    total_holding: materializedHolding
+    total_holding: effectiveHolding
   };
 
 
 
-  const notHandedOver = materializedHolding;
+  const notHandedOver = effectiveHolding;
   
   // Pending handovers
   const awaitingAmount = dailyData.today_sent_pending;
@@ -546,12 +565,7 @@ const Handovers = () => {
       setAmount("");
       setNotes("");
       setToUserId("");
-      qc.invalidateQueries({ queryKey: ["handovers"] });
-      qc.invalidateQueries({ queryKey: ["agent-cash-holding"] });
-      qc.invalidateQueries({ queryKey: ["user-sales-totals"] });
-      qc.invalidateQueries({ queryKey: ["user-transaction-totals"] });
-      qc.invalidateQueries({ queryKey: ["user-holding-balance"] });
-      qc.invalidateQueries({ queryKey: ["agent-dashboard"] });
+      afterHandoverChanged(qc);
     }
   };
 
@@ -583,14 +597,7 @@ const Handovers = () => {
           entityId: id,
         });
       }
-      qc.invalidateQueries({ queryKey: ["handovers"] });
-      qc.invalidateQueries({ queryKey: ["agent-cash-holding"] });
-      qc.invalidateQueries({ queryKey: ["user-holding-balance"] });
-      qc.invalidateQueries({ queryKey: ["all-staff-balances"] });
-      qc.invalidateQueries({ queryKey: ["agent-dashboard"] });
-      qc.invalidateQueries({ queryKey: ["income-entries"] });
-      qc.invalidateQueries({ queryKey: ["finalizer-account"] });
-      qc.invalidateQueries({ queryKey: ["finalizer-holdings"] });
+      afterHandoverChanged(qc, { userId: handover?.user_id || undefined });
     }
   };
 
@@ -616,8 +623,7 @@ const Handovers = () => {
           entityId: id,
         });
       }
-      qc.invalidateQueries({ queryKey: ["handovers"] });
-      qc.invalidateQueries({ queryKey: ["agent-cash-holding"] });
+      afterHandoverChanged(qc, { userId: handover?.user_id || undefined });
     }
   };
 
@@ -659,8 +665,7 @@ const Handovers = () => {
           entityId: id,
         });
       }
-      qc.invalidateQueries({ queryKey: ["handovers"] });
-      qc.invalidateQueries({ queryKey: ["agent-cash-holding"] });
+      afterHandoverChanged(qc, { userId: handover?.user_id || undefined });
     }
   };
 
@@ -717,7 +722,7 @@ const Handovers = () => {
       setAdminTransferTo("");
       setAdminTransferAmount("");
       setAdminTransferReason("");
-      qc.invalidateQueries({ queryKey: ["handovers"] });
+      afterHandoverChanged(qc);
     } catch (err: any) {
       toast.error(err.message || "Failed to complete admin transfer");
     } finally {
@@ -756,10 +761,7 @@ const Handovers = () => {
       setSelectedHandoverForEdit(null);
       setEditHandoverAmount("");
       setEditHandoverStatus("");
-      qc.invalidateQueries({ queryKey: ["handovers"] });
-      qc.invalidateQueries({ queryKey: ["all-staff-balances"] });
-      qc.invalidateQueries({ queryKey: ["user-holding-balance"] });
-      qc.invalidateQueries({ queryKey: ["user-daily-balance"] });
+      afterHandoverChanged(qc);
     } catch (err: any) {
       toast.error(err.message || "Failed to update handover");
     } finally {
@@ -812,8 +814,7 @@ const Handovers = () => {
       setAdjustCashAmount("");
       setAdjustUpiAmount("");
       setAdjustReason("");
-      qc.invalidateQueries({ queryKey: ["all-staff-balances"] });
-      qc.invalidateQueries({ queryKey: ["user-holding-balance"] });
+      afterHandoverChanged(qc);
     } catch (err: any) {
       toast.error(err.message || "Failed to adjust holding balance");
     } finally {

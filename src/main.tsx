@@ -202,7 +202,27 @@ async function saveFCMToken(token: string) {
 // Clear stale caches BEFORE rendering — prevents SW from serving old auth responses
 async function startApp() {
   await clearAllCaches();
-  createRoot(document.getElementById("root")!).render(<App />);
+
+  /*
+   * Defensive: if something crashes during render (e.g. a provider
+   * failing), show a generic error so the user isn't stuck on a
+   * blank white screen.
+   */
+  try {
+    createRoot(document.getElementById("root")!).render(<App />);
+  } catch (renderErr) {
+    console.error("[startApp] React render crashed:", renderErr);
+    const root = document.getElementById("root");
+    if (root) {
+      root.innerHTML = `
+        <div style="display:flex;flex-direction:column;justify-content:center;align-items:center;height:100vh;padding:24px;font-family:sans-serif;color:#fff;background:#0b0f19">
+          <h1 style="font-size:20px;margin-bottom:12px">Something went wrong</h1>
+          <p style="font-size:14px;opacity:.7;text-align:center">The app could not start. Please try clearing the app data or reinstalling.</p>
+        </div>
+      `;
+    }
+  }
+
   initCapacitor();
 }
 startApp();

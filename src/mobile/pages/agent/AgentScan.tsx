@@ -260,7 +260,6 @@ export function AgentScan({ onGoRecord, onGoVisit, onOpenStore }: Props) {
       <button
         onClick={() => selectedStore ? handleVisitStore(selectedStore) : onGoVisit()}
         disabled={isVisiting}
-        onClick={() => selectedStore && handleVisitStore(selectedStore)}
       >
         {isVisiting ? <Loader2 className="h-6 w-6 text-emerald-500 animate-spin" /> : <CheckCircle2 className="h-6 w-6 text-emerald-500" />}
         <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 leading-tight text-center">{selectedStore ? "Mark Visited" : "Routes & Visits"}</span>

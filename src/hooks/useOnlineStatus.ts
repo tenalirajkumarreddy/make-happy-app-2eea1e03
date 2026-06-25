@@ -20,6 +20,7 @@ import { logError } from "@/lib/logger";
 import { detectConflicts, ConflictType } from "@/lib/conflictResolver";
 import { validateActionPermission, getUserRole } from "@/lib/permissionCheck";
 import { afterTransactionSaved, afterPaymentReturned } from "@/lib/mutationHelpers";
+import { invalidateAllKeys } from "@/lib/cacheInvalidation";
 
 export function useOnlineStatus() {
   const qc = useQueryClient();
@@ -56,6 +57,48 @@ export function useOnlineStatus() {
       window.removeEventListener("offline-queue-changed", handleQueueChanged);
     };
   }, []);
+
+  /**
+   * Call after a batch of offline actions have been synced to force
+   * an immediate refetch of the affected domain queries instead of
+   * waiting for the next natural rerender or window‑focus event.
+   */
+  const invalidateSyncedQueries = useCallback(() => {
+    // Broad invalidation: anything that might have changed during offline usage
+    invalidateAllKeys(qc, [
+      ["sales"],
+      ["transactions"],
+      ["orders"],
+      ["stores"],
+      ["customers"],
+      ["inventory"],
+      ["product-stock"],
+      ["staff-stock"],
+      ["stock-movements"],
+      ["handovers"],
+      ["expenses"],
+      ["dashboard-stats"],
+      ["agent-dashboard-stats"],
+      ["manager-dashboard"],
+      ["agent-dashboard"],
+      ["customer-dashboard"],
+      ["pos-dashboard"],
+      ["marketer-dashboard"],
+      ["operator-dashboard"],
+      ["daybook-sales"],
+      ["daybook-transactions"],
+      ["analytics"],
+      ["mobile-agent-sales-today"],
+      ["mobile-sales"],
+      ["mobile-agent-tx-today"],
+      ["mobile-transactions"],
+      ["mobile-history-sales-timeline"],
+      ["mobile-history-transactions-timeline"],
+      ["mobile-history-balance-sales"],
+      ["mobile-history-balance-transactions"],
+      ["mobile-agent-pending-orders"],
+    ]);
+  }, [qc]);
 
   const refreshCount = useCallback(async () => {
     const [actionCount, fileCount] = await Promise.all([
@@ -449,7 +492,14 @@ export function useOnlineStatus() {
       },
     });
   }
-}, [syncing, qc, refreshCount, syncFileUploads]);
+
+  // After finishing a sync batch, invalidate all affected domains so the
+  // UI picks up the newly-persisted data without waiting for the next
+  // natural refetch trigger.
+  if (totalSynced > 0 || totalFailed > 0) {
+    invalidateSyncedQueries();
+  }
+}, [syncing, qc, refreshCount, syncFileUploads, invalidateSyncedQueries]);
 
   // Auto-sync when coming back online
   useEffect(() => {
