@@ -39,9 +39,7 @@ export function PosHome({ onOpenRecord, onOpenHistory, onOpenInventory }: Props)
       };
     },
     enabled: !!posStore,
-    refetchInterval: 60_000,
-    staleTime: 60_000,
-  });
+});
 
   // Orders for the warehouse's stores
   const { data: ordersData, isLoading: ordersLoading } = useQuery({
@@ -83,9 +81,7 @@ export function PosHome({ onOpenRecord, onOpenHistory, onOpenInventory }: Props)
       };
     },
     enabled: !!warehouse,
-    refetchInterval: 60_000,
-    staleTime: 60_000,
-  });
+});
 
   // Stock movements for the warehouse
   const { data: stockMovements, isLoading: movementsLoading } = useQuery({
@@ -101,9 +97,7 @@ export function PosHome({ onOpenRecord, onOpenHistory, onOpenInventory }: Props)
       return data || [];
     },
     enabled: !!warehouse,
-    refetchInterval: 60_000,
-    staleTime: 60_000,
-  });
+});
 
   // Production runs today
   const { data: productionRuns = [] } = useQuery({
@@ -125,9 +119,7 @@ export function PosHome({ onOpenRecord, onOpenHistory, onOpenInventory }: Props)
       }
     },
     enabled: !!warehouse,
-    refetchInterval: 60_000,
-    staleTime: 60_000,
-  });
+});
 
   // Worker attendance today
   const { data: attendanceData } = useQuery({
@@ -152,9 +144,7 @@ export function PosHome({ onOpenRecord, onOpenHistory, onOpenInventory }: Props)
       }
     },
     enabled: !!warehouse,
-    refetchInterval: 120_000,
-    staleTime: 120_000,
-  });
+});
 
   // Pending invoices for this warehouse
   const { data: pendingInvoices = [] } = useQuery({
@@ -179,9 +169,7 @@ export function PosHome({ onOpenRecord, onOpenHistory, onOpenInventory }: Props)
       }
     },
     enabled: !!warehouse,
-    refetchInterval: 120_000,
-    staleTime: 120_000,
-  });
+});
 
   const greeting = () => {
     const h = new Date().getHours();

@@ -17,7 +17,6 @@ import { sanitizeString, sanitizeObject } from "@/lib/sanitization";
 import { Loader2, User, Upload, AlertCircle, Phone, Mail, Store as StoreIcon, Plus } from "lucide-react";
 import { usePermission } from "@/hooks/usePermission";
 import { enqueueWithContext } from "@/lib/conflictResolver";
-import { generateBusinessKey } from "@/lib/offlineQueue";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { TableSkeleton } from "@/components/shared/TableSkeleton";
 import { Checkbox } from "@/components/ui/checkbox";

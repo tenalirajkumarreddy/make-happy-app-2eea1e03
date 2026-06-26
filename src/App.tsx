@@ -1,9 +1,7 @@
 import { Suspense, lazy } from "react";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient } from "@tanstack/react-query";
-import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
-import { createIndexedDbPersister } from "@/lib/persister";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
@@ -27,16 +25,12 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
-      // Reactive data layer: data is fresh for 2 s so repeated mounts
-      // within the same interaction do not thrash, but mutations and
-      // realtime events still trigger immediate background refetches.
-      staleTime: 2_000,
-      // Refetch when window/tab regains focus (keeps cross-tab data in sync)
+      // NO caching — always fetch fresh data
+      staleTime: 0,
+// Always refetch when window/tab regains focus
       refetchOnWindowFocus: true,
-      // Always refetch on reconnect (critical for offline-first behaviour)
+      // Always refetch on reconnect
       refetchOnReconnect: true,
-      // Background poll every 30 s to keep dashboards current
-      refetchInterval: 30_000,
     },
     mutations: {
       onError: (error) => {
@@ -46,13 +40,6 @@ const queryClient = new QueryClient({
   },
 });
 
-const indexedDbPersister = createIndexedDbPersister();
-
-/**
- * Inner app root that runs *inside* PersistQueryClientProvider.
- * All hooks that need useQueryClient (e.g. useCapacitorAppState)
- * must live here or deeper in the tree.
- */
 function AppContent() {
   // Global realtime sync: ensures every screen always sees fresh data
   useRealtimeSync();
@@ -93,17 +80,9 @@ const App = () => {
   }
 
   return (
-    <PersistQueryClientProvider
-      client={queryClient}
-      persistOptions={{
-        persister: indexedDbPersister,
-        maxAge: 1000 * 60 * 60 * 24,
-        buster: "v1",
-        prefix: "ap",
-      }}
-    >
+    <QueryClientProvider client={queryClient}>
       <AppContent />
-    </PersistQueryClientProvider>
+    </QueryClientProvider>
   );
 };
 

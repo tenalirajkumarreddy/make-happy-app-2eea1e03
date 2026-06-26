@@ -53,6 +53,6 @@ export function useCompanySettings() {
       };
     },
     // Settings update in realtime (sync is triggered on change, but low staleTime helps concurrency)
-    staleTime: 1000 * 5, // 5 seconds
+// 5 seconds
   });
 }

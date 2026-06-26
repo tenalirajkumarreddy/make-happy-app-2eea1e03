@@ -1,7 +1,6 @@
 import { useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
-import { generateBusinessKey } from "@/lib/offlineQueue";
 import { enqueueWithContext } from "@/lib/conflictResolver";
 import { toast } from "sonner";
 

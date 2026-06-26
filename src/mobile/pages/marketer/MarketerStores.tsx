@@ -89,8 +89,7 @@ export function MarketerStores({ onOpenStore, onGoRecord, onGoOrders }: Props) {
       return (data as unknown as StoreListItem[]) || [];
     },
     enabled: !!user,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: routes } = useQuery({
     queryKey: ["mobile-marketer-routes"],
@@ -98,8 +97,7 @@ export function MarketerStores({ onOpenStore, onGoRecord, onGoOrders }: Props) {
       const { data } = await supabase.from("routes").select("id, name").eq("is_active", true).order("name");
       return (data as RouteItem[]) || [];
     },
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: storeTypes } = useQuery({
     queryKey: ["mobile-marketer-store-types"],
@@ -107,8 +105,7 @@ export function MarketerStores({ onOpenStore, onGoRecord, onGoOrders }: Props) {
       const { data } = await supabase.from("store_types").select("id, name").order("name");
       return (data as StoreTypeItem[]) || [];
     },
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const filtered = (stores || []).filter((store) => {
     const matchAccess = canAccessRoute(store.route_id);

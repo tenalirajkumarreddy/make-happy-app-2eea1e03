@@ -4,7 +4,6 @@ import { DataTable } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { addToQueue, generateBusinessKey } from "@/lib/offlineQueue";
 import { logActivity } from "@/lib/activityLogger";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { CANCEL_REASONS } from "@/lib/constants";
@@ -270,8 +269,7 @@ const Orders = () => {
       return (data as any)?.access_level || "all";
     },
     enabled: !!user?.id,
-    staleTime: 60_000,
-  });
+});
 
   const { data: orders, isLoading, isFetching } = useQuery({
     queryKey: ["orders", currentWarehouse?.id, statusFilter, filterFrom, filterTo, filterCustomer, filterStore, filterStoreType, filterRoute, filterAssignedTo, loadedPages, user?.id, role, orderAccess],

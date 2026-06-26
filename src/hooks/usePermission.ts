@@ -17,8 +17,7 @@ export function usePermission(key: PermissionKey): { allowed: boolean; loading: 
       return data || [];
     },
     enabled: !!user?.id,
-    staleTime: 30_000,
-  });
+});
 
   if (!user || !role) return { allowed: false, loading: true };
   if (isLoading) return { allowed: false, loading: true };

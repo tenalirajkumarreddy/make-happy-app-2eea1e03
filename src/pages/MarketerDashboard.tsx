@@ -7,7 +7,7 @@ import {
   Users, ClipboardList, Banknote, Smartphone,
   Plus, History, HandCoins,
   ArrowRight, ShoppingCart, DollarSign,
-  Loader2, WifiOff, RefreshCw
+  WifiOff
 } from "lucide-react";
 import { DashboardSkeleton } from "@/components/shared/DashboardSkeleton";
 import { Button } from "@/components/ui/button";
@@ -20,7 +20,7 @@ import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 const MarketerDashboard = () => {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
-  const { isOnline, pendingCount, syncing, syncQueue } = useOnlineStatus();
+  const { isOnline } = useOnlineStatus();
 
   const { data: stats, isLoading } = useQuery({
     queryKey: ["marketer-crm-dashboard", user?.id],
@@ -136,22 +136,10 @@ const MarketerDashboard = () => {
         subtitle={`Welcome, ${profile?.full_name || "Marketer"}! Customer relationships, orders & collections.`}
       />
 
-      {(!isOnline || pendingCount > 0) && (
-        <div className={`flex items-center justify-between gap-3 rounded-lg border px-4 py-3 text-sm ${!isOnline ? "border-destructive/30 bg-destructive/5 text-destructive" : "border-warning/30 bg-warning/5 text-warning"}`}>
-          <div className="flex items-center gap-2">
-            <WifiOff className="h-4 w-4 shrink-0" />
-            <span>
-              {!isOnline
-                ? `You're offline${pendingCount > 0 ? ` — ${pendingCount} action${pendingCount > 1 ? "s" : ""} queued` : ""}`
-                : `${pendingCount} action${pendingCount > 1 ? "s" : ""} pending sync`}
-            </span>
-          </div>
-          {isOnline && pendingCount > 0 && (
-            <Button size="sm" variant="outline" onClick={syncQueue} disabled={syncing} className="h-7 gap-1.5 text-xs shrink-0">
-              {syncing ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-              Sync Now
-            </Button>
-          )}
+      {!isOnline && (
+        <div className="flex items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+          <WifiOff className="h-4 w-4 shrink-0" />
+          <span>You are offline. Some features may be unavailable.</span>
         </div>
       )}
 

@@ -46,7 +46,5 @@ export function useActiveSession(userId?: string | null, scope?: string) {
       return (data as unknown as ActiveSessionData | null) || null;
     },
     enabled: !!userId,
-    refetchInterval: 30_000,
-    staleTime: 30_000,
-  });
+});
 }

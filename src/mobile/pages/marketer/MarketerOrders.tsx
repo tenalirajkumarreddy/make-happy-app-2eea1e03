@@ -143,9 +143,7 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
       return (data as unknown as OrderRow[]) || [];
     },
     enabled: !!user,
-    refetchInterval: 60_000,
-    staleTime: 60_000,
-  });
+});
 
   const storeTypeOptions = useMemo(() => {
     const set = new Set<string>();
@@ -188,8 +186,7 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
       if (error) throw error;
       return ((data as any[]) || []).filter((store) => canAccessRoute(store.route_id));
     },
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: createProducts } = useQuery({
     queryKey: ["mobile-marketer-create-products"],
@@ -202,8 +199,7 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
       if (error) throw error;
       return (data as ProductItem[]) || [];
     },
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const pendingCount = useMemo(() => (orders || []).filter((order) => order.status === "pending").length, [orders]);
 
@@ -224,8 +220,7 @@ export function MarketerOrders({ preselectStore, onStoreConsumed }: Props) {
       };
     },
     enabled: !!viewProformaId,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const addCreateItem = (product: any) => {
     setCreateOrderItems((prev) => {

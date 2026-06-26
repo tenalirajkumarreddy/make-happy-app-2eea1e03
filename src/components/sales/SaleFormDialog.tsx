@@ -18,12 +18,10 @@ import type { UserRoleString } from "@/contexts/AuthContext";
 import { format } from "date-fns";
 import { validateSaleData } from "@/lib/validation/schemas";
 import { resolveCreditLimit } from "@/lib/creditLimit";
-import { addToQueue } from "@/lib/offlineQueue";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { QrStoreSelector } from "@/components/shared/QrStoreSelector";
 import { logActivity } from "@/lib/activityLogger";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
-import { generateBusinessKey } from "@/lib/offlineQueue";
 import { usePermission } from "@/hooks/usePermission";
 
 /* ─── Types ─── */

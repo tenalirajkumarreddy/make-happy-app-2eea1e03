@@ -8,7 +8,6 @@ import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { useSearchParams } from "react-router-dom";
 import { validateSaleData } from "@/lib/validation/schemas";
 import { resolveCreditLimit } from "@/lib/creditLimit";
-import { addToQueue, generateBusinessKey } from "@/lib/offlineQueue";
 import { afterSaleSaved } from "@/lib/mutationHelpers";
 import { invalidateQueries, invalidateAllDashboards, invalidateStoreGraph } from "@/lib/invalidateQueries";
 import { logActivity } from "@/lib/activityLogger";
@@ -304,16 +303,8 @@ export function useRecordSale() {
     const saleItems = items.filter(i => i.product_id && i.quantity > 0).map(i => ({ product_id: i.product_id, quantity: i.quantity, unit_price: i.unit_price, total_price: i.quantity * i.unit_price }));
 
     if (!navigator.onLine) {
-      const effectiveRecordedBy = recordedFor || user!.id;
-      const loggedBy = recordedFor ? user!.id : null;
-      const { validateCreditLimitOffline } = await import("@/lib/offlineCreditValidation");
-      const creditCheck = await validateCreditLimitOffline(storeId, outstandingFromSale, isAdmin);
-      if (!creditCheck.valid) { toast.error(creditCheck.warning || "Credit limit exceeded"); return; }
-      if (creditCheck.warning) toast.warning(creditCheck.warning);
-      const businessKey = generateBusinessKey("sale", { storeId, customerId, amount: totalAmount, products: saleItems.map(i => ({ product_id: i.product_id, quantity: i.quantity })), timestamp: saleDate || new Date().toISOString() });
-      await addToQueue({ id: crypto.randomUUID(), type: "sale", payload: { saleData: { store_id: storeId, customer_id: customerId, recorded_by: effectiveRecordedBy, logged_by: loggedBy, total_amount: totalAmount, cash_amount: cash, upi_amount: upi, outstanding_amount: outstandingFromSale, old_outstanding: oldOutstanding, new_outstanding: newOutstanding, ...(saleDate ? { created_at: new Date(saleDate).toISOString() } : {}) }, saleItems: saleItems, storeUpdate: { outstanding: newOutstanding } }, createdAt: new Date().toISOString(), businessKey, context: { storeOutstandingAtQueueTime: oldOutstanding, customerCreditLimitAtQueueTime: creditCheck.limit, timestampAtQueueTime: new Date().toISOString(), storeId, customerId } } as any);
-      toast.warning("You're offline — sale queued and will sync automatically when back online");
-      setShowAdd(false); resetForm(); return;
+      toast.error("You are offline. Please connect to the internet to record a sale.");
+      return;
     }
 
     const { data: displayId } = await supabase.rpc("generate_display_id", { prefix: "SALE", seq_name: "sale_display_seq" }) as any;

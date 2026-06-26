@@ -154,8 +154,7 @@ export function StockTransferModal({
       console.log("[StockTransfer] Warehouses found:", data?.length || 0);
       return data ?? [];
     },
-    staleTime: 60_000,
-  });
+});
 
   // ── Staff list (broader roles) ─────────────────────────────────────────────
   const { data: fetchedStaff = [] } = useQuery({
@@ -196,8 +195,7 @@ export function StockTransferModal({
         );
     },
     enabled: !staffMembers || staffMembers.length === 0,
-    staleTime: 60_000,
-  });
+});
 
   // Prefer prop list, fall back to fetched list
   const displayStaff = useMemo(() => {

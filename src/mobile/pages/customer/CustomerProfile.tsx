@@ -34,8 +34,7 @@ export function CustomerProfile() {
       return data.user;
     },
     enabled: !!user,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const googleIdentity = liveAuthUser?.identities?.find((identity) => identity.provider === "google");
   const isGoogleLinked = !!googleIdentity;
@@ -44,8 +43,7 @@ export function CustomerProfile() {
     queryKey: ["mobile-customer-profile", user?.id],
     queryFn: async () => (await resolveCustomer(user!.id, "id, name, display_id, phone, email, address")) as CustomerRow | null,
     enabled: !!user,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: stores } = useQuery({
     queryKey: ["mobile-customer-profile-stores", customer?.id],
@@ -60,8 +58,7 @@ export function CustomerProfile() {
       return (data as StoreRow[]) || [];
     },
     enabled: !!customer,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: customerCare } = useQuery({
     queryKey: ["mobile-customer-profile-care"],
@@ -74,8 +71,7 @@ export function CustomerProfile() {
       if (error) throw error;
       return data?.value || "";
     },
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: appSettings } = useQuery({
     queryKey: ["company-settings", "google-linking"],
@@ -87,8 +83,7 @@ export function CustomerProfile() {
         .maybeSingle();
       return data;
     },
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const googleLinkingEnabled = appSettings?.value === "true";
 

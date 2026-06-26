@@ -8,7 +8,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { logActivity } from "@/lib/activityLogger";
 import { sanitizeString } from "@/lib/sanitization";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
-import { addToQueue, generateBusinessKey } from "@/lib/offlineQueue";
 import { validateSaleData } from "@/lib/validation/schemas";
 import { resolveCreditLimit } from "@/lib/creditLimit";
 import { afterSaleSaved, afterSaleEdited, afterSaleCancelled, afterSaleReturned } from "@/lib/mutationHelpers";
@@ -780,77 +779,10 @@ const Sales = () => {
     }
   }
 
-// Queue sale for offline sync if no network connection
+// Reject offline attempts — no queue
     if (!navigator.onLine) {
-      const effectiveRecordedByOffline = recordedFor || user!.id;
-      const loggedByOffline = recordedFor ? user!.id : null;
-      const saleItems = items.filter((i) => i.product_id && i.quantity > 0).map((i) => ({
-        product_id: i.product_id,
-        quantity: i.quantity,
-        unit_price: i.unit_price,
-        total_price: i.quantity * i.unit_price,
-      }));
-
-      // OFFLINE CREDIT LIMIT VALIDATION
-      const { validateCreditLimitOffline } = await import("@/lib/offlineCreditValidation");
-      const creditCheck = await validateCreditLimitOffline(
-        storeId,
-        outstandingFromSale,
-        isAdmin
-      );
-
-      if (!creditCheck.valid) {
-        toast.error(creditCheck.warning || "Credit limit exceeded");
-        setSaving(false);
-        return;
-      }
-
-      if (creditCheck.warning) {
-        toast.warning(creditCheck.warning);
-      }
-
-      // Generate business key for deduplication
-      const businessKey = generateBusinessKey('sale', {
-        storeId,
-        customerId,
-        amount: totalAmount,
-        products: saleItems.map(i => ({ product_id: i.product_id, quantity: i.quantity })),
-        timestamp: saleDate || new Date().toISOString(),
-      });
-
-      await addToQueue({
-        id: crypto.randomUUID(),
-        type: "sale",
-        payload: {
-          saleData: {
-            store_id: storeId,
-            customer_id: customerId,
-            recorded_by: effectiveRecordedByOffline,
-            logged_by: loggedByOffline,
-            total_amount: totalAmount,
-            cash_amount: cash,
-            upi_amount: upi,
-            outstanding_amount: outstandingFromSale,
-            old_outstanding: oldOutstanding,
-            new_outstanding: newOutstanding,
-            ...(saleDate ? { created_at: new Date(saleDate).toISOString() } : {}),
-          },
-          saleItems: saleItems,
-          storeUpdate: { outstanding: newOutstanding },
-        },
-        createdAt: new Date().toISOString(),
-        businessKey,
-        context: {
-          creditLimit: creditCheck.limit,
-          creditLimitSource: creditCheck.limitSource,
-          currentOutstanding: creditCheck.currentOutstanding,
-          cached: creditCheck.cached,
-        } as any,
-      });
-      toast.warning("You're offline — sale queued and will sync automatically when back online");
+      toast.error("You are offline. Please connect to the internet to record a sale.");
       setSaving(false);
-      setShowAdd(false);
-      resetForm();
       return;
     }
 
@@ -943,7 +875,8 @@ const Sales = () => {
     setSaving(false);
     setShowAdd(false);
     resetForm();
-    afterSaleSaved(qc, { storeId });
+    // Wait for cache invalidation and refetch to complete before allowing next sale
+    await afterSaleSaved(qc, { storeId });
   };
 
   const getRecorderName = (userId: string) => {

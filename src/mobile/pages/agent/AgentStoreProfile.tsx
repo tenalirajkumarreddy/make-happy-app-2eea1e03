@@ -63,7 +63,7 @@ export function AgentStoreProfile({ store, onBack, onGoRecord }: Props) {
       return (data as unknown as StoreProfileRow | null) || null;
     },
     enabled: !!store.id,
-    staleTime: 0, // Always fetch fresh data for live store profile
+// Always fetch fresh data for live store profile
   });
 
   const currentStore: StoreOption = useMemo(() => ({
@@ -94,8 +94,7 @@ export function AgentStoreProfile({ store, onBack, onGoRecord }: Props) {
       return data || [];
     },
     enabled: !!storeRow,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: typeP } = useQuery({
     queryKey: ["mobile-store-type-pricing", storeTypeId],
@@ -106,8 +105,7 @@ export function AgentStoreProfile({ store, onBack, onGoRecord }: Props) {
       return map;
     },
     enabled: !!storeTypeId,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: storeP } = useQuery({
     queryKey: ["mobile-store-pricing", store.id],
@@ -118,8 +116,7 @@ export function AgentStoreProfile({ store, onBack, onGoRecord }: Props) {
       return map;
     },
     enabled: !!store.id,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const getPrice = (productId: string, basePrice: number) => {
     if (storeP && productId in storeP) return { price: storeP[productId], label: "store" as const };

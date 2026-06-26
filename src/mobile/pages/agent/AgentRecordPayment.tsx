@@ -10,7 +10,6 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermission } from "@/hooks/usePermission";
-import { generateBusinessKey } from "@/lib/offlineQueue";
 import { enqueueWithContext } from "@/lib/conflictResolver";
 import { logActivity } from "@/lib/activityLogger";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
@@ -52,8 +51,7 @@ export function RecordPayment({ preselectStore }: { preselectStore?: StoreOption
       return profs?.filter((p) => p.user_id !== user?.id) || [];
     },
     enabled: canRecordBehalf,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const cash = parseFloat(cashAmount) || 0;
   const upi = parseFloat(upiAmount) || 0;

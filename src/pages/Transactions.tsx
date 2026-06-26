@@ -6,7 +6,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { logActivity } from "@/lib/activityLogger";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { enqueueWithContext } from "@/lib/conflictResolver";
-import { generateBusinessKey } from "@/lib/offlineQueue";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
 import { Loader2, X, CalendarIcon, Store as StoreIcon, RotateCcw, Receipt, Pencil, MapPin, UserCircle } from "lucide-react";
@@ -292,7 +291,7 @@ const Transactions = () => {
       setSaving(false);
       setShowAdd(false);
       resetForm();
-      afterTransactionSaved(qc, { storeId });
+      await afterTransactionSaved(qc, { storeId });
       return;
     }
 
@@ -409,7 +408,7 @@ const Transactions = () => {
     setSaving(false);
     setShowAdd(false);
     resetForm();
-    afterTransactionSaved(qc, { storeId });
+    await afterTransactionSaved(qc, { storeId });
   };
 
   // Filtering is now done server-side; local array mirrors the fetched page(s)

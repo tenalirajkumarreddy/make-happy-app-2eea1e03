@@ -1,5 +1,4 @@
 import { describe, it, expect } from "vitest";
-import { createIndexedDbPersister } from "@/lib/persister";
 import type { PersistedClient } from "@tanstack/react-query-persist-client";
 
 describe("createIndexedDbPersister", () => {

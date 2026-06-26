@@ -91,8 +91,7 @@ export function AdminPurchases({ onNavigate }: { onNavigate: (path: string) => v
       if (error) throw error;
       return (data || []) as Purchase[];
     },
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const hasMore = (purchases || []).length === PAGE_SIZE;
 

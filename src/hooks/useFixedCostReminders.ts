@@ -32,7 +32,7 @@ export function useFixedCostReminders() {
       return data || [];
     },
     enabled: isAdmin,
-    staleTime: 1000 * 60 * 60, // Only check once per hour
+// Only check once per hour
   });
 
   useEffect(() => {

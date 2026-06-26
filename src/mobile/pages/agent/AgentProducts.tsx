@@ -51,7 +51,7 @@ export function AgentProducts() {
         stock_quantity: stockMap[p.id] || 0
       }));
     },
-    staleTime: 1000 * 60 * 5, // 5 minutes cache
+// 5 minutes cache
   });
 
   const { data: categories } = useQuery({
@@ -63,7 +63,7 @@ export function AgentProducts() {
         .order("name");
       return data || [];
     },
-    staleTime: 1000 * 60 * 60, // 1 hour cache
+// 1 hour cache
   });
 
   const filteredProducts = products?.filter(p => {

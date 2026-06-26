@@ -45,9 +45,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import { usePermission } from "@/hooks/usePermission";
 import { supabase } from "@/integrations/supabase/client";
 import { afterSaleEdited, afterSaleReturned, afterPaymentReturned } from "@/lib/mutationHelpers";
+import { useMobileRealtimeSync } from "@/hooks/useRealtimeSync";
 import { ReturnPaymentDialog } from "@/mobile/components/ReturnPaymentDialog";
 import { enqueueWithContext } from "@/lib/conflictResolver";
-import { generateBusinessKey } from "@/lib/offlineQueue";
 import { sendNotification, getAdminUserIds, sendNotificationToMany } from "@/lib/notifications";
 import { logActivity } from "@/lib/activityLogger";
 import { cn } from "@/lib/utils";
@@ -101,6 +101,17 @@ export function AgentHistory() {
   const { allowed: canReturnSales } = usePermission("create_sale_returns");
   const { allowed: canSubmitExpenses } = usePermission("submit_expenses");
   const qc = useQueryClient();
+
+  // Focused realtime for history: sales, transactions, handovers, expense_claims
+  useMobileRealtimeSync([
+    "sales",
+    "transactions",
+    "handovers",
+    "expense_claims",
+    "sale_returns",
+    "payment_returns",
+  ]);
+
   const [view, setView] = useState<"activity" | "handovers" | "claims">("activity");
   const [selectedActivityDate, setSelectedActivityDate] = useState<string | null>(null);
   const [handoverOpen, setHandoverOpen] = useState(false);
@@ -189,9 +200,7 @@ export function AgentHistory() {
       return (data as any[]) || [];
     },
     enabled: !!user,
-    refetchInterval: 60_000,
-    staleTime: 60_000,
-  });
+});
 
   const { data: salesForBalance } = useQuery({
     queryKey: ["mobile-history-balance-sales", user?.id],
@@ -207,9 +216,7 @@ export function AgentHistory() {
       return (data as any[]) || [];
     },
     enabled: !!user,
-    refetchInterval: 60_000,
-    staleTime: 60_000,
-  });
+});
 
   const { data: salesTimeline, isLoading: loadingSalesTimeline } = useQuery({
     queryKey: ["mobile-history-sales-timeline", user?.id],
@@ -226,9 +233,7 @@ export function AgentHistory() {
       return (data as any[]) || [];
     },
     enabled: !!user,
-    refetchInterval: 60_000,
-    staleTime: 60_000,
-  });
+});
 
   const { data: transactionsForBalance } = useQuery({
     queryKey: ["mobile-history-balance-transactions", user?.id],
@@ -243,8 +248,7 @@ export function AgentHistory() {
       return (data as any[]) || [];
     },
     enabled: !!user,
-    refetchInterval: 60_000,
-  });
+});
 
   const { data: holdingBalanceData } = useQuery({
     queryKey: ["mobile-history-holding-balance", user?.id],
@@ -260,9 +264,7 @@ export function AgentHistory() {
       };
     },
     enabled: !!user,
-    refetchInterval: 60_000,
-    staleTime: 60_000,
-  });
+});
 
   // Expense categories for submission
   const { data: expenseCategories = [] } = useQuery({
@@ -276,8 +278,7 @@ export function AgentHistory() {
       if (error) throw error;
       return data || [];
     },
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   // Fetch expense claims directed at this user (for managers approving staff expenses)
   const { data: expenseClaims = [] } = useQuery<ExpenseClaim[]>({
@@ -296,9 +297,7 @@ export function AgentHistory() {
       }));
     },
     enabled: !!user,
-    refetchInterval: 60_000,
-    staleTime: 60_000,
-  });
+});
 
   const { data: transactionsTimeline, isLoading: loadingTransactionsTimeline } = useQuery({
     queryKey: ["mobile-history-transactions-timeline", user?.id],
@@ -314,9 +313,7 @@ export function AgentHistory() {
       return (data as any[]) || [];
     },
     enabled: !!user,
-    refetchInterval: 60_000,
-    staleTime: 60_000,
-  });
+});
 
   const { data: staffUsers } = useQuery({
     queryKey: ["mobile-staff-users"],
@@ -360,8 +357,7 @@ export function AgentHistory() {
         .sort((a: any, b: any) => a.full_name.localeCompare(b.full_name));
     },
     enabled: !!user,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: profiles } = useQuery({
     queryKey: ["profiles", "mobile-history"],
@@ -374,8 +370,7 @@ export function AgentHistory() {
       return (data || []) as Array<{ user_id: string; full_name: string | null }>;
     },
     enabled: !!user,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: editingSaleItems } = useQuery({
     queryKey: ["sale-items-for-edit", editingSale?.id],
@@ -389,8 +384,7 @@ export function AgentHistory() {
       return (data as any[]) || [];
     },
     enabled: !!editingSale?.id,
-    staleTime: 30_000,
-  });
+});
 
   useEffect(() => {
     if (editingSaleItems) {
@@ -421,8 +415,7 @@ export function AgentHistory() {
       return (data as any[]) || [];
     },
     enabled: !!returningSale?.id,
-    staleTime: 30_000,
-  });
+});
 
   useEffect(() => {
     if (!returningSale) {

@@ -148,8 +148,7 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
       return (data || []) as (Handover & { profiles: { full_name: string; avatar_url: string | null } | null; handed_to_profile: { full_name: string; avatar_url: string | null } | null })[];
     },
     enabled: !!user,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: staffProfiles = [] } = useQuery({
     queryKey: ["admin-handovers-staff"],
@@ -173,8 +172,7 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
         roleLabel: roleLabel[roleMap.get(p.user_id) || ""] || "Staff",
       })).sort((a: any, b: any) => a.full_name.localeCompare(b.full_name));
     },
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: expenseClaims = [], isLoading: loadingExpenses } = useQuery({
     queryKey: ["admin-handovers-expenses"],
@@ -192,8 +190,7 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
       return (data || []) as (ExpenseClaim & { profiles: { full_name: string; avatar_url: string | null } | null })[];
     },
     enabled: !!user && canApproveExpenses,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: staffBalances = [] } = useQuery({
     queryKey: ["admin-handovers-balances"],
@@ -213,8 +210,7 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
       })) as (StaffBalance & { avatar_url: string | null })[];
     },
     enabled: !!user && canSeeBalances,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: profileMap } = useQuery({
     queryKey: ["admin-handovers-profile-map"],
@@ -224,8 +220,7 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
       (data ?? []).forEach((p: any) => { map[p.user_id] = { name: p.full_name, avatar: p.avatar_url }; });
       return map;
     },
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: expenseCategories = [] } = useQuery({
     queryKey: ["expense-categories"],
@@ -238,8 +233,7 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
       if (error) throw error;
       return (data || []) as Array<{ id: string; name: string; color: string; icon: string | null }>;
     },
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: finalizerIncome, isLoading: finalizerIncomeLoading } = useQuery({
     queryKey: ["admin-handovers-income", incomeFilterDate],
@@ -255,8 +249,7 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
       return data || [];
     },
     enabled: !!user && (isFinalizer || isAdmin),
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: finalizerAccount } = useQuery({
     queryKey: ["admin-handovers-finalizer-account", user?.id],
@@ -272,8 +265,7 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
       return data as { cash_amount: number; upi_amount: number; last_reset_at: string } | null;
     },
     enabled: !!user && isFinalizer,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: finalizerHoldings } = useQuery({
     queryKey: ["admin-handovers-finalizer-holdings"],
@@ -293,8 +285,7 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
       })) as Array<{ user_id: string; full_name: string; cash_amount: number; upi_amount: number; total_balance: number; last_reset_at: string }>;
     },
     enabled: !!user && isAdmin,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const getName = (userId: string | null) => profileMap?.[userId || ""]?.name || "Unknown";
 

@@ -98,7 +98,7 @@ const StoreDetail = () => {
         return data;
       },
       enabled: !!id,
-      staleTime: 0, // Always fetch fresh data for live store profile
+// Always fetch fresh data for live store profile
     });
 
   // Customer list for transfer

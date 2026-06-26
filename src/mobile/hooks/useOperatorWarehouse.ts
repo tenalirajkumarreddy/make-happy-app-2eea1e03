@@ -33,6 +33,5 @@ export function useOperatorWarehouse(userId?: string) {
       return { warehouse: wh, posStore };
     },
     enabled: !!userId,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 }

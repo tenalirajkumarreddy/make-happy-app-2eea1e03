@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Loader2, Minus, Plus, ChevronRight, Store as StoreIcon,
@@ -12,18 +12,18 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermission } from "@/hooks/usePermission";
-import { generateBusinessKey } from "@/lib/offlineQueue";
-import { enqueueWithContext } from "@/lib/conflictResolver";
+
+import { usePullToRefresh } from "@/mobile/hooks/usePullToRefresh";
 import { useStorePendingOrders } from "@/mobile/hooks/useStorePendingOrders";
 import { logActivity } from "@/lib/activityLogger";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { resolveCreditLimit, type CustomerCredit, type StoreTypeCredit } from "@/lib/creditLimit";
-import { validateCreditLimitOffline } from "@/lib/offlineCreditValidation";
 import { StorePickerSheet, StoreOption } from "@/mobile/components/StorePickerSheet";
 import { cn } from "@/lib/utils";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { SaleReceipt } from "@/components/shared/SaleReceipt";
 import { afterSaleSaved, afterTransactionSaved } from "@/lib/mutationHelpers";
+import { useMobileRealtimeSync } from "@/hooks/useRealtimeSync";
 
 interface SaleItem {
   product_id: string;
@@ -125,8 +125,7 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
       return (profs?.filter((p) => p.user_id !== user?.id) ?? []) as StaffUserOption[];
     },
     enabled: canRecordBehalf,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: availableProducts, isLoading: loadingProducts } = useQuery({
     queryKey: ["mobile-products-for-sale", store?.store_type_id, store?.id, user?.id, recordedFor],
@@ -182,8 +181,7 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
       });
     },
     enabled: !!store?.store_type_id && !!store?.id && !!user?.id,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const addItem = (productId: string) => {
     const exists = items.find((i) => i.product_id === productId);
@@ -223,8 +221,7 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
       const { data } = await supabase.from("store_types").select("id, credit_limit_kyc, credit_limit_no_kyc");
       return data || [];
     },
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: customers } = useQuery({
     queryKey: ["mobile-customers-kyc-sale"],
@@ -232,8 +229,7 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
       const { data } = await supabase.from("customers").select("id, kyc_status, credit_limit_override");
       return data || [];
     },
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: allProducts = [] } = useQuery({
     queryKey: ["mobile-products-search", showProductSearch],
@@ -246,8 +242,7 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
       return data || [];
     },
     enabled: showProductSearch,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const pendingOrdersResult = useStorePendingOrders(store?.id);
   const pendingOrders = pendingOrdersResult.data ?? [];
@@ -308,30 +303,8 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
       const saleItems = items.map((i) => ({ product_id: i.product_id, quantity: i.quantity, unit_price: i.unit_price, total_price: i.quantity * i.unit_price }));
 
       if (!navigator.onLine) {
-        if (isCreditCheckEnabled) {
-          const offlineCredit = await validateCreditLimitOffline(store!.id, outstandingFromSale, isAdmin);
-          if (!offlineCredit.valid && !isAdmin) {
-            throw new Error(offlineCredit.warning || "Credit limit exceeded. Cannot queue sale offline.");
-          }
-          if (offlineCredit.exceeded && !isAdmin) {
-            throw new Error("Credit limit exceeded. Cannot queue sale offline.");
-          }
-        }
-        const businessKey = generateBusinessKey("sale", {
-          storeId: store!.id,
-          customerId: store!.customer_id,
-          amount: totalAmount,
-          products: saleItems.map((i) => ({ product_id: i.product_id, quantity: i.quantity })),
-          timestamp: saleDate || new Date().toISOString(),
-        });
-        await enqueueWithContext({
-          id: crypto.randomUUID(),
-          type: "sale",
-          payload: { saleData, saleItems, storeUpdate: { outstanding: newOutstanding } },
-          createdAt: new Date().toISOString(),
-          businessKey,
-        });
-        return { queued: true };
+        toast.error("You are offline. Please connect to the internet to record a sale.");
+        return;
       }
 
       const { data: generatedDisplayId, error: displayErr } = await supabase.rpc("generate_display_id", {
@@ -385,6 +358,10 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
       toast.success("Sale recorded successfully");
       resetSale();
       afterSaleSaved(qc, { isMobile: true, storeId: store?.id });
+      // Refresh the selected store so the next sale has the correct outstanding
+      if (store?.id) {
+        supabase.from("stores").select("id, name, outstanding, display_id, store_type_id, customer_id, lat, lng, is_active").eq("id", store.id).single().then(({ data }) => { if (data) setStore(data as unknown as StoreOption); });
+      }
       if (saleRow?.sale_id) {
         setReceiptSaleId(saleRow.sale_id);
       } else {
@@ -917,8 +894,7 @@ function RecordPayment({ preselectStore }: { preselectStore?: StoreOption | null
       return (profs?.filter((p) => p.user_id !== user?.id) ?? []) as StaffUserOption[];
     },
     enabled: canRecordBehalf,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const cash = parseFloat(cashAmount) || 0;
   const upi = parseFloat(upiAmount) || 0;
@@ -946,20 +922,8 @@ function RecordPayment({ preselectStore }: { preselectStore?: StoreOption | null
       };
 
       if (!navigator.onLine) {
-        const txBusinessKey = generateBusinessKey("transaction", {
-          storeId: store!.id,
-          customerId: store!.customer_id,
-          amount: totalPayment,
-          timestamp: txnDate || new Date().toISOString(),
-        });
-        await enqueueWithContext({
-          id: crypto.randomUUID(),
-          type: "transaction",
-          payload: { txData, storeUpdate: { outstanding: newOutstanding } },
-          createdAt: new Date().toISOString(),
-          businessKey: txBusinessKey,
-        });
-        return { queued: true };
+        toast.error("You are offline. Please connect to the internet to record a payment.");
+        return;
       }
 
       const { data: generatedDisplayId, error: displayErr } = await supabase.rpc("generate_display_id", {
@@ -1012,6 +976,10 @@ function RecordPayment({ preselectStore }: { preselectStore?: StoreOption | null
       toast.success("Payment recorded");
       resetPayment();
       afterTransactionSaved(qc, { isMobile: true, storeId: store?.id });
+      // Refresh the selected store so the next payment has the correct outstanding
+      if (store?.id) {
+        supabase.from("stores").select("id, name, outstanding, display_id, store_type_id, customer_id, lat, lng, is_active").eq("id", store.id).single().then(({ data }) => { if (data) setStore(data as unknown as StoreOption); });
+      }
     },
     onError: (err) => {
       toast.error(err.message || "Failed to record payment. Please try again.");
@@ -1240,6 +1208,17 @@ export function AgentRecord({
   const initialTab = !allowSale ? "payment" : (preselectTab ?? "sale");
   const [activeTab, setActiveTab] = useState<string>(initialTab);
 
+  // Focused realtime for the record page: sales, transactions, stores, products
+  useMobileRealtimeSync([
+    "sales",
+    "transactions",
+    "stores",
+    "products",
+    "store_pricing",
+    "store_type_pricing",
+    "store_type_products",
+  ]);
+
   useEffect(() => {
     if (!allowPayment) {
       setActiveTab("sale");
@@ -1252,8 +1231,20 @@ export function AgentRecord({
     if (preselectStore && preselectTab) setActiveTab(preselectTab);
   }, [preselectStore?.id, preselectTab, allowSale, allowPayment]);
 
+  const { handlers: pullHandlers, isPulling, isRefreshing, pullDistance, threshold } = usePullToRefresh({
+    onRefresh: async () => { 
+      if (preselectStore?.id) {
+        const { data } = await supabase.from("stores").select("id, name, outstanding, display_id, store_type_id, customer_id, lat, lng, is_active").eq("id", preselectStore.id).single();
+        if (data) {
+          setStore(data as unknown as StoreOption);
+          toast.success("Store data refreshed");
+        }
+      }
+    },
+  });
+
   return (
-    <div className="pb-4">
+    <div className="pb-4" {...pullHandlers}>
       {/* Tab selector header */}
       <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 dark:from-slate-900 dark:via-blue-950 dark:to-indigo-950 px-4 pt-4 pb-6">
         <p className="text-blue-200 text-xs font-medium uppercase tracking-widest mb-3">Action</p>

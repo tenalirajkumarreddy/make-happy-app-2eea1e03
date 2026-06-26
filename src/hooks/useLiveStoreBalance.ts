@@ -13,7 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
  * This guarantees the StatCard / profile card always shows the true outstanding.
  */
 export function useLiveStoreBalance(storeId: string | undefined) {
-  // ── Primary: server-maintained outstanding ────────────────────────────
+  // Primary: server-computed outstanding
   const { data: storeRow } = useQuery({
     queryKey: ["store-outstanding", storeId],
     queryFn: async () => {
@@ -26,10 +26,11 @@ export function useLiveStoreBalance(storeId: string | undefined) {
       return data;
     },
     enabled: !!storeId,
-    staleTime: 2_000,
+    staleTime: 0,
+// Keep in cache for 5 minutes but always refetch when active
   });
 
-  // ── Fallback data: sales ──────────────────────────────────────────────
+  // Fallback data: sales
   const { data: salesData } = useQuery({
     queryKey: ["store-sales-balance", storeId],
     queryFn: async () => {
@@ -43,10 +44,10 @@ export function useLiveStoreBalance(storeId: string | undefined) {
       return data || [];
     },
     enabled: !!storeId,
-    staleTime: 2_000,
+    staleTime: 0,
   });
 
-  // ── Fallback data: transactions ───────────────────────────────────────
+  // Fallback data: transactions
   const { data: txnData } = useQuery({
     queryKey: ["store-txn-balance", storeId],
     queryFn: async () => {
@@ -60,10 +61,10 @@ export function useLiveStoreBalance(storeId: string | undefined) {
       return data || [];
     },
     enabled: !!storeId,
-    staleTime: 2_000,
+    staleTime: 0,
   });
 
-  // ── Fallback data: balance adjustments ──────────────────────────────
+  // Fallback data: balance adjustments
   const { data: adjustmentData } = useQuery({
     queryKey: ["store-adjustments-balance", storeId],
     queryFn: async () => {
@@ -76,7 +77,7 @@ export function useLiveStoreBalance(storeId: string | undefined) {
       return data || [];
     },
     enabled: !!storeId,
-    staleTime: 2_000,
+    staleTime: 0,
   });
 
   const liveOutstanding = useMemo(() => {

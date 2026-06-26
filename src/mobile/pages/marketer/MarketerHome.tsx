@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { StoreOption } from "@/mobile/components/StorePickerSheet";
+import { useMobileRealtimeSync } from "@/hooks/useRealtimeSync";
 
 interface Props {
   onOpenOrders: () => void;
@@ -45,6 +46,16 @@ interface RouteStore {
 export function MarketerHome({ onOpenOrders, onOpenRecord, onOpenStores, onOpenAddEntity, onOpenStore, onGoRecord, onGoSale, onGoCustomers, onGoStockTransfers, onGoMap }: Props) {
   const { user, profile } = useAuth();
 
+  // Focused realtime for marketer home: orders, transactions, stores, customers
+  useMobileRealtimeSync([
+    "orders",
+    "transactions",
+    "stores",
+    "customers",
+    "route_sessions",
+    "store_visits",
+  ]);
+
   const { data: stats, isLoading } = useQuery({
     queryKey: ["mobile-marketer-dashboard", user?.id],
     queryFn: async () => {
@@ -73,9 +84,7 @@ export function MarketerHome({ onOpenOrders, onOpenRecord, onOpenStores, onOpenA
       };
     },
     enabled: !!user,
-    refetchInterval: 60_000,
-    staleTime: 60_000,
-  });
+});
 
   // Pending orders for home display
   const { data: pendingOrders = [] } = useQuery({
@@ -90,9 +99,7 @@ export function MarketerHome({ onOpenOrders, onOpenRecord, onOpenStores, onOpenA
       return (data as unknown as PendingOrderRow[]) || [];
     },
     enabled: !!user,
-    refetchInterval: 60_000,
-    staleTime: 60_000,
-  });
+});
 
   // Active route session
   const { data: activeSession } = useQuery({
@@ -107,9 +114,7 @@ export function MarketerHome({ onOpenOrders, onOpenRecord, onOpenStores, onOpenA
       return data;
     },
     enabled: !!user,
-    refetchInterval: 30_000,
-    staleTime: 30_000,
-  });
+});
 
   // Visits for route progress
   const { data: visits } = useQuery({
@@ -122,8 +127,7 @@ export function MarketerHome({ onOpenOrders, onOpenRecord, onOpenStores, onOpenA
       return new Set((data || []).map((v) => v.store_id));
     },
     enabled: !!activeSession?.id,
-    staleTime: 30_000,
-  });
+});
 
   const { data: followUps = [] } = useQuery({
     queryKey: ["mobile-marketer-followup", user?.id],
@@ -138,9 +142,7 @@ export function MarketerHome({ onOpenOrders, onOpenRecord, onOpenStores, onOpenA
       return (customers || []).map(c => ({ type: "inactive", ...c }));
     },
     enabled: !!user,
-    refetchInterval: 120_000,
-    staleTime: 120_000,
-  });
+});
 
   const greeting = () => {
     const h = new Date().getHours();

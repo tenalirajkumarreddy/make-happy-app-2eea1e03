@@ -12,13 +12,11 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermission } from "@/hooks/usePermission";
-import { generateBusinessKey } from "@/lib/offlineQueue";
 import { enqueueWithContext } from "@/lib/conflictResolver";
 import { useStorePendingOrders } from "@/mobile/hooks/useStorePendingOrders";
 import { logActivity } from "@/lib/activityLogger";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { resolveCreditLimit } from "@/lib/creditLimit";
-import { validateCreditLimitOffline } from "@/lib/offlineCreditValidation";
 import { checkProximity } from "@/lib/proximity";
 import {extractErrorCode, ErrorMessages} from "@/lib/errorCodes";
 import { StorePickerSheet, StoreOption } from "@/mobile/components/StorePickerSheet";
@@ -98,8 +96,7 @@ export function RecordSale({ preselectStore }: { preselectStore?: StoreOption | 
       return ((profs ?? []).filter((p: any) => p.user_id !== user?.id) as any[]);
     },
     enabled: canRecordBehalf,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: availableProducts, isLoading: loadingProducts } = useQuery({
     queryKey: ["mobile-products-for-sale", store?.store_type_id, store?.id, user?.id, recordedFor],
@@ -158,8 +155,7 @@ export function RecordSale({ preselectStore }: { preselectStore?: StoreOption | 
       });
     },
     enabled: !!store?.store_type_id && !!store?.id && !!user?.id,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: storeTypes } = useQuery({
     queryKey: ["mobile-store-types-credit", store?.store_type_id],
@@ -169,8 +165,7 @@ export function RecordSale({ preselectStore }: { preselectStore?: StoreOption | 
       return data || [];
     },
     enabled: !!store?.store_type_id,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: customers } = useQuery({
     queryKey: ["mobile-customers-kyc-sale", store?.customer_id],
@@ -178,8 +173,7 @@ export function RecordSale({ preselectStore }: { preselectStore?: StoreOption | 
       const { data } = await supabase.from("customers").select("*").limit(100);
       return data || [];
     },
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: allProducts } = useQuery({
     queryKey: ["mobile-products-search"],
@@ -188,8 +182,7 @@ export function RecordSale({ preselectStore }: { preselectStore?: StoreOption | 
       return data || [];
     },
     enabled: showProductSearch,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: pendingOrders } = useStorePendingOrders(store?.id);
 

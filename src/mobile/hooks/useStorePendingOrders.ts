@@ -29,6 +29,5 @@ export function useStorePendingOrders(storeId?: string | null) {
       return (data || []) as unknown as PendingOrder[];
     },
     enabled: !!storeId,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 }

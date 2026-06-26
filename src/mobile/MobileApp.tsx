@@ -14,7 +14,7 @@ Factory, Undo2, UserCog, Coins, Home, ScanLine, ReceiptIndianRupee,
 import { useAuth } from "@/contexts/AuthContext";
 import { isNativeApp } from "@/lib/capacitorUtils";
 import { logDebug } from "@/lib/logger";
-import { useRealtimeSync } from "@/hooks/useRealtimeSync";
+import { useRealtimeSync, useMutationBroadcast } from "@/hooks/useRealtimeSync";
 import { PermissionSetup } from "./components/PermissionSetup";
 import { MobileHeader } from "./components/MobileHeader";
 import { BottomNav, CUSTOMER_TABS, MobileTab, type MobileTabItem } from "./components/BottomNav";
@@ -246,6 +246,7 @@ const STAFF_MENU_BY_ROLE: Record<StaffRole, StaffMenuSection[]> = {
 };
 function StaffApp({ role }: { role: StaffRole }) {
   useRealtimeSync();
+  useMutationBroadcast();
   const { profile, signOut, user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -507,6 +508,7 @@ function StaffApp({ role }: { role: StaffRole }) {
 
 function CustomerApp() {
   useRealtimeSync();
+  useMutationBroadcast();
   const [tab, setTab] = useState<MobileTab>("home");
   const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null);
 
@@ -534,6 +536,7 @@ function CustomerApp() {
 
 function MarketerApp() {
   useRealtimeSync();
+  useMutationBroadcast();
   const { user } = useAuth();
   const [tab, setTab] = useState<MobileTab>("home");
   const [showAddEntity, setShowAddEntity] = useState(false);
@@ -611,6 +614,7 @@ function MarketerApp() {
 
 function AgentApp() {
   useRealtimeSync();
+  useMutationBroadcast();
   const { user } = useAuth();
   const [tab, setTab] = useState<MobileTab>("home");
   const [showAddEntity, setShowAddEntity] = useState(false);
@@ -724,6 +728,7 @@ function AgentApp() {
 
 function PosApp() {
   useRealtimeSync();
+  useMutationBroadcast();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [tab, setTab] = useState<MobileTab>("home");

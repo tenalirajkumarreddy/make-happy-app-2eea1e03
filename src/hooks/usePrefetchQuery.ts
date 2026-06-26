@@ -42,14 +42,14 @@ export function usePrefetchOnHover() {
   const prefetchRoute = useCallback(
     (pathname: string) => {
       if (prefetchedRef.current.has(pathname)) return;
-      
+
       const queryKeys = ROUTE_QUERY_KEYS[pathname];
       if (!queryKeys?.length) return;
 
       queryKeys.forEach((key) => {
         qc.prefetchQuery({
           queryKey: [key],
-          staleTime: 60_000,
+          staleTime: 0,
         });
       });
 
@@ -91,14 +91,14 @@ export function useTabPrefetch() {
   const prefetchTab = useCallback(
     (tab: string) => {
       if (prefetchedRef.current.has(tab)) return;
-      
+
       const queryKeys = TAB_QUERY_KEYS[tab];
       if (!queryKeys?.length) return;
 
       queryKeys.forEach((key) => {
         qc.prefetchQuery({
           queryKey: [key],
-          staleTime: 60_000,
+          staleTime: 0,
         });
       });
 

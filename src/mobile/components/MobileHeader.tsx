@@ -36,7 +36,7 @@ interface Props {
 export const MobileHeader = memo(function MobileHeader({ title }: Props) {
   const { profile, role, signOut } = useAuth();
   const { unreadCount } = useNotifications();
-  const { isOnline, pendingCount } = useOnlineStatus();
+  const { isOnline } = useOnlineStatus();
   const { dark, toggle } = useTheme();
   const navigate = useNavigate();
   const [notifOpen, setNotifOpen] = useState(false);
@@ -118,11 +118,6 @@ export const MobileHeader = memo(function MobileHeader({ title }: Props) {
                   <Wifi className="h-3 w-3" />
                 ) : (
                   <WifiOff className="h-3 w-3" />
-                )}
-                {pendingCount > 0 && (
-                  <span className="ml-0.5 bg-amber-400 text-amber-900 px-1 rounded-full text-xs font-bold">
-                    {pendingCount}
-                  </span>
                 )}
               </div>
 

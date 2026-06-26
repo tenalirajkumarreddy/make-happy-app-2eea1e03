@@ -17,6 +17,7 @@ import { VisitReasonDialog } from "@/components/routes/VisitReasonDialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { MiniStat } from "@/mobile/pages/agent/MiniStat";
 import { getCurrentPosition } from "@/lib/capacitorUtils";
+import { useMobileRealtimeSync } from "@/hooks/useRealtimeSync";
 
 interface Props {
   onOpenStore: (store: StoreOption) => void;
@@ -85,6 +86,18 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
   const [elapsed, setElapsed] = useState("");
   const qc = useQueryClient();
 
+  // Focused realtime: only sales, transactions, orders, route_sessions, and store_visits
+  // for the agent home dashboard. This avoids channel saturation in the WebView.
+  useMobileRealtimeSync([
+    "sales",
+    "transactions",
+    "orders",
+    "route_sessions",
+    "store_visits",
+    "handovers",
+    "stores",
+  ]);
+
   const [queueStatus, setQueueStatus] = useState({
     total: 0,
     pending: 0,
@@ -94,13 +107,8 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
   });
 
   const updateQueueStatus = async () => {
-    try {
-      const { getQueueStatus } = await import("@/lib/offlineQueue");
-      const status = await getQueueStatus();
-      setQueueStatus(status);
-    } catch (e) {
-      console.error("Failed to get queue status", e);
-    }
+    // No offline queue — all operations require internet
+    setQueueStatus({ total: 0, pending: 0, failed: 0, conflicts: 0, readyToSync: 0 });
   };
 
   useEffect(() => {
@@ -139,9 +147,7 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
       return data || [];
     },
     enabled: !!user,
-    refetchInterval: 60_000,
-    staleTime: 60_000,
-  });
+});
 
   const { data: txData } = useQuery({
     queryKey: ["mobile-agent-tx-today", user?.id, today],
@@ -155,9 +161,7 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
       return data || [];
     },
     enabled: !!user,
-    refetchInterval: 60_000,
-    staleTime: 60_000,
-  });
+});
 
   const { data: visitCount } = useQuery({
     queryKey: ["mobile-agent-visits-today", user?.id, today],
@@ -169,9 +173,7 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
       return count ?? 0;
     },
     enabled: !!user,
-    refetchInterval: 60_000,
-    staleTime: 60_000,
-  });
+});
 
   const { data: activeSession } = useQuery({
     queryKey: ["mobile-active-session", user?.id],
@@ -185,9 +187,7 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
       return (data as unknown as ActiveSessionData | null) || null;
     },
     enabled: !!user,
-    refetchInterval: 30_000,
-    staleTime: 30_000,
-  });
+});
 
   useEffect(() => {
     if (!activeSession?.started_at) return;
@@ -213,8 +213,7 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
       return new Set((data || []).map((visit) => visit.store_id));
     },
     enabled: !!activeSession,
-    staleTime: 30_000,
-  });
+});
 
   const { data: pendingOrders } = useQuery({
     queryKey: ["mobile-agent-pending-orders"],
@@ -228,9 +227,7 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
       return (data as unknown as PendingOrderRow[]) || [];
     },
     enabled: !!user,
-    refetchInterval: 60_000,
-    staleTime: 60_000,
-  });
+});
 
   const { data: routePendingOrders } = useQuery({
     queryKey: ["mobile-route-pending-orders", activeSession?.id],
@@ -246,8 +243,7 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
       return count ?? 0;
     },
     enabled: !!activeSession && routeStores.length > 0,
-    staleTime: 30_000,
-  });
+});
 
   // Stock holdings
   const { data: stockItems = [] } = useQuery({
@@ -264,8 +260,7 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
       }));
     },
     enabled: !!user,
-    staleTime: 30_000,
-  });
+});
 
   const totalSales = salesData?.reduce((sum, row) => sum + (row.total_amount ?? 0), 0) ?? 0;
   const cashSales = salesData?.reduce((sum, row) => sum + (row.cash_amount ?? 0), 0) ?? 0;

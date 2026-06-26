@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { logError } from "@/lib/logger";
 import { useLocation } from "react-router-dom";
+import * as Sentry from "@sentry/react";
 
 // ── Shared query key groups (reused across tables to avoid duplication) ──────
 const DASHBOARD = [
@@ -586,6 +587,25 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
   return chunks;
 }
 
+// ── Channel status tracking for debugging ────────────────────────────────────
+export interface ChannelStatus {
+  name: string;
+  status: "SUBSCRIBED" | "CHANNEL_ERROR" | "CLOSED" | "TIMED_OUT" | "SUBSCRIBING";
+  tables: string[];
+  lastStatusChange: string;
+  retryCount: number;
+}
+
+const channelStatuses = new Map<string, ChannelStatus>();
+
+/**
+ * Get current status of all active Supabase channels
+ * For debugging - call from dev console or debug panel
+ */
+export function getChannelStatuses(): ChannelStatus[] {
+  return Array.from(channelStatuses.values());
+}
+
 // ── Shared multi-channel realtime ────────────────────────────────────────────
 const channels = new Map<string, ReturnType<typeof supabase.channel>>();
 const subscribers = new Map<symbol, RealtimeSubscriber>();
@@ -594,9 +614,11 @@ let isTearingDown = false;
 const RETRY = { maxRetries: 5, baseDelay: 1000, maxDelay: 30000 };
 const DEBOUNCE_MS = 250;
 let retryAttempt = 0;
+// Per-queryKey debounce timers to prevent race conditions
 const invalidateTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const pendingInvalidations = new Map<string, Set<string>>();
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
+let currentRole: string | null = null;
 
 function flushInvalidations(subscriberId: symbol) {
   const sub = subscribers.get(subscriberId);
@@ -646,10 +668,21 @@ function buildChannel(role: string | null) {
   const tables = ROLE_TABLE_MAP[role ?? ""] ?? [];
   if (!tables.length) return;
 
+  currentRole = role;
   const batches = chunkArray(tables, BATCH_SIZE);
   batches.forEach((batch, idx) => {
     const channelName = `global-realtime-sync-v2-batch${idx}`;
     let ch = supabase.channel(channelName);
+    
+    // Initialize channel status
+    channelStatuses.set(channelName, {
+      name: channelName,
+      status: "SUBSCRIBING",
+      tables: batch,
+      lastStatusChange: new Date().toISOString(),
+      retryCount: 0,
+    });
+    
     batch.forEach((table) => {
       ch = ch.on(
         "postgres_changes",
@@ -660,14 +693,32 @@ function buildChannel(role: string | null) {
 
     ch.subscribe((status: string) => {
       if (isTearingDown) return;
+      
+      const prevStatus = channelStatuses.get(channelName)?.status;
+      channelStatuses.set(channelName, {
+        ...channelStatuses.get(channelName)!,
+        status: status as ChannelStatus["status"],
+        lastStatusChange: new Date().toISOString(),
+      });
+      
       if (status === "SUBSCRIBED") {
         retryAttempt = 0;
         if (import.meta.env.DEV) console.log(`[Realtime] Batch ${idx} subscribed to ${batch.length} tables`); // eslint-disable-line no-console
       } else if (status === "CHANNEL_ERROR") {
-        logError(`[Realtime] Channel error batch ${idx}`, { context: "useRealtimeSync" });
+        const errorMsg = `[Realtime] Channel error batch ${idx}`;
+        logError(errorMsg, { context: "useRealtimeSync", channelName, batchLength: batch.length });
+        Sentry.captureMessage(errorMsg, {
+          level: 'warning',
+          extra: { channelName, batchLength: batch.length, tables: batch.slice(0, 10) },
+        });
         scheduleReconnect(role);
       } else if (status === "CLOSED" || status === "TIMED_OUT") {
-        if (import.meta.env.DEV) console.warn(`[Realtime] Batch ${idx} connection`, status, "— reconnecting…");
+        const warnMsg = `[Realtime] Batch ${idx} connection ${status} — reconnecting…`;
+        if (import.meta.env.DEV) console.warn(warnMsg);
+        Sentry.captureMessage(warnMsg, {
+          level: 'warning',
+          extra: { channelName, status, batchLength: batch.length },
+        });
         scheduleReconnect(role);
       }
     });
@@ -679,12 +730,22 @@ function buildChannel(role: string | null) {
 function scheduleReconnect(role: string | null) {
   if (retryTimer) clearTimeout(retryTimer);
   if (retryAttempt >= RETRY.maxRetries) {
-    logError("[Realtime] Max retries reached", { context: "useRealtimeSync" });
+    const errorMsg = "[Realtime] Max retries reached";
+    logError(errorMsg, { context: "useRealtimeSync" });
+    Sentry.captureMessage(errorMsg, { level: 'error', extra: { role, retryAttempt } });
     return;
   }
   const delay = Math.min(RETRY.baseDelay * 2 ** retryAttempt, RETRY.maxDelay);
   retryTimer = setTimeout(async () => {
     retryAttempt++;
+    // Update all channel retry counts
+    channelStatuses.forEach((status) => {
+      channelStatuses.set(status.name, {
+        ...status,
+        retryCount: status.retryCount + 1,
+        lastStatusChange: new Date().toISOString(),
+      });
+    });
     await tearDownChannels();
     buildChannel(role);
   }, delay);
@@ -855,6 +916,138 @@ function flushPageInvalidations(subscriberId: symbol) {
   }, 150);
 }
 
+/**
+ * Mobile-specific realtime sync hook.
+ * Subscribes to a focused set of tables relevant to the mobile role's current view.
+ * Uses a simpler, more reliable channel strategy optimized for Capacitor/WebView.
+ */
+export function useMobileRealtimeSync(tables: string[]) {
+  const qc = useQueryClient();
+  const { role, user } = useAuth();
+  const isAdmin = role === "super_admin" || role === "manager";
+  const prevTablesRef = useRef<string[] | null>(null);
+
+  useEffect(() => {
+    if (!role || !tables.length) return;
+
+    let cancelled = false;
+    const id = Symbol("mobile-rt-sub");
+    const subscriberId = String(id);
+    const effectiveTables = tables.filter((t) => {
+      const roleTables = ROLE_TABLE_MAP[role] ?? [];
+      return roleTables.includes(t);
+    });
+
+    if (effectiveTables.length === 0) return;
+
+    const setup = async () => {
+      // Tear down if tables changed
+      if (
+        prevTablesRef.current !== null &&
+        JSON.stringify(prevTablesRef.current) !== JSON.stringify(effectiveTables)
+      ) {
+        await tearDownPageChannels();
+      }
+      if (cancelled) return;
+      prevTablesRef.current = [...effectiveTables];
+
+      pageSubscribers.set(id, { qc, isAdmin, userId: user?.id, role });
+      buildPageChannel(effectiveTables, role);
+    };
+
+    setup();
+
+    return () => {
+      cancelled = true;
+      pageSubscribers.delete(id);
+      flushPageInvalidations(id);
+      pagePendingInvalidations.delete(subscriberId);
+    };
+  }, [qc, isAdmin, user?.id, role, JSON.stringify(tables)]);
+}
+
+// ── Mutation broadcast channel for mobile ────────────────────────────────────
+// Capacitor WebViews sometimes drop Supabase realtime connections when the
+// app is backgrounded. A BroadcastChannel + CustomEvent fallback lets us
+// push invalidations from the mutation site to every active hook.
+type MutationBroadcastCallback = (table: string, payload?: any) => void;
+const mutationListeners = new Set<MutationBroadcastCallback>();
+
+// Module-level singleton BroadcastChannel
+let broadcastChannel: BroadcastChannel | null = null;
+let broadcastChannelAvailable = false;
+
+try {
+  if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+    broadcastChannel = new BroadcastChannel("aquaprime_mutations");
+    broadcastChannelAvailable = true;
+    broadcastChannel.onmessage = (event) => {
+      const { table, payload } = event.data || {};
+      if (table) {
+        mutationListeners.forEach((cb) => cb(table, payload));
+      }
+    };
+  }
+} catch (err) {
+  // BroadcastChannel not available (e.g. older WebViews, restricted contexts)
+  broadcastChannelAvailable = false;
+  if (import.meta.env.DEV) console.warn("[BroadcastChannel] Not available, using CustomEvent fallback only");
+}
+
+/** Broadcast a mutation event to all tabs/windows of the app */
+export function broadcastMutation(table: string, payload?: any) {
+  // Try BroadcastChannel first
+  if (broadcastChannel && broadcastChannelAvailable) {
+    try {
+      broadcastChannel.postMessage({ table, payload, timestamp: Date.now() });
+    } catch (err) {
+      logError(err, { context: "broadcastMutation.postMessage" });
+      broadcastChannelAvailable = false;
+    }
+  }
+  
+  // CustomEvent fallback for same-tab and Capacitor WebView compatibility
+  if (typeof window !== "undefined") {
+    try {
+      window.dispatchEvent(
+        new CustomEvent("aquaprime-mutation", { 
+          detail: { table, payload, timestamp: Date.now() },
+          bubbles: true,
+          composed: true,
+        })
+      );
+    } catch (err) {
+      logError(err, { context: "broadcastMutation.dispatchEvent" });
+    }
+  }
+}
+
+/** Listen for mutation broadcasts and invalidate query keys */
+export function useMutationBroadcast() {
+  const qc = useQueryClient();
+  const { role } = useAuth();
+
+  useEffect(() => {
+    const handleMutation = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      if (!detail?.table) return;
+      const keys = TABLE_QUERY_MAP[detail.table];
+      if (!keys) return;
+      keys.forEach((key) => {
+        qc.invalidateQueries({ queryKey: [key] });
+        setTimeout(() => {
+          qc.refetchQueries({ queryKey: [key], exact: false, type: "all" });
+        }, 150);
+      });
+    };
+
+    // Listen on window with capture phase to ensure we receive it
+    window.addEventListener("aquaprime-mutation", handleMutation, { capture: false, passive: true });
+    return () => window.removeEventListener("aquaprime-mutation", handleMutation);
+  }, [qc, role]);
+}
+
+/** Legacy hook kept for transition period — prefer useMobileRealtimeSync */
 export function usePageRealtimeSync() {
   const qc = useQueryClient();
   const { role, user } = useAuth();

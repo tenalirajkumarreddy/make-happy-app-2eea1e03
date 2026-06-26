@@ -29,8 +29,7 @@ export function CustomerHome({ selectedStoreId, onStoreChange, onOpenSales, onOp
     queryKey: ["mobile-customer-self", user?.id],
     queryFn: async () => (await resolveCustomer(user!.id, "id, name, display_id, kyc_status")) as CustomerRow | null,
     enabled: !!user,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: stores } = useQuery({
     queryKey: ["mobile-customer-home-stores", customer?.id],
@@ -41,8 +40,7 @@ export function CustomerHome({ selectedStoreId, onStoreChange, onOpenSales, onOp
       return (data as StoreRow[]) || [];
     },
     enabled: !!customer,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: orders } = useQuery({
     queryKey: ["mobile-customer-home-orders", customer?.id],
@@ -53,8 +51,7 @@ export function CustomerHome({ selectedStoreId, onStoreChange, onOpenSales, onOp
       return (data as OrderRow[]) || [];
     },
     enabled: !!customer,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: sales, isLoading: loadingSales } = useQuery({
     queryKey: ["mobile-customer-home-sales", customer?.id],
@@ -69,8 +66,7 @@ export function CustomerHome({ selectedStoreId, onStoreChange, onOpenSales, onOp
       return (data as unknown as SaleRow[]) || [];
     },
     enabled: !!customer,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: settings } = useQuery({
     queryKey: ["mobile-customer-care-setting"],
@@ -80,8 +76,7 @@ export function CustomerHome({ selectedStoreId, onStoreChange, onOpenSales, onOp
       if (error) throw error;
       return data?.value || "";
     },
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const scopedOrders = useMemo(() => {
     if (!orders) return [];

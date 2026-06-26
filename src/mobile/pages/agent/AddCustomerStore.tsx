@@ -5,7 +5,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { useRouteAccess } from "@/hooks/useRouteAccess";
-import { addToQueue } from "@/lib/offlineQueue";
 import { getCurrentPosition, takePhoto } from "@/lib/capacitorUtils";
 import { ArrowLeft, Check, ChevronRight, Loader2, MapPin, Store, User, UserPlus, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -92,8 +91,7 @@ export default function AddCustomerStore({ onClose }: { onClose: () => void }) {
       return types;
     },
     enabled: step === "store",
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: routes } = useQuery({
     queryKey: ["routes-list", storeTypeId, user?.id],
@@ -110,8 +108,7 @@ export default function AddCustomerStore({ onClose }: { onClose: () => void }) {
       return fetchedRoutes;
     },
     enabled: step === "store",
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: customers } = useQuery({
     queryKey: ["customers-list-simple"],
@@ -120,8 +117,7 @@ export default function AddCustomerStore({ onClose }: { onClose: () => void }) {
       return data || [];
     },
     enabled: step === "customer" && mode === "store",
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const handleNext = () => {
     if (step === "type") {

@@ -8,7 +8,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { logActivity } from "@/lib/activityLogger";
 import { sanitizeString } from "@/lib/sanitization";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
-import { addToQueue, generateBusinessKey } from "@/lib/offlineQueue";
 import { validateSaleData } from "@/lib/validation/schemas";
 import { resolveCreditLimit } from "@/lib/creditLimit";
 import { useAuth } from "@/contexts/AuthContext";

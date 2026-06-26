@@ -56,7 +56,6 @@ import { ProformaView } from "@/components/orders/ProformaView";
 import { QrStoreSelector } from "@/components/shared/QrStoreSelector";
 import { usePermission } from "@/hooks/usePermission";
 import { afterSaleSaved } from "@/lib/mutationHelpers";
-import { cacheQueryResult, getCachedQueryResult } from "@/lib/offlineRouteCache";
 import { getActiveOrderForStore, type ActiveOrderInfo } from "@/lib/orders";
 import { ActiveOrderExistsDialog } from "@/mobile/components/ActiveOrderExistsDialog";
 import { VisitReasonDialog } from "@/components/routes/VisitReasonDialog";
@@ -171,11 +170,8 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
       const cacheKey = `routes:${user?.id}:${role}`;
 
       if (!navigator.onLine) {
-        const cached = await getCachedQueryResult<RouteRow[]>(cacheKey);
-        if (cached) {
-          setIsOfflineData(true);
-          return cached;
-        }
+        toast.error("You are offline. Routes cannot be loaded without internet.");
+        return [];
       }
 
       const { data, error } = await supabase
@@ -190,13 +186,10 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
       const result = (data as unknown as RouteRow[]) || [];
       setIsOfflineData(false);
 
-      await cacheQueryResult(cacheKey, result);
-
       return result;
     },
     enabled: !!user,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const routeList = (((routes as RouteRow[] | undefined) || [])
     .filter((route) => canAccessRoute(route.id))
@@ -225,8 +218,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
       return data;
     },
     enabled: !!user,
-    staleTime: 30_000,
-  });
+});
 
   const { data: pendingOrderStoreIds } = useQuery({
     queryKey: ["mobile-route-pending-orders", allStoreIds],
@@ -240,8 +232,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
       return new Set((data || []).map((row) => row.store_id));
     },
     enabled: allStoreIds.length > 0,
-    staleTime: 30_000,
-  });
+});
 
   // Orders: assigned to agent, created by agent, or for stores on their routes
   const { data: allOrders, isLoading: loadingOrders } = useQuery({
@@ -262,8 +253,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
       return (data as unknown as OrderRow[]) || [];
     },
     enabled: view === "orders" && !!user,
-    staleTime: 30_000,
-  });
+});
 
   const storeTypeOptions = useMemo(() => {
     const set = new Set<string>();
@@ -321,8 +311,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
       return visitMap;
     },
     enabled: !!user,
-    staleTime: 30_000,
-  });
+});
 
   const { data: sessionPosition } = useQuery({
     queryKey: ["session-position", activeSession?.id],
@@ -339,9 +328,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
       return null;
     },
     enabled: !!activeSession,
-    refetchInterval: 15_000,
-    staleTime: 15_000,
-  });
+});
 
   const [selectedOrder, setSelectedOrder] = useState<OrderRow | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -383,8 +370,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
       return (data as any[]) || [];
     },
     enabled: allStoreIds.length > 0,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: createStoreProducts } = useQuery({
     queryKey: ["mobile-agent-create-store-products", createSelectedStoreTypeId, createStoreId],
@@ -419,8 +405,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
       }));
     },
     enabled: !!createSelectedStoreTypeId && !!createStoreId,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const handleCancelOrder = async () => {
     if (!cancelOrderId || !cancelReason.trim()) {
@@ -704,8 +689,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
       };
     },
     enabled: !!viewProformaId,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const calculateItemTotal = (item: OrderItemRow) =>
     item.quantity * (item.products?.base_price || 0);
@@ -777,14 +761,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
       }
 
       if (!navigator.onLine) {
-        const { addToQueue } = await import("@/lib/offlineQueue");
-        await addToQueue({
-          id: crypto.randomUUID(),
-          type: "visit",
-          payload: { userId: user.id, storeId: store.id, lat, lng },
-          createdAt: new Date().toISOString(),
-        });
-        toast.warning(`Offline — visit queued for ${store.name}`);
+        toast.error("You are offline. Please connect to the internet to record a visit.");
         return;
       }
 

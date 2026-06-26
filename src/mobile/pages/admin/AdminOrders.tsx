@@ -141,8 +141,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
       };
     },
     enabled: !!viewProformaId,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const PAGE_SIZE = 20;
 
@@ -179,8 +178,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
       if (error) throw error;
       return { orders: (data || []) as Order[], total: count || 0 };
     },
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const allOrders = orders?.orders || [];
   const totalOrders = orders?.total || 0;
@@ -194,8 +192,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
       return data || [];
     },
     enabled: !!currentWarehouse,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: stores = [] } = useQuery({
     queryKey: ["mobile-orders-stores", currentWarehouse?.id],
@@ -204,8 +201,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
       return data || [];
     },
     enabled: !!currentWarehouse,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: assignedStaff = [] } = useQuery({
     queryKey: ["mobile-orders-staff"],
@@ -213,8 +209,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
       const { data } = await supabase.from("profiles").select("user_id, full_name").order("full_name").limit(100);
       return data || [];
     },
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: createProducts = [] } = useQuery({
     queryKey: ["admin-create-products", currentWarehouse?.id],
@@ -227,8 +222,7 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
       return data || [];
     },
     enabled: showCreate,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { handlers: pullHandlers, isPulling, isRefreshing, pullDistance, threshold } = usePullToRefresh({
     onRefresh: async () => { setPage(1); await refetch(); },

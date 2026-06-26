@@ -145,8 +145,7 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
       if (error) throw error;
       return { sales: (data || []) as Sale[], total: count || 0 };
     },
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   // Filter options
   const { data: stores = [] } = useQuery({
@@ -156,8 +155,7 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
       return data || [];
     },
     enabled: !!currentWarehouse,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: customers = [] } = useQuery({
     queryKey: ["mobile-sales-customers", currentWarehouse?.id],
@@ -165,8 +163,7 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
       const { data } = await supabase.from("customers").select("id, name").order("name").limit(100);
       return data || [];
     },
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: agentProfiles = [] } = useQuery({
     queryKey: ["mobile-agent-profiles"],
@@ -183,8 +180,7 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
       return data || [];
     },
     enabled: canCancelSales,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const allSales = sales?.sales || [];
   const totalSales = sales?.total || 0;
@@ -206,8 +202,7 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
       });
       return map;
     },
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   // Fetch items for editing sale
   const { data: editSaleItems } = useQuery({
@@ -220,8 +215,7 @@ export function AdminSales({ onNavigate }: { onNavigate: (path: string) => void 
       return data || [];
     },
     enabled: !!editingSaleId,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   useEffect(() => {
     if (editSaleItems && editSaleItems.length > 0) {

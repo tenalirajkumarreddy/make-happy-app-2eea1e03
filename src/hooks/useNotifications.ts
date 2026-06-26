@@ -77,8 +77,7 @@ export function useNotifications() {
     queryKey,
     queryFn: () => fetchNotificationsFromDb(user!.id),
     enabled: !!user,
-    staleTime: NOTIF_STALE_MS,
-  });
+});
 
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 

@@ -64,8 +64,7 @@ export function CustomerOrders({ selectedStoreId, onStoreChange }: Props) {
       return res as unknown as CustomerRow | null;
     },
     enabled: !!user,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: stores } = useQuery({
     queryKey: ["mobile-customer-orders-stores", customer?.id],
@@ -79,8 +78,7 @@ export function CustomerOrders({ selectedStoreId, onStoreChange }: Props) {
       return (data as any[]) || [];
     },
     enabled: !!customer,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: createProducts } = useQuery({
     queryKey: ["mobile-customer-create-products"],
@@ -92,8 +90,7 @@ export function CustomerOrders({ selectedStoreId, onStoreChange }: Props) {
         .order("name");
       return (data || []) as any[];
     },
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: orders, isLoading } = useQuery({
     queryKey: ["mobile-customer-orders", customer?.id],
@@ -107,9 +104,7 @@ export function CustomerOrders({ selectedStoreId, onStoreChange }: Props) {
       return (data as unknown as OrderRow[]) || [];
     },
     enabled: !!customer,
-    refetchInterval: 60_000,
-    staleTime: 60_000,
-  });
+});
 
   useEffect(() => {
     if (openCreate) {

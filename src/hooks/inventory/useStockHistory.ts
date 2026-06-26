@@ -298,7 +298,7 @@ export function useRecentStockHistory(limit: number = 10) {
       if (error) throw error;
       return data || [];
     },
-    refetchInterval: 30000, // Refresh every 30 seconds
+// Refresh every 30 seconds
   });
 
   return {

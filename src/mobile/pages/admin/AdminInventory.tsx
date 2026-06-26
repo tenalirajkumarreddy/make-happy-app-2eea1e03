@@ -63,8 +63,7 @@ export function AdminInventory({ onNavigate }: { onNavigate: (path: string) => v
       if (error) throw error;
       return (data || []) as StockItem[];
     },
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   // Filter stock
   const filteredStock = useMemo(() => {

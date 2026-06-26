@@ -57,8 +57,7 @@ export function StockTransferSheet({ open, onOpenChange }: Props) {
       })) as StockItem[];
     },
     enabled: !!user,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   // Warehouses (for staff_to_warehouse)
   const { data: warehouses = [] } = useQuery({
@@ -80,8 +79,7 @@ export function StockTransferSheet({ open, onOpenChange }: Props) {
       return data || [];
     },
     enabled: !!user,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   // Target staff (for staff_to_staff)
   const { data: staffList = [] } = useQuery({
@@ -101,8 +99,7 @@ export function StockTransferSheet({ open, onOpenChange }: Props) {
         .filter((s: any) => s.user_id !== user?.id && s.full_name !== "Unknown");
     },
     enabled: !!user,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const [toId, setToId] = useState("");
 

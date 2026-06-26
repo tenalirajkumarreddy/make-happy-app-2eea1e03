@@ -1,4 +1,5 @@
 ﻿import { QueryClient } from "@tanstack/react-query";
+import { broadcastMutation } from "@/hooks/useRealtimeSync";
 
 const FORCE = { refetchType: 'all' as const };
 
@@ -37,6 +38,11 @@ export function afterSaleSaved(qc: QueryClient, options?: { isMobile?: boolean; 
     invalidateAll(qc, ["balance-adjustments", options.storeId]);
     invalidateAll(qc, ["store-payment-returns", options.storeId]);
     invalidateAll(qc, ["store-qr-codes", options.storeId]);
+    // Background invalidation — fire and forget (keeps UI responsive)
+    invalidateAll(qc, ["store-outstanding", options.storeId]);
+    invalidateAll(qc, ["store-sales-balance", options.storeId]);
+    invalidateAll(qc, ["store-txn-balance", options.storeId]);
+    invalidateAll(qc, ["store-adjustments-balance", options.storeId]);
   }
   invalidateAll(qc, ["staff-stock"]);
   invalidateAll(qc, ["product-stock"]);
@@ -88,6 +94,8 @@ export function afterSaleSaved(qc: QueryClient, options?: { isMobile?: boolean; 
   if (options?.storeId) {
     invalidateAll(qc, ["sale-items-for-store", options.storeId]);
   }
+  // Inform every other tab / window that sales changed
+  broadcastMutation("sales", { storeId: options?.storeId, isMobile: options?.isMobile });
 }
 
 export function afterTransactionSaved(qc: QueryClient, options?: { isMobile?: boolean; storeId?: string }) {
@@ -117,6 +125,11 @@ export function afterTransactionSaved(qc: QueryClient, options?: { isMobile?: bo
     invalidateAll(qc, ["balance-adjustments", options.storeId]);
     invalidateAll(qc, ["store-payment-returns", options.storeId]);
     invalidateAll(qc, ["store-qr-codes", options.storeId]);
+    // Background invalidation — fire and forget (keeps UI responsive)
+    invalidateAll(qc, ["store-outstanding", options.storeId]);
+    invalidateAll(qc, ["store-sales-balance", options.storeId]);
+    invalidateAll(qc, ["store-txn-balance", options.storeId]);
+    invalidateAll(qc, ["store-adjustments-balance", options.storeId]);
   }
   if (options?.isMobile) {
     invalidateAll(qc, ["mobile-agent-tx-today"]);
@@ -124,6 +137,7 @@ export function afterTransactionSaved(qc: QueryClient, options?: { isMobile?: bo
     invalidateAll(qc, ["mobile-history-transactions-timeline"]);
     invalidateAll(qc, ["mobile-history-balance-transactions"]);
   }
+  broadcastMutation("transactions", { storeId: options?.storeId, isMobile: options?.isMobile });
 }
 
 export function afterSaleReturned(qc: QueryClient, options?: { isMobile?: boolean; saleId?: string; storeId?: string; returnData?: any }) {
@@ -195,6 +209,7 @@ export function afterSaleReturned(qc: QueryClient, options?: { isMobile?: boolea
   if (options?.saleId) {
     invalidateAll(qc, ["sale-return-detail", options.saleId]);
   }
+  broadcastMutation("sale_returns", { saleId: options?.saleId, storeId: options?.storeId, isMobile: options?.isMobile });
 }
 
 export function afterSaleEdited(qc: QueryClient, options?: { isMobile?: boolean; storeId?: string }) {
@@ -232,10 +247,11 @@ export function afterSaleEdited(qc: QueryClient, options?: { isMobile?: boolean;
     invalidateAll(qc, ["mobile-products-for-sale"]);
     invalidateAll(qc, ["mobile-inventory"]);
   }
+  broadcastMutation("sales", { storeId: options?.storeId, isMobile: options?.isMobile, action: "edit" });
 }
 
 export function afterSaleCancelled(qc: QueryClient, options?: { isMobile?: boolean; storeId?: string }) {
-  // Do NOT force an eager refetch on sales â€” it can hit a stale read-replica
+  // Do NOT force an eager refetch on sales — it can hit a stale read-replica
   // and overwrite optimistic updates before the write has replicated.
   // The useRealtimeSync hook already subscribes to DB changes and will safely
   // invalidate / mark stale so active observers refetch on their next tick.
@@ -270,6 +286,7 @@ export function afterSaleCancelled(qc: QueryClient, options?: { isMobile?: boole
     invalidateAll(qc, ["mobile-products-for-sale"]);
     invalidateAll(qc, ["mobile-inventory"]);
   }
+  broadcastMutation("sales", { storeId: options?.storeId, isMobile: options?.isMobile, action: "cancel" });
 }
 
 export function afterPaymentReturned(qc: QueryClient, options?: { isMobile?: boolean }) {
@@ -287,6 +304,7 @@ export function afterPaymentReturned(qc: QueryClient, options?: { isMobile?: boo
     invalidateAll(qc, ["mobile-recent-activity"]);
     invalidateAll(qc, ["mobile-agent-tx-today"]);
   }
+  broadcastMutation("payment_returns", { isMobile: options?.isMobile });
 }
 
 export function afterHandoverChanged(qc: QueryClient, options?: { isMobile?: boolean; userId?: string }) {
@@ -311,4 +329,5 @@ export function afterHandoverChanged(qc: QueryClient, options?: { isMobile?: boo
     invalidateAll(qc, ["mobile-agent-tx-today"]);
     invalidateAll(qc, ["mobile-agent-sales-today"]);
   }
+  broadcastMutation("handovers", { userId: options?.userId, isMobile: options?.isMobile });
 }

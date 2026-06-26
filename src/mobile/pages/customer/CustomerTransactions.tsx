@@ -62,8 +62,7 @@ export function CustomerTransactions({ selectedStoreId }: Props) {
     queryKey: ["mobile-customer-ledger-self", user?.id],
     queryFn: async () => (await resolveCustomer(user!.id, "id")) as CustomerRow | null,
     enabled: !!user,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: stores } = useQuery({
     queryKey: ["mobile-customer-ledger-stores", customer?.id],
@@ -76,8 +75,7 @@ export function CustomerTransactions({ selectedStoreId }: Props) {
       return (data as StoreOutstandingRow[]) || [];
     },
     enabled: !!customer,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: sales } = useQuery({
     queryKey: ["mobile-customer-ledger-sales", customer?.id],
@@ -93,8 +91,7 @@ export function CustomerTransactions({ selectedStoreId }: Props) {
       return (data as unknown as SaleLedgerRow[]) || [];
     },
     enabled: !!customer,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: transactions, isLoading } = useQuery({
     queryKey: ["mobile-customer-ledger-payments", customer?.id],
@@ -109,8 +106,7 @@ export function CustomerTransactions({ selectedStoreId }: Props) {
       return (data as unknown as TransactionLedgerRow[]) || [];
     },
     enabled: !!customer,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const ledger = useMemo(() => {
     const entries: LedgerEntry[] = [

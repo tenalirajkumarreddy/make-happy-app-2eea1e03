@@ -36,7 +36,6 @@ import {
   AlertDescription,
   AlertTitle,
 } from "@/components/ui/alert";
-import { PendingAction, ConflictInfo, resolveConflict, getConflictedActions } from "@/lib/offlineQueue";
 import {
   Conflict,
   ConflictType,

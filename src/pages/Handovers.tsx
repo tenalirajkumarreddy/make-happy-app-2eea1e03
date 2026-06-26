@@ -269,8 +269,7 @@ const Handovers = () => {
     },
     enabled: !!user && isStaff,
     // Refresh every 30 seconds for active users
-    refetchInterval: 30000,
-  });
+});
 
   // Fetch finalizer income entries (today)
   const { data: finalizerIncome, isLoading: finalizerIncomeLoading } = useQuery({

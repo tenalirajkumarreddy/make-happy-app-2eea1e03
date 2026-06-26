@@ -42,8 +42,7 @@ export function CustomerSales({ selectedStoreId }: Props) {
     queryKey: ["mobile-customer-sales-self", user?.id],
     queryFn: async () => (await resolveCustomer(user!.id, "id")) as CustomerRow | null,
     enabled: !!user,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: sales, isLoading } = useQuery({
     queryKey: ["mobile-customer-sales", customer?.id],
@@ -59,8 +58,7 @@ export function CustomerSales({ selectedStoreId }: Props) {
       return (data as unknown as SaleRow[]) || [];
     },
     enabled: !!customer,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const filteredSales = useMemo(() => {
     if (!selectedStoreId) return sales || [];

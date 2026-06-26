@@ -100,7 +100,7 @@ const MapPage = () => {
         profiles: s.agent_name ? { full_name: s.agent_name } : null,
       }));
     },
-    refetchInterval: 30000, // Increased to 30s to reduce DB load
+// Increased to 30s to reduce DB load
     refetchIntervalInBackground: false,
   });
 
@@ -124,7 +124,7 @@ const MapPage = () => {
       return new Set((visits ?? []).map((v: any) => v.store_id));
     },
     enabled: activeSessionIds.length > 0,
-    refetchInterval: 30000, // Increased to 30s
+// Increased to 30s
     refetchIntervalInBackground: false,
   });
 

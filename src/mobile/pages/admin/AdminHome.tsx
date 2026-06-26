@@ -69,9 +69,7 @@ export function AdminHome({
         salesCount: td.length,
       } as DashboardStats;
     },
-    refetchInterval: 60_000,
-    staleTime: 60_000,
-  });
+});
 
   const { data: recentActivity } = useQuery({
     queryKey: ["mobile-recent-activity", currentWarehouse?.id],
@@ -86,8 +84,7 @@ export function AdminHome({
         store: s.stores?.name ?? null, date: s.created_at,
       }));
     },
-    staleTime: 30_000,
-  });
+});
 
   const { data: pendingExpenses = [] } = useQuery({
     queryKey: ["mobile-pending-expense-widget", currentWarehouse?.id],
@@ -105,9 +102,7 @@ export function AdminHome({
       const { data } = await query;
       return data || [];
     },
-    refetchInterval: 30_000,
-    staleTime: 30_000,
-  });
+});
 
   const { data: opsMetrics } = useQuery({
     queryKey: ["mobile-admin-ops", currentWarehouse?.id, role],
@@ -139,9 +134,7 @@ export function AdminHome({
 
       return { fulfillmentRate, collectionEfficiency };
     },
-    refetchInterval: 60_000,
-    staleTime: 60_000,
-  });
+});
 
   const qc = useQueryClient();
 

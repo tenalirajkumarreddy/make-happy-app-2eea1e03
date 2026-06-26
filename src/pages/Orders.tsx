@@ -4,7 +4,6 @@ import { DataTable } from "@/components/shared/DataTable";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { addToQueue, generateBusinessKey } from "@/lib/offlineQueue";
 import { logActivity } from "@/lib/activityLogger";
 import { sendNotificationToMany, getAdminUserIds } from "@/lib/notifications";
 import { CANCEL_REASONS } from "@/lib/constants";
@@ -278,8 +277,7 @@ const Orders = () => {
       return (data as any)?.access_level || "all";
     },
     enabled: !!user?.id,
-    staleTime: 60_000,
-  });
+});
 
   const { data: orders, isLoading, isFetching, refetch: refetchOrders } = useQuery({
     queryKey: ["orders", currentWarehouse?.id, statusFilter, filterFrom, filterTo, filterCustomer, filterStore, filterStoreType, filterRoute, filterAssignedTo, loadedPages, user?.id, role, orderAccess],
@@ -536,31 +534,8 @@ const Orders = () => {
       return;
     }
 
-    // Offline: queue order and return
     if (!navigator.onLine) {
-      const bizKey = generateBusinessKey('order', {
-        storeId: storeId,
-        orderType: orderType,
-        timestamp: new Date().toISOString(),
-      });
-      await addToQueue({
-        id: crypto.randomUUID(),
-        type: "order",
-        payload: {
-          store_id: storeId,
-          customer_id: customerId,
-      order_type: orderType as "simple" | "detailed",
-          requirement_note: requirementNote,
-          order_items: orderItems.filter((i) => i.product_id),
-          assigned_to: assignedTo,
-        },
-        createdAt: new Date().toISOString(),
-        businessKey: bizKey,
-      });
-      qc.invalidateQueries({ queryKey: ["orders"], refetchType: "all" });
-      setShowAdd(false);
-      toast.warning("Offline — order queued and will sync automatically");
-      setSaving(false);
+      toast.error("You are offline. Please connect to the internet to create an order.");
       return;
     }
 

@@ -94,8 +94,7 @@ export function AdminTransactions({ onNavigate }: { onNavigate: (path: string) =
       if (error) throw error;
       return { transactions: (data || []) as Transaction[], total: count || 0 };
     },
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   // Filter options
   const { data: stores = [] } = useQuery({
@@ -105,8 +104,7 @@ export function AdminTransactions({ onNavigate }: { onNavigate: (path: string) =
       return data || [];
     },
     enabled: !!currentWarehouse,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: customers = [] } = useQuery({
     queryKey: ["mobile-txn-customers", currentWarehouse?.id],
@@ -115,8 +113,7 @@ export function AdminTransactions({ onNavigate }: { onNavigate: (path: string) =
       return data || [];
     },
     enabled: !!currentWarehouse,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: agents = [] } = useQuery({
     queryKey: ["mobile-txn-agents"],
@@ -124,8 +121,7 @@ export function AdminTransactions({ onNavigate }: { onNavigate: (path: string) =
       const { data } = await supabase.from("profiles").select("user_id, full_name").order("full_name").limit(100);
       return data || [];
     },
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const allTxns = transactions?.transactions || [];
   const totalTxns = transactions?.total || 0;
@@ -151,8 +147,7 @@ export function AdminTransactions({ onNavigate }: { onNavigate: (path: string) =
       });
       return map;
     },
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   // Filter by search
   const filteredTxns = useMemo(() => {

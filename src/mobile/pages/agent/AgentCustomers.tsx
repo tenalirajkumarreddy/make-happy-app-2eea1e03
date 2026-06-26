@@ -91,8 +91,7 @@ export function AgentCustomers({ onOpenStore, onGoRecord, onGoVisit }: Props) {
       return (data as unknown as StoreListItem[]) || [];
     },
     enabled: !!user,
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: routes } = useQuery({
     queryKey: ["mobile-routes-list"],
@@ -100,8 +99,7 @@ export function AgentCustomers({ onOpenStore, onGoRecord, onGoVisit }: Props) {
       const { data } = await supabase.from("routes").select("id, name").eq("is_active", true).order("name");
       return (data as RouteItem[]) || [];
     },
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const { data: storeTypes } = useQuery({
     queryKey: ["mobile-store-types"],
@@ -109,8 +107,7 @@ export function AgentCustomers({ onOpenStore, onGoRecord, onGoVisit }: Props) {
       const { data } = await supabase.from("store_types").select("id, name").order("name");
       return (data as StoreTypeItem[]) || [];
     },
-    staleTime: 5 * 60 * 1000,
-  });
+});
 
   const filtered = (stores || []).filter((s) => {
     const matchAccess = canAccessRoute(s.route_id);

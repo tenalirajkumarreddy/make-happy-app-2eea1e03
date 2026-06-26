@@ -71,5 +71,11 @@ export const supabase = createClient<Database>(
         'X-Client-Info': 'bizmanager-web',
       },
     },
+    realtime: {
+      params: {
+        eventsPerSecond: 10,
+      },
+      reconnectAfterMs: (tries) => Math.min(tries * 1000, 30000),
+    },
   }
 );
