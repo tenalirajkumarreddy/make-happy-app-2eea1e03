@@ -48,6 +48,7 @@ const MANAGER_TYPES = [
 
 const PERM_HEADERS: { key: PermissionKey; label: string }[] = [
   { key: "price_override", label: "Price Override" },
+  { key: "set_store_pricing", label: "Set Store Pricing" },
   { key: "record_behalf", label: "Record On Behalf" },
   { key: "create_customers", label: "Create Customers" },
   { key: "create_stores", label: "Create Stores" },

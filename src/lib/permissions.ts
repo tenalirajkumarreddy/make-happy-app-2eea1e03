@@ -12,7 +12,7 @@ export type { AppRole } from "@/types/roles";
 /** Default permissions per role — inherent permissions that can't be toggled off */
 export const ROLE_DEFAULTS: Record<AppRole, PermissionKey[]> = {
   super_admin: [
-    "price_override", "record_behalf", "create_customers", "create_stores",
+    "price_override", "set_store_pricing", "record_behalf", "create_customers", "create_stores",
     "edit_balance", "opening_balance", "finalizer", "see_handover_balance",
     "modify_handovers", "cancel_any_handover", "adjust_holding_balance",
     "view_vendors", "manage_vendors",
@@ -28,7 +28,7 @@ export const ROLE_DEFAULTS: Record<AppRole, PermissionKey[]> = {
     "cancel_sales", "modify_transactions",
   ],
   manager: [
-    "price_override", "record_behalf", "create_customers", "create_stores",
+    "price_override", "set_store_pricing", "record_behalf", "create_customers", "create_stores",
     "edit_balance", "opening_balance", "finalizer", "see_handover_balance",
     "modify_handovers", "cancel_any_handover", "adjust_holding_balance",
     "view_vendors", "manage_vendors",
@@ -83,7 +83,7 @@ export function hasRoleDefaultPermission(role: AppRole, permission: PermissionKe
 /** All defined permission keys — use this instead of hardcoding arrays */
 export const ALL_PERMISSION_KEYS: PermissionKey[] = [
   // General
-  "price_override", "record_behalf", "create_customers", "create_stores",
+  "price_override", "set_store_pricing", "record_behalf", "create_customers", "create_stores",
   "edit_balance", "opening_balance", "finalizer", "see_handover_balance",
   "submit_expenses", "manage_expense_access", "approve_expenses",
   // Handover
@@ -125,6 +125,7 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   delete_invoices: "Delete Invoices",
   download_invoices: "Download/Print Invoices",
   price_override: "Override Product Prices",
+  set_store_pricing: "Set Store/Customer Pricing",
   record_behalf: "Record Sales on Behalf",
   record_sale: "Record Sales",
   backdate: "Backdate Sales",
@@ -165,7 +166,7 @@ export const PERMISSION_GROUPS: Record<string, PermissionKey[]> = {
     "view_invoices", "create_invoices", "edit_invoices", "delete_invoices", "download_invoices",
   ],
   "Sales & Pricing": [
-    "record_sale", "backdate", "cancel_sales", "modify_transactions", "price_override", "record_behalf", "edit_balance",
+    "record_sale", "backdate", "cancel_sales", "modify_transactions", "price_override", "set_store_pricing", "record_behalf", "edit_balance",
     "opening_balance", "finalizer", "see_handover_balance",
   ],
   "Handovers": [

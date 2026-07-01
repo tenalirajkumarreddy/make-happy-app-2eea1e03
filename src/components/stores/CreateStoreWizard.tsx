@@ -314,16 +314,29 @@ export function CreateStoreWizard({ open, onOpenChange, onCreated }: CreateStore
 
       if (storeErr) { toast.error(storeErr.message); setSaving(false); return; }
 
+      // Handle both SETOF (array) and single-row return from RPC
+      const newStoreId = Array.isArray(newStore) && newStore.length > 0 ? newStore[0].id : newStore?.id;
+      if (!newStoreId) {
+        toast.error("Store created but could not retrieve store ID for pricing");
+        setSaving(false);
+        return;
+      }
+
       // Save store pricing if any
       const pricingInserts = Object.entries(priceMap)
         .filter(([, v]) => v && Number(v) > 0)
         .map(([productId, price]) => ({
-          store_id: newStore.id,
+          store_id: newStoreId,
           product_id: productId,
           price: Number(price),
         }));
       if (pricingInserts.length > 0) {
-        await supabase.from("store_pricing").insert(pricingInserts);
+        const { error: pricingError } = await supabase.from("store_pricing").insert(pricingInserts);
+        if (pricingError) {
+          toast.error("Store created but pricing failed: " + pricingError.message);
+          setSaving(false);
+          return;
+        }
       }
 
       toast.success("Store created successfully!");

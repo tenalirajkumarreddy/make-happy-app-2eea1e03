@@ -21,7 +21,8 @@ export type PermissionKey =
   | "transfer_orders" | "delete_orders" | "fulfill_orders" | "cancel_orders"
   | "create_sale_returns" | "view_assigned_orders" | "accept_order_transfers"
   | "view_invoices" | "create_invoices" | "edit_invoices" | "delete_invoices" | "download_invoices"
-  | "cancel_sales" | "modify_transactions";
+  | "cancel_sales" | "modify_transactions"
+  | "set_store_pricing";
 
 interface InlinePermissionCheckboxProps {
   userId: string;
