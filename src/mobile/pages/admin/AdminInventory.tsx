@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWarehouse } from "@/contexts/WarehouseContext";
-import { Loader2, Plus, Eye, AlertCircle, Boxes, TrendingUp, Package, ShoppingCart, ArrowUpDown, Users, History } from "lucide-react";
+import { Loader2, Plus, Eye, AlertCircle, Boxes, TrendingUp, Package, ShoppingCart, ArrowUpDown, Users, History, RotateCcw } from "lucide-react";
 import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -17,6 +17,7 @@ import { CardSkeletonList } from "@/mobile/components/CardSkeleton";
 import { StockAdjustmentSheet } from "@/mobile/components/inventory/StockAdjustmentSheet";
 import { StockHistorySheet } from "@/mobile/components/inventory/StockHistorySheet";
 import { StaffHoldingsSheet } from "@/mobile/components/inventory/StaffHoldingsSheet";
+import { StockReturnRequestsPanel } from "@/components/inventory/StockReturnRequestsPanel";
 
 interface StockItem {
   id: string;
@@ -125,7 +126,7 @@ export function AdminInventory({ onNavigate }: { onNavigate: (path: string) => v
       <div className="px-4 -mt-3 space-y-3 mb-4">
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-3 h-10 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+          <TabsList className="grid w-full grid-cols-4 h-10 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
             <TabsTrigger value="stock" className="text-xs rounded-lg">
               <Package className="h-3.5 w-3.5 mr-1" /> Stock
             </TabsTrigger>
@@ -134,6 +135,9 @@ export function AdminInventory({ onNavigate }: { onNavigate: (path: string) => v
             </TabsTrigger>
             <TabsTrigger value="history" className="text-xs rounded-lg">
               <History className="h-3.5 w-3.5 mr-1" /> History
+            </TabsTrigger>
+            <TabsTrigger value="returns" className="text-xs rounded-lg">
+              <RotateCcw className="h-3.5 w-3.5 mr-1" /> Returns
             </TabsTrigger>
           </TabsList>
 
@@ -311,6 +315,14 @@ export function AdminInventory({ onNavigate }: { onNavigate: (path: string) => v
             <p className="text-xs text-muted-foreground text-center">
               Tap to view all stock movements and adjustments
             </p>
+          </TabsContent>
+
+          {/* Agent Return Requests Tab */}
+          <TabsContent value="returns" className="mt-3">
+            <StockReturnRequestsPanel
+              warehouseId={currentWarehouse?.id}
+              className="pb-2"
+            />
           </TabsContent>
         </Tabs>
       </div>

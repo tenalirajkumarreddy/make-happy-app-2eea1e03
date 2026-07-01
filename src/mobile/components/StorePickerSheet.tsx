@@ -113,7 +113,7 @@ export function StorePickerSheet({ open, onOpenChange, onSelect, filterRouteId }
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="h-[88vh] rounded-t-2xl flex flex-col p-0">
+      <SheetContent side="bottom" className="h-[88vh] rounded-t-2xl flex flex-col !p-0">
         {/* Handle bar */}
         <div className="flex justify-center pt-3 pb-1 shrink-0">
           <div className="h-1 w-10 rounded-full bg-muted" />

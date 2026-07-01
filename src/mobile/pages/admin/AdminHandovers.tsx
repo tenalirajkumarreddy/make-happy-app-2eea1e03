@@ -305,16 +305,6 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
       const { error } = await (supabase.rpc("confirm_handover", { p_handover_id: id, p_confirmed_by: user?.id } as any));
       if (error) throw error;
       toast.success("Handover confirmed");
-      if (handover?.user_id) {
-        sendNotification({
-          userId: handover.user_id,
-          title: "Handover Confirmed",
-          message: `Your ₹${Number(handover.cash_amount).toLocaleString()} handover was accepted`,
-          type: "handover",
-          entityType: "handover",
-          entityId: id,
-        });
-      }
       qc.invalidateQueries({ queryKey: ["admin-handovers"] });
     } catch (err: any) {
       toast.error(err.message || "Failed to confirm handover");
@@ -334,16 +324,6 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
       });
       if (error) throw error;
       toast.success("Handover rejected");
-      if (handover?.user_id) {
-        sendNotification({
-          userId: handover.user_id,
-          title: "Handover Rejected",
-          message: `Your ₹${Number(handover.cash_amount).toLocaleString()} handover was rejected`,
-          type: "handover",
-          entityType: "handover",
-          entityId: id,
-        });
-      }
       qc.invalidateQueries({ queryKey: ["admin-handovers"] });
     } catch (err: any) {
       toast.error(err.message || "Failed to reject handover");
@@ -373,20 +353,6 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
       } as any));
       if (error) throw error;
       toast.success("Transfer completed");
-      sendNotification({
-        userId: transferFrom,
-        title: "Admin Transfer",
-        message: `₹${Number(transferAmount).toLocaleString()} transferred from your holding`,
-        type: "handover",
-        entityType: "handover",
-      });
-      sendNotification({
-        userId: transferTo,
-        title: "Admin Transfer",
-        message: `₹${Number(transferAmount).toLocaleString()} transferred to your holding`,
-        type: "handover",
-        entityType: "handover",
-      });
       setAdminTransferOpen(false);
       setTransferFrom("");
       setTransferTo("");
@@ -489,13 +455,6 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
       });
       if (error) throw error;
       toast.success("Holding balance adjusted");
-      sendNotification({
-        userId: data.userId,
-        title: "Holding Balance Adjusted",
-        message: `Your holding adjusted: Cash ₹${cashAdj >= 0 ? "+" : ""}${cashAdj}, UPI ₹${upiAdj >= 0 ? "+" : ""}${upiAdj}`,
-        type: "system",
-        entityType: "staff_account",
-      });
       setAdjustHoldingOpen(false);
       qc.invalidateQueries({ queryKey: ["admin-handovers-balances"] });
     } catch (err: any) {
@@ -553,13 +512,6 @@ export function AdminHandovers({ onNavigate: _onNavigate }: { onNavigate: (path:
       } as any).select().single();
       if (error) throw error;
       toast.success("Expense claim submitted");
-      const adminIds = await getAdminUserIds();
-      sendNotificationToMany(adminIds, {
-        title: "New Expense Claim",
-        message: `₹${Number(expenseAmount).toLocaleString()} expense claim requires review`,
-        type: "expense_request" as any,
-        entityType: "expense_claim",
-      });
       setExpenseOpen(false);
       setExpenseAmount("");
       setExpenseDescription("");

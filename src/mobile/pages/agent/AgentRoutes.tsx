@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { startOfDay, format } from "date-fns";
 import {
@@ -60,6 +60,9 @@ import { getActiveOrderForStore, type ActiveOrderInfo } from "@/lib/orders";
 import { ActiveOrderExistsDialog } from "@/mobile/components/ActiveOrderExistsDialog";
 import { VisitReasonDialog } from "@/components/routes/VisitReasonDialog";
 import { RouteMap } from "@/components/routes/RouteMap";
+import { usePullToRefresh } from "@/mobile/hooks/usePullToRefresh";
+import { PullRefreshIndicator } from "@/mobile/components/PullRefreshIndicator";
+import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import type { StoreOption } from "@/mobile/components/StorePickerSheet";
 
 interface CustomerItem { id: string; name: string; }
@@ -798,8 +801,27 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
     setVisitReasonDialog({ store });
   };
 
+  const onRefresh = useCallback(async () => {
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["mobile-agent-routes"] }),
+      qc.invalidateQueries({ queryKey: ["active-route-session"] }),
+      qc.invalidateQueries({ queryKey: ["mobile-route-pending-orders"] }),
+      qc.invalidateQueries({ queryKey: ["store-visits", user?.id] }),
+      qc.invalidateQueries({ queryKey: ["session-position"] }),
+      qc.invalidateQueries({ queryKey: ["mobile-agent-all-orders"] }),
+      qc.invalidateQueries({ queryKey: ["mobile-agent-create-all-stores"] }),
+      qc.invalidateQueries({ queryKey: ["orders"] }),
+      qc.invalidateQueries({ queryKey: ["agent-view-proforma"] }),
+    ]);
+  }, [qc, user?.id]);
+
+  const { handlers: pullHandlers, isPulling, isRefreshing, pullDistance, threshold } = usePullToRefresh({
+    onRefresh,
+  });
+
   return (
-    <div className="pb-6">
+    <div {...pullHandlers} className="pb-6">
+      <PullRefreshIndicator isRefreshing={isRefreshing} isPulling={isPulling} pullDistance={pullDistance} threshold={threshold} />
       <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 dark:from-slate-900 dark:via-blue-950 dark:to-indigo-950 px-4 pt-4 pb-8">
         <p className="text-blue-200 text-xs font-medium uppercase tracking-widest">Today</p>
         <h2 className="text-white text-xl font-bold mt-0.5">My Routes</h2>
@@ -858,21 +880,29 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
             </div>
 
             {showMap && (
-              <RouteMap
-                stores={routeList.flatMap(r => r.stores).map(s => ({
-                  id: s.id,
-                  name: s.name,
-                  display_id: s.display_id,
-                  lat: s.lat,
-                  lng: s.lng,
-                  visited: (visitedStoresByRoute?.get(
-                    routeList.find(r => r.stores.some(st => st.id === s.id))?.id || ""
-                  ) || new Set()).has(s.id),
-                  outstanding: Number(s.outstanding || 0),
-                }))}
-                agentLocation={sessionPosition}
-                className="mb-4"
-              />
+              <ErrorBoundary fallback={
+                <div className="mb-4 rounded-2xl border border-dashed border-slate-300 dark:border-slate-600 p-8 text-center bg-slate-50/50 dark:bg-slate-800/30">
+                  <Map className="h-8 w-8 mx-auto mb-2 text-slate-400" />
+                  <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Map unavailable</p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Could not load the map component</p>
+                </div>
+              }>
+                <RouteMap
+                  stores={routeList.flatMap(r => r.stores).map(s => ({
+                    id: s.id,
+                    name: s.name,
+                    display_id: s.display_id,
+                    lat: s.lat,
+                    lng: s.lng,
+                    visited: (visitedStoresByRoute?.get(
+                      routeList.find(r => r.stores.some(st => st.id === s.id))?.id || ""
+                    ) || new Set()).has(s.id),
+                    outstanding: Number(s.outstanding || 0),
+                  }))}
+                  agentLocation={sessionPosition}
+                  className="mb-4"
+                />
+              </ErrorBoundary>
             )}
 
             <div>
@@ -938,7 +968,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
                           <div className="flex items-stretch">
                             <div className={`w-1 self-stretch ${accentColor} shrink-0`} />
                             <div className="flex-1 flex items-start gap-3 p-4">
-                              <div className={`h-10 w-10 rounded-lg ${accentColor} bg-opacity-10 dark:bg-opacity-20 flex items-center justify-center shrink-0`}>
+                              <div className={`h-10 w-10 rounded-lg ${accentColor} flex items-center justify-center shrink-0 shadow-sm`}>
                                 <MapPin className="h-5 w-5 text-white" />
                               </div>
 
@@ -1057,33 +1087,33 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
                                               <Button
                                                 variant="outline"
                                                 size="sm"
-                                                className="h-10 flex-1 rounded-xl text-xs font-semibold border border-slate-100 dark:border-slate-700"
+                                                className="h-10 flex-1 rounded-xl text-xs font-semibold bg-emerald-50 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300"
                                                 onClick={() => handleMarkVisitedClick(store)}
                                                 disabled={visitLoading === store.id}
                                               >
                                                 {visitLoading === store.id ? (
-                                                  <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin text-emerald-500" />
+                                                  <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
                                                 ) : (
-                                                  <CheckCircle2 className="h-3.5 w-3.5 mr-1 text-emerald-500" />
+                                                  <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
                                                 )}
                                                 Visit
                                               </Button>
                                               <Button
                                                 variant="outline"
                                                 size="sm"
-                                                className="h-10 flex-1 rounded-xl text-xs font-semibold border border-slate-100 dark:border-slate-700"
+                                                className="h-10 flex-1 rounded-xl text-xs font-semibold bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300"
                                                 onClick={() => onGoRecord?.(toStoreOption(store), "sale")}
                                               >
-                                                <ShoppingCart className="h-3.5 w-3.5 mr-1 text-blue-500" />
+                                                <ShoppingCart className="h-3.5 w-3.5 mr-1" />
                                                 Sale
                                               </Button>
                                               <Button
                                                 variant="outline"
                                                 size="sm"
-                                                className="h-10 flex-1 rounded-xl text-xs font-semibold border border-slate-100 dark:border-slate-700"
+                                                className="h-10 flex-1 rounded-xl text-xs font-semibold bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-300"
                                                 onClick={() => onGoRecord?.(toStoreOption(store), "payment")}
                                               >
-                                                <Wallet className="h-3.5 w-3.5 mr-1 text-emerald-500" />
+                                                <Wallet className="h-3.5 w-3.5 mr-1" />
                                                 Txn
                                               </Button>
                                             </div>
@@ -1091,30 +1121,30 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
                                               <Button
                                                 variant="outline"
                                                 size="sm"
-                                                className="h-10 flex-1 rounded-xl text-xs font-semibold border border-slate-100 dark:border-slate-700"
+                                                className="h-10 flex-1 rounded-xl text-xs font-semibold bg-indigo-50 dark:bg-indigo-900/30 border-indigo-200 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300"
                                                 onClick={() => openDirections({ ...store, name: store.name })}
                                                 disabled={!canNavigate}
                                               >
-                                                <Navigation2 className="h-3.5 w-3.5 mr-1 text-purple-500" />
+                                                <Navigation2 className="h-3.5 w-3.5 mr-1" />
                                                 Navigate
                                               </Button>
                                               <Button
                                                 variant="outline"
                                                 size="sm"
-                                                className="h-10 flex-1 rounded-xl text-xs font-semibold border border-slate-100 dark:border-slate-700"
+                                                className="h-10 flex-1 rounded-xl text-xs font-semibold bg-slate-50 dark:bg-slate-700/40 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200"
                                                 onClick={() => handleCall(store.phone || "")}
                                                 disabled={!store.phone}
                                               >
-                                                <Phone className="h-3.5 w-3.5 mr-1 text-slate-500 dark:text-slate-400" />
+                                                <Phone className="h-3.5 w-3.5 mr-1" />
                                                 Call
                                               </Button>
                                               <Button
                                                 variant="outline"
                                                 size="sm"
-                                                className="h-10 flex-1 rounded-xl text-xs font-semibold border border-slate-100 dark:border-slate-700"
+                                                className="h-10 flex-1 rounded-xl text-xs font-semibold bg-slate-50 dark:bg-slate-700/40 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200"
                                                 onClick={() => onOpenStore?.(toStoreOption(store))}
                                               >
-                                                <Eye className="h-3.5 w-3.5 mr-1 text-slate-500 dark:text-slate-400" />
+                                                <Eye className="h-3.5 w-3.5 mr-1" />
                                                 Open
                                               </Button>
                                             </div>

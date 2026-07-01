@@ -47,15 +47,29 @@
 .mobile-page-wrapper .rounded-xl {
   border-radius: 1rem;
 }
+.mobile-page-wrapper .rounded-2xl {
+  border-radius: 1.5rem;
+}
+
+.mobile-page-wrapper [class*="border-border"] {
+  border-color: rgba(0,0,0,0.05); /* very soft borders */
+}
+.dark .mobile-page-wrapper [class*="border-border"] {
+  border-color: rgba(255,255,255,0.05);
+}
+
+.mobile-page-wrapper [class*="bg-card"] {
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.04), 0 1px 2px rgb(0 0 0 / 0.02);
+}
 
 .mobile-page-wrapper [class*="shadow-sm"],
 .mobile-page-wrapper [class*="shadow-md"] {
-  box-shadow: 0 1px 3px rgb(0 0 0 / 0.06), 0 1px 2px rgb(0 0 0 / 0.04);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.06), 0 1px 2px rgb(0 0 0 / 0.04);
 }
 
 /* Card inner padding — slightly tighter for mobile */
 .mobile-page-wrapper .p-6 {
-  padding: 1rem;
+  padding: 1.25rem;
 }
 
 .mobile-page-wrapper .p-8 {
@@ -132,6 +146,18 @@
   height: 2.75rem;
 }
 
+.mobile-page-wrapper button[class*="h-11"] {
+  height: 3rem;
+}
+
+.mobile-page-wrapper button[class*="h-12"] {
+  height: 3rem;
+}
+
+.mobile-page-wrapper button[class*="h-13"] {
+  height: 3rem;
+}
+
 /* Button pill radius */
 .mobile-page-wrapper button[class*="rounded-md"] {
   border-radius: 0.75rem;
@@ -156,9 +182,14 @@
 }
 
 /* Labels */
+.mobile-page-wrapper label,
+.mobile-page-wrapper .Label,
 .mobile-page-wrapper label[class*="text-sm"] {
-  font-size: 0.8125rem;
-  font-weight: 600;
+  font-size: 0.75rem !important; /* text-xs */
+  font-weight: 700 !important; /* font-bold */
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important; /* tracking-widest */
+  color: hsl(var(--muted-foreground));
 }
 
 /* ───────────────── Tabs ───────────────── */
@@ -188,11 +219,13 @@
 
 /* ───────────────── Dialogs & Sheets ───────────────── */
 /* Make dialogs full-width on mobile (exclude bottom sheets which handle their own positioning) */
-.mobile-page-wrapper ~ [role="dialog"],
-[data-state="open"][role="dialog"]:not([class*="SheetContent"]) {
-  width: calc(100% - 2rem) !important;
-  max-width: 100% !important;
-  border-radius: 1rem !important;
+@media (max-width: 640px) {
+  .mobile-page-wrapper ~ [role="dialog"]:not([class*="SheetContent"]),
+  [data-state="open"][role="dialog"]:not([class*="SheetContent"]) {
+    width: calc(100% - 2rem) !important;
+    max-width: 100% !important;
+    border-radius: 1rem !important;
+  }
 }
 
 /* Sheet content improvements */
@@ -304,3 +337,36 @@
 .mobile-page-wrapper .flex.flex-col.items-center.justify-center {
   padding: var(--space-8) var(--space-4);
 }
+
+/* ───────────────── Dark Mode Button Visibility ───────────────── */
+/* Ensure outline buttons have visible borders in dark mode */
+.dark .mobile-page-wrapper button[class*="variant-outline"],
+.dark .mobile-page-wrapper button[class*="border-slate"] {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* Disabled buttons — consistent opacity */
+.mobile-page-wrapper button:disabled,
+.mobile-page-wrapper [role="button"]:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ───────────────── Consistent Card Elevation ───────────────── */
+/* Standardize card shadows for dark mode visibility */
+.dark .mobile-page-wrapper [class*="shadow-sm"] {
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.2), 0 1px 2px rgb(0 0 0 / 0.15);
+}
+
+.dark .mobile-page-wrapper [class*="shadow-lg"],
+.dark .mobile-page-wrapper [class*="shadow-xl"] {
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.3), 0 2px 4px rgb(0 0 0 / 0.2);
+}
+
+/* ───────────────── Color-coded Button Tints (Dark Mode) ───────────────── */
+/* Ensure tinted buttons maintain contrast in dark mode */
+.dark .mobile-page-wrapper button[class*="bg-blue-50"] { background-color: rgba(59, 130, 246, 0.12); }
+.dark .mobile-page-wrapper button[class*="bg-emerald-50"] { background-color: rgba(16, 185, 129, 0.12); }
+.dark .mobile-page-wrapper button[class*="bg-amber-50"] { background-color: rgba(245, 158, 11, 0.12); }
+.dark .mobile-page-wrapper button[class*="bg-indigo-50"] { background-color: rgba(99, 102, 241, 0.12); }
+.dark .mobile-page-wrapper button[class*="bg-orange-50"] { background-color: rgba(249, 115, 22, 0.12); }

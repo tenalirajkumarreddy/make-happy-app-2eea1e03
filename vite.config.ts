@@ -39,8 +39,9 @@ function performanceOptimizer(): Plugin {
 
         // 3. Non-blocking CSS: media="print" onload="this.media='all'"
         result = result.replace(
-          /<link\b([^>]*?)rel="stylesheet"([^>]*?)>/g,
-          '<link$1rel="stylesheet"$2 media="print" onload="this.media=\u0027all\u0027" />'
+          /<link\b([^>]*?)rel="stylesheet"([^>]*?)\/?>/g,
+          (_match, before, after) =>
+            `<link${before}rel="stylesheet"${after} media="print" onload="this.media=\u0027all\u0027">`
         );
 
         return result;

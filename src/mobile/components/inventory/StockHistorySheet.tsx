@@ -65,7 +65,7 @@ export function StockHistorySheet({ open, onOpenChange }: StockHistorySheetProps
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="rounded-t-3xl pb-10 px-0 max-h-[90vh] overflow-y-auto">
+      <SheetContent side="bottom" className="rounded-t-3xl pb-10 !p-0 max-h-[90vh] overflow-y-auto">
         <div className="px-6">
           <SheetHeader className="mb-5 text-left">
             <SheetTitle className="text-lg font-bold">Stock History</SheetTitle>

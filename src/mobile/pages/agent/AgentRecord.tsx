@@ -422,46 +422,46 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
         <p className="text-xs font-bold text-muted-foreground dark:text-muted-foreground uppercase tracking-widest mb-2">Select Store</p>
         <button
           className={cn(
-            "w-full border-2 rounded-xl p-4 flex items-center gap-3 text-left transition-all",
+            "w-full border-2 rounded-2xl p-4 flex items-center gap-3 text-left transition-all shadow-sm",
             store
-              ? "border-blue-200 dark:border-blue-700 bg-blue-50/50 dark:bg-blue-900/20"
-              : "border-dashed border-border border hover:border-blue-200 dark:hover:border-blue-700 hover:bg-muted/50"
+              ? "border-blue-200 dark:border-blue-700 bg-blue-50/70 dark:bg-blue-900/20"
+              : "border-dashed border-slate-200 dark:border-slate-700 hover:border-blue-200 dark:hover:border-blue-700 hover:bg-slate-50 dark:hover:bg-slate-800"
           )}
           onClick={() => setStorePickerOpen(true)}
           aria-label={store ? `Change store, currently ${store.name}` : "Select a store"}
         >
           <div className={cn(
-            "h-10 w-10 rounded-xl flex items-center justify-center shrink-0",
-            store ? "bg-blue-100 dark:bg-blue-900/40" : "bg-muted"
+            "h-11 w-11 rounded-xl flex items-center justify-center shrink-0 shadow-sm",
+            store ? "bg-gradient-to-br from-blue-500 to-blue-600" : "bg-slate-100 dark:bg-slate-800"
           )}>
-            <StoreIcon className={cn("h-5 w-5", store ? "text-blue-500" : "text-muted-foreground")} />
+            <StoreIcon className={cn("h-5 w-5", store ? "text-white" : "text-slate-400")} />
           </div>
           {store ? (
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-foreground dark:text-white truncate">{store.name}</p>
-              <p className="text-xs text-muted-foreground">{store.display_id}</p>
+              <p className="text-sm font-bold text-slate-800 dark:text-white truncate">{store.name}</p>
+              <p className="text-xs text-slate-500">{store.display_id}</p>
             </div>
           ) : (
-            <span className="text-muted-foreground text-sm flex-1 font-medium">Tap to select store...</span>
+            <span className="text-slate-500 text-sm flex-1 font-medium">Tap to select store...</span>
           )}
-          <ChevronRight className={cn("h-4 w-4 shrink-0", store ? "text-blue-400" : "text-muted-foreground/40")} />
+          <ChevronRight className={cn("h-4 w-4 shrink-0", store ? "text-blue-500" : "text-slate-300")} />
         </button>
       </div>
 
       {/* Store balance info */}
       {store && (
         <div className="px-4">
-          <div className="rounded-xl bg-card border border-border border p-3.5 flex justify-between items-center">
+          <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-4 flex justify-between items-center">
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold">Current Balance</p>
-              <p className={cn("text-xl font-bold mt-0.5", oldOutstanding > 0 ? "text-red-500" : oldOutstanding < 0 ? "text-emerald-500" : "text-muted-foreground")}>
+              <p className="text-[11px] text-slate-500 font-bold uppercase tracking-widest leading-tight">Current Balance</p>
+              <p className={cn("text-xl font-bold mt-1 tabular-nums", oldOutstanding > 0 ? "text-red-500" : oldOutstanding < 0 ? "text-emerald-500" : "text-slate-400")}>
                 {oldOutstanding > 0 ? `-₹${oldOutstanding.toLocaleString("en-IN")}` : oldOutstanding < 0 ? `+₹${Math.abs(oldOutstanding).toLocaleString("en-IN")}` : "₹0"}
               </p>
             </div>
             {store.customers?.name && (
               <div className="text-right">
-                <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold">Customer</p>
-                <p className="text-sm font-bold text-foreground mt-0.5">{store.customers.name}</p>
+                <p className="text-[11px] text-slate-500 font-bold uppercase tracking-widest leading-tight">Customer</p>
+                <p className="text-sm font-bold text-slate-800 dark:text-slate-200 mt-1">{store.customers.name}</p>
               </div>
             )}
           </div>
@@ -473,14 +473,14 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
         <div className="px-4">
           <button
             onClick={() => setShowOrders(true)}
-            className="w-full rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 p-3.5 flex items-center gap-3 text-left transition-all active:scale-[0.98]"
+            className="w-full rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 shadow-sm p-4 flex items-center gap-3 text-left transition-all active:scale-[0.98]"
           >
-            <div className="h-9 w-9 rounded-xl bg-amber-100 dark:bg-amber-800/40 flex items-center justify-center shrink-0">
-              <ShoppingCart className="h-4.5 w-4.5 text-amber-600 dark:text-amber-400" />
+            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 shadow-sm flex items-center justify-center shrink-0">
+              <ShoppingCart className="h-5 w-5 text-white" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold text-amber-800 dark:text-amber-200">{pendingOrders.length} Pending Order{pendingOrders.length > 1 ? "s" : ""}</p>
-              <p className="text-xs text-amber-600 dark:text-amber-400">Tap to view and fulfill</p>
+              <p className="text-[11px] font-semibold text-amber-600/80 dark:text-amber-400/80 mt-0.5 uppercase tracking-wide">Tap to view & fulfill</p>
             </div>
             <ChevronRight className="h-4 w-4 text-amber-400 shrink-0" />
           </button>
@@ -533,14 +533,14 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
 
       {/* Entry options */}
       <div className="px-4">
-        <div className="rounded-xl bg-card border border-border border p-3 space-y-2.5">
+        <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-4 space-y-3">
           {canRecordBehalf && (
             <div>
-              <Label className="text-xs text-muted-foreground dark:text-muted-foreground font-semibold">Record For</Label>
+              <Label className="text-[11px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest leading-tight">Record For</Label>
               <select
                 value={recordedFor || "self"}
                 onChange={(e) => setRecordedFor(e.target.value === "self" ? "" : e.target.value)}
-                className="mt-1 w-full h-10 rounded-xl border border-border border bg-card px-3 text-sm"
+                className="mt-1.5 w-full h-11 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 px-3 text-sm font-medium"
               >
                 <option value="self">Self</option>
                 {staffUsers.map((member) => (
@@ -580,10 +580,10 @@ function RecordSale({ preselectStore, onSuccess }: { preselectStore?: StoreOptio
                   <div
                     key={product.id}
                     className={cn(
-                      "rounded-xl border-2 transition-all overflow-hidden",
+                      "rounded-2xl border transition-all overflow-hidden",
                       inCart
-                        ? "border-blue-200 dark:border-blue-700 bg-blue-50/30 dark:bg-blue-900/10"
-                        : "border-border border bg-card"
+                        ? "border-blue-200 dark:border-blue-700 bg-blue-50/50 dark:bg-blue-900/20 shadow-sm"
+                        : "border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm"
                     )}
                   >
                     <div className="flex items-center p-3.5 gap-3">
@@ -1012,45 +1012,45 @@ function RecordPayment({ preselectStore }: { preselectStore?: StoreOption | null
         <p className="text-xs font-bold text-muted-foreground dark:text-muted-foreground uppercase tracking-widest mb-2">Select Store</p>
         <button
           className={cn(
-            "w-full border-2 rounded-xl p-4 flex items-center gap-3 text-left transition-all",
+            "w-full border-2 rounded-2xl p-4 flex items-center gap-3 text-left transition-all shadow-sm",
             store
-              ? "border-emerald-200 dark:border-emerald-700 bg-emerald-50/50 dark:bg-emerald-900/10"
-              : "border-dashed border-border border hover:border-emerald-200 dark:hover:border-emerald-700 hover:bg-muted/50"
+              ? "border-emerald-200 dark:border-emerald-700 bg-emerald-50/70 dark:bg-emerald-900/20"
+              : "border-dashed border-slate-200 dark:border-slate-700 hover:border-emerald-200 dark:hover:border-emerald-700 hover:bg-slate-50 dark:hover:bg-slate-800"
           )}
           onClick={() => setStorePickerOpen(true)}
         >
           <div className={cn(
-            "h-10 w-10 rounded-xl flex items-center justify-center shrink-0",
-            store ? "bg-emerald-100 dark:bg-emerald-900/40" : "bg-muted"
+            "h-11 w-11 rounded-xl flex items-center justify-center shrink-0 shadow-sm",
+            store ? "bg-gradient-to-br from-emerald-500 to-emerald-600" : "bg-slate-100 dark:bg-slate-800"
           )}>
-            <StoreIcon className={cn("h-5 w-5", store ? "text-emerald-500" : "text-muted-foreground")} />
+            <StoreIcon className={cn("h-5 w-5", store ? "text-white" : "text-slate-400")} />
           </div>
           {store ? (
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-foreground dark:text-white truncate">{store.name}</p>
-              <p className="text-xs text-muted-foreground">{store.display_id}</p>
+              <p className="text-sm font-bold text-slate-800 dark:text-white truncate">{store.name}</p>
+              <p className="text-xs text-slate-500">{store.display_id}</p>
             </div>
           ) : (
-            <span className="text-muted-foreground text-sm flex-1 font-medium">Tap to select store...</span>
+            <span className="text-slate-500 text-sm flex-1 font-medium">Tap to select store...</span>
           )}
-          <ChevronRight className={cn("h-4 w-4 shrink-0", store ? "text-emerald-400" : "text-muted-foreground/40")} />
+          <ChevronRight className={cn("h-4 w-4 shrink-0", store ? "text-emerald-500" : "text-slate-300")} />
         </button>
       </div>
 
       {/* Balance info */}
       {store && (
         <div className="px-4">
-          <div className="rounded-xl bg-card border border-border border p-3.5 flex justify-between items-center">
+          <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-4 flex justify-between items-center">
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold">Outstanding Balance</p>
-              <p className={cn("text-xl font-bold mt-0.5", oldOutstanding > 0 ? "text-red-500" : "text-emerald-500")}>
+              <p className="text-[11px] text-slate-500 font-bold uppercase tracking-widest leading-tight">Outstanding Balance</p>
+              <p className={cn("text-xl font-bold mt-1 tabular-nums", oldOutstanding > 0 ? "text-red-500" : "text-emerald-500")}>
                 ₹{oldOutstanding.toLocaleString("en-IN")}
               </p>
             </div>
             {store.customers?.name && (
               <div className="text-right">
-                <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold">Customer</p>
-                <p className="text-sm font-bold text-foreground mt-0.5">{store.customers.name}</p>
+                <p className="text-[11px] text-slate-500 font-bold uppercase tracking-widest leading-tight">Customer</p>
+                <p className="text-sm font-bold text-slate-800 dark:text-slate-200 mt-1">{store.customers.name}</p>
               </div>
             )}
           </div>
@@ -1108,14 +1108,14 @@ function RecordPayment({ preselectStore }: { preselectStore?: StoreOption | null
           </div>
         </div>
 
-        <div className="mt-2 rounded-xl bg-card border border-border border p-3 space-y-2.5">
+        <div className="mt-2 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-4 space-y-3">
           {canRecordBehalf && (
             <div>
-              <Label className="text-xs text-muted-foreground dark:text-muted-foreground font-semibold">Record For</Label>
+              <Label className="text-[11px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest leading-tight">Record For</Label>
               <select
                 value={recordedFor || "self"}
                 onChange={(e) => setRecordedFor(e.target.value === "self" ? "" : e.target.value)}
-                className="mt-1 w-full h-10 rounded-xl border border-border border bg-card px-3 text-sm"
+                className="mt-1.5 w-full h-11 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 px-3 text-sm font-medium"
               >
                 <option value="self">Self</option>
                 {staffUsers.map((member) => (

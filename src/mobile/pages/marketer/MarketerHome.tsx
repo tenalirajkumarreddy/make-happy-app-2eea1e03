@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import type { StoreOption } from "@/mobile/components/StorePickerSheet";
 import { useMobileRealtimeSync } from "@/hooks/useRealtimeSync";
 
+import { format } from "date-fns";
+
 interface Props {
   onOpenOrders: () => void;
   onOpenRecord: () => void;
@@ -114,7 +116,20 @@ export function MarketerHome({ onOpenOrders, onOpenRecord, onOpenStores, onOpenA
       return data;
     },
     enabled: !!user,
-});
+  });
+
+  const { data: recentSessions = [] } = useQuery({
+    queryKey: ["mobile-marketer-recent-sessions", user?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("route_sessions")
+        .select("id, status, started_at, ended_at, routes(name), profiles(full_name)")
+        .order("started_at", { ascending: false })
+        .limit(3);
+      return data || [];
+    },
+    enabled: !!user,
+  });
 
   // Visits for route progress
   const { data: visits } = useQuery({
@@ -260,6 +275,45 @@ export function MarketerHome({ onOpenOrders, onOpenRecord, onOpenStores, onOpenA
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Recent Route Sessions */}
+        {recentSessions.length > 0 && (
+          <div className="px-1 mt-5">
+            <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2.5">Recent Route Sessions</p>
+            <div className="space-y-2">
+              {recentSessions.map((session: any) => (
+                <div key={session.id} className="rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-3.5 flex items-center gap-3">
+                  <div className={cn("h-9 w-9 rounded-xl flex items-center justify-center shrink-0", session.status === 'active' ? "bg-emerald-50 dark:bg-emerald-900/30" : "bg-slate-50 dark:bg-slate-800")}>
+                    {session.status === 'active' ? (
+                      <div className="relative flex h-3 w-3">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                      </div>
+                    ) : (
+                      <MapPin className="h-4 w-4 text-slate-400" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-slate-800 dark:text-white truncate">
+                      {session.routes?.name || "Unknown Route"}
+                    </p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                      {session.profiles?.full_name || "Unknown Agent"}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-xs font-medium text-slate-800 dark:text-slate-200">
+                      {format(new Date(session.started_at), "hh:mm a")}
+                    </p>
+                    <p className="text-[10px] text-slate-400 uppercase font-semibold">
+                      {session.status}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

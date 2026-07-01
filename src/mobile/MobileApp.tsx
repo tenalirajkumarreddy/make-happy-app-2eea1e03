@@ -90,6 +90,7 @@ const AgentCustomers = lazy(() => import("./pages/agent/AgentCustomers").then(m 
 const AgentStoreProfile = lazy(() => import("./pages/agent/AgentStoreProfile").then(m => ({ default: m.AgentStoreProfile })));
 const AgentProducts = lazy(() => import("./pages/agent/AgentProducts").then(m => ({ default: m.AgentProducts })));
 const StockTransferSheet = lazy(() => import("./components/StockTransferSheet").then(m => ({ default: m.StockTransferSheet })));
+const AgentReturnSheet = lazy(() => import("./components/AgentReturnSheet").then(m => ({ default: m.AgentReturnSheet })));
 const MarketerHome = lazy(() => import("./pages/marketer/MarketerHome").then(m => ({ default: m.MarketerHome })));
 const MarketerOrders = lazy(() => import("./pages/marketer/MarketerOrders").then(m => ({ default: m.MarketerOrders })));
 const MarketerStores = lazy(() => import("./pages/marketer/MarketerStores").then(m => ({ default: m.MarketerStores })));
@@ -623,9 +624,11 @@ function AgentApp() {
   const [profileStore, setProfileStore] = useState<StoreOption | null>(null);
   const [profileReturnTab, setProfileReturnTab] = useState<MobileTab>("customers");
   const [showStockTransfer, setShowStockTransfer] = useState(false);
+  const [showReturnSheet, setShowReturnSheet] = useState(false);
   const { data: pendingHandoversCount = 0 } = useHandoverBadge(user?.id);
 
   useHardwareBackButton(() => {
+    if (showReturnSheet) { setShowReturnSheet(false); return; }
     if (showStockTransfer) { setShowStockTransfer(false); return; }
     if (showAddEntity) { setShowAddEntity(false); return; }
     if (recordAction) { setRecordAction(null); setPreselectStore(null); }
@@ -692,9 +695,11 @@ function AgentApp() {
               onOpenAddEntity={() => setShowAddEntity(true)}
               onGoMap={() => setTab("routes")}
               onOpenStockTransfer={() => setShowStockTransfer(true)}
+              onOpenReturnSheet={() => setShowReturnSheet(true)}
             />
           )}
           <StockTransferSheet open={showStockTransfer} onOpenChange={setShowStockTransfer} />
+          <AgentReturnSheet open={showReturnSheet} onOpenChange={setShowReturnSheet} />
           {tab === "products" && <AgentProducts />}
           {tab === "routes" && <AgentRoutes onOpenStore={(store) => handleOpenStoreProfile(store, "routes")} onGoRecord={handleGoRecord} />}
           {tab === "scan" && !recordAction && (

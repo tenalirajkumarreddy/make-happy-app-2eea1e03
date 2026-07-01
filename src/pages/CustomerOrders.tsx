@@ -83,17 +83,6 @@ const CustomerOrders = () => {
     setSaving(false);
     if (error) toast.error(error.message);
     else {
-      getAdminUserIds().then(admins => {
-        if (admins.length > 0) {
-          sendNotificationToMany(admins, {
-            title: "New Customer Order",
-            message: `Order ${displayId} placed by customer`,
-            type: "order" as any,
-          });
-        }
-      }).catch((error) => {
-        console.error("Failed to notify admins of new order:", error);
-      });
       toast.success("Order placed!");
       setShowOrder(false);
       setOrderStoreId("");

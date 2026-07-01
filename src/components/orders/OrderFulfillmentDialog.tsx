@@ -334,14 +334,7 @@ export function OrderFulfillmentDialog({
         p_sale_id: saleResult?.[0]?.sale_id || saleResult?.sale_id,
       });
 
-      // notifications
-      if (customerId) {
-        await sendNotificationToMany([customerId], { title: "Order Delivered", message: `Order ${order.display_id} has been fulfilled.`, type: "order", entityType: "order", entityId: order.id }).catch(() => {});
-      }
-      getAdminUserIds().then(ids => {
-        const others = ids.filter(id => id !== user.id);
-        if (others.length) sendNotificationToMany(others, { title: "Order Fulfilled", message: `Order ${order.display_id} fulfilled.`, type: "order", entityType: "order", entityId: order.id }).catch(() => {});
-      });
+      // Notifications handled by DB triggers
 
       toast.success("Order Fulfilled", { description: `Sale ${did} created.` });
       afterSaleSaved(qc, { storeId: order.store_id });

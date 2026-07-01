@@ -66,8 +66,21 @@ function validateEnv(): Env {
   };
 }
 
-// Validate on module load
-export const env = validateEnv();
+// Validate on module load — wrap in try/catch to prevent white screen on missing env vars
+export let env: Env;
+try {
+  env = validateEnv();
+} catch (e) {
+  console.error("[ENV] Validation failed – app will likely fail at runtime:", e);
+  // Non-blocking fallback: let the app try to render (will show errors downstream)
+  env = {
+    VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL || '',
+    VITE_SUPABASE_PUBLISHABLE_KEY: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || '',
+    VITE_SUPABASE_PROJECT_ID: import.meta.env.VITE_SUPABASE_PROJECT_ID || '',
+    VITE_SENTRY_DSN: import.meta.env.VITE_SENTRY_DSN || undefined,
+    VITE_SENTRY_ENVIRONMENT: import.meta.env.VITE_SENTRY_ENVIRONMENT || undefined,
+  };
+}
 
 // Prevent accidental import.meta.env usage elsewhere
 export function getEnv<K extends keyof Env>(key: K): Env[K] {

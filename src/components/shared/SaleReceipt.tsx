@@ -244,19 +244,60 @@ ${totalDue > previousBalance ? `<div class="row bold" style="color: var(--receip
       return;
     }
     const toastId = toast.loading("Capturing receipt…");
+
+    // Clone the receipt element off-screen so html2canvas can capture the
+    // FULL content height without being clipped by Dialog overflow containers.
+    let cloneContainer: HTMLDivElement | null = null;
     try {
       const html2canvas = (await import("html2canvas")).default;
-      const canvas = await html2canvas(printRef.current, {
+
+      const source = printRef.current;
+      const fullWidth = source.scrollWidth;
+      const fullHeight = source.scrollHeight;
+
+      // Create an off-screen container matching the full content dimensions
+      cloneContainer = document.createElement("div");
+      cloneContainer.style.cssText = `
+        position: fixed;
+        top: -9999px;
+        left: -9999px;
+        width: ${fullWidth}px;
+        z-index: -1;
+        pointer-events: none;
+        background: #ffffff;
+      `;
+      const clone = source.cloneNode(true) as HTMLElement;
+      clone.style.cssText = `
+        width: ${fullWidth}px;
+        height: auto;
+        overflow: visible;
+        max-height: none;
+        background: #ffffff;
+        font-family: ui-monospace, 'Courier New', monospace;
+      `;
+      cloneContainer.appendChild(clone);
+      document.body.appendChild(cloneContainer);
+
+      // Brief yield so browser lays out the clone fully
+      await new Promise((r) => requestAnimationFrame(r));
+
+      const canvas = await html2canvas(clone, {
         scale: 2,
         backgroundColor: "#ffffff",
         useCORS: true,
         logging: false,
-        width: printRef.current.scrollWidth,
-        height: printRef.current.scrollHeight,
+        width: fullWidth,
+        height: clone.scrollHeight,
+        windowWidth: fullWidth,
+        windowHeight: clone.scrollHeight,
       });
+
+      // Clean up clone immediately
+      document.body.removeChild(cloneContainer);
+      cloneContainer = null;
+
       const dataUrl = canvas.toDataURL("image/png");
       const base64Data = dataUrl.replace(/^data:image\/\w+;base64,/, "");
-
       const fileName = `receipt-${sale?.display_id || "sale"}.png`;
 
       if (isNativeApp()) {
@@ -307,6 +348,10 @@ ${totalDue > previousBalance ? `<div class="row bold" style="color: var(--receip
       }
       toast.dismiss(toastId);
     } catch (err) {
+      // Ensure clone is cleaned up even on error
+      if (cloneContainer && document.body.contains(cloneContainer)) {
+        document.body.removeChild(cloneContainer);
+      }
       console.error("Share image failed:", err);
       toast.dismiss(toastId);
       toast.error("Failed to share receipt image");

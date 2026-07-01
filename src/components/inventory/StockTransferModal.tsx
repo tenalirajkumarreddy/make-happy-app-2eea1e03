@@ -460,38 +460,16 @@ const {
         const transferTypeLabel = transferType === "staff_to_warehouse" ? "Staff → Warehouse" : 
           transferType === "warehouse_to_staff" ? "Warehouse → Staff" : 
           transferType === "warehouse_to_warehouse" ? "Warehouse → Warehouse" : "Staff → Staff";
-        const notificationMessage = isSender ? 
-          `New ${transferTypeLabel} transfer awaiting your acceptance` : 
-          `New ${transferTypeLabel} request awaiting approval`;
+        
+        const finalStatus = data?.firstTransferStatus || "pending";
+        const statusMessage = 
+          finalStatus === "completed" ? "Transfer completed successfully" :
+          finalStatus === "awaiting_acceptance" ? "Transfer sent - awaiting recipient acceptance" :
+          "Transfer request submitted - awaiting approval";
 
-        // Notify all approvers (super_admin, manager, operator)
-        getApproverUserIds().then((approverIds) => {
-          const notifyIds = [...approverIds];
-          
-          // If sending to a specific user, notify them too
-          if (toUserId && isSender) {
-            notifyIds.push(toUserId);
-          }
-          
-          if (notifyIds.length > 0) {
-            sendNotificationToMany(notifyIds, {
-              title: "New Transfer Request",
-              message: notificationMessage,
-              type: "stock_transfer",
-              entityType: "stock_transfers",
-              entityId: firstTransferId,
-            });
-          }
-        }).catch(console.error);
+        toast.success(statusMessage);
       }
-
-      const finalStatus = data?.firstTransferStatus || "pending";
-      const statusMessage = 
-        finalStatus === "completed" ? "Transfer completed successfully" :
-        finalStatus === "awaiting_acceptance" ? "Transfer sent - awaiting recipient acceptance" :
-        "Transfer request submitted - awaiting approval";
-
-      toast.success(statusMessage);
+      
       onClose();
     },
     onError: (error: Error) => {

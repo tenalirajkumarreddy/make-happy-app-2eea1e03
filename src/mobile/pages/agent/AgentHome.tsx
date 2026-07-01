@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   MapPin, Phone, Navigation2, TrendingUp,
   Store, ShoppingCart, Loader2, Banknote, Wallet, ArrowRight, CheckCircle2, Eye, Package,
-  ArrowRightLeft, Boxes, RefreshCw, Square,
+  ArrowRightLeft, Boxes, RefreshCw, Square, RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +18,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { MiniStat } from "@/mobile/pages/agent/MiniStat";
 import { getCurrentPosition } from "@/lib/capacitorUtils";
 import { useMobileRealtimeSync } from "@/hooks/useRealtimeSync";
+import { usePullToRefresh } from "@/mobile/hooks/usePullToRefresh";
+import { PullRefreshIndicator } from "@/mobile/components/PullRefreshIndicator";
 
 interface Props {
   onOpenStore: (store: StoreOption) => void;
@@ -25,6 +27,7 @@ interface Props {
   onGoProducts?: () => void;
   onOpenAddEntity?: () => void;
   onOpenStockTransfer?: () => void;
+  onOpenReturnSheet?: () => void;
   onGoMap?: () => void;
 }
 
@@ -76,7 +79,7 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEntity, onOpenStockTransfer, onGoMap }: Props) {
+export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEntity, onOpenStockTransfer, onOpenReturnSheet, onGoMap }: Props) {
   const { user, profile } = useAuth();
   const today = new Date().toISOString().split("T")[0];
   const [currentPosition, setCurrentPosition] = useState<{ lat: number; lng: number } | null>(null);
@@ -353,8 +356,26 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
     }
   };
 
+  const onRefresh = useCallback(async () => {
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["mobile-agent-sales-today"] }),
+      qc.invalidateQueries({ queryKey: ["mobile-agent-tx-today"] }),
+      qc.invalidateQueries({ queryKey: ["mobile-agent-visits-today"] }),
+      qc.invalidateQueries({ queryKey: ["mobile-active-session"] }),
+      qc.invalidateQueries({ queryKey: ["mobile-session-visits"] }),
+      qc.invalidateQueries({ queryKey: ["mobile-agent-pending-orders"] }),
+      qc.invalidateQueries({ queryKey: ["mobile-route-pending-orders"] }),
+      qc.invalidateQueries({ queryKey: ["mobile-agent-stock-holdings"] }),
+    ]);
+  }, [qc]);
+
+  const { handlers: pullHandlers, isPulling, isRefreshing, pullDistance, threshold } = usePullToRefresh({
+    onRefresh,
+  });
+
   return (
-    <div className="pb-6">
+    <div {...pullHandlers} className="pb-6">
+      <PullRefreshIndicator isRefreshing={isRefreshing} isPulling={isPulling} pullDistance={pullDistance} threshold={threshold} />
       <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 dark:from-slate-900 dark:via-blue-950 dark:to-indigo-950 px-4 pt-4 pb-8">
         <p className="text-blue-200 text-sm font-medium">{greeting()},</p>
         <h2 className="text-white text-2xl font-bold mt-0.5">{firstName} 👋</h2>
@@ -411,47 +432,56 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
 
         {/* Stock Holdings Card */}
         {stockItems.length > 0 && (
-          <div className="rounded-2xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700 p-4">
+          <div className="rounded-2xl bg-white dark:bg-slate-800 shadow-lg border border-slate-100 dark:border-slate-700 p-4">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2.5">
-                <div className="h-7 w-7 rounded-lg bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center">
-                  <Boxes className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-sm">
+                  <Boxes className="h-3.5 w-3.5 text-white" />
                 </div>
                 <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">My Stock</p>
               </div>
-              <button
-                onClick={onOpenStockTransfer}
-                className="h-8 px-3 rounded-lg bg-amber-50 dark:bg-amber-900/30 flex items-center gap-1.5 text-xs font-semibold text-amber-600 dark:text-amber-400 hover:bg-amber-100"
-              >
-                <ArrowRightLeft className="h-3.5 w-3.5" />
-                Transfer
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={onOpenReturnSheet}
+                  className="h-8 px-3 rounded-lg bg-orange-50 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800 flex items-center gap-1.5 text-xs font-semibold text-orange-600 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-900/50 transition-colors"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Return
+                </button>
+                <button
+                  onClick={onOpenStockTransfer}
+                  className="h-8 px-3 rounded-lg bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 flex items-center gap-1.5 text-xs font-semibold text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-colors"
+                >
+                  <ArrowRightLeft className="h-3.5 w-3.5" />
+                  Transfer
+                </button>
+              </div>
             </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-3 text-center">
-                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Products</p>
-                <p className="text-xl font-bold text-slate-800 dark:text-white mt-1">{stockItems.length}</p>
+            <div className="grid grid-cols-3 gap-2.5">
+              <div className="rounded-xl bg-blue-50/70 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/40 p-3 text-center">
+                <p className="text-[11px] text-blue-600/70 dark:text-blue-400/70 font-semibold uppercase tracking-wide">Products</p>
+                <p className="text-lg font-bold text-blue-700 dark:text-blue-300 mt-1 tabular-nums">{stockItems.length}</p>
               </div>
-              <div className="rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-3 text-center">
-                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Units</p>
-                <p className="text-xl font-bold text-slate-800 dark:text-white mt-1">{stockUnits}</p>
+              <div className="rounded-xl bg-emerald-50/70 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/40 p-3 text-center">
+                <p className="text-[11px] text-emerald-600/70 dark:text-emerald-400/70 font-semibold uppercase tracking-wide">Units</p>
+                <p className="text-lg font-bold text-emerald-700 dark:text-emerald-300 mt-1 tabular-nums">{stockUnits}</p>
               </div>
-              <div className="rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-3 text-center">
-                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Value</p>
-                <p className="text-xl font-bold text-slate-800 dark:text-white mt-1">₹{stockValue >= 1000 ? `${(stockValue/1000).toFixed(1)}k` : stockValue.toLocaleString()}</p>
+              <div className="rounded-xl bg-amber-50/70 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800/40 p-3 text-center">
+                <p className="text-[11px] text-amber-600/70 dark:text-amber-400/70 font-semibold uppercase tracking-wide">Value</p>
+                <p className="text-lg font-bold text-amber-700 dark:text-amber-300 mt-1 tabular-nums">₹{stockValue >= 1000 ? `${(stockValue/1000).toFixed(1)}k` : stockValue.toLocaleString()}</p>
               </div>
             </div>
 
-            <div className="mt-4 pt-4 border-t space-y-1.5 max-h-48 overflow-y-auto">
-              {stockItems.map((item: any) => (
-                <div key={item.id} className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-muted/50 transition-colors">
+            <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700 space-y-0.5 max-h-48 overflow-y-auto">
+              {stockItems.map((item: any, idx: number) => (
+                <div key={item.id} className={cn("flex items-center justify-between px-2.5 py-2 rounded-lg transition-colors", idx % 2 === 0 ? "bg-slate-50/60 dark:bg-slate-700/20" : "")}>
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-medium text-slate-800 dark:text-white truncate">{item.product?.name || "Unknown"}</p>
-                    <p className="text-xs text-slate-500/70 dark:text-slate-400/70 font-mono">{item.product?.sku || ""}{item.product?.unit ? ` · ${item.product.unit}` : ""}</p>
+                    <p className="text-[11px] text-slate-500/70 dark:text-slate-400/70 font-mono">{item.product?.sku || ""}{item.product?.unit ? ` · ${item.product.unit}` : ""}</p>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-xs font-bold text-slate-800 dark:text-white">{item.quantity}</span>
-                    <span className="text-xs text-slate-500 dark:text-slate-400">₹{Number(item.amount_value || 0).toLocaleString("en-IN")}</span>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="text-xs font-bold text-slate-800 dark:text-white bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded tabular-nums">{item.quantity}</span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">₹{Number(item.amount_value || 0).toLocaleString("en-IN")}</span>
                   </div>
                 </div>
               ))}
@@ -551,31 +581,31 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
             </div>
 
             <div className="grid grid-cols-3 gap-2 mt-4">
-              <Button size="sm" className="h-10 rounded-xl gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold" onClick={() => openDirections(nextStore)}>
+              <Button size="sm" className="h-10 rounded-xl gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm" onClick={() => openDirections(nextStore)}>
                 <Navigation2 className="h-4 w-4" />
                 Navigate
               </Button>
-              <Button size="sm" variant="outline" className="h-10 rounded-xl gap-1.5 text-xs font-semibold" onClick={() => window.open(`tel:${nextStore.phone}`, "_self")} disabled={!nextStore.phone}>
-                <Phone className="h-4 w-4" />
+              <Button size="sm" variant="outline" className="h-10 rounded-xl gap-1.5 text-xs font-semibold bg-slate-50 dark:bg-slate-700/40 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200" onClick={() => window.open(`tel:${nextStore.phone}`, "_self")} disabled={!nextStore.phone}>
+                <Phone className="h-4 w-4 text-slate-500 dark:text-slate-400" />
                 Call
               </Button>
-              <Button size="sm" variant="outline" className="h-10 rounded-xl gap-1.5 text-xs font-semibold" onClick={() => setVisitReasonDialog(true)} disabled={isVisiting}>
-                {isVisiting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+              <Button size="sm" variant="outline" className="h-10 rounded-xl gap-1.5 text-xs font-semibold bg-emerald-50 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300" onClick={() => setVisitReasonDialog(true)} disabled={isVisiting}>
+                {isVisiting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4 text-emerald-500" />}
                 Visit
               </Button>
             </div>
 
             <div className="grid grid-cols-3 gap-2 mt-2">
-              <Button size="sm" variant="outline" className="h-10 rounded-xl gap-1.5 text-xs font-semibold" onClick={() => onGoRecord(nextStore, "sale")}>
-                <ShoppingCart className="h-4 w-4" />
+              <Button size="sm" variant="outline" className="h-10 rounded-xl gap-1.5 text-xs font-semibold bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300" onClick={() => onGoRecord(nextStore, "sale")}>
+                <ShoppingCart className="h-4 w-4 text-blue-500" />
                 Sale
               </Button>
-              <Button size="sm" variant="outline" className="h-10 rounded-xl gap-1.5 text-xs font-semibold" onClick={() => onGoRecord(nextStore, "payment")}>
-                <Wallet className="h-4 w-4" />
+              <Button size="sm" variant="outline" className="h-10 rounded-xl gap-1.5 text-xs font-semibold bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-300" onClick={() => onGoRecord(nextStore, "payment")}>
+                <Wallet className="h-4 w-4 text-amber-500" />
                 Txn
               </Button>
-              <Button size="sm" variant="outline" className="h-10 rounded-xl gap-1.5 text-xs font-semibold" onClick={() => onOpenStore(nextStore)}>
-                <Eye className="h-4 w-4" />
+              <Button size="sm" variant="outline" className="h-10 rounded-xl gap-1.5 text-xs font-semibold bg-slate-50 dark:bg-slate-700/40 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200" onClick={() => onOpenStore(nextStore)}>
+                <Eye className="h-4 w-4 text-slate-500 dark:text-slate-400" />
                 Open
               </Button>
             </div>
@@ -585,36 +615,42 @@ export function AgentHome({ onOpenStore, onGoRecord, onGoProducts, onOpenAddEnti
 
       {/* Quick Actions Grid */}
       <div className="px-4 grid grid-cols-2 gap-3 mb-6 mt-4">
-        <Button
-          variant="outline"
-          className="h-20 flex flex-col items-center justify-center gap-2 shadow-sm"
+        <button
+          className="h-[4.5rem] rounded-2xl border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm flex flex-col items-center justify-center gap-1.5 active:scale-[0.97] transition-all"
           onClick={() => onGoProducts?.()}
         >
-          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
+          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm">
             <Package className="h-3.5 w-3.5 text-white" />
           </div>
-          <span className="text-xs font-medium">Product Catalog</span>
-        </Button>
-        <Button
-          variant="outline"
-          className="h-20 flex flex-col items-center justify-center gap-2 shadow-sm"
+          <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Product Catalog</span>
+        </button>
+        <button
+          className="h-[4.5rem] rounded-2xl border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm flex flex-col items-center justify-center gap-1.5 active:scale-[0.97] transition-all"
           onClick={() => onOpenAddEntity?.()}
         >
-          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center">
+          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center shadow-sm">
             <Store className="h-3.5 w-3.5 text-white" />
           </div>
-          <span className="text-xs font-medium">Add Customer/Store</span>
-        </Button>
-        <Button
-          variant="outline"
-          className="h-20 flex flex-col items-center justify-center gap-2 shadow-sm"
+          <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Add Customer/Store</span>
+        </button>
+        <button
+          className="h-[4.5rem] rounded-2xl border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm flex flex-col items-center justify-center gap-1.5 active:scale-[0.97] transition-all"
+          onClick={() => onOpenStockTransfer?.()}
+        >
+          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-sm">
+            <ArrowRightLeft className="h-3.5 w-3.5 text-white" />
+          </div>
+          <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Stock Transfer</span>
+        </button>
+        <button
+          className="h-[4.5rem] rounded-2xl border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm flex flex-col items-center justify-center gap-1.5 active:scale-[0.97] transition-all"
           onClick={() => onGoMap?.()}
         >
-          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center">
+          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center shadow-sm">
             <MapPin className="h-3.5 w-3.5 text-white" />
           </div>
-          <span className="text-xs font-medium">Map View</span>
-        </Button>
+          <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Map View</span>
+        </button>
       </div>
 
       {(pendingOrders?.length ?? 0) > 0 && (

@@ -641,37 +641,7 @@ const Orders = () => {
   logActivity(user!.id, "Created order", "order", displayId, order.id);
     toast.success("Order created");
 
-    // Notify admins/managers
-    const storeName = stores?.find((s) => s.id === storeId)?.name || "store";
-    getAdminUserIds()
-      .then((ids) => {
-        const others = ids.filter((id) => id !== user!.id);
-        if (others.length > 0) {
-          sendNotificationToMany(others, {
-            title: "New Order Created",
-            message: `Order ${displayId} (${orderType}) placed for ${storeName}`,
-            type: "order",
-            entityType: "order",
-            entityId: order.id,
-          });
-        }
-      })
-      .catch((error) => {
-        console.error("Failed to notify admins about new order:", error);
-      });
-
-    // Notify assigned agent if order is assigned
-    if (assignedTo && assignedTo !== "unassigned" && assignedTo !== user!.id) {
-      sendNotificationToMany([assignedTo], {
-        title: "Order Assigned to You",
-        message: `Order ${displayId} (${orderType}) for ${storeName} has been assigned to you`,
-        type: "order",
-        entityType: "order",
-        entityId: order.id,
-      }).catch((error) => {
-        console.error("Failed to notify assigned agent:", error);
-      });
-    }
+    // Notifications are handled by DB triggers
 
     setSaving(false);
     setShowAdd(false);
@@ -940,14 +910,7 @@ if (orderType === "detailed" && canModifyPrices) {
 
     const order = orders?.find((o) => o.id === orderId);
     
-    // Notify the assigned agent
-    sendNotificationToMany([newAssigneeId], {
-      title: "Order Assigned",
-      message: `Order ${order?.display_id} has been assigned to you`,
-      type: "order",
-      entityType: "order",
-      entityId: orderId,
-    });
+    // Notifications are handled by DB triggers
 
     logActivity(user!.id, "Transferred order", "order", order?.display_id, orderId, { assigned_to: newAssigneeId });
     toast.success("Order transferred");
@@ -1098,17 +1061,7 @@ const exportCSV = () => {
       logActivity(user!.id, "Cancelled order", "order", target?.display_id || "", cancelOrderId, { reason: cancelReason });
 
       if (target?.customers && target.customer_id) {
-        supabase.from("customers").select("user_id").eq("id", target.customer_id).single().then(({ data: custData }) => {
-          if (custData?.user_id) {
-            sendNotificationToMany([custData.user_id], {
-              title: "Order Cancelled",
-              message: `Order ${target?.display_id} was cancelled. Reason: ${cancelReason}`,
-              type: "order",
-              entityType: "order",
-              entityId: cancelOrderId,
-            });
-          }
-        }).catch(() => {});
+        // Notifications are handled by DB triggers
       }
 
       supabase.from("proforma_invoices").update({ status: "cancelled", deleted_at: new Date().toISOString() }).eq("order_id", cancelOrderId).then().catch(() => {});

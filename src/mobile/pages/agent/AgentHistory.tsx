@@ -1244,10 +1244,10 @@ export function AgentHistory() {
                               });
                             }}
                             className={cn(
-                              "text-xs font-semibold px-3 py-2 rounded-lg transition-colors",
+                              "text-[11px] font-bold px-3 py-2 rounded-xl transition-all active:scale-95 shadow-sm border",
                               isPastDate(item.created_at, item._updated_at)
-                                ? "text-slate-300 dark:text-slate-600 cursor-not-allowed"
-                                : "text-blue-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                                ? "bg-slate-50 dark:bg-slate-800/50 text-slate-400 border-slate-100 dark:border-slate-700 cursor-not-allowed"
+                                : "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-blue-100 dark:border-blue-800/50"
                             )}
                           >
                             Edit
@@ -1265,10 +1265,10 @@ export function AgentHistory() {
                                 created_at: item.created_at,
                               })}
                               className={cn(
-                                "text-xs font-semibold px-3 py-2 rounded-lg transition-colors",
+                                "text-[11px] font-bold px-3 py-2 rounded-xl transition-all active:scale-95 shadow-sm border",
                                 isPastDate(item.created_at, item._updated_at)
-                                  ? "text-slate-300 dark:text-slate-600 cursor-not-allowed"
-                                  : "text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                  ? "bg-slate-50 dark:bg-slate-800/50 text-slate-400 border-slate-100 dark:border-slate-700 cursor-not-allowed"
+                                  : "bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border-red-100 dark:border-red-800/50"
                               )}
                             >
                               Return
@@ -1303,21 +1303,21 @@ export function AgentHistory() {
             <MiniStat icon={TrendingUp} label="Today's Sales" value={`₹${todaySalesAndPayments.toLocaleString("en-IN")}`} subValue={`Cash ₹${todayCash.toLocaleString("en-IN")} · UPI ₹${todayUpi.toLocaleString("en-IN")}`} color="from-blue-500 to-blue-600" />
             <MiniStat icon={Receipt} label="Today's Payments" value={`₹${todayTotalPayments.toLocaleString("en-IN")}`} subValue={`${todayPayments.length} txns`} color="from-emerald-500 to-green-600" />
             <MiniStat icon={Send} label="Transferred Today" value={`₹${transferredToday.toLocaleString("en-IN")}`} subValue={sentPending > 0 ? `₹${sentPending.toLocaleString("en-IN")} pending` : "All transferred"} color="from-orange-500 to-amber-600" />
-            <div className="rounded-xl border border-slate-100 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/30 p-3">
+            <div className="rounded-2xl border border-slate-100 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/30 p-4 shadow-sm">
               <div className="flex items-start justify-between gap-2">
-                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium leading-tight">Net Balance</p>
-                <div className={cn("h-6 w-6 rounded-md bg-gradient-to-br flex items-center justify-center shrink-0", netBalance > 0 ? "from-red-500 to-rose-600" : netBalance < 0 ? "from-green-500 to-emerald-600" : "from-violet-500 to-purple-600")}>
-                  <Wallet className="h-3 w-3 text-white" />
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest leading-tight">Net Balance</p>
+                <div className={cn("h-8 w-8 rounded-xl bg-gradient-to-br flex items-center justify-center shrink-0 shadow-sm", netBalance > 0 ? "from-red-500 to-rose-600" : netBalance < 0 ? "from-green-500 to-emerald-600" : "from-slate-500 to-slate-600")}>
+                  <Wallet className="h-4 w-4 text-white" />
                 </div>
               </div>
-              <p className={cn("text-lg font-bold mt-1", netBalance > 0 ? "text-red-600 dark:text-red-400" : netBalance < 0 ? "text-green-600 dark:text-green-400" : "text-slate-900 dark:text-white")}>
+              <p className={cn("text-xl font-black mt-2", netBalance > 0 ? "text-red-600 dark:text-red-400" : netBalance < 0 ? "text-emerald-600 dark:text-emerald-400" : "text-slate-800 dark:text-white")}>
                 ₹{Math.abs(netBalance).toLocaleString("en-IN")}
               </p>
-              <p className="text-xs mt-0.5 leading-tight font-medium">
+              <p className="text-xs mt-1 leading-tight font-bold">
                 {netBalance > 0 ? (
                   <span className="text-red-500">You owe warehouse</span>
                 ) : netBalance < 0 ? (
-                  <span className="text-green-500">Warehouse owes you</span>
+                  <span className="text-emerald-500">Warehouse owes you</span>
                 ) : (
                   <span className="text-slate-400">Settled</span>
                 )}

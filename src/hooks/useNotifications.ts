@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Capacitor } from "@capacitor/core";
+import { App as CapacitorApp } from "@capacitor/app";
 import { LocalNotifications } from "@capacitor/local-notifications";
 import { PushNotifications, PushNotificationSchema } from "@capacitor/push-notifications";
 import { supabase } from "@/integrations/supabase/client";
@@ -32,7 +33,7 @@ export interface AppNotification {
 
 const NOTIF_STALE_MS = 5 * 60 * 1000;
 const NOTIF_SEEN_MAX = 100;
-const NOTIF_RECONNECT_MAX_RETRIES = 3;
+const NOTIF_RECONNECT_MAX_RETRIES = 5;
 const NOTIF_RECONNECT_MAX_DELAY_MS = 8000;
 
 async function fetchNotificationsFromDb(userId: string): Promise<AppNotification[]> {
@@ -77,6 +78,7 @@ export function useNotifications() {
     queryKey,
     queryFn: () => fetchNotificationsFromDb(user!.id),
     enabled: !!user,
+    staleTime: NOTIF_STALE_MS,
 });
 
   const unreadCount = notifications.filter((n) => !n.is_read).length;
@@ -164,7 +166,12 @@ export function useNotifications() {
             } else {
               fireNativeNotification(newNotif.id, newNotif.title, newNotif.message);
             }
-            toast(newNotif.title, { description: newNotif.message, duration: 5000 });
+            // Show in-app toast with higher z-index class for mobile
+            toast(newNotif.title, {
+              description: newNotif.message,
+              duration: 5000,
+              className: "z-[9999]",
+            });
           }
         )
         .on(
@@ -179,6 +186,7 @@ export function useNotifications() {
         )
         .subscribe((status: string) => {
           if (activeUserId !== userId) return;
+          logDebug("Notification channel status", { status, userId });
           if (status === "SUBSCRIBED") {
             retryCount = 0;
           } else if (status === "CHANNEL_ERROR" || status === "CLOSED" || status === "TIMED_OUT") {
@@ -194,11 +202,12 @@ export function useNotifications() {
       if (document.visibilityState === "visible") {
         if (visibilityThrottle) return;
         visibilityThrottle = setTimeout(() => { visibilityThrottle = null; }, 1000);
-        if (retryCount > 0) {
-          retryCount = 0;
-          if (retryTimer) clearTimeout(retryTimer);
-          subscribeToChannel();
-        }
+        // Always resubscribe on visibility to ensure fresh connection
+        retryCount = 0;
+        if (retryTimer) clearTimeout(retryTimer);
+        subscribeToChannel();
+        // Also refresh notifications from DB
+        queryClient.invalidateQueries({ queryKey: queryKeyForUser });
       }
     }
 
@@ -219,6 +228,24 @@ export function useNotifications() {
 
     refCount++;
 
+    // ── App resume listener (Capacitor native only) ──────────────────
+    // When the Android app comes back to foreground, reconnect Realtime
+    let appStateHandle: { remove: () => Promise<void> } | null = null;
+    if (Capacitor.isNativePlatform()) {
+      CapacitorApp.addListener("appStateChange", ({ isActive }) => {
+        if (isActive && activeUserId === userId) {
+          logDebug("App resumed — reconnecting notification channel", { userId });
+          retryCount = 0;
+          if (retryTimer) clearTimeout(retryTimer);
+          subscribeToChannel();
+          // Refresh from DB to catch any missed notifications
+          queryClient.invalidateQueries({ queryKey: queryKeyForUser });
+        }
+      }).then((handle) => {
+        appStateHandle = handle;
+      }).catch(() => { /* ignore */ });
+    }
+
     return () => {
       mountedRef.current = false;
       refCount--;
@@ -232,6 +259,9 @@ export function useNotifications() {
           activeChannel = null;
         }
         activeUserId = null;
+      }
+      if (appStateHandle) {
+        appStateHandle.remove().catch(() => { /* ignore */ });
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -321,12 +351,24 @@ export function useNotifications() {
 export async function requestNotificationPermission() {
   if (Capacitor.isNativePlatform()) {
     try {
+      // Request LocalNotifications permission (needed for Android 13+ / API 33+)
+      let localGranted = false;
+      try {
+        const localPerm = await LocalNotifications.requestPermissions();
+        localGranted = localPerm.display === "granted";
+        logDebug("Local notification permission result", localPerm);
+      } catch (err) {
+        logError("Failed to request LocalNotifications permission", err);
+      }
+
+      // Request PushNotifications permission (for FCM)
       const permResult = await PushNotifications.requestPermissions();
       logDebug("Push notification permission requested on native platform", permResult);
       if (permResult.receive === "granted") {
         await PushNotifications.register();
       }
-      return permResult.receive;
+
+      return permResult.receive === "granted" || localGranted ? "granted" : "denied";
     } catch (err) {
       logError("Failed to request native push notification permission", err);
       return "denied";
@@ -355,13 +397,40 @@ function showBrowserNotification(title: string, body: string) {
 
 async function fireNativeNotification(_id: string, title: string, body: string) {
   try {
+    // Check if LocalNotifications permission is granted; request if not
+    let permStatus = await LocalNotifications.checkPermissions();
+    if (permStatus.display !== "granted") {
+      permStatus = await LocalNotifications.requestPermissions();
+    }
+
+    if (permStatus.display !== "granted") {
+      logDebug("LocalNotifications permission not granted, skipping native notification");
+      return;
+    }
+
+    // Ensure notification channel exists (required for Android 8.0+)
+    const channels = await LocalNotifications.listChannels();
+    if (!channels.channels.find(c => c.id === 'default')) {
+      await LocalNotifications.createChannel({
+        id: 'default',
+        name: 'Default',
+        description: 'Default app notifications',
+        importance: 4, // 4 = High
+        visibility: 1, // 1 = Public
+      });
+    }
+
     await LocalNotifications.schedule({
       notifications: [{
-        id: Math.floor(Math.random() * 100000),
+        id: Math.floor(Math.random() * 2147483647),
         title,
         body,
-        smallIcon: "ic_launcher",
+        smallIcon: "ic_launcher_foreground",
         largeIcon: "ic_launcher",
+        channelId: "default",
+        sound: "default",
+        autoCancel: true,
+        ongoing: false,
       }],
     });
   } catch (err) {

@@ -13,6 +13,17 @@ export function useHardwareBackButton(onBack: () => void) {
 
     const register = async () => {
       listenerHandle = await CapacitorApp.addListener("backButton", () => {
+        // 1. Check for any open Radix UI dialogs/sheets/dropdowns
+        const openOverlays = document.querySelectorAll('[role="dialog"][data-state="open"], [role="menu"][data-state="open"]');
+        
+        if (openOverlays.length > 0) {
+          // Dispatch Escape to let standard UI components close themselves
+          const escapeEvent = new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true });
+          document.dispatchEvent(escapeEvent);
+          return;
+        }
+
+        // 2. Otherwise execute custom navigation fallback
         onBackRef.current();
       });
     };

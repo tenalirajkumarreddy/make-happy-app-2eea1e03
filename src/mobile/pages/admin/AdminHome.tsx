@@ -7,7 +7,7 @@ import { usePermission } from "@/hooks/usePermission";
 import {
   ShoppingCart, ClipboardList, TrendingUp, TrendingDown, Wallet,
   Users, Store, Package, ArrowRight, AlertCircle, Receipt, Loader2,
-  BarChart3, Warehouse, Settings, CheckCircle2, XCircle,
+  BarChart3, Warehouse, Settings, CheckCircle2, XCircle, MapPin, Navigation
 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -102,7 +102,20 @@ export function AdminHome({
       const { data } = await query;
       return data || [];
     },
-});
+  });
+
+  const { data: routeSessions = [] } = useQuery({
+    queryKey: ["mobile-admin-route-sessions", currentWarehouse?.id],
+    queryFn: async () => {
+      let query = supabase
+        .from("route_sessions")
+        .select("id, status, started_at, ended_at, routes(name), profiles(full_name)")
+        .order("started_at", { ascending: false })
+        .limit(3);
+      const { data } = await query;
+      return data || [];
+    },
+  });
 
   const { data: opsMetrics } = useQuery({
     queryKey: ["mobile-admin-ops", currentWarehouse?.id, role],
@@ -318,6 +331,53 @@ export function AdminHome({
           </div>
         )}
       </div>
+
+      {/* Route Sessions Widget */}
+      {routeSessions.length > 0 && (
+        <div className="px-4 mt-5">
+          <div className="flex items-center justify-between mb-2.5">
+            <SectionLabel className="mb-0 flex items-center gap-2">
+              <MapPin className="h-3.5 w-3.5 text-indigo-500" />
+              Recent Route Sessions
+            </SectionLabel>
+            <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-full">
+              {routeSessions.length}
+            </span>
+          </div>
+          <div className="space-y-2">
+            {routeSessions.map((session: any) => (
+              <div key={session.id} className="rounded-xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-3.5 flex items-center gap-3">
+                <div className={cn("h-9 w-9 rounded-xl flex items-center justify-center shrink-0", session.status === 'active' ? "bg-emerald-50 dark:bg-emerald-900/30" : "bg-slate-50 dark:bg-slate-800")}>
+                  {session.status === 'active' ? (
+                    <div className="relative flex h-3 w-3">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                    </div>
+                  ) : (
+                    <Navigation className="h-4 w-4 text-slate-400" />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-slate-800 dark:text-white truncate">
+                    {session.routes?.name || "Unknown Route"}
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                    {session.profiles?.full_name || "Unknown Agent"}
+                  </p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-xs font-medium text-slate-800 dark:text-slate-200">
+                    {format(new Date(session.started_at), "hh:mm a")}
+                  </p>
+                  <p className="text-[10px] text-slate-400 uppercase font-semibold">
+                    {session.status}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Pending Expenses Widget */}
       {pendingExpenses.length > 0 && (

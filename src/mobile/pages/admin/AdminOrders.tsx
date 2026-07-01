@@ -528,41 +528,8 @@ export function AdminOrders({ onNavigate }: { onNavigate: (path: string) => void
       for (const [queryKey, oldData] of allOrderKeys) {
         if (!oldData || !Array.isArray(oldData)) continue;
         qc.setQueryData(queryKey, [newOrder, ...oldData]);
+        // Notifications handled by DB triggers
       }
-
-      getApproverUserIds().then((ids) => {
-        if (ids.length > 0) {
-          sendNotificationToMany(ids, {
-            title: "New Order Created",
-            message: `Order ${displayId} for ${storeName}`,
-            type: "order",
-            entityType: "order",
-            entityId: orderRow.order_id,
-          }, { excludeFromBroadcast: [user!.id] });
-        }
-      });
-      getUsersByRole(["marketer"]).then((ids) => {
-        if (ids.length > 0) {
-          sendNotificationToMany(ids, {
-            title: "New Order Created",
-            message: `Order ${displayId} for ${storeName}`,
-            type: "order",
-            entityType: "order",
-            entityId: orderRow.order_id,
-          }, { excludeFromBroadcast: [user!.id] });
-        }
-      });
-      getAgentsForStore(createStoreId).then((agentIds) => {
-        if (agentIds.length > 0) {
-          sendNotificationToMany(agentIds, {
-            title: "New Order for Your Store",
-            message: `Order ${displayId} for ${storeName}`,
-            type: "order",
-            entityType: "order",
-            entityId: orderRow.id,
-          });
-        }
-      });
 
       setShowCreate(false);
       setCreateStoreId("");

@@ -328,7 +328,7 @@ const StoreCard = memo(({ s, onOpenStore, onGoRecord, onGoVisit, handleNavigate,
             <Button
               variant="outline"
               size="sm"
-              className="h-11 rounded-xl text-xs font-bold bg-blue-50/50 hover:bg-blue-100/70 text-blue-600 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+              className="h-10 rounded-xl text-xs font-bold bg-blue-50/50 hover:bg-blue-100/70 text-blue-600 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800 dark:text-blue-300"
               onClick={() => onGoRecord(storeOption, "sale")}
             >
               <ShoppingCart className="h-4 w-4 mr-1 shrink-0" />
@@ -337,7 +337,7 @@ const StoreCard = memo(({ s, onOpenStore, onGoRecord, onGoVisit, handleNavigate,
             <Button
               variant="outline"
               size="sm"
-              className="h-11 rounded-xl text-xs font-bold bg-emerald-50/50 hover:bg-emerald-100/70 text-emerald-600 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-800"
+              className="h-10 rounded-xl text-xs font-bold bg-emerald-50/50 hover:bg-emerald-100/70 text-emerald-600 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-800 dark:text-emerald-300"
               onClick={() => onGoRecord(storeOption, "payment")}
             >
               <Wallet className="h-4 w-4 mr-1 shrink-0" />
@@ -346,7 +346,7 @@ const StoreCard = memo(({ s, onOpenStore, onGoRecord, onGoVisit, handleNavigate,
             <Button
               variant="outline"
               size="sm"
-              className="h-11 rounded-xl text-xs font-bold bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700"
+              className="h-10 rounded-xl text-xs font-bold bg-amber-50/50 hover:bg-amber-100/70 text-amber-600 border-amber-200 dark:bg-amber-950/20 dark:border-amber-800 dark:text-amber-300"
               onClick={() => onOpenStore(storeOption)}
             >
               <CheckCircle2 className="h-4 w-4 mr-1 shrink-0" />
@@ -358,30 +358,30 @@ const StoreCard = memo(({ s, onOpenStore, onGoRecord, onGoVisit, handleNavigate,
             <Button
               variant="outline"
               size="sm"
-              className="h-11 text-xs font-semibold rounded-xl text-slate-600 hover:text-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+              className="h-10 text-xs font-semibold rounded-xl bg-indigo-50/50 hover:bg-indigo-100/70 text-indigo-600 border-indigo-200 dark:bg-indigo-950/20 dark:border-indigo-800 dark:text-indigo-300"
               onClick={() => handleNavigate(s)}
               disabled={!s.lat && !s.lng && !s.address}
             >
-              <Navigation2 className="h-4 w-4 mr-1 shrink-0 text-slate-500" />
+              <Navigation2 className="h-4 w-4 mr-1 shrink-0" />
               Navigate
             </Button>
             <Button
               variant="outline"
               size="sm"
-              className="h-11 text-xs font-semibold rounded-xl text-slate-600 hover:text-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+              className="h-10 text-xs font-semibold rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-700/40 dark:border-slate-600 dark:text-slate-200"
               onClick={() => phone && handleCall(phone)}
               disabled={!phone}
             >
-              <Phone className="h-4 w-4 mr-1 shrink-0 text-slate-500" />
+              <Phone className="h-4 w-4 mr-1 shrink-0" />
               Call
             </Button>
             <Button
               variant="outline"
               size="sm"
-              className="h-11 text-xs font-semibold rounded-xl text-slate-600 hover:text-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+              className="h-10 text-xs font-semibold rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-700/40 dark:border-slate-600 dark:text-slate-200"
               onClick={() => onOpenStore(storeOption)}
             >
-              <Eye className="h-4 w-4 mr-1 shrink-0 text-slate-500" />
+              <Eye className="h-4 w-4 mr-1 shrink-0" />
               Open
             </Button>
           </div>

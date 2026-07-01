@@ -586,16 +586,6 @@ const Handovers = () => {
     else {
       const isCollection = handover?.handover_type === 'collection';
       toast.success(isCollection ? "Collection accepted - income recorded" : "Transfer accepted");
-      if (handover?.user_id) {
-        sendNotification({
-          userId: handover.user_id,
-          title: isCollection ? "Collection Confirmed" : "Transfer Confirmed",
-          message: `Your ₹${Number(handover.cash_amount).toLocaleString()} ${isCollection ? 'collection' : 'transfer'} was accepted`,
-          type: "handover",
-          entityType: "handover",
-          entityId: id,
-        });
-      }
       afterHandoverChanged(qc, { userId: handover?.user_id || undefined });
     }
   };
@@ -612,16 +602,6 @@ const Handovers = () => {
     if (error) toast.error(error.message);
     else {
       toast.success("Handover rejected");
-      if (handover?.user_id) {
-        sendNotification({
-          userId: handover.user_id,
-          title: "Handover Rejected",
-          message: `Your ₹${Number(handover.cash_amount).toLocaleString()} handover was rejected`,
-          type: "handover",
-          entityType: "handover",
-          entityId: id,
-        });
-      }
       afterHandoverChanged(qc, { userId: handover?.user_id || undefined });
     }
   };
@@ -654,16 +634,6 @@ const Handovers = () => {
     if (error) toast.error(error.message);
     else {
       toast.success("Handover cancelled");
-      if (handover?.handed_to) {
-        sendNotification({
-          userId: handover.handed_to,
-          title: "Handover Cancelled",
-          message: `A ₹${Number(handover.cash_amount).toLocaleString()} handover was cancelled by sender`,
-          type: "handover",
-          entityType: "handover",
-          entityId: id,
-        });
-      }
       afterHandoverChanged(qc, { userId: handover?.user_id || undefined });
     }
   };
@@ -697,24 +667,6 @@ const Handovers = () => {
       if (transferError) throw transferError;
 
       toast.success(`Admin transfer of ₹${Number(adminTransferAmount).toLocaleString()} completed successfully`);
-
-      sendNotification({
-        userId: adminTransferFrom,
-        title: "Admin Handover Sent",
-        message: `Admin transferred ₹${Number(adminTransferAmount).toLocaleString()} to ${getName(adminTransferTo)}`,
-        type: "handover",
-        entityType: "handover",
-        entityId: transferResult?.[0]?.id || "",
-      });
-
-      sendNotification({
-        userId: adminTransferTo,
-        title: "Admin Handover Received",
-        message: `Admin transferred ₹${Number(adminTransferAmount).toLocaleString()} from ${getName(adminTransferFrom)}`,
-        type: "handover",
-        entityType: "handover",
-        entityId: transferResult?.[0]?.id || "",
-      });
 
       setAdminTransferOpen(false);
       setAdminTransferFrom("");
@@ -799,15 +751,6 @@ const Handovers = () => {
 
       toast.success(`Holding balance adjusted successfully`);
       
-      // Notify the affected user
-      sendNotification({
-        userId: adjustHoldingUser,
-        title: "Holding Balance Adjusted",
-        message: `Your holding has been adjusted: Cash ₹${cashAdj >= 0 ? '+' : ''}${cashAdj}, UPI ₹${upiAdj >= 0 ? '+' : ''}${upiAdj}. Reason: ${adjustReason || 'Admin adjustment'}`,
-        type: "system",
-        entityType: "staff_account",
-      });
-
       setAdjustHoldingOpen(false);
       setAdjustHoldingUser("");
       setAdjustCashAmount("");
@@ -915,15 +858,6 @@ const Handovers = () => {
 
       toast.success("Expense claim submitted for approval");
 
-      const adminIds = await getAdminUserIds();
-      sendNotificationToMany(adminIds, {
-        title: "New Expense Claim",
-        message: `₹${Number(expenseAmount).toLocaleString()} expense claim requires your review`,
-        type: "expense_request" as any,
-        entityType: "expense_claim",
-        entityId: expenseData?.id,
-      });
-
       setCreateOpen(false);
       setCreateType("handover");
       setExpenseAmount("");
@@ -962,17 +896,6 @@ const Handovers = () => {
       if (rpcError) throw rpcError;
 
       toast.success(`Expense claim ${action === "approve" ? "approved" : "rejected"}`);
-
-      sendNotification({
-        userId: reviewExpense.user_id,
-        title: `Expense Claim ${action === "approve" ? "Approved" : "Rejected"}`,
-        message: action === "approve"
-          ? `Your ₹${(rpcResult as any)?.amount?.toLocaleString() || approvedAmount?.toLocaleString()} expense claim was approved`
-          : `Your ₹${Number(reviewExpense.amount).toLocaleString()} expense claim was rejected`,
-        type: "system",
-        entityType: "expense_claim",
-        entityId: reviewExpense.id,
-      });
 
       setReviewExpense(null);
       setReviewCategory("");

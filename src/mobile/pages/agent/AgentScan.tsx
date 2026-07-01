@@ -245,24 +245,25 @@ export function AgentScan({ onGoRecord, onGoVisit, onOpenStore }: Props) {
     <div className="grid grid-cols-3 gap-2">
       <button
         onClick={() => onGoRecord(selectedStore, "sale")}
-        className="flex flex-col items-center gap-2 p-4 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 transition-all shadow-sm"
+        className="flex flex-col items-center gap-2.5 p-4 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 active:scale-95 transition-all shadow-sm border border-blue-400"
       >
         <ShoppingCart className="h-6 w-6 text-white" />
-        <span className="text-xs font-semibold text-white leading-tight text-center">Record Sale</span>
+        <span className="text-[11px] font-bold text-white uppercase tracking-wider text-center">Record Sale</span>
       </button>
       <button
         onClick={() => onGoRecord(selectedStore, "payment")}
-        className="flex flex-col items-center gap-2 p-4 rounded-xl bg-card border hover:bg-muted/50 active:scale-95 transition-all shadow-sm"
+        className="flex flex-col items-center gap-2.5 p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 active:scale-95 transition-all shadow-sm"
       >
-        <Banknote className="h-6 w-6 text-emerald-500" />
-        <span className="text-xs font-semibold text-foreground leading-tight text-center">Record Transaction</span>
+        <Banknote className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+        <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider text-center">Payment</span>
       </button>
       <button
         onClick={() => selectedStore ? handleVisitStore(selectedStore) : onGoVisit()}
         disabled={isVisiting}
+        className="flex flex-col items-center gap-2.5 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-95 transition-all shadow-sm"
       >
-        {isVisiting ? <Loader2 className="h-6 w-6 text-emerald-500 animate-spin" /> : <CheckCircle2 className="h-6 w-6 text-emerald-500" />}
-        <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 leading-tight text-center">{selectedStore ? "Mark Visited" : "Routes & Visits"}</span>
+        {isVisiting ? <Loader2 className="h-6 w-6 text-slate-500 animate-spin" /> : <CheckCircle2 className="h-6 w-6 text-slate-600 dark:text-slate-400" />}
+        <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider text-center">{selectedStore ? "Mark Visited" : "Routes & Visits"}</span>
       </button>
     </div>
   );
@@ -361,15 +362,20 @@ export function AgentScan({ onGoRecord, onGoVisit, onOpenStore }: Props) {
               Find Nearest 5 Stores
             </Button>
             {nearbyStores.length > 0 && (
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 {nearbyStores.map((store) => (
                   <button
                     key={store.id}
-                    className={cn("w-full text-left rounded-xl border p-3.5", selectedStore?.id === store.id ? "border-primary bg-primary/5" : "")}
+                    className={cn(
+                      "w-full text-left rounded-2xl border p-4 transition-all shadow-sm active:scale-[0.98]",
+                      selectedStore?.id === store.id
+                        ? "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800"
+                        : "bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-900/50"
+                    )}
                     onClick={() => setSelectedStore(store)}
                   >
-                    <p className="font-semibold text-sm text-foreground">{store.name}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{store.display_id} · {store._distKm < 1 ? `${Math.round(store._distKm * 1000)}m` : `${store._distKm.toFixed(1)}km`}</p>
+                    <p className="font-bold text-sm text-slate-800 dark:text-white leading-tight">{store.name}</p>
+                    <p className="text-xs text-slate-500 font-medium mt-1">{store.display_id} · {store._distKm < 1 ? `${Math.round(store._distKm * 1000)}m` : `${store._distKm.toFixed(1)}km`}</p>
                   </button>
                 ))}
               </div>
@@ -389,41 +395,41 @@ export function AgentScan({ onGoRecord, onGoVisit, onOpenStore }: Props) {
 
       {selectedStore && (
         <div className="px-4 pt-3">
-          <div className="rounded-xl bg-card shadow-sm border overflow-hidden">
-            <div className="bg-emerald-50/50 dark:bg-emerald-900/20 px-4 py-3 flex items-center gap-2 border-b">
+          <div className="rounded-2xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden">
+            <div className="bg-emerald-50 dark:bg-emerald-900/20 px-4 py-3 flex items-center gap-2 border-b border-emerald-100 dark:border-emerald-800/50">
               <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-              <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">Store Identified</span>
+              <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-widest">Store Identified</span>
             </div>
             <div className="p-4 flex items-start gap-3">
-              <button className="h-14 w-14 rounded-xl bg-muted overflow-hidden shrink-0" onClick={() => onOpenStore(selectedStore)}>
+              <button className="h-14 w-14 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700 overflow-hidden shrink-0 shadow-sm" onClick={() => onOpenStore(selectedStore)}>
                 {selectedStore.photo_url ? (
                   <img src={selectedStore.photo_url} alt={selectedStore.name} loading="lazy" className="h-full w-full object-cover" />
                 ) : (
-                  <div className="h-full w-full flex items-center justify-center"><Store className="h-5 w-5 text-muted-foreground/60" /></div>
+                  <div className="h-full w-full flex items-center justify-center"><Store className="h-5 w-5 text-slate-300 dark:text-slate-600" /></div>
                 )}
               </button>
               <div className="flex-1 min-w-0">
-                <p className="font-bold text-foreground leading-tight">{selectedStore.name}</p>
-                <p className="text-xs text-muted-foreground/70 mt-0.5">{selectedStore.display_id}</p>
+                <p className="font-bold text-slate-800 dark:text-white leading-tight">{selectedStore.name}</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1">{selectedStore.display_id}</p>
                 {selectedStore.address && (
-                  <div className="flex items-center gap-1 mt-1.5 text-xs text-muted-foreground/70">
+                  <div className="flex items-center gap-1 mt-1.5 text-xs text-slate-500 font-medium">
                     <MapPin className="h-3 w-3 shrink-0" />
                     <span className="truncate">{selectedStore.address}</span>
                   </div>
                 )}
-                <div className="flex items-center gap-2 mt-2 flex-wrap">
-                  {selectedStore.store_types?.name && <Badge variant="secondary" className="text-xs font-semibold bg-blue-50 dark:bg-blue-900/30 text-blue-600 border-0">{selectedStore.store_types.name}</Badge>}
-                  {selectedStore.routes?.name && <Badge variant="secondary" className="text-xs font-semibold bg-muted text-muted-foreground border-0">{selectedStore.routes.name}</Badge>}
+                <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                  {selectedStore.store_types?.name && <Badge variant="secondary" className="text-[10px] font-bold bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border-0 uppercase tracking-wider px-1.5 py-0.5">{selectedStore.store_types.name}</Badge>}
+                  {selectedStore.routes?.name && <Badge variant="secondary" className="text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-0 uppercase tracking-wider px-1.5 py-0.5">{selectedStore.routes.name}</Badge>}
                 </div>
               </div>
               <div className="text-right shrink-0">
-                <p className="text-xs text-muted-foreground/70 mb-0.5">Balance</p>
-                <p className={cn("font-bold text-base", selectedStore.outstanding > 0 ? "text-red-500" : "text-emerald-500")}>₹{Number(selectedStore.outstanding).toLocaleString("en-IN")}</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Balance</p>
+                <p className={cn("font-black text-lg", selectedStore.outstanding > 0 ? "text-red-500" : "text-emerald-500")}>₹{Number(selectedStore.outstanding).toLocaleString("en-IN")}</p>
               </div>
             </div>
             <div className="px-4 pb-4">
-              <Button variant="outline" size="sm" className="h-8 rounded-lg text-xs" onClick={() => onOpenStore(selectedStore)}>
-                <Eye className="h-3.5 w-3.5 mr-1.5" />
+              <Button variant="outline" size="sm" className="h-10 w-full rounded-xl text-xs font-bold shadow-sm" onClick={() => onOpenStore(selectedStore)}>
+                <Eye className="h-4 w-4 mr-2" />
                 Open Store Profile
               </Button>
             </div>
@@ -432,16 +438,16 @@ export function AgentScan({ onGoRecord, onGoVisit, onOpenStore }: Props) {
       )}
 
       <div className="p-4 pt-3">
-        <div className="rounded-xl bg-card shadow-sm border p-5">
+        <div className="rounded-2xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700 p-5">
           <div className="flex items-center justify-between gap-3 mb-4">
             <div>
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Actions</p>
-              <p className="text-sm font-semibold text-foreground mt-1">{selectedStore ? `Continue with ${selectedStore.name}` : "Use the same sale and payment flow as the web app"}</p>
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Actions</p>
+              <p className="text-sm font-bold text-slate-800 dark:text-white mt-1">{selectedStore ? `Continue with ${selectedStore.name}` : "Use the same sale and payment flow as the web app"}</p>
             </div>
-            {selectedStore && <Badge variant="outline" className="text-xs font-semibold border-emerald-200 text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20">Store selected</Badge>}
+            {selectedStore && <Badge variant="outline" className="text-[10px] font-bold border-emerald-200 text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 uppercase tracking-wider px-1.5 py-0.5">Selected</Badge>}
           </div>
           {renderQuickActions()}
-          {!selectedStore && <p className="text-xs text-muted-foreground/70 mt-3 leading-relaxed">If you start before scanning, the next screen lets you choose the store manually.</p>}
+          {!selectedStore && <p className="text-xs font-medium text-slate-400 mt-4 leading-relaxed">If you start before scanning, the next screen lets you choose the store manually.</p>}
         </div>
       </div>
 

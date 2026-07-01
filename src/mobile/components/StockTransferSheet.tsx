@@ -171,7 +171,7 @@ export function StockTransferSheet({ open, onOpenChange }: Props) {
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="h-[85vh] rounded-t-2xl flex flex-col px-0">
+      <SheetContent side="bottom" className="h-[85vh] rounded-t-2xl flex flex-col !p-0">
         <SheetHeader className="px-4 pb-2 border-b">
           <div className="flex items-center justify-between">
             <SheetTitle className="flex items-center gap-2">

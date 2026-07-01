@@ -8,7 +8,7 @@ import { ReportFilters, DateRange } from "./ReportFilters";
 import { format, subDays } from "date-fns";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Route, MapPin, CheckCircle2, ShoppingCart, Banknote, TrendingUp } from "lucide-react";
+import { Route, MapPin, CheckCircle2, ShoppingCart, Banknote, TrendingUp, Navigation } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from "recharts";
 import { useWarehouse } from "@/contexts/WarehouseContext";
 import { useNavigate } from "react-router-dom";
@@ -39,7 +39,7 @@ export default function RouteEfficiencyReport() {
         sb.from("store_visits").select("store_id, session_id, visited_at, route_sessions(route_id)").gte("visited_at", from).lte("visited_at", to),
         sb.from("sales").select("store_id, total_amount, outstanding_amount, created_at").gte("created_at", from).lte("created_at", to),
         sb.from("transactions").select("store_id, amount").eq("type", "payment").gte("transaction_date", from).lte("transaction_date", to),
-        sb.from("route_sessions").select("id, route_id, status, started_at").eq("status", "completed").gte("started_at", from).lte("started_at", to),
+        sb.from("route_sessions").select("id, route_id, status, started_at, ended_at, profiles(full_name), routes(name)").gte("started_at", from).lte("started_at", to).order("started_at", { ascending: false }),
       ]);
 
       const routes: any[] = routesRes.data || [];
@@ -99,12 +99,14 @@ export default function RouteEfficiencyReport() {
           };
         });
 
-      return { routeData };
+      return { routeData, sessions };
     },
   });
 
   const routeData = data?.routeData || [];
+  const rawSessions = data?.sessions || [];
   const filteredRoutes = selectedRoute === "all" ? routeData : routeData.filter(r => r.id === selectedRoute);
+  const displaySessions = selectedRoute === "all" ? rawSessions : rawSessions.filter(s => s.route_id === selectedRoute);
 
   const totals = useMemo(() => {
     return filteredRoutes.reduce((acc, r) => ({
@@ -137,6 +139,56 @@ export default function RouteEfficiencyReport() {
         </div>
 
         <div className="grid lg:grid-cols-2 gap-6">
+          <Card className="lg:col-span-2">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Navigation className="h-4 w-4" />
+                Live & Recent Route Sessions
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0 max-h-80 overflow-y-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Route</TableHead>
+                    <TableHead>Agent</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Started</TableHead>
+                    <TableHead>Ended</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {displaySessions.map((s: any) => (
+                    <TableRow key={s.id}>
+                      <TableCell className="font-medium">{s.routes?.name || "N/A"}</TableCell>
+                      <TableCell>{s.profiles?.full_name || "N/A"}</TableCell>
+                      <TableCell>
+                        {s.status === 'active' ? (
+                          <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-emerald-200">
+                            <span className="relative flex h-2 w-2 mr-2">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                            </span>
+                            Active
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-slate-500">Completed</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>{format(new Date(s.started_at), "MMM d, hh:mm a")}</TableCell>
+                      <TableCell>{s.ended_at ? format(new Date(s.ended_at), "hh:mm a") : "-"}</TableCell>
+                    </TableRow>
+                  ))}
+                  {displaySessions.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-4 text-muted-foreground">No sessions in this period.</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader className="pb-2"><CardTitle className="text-base">Visit % vs Collection % by Route</CardTitle></CardHeader>
             <CardContent>

@@ -15,8 +15,16 @@ export function NotificationsSheet({ open, onOpenChange }: Props) {
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="h-[75vh] rounded-t-2xl flex flex-col px-0">
-        <SheetHeader className="px-4 pb-2 border-b">
+      <SheetContent
+        side="bottom"
+        className="rounded-t-2xl flex flex-col !p-0"
+        style={{
+          height: "75dvh",
+          maxHeight: "75dvh",
+          paddingBottom: "env(safe-area-inset-bottom, 16px)",
+        }}
+      >
+        <SheetHeader className="px-4 pb-2 border-b shrink-0">
           <div className="flex items-center justify-between">
             <SheetTitle className="flex items-center gap-2">
               <Bell className="h-4 w-4" />
@@ -32,7 +40,7 @@ export function NotificationsSheet({ open, onOpenChange }: Props) {
                 variant="ghost"
                 size="sm"
                 className="text-xs h-8"
-                onClick={markAllAsRead}
+                onClick={() => markAllAsRead()}
               >
                 <CheckCheck className="h-3 w-3 mr-1" />
                 All read
@@ -41,7 +49,7 @@ export function NotificationsSheet({ open, onOpenChange }: Props) {
           </div>
         </SheetHeader>
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto overscroll-contain">
           {notifications.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full gap-3 text-center px-6">
               <Bell className="h-10 w-10 text-muted-foreground/40" />
@@ -52,6 +60,7 @@ export function NotificationsSheet({ open, onOpenChange }: Props) {
               {notifications.map((n) => (
                 <button
                   key={n.id}
+                  type="button"
                   className={cn(
                     "w-full text-left px-4 py-3 transition-colors hover:bg-muted/50 active:bg-muted",
                     !n.is_read && "bg-primary/5"

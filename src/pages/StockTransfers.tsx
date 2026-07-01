@@ -155,23 +155,6 @@ export default function StockTransfers() {
     return [] as string[];
   }, [isSuperAdmin, isManager, isOperator, isAgent]);
 
-  useEffect(() => {
-    // eslint-disable-next-line no-console
-    console.log("StockTransfers: role:", role, "warehouse:", currentWarehouse?.id, "user:", user?.id);
-  }, [role, currentWarehouse, user]);
-
-  // Scroll to highlight element once loaded
-  useEffect(() => {
-    if (!highlightId || transfers.length === 0) return;
-    const timer = setTimeout(() => {
-      const el = document.getElementById(`transfer-${highlightId}`);
-      if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
-    }, 200);
-    return () => clearTimeout(timer);
-  }, [highlightId, transfers]);
-
   // ── Transfers history ──────────────────────────────────────────────────
   const {
     data: transfers = [],
@@ -199,7 +182,25 @@ export default function StockTransfers() {
       }
       return (data ?? []) as TransferRow[];
     },
+    enabled: !!selectedWarehouseId,
   });
+
+  useEffect(() => {
+    // eslint-disable-next-line no-console
+    console.log("StockTransfers: role:", role, "warehouse:", currentWarehouse?.id, "user:", user?.id);
+  }, [role, currentWarehouse, user]);
+
+  // Scroll to highlight element once loaded
+  useEffect(() => {
+    if (!highlightId || transfers.length === 0) return;
+    const timer = setTimeout(() => {
+      const el = document.getElementById(`transfer-${highlightId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [highlightId, transfers]);
 
   // ── Approve Mutation ─────────────────────────────────────────────
   const { mutate: approveTransfer, isPending: isApproving } = useMutation({

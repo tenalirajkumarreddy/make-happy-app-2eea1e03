@@ -27,6 +27,7 @@ import { DashboardSkeleton } from "@/components/shared/DashboardSkeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
+import { QuickActionDrawer } from "@/components/agent/QuickActionDrawer";
 
 // Lazy-load recharts (~433KB) — only needed after data loads
 const DashboardBarChart = lazy(() => import("@/components/dashboard/DashboardBarChart"));
@@ -313,37 +314,42 @@ const SuperAdminDashboard = () => {
          />
        </div>
 
-       {/* Quick Actions */}
+    {/* Quick Actions */}
        <div className="rounded-xl border bg-card p-5">
-         <div className="flex items-center justify-between gap-3 mb-4">
-           <div>
-             <h3 className="text-sm font-semibold">Quick Actions</h3>
-             <p className="text-xs text-muted-foreground mt-1">Management functions for global oversight.</p>
-           </div>
-         </div>
-         <div className="grid grid-cols-2 xl:grid-cols-5 gap-3">
-           <Button variant="outline" className="h-auto min-h-24 flex-col gap-2 py-4" onClick={() => navigate("/staff-directory")}>
-             <Users className="h-5 w-5" />
-             Manage Users
-           </Button>
-           <Button variant="outline" className="h-auto min-h-24 flex-col gap-2 py-4" onClick={() => navigate("/staff-directory")}>
-             <Users2 className="h-5 w-5" />
-             Staff Directory
-           </Button>
-           <Button variant="outline" className="h-auto min-h-24 flex-col gap-2 py-4" onClick={() => navigate("/warehouses")}>
-             <WarehouseIcon className="h-5 w-5" />
-             Warehouses
-           </Button>
-           <Button variant="outline" className="h-auto min-h-24 flex-col gap-2 py-4" onClick={() => navigate("/settings")}>
-             <Settings className="h-5 w-5" />
-             Settings
-           </Button>
-           <Button variant="outline" className="h-auto min-h-24 flex-col gap-2 py-4" onClick={() => navigate("/reports")}>
-             <FileText className="h-5 w-5" />
-             Reports
-           </Button>
-         </div>
-       </div>
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div>
+              <h3 className="text-sm font-semibold">Quick Actions</h3>
+              <p className="text-xs text-muted-foreground mt-1">Management functions for global oversight.</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 xl:grid-cols-5 gap-3">
+            <Button variant="outline" className="h-auto min-h-24 flex-col gap-2 py-4" onClick={() => navigate("/staff-directory")}>
+              <Users className="h-5 w-5" />
+              Manage Users
+            </Button>
+            <Button variant="outline" className="h-auto min-h-24 flex-col gap-2 py-4" onClick={() => navigate("/staff-directory")}>
+              <Users2 className="h-5 w-5" />
+              Staff Directory
+            </Button>
+            <Button variant="outline" className="h-auto min-h-24 flex-col gap-2 py-4" onClick={() => navigate("/warehouses")}>
+              <WarehouseIcon className="h-5 w-5" />
+              Warehouses
+            </Button>
+            <Button variant="outline" className="h-auto min-h-24 flex-col gap-2 py-4" onClick={() => navigate("/settings")}>
+              <Settings className="h-5 w-5" />
+              Settings
+            </Button>
+            <Button variant="outline" className="h-auto min-h-24 flex-col gap-2 py-4" onClick={() => navigate("/reports")}>
+              <FileText className="h-5 w-5" />
+              Reports
+            </Button>
+          </div>
+        </div>
+
+        {/* Floating Scan Button */}
+        <div className="fixed bottom-6 right-4 z-50 sm:bottom-8 sm:right-8">
+          <QuickActionDrawer />
+        </div>
 
        {/* Charts & Alerts */}
        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -656,6 +662,11 @@ const ManagerDashboard = () => {
           </div>
         </div>
       )}
+
+      {/* Floating Scan Button */}
+      <div className="fixed bottom-6 right-4 z-50 sm:bottom-8 sm:right-8">
+        <QuickActionDrawer />
+      </div>
     </div>
   );
 };

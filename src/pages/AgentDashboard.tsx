@@ -18,7 +18,8 @@ import {
   Boxes,
   History,
   User,
-  Building2
+  Building2,
+  Loader2
 } from "lucide-react";
 import { DashboardSkeleton } from "@/components/shared/DashboardSkeleton";
 import { QuickActionDrawer } from "@/components/agent/QuickActionDrawer";

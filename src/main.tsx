@@ -13,6 +13,7 @@ import { env } from "@/lib/env";
 import { logDebug, logError } from "@/lib/logger";
 import { supabase } from "@/integrations/supabase/client";
 import { PushNotifications } from "@capacitor/push-notifications";
+import { LocalNotifications } from "@capacitor/local-notifications";
 
 if (env.VITE_SENTRY_DSN && import.meta.env.PROD) {
   // Defer Sentry init to after first paint to reduce main-thread blocking (LCP/TBT)
@@ -124,6 +125,25 @@ async function initCapacitor() {
 
     // Initialize push notifications (FCM)
     initPushNotifications();
+
+    // Create Android notification channel (required for LocalNotifications on Android 8+ / API 26+)
+    // Without this, LocalNotifications will not appear in the system notification tray.
+    try {
+      await LocalNotifications.createChannel({
+        id: "default",
+        name: "App Notifications",
+        description: "General app notifications for sales, payments, and alerts",
+        importance: 4, // HIGH
+        visibility: 1, // PUBLIC
+        sound: "default",
+        vibration: true,
+        lights: true,
+        lightColor: "#3b82f6",
+      });
+      logDebug("Notification channel created");
+    } catch (e) {
+      logDebug("LocalNotifications channel creation failed (may be web or old Android)", { error: e });
+    }
   }
 }
 

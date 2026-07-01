@@ -30,489 +30,399 @@
 18-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:66:22-63
 19
 20    <queries>
-20-->[:capacitor-camera] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\.pnpm\@capacitor+camera@8.1.0_@capacitor+core@8.3.1\node_modules\@capacitor\camera\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:7:5-17:15
+20-->[:capacitor-camera] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\camera\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:7:5-11:15
 21        <intent>
-21-->[:capacitor-camera] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\.pnpm\@capacitor+camera@8.1.0_@capacitor+core@8.3.1\node_modules\@capacitor\camera\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:8:9-10:18
+21-->[:capacitor-camera] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\camera\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:8:9-10:18
 22            <action android:name="android.media.action.IMAGE_CAPTURE" />
-22-->[:capacitor-camera] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\.pnpm\@capacitor+camera@8.1.0_@capacitor+core@8.3.1\node_modules\@capacitor\camera\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:9:13-73
-22-->[:capacitor-camera] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\.pnpm\@capacitor+camera@8.1.0_@capacitor+core@8.3.1\node_modules\@capacitor\camera\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:9:21-70
+22-->[:capacitor-camera] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\camera\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:9:13-73
+22-->[:capacitor-camera] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\camera\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:9:21-70
 23        </intent>
-24        <intent>
-24-->[:capacitor-camera] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\.pnpm\@capacitor+camera@8.1.0_@capacitor+core@8.3.1\node_modules\@capacitor\camera\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:11:9-13:18
-25            <action android:name="android.intent.action.GET_CONTENT" />
-25-->[:capacitor-camera] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\.pnpm\@capacitor+camera@8.1.0_@capacitor+core@8.3.1\node_modules\@capacitor\camera\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:12:13-72
-25-->[:capacitor-camera] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\.pnpm\@capacitor+camera@8.1.0_@capacitor+core@8.3.1\node_modules\@capacitor\camera\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:12:21-69
-26        </intent>
-27        <intent>
-27-->[:capacitor-camera] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\.pnpm\@capacitor+camera@8.1.0_@capacitor+core@8.3.1\node_modules\@capacitor\camera\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:14:9-16:18
-28            <action android:name="android.intent.action.PICK" />
-28-->[:capacitor-camera] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\.pnpm\@capacitor+camera@8.1.0_@capacitor+core@8.3.1\node_modules\@capacitor\camera\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:15:13-65
-28-->[:capacitor-camera] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\.pnpm\@capacitor+camera@8.1.0_@capacitor+core@8.3.1\node_modules\@capacitor\camera\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:15:21-62
-29        </intent>
-30    </queries>
-31
-32    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-32-->[:capacitor-local-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\.pnpm\@capacitor+local-notifications@8.2.0_@capacitor+core@8.3.1\node_modules\@capacitor\local-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:7:5-81
-32-->[:capacitor-local-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\.pnpm\@capacitor+local-notifications@8.2.0_@capacitor+core@8.3.1\node_modules\@capacitor\local-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:7:22-78
-33    <uses-permission android:name="android.permission.WAKE_LOCK" />
-33-->[:capacitor-local-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\.pnpm\@capacitor+local-notifications@8.2.0_@capacitor+core@8.3.1\node_modules\@capacitor\local-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:8:5-68
-33-->[:capacitor-local-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\.pnpm\@capacitor+local-notifications@8.2.0_@capacitor+core@8.3.1\node_modules\@capacitor\local-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:8:22-65
-34    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" /> <!-- Required by older versions of Google Play services to create IID tokens -->
-34-->[io.ionic.libs:iongeolocation-android:2.2.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f9f36ed1f901e20a235c9439f9d4c093\transformed\iongeolocation-android-2.2.0\AndroidManifest.xml:7:5-79
-34-->[io.ionic.libs:iongeolocation-android:2.2.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f9f36ed1f901e20a235c9439f9d4c093\transformed\iongeolocation-android-2.2.0\AndroidManifest.xml:7:22-76
-35    <uses-permission android:name="com.google.android.c2dm.permission.RECEIVE" />
-35-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:26:5-82
-35-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:26:22-79
+24    </queries>
+25
+26    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+26-->[:capacitor-local-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\local-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:7:5-81
+26-->[:capacitor-local-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\local-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:7:22-78
+27    <uses-permission android:name="android.permission.WAKE_LOCK" />
+27-->[:capacitor-local-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\local-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:8:5-68
+27-->[:capacitor-local-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\local-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:8:22-65
+28    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" /> <!-- Required by older versions of Google Play services to create IID tokens -->
+28-->[io.ionic.libs:iongeolocation-android:2.2.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f9f36ed1f901e20a235c9439f9d4c093\transformed\iongeolocation-android-2.2.0\AndroidManifest.xml:7:5-79
+28-->[io.ionic.libs:iongeolocation-android:2.2.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f9f36ed1f901e20a235c9439f9d4c093\transformed\iongeolocation-android-2.2.0\AndroidManifest.xml:7:22-76
+29    <uses-permission android:name="com.google.android.c2dm.permission.RECEIVE" />
+29-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:26:5-82
+29-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:26:22-79
+30
+31    <permission
+31-->[androidx.core:core:1.17.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\11094a199bb7945826b161d8a9c17beb\transformed\core-1.17.0\AndroidManifest.xml:22:5-24:47
+32        android:name="com.aquaprime.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+32-->[androidx.core:core:1.17.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\11094a199bb7945826b161d8a9c17beb\transformed\core-1.17.0\AndroidManifest.xml:23:9-81
+33        android:protectionLevel="signature" />
+33-->[androidx.core:core:1.17.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\11094a199bb7945826b161d8a9c17beb\transformed\core-1.17.0\AndroidManifest.xml:24:9-44
+34
+35    <uses-permission android:name="com.aquaprime.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+35-->[androidx.core:core:1.17.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\11094a199bb7945826b161d8a9c17beb\transformed\core-1.17.0\AndroidManifest.xml:26:5-97
+35-->[androidx.core:core:1.17.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\11094a199bb7945826b161d8a9c17beb\transformed\core-1.17.0\AndroidManifest.xml:26:22-94
 36
-37    <permission
-37-->[androidx.core:core:1.17.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\11094a199bb7945826b161d8a9c17beb\transformed\core-1.17.0\AndroidManifest.xml:22:5-24:47
-38        android:name="com.aquaprime.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
-38-->[androidx.core:core:1.17.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\11094a199bb7945826b161d8a9c17beb\transformed\core-1.17.0\AndroidManifest.xml:23:9-81
-39        android:protectionLevel="signature" />
-39-->[androidx.core:core:1.17.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\11094a199bb7945826b161d8a9c17beb\transformed\core-1.17.0\AndroidManifest.xml:24:9-44
-40
-41    <uses-permission android:name="com.aquaprime.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
-41-->[androidx.core:core:1.17.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\11094a199bb7945826b161d8a9c17beb\transformed\core-1.17.0\AndroidManifest.xml:26:5-97
-41-->[androidx.core:core:1.17.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\11094a199bb7945826b161d8a9c17beb\transformed\core-1.17.0\AndroidManifest.xml:26:22-94
-42
-43    <application
-43-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:4:5-57:19
-44        android:name="com.aquaprime.app.AquaPrimeApp"
-44-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:5:9-37
-45        android:allowBackup="true"
-45-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:6:9-35
-46        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
-46-->[androidx.core:core:1.17.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\11094a199bb7945826b161d8a9c17beb\transformed\core-1.17.0\AndroidManifest.xml:28:18-86
-47        android:debuggable="true"
-48        android:extractNativeLibs="false"
-49        android:icon="@mipmap/ic_launcher"
-49-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:7:9-43
-50        android:label="@string/app_name"
-50-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:8:9-41
-51        android:requestLegacyExternalStorage="true"
-51-->[io.ionic.libs:ioncamera-android:1.0.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\240b98250f19f78d3c0bb7a81ae5d353\transformed\ioncamera-android-1.0.0\AndroidManifest.xml:8:18-61
-52        android:roundIcon="@mipmap/ic_launcher_round"
-52-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:9:9-54
-53        android:supportsRtl="true"
-53-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:10:9-35
-54        android:theme="@style/AppTheme" >
-54-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:11:9-40
-55        <activity
-55-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:13:9-46:20
-56            android:name="com.aquaprime.app.MainActivity"
-56-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:15:13-41
-57            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
-57-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:14:13-148
-58            android:exported="true"
-58-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:19:13-36
-59            android:hardwareAccelerated="true"
-59-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:20:13-47
-60            android:label="@string/title_activity_main"
-60-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:16:13-56
-61            android:launchMode="singleTask"
-61-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:18:13-44
-62            android:theme="@style/AppTheme.NoActionBarLaunch"
-62-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:17:13-62
-63            android:windowSoftInputMode="adjustResize" >
-63-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:21:13-55
-64            <intent-filter>
-64-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:23:13-26:29
-65                <action android:name="android.intent.action.MAIN" />
-65-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:24:17-69
-65-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:24:25-66
+37    <application
+37-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:4:5-57:19
+38        android:name="com.aquaprime.app.AquaPrimeApp"
+38-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:5:9-37
+39        android:allowBackup="true"
+39-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:6:9-35
+40        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+40-->[androidx.core:core:1.17.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\11094a199bb7945826b161d8a9c17beb\transformed\core-1.17.0\AndroidManifest.xml:28:18-86
+41        android:debuggable="true"
+42        android:extractNativeLibs="false"
+43        android:icon="@mipmap/ic_launcher"
+43-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:7:9-43
+44        android:label="@string/app_name"
+44-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:8:9-41
+45        android:roundIcon="@mipmap/ic_launcher_round"
+45-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:9:9-54
+46        android:supportsRtl="true"
+46-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:10:9-35
+47        android:theme="@style/AppTheme" >
+47-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:11:9-40
+48        <activity
+48-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:13:9-46:20
+49            android:name="com.aquaprime.app.MainActivity"
+49-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:15:13-41
+50            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
+50-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:14:13-148
+51            android:exported="true"
+51-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:19:13-36
+52            android:hardwareAccelerated="true"
+52-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:20:13-47
+53            android:label="@string/title_activity_main"
+53-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:16:13-56
+54            android:launchMode="singleTask"
+54-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:18:13-44
+55            android:theme="@style/AppTheme.NoActionBarLaunch"
+55-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:17:13-62
+56            android:windowSoftInputMode="adjustResize" >
+56-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:21:13-55
+57            <intent-filter>
+57-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:23:13-26:29
+58                <action android:name="android.intent.action.MAIN" />
+58-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:24:17-69
+58-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:24:25-66
+59
+60                <category android:name="android.intent.category.LAUNCHER" />
+60-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:25:17-77
+60-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:25:27-74
+61            </intent-filter>
+62
+63            <!-- Deep link intent filter for Google OAuth callback -->
+64            <intent-filter android:autoVerify="false" >
+64-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:29:13-37:29
+64-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:29:28-54
+65                <action android:name="android.intent.action.VIEW" />
+65-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:30:17-69
+65-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:30:25-66
 66
-67                <category android:name="android.intent.category.LAUNCHER" />
-67-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:25:17-77
-67-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:25:27-74
-68            </intent-filter>
+67                <category android:name="android.intent.category.DEFAULT" />
+67-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:31:17-76
+67-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:31:27-73
+68                <category android:name="android.intent.category.BROWSABLE" />
+68-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:32:17-78
+68-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:32:27-75
 69
-70            <!-- Deep link intent filter for Google OAuth callback -->
-71            <intent-filter android:autoVerify="false" >
-71-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:29:13-37:29
-71-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:29:28-54
-72                <action android:name="android.intent.action.VIEW" />
-72-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:30:17-69
-72-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:30:25-66
-73
-74                <category android:name="android.intent.category.DEFAULT" />
-74-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:31:17-76
-74-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:31:27-73
-75                <category android:name="android.intent.category.BROWSABLE" />
-75-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:32:17-78
-75-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:32:27-75
-76
-77                <data
-77-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:33:17-36:54
-78                    android:host="auth"
-78-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:35:21-40
-79                    android:pathPrefix="/callback"
-79-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:36:21-51
-80                    android:scheme="com.aquaprime.app" />
-80-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:34:21-55
-81            </intent-filter>
-82
-83            <!-- Share target intent filter (for @capgo/capacitor-share-target) -->
-84            <intent-filter>
-84-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:40:13-44:29
-85                <action android:name="android.intent.action.SEND" />
-85-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:41:17-69
-85-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:41:25-66
-86
-87                <category android:name="android.intent.category.DEFAULT" />
-87-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:31:17-76
-87-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:31:27-73
-88
-89                <data android:mimeType="image/*" />
-89-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:33:17-36:54
-89-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:43:23-49
-90            </intent-filter>
-91        </activity>
-92
-93        <provider
-94            android:name="androidx.core.content.FileProvider"
-94-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:49:13-62
-95            android:authorities="com.aquaprime.app.fileprovider"
-95-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:50:13-64
-96            android:exported="false"
-96-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:51:13-37
-97            android:grantUriPermissions="true" >
-97-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:52:13-47
-98            <meta-data
-98-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:53:13-55:64
-99                android:name="android.support.FILE_PROVIDER_PATHS"
-99-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:54:17-67
-100                android:resource="@xml/file_paths" />
-100-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:55:17-51
-101        </provider>
-102
-103        <receiver android:name="com.capacitorjs.plugins.localnotifications.TimedNotificationPublisher" />
-103-->[:capacitor-local-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\.pnpm\@capacitor+local-notifications@8.2.0_@capacitor+core@8.3.1\node_modules\@capacitor\local-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:12:9-106
-103-->[:capacitor-local-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\.pnpm\@capacitor+local-notifications@8.2.0_@capacitor+core@8.3.1\node_modules\@capacitor\local-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:12:19-103
-104        <receiver android:name="com.capacitorjs.plugins.localnotifications.NotificationDismissReceiver" />
-104-->[:capacitor-local-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\.pnpm\@capacitor+local-notifications@8.2.0_@capacitor+core@8.3.1\node_modules\@capacitor\local-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:13:9-107
-104-->[:capacitor-local-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\.pnpm\@capacitor+local-notifications@8.2.0_@capacitor+core@8.3.1\node_modules\@capacitor\local-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:13:19-104
-105        <receiver
-105-->[:capacitor-local-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\.pnpm\@capacitor+local-notifications@8.2.0_@capacitor+core@8.3.1\node_modules\@capacitor\local-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:14:9-23:20
-106            android:name="com.capacitorjs.plugins.localnotifications.LocalNotificationRestoreReceiver"
-106-->[:capacitor-local-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\.pnpm\@capacitor+local-notifications@8.2.0_@capacitor+core@8.3.1\node_modules\@capacitor\local-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:15:13-103
-107            android:directBootAware="true"
-107-->[:capacitor-local-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\.pnpm\@capacitor+local-notifications@8.2.0_@capacitor+core@8.3.1\node_modules\@capacitor\local-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:16:13-43
-108            android:exported="false" >
-108-->[:capacitor-local-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\.pnpm\@capacitor+local-notifications@8.2.0_@capacitor+core@8.3.1\node_modules\@capacitor\local-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:17:13-37
-109            <intent-filter>
-109-->[:capacitor-local-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\.pnpm\@capacitor+local-notifications@8.2.0_@capacitor+core@8.3.1\node_modules\@capacitor\local-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:18:13-22:29
-110                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
-110-->[:capacitor-local-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\.pnpm\@capacitor+local-notifications@8.2.0_@capacitor+core@8.3.1\node_modules\@capacitor\local-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:19:17-86
-110-->[:capacitor-local-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\.pnpm\@capacitor+local-notifications@8.2.0_@capacitor+core@8.3.1\node_modules\@capacitor\local-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:19:25-83
-111                <action android:name="android.intent.action.BOOT_COMPLETED" />
-111-->[:capacitor-local-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\.pnpm\@capacitor+local-notifications@8.2.0_@capacitor+core@8.3.1\node_modules\@capacitor\local-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:20:17-79
-111-->[:capacitor-local-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\.pnpm\@capacitor+local-notifications@8.2.0_@capacitor+core@8.3.1\node_modules\@capacitor\local-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:20:25-76
-112                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
-112-->[:capacitor-local-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\.pnpm\@capacitor+local-notifications@8.2.0_@capacitor+core@8.3.1\node_modules\@capacitor\local-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:21:17-82
-112-->[:capacitor-local-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\.pnpm\@capacitor+local-notifications@8.2.0_@capacitor+core@8.3.1\node_modules\@capacitor\local-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:21:25-79
-113            </intent-filter>
-114        </receiver>
-115
-116        <service
-116-->[:capacitor-push-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\.pnpm\@capacitor+push-notifications@8.1.1_@capacitor+core@8.3.1\node_modules\@capacitor\push-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:8:9-14:19
-117            android:name="com.capacitorjs.plugins.pushnotifications.MessagingService"
-117-->[:capacitor-push-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\.pnpm\@capacitor+push-notifications@8.1.1_@capacitor+core@8.3.1\node_modules\@capacitor\push-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:9:13-86
-118            android:exported="false" >
-118-->[:capacitor-push-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\.pnpm\@capacitor+push-notifications@8.1.1_@capacitor+core@8.3.1\node_modules\@capacitor\push-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:10:13-37
-119            <intent-filter>
-119-->[:capacitor-push-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\.pnpm\@capacitor+push-notifications@8.1.1_@capacitor+core@8.3.1\node_modules\@capacitor\push-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:11:13-13:29
-120                <action android:name="com.google.firebase.MESSAGING_EVENT" />
-120-->[:capacitor-push-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\.pnpm\@capacitor+push-notifications@8.1.1_@capacitor+core@8.3.1\node_modules\@capacitor\push-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:12:17-78
-120-->[:capacitor-push-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\.pnpm\@capacitor+push-notifications@8.1.1_@capacitor+core@8.3.1\node_modules\@capacitor\push-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:12:25-75
-121            </intent-filter>
-122        </service>
-123
-124        <activity
-124-->[io.ionic.libs:ioncamera-android:1.0.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\240b98250f19f78d3c0bb7a81ae5d353\transformed\ioncamera-android-1.0.0\AndroidManifest.xml:9:9-11:86
-125            android:name="io.ionic.libs.ioncameralib.view.IONCAMRLoadingActivity"
-125-->[io.ionic.libs:ioncamera-android:1.0.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\240b98250f19f78d3c0bb7a81ae5d353\transformed\ioncamera-android-1.0.0\AndroidManifest.xml:10:13-82
-126            android:theme="@android:style/Theme.Translucent.NoTitleBar.Fullscreen" />
-126-->[io.ionic.libs:ioncamera-android:1.0.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\240b98250f19f78d3c0bb7a81ae5d353\transformed\ioncamera-android-1.0.0\AndroidManifest.xml:11:13-83
-127        <activity
-127-->[io.ionic.libs:ioncamera-android:1.0.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\240b98250f19f78d3c0bb7a81ae5d353\transformed\ioncamera-android-1.0.0\AndroidManifest.xml:12:9-16:36
-128            android:name="io.ionic.libs.ioncameralib.view.IONCAMRImageEditorActivity"
-128-->[io.ionic.libs:ioncamera-android:1.0.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\240b98250f19f78d3c0bb7a81ae5d353\transformed\ioncamera-android-1.0.0\AndroidManifest.xml:13:13-86
-129            android:enableOnBackInvokedCallback="true"
-129-->[io.ionic.libs:ioncamera-android:1.0.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\240b98250f19f78d3c0bb7a81ae5d353\transformed\ioncamera-android-1.0.0\AndroidManifest.xml:14:13-55
-130            android:theme="@android:style/Theme.Black.NoTitleBar" />
-130-->[io.ionic.libs:ioncamera-android:1.0.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\240b98250f19f78d3c0bb7a81ae5d353\transformed\ioncamera-android-1.0.0\AndroidManifest.xml:15:13-66
-131        <activity
-131-->[io.ionic.libs:ioncamera-android:1.0.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\240b98250f19f78d3c0bb7a81ae5d353\transformed\ioncamera-android-1.0.0\AndroidManifest.xml:17:9-20:86
-132            android:name="io.ionic.libs.ioncameralib.view.IONCAMROpenPhotoPickerActivity"
-132-->[io.ionic.libs:ioncamera-android:1.0.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\240b98250f19f78d3c0bb7a81ae5d353\transformed\ioncamera-android-1.0.0\AndroidManifest.xml:18:13-90
-133            android:exported="false"
-133-->[io.ionic.libs:ioncamera-android:1.0.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\240b98250f19f78d3c0bb7a81ae5d353\transformed\ioncamera-android-1.0.0\AndroidManifest.xml:19:13-37
-134            android:theme="@android:style/Theme.Translucent.NoTitleBar.Fullscreen" /> <!-- Trigger Google Play services to install the backported photo picker module. -->
-134-->[io.ionic.libs:ioncamera-android:1.0.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\240b98250f19f78d3c0bb7a81ae5d353\transformed\ioncamera-android-1.0.0\AndroidManifest.xml:20:13-83
-135        <service
-135-->[io.ionic.libs:ioncamera-android:1.0.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\240b98250f19f78d3c0bb7a81ae5d353\transformed\ioncamera-android-1.0.0\AndroidManifest.xml:22:9-34:19
-136            android:name="com.google.android.gms.metadata.ModuleDependencies"
-136-->[io.ionic.libs:ioncamera-android:1.0.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\240b98250f19f78d3c0bb7a81ae5d353\transformed\ioncamera-android-1.0.0\AndroidManifest.xml:23:13-78
-137            android:enabled="false"
-137-->[io.ionic.libs:ioncamera-android:1.0.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\240b98250f19f78d3c0bb7a81ae5d353\transformed\ioncamera-android-1.0.0\AndroidManifest.xml:24:13-36
-138            android:exported="false" >
-138-->[io.ionic.libs:ioncamera-android:1.0.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\240b98250f19f78d3c0bb7a81ae5d353\transformed\ioncamera-android-1.0.0\AndroidManifest.xml:25:13-37
-139            <intent-filter>
-139-->[io.ionic.libs:ioncamera-android:1.0.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\240b98250f19f78d3c0bb7a81ae5d353\transformed\ioncamera-android-1.0.0\AndroidManifest.xml:27:13-29:29
-140                <action android:name="com.google.android.gms.metadata.MODULE_DEPENDENCIES" />
-140-->[io.ionic.libs:ioncamera-android:1.0.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\240b98250f19f78d3c0bb7a81ae5d353\transformed\ioncamera-android-1.0.0\AndroidManifest.xml:28:17-94
-140-->[io.ionic.libs:ioncamera-android:1.0.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\240b98250f19f78d3c0bb7a81ae5d353\transformed\ioncamera-android-1.0.0\AndroidManifest.xml:28:25-91
-141            </intent-filter>
-142
-143            <meta-data
-143-->[io.ionic.libs:ioncamera-android:1.0.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\240b98250f19f78d3c0bb7a81ae5d353\transformed\ioncamera-android-1.0.0\AndroidManifest.xml:31:13-33:36
-144                android:name="photopicker_activity:0:required"
-144-->[io.ionic.libs:ioncamera-android:1.0.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\240b98250f19f78d3c0bb7a81ae5d353\transformed\ioncamera-android-1.0.0\AndroidManifest.xml:32:17-63
-145                android:value="" />
-145-->[io.ionic.libs:ioncamera-android:1.0.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\240b98250f19f78d3c0bb7a81ae5d353\transformed\ioncamera-android-1.0.0\AndroidManifest.xml:33:17-33
-146        </service>
-147
-148        <provider
-148-->[io.ionic.libs:ioncamera-android:1.0.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\240b98250f19f78d3c0bb7a81ae5d353\transformed\ioncamera-android-1.0.0\AndroidManifest.xml:36:9-44:20
-149            android:name="io.ionic.libs.ioncameralib.IONCAMRFileProvider"
-149-->[io.ionic.libs:ioncamera-android:1.0.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\240b98250f19f78d3c0bb7a81ae5d353\transformed\ioncamera-android-1.0.0\AndroidManifest.xml:37:13-74
-150            android:authorities="com.aquaprime.app.camera.provider"
-150-->[io.ionic.libs:ioncamera-android:1.0.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\240b98250f19f78d3c0bb7a81ae5d353\transformed\ioncamera-android-1.0.0\AndroidManifest.xml:38:13-67
-151            android:exported="false"
-151-->[io.ionic.libs:ioncamera-android:1.0.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\240b98250f19f78d3c0bb7a81ae5d353\transformed\ioncamera-android-1.0.0\AndroidManifest.xml:39:13-37
-152            android:grantUriPermissions="true" >
-152-->[io.ionic.libs:ioncamera-android:1.0.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\240b98250f19f78d3c0bb7a81ae5d353\transformed\ioncamera-android-1.0.0\AndroidManifest.xml:40:13-47
-153            <meta-data
-153-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:53:13-55:64
-154                android:name="android.support.FILE_PROVIDER_PATHS"
-154-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:54:17-67
-155                android:resource="@xml/ioncamera_paths" />
-155-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:55:17-51
-156        </provider>
-157
-158        <receiver
-158-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:29:9-40:20
-159            android:name="com.google.firebase.iid.FirebaseInstanceIdReceiver"
-159-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:30:13-78
-160            android:exported="true"
-160-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:31:13-36
-161            android:permission="com.google.android.c2dm.permission.SEND" >
-161-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:32:13-73
-162            <intent-filter>
-162-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:33:13-35:29
-163                <action android:name="com.google.android.c2dm.intent.RECEIVE" />
-163-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:34:17-81
-163-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:34:25-78
-164            </intent-filter>
-165
-166            <meta-data
-166-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:37:13-39:40
-167                android:name="com.google.android.gms.cloudmessaging.FINISHED_AFTER_HANDLED"
-167-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:38:17-92
-168                android:value="true" />
-168-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:39:17-37
-169        </receiver>
-170        <!--
-171             FirebaseMessagingService performs security checks at runtime,
-172             but set to not exported to explicitly avoid allowing another app to call it.
-173        -->
-174        <service
-174-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:46:9-53:19
-175            android:name="com.google.firebase.messaging.FirebaseMessagingService"
-175-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:47:13-82
-176            android:directBootAware="true"
-176-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:48:13-43
-177            android:exported="false" >
-177-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:49:13-37
-178            <intent-filter android:priority="-500" >
-178-->[:capacitor-push-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\.pnpm\@capacitor+push-notifications@8.1.1_@capacitor+core@8.3.1\node_modules\@capacitor\push-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:11:13-13:29
-179                <action android:name="com.google.firebase.MESSAGING_EVENT" />
-179-->[:capacitor-push-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\.pnpm\@capacitor+push-notifications@8.1.1_@capacitor+core@8.3.1\node_modules\@capacitor\push-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:12:17-78
-179-->[:capacitor-push-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\.pnpm\@capacitor+push-notifications@8.1.1_@capacitor+core@8.3.1\node_modules\@capacitor\push-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:12:25-75
-180            </intent-filter>
-181        </service>
-182        <service
-182-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:54:9-63:19
-183            android:name="com.google.firebase.components.ComponentDiscoveryService"
-183-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:55:13-84
-184            android:directBootAware="true"
-184-->[com.google.firebase:firebase-common:22.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\cb546919c09df4bb1e2d2127157bcaa2\transformed\firebase-common-22.0.1\AndroidManifest.xml:32:13-43
-185            android:exported="false" >
-185-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:56:13-37
-186            <meta-data
-186-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:57:13-59:85
-187                android:name="com.google.firebase.components:com.google.firebase.messaging.FirebaseMessagingKtxRegistrar"
-187-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:58:17-122
-188                android:value="com.google.firebase.components.ComponentRegistrar" />
-188-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:59:17-82
-189            <meta-data
-189-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:60:13-62:85
-190                android:name="com.google.firebase.components:com.google.firebase.messaging.FirebaseMessagingRegistrar"
-190-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:61:17-119
-191                android:value="com.google.firebase.components.ComponentRegistrar" />
-191-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:62:17-82
-192            <meta-data
-192-->[com.google.firebase:firebase-installations:18.0.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\df907beae055c1d2434697ac5cd0594d\transformed\firebase-installations-18.0.0\AndroidManifest.xml:15:13-17:85
-193                android:name="com.google.firebase.components:com.google.firebase.installations.FirebaseInstallationsKtxRegistrar"
-193-->[com.google.firebase:firebase-installations:18.0.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\df907beae055c1d2434697ac5cd0594d\transformed\firebase-installations-18.0.0\AndroidManifest.xml:16:17-130
-194                android:value="com.google.firebase.components.ComponentRegistrar" />
-194-->[com.google.firebase:firebase-installations:18.0.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\df907beae055c1d2434697ac5cd0594d\transformed\firebase-installations-18.0.0\AndroidManifest.xml:17:17-82
-195            <meta-data
-195-->[com.google.firebase:firebase-installations:18.0.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\df907beae055c1d2434697ac5cd0594d\transformed\firebase-installations-18.0.0\AndroidManifest.xml:18:13-20:85
-196                android:name="com.google.firebase.components:com.google.firebase.installations.FirebaseInstallationsRegistrar"
-196-->[com.google.firebase:firebase-installations:18.0.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\df907beae055c1d2434697ac5cd0594d\transformed\firebase-installations-18.0.0\AndroidManifest.xml:19:17-127
-197                android:value="com.google.firebase.components.ComponentRegistrar" />
-197-->[com.google.firebase:firebase-installations:18.0.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\df907beae055c1d2434697ac5cd0594d\transformed\firebase-installations-18.0.0\AndroidManifest.xml:20:17-82
-198            <meta-data
-198-->[com.google.firebase:firebase-common:22.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\cb546919c09df4bb1e2d2127157bcaa2\transformed\firebase-common-22.0.1\AndroidManifest.xml:35:13-37:85
-199                android:name="com.google.firebase.components:com.google.firebase.FirebaseCommonKtxRegistrar"
-199-->[com.google.firebase:firebase-common:22.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\cb546919c09df4bb1e2d2127157bcaa2\transformed\firebase-common-22.0.1\AndroidManifest.xml:36:17-109
-200                android:value="com.google.firebase.components.ComponentRegistrar" />
-200-->[com.google.firebase:firebase-common:22.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\cb546919c09df4bb1e2d2127157bcaa2\transformed\firebase-common-22.0.1\AndroidManifest.xml:37:17-82
-201            <meta-data
-201-->[com.google.firebase:firebase-datatransport:18.2.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\37804962654ec3e9f031e2012e83e63f\transformed\firebase-datatransport-18.2.0\AndroidManifest.xml:25:13-27:85
-202                android:name="com.google.firebase.components:com.google.firebase.datatransport.TransportRegistrar"
-202-->[com.google.firebase:firebase-datatransport:18.2.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\37804962654ec3e9f031e2012e83e63f\transformed\firebase-datatransport-18.2.0\AndroidManifest.xml:26:17-115
-203                android:value="com.google.firebase.components.ComponentRegistrar" />
-203-->[com.google.firebase:firebase-datatransport:18.2.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\37804962654ec3e9f031e2012e83e63f\transformed\firebase-datatransport-18.2.0\AndroidManifest.xml:27:17-82
-204        </service>
-205
-206        <activity
-206-->[com.google.android.gms:play-services-base:18.5.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\c1b0052ae712299163f2612d6db27779\transformed\play-services-base-18.5.0\AndroidManifest.xml:5:9-173
-207            android:name="com.google.android.gms.common.api.GoogleApiActivity"
-207-->[com.google.android.gms:play-services-base:18.5.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\c1b0052ae712299163f2612d6db27779\transformed\play-services-base-18.5.0\AndroidManifest.xml:5:19-85
-208            android:exported="false"
-208-->[com.google.android.gms:play-services-base:18.5.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\c1b0052ae712299163f2612d6db27779\transformed\play-services-base-18.5.0\AndroidManifest.xml:5:146-170
-209            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
-209-->[com.google.android.gms:play-services-base:18.5.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\c1b0052ae712299163f2612d6db27779\transformed\play-services-base-18.5.0\AndroidManifest.xml:5:86-145
-210
-211        <provider
-211-->[androidx.emoji2:emoji2:1.3.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\353d69426d62513a7e19e841051a3a44\transformed\emoji2-1.3.0\AndroidManifest.xml:24:9-32:20
-212            android:name="androidx.startup.InitializationProvider"
-212-->[androidx.emoji2:emoji2:1.3.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\353d69426d62513a7e19e841051a3a44\transformed\emoji2-1.3.0\AndroidManifest.xml:25:13-67
-213            android:authorities="com.aquaprime.app.androidx-startup"
-213-->[androidx.emoji2:emoji2:1.3.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\353d69426d62513a7e19e841051a3a44\transformed\emoji2-1.3.0\AndroidManifest.xml:26:13-68
-214            android:exported="false" >
-214-->[androidx.emoji2:emoji2:1.3.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\353d69426d62513a7e19e841051a3a44\transformed\emoji2-1.3.0\AndroidManifest.xml:27:13-37
-215            <meta-data
-215-->[androidx.emoji2:emoji2:1.3.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\353d69426d62513a7e19e841051a3a44\transformed\emoji2-1.3.0\AndroidManifest.xml:29:13-31:52
-216                android:name="androidx.emoji2.text.EmojiCompatInitializer"
-216-->[androidx.emoji2:emoji2:1.3.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\353d69426d62513a7e19e841051a3a44\transformed\emoji2-1.3.0\AndroidManifest.xml:30:17-75
-217                android:value="androidx.startup" />
-217-->[androidx.emoji2:emoji2:1.3.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\353d69426d62513a7e19e841051a3a44\transformed\emoji2-1.3.0\AndroidManifest.xml:31:17-49
+70                <data
+70-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:33:17-36:54
+71                    android:host="auth"
+71-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:35:21-40
+72                    android:pathPrefix="/callback"
+72-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:36:21-51
+73                    android:scheme="com.aquaprime.app" />
+73-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:34:21-55
+74            </intent-filter>
+75
+76            <!-- Share target intent filter (for @capgo/capacitor-share-target) -->
+77            <intent-filter>
+77-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:40:13-44:29
+78                <action android:name="android.intent.action.SEND" />
+78-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:41:17-69
+78-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:41:25-66
+79
+80                <category android:name="android.intent.category.DEFAULT" />
+80-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:31:17-76
+80-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:31:27-73
+81
+82                <data android:mimeType="image/*" />
+82-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:33:17-36:54
+82-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:43:23-49
+83            </intent-filter>
+84        </activity>
+85
+86        <provider
+87            android:name="androidx.core.content.FileProvider"
+87-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:49:13-62
+88            android:authorities="com.aquaprime.app.fileprovider"
+88-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:50:13-64
+89            android:exported="false"
+89-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:51:13-37
+90            android:grantUriPermissions="true" >
+90-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:52:13-47
+91            <meta-data
+91-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:53:13-55:64
+92                android:name="android.support.FILE_PROVIDER_PATHS"
+92-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:54:17-67
+93                android:resource="@xml/file_paths" />
+93-->C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\android\app\src\main\AndroidManifest.xml:55:17-51
+94        </provider>
+95
+96        <receiver android:name="com.capacitorjs.plugins.localnotifications.TimedNotificationPublisher" />
+96-->[:capacitor-local-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\local-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:12:9-106
+96-->[:capacitor-local-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\local-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:12:19-103
+97        <receiver android:name="com.capacitorjs.plugins.localnotifications.NotificationDismissReceiver" />
+97-->[:capacitor-local-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\local-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:13:9-107
+97-->[:capacitor-local-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\local-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:13:19-104
+98        <receiver
+98-->[:capacitor-local-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\local-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:14:9-23:20
+99            android:name="com.capacitorjs.plugins.localnotifications.LocalNotificationRestoreReceiver"
+99-->[:capacitor-local-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\local-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:15:13-103
+100            android:directBootAware="true"
+100-->[:capacitor-local-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\local-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:16:13-43
+101            android:exported="false" >
+101-->[:capacitor-local-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\local-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:17:13-37
+102            <intent-filter>
+102-->[:capacitor-local-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\local-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:18:13-22:29
+103                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+103-->[:capacitor-local-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\local-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:19:17-86
+103-->[:capacitor-local-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\local-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:19:25-83
+104                <action android:name="android.intent.action.BOOT_COMPLETED" />
+104-->[:capacitor-local-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\local-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:20:17-79
+104-->[:capacitor-local-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\local-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:20:25-76
+105                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+105-->[:capacitor-local-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\local-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:21:17-82
+105-->[:capacitor-local-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\local-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:21:25-79
+106            </intent-filter>
+107        </receiver>
+108
+109        <service
+109-->[:capacitor-push-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\push-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:8:9-14:19
+110            android:name="com.capacitorjs.plugins.pushnotifications.MessagingService"
+110-->[:capacitor-push-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\push-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:9:13-86
+111            android:exported="false" >
+111-->[:capacitor-push-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\push-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:10:13-37
+112            <intent-filter>
+112-->[:capacitor-push-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\push-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:11:13-13:29
+113                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+113-->[:capacitor-push-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\push-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:12:17-78
+113-->[:capacitor-push-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\push-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:12:25-75
+114            </intent-filter>
+115        </service>
+116
+117        <receiver
+117-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:29:9-40:20
+118            android:name="com.google.firebase.iid.FirebaseInstanceIdReceiver"
+118-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:30:13-78
+119            android:exported="true"
+119-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:31:13-36
+120            android:permission="com.google.android.c2dm.permission.SEND" >
+120-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:32:13-73
+121            <intent-filter>
+121-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:33:13-35:29
+122                <action android:name="com.google.android.c2dm.intent.RECEIVE" />
+122-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:34:17-81
+122-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:34:25-78
+123            </intent-filter>
+124
+125            <meta-data
+125-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:37:13-39:40
+126                android:name="com.google.android.gms.cloudmessaging.FINISHED_AFTER_HANDLED"
+126-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:38:17-92
+127                android:value="true" />
+127-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:39:17-37
+128        </receiver>
+129        <!--
+130             FirebaseMessagingService performs security checks at runtime,
+131             but set to not exported to explicitly avoid allowing another app to call it.
+132        -->
+133        <service
+133-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:46:9-53:19
+134            android:name="com.google.firebase.messaging.FirebaseMessagingService"
+134-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:47:13-82
+135            android:directBootAware="true"
+135-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:48:13-43
+136            android:exported="false" >
+136-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:49:13-37
+137            <intent-filter android:priority="-500" >
+137-->[:capacitor-push-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\push-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:11:13-13:29
+138                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+138-->[:capacitor-push-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\push-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:12:17-78
+138-->[:capacitor-push-notifications] C:\Users\rajku\Documents\PUBLIC PROJECTS\make-happy-app-2eea1e03\node_modules\@capacitor\push-notifications\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:12:25-75
+139            </intent-filter>
+140        </service>
+141        <service
+141-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:54:9-63:19
+142            android:name="com.google.firebase.components.ComponentDiscoveryService"
+142-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:55:13-84
+143            android:directBootAware="true"
+143-->[com.google.firebase:firebase-common:22.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\cb546919c09df4bb1e2d2127157bcaa2\transformed\firebase-common-22.0.1\AndroidManifest.xml:32:13-43
+144            android:exported="false" >
+144-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:56:13-37
+145            <meta-data
+145-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:57:13-59:85
+146                android:name="com.google.firebase.components:com.google.firebase.messaging.FirebaseMessagingKtxRegistrar"
+146-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:58:17-122
+147                android:value="com.google.firebase.components.ComponentRegistrar" />
+147-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:59:17-82
+148            <meta-data
+148-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:60:13-62:85
+149                android:name="com.google.firebase.components:com.google.firebase.messaging.FirebaseMessagingRegistrar"
+149-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:61:17-119
+150                android:value="com.google.firebase.components.ComponentRegistrar" />
+150-->[com.google.firebase:firebase-messaging:25.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\fee7827030cf30b9c64fc7d59fae02bb\transformed\firebase-messaging-25.0.1\AndroidManifest.xml:62:17-82
+151            <meta-data
+151-->[com.google.firebase:firebase-installations:18.0.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\df907beae055c1d2434697ac5cd0594d\transformed\firebase-installations-18.0.0\AndroidManifest.xml:15:13-17:85
+152                android:name="com.google.firebase.components:com.google.firebase.installations.FirebaseInstallationsKtxRegistrar"
+152-->[com.google.firebase:firebase-installations:18.0.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\df907beae055c1d2434697ac5cd0594d\transformed\firebase-installations-18.0.0\AndroidManifest.xml:16:17-130
+153                android:value="com.google.firebase.components.ComponentRegistrar" />
+153-->[com.google.firebase:firebase-installations:18.0.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\df907beae055c1d2434697ac5cd0594d\transformed\firebase-installations-18.0.0\AndroidManifest.xml:17:17-82
+154            <meta-data
+154-->[com.google.firebase:firebase-installations:18.0.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\df907beae055c1d2434697ac5cd0594d\transformed\firebase-installations-18.0.0\AndroidManifest.xml:18:13-20:85
+155                android:name="com.google.firebase.components:com.google.firebase.installations.FirebaseInstallationsRegistrar"
+155-->[com.google.firebase:firebase-installations:18.0.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\df907beae055c1d2434697ac5cd0594d\transformed\firebase-installations-18.0.0\AndroidManifest.xml:19:17-127
+156                android:value="com.google.firebase.components.ComponentRegistrar" />
+156-->[com.google.firebase:firebase-installations:18.0.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\df907beae055c1d2434697ac5cd0594d\transformed\firebase-installations-18.0.0\AndroidManifest.xml:20:17-82
+157            <meta-data
+157-->[com.google.firebase:firebase-common:22.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\cb546919c09df4bb1e2d2127157bcaa2\transformed\firebase-common-22.0.1\AndroidManifest.xml:35:13-37:85
+158                android:name="com.google.firebase.components:com.google.firebase.FirebaseCommonKtxRegistrar"
+158-->[com.google.firebase:firebase-common:22.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\cb546919c09df4bb1e2d2127157bcaa2\transformed\firebase-common-22.0.1\AndroidManifest.xml:36:17-109
+159                android:value="com.google.firebase.components.ComponentRegistrar" />
+159-->[com.google.firebase:firebase-common:22.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\cb546919c09df4bb1e2d2127157bcaa2\transformed\firebase-common-22.0.1\AndroidManifest.xml:37:17-82
+160            <meta-data
+160-->[com.google.firebase:firebase-datatransport:18.2.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\37804962654ec3e9f031e2012e83e63f\transformed\firebase-datatransport-18.2.0\AndroidManifest.xml:25:13-27:85
+161                android:name="com.google.firebase.components:com.google.firebase.datatransport.TransportRegistrar"
+161-->[com.google.firebase:firebase-datatransport:18.2.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\37804962654ec3e9f031e2012e83e63f\transformed\firebase-datatransport-18.2.0\AndroidManifest.xml:26:17-115
+162                android:value="com.google.firebase.components.ComponentRegistrar" />
+162-->[com.google.firebase:firebase-datatransport:18.2.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\37804962654ec3e9f031e2012e83e63f\transformed\firebase-datatransport-18.2.0\AndroidManifest.xml:27:17-82
+163        </service>
+164
+165        <activity
+165-->[com.google.android.gms:play-services-base:18.5.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\c1b0052ae712299163f2612d6db27779\transformed\play-services-base-18.5.0\AndroidManifest.xml:5:9-173
+166            android:name="com.google.android.gms.common.api.GoogleApiActivity"
+166-->[com.google.android.gms:play-services-base:18.5.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\c1b0052ae712299163f2612d6db27779\transformed\play-services-base-18.5.0\AndroidManifest.xml:5:19-85
+167            android:exported="false"
+167-->[com.google.android.gms:play-services-base:18.5.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\c1b0052ae712299163f2612d6db27779\transformed\play-services-base-18.5.0\AndroidManifest.xml:5:146-170
+168            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+168-->[com.google.android.gms:play-services-base:18.5.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\c1b0052ae712299163f2612d6db27779\transformed\play-services-base-18.5.0\AndroidManifest.xml:5:86-145
+169
+170        <provider
+170-->[androidx.emoji2:emoji2:1.3.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\353d69426d62513a7e19e841051a3a44\transformed\emoji2-1.3.0\AndroidManifest.xml:24:9-32:20
+171            android:name="androidx.startup.InitializationProvider"
+171-->[androidx.emoji2:emoji2:1.3.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\353d69426d62513a7e19e841051a3a44\transformed\emoji2-1.3.0\AndroidManifest.xml:25:13-67
+172            android:authorities="com.aquaprime.app.androidx-startup"
+172-->[androidx.emoji2:emoji2:1.3.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\353d69426d62513a7e19e841051a3a44\transformed\emoji2-1.3.0\AndroidManifest.xml:26:13-68
+173            android:exported="false" >
+173-->[androidx.emoji2:emoji2:1.3.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\353d69426d62513a7e19e841051a3a44\transformed\emoji2-1.3.0\AndroidManifest.xml:27:13-37
+174            <meta-data
+174-->[androidx.emoji2:emoji2:1.3.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\353d69426d62513a7e19e841051a3a44\transformed\emoji2-1.3.0\AndroidManifest.xml:29:13-31:52
+175                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+175-->[androidx.emoji2:emoji2:1.3.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\353d69426d62513a7e19e841051a3a44\transformed\emoji2-1.3.0\AndroidManifest.xml:30:17-75
+176                android:value="androidx.startup" />
+176-->[androidx.emoji2:emoji2:1.3.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\353d69426d62513a7e19e841051a3a44\transformed\emoji2-1.3.0\AndroidManifest.xml:31:17-49
+177            <meta-data
+177-->[androidx.lifecycle:lifecycle-process:2.6.2] C:\Users\rajku\.gradle\caches\8.14.3\transforms\14a3b51da1167f75215e7e32d2231e74\transformed\lifecycle-process-2.6.2\AndroidManifest.xml:29:13-31:52
+178                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+178-->[androidx.lifecycle:lifecycle-process:2.6.2] C:\Users\rajku\.gradle\caches\8.14.3\transforms\14a3b51da1167f75215e7e32d2231e74\transformed\lifecycle-process-2.6.2\AndroidManifest.xml:30:17-78
+179                android:value="androidx.startup" />
+179-->[androidx.lifecycle:lifecycle-process:2.6.2] C:\Users\rajku\.gradle\caches\8.14.3\transforms\14a3b51da1167f75215e7e32d2231e74\transformed\lifecycle-process-2.6.2\AndroidManifest.xml:31:17-49
+180            <meta-data
+180-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:29:13-31:52
+181                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+181-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:30:17-85
+182                android:value="androidx.startup" />
+182-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:31:17-49
+183        </provider>
+184        <provider
+184-->[com.google.firebase:firebase-common:22.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\cb546919c09df4bb1e2d2127157bcaa2\transformed\firebase-common-22.0.1\AndroidManifest.xml:23:9-28:39
+185            android:name="com.google.firebase.provider.FirebaseInitProvider"
+185-->[com.google.firebase:firebase-common:22.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\cb546919c09df4bb1e2d2127157bcaa2\transformed\firebase-common-22.0.1\AndroidManifest.xml:24:13-77
+186            android:authorities="com.aquaprime.app.firebaseinitprovider"
+186-->[com.google.firebase:firebase-common:22.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\cb546919c09df4bb1e2d2127157bcaa2\transformed\firebase-common-22.0.1\AndroidManifest.xml:25:13-72
+187            android:directBootAware="true"
+187-->[com.google.firebase:firebase-common:22.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\cb546919c09df4bb1e2d2127157bcaa2\transformed\firebase-common-22.0.1\AndroidManifest.xml:26:13-43
+188            android:exported="false"
+188-->[com.google.firebase:firebase-common:22.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\cb546919c09df4bb1e2d2127157bcaa2\transformed\firebase-common-22.0.1\AndroidManifest.xml:27:13-37
+189            android:initOrder="100" />
+189-->[com.google.firebase:firebase-common:22.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\cb546919c09df4bb1e2d2127157bcaa2\transformed\firebase-common-22.0.1\AndroidManifest.xml:28:13-36
+190
+191        <meta-data
+191-->[com.google.android.gms:play-services-basement:18.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\535e9dd0a65eaa85bd344836d560144e\transformed\play-services-basement-18.4.0\AndroidManifest.xml:6:9-122
+192            android:name="com.google.android.gms.version"
+192-->[com.google.android.gms:play-services-basement:18.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\535e9dd0a65eaa85bd344836d560144e\transformed\play-services-basement-18.4.0\AndroidManifest.xml:6:20-65
+193            android:value="@integer/google_play_services_version" />
+193-->[com.google.android.gms:play-services-basement:18.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\535e9dd0a65eaa85bd344836d560144e\transformed\play-services-basement-18.4.0\AndroidManifest.xml:6:66-119
+194
+195        <receiver
+195-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:34:9-52:20
+196            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+196-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:35:13-76
+197            android:directBootAware="false"
+197-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:36:13-44
+198            android:enabled="true"
+198-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:37:13-35
+199            android:exported="true"
+199-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:38:13-36
+200            android:permission="android.permission.DUMP" >
+200-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:39:13-57
+201            <intent-filter>
+201-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:40:13-42:29
+202                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+202-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:41:17-91
+202-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:41:25-88
+203            </intent-filter>
+204            <intent-filter>
+204-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:43:13-45:29
+205                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+205-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:44:17-85
+205-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:44:25-82
+206            </intent-filter>
+207            <intent-filter>
+207-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:46:13-48:29
+208                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+208-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:47:17-88
+208-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:47:25-85
+209            </intent-filter>
+210            <intent-filter>
+210-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:49:13-51:29
+211                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+211-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:50:17-95
+211-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:50:25-92
+212            </intent-filter>
+213        </receiver>
+214
+215        <service
+215-->[com.google.android.datatransport:transport-backend-cct:3.1.9] C:\Users\rajku\.gradle\caches\8.14.3\transforms\ea620a6b5afc7c5e432bbec109041d91\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:28:9-34:19
+216            android:name="com.google.android.datatransport.runtime.backends.TransportBackendDiscovery"
+216-->[com.google.android.datatransport:transport-backend-cct:3.1.9] C:\Users\rajku\.gradle\caches\8.14.3\transforms\ea620a6b5afc7c5e432bbec109041d91\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:29:13-103
+217            android:exported="false" >
+217-->[com.google.android.datatransport:transport-backend-cct:3.1.9] C:\Users\rajku\.gradle\caches\8.14.3\transforms\ea620a6b5afc7c5e432bbec109041d91\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:30:13-37
 218            <meta-data
-218-->[androidx.lifecycle:lifecycle-process:2.6.2] C:\Users\rajku\.gradle\caches\8.14.3\transforms\14a3b51da1167f75215e7e32d2231e74\transformed\lifecycle-process-2.6.2\AndroidManifest.xml:29:13-31:52
-219                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
-219-->[androidx.lifecycle:lifecycle-process:2.6.2] C:\Users\rajku\.gradle\caches\8.14.3\transforms\14a3b51da1167f75215e7e32d2231e74\transformed\lifecycle-process-2.6.2\AndroidManifest.xml:30:17-78
-220                android:value="androidx.startup" />
-220-->[androidx.lifecycle:lifecycle-process:2.6.2] C:\Users\rajku\.gradle\caches\8.14.3\transforms\14a3b51da1167f75215e7e32d2231e74\transformed\lifecycle-process-2.6.2\AndroidManifest.xml:31:17-49
-221            <meta-data
-221-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:29:13-31:52
-222                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
-222-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:30:17-85
-223                android:value="androidx.startup" />
-223-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:31:17-49
-224        </provider>
-225        <!--
-226        Service for holding metadata. Cannot be instantiated.
-227        Metadata will be merged from other manifests.
-228        -->
-229        <service
-229-->[androidx.camera:camera-core:1.4.2] C:\Users\rajku\.gradle\caches\8.14.3\transforms\1bed5d73aa0783bafdf646ee8d6db11d\transformed\camera-core-1.4.2\AndroidManifest.xml:29:9-33:78
-230            android:name="androidx.camera.core.impl.MetadataHolderService"
-230-->[androidx.camera:camera-core:1.4.2] C:\Users\rajku\.gradle\caches\8.14.3\transforms\1bed5d73aa0783bafdf646ee8d6db11d\transformed\camera-core-1.4.2\AndroidManifest.xml:30:13-75
-231            android:enabled="false"
-231-->[androidx.camera:camera-core:1.4.2] C:\Users\rajku\.gradle\caches\8.14.3\transforms\1bed5d73aa0783bafdf646ee8d6db11d\transformed\camera-core-1.4.2\AndroidManifest.xml:31:13-36
-232            android:exported="false" />
-232-->[androidx.camera:camera-core:1.4.2] C:\Users\rajku\.gradle\caches\8.14.3\transforms\1bed5d73aa0783bafdf646ee8d6db11d\transformed\camera-core-1.4.2\AndroidManifest.xml:32:13-37
-233
-234        <provider
-234-->[com.google.firebase:firebase-common:22.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\cb546919c09df4bb1e2d2127157bcaa2\transformed\firebase-common-22.0.1\AndroidManifest.xml:23:9-28:39
-235            android:name="com.google.firebase.provider.FirebaseInitProvider"
-235-->[com.google.firebase:firebase-common:22.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\cb546919c09df4bb1e2d2127157bcaa2\transformed\firebase-common-22.0.1\AndroidManifest.xml:24:13-77
-236            android:authorities="com.aquaprime.app.firebaseinitprovider"
-236-->[com.google.firebase:firebase-common:22.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\cb546919c09df4bb1e2d2127157bcaa2\transformed\firebase-common-22.0.1\AndroidManifest.xml:25:13-72
-237            android:directBootAware="true"
-237-->[com.google.firebase:firebase-common:22.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\cb546919c09df4bb1e2d2127157bcaa2\transformed\firebase-common-22.0.1\AndroidManifest.xml:26:13-43
-238            android:exported="false"
-238-->[com.google.firebase:firebase-common:22.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\cb546919c09df4bb1e2d2127157bcaa2\transformed\firebase-common-22.0.1\AndroidManifest.xml:27:13-37
-239            android:initOrder="100" />
-239-->[com.google.firebase:firebase-common:22.0.1] C:\Users\rajku\.gradle\caches\8.14.3\transforms\cb546919c09df4bb1e2d2127157bcaa2\transformed\firebase-common-22.0.1\AndroidManifest.xml:28:13-36
-240
-241        <meta-data
-241-->[com.google.android.gms:play-services-basement:18.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\535e9dd0a65eaa85bd344836d560144e\transformed\play-services-basement-18.4.0\AndroidManifest.xml:6:9-122
-242            android:name="com.google.android.gms.version"
-242-->[com.google.android.gms:play-services-basement:18.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\535e9dd0a65eaa85bd344836d560144e\transformed\play-services-basement-18.4.0\AndroidManifest.xml:6:20-65
-243            android:value="@integer/google_play_services_version" />
-243-->[com.google.android.gms:play-services-basement:18.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\535e9dd0a65eaa85bd344836d560144e\transformed\play-services-basement-18.4.0\AndroidManifest.xml:6:66-119
-244
-245        <receiver
-245-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:34:9-52:20
-246            android:name="androidx.profileinstaller.ProfileInstallReceiver"
-246-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:35:13-76
-247            android:directBootAware="false"
-247-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:36:13-44
-248            android:enabled="true"
-248-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:37:13-35
-249            android:exported="true"
-249-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:38:13-36
-250            android:permission="android.permission.DUMP" >
-250-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:39:13-57
-251            <intent-filter>
-251-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:40:13-42:29
-252                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
-252-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:41:17-91
-252-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:41:25-88
-253            </intent-filter>
-254            <intent-filter>
-254-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:43:13-45:29
-255                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
-255-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:44:17-85
-255-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:44:25-82
-256            </intent-filter>
-257            <intent-filter>
-257-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:46:13-48:29
-258                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
-258-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:47:17-88
-258-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:47:25-85
-259            </intent-filter>
-260            <intent-filter>
-260-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:49:13-51:29
-261                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
-261-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:50:17-95
-261-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rajku\.gradle\caches\8.14.3\transforms\f95ab50c54d3211c648684c462933e30\transformed\profileinstaller-1.4.0\AndroidManifest.xml:50:25-92
-262            </intent-filter>
-263        </receiver>
-264
-265        <service
-265-->[com.google.android.datatransport:transport-backend-cct:3.1.9] C:\Users\rajku\.gradle\caches\8.14.3\transforms\ea620a6b5afc7c5e432bbec109041d91\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:28:9-34:19
-266            android:name="com.google.android.datatransport.runtime.backends.TransportBackendDiscovery"
-266-->[com.google.android.datatransport:transport-backend-cct:3.1.9] C:\Users\rajku\.gradle\caches\8.14.3\transforms\ea620a6b5afc7c5e432bbec109041d91\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:29:13-103
-267            android:exported="false" >
-267-->[com.google.android.datatransport:transport-backend-cct:3.1.9] C:\Users\rajku\.gradle\caches\8.14.3\transforms\ea620a6b5afc7c5e432bbec109041d91\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:30:13-37
-268            <meta-data
-268-->[com.google.android.datatransport:transport-backend-cct:3.1.9] C:\Users\rajku\.gradle\caches\8.14.3\transforms\ea620a6b5afc7c5e432bbec109041d91\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:31:13-33:39
-269                android:name="backend:com.google.android.datatransport.cct.CctBackendFactory"
-269-->[com.google.android.datatransport:transport-backend-cct:3.1.9] C:\Users\rajku\.gradle\caches\8.14.3\transforms\ea620a6b5afc7c5e432bbec109041d91\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:32:17-94
-270                android:value="cct" />
-270-->[com.google.android.datatransport:transport-backend-cct:3.1.9] C:\Users\rajku\.gradle\caches\8.14.3\transforms\ea620a6b5afc7c5e432bbec109041d91\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:33:17-36
-271        </service>
-272        <service
-272-->[com.google.android.datatransport:transport-runtime:3.1.9] C:\Users\rajku\.gradle\caches\8.14.3\transforms\1491c73c5d15eb22051217da9a2fb39c\transformed\transport-runtime-3.1.9\AndroidManifest.xml:26:9-30:19
-273            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService"
-273-->[com.google.android.datatransport:transport-runtime:3.1.9] C:\Users\rajku\.gradle\caches\8.14.3\transforms\1491c73c5d15eb22051217da9a2fb39c\transformed\transport-runtime-3.1.9\AndroidManifest.xml:27:13-117
-274            android:exported="false"
-274-->[com.google.android.datatransport:transport-runtime:3.1.9] C:\Users\rajku\.gradle\caches\8.14.3\transforms\1491c73c5d15eb22051217da9a2fb39c\transformed\transport-runtime-3.1.9\AndroidManifest.xml:28:13-37
-275            android:permission="android.permission.BIND_JOB_SERVICE" >
-275-->[com.google.android.datatransport:transport-runtime:3.1.9] C:\Users\rajku\.gradle\caches\8.14.3\transforms\1491c73c5d15eb22051217da9a2fb39c\transformed\transport-runtime-3.1.9\AndroidManifest.xml:29:13-69
-276        </service>
-277
-278        <receiver
-278-->[com.google.android.datatransport:transport-runtime:3.1.9] C:\Users\rajku\.gradle\caches\8.14.3\transforms\1491c73c5d15eb22051217da9a2fb39c\transformed\transport-runtime-3.1.9\AndroidManifest.xml:32:9-34:40
-279            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.AlarmManagerSchedulerBroadcastReceiver"
-279-->[com.google.android.datatransport:transport-runtime:3.1.9] C:\Users\rajku\.gradle\caches\8.14.3\transforms\1491c73c5d15eb22051217da9a2fb39c\transformed\transport-runtime-3.1.9\AndroidManifest.xml:33:13-132
-280            android:exported="false" />
-280-->[com.google.android.datatransport:transport-runtime:3.1.9] C:\Users\rajku\.gradle\caches\8.14.3\transforms\1491c73c5d15eb22051217da9a2fb39c\transformed\transport-runtime-3.1.9\AndroidManifest.xml:34:13-37
-281    </application>
-282
-283</manifest>
+218-->[com.google.android.datatransport:transport-backend-cct:3.1.9] C:\Users\rajku\.gradle\caches\8.14.3\transforms\ea620a6b5afc7c5e432bbec109041d91\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:31:13-33:39
+219                android:name="backend:com.google.android.datatransport.cct.CctBackendFactory"
+219-->[com.google.android.datatransport:transport-backend-cct:3.1.9] C:\Users\rajku\.gradle\caches\8.14.3\transforms\ea620a6b5afc7c5e432bbec109041d91\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:32:17-94
+220                android:value="cct" />
+220-->[com.google.android.datatransport:transport-backend-cct:3.1.9] C:\Users\rajku\.gradle\caches\8.14.3\transforms\ea620a6b5afc7c5e432bbec109041d91\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:33:17-36
+221        </service>
+222        <service
+222-->[com.google.android.datatransport:transport-runtime:3.1.9] C:\Users\rajku\.gradle\caches\8.14.3\transforms\1491c73c5d15eb22051217da9a2fb39c\transformed\transport-runtime-3.1.9\AndroidManifest.xml:26:9-30:19
+223            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService"
+223-->[com.google.android.datatransport:transport-runtime:3.1.9] C:\Users\rajku\.gradle\caches\8.14.3\transforms\1491c73c5d15eb22051217da9a2fb39c\transformed\transport-runtime-3.1.9\AndroidManifest.xml:27:13-117
+224            android:exported="false"
+224-->[com.google.android.datatransport:transport-runtime:3.1.9] C:\Users\rajku\.gradle\caches\8.14.3\transforms\1491c73c5d15eb22051217da9a2fb39c\transformed\transport-runtime-3.1.9\AndroidManifest.xml:28:13-37
+225            android:permission="android.permission.BIND_JOB_SERVICE" >
+225-->[com.google.android.datatransport:transport-runtime:3.1.9] C:\Users\rajku\.gradle\caches\8.14.3\transforms\1491c73c5d15eb22051217da9a2fb39c\transformed\transport-runtime-3.1.9\AndroidManifest.xml:29:13-69
+226        </service>
+227
+228        <receiver
+228-->[com.google.android.datatransport:transport-runtime:3.1.9] C:\Users\rajku\.gradle\caches\8.14.3\transforms\1491c73c5d15eb22051217da9a2fb39c\transformed\transport-runtime-3.1.9\AndroidManifest.xml:32:9-34:40
+229            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.AlarmManagerSchedulerBroadcastReceiver"
+229-->[com.google.android.datatransport:transport-runtime:3.1.9] C:\Users\rajku\.gradle\caches\8.14.3\transforms\1491c73c5d15eb22051217da9a2fb39c\transformed\transport-runtime-3.1.9\AndroidManifest.xml:33:13-132
+230            android:exported="false" />
+230-->[com.google.android.datatransport:transport-runtime:3.1.9] C:\Users\rajku\.gradle\caches\8.14.3\transforms\1491c73c5d15eb22051217da9a2fb39c\transformed\transport-runtime-3.1.9\AndroidManifest.xml:34:13-37
+231    </application>
+232
+233</manifest>
