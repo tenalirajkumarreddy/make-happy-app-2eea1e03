@@ -171,6 +171,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       setLoading(false);
     }
+    // If roleError is set, leave role as null; ProtectedRoute will handle it
   };
 
   useEffect(() => {

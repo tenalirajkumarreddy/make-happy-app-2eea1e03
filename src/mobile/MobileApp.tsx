@@ -255,6 +255,7 @@ function StaffApp({ role }: { role: StaffRole }) {
   const menuSections = STAFF_MENU_BY_ROLE[role];
   const allMenuItems = menuSections.flatMap((s) => s.items);
 
+  // Header title: use menu items list to derive page name
   const activeMenuItem =
     allMenuItems.find((item) => location.pathname === item.path || (item.path !== "/" && location.pathname.startsWith(item.path))) ||
     allMenuItems[0];
@@ -352,7 +353,6 @@ function StaffApp({ role }: { role: StaffRole }) {
           setMenuOpen(false);
           return;
         }
-
         if (location.pathname !== "/") {
           navigate("/");
         }
@@ -490,6 +490,7 @@ function StaffApp({ role }: { role: StaffRole }) {
         </SheetContent>
       </Sheet>
 
+      {/* Page content — padded for header only (no bottom nav) */}
       <main
         className="flex-1 overflow-y-auto"
         style={{
@@ -506,7 +507,7 @@ function StaffApp({ role }: { role: StaffRole }) {
 }
 
 function CustomerApp() {
-  useRealtimeSync();
+  // useRealtimeSync(); // Excluded for customers to save connections
   const [tab, setTab] = useState<MobileTab>("home");
   const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null);
 
