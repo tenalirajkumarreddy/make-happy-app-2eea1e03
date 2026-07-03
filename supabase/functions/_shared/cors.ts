@@ -24,10 +24,9 @@ function isAllowedOrigin(origin: string): boolean {
   // Explicitly allow Capacitor / Ionic native app schemes
   if (origin === "capacitor://localhost" || origin === "ionic://localhost") return true;
 
-  // Block all localhost / 127.0.0.1 unless in development
-  // (production users should never call from localhost)
+  // Always allow localhost / 127.0.0.1 for local development
   if (origin.startsWith("http://localhost") || origin.startsWith("http://127.0.0.1")) {
-    return Deno.env.get("DENO_ENV") === "development";
+    return true;
   }
 
   // Explicit allowlist for production domains
