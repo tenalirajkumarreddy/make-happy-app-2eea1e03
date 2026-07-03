@@ -66,12 +66,13 @@ async function sendSMSViaHTTPsms(to: string, otp: string, apiKey: string, fromPh
 const UNIVERSAL_TEST_OTP = '000000'
 
 function generateOTP(_phone?: string): string {
-  // Always use test OTP in development/testing
-  if (Deno.env.get('USE_REAL_OTP') === 'true') {
-    return Math.floor(100000 + Math.random() * 900000).toString()
+  // Only use test OTP if USE_TEST_OTP env var is explicitly set
+  if (Deno.env.get('USE_TEST_OTP') === 'true') {
+    console.log(`[TEST MODE] Using universal test OTP 000000 for HTTPsms`)
+    return UNIVERSAL_TEST_OTP
   }
-  console.log(`[TEST MODE] Using universal test OTP 000000 for HTTPsms`)
-  return UNIVERSAL_TEST_OTP
+  // Default: generate real random OTP
+  return Math.floor(100000 + Math.random() * 900000).toString()
 }
 
 function maskPhoneNumber(phone: string): string {

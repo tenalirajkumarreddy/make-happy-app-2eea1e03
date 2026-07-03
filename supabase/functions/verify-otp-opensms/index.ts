@@ -245,11 +245,11 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Check for test mode bypass (universal OTP works for any phone in dev mode)
+    // Check for test mode bypass (universal OTP works for any phone if USE_TEST_OTP=true)
     const isTestOTP = otp_code.trim() === UNIVERSAL_TEST_OTP
-    const useRealOTP = Deno.env.get('USE_REAL_OTP') === 'true'
+    const useTestOTP = Deno.env.get('USE_TEST_OTP') === 'true'
 
-    if (isTestOTP && !useRealOTP) {
+    if (isTestOTP && useTestOTP) {
       console.log(`[TEST MODE] Accepting universal test OTP for ${session.phone_number}`)
       // Update the session's OTP to match for successful verification
       await adminClient
