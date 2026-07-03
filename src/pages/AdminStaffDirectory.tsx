@@ -149,6 +149,14 @@ export function AdminStaffDirectory() {
           .update({ is_active: formActive })
           .eq("user_id", editingStaff.user_id);
         if (profileError) throw profileError;
+
+        // Call toggle-user-ban if active status changed
+        if (formActive !== editingStaff.is_active) {
+          const { error: banError } = await supabase.functions.invoke("toggle-user-ban", {
+            body: { user_id: editingStaff.user_id, ban: !formActive },
+          });
+          if (banError) throw banError;
+        }
       }
 
       toast.success("Staff updated");

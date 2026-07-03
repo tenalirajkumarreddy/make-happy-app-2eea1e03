@@ -63,6 +63,7 @@ export function StaffDirectory() {
   const [warehouseFilter, setWarehouseFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("active");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [disablingId, setDisablingId] = useState<string | null>(null);
 
   // Invite dialog state (phone is primary, email is optional)
   const [showInvite, setShowInvite] = useState(false);
@@ -283,19 +284,35 @@ export function StaffDirectory() {
     totalCash: (staff ?? []).reduce((sum: any, s: any) => sum + (s.cash_amount || 0) + (s.upi_amount || 0), 0) || 0,
   };
 
-  const handleToggleActive = async (userId: string, active: boolean) => {
+  const handleToggleActive = async (userId: string, currentActive: boolean) => {
+    setDisablingId(userId);
     try {
-      const { error } = await supabase
+      // 1. Kill/allow Supabase auth sessions
+      const { error: banError } = await supabase.functions.invoke("toggle-user-ban", {
+        body: { user_id: userId, ban: !currentActive },
+      });
+      if (banError) throw banError;
+
+      // 2. Update staff_directory
+      const { error: dirError } = await supabase
+        .from("staff_directory" as any)
+        .update({ is_active: !currentActive })
+        .eq("user_id", userId);
+      if (dirError) throw dirError;
+
+      // 3. Update profiles (idempotent — toggle-user-ban already did this)
+      const { error: profileError } = await supabase
         .from("profiles")
-        .update({ is_active: active } as any)
-        .eq("user_id", userId as any);
+        .update({ is_active: !currentActive })
+        .eq("user_id", userId);
+      if (profileError) throw profileError;
 
-      if (error) throw error;
-
-      toast.success(`Staff ${active ? "activated" : "deactivated"}`);
+      toast.success(`Staff ${!currentActive ? "activated" : "deactivated"}`);
       queryClient.invalidateQueries({ queryKey: ["staff-directory-enriched"] });
-    } catch (error) {
-      toast.error("Failed to update status");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update status");
+    } finally {
+      setDisablingId(null);
     }
   };
 

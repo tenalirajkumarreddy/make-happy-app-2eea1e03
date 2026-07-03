@@ -150,6 +150,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (e) {
         logError("Failed to cache auth state", e);
       }
+
+      // Role-aware redirect for first-time staff login
+      if (resolvedRole && resolvedRole !== "customer") {
+        const ROLE_DASHBOARD_MAP: Record<string, string> = {
+          super_admin: "/",
+          manager: "/",
+          agent: "/agent",
+          marketer: "/marketer",
+          operator: "/pos",
+        };
+        const target = ROLE_DASHBOARD_MAP[resolvedRole];
+        if (target && window.location.pathname !== target) {
+          window.location.href = target;
+        }
+      } else if (resolvedCustomer) {
+        if (window.location.pathname !== "/") {
+          window.location.href = "/";
+        }
+      }
     } catch (error: any) {
       logError("Error fetching user data", error);
       if (error?.message === "USER_DISABLED") {
@@ -236,6 +255,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setCustomer(null);
     setNeedsOnboarding(false);
   };
+
+  // Heartbeat: poll profiles.is_active every 30s to catch disabled users
+  useEffect(() => {
+    if (!user) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const { data } = await supabase
+          .from("profiles")
+          .select("is_active")
+          .eq("user_id", user.id)
+          .single();
+
+        if (data && !data.is_active) {
+          await signOut();
+        }
+      } catch (e) {
+        logError("Auth heartbeat failed", e);
+      }
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(interval);
+  }, [user, signOut]);
 
   return (
     <AuthContext.Provider value={{ user, session, role, profile, customer, needsOnboarding, loading, signOut }}>
