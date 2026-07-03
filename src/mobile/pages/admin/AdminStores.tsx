@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Search, X, Loader2, Store, MapPin, Phone, Map } from "lucide-react";
+import { Search, X, Loader2, Store, MapPin, Phone, Navigation2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { cn } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { StoreCard, type StoreCardAction } from "@/mobile/components/StoreCard";
 
 export function AdminStores() {
   const [search, setSearch] = useState("");
@@ -88,10 +88,10 @@ export function AdminStores() {
             <Select value={filterRoute} onValueChange={setFilterRoute}>
               <SelectTrigger className="h-10 text-[13px] font-medium bg-slate-50 dark:bg-slate-900 border-none rounded-xl">
                 <div className="flex items-center gap-2">
-                  <Map className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+                  <MapPin className="h- texts-teal-600 dark:text-teal-400" />
                   <SelectValue placeholder="All Routes" />
                 </div>
-              </SelectTrigger>
+                </SelectTrigger>
               <SelectContent className="rounded-2xl shrink-0">
                 <SelectItem value="all">All Routes</SelectItem>
                 {(routes || []).map((r: any) => (
@@ -122,80 +122,38 @@ export function AdminStores() {
         ) : (
           <div className="space-y-3">
             {filtered.map((s: any) => {
-              const outstandingAmount = Number(s.outstanding);
-              const hasOutstanding = outstandingAmount > 0;
-              
+              const phone = s.phone || s.customers?.phone;
+              const actions: StoreCardAction[] = [
+                {
+                  id: "navigate",
+                  label: "Navigate",
+                  icon: Navigation2,
+                  onClick: () => {
+                    if (s.lat && s.lng) {
+                      window.open(`https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lng}`, "_blank");
+                    } else if (s.address) {
+                      window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(s.address)}`, "_blank");
+                    }
+                  },
+                  disabled: !s.lat && !s.lng && !s.address,
+                  className: "bg-indigo-50 text-indigo-600 border-indigo-200 dark:bg-indigo-950/20 dark:border-indigo-800",
+                },
+                {
+                  id: "call",
+                  label: "Call",
+                  icon: Phone,
+                  onClick: () => phone && window.open(`tel:${phone}`, "_self"),
+                  disabled: !phone,
+                  className: "bg-teal-50 text-teal-600 border-teal-200 dark:bg-teal-950/20 dark:border-teal-800",
+                },
+              ];
               return (
-                <div 
-                  key={s.id} 
-                  className="bg-white dark:bg-[#1a1d24] rounded-2xl shadow-sm p-4 active:scale-[0.98] transition-all cursor-pointer border border-transparent hover:border-slate-100 dark:hover:border-slate-800"
-                >
-                  <div className="flex items-start gap-4">
-                    <div className="h-14 w-14 rounded-2xl bg-slate-100 dark:bg-slate-800 overflow-hidden shrink-0 border border-slate-200/50 dark:border-slate-700/50 shadow-sm relative">
-                      {s.photo_url ? (
-                        <img src={s.photo_url} alt={s.name} loading="lazy" className="h-full w-full object-cover" />
-                      ) : (
-                        <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-teal-50 to-cyan-50 dark:from-teal-900/30 dark:to-cyan-900/30">
-                          <Store className="h-6 w-6 text-teal-600/40 dark:text-teal-400/40" />
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div className="flex-1 min-w-0">
-                      <div className="flex justify-between items-start">
-                        <div className="pr-2">
-                          <h4 className="text-[15px] font-bold text-slate-900 dark:text-white truncate">
-                            {s.name}
-                          </h4>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded shrink-0 inline-block mt-1">
-                            {s.display_id}
-                          </span>
-                        </div>
-                        
-                        <div className="text-right shrink-0">
-                          <p className={cn(
-                            "text-[15px] font-black tracking-tight", 
-                            hasOutstanding ? "text-red-500 dark:text-red-400" : "text-emerald-500 dark:text-emerald-400"
-                          )}>
-                            ₹{outstandingAmount.toLocaleString("en-IN")}
-                          </p>
-                          <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mt-0.5">
-                            Outstanding
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="mt-2.5 pt-2.5 border-t border-slate-100 dark:border-slate-800/50 flex items-center justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          {s.customers?.name && (
-                            <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 truncate flex items-center gap-1.5">
-                              <span className="h-1.5 w-1.5 rounded-full bg-slate-300 dark:bg-slate-600 shrink-0" />
-                              {s.customers.name}
-                            </p>
-                          )}
-                          {s.routes?.name && (
-                            <p className="text-[11px] font-medium text-teal-600 dark:text-teal-400 truncate flex items-center gap-1.5 mt-1">
-                              <Map className="h-3 w-3 shrink-0" />
-                              {s.routes.name}
-                            </p>
-                          )}
-                        </div>
-
-                        {s.phone && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              window.open(`tel:${s.phone}`, "_self");
-                            }}
-                            className="h-8 w-8 rounded-full bg-slate-50 dark:bg-slate-800 flex items-center justify-center shrink-0 active:scale-90 transition-transform border border-slate-100 dark:border-slate-700"
-                          >
-                            <Phone className="h-3.5 w-3.5 text-slate-600 dark:text-slate-300" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <StoreCard
+                  key={s.id}
+                  store={s}
+                  onOpenStore={() => {}}
+                  actions={actions}
+                />
               );
             })}
           </div>

@@ -47,7 +47,7 @@ export function StoreLedger({ sales, transactions, paymentReturns = [], balanceA
     }
 
     // Filter out cancelled/returned entries
-    const activeSales = sales.filter((s: any) => !s.deleted_at && !s.is_fully_returned);
+    const activeSales = sales.filter((s: any) => !s.deleted_at);
     const activeTransactions = transactions.filter((t: any) => !t.deleted_at);
 
     for (const s of activeSales) {
@@ -114,6 +114,10 @@ export function StoreLedger({ sales, transactions, paymentReturns = [], balanceA
     for (const entry of entries) {
       if (entry.type === "sale") {
         // Sale adds outstanding (debit to customer, credit to us = outstanding increases)
+        // Skip returned sales - they are reversed by the return transaction
+        if (entry.raw?.is_fully_returned) {
+          continue;
+        }
         runningBalance += entry.total_amount - entry.cash_amount - entry.upi_amount;
       } else if (entry.type === "payment") {
         // Payment reduces outstanding (credit from customer)

@@ -828,7 +828,7 @@ const Expenses = () => {
                   }
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="w-80">
+              <SheetContent side="left" className="w-80 p-6">
                 <SheetHeader>
                   <SheetTitle>Filter by Category</SheetTitle>
                   <SheetDescription>Select a category to filter expenses</SheetDescription>
@@ -853,7 +853,7 @@ const Expenses = () => {
                     )}
                   </Button>
                 </SheetTrigger>
-                <SheetContent side="right" className="w-96">
+                <SheetContent side="right" className="w-96 p-6">
                   <SheetHeader>
                     <SheetTitle>Fixed Costs</SheetTitle>
                     <SheetDescription>Manage recurring expenses</SheetDescription>

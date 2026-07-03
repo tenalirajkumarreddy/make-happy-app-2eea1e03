@@ -1462,64 +1462,137 @@ export function AgentHistory() {
               <div className="space-y-3">
                 {(handovers || []).map((handover: any) => {
                   const total = Number(handover.cash_amount || 0) + Number(handover.upi_amount || 0);
+                  const cash = Number(handover.cash_amount || 0);
+                  const upi = Number(handover.upi_amount || 0);
                   const waitingForYou = handover.handed_to === user?.id && handover.status === "awaiting_confirmation";
                   const isOwnSent = handover.user_id === user?.id;
                   const isOwnReceived = handover.handed_to === user?.id;
-                  const amountColor = isOwnSent ? "text-red-600 dark:text-red-400" : isOwnReceived ? "text-green-600 dark:text-green-400" : "text-slate-800 dark:text-white";
-                  const amountSign = isOwnSent ? "−" : isOwnReceived ? "+" : "";
+
+                  const stripeColor = isOwnSent
+                    ? "bg-red-400"
+                    : isOwnReceived
+                    ? "bg-emerald-400"
+                    : "bg-slate-300";
+
+                  const amountColor = isOwnSent
+                    ? "text-red-600 dark:text-red-400"
+                    : isOwnReceived
+                    ? "text-emerald-600 dark:text-emerald-400"
+                    : "text-slate-800 dark:text-white";
+
+                  const directionLabel = isOwnSent ? "Sent" : isOwnReceived ? "Received" : "";
+                  const directionIcon = isOwnSent ? "↑" : isOwnReceived ? "↓" : "";
+
+                  const statusConfig: Record<string, { bg: string; text: string; label: string }> = {
+                    awaiting_confirmation: { bg: "bg-amber-50 dark:bg-amber-900/20", text: "text-amber-600 dark:text-amber-400", label: "Pending" },
+                    confirmed: { bg: "bg-emerald-50 dark:bg-emerald-900/20", text: "text-emerald-600 dark:text-emerald-400", label: "Confirmed" },
+                    rejected: { bg: "bg-red-50 dark:bg-red-900/20", text: "text-red-600 dark:text-red-400", label: "Rejected" },
+                  };
+                  const sc = statusConfig[handover.status] ?? { bg: "bg-slate-100 dark:bg-slate-700", text: "text-slate-500 dark:text-slate-400", label: handover.status };
 
                   return (
                     <div
                       key={handover.id}
-                      className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-4"
+                      className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm overflow-hidden"
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className={`text-base font-bold ${amountColor}`}>{amountSign}₹{total.toLocaleString("en-IN")}</p>
-                            <Badge variant="outline" className={cn("text-xs font-semibold", getStatusTone(handover.status))}>
-                              {handover.status.replaceAll("_", " ")}
-                            </Badge>
+                      <div className="flex items-stretch">
+                        <div className={`w-1 shrink-0 ${stripeColor}`} />
+                        <div className="flex-1 p-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-baseline gap-2">
+                              <span className={`text-xl font-bold tabular-nums ${amountColor}`}>
+                                {directionIcon} ₹{total.toLocaleString("en-IN")}
+                              </span>
+                              {directionLabel && (
+                                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                                  isOwnSent
+                                    ? "bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400"
+                                    : "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400"
+                                }`}>
+                                  {directionLabel}
+                                </span>
+                              )}
+                            </div>
+                            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full shrink-0 ${sc.bg} ${sc.text}`}>
+                              {sc.label}
+                            </span>
                           </div>
-                          <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">
-                            {getPersonName(handover.user_id)} to {getPersonName(handover.handed_to)}
-                          </p>
-                          <div className="flex items-center gap-2 mt-1 text-xs text-slate-400 flex-wrap">
-                            <span>{format(new Date(handover.created_at), "dd MMM yyyy, hh:mm a")}</span>
-                            {isOwnSent && <span>Sent</span>}
-                            {isOwnReceived && <span>Received</span>}
+
+                          <div className="flex items-center gap-1.5 mt-2">
+                            <div className="flex items-center gap-1 min-w-0">
+                              <span className="text-xs text-slate-400 dark:text-slate-500 shrink-0">From</span>
+                              <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 truncate">{getPersonName(handover.user_id)}</span>
+                            </div>
+                            <span className="text-slate-300 dark:text-slate-600 shrink-0">→</span>
+                            <div className="flex items-center gap-1 min-w-0">
+                              <span className="text-xs text-slate-400 dark:text-slate-500 shrink-0">To</span>
+                              <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 truncate">{getPersonName(handover.handed_to)}</span>
+                            </div>
+                          </div>
+
+                          {(cash > 0 || upi > 0) && (
+                            <div className="flex items-center gap-2 mt-2.5">
+                              {cash > 0 && (
+                                <span className="flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400">
+                                  <span className="font-bold">₹{cash.toLocaleString("en-IN")}</span>
+                                  <span className="text-emerald-500/70">Cash</span>
+                                </span>
+                              )}
+                              {upi > 0 && (
+                                <span className="flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-lg bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-400">
+                                  <span className="font-bold">₹{upi.toLocaleString("en-IN")}</span>
+                                  <span className="text-violet-500/70">UPI</span>
+                                </span>
+                              )}
+                            </div>
+                          )}
+
+                          <div className="flex items-center gap-2 mt-2.5">
+                            <span className="text-[11px] text-slate-400 dark:text-slate-500 tabular-nums">
+                              {format(new Date(handover.created_at), "dd MMM yyyy, hh:mm a")}
+                            </span>
                           </div>
                           {handover.notes && (
-                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">{handover.notes}</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed italic">
+                              "{handover.notes}"
+                            </p>
                           )}
                         </div>
                       </div>
 
-                      {waitingForYou && (
-                        <div className="grid grid-cols-2 gap-2 mt-3">
-                          <Button size="sm" className="h-10 rounded-xl" onClick={() => handleConfirm(handover)}>
-                            <CheckCircle2 className="h-4 w-4 mr-1.5" />
-                            Confirm
-                          </Button>
-                          <Button size="sm" variant="outline" className="h-10 rounded-xl" onClick={() => handleReject(handover)}>
-                            <XCircle className="h-4 w-4 mr-1.5" />
-                            Reject
-                          </Button>
-                        </div>
-                      )}
-
-                      {handover.user_id === user?.id && handover.status === "awaiting_confirmation" && (
-                        <div className="flex justify-end mt-3">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-10 rounded-xl text-xs text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-                            onClick={() => handleCancelHandover(handover)}
-                            disabled={submitting}
-                          >
-                            <XCircle className="h-3 w-3 mr-1" />
-                            Cancel
-                          </Button>
+                      {(waitingForYou || (handover.user_id === user?.id && handover.status === "awaiting_confirmation")) && (
+                        <div className="border-t border-slate-100 dark:border-slate-700 flex">
+                          {waitingForYou && (
+                            <>
+                              <Button
+                                size="sm"
+                                className="flex-1 h-11 rounded-none rounded-bl-2xl bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold gap-1.5"
+                                onClick={() => handleConfirm(handover)}
+                              >
+                                <CheckCircle2 className="h-4 w-4" />
+                                Confirm
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="flex-1 h-11 rounded-none rounded-br-2xl border-0 border-l border-slate-100 dark:border-slate-700 text-red-500 dark:text-red-400 text-sm font-semibold gap-1.5 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                onClick={() => handleReject(handover)}
+                              >
+                                <XCircle className="h-4 w-4" />
+                                Reject
+                              </Button>
+                            </>
+                          )}
+                          {handover.user_id === user?.id && handover.status === "awaiting_confirmation" && !waitingForYou && (
+                            <button
+                              className="flex-1 h-11 flex items-center justify-center gap-1.5 text-xs font-semibold text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                              onClick={() => handleCancelHandover(handover)}
+                              disabled={submitting}
+                            >
+                              <XCircle className="h-4 w-4" />
+                              Cancel Request
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1548,77 +1621,118 @@ export function AgentHistory() {
               <div className="space-y-3">
                 {expenseClaims.map((claim: any) => {
                   const category = (expenseCategories as any[]).find((c: any) => c.id === claim.category_id);
+                  const statusConfig: Record<string, { bg: string; text: string; border: string; label: string }> = {
+                    approved: {
+                      bg: "bg-emerald-50 dark:bg-emerald-900/20",
+                      text: "text-emerald-700 dark:text-emerald-400",
+                      border: "border-emerald-200 dark:border-emerald-700",
+                      label: "Approved",
+                    },
+                    rejected: {
+                      bg: "bg-red-50 dark:bg-red-900/20",
+                      text: "text-red-700 dark:text-red-400",
+                      border: "border-red-200 dark:border-red-700",
+                      label: "Rejected",
+                    },
+                    cancelled: {
+                      bg: "bg-slate-100 dark:bg-slate-700",
+                      text: "text-slate-500 dark:text-slate-400",
+                      border: "border-slate-200 dark:border-slate-600",
+                      label: "Cancelled",
+                    },
+                    pending: {
+                      bg: "bg-amber-50 dark:bg-amber-900/20",
+                      text: "text-amber-700 dark:text-amber-400",
+                      border: "border-amber-200 dark:border-amber-700",
+                      label: "Pending",
+                    },
+                  };
+                  const sc = statusConfig[claim.status] ?? statusConfig["pending"];
+
                   return (
                     <div
                       key={claim.id}
-                      className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-4"
+                      className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm overflow-hidden"
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="text-base font-bold text-slate-800 dark:text-white">₹{Number(claim.amount).toLocaleString("en-IN")}</p>
-                            {category && (
-                              <div className="flex items-center gap-1.5">
-                                <div
-                                  className="h-2 w-2 rounded-full"
-                                  style={{ backgroundColor: category.color || `hsl(var(--primary))` }}
-                                />
-                                <span className="text-xs text-slate-500 dark:text-slate-400">{category.name}</span>
-                              </div>
+                      <div className="p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-baseline gap-2 flex-wrap">
+                            <span className="text-xl font-bold text-slate-800 dark:text-white tabular-nums">
+                              ₹{Number(claim.amount).toLocaleString("en-IN")}
+                            </span>
+                            {claim.status === "approved" && claim.approved_amount && claim.approved_amount !== claim.amount && (
+                              <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">
+                                → ₹{Number(claim.approved_amount).toLocaleString("en-IN")} approved
+                              </span>
                             )}
                           </div>
-                          {claim.description && (
-                            <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">{claim.description}</p>
+                          <span className={`text-xs font-bold px-2.5 py-1 rounded-full border shrink-0 ${sc.bg} ${sc.text} ${sc.border}`}>
+                            {sc.label}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2 mt-2.5 flex-wrap">
+                          {category && (
+                            <span
+                              className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full"
+                              style={{
+                                backgroundColor: `${category.color || "#6366f1"}18`,
+                                color: category.color || "#6366f1",
+                              }}
+                            >
+                              <span
+                                className="h-2 w-2 rounded-full shrink-0"
+                                style={{ backgroundColor: category.color || "#6366f1" }}
+                              />
+                              {category.name}
+                            </span>
                           )}
-                          <div className="flex items-center gap-2 mt-1 text-xs text-slate-400 flex-wrap">
-                            <span>{claim.display_id || claim.id.slice(0, 8)}</span>
-                            <span>·</span>
-                            <span>{format(new Date(claim.created_at), "dd MMM yyyy")}</span>
-                            {claim.expense_date && (
-                              <>
-                                <span>·</span>
-                                <span>Expense: {format(new Date(claim.expense_date), "dd MMM yyyy")}</span>
-                              </>
-                            )}
-                          </div>
                           {claim.bill_urls && claim.bill_urls.length > 0 && (
-                            <p className="text-xs text-blue-500 mt-1">📎 {claim.bill_urls.length} attachment(s)</p>
+                            <span className="flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400">
+                              📎 {claim.bill_urls.length} file{claim.bill_urls.length > 1 ? "s" : ""}
+                            </span>
                           )}
                         </div>
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            "text-xs font-semibold capitalize shrink-0",
-                            claim.status === "approved"
-                              ? "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-700"
-                              : claim.status === "rejected"
-                              ? "bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border-red-200 dark:border-red-700"
-                              : claim.status === "cancelled"
-                              ? "bg-slate-100 dark:bg-slate-700 text-slate-500 border-slate-200 dark:border-slate-600"
-                              : "bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-700"
+
+                        {claim.description && (
+                          <p className="text-sm text-slate-600 dark:text-slate-300 mt-2 leading-relaxed">
+                            {claim.description}
+                          </p>
+                        )}
+
+                        <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700 grid grid-cols-2 gap-y-1.5">
+                          <div>
+                            <p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-wide font-semibold">Claim ID</p>
+                            <p className="text-xs font-mono font-semibold text-slate-600 dark:text-slate-300 mt-0.5">{claim.display_id || claim.id.slice(0, 8)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-wide font-semibold">Submitted</p>
+                            <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">{format(new Date(claim.created_at), "dd MMM yyyy")}</p>
+                          </div>
+                          {claim.expense_date && (
+                            <div>
+                              <p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-wide font-semibold">Expense Date</p>
+                              <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">{format(new Date(claim.expense_date), "dd MMM yyyy")}</p>
+                            </div>
                           )}
-                        >
-                          {claim.status}
-                        </Badge>
+                        </div>
+
+                        {claim.rejection_reason && (
+                          <div className="mt-3 px-3 py-2.5 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800">
+                            <p className="text-[10px] text-red-400 dark:text-red-500 uppercase tracking-wide font-bold mb-0.5">Rejection Reason</p>
+                            <p className="text-xs text-red-600 dark:text-red-400 leading-relaxed">{claim.rejection_reason}</p>
+                          </div>
+                        )}
                       </div>
-                      {claim.rejection_reason && (
-                        <p className="text-xs text-red-500 dark:text-red-400 mt-2 px-3 py-2 bg-red-50 dark:bg-red-900/20 rounded-lg">
-                          Reason: {claim.rejection_reason}
-                        </p>
-                      )}
-                      {claim.status === "approved" && claim.approved_amount && claim.approved_amount !== claim.amount && (
-                        <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-2">
-                          Approved amount: ₹{Number(claim.approved_amount).toLocaleString("en-IN")}
-                        </p>
-                      )}
+
                       {claim.status === "pending" && (
-                        <div className="flex items-center gap-2 mt-3">
+                        <div className="border-t border-slate-100 dark:border-slate-700">
                           <button
                             onClick={() => handleCancelExpenseClaim(claim.id)}
-                            className="h-10 rounded-lg px-3 text-xs font-semibold bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-700 flex items-center gap-1"
+                            className="w-full h-11 flex items-center justify-center gap-2 text-sm font-semibold text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors rounded-b-2xl"
                           >
-                            <XCircle className="h-3 w-3" />
-                            Cancel
+                            <XCircle className="h-4 w-4" />
+                            Cancel Claim
                           </button>
                         </div>
                       )}

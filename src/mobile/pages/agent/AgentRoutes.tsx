@@ -10,7 +10,6 @@ import {
   Eye,
   List,
   Loader2,
-  Map,
   MapPin,
   Minus,
   Navigation2,
@@ -60,8 +59,8 @@ import { cacheQueryResult, getCachedQueryResult } from "@/lib/offlineRouteCache"
 import { getActiveOrderForStore, type ActiveOrderInfo } from "@/lib/orders";
 import { ActiveOrderExistsDialog } from "@/mobile/components/ActiveOrderExistsDialog";
 import { VisitReasonDialog } from "@/components/routes/VisitReasonDialog";
-import { RouteMap } from "@/components/routes/RouteMap";
 import type { StoreOption } from "@/mobile/components/StorePickerSheet";
+import { StoreCard, type StoreCardAction, type StoreCardItem } from "@/mobile/components/StoreCard";
 
 interface CustomerItem { id: string; name: string; }
 interface StoreItem { id: string; name: string; route_id: string | null; }
@@ -81,6 +80,7 @@ interface RouteStore {
   name: string;
   display_id: string;
   route_id: string | null;
+  photo_url: string | null;
   address: string | null;
   phone: string | null;
   lat: number | null;
@@ -153,7 +153,6 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
   const { allowed: canCancelOrders } = usePermission("cancel_orders");
   const { allowed: canRecordSale } = usePermission("record_sale");
   const [view, setView] = useState<"routes" | "orders">("routes");
-  const [showMap, setShowMap] = useState(false);
   const [expandedRouteId, setExpandedRouteId] = useState<string | null>(null);
   const [agentPos, setAgentPos] = useState<{ lat: number; lng: number } | null>(null);
   const [fetchingPos, setFetchingPos] = useState(false);
@@ -181,7 +180,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
       const { data, error } = await supabase
         .from("routes")
         .select(
-          "id, name, store_types(name), stores(id, name, display_id, route_id, address, phone, lat, lng, outstanding, store_order, customer_id, customers(name), store_types(name))"
+          "id, name, store_types(name), stores(id, name, display_id, photo_url, route_id, address, phone, lat, lng, outstanding, store_order, customer_id, customers(name), store_types(name))"
         )
         .eq("is_active", true)
         .order("name");
@@ -859,16 +858,11 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
 
         <button
           type="button"
-          onClick={() => setShowMap(!showMap)}
-          className={cn(
-            "w-full mt-2 py-2 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors rounded-xl",
-            showMap
-              ? "bg-white text-blue-700"
-              : "bg-white/10 text-white/80 hover:bg-white/20"
-          )}
+          onClick={() => setShowCreate(true)}
+          className="w-full mt-2 h-10 rounded-xl bg-white text-blue-700 text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm"
         >
-          <Map className="h-3.5 w-3.5" />
-          {showMap ? "Hide Map" : "Show Map"}
+          <Plus className="h-4 w-4" />
+          New Order
         </button>
       </div>
 
@@ -879,24 +873,6 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
             <div className="rounded-2xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden">
               <RouteSessionPanel />
             </div>
-
-            {showMap && (
-              <RouteMap
-                stores={routeList.flatMap(r => r.stores).map(s => ({
-                  id: s.id,
-                  name: s.name,
-                  display_id: s.display_id,
-                  lat: s.lat,
-                  lng: s.lng,
-                  visited: (visitedStoresByRoute?.get(
-                    routeList.find(r => r.stores.some(st => st.id === s.id))?.id || ""
-                  ) || new Set()).has(s.id),
-                  outstanding: Number(s.outstanding || 0),
-                }))}
-                agentLocation={sessionPosition}
-                className="mb-4"
-              />
-            )}
 
             <div>
               {isOfflineData && (
@@ -961,7 +937,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
                           <div className="flex items-stretch">
                             <div className={`w-1 self-stretch ${accentColor} shrink-0`} />
                             <div className="flex-1 flex items-start gap-3 p-4">
-                              <div className={`h-10 w-10 rounded-lg ${accentColor} bg-opacity-10 dark:bg-opacity-20 flex items-center justify-center shrink-0`}>
+                              <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${accentColor} bg-opacity-15`}>
                                 <MapPin className="h-5 w-5 text-white" />
                               </div>
 
@@ -1009,14 +985,14 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
                                     {pendingOrders}
                                   </span>
                                 )}
-                                <ChevronDown className={cn("h-4 w-4 text-slate-400/60 dark:text-slate-500/60 dark:text-slate-400 transition-transform duration-200", isExpanded && "rotate-180")} />
+                                <ChevronDown className={cn("h-5 w-5 text-slate-400 dark:text-slate-500 transition-transform duration-200", isExpanded && "rotate-180")} />
                               </div>
                             </div>
                           </div>
                         </button>
 
                         {isExpanded && (
-                          <div className="border-t border-slate-100 dark:border-slate-700-slate-100 dark:border-slate-700 px-4 py-4 bg-slate-50/50 dark:bg-slate-800/30">
+                          <div className="border-t border-slate-100 dark:border-slate-700 px-4 py-4 bg-slate-50/50 dark:bg-slate-800/30">
                             {sortedStores.length === 0 ? (
                               <div className="rounded-xl border border-dashed p-4 text-center">
                                 <p className="text-sm font-medium text-slate-500 dark:text-slate-400">No stores assigned</p>
@@ -1027,124 +1003,77 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
                                   const visited = (visitedStoresByRoute?.get(route.id) || new Set<string>()).has(store.id);
                                   const canNavigate = (store.lat != null && store.lng != null) || !!store.address;
 
+                                  // Build a StoreCard-compatible item from RouteStore data
+                                  const cardItem: StoreCardItem = {
+                                    id: store.id,
+                                    name: store.name,
+                                    display_id: store.display_id,
+                                    photo_url: store.photo_url || null,
+                                    outstanding: Number(store.outstanding || 0),
+                                    address: store.address,
+                                    phone: store.phone,
+                                    lat: store.lat,
+                                    lng: store.lng,
+                                    route_id: store.route_id,
+                                    is_active: (store as any).is_active ?? true,
+                                    store_type_id: (store as any).store_type_id ?? null,
+                                    customer_id: store.customer_id,
+                                    last_activity_at: (store as any).last_activity_at ?? null,
+                                    customers: store.customers,
+                                    store_types: store.store_types,
+                                    routes: route ? { name: route.name } : null,
+                                  };
+
+                                  const storeActions: StoreCardAction[] = [
+                                    {
+                                      id: "visit",
+                                      label: visited ? "Visited" : "Mark Visit",
+                                      icon: CheckCircle2,
+                                      onClick: () => { if (!visited) handleMarkVisitedClick(store); },
+                                      disabled: visited,
+                                      className: visited
+                                        ? "bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-800 opacity-50"
+                                        : "bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-800",
+                                    },
+                                    {
+                                      id: "sale",
+                                      label: "Record Sale",
+                                      icon: ShoppingCart,
+                                      onClick: () => onGoRecord?.(toStoreOption(store), "sale"),
+                                      className: "bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800",
+                                    },
+                                    {
+                                      id: "payment",
+                                      label: "Record Transaction",
+                                      icon: Wallet,
+                                      onClick: () => onGoRecord?.(toStoreOption(store), "payment"),
+                                      className: "bg-violet-50 text-violet-600 border-violet-200 dark:bg-violet-950/20 dark:border-violet-800",
+                                    },
+                                    {
+                                      id: "navigate",
+                                      label: "Navigate",
+                                      icon: Navigation2,
+                                      onClick: () => openDirections({ ...store, name: store.name }),
+                                      disabled: !canNavigate,
+                                      className: "bg-indigo-50 text-indigo-600 border-indigo-200 dark:bg-indigo-950/20 dark:border-indigo-800",
+                                    },
+                                    {
+                                      id: "call",
+                                      label: "Call",
+                                      icon: Phone,
+                                      onClick: () => handleCall(store.phone || ""),
+                                      disabled: !store.phone,
+                                      className: "bg-teal-50 text-teal-600 border-teal-200 dark:bg-teal-950/20 dark:border-teal-800",
+                                    },
+                                  ];
+
                                   return (
-                                    <div
+                                    <StoreCard
                                       key={store.id}
-                                      className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 overflow-hidden"
-                                    >
-                                      <div className="flex items-stretch">
-                                        <div className={cn("w-1 shrink-0", visited ? "bg-emerald-400" : "bg-muted/60")} />
-                                        <div className="flex-1 p-3">
-                                          <div className="flex items-start justify-between gap-2">
-                                            <div className="min-w-0 flex-1">
-                                              <div className="flex items-center gap-2">
-                                                <span className="text-xs font-mono text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded shrink-0">
-                                                  {store.display_id}
-                                                </span>
-                                                <p className="text-sm font-semibold text-slate-800 dark:text-white truncate">
-                                                  {store.name}
-                                                </p>
-                                              </div>
-
-                                              {store.customers?.name && (
-                                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{store.customers.name}</p>
-                                              )}
-
-                                              {store.address && (
-                                                <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 line-clamp-1">{store.address}</p>
-                                              )}
-
-                                              <div className="flex items-center gap-2 mt-2 flex-wrap">
-                                                <span className={cn(
-                                                  "text-xs font-medium px-2 py-0.5 rounded-full",
-                                                  visited
-                                                    ? "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30"
-                                                    : "bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400"
-                                                )}>
-                                                  {visited ? "Visited" : "Pending"}
-                                                </span>
-                                                <span className="text-xs text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-full">
-                                                  O/s ₹{Number(store.outstanding || 0).toLocaleString("en-IN")}
-                                                </span>
-                                                {pendingOrderStoreIds?.has(store.id) && (
-                                                  <span className="text-xs font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-2 py-0.5 rounded-full">
-                                                    Order pending
-                                                  </span>
-                                                )}
-                                              </div>
-                                            </div>
-                                          </div>
-
-                                          <div className="space-y-2 mt-2.5 pt-2.5 border-t border-slate-100 dark:border-slate-700">
-                                            <div className="flex items-center gap-2">
-                                              <Button
-                                                variant="outline"
-                                                size="sm"
-                                                className="h-10 flex-1 rounded-xl text-xs font-semibold border border-slate-100 dark:border-slate-700"
-                                                onClick={() => handleMarkVisitedClick(store)}
-                                                disabled={visitLoading === store.id}
-                                              >
-                                                {visitLoading === store.id ? (
-                                                  <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin text-emerald-500" />
-                                                ) : (
-                                                  <CheckCircle2 className="h-3.5 w-3.5 mr-1 text-emerald-500" />
-                                                )}
-                                                Visit
-                                              </Button>
-                                              <Button
-                                                variant="outline"
-                                                size="sm"
-                                                className="h-10 flex-1 rounded-xl text-xs font-semibold border border-slate-100 dark:border-slate-700"
-                                                onClick={() => onGoRecord?.(toStoreOption(store), "sale")}
-                                              >
-                                                <ShoppingCart className="h-3.5 w-3.5 mr-1 text-blue-500" />
-                                                Sale
-                                              </Button>
-                                              <Button
-                                                variant="outline"
-                                                size="sm"
-                                                className="h-10 flex-1 rounded-xl text-xs font-semibold border border-slate-100 dark:border-slate-700"
-                                                onClick={() => onGoRecord?.(toStoreOption(store), "payment")}
-                                              >
-                                                <Wallet className="h-3.5 w-3.5 mr-1 text-emerald-500" />
-                                                Txn
-                                              </Button>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                              <Button
-                                                variant="outline"
-                                                size="sm"
-                                                className="h-10 flex-1 rounded-xl text-xs font-semibold border border-slate-100 dark:border-slate-700"
-                                                onClick={() => openDirections({ ...store, name: store.name })}
-                                                disabled={!canNavigate}
-                                              >
-                                                <Navigation2 className="h-3.5 w-3.5 mr-1 text-purple-500" />
-                                                Navigate
-                                              </Button>
-                                              <Button
-                                                variant="outline"
-                                                size="sm"
-                                                className="h-10 flex-1 rounded-xl text-xs font-semibold border border-slate-100 dark:border-slate-700"
-                                                onClick={() => handleCall(store.phone || "")}
-                                                disabled={!store.phone}
-                                              >
-                                                <Phone className="h-3.5 w-3.5 mr-1 text-slate-500 dark:text-slate-400" />
-                                                Call
-                                              </Button>
-                                              <Button
-                                                variant="outline"
-                                                size="sm"
-                                                className="h-10 flex-1 rounded-xl text-xs font-semibold border border-slate-100 dark:border-slate-700"
-                                                onClick={() => onOpenStore?.(toStoreOption(store))}
-                                              >
-                                                <Eye className="h-3.5 w-3.5 mr-1 text-slate-500 dark:text-slate-400" />
-                                                Open
-                                              </Button>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    </div>
+                                      store={cardItem}
+                                      onOpenStore={() => onOpenStore?.(toStoreOption(store))}
+                                      actions={storeActions}
+                                    />
                                   );
                                 })}
                               </div>
@@ -1163,55 +1092,55 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
         {/* ── ALL ORDERS VIEW ── */}
         {view === "orders" && (
           <div>
-            <div className="flex items-center justify-between mb-2.5">
-              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
-                All Orders ({filteredOrders.length})
+            {/* Orders header */}
+            <div className="flex items-center gap-2 mb-3">
+              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest flex-1">
+                Orders <span className="text-blue-600 dark:text-blue-400">({filteredOrders.length})</span>
               </p>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className="text-xs text-blue-600 dark:text-blue-400 font-semibold"
-                  onClick={() => setShowFilters(!showFilters)}
-                >
-                  {showFilters ? "Hide" : "Filter"}
-                </button>
-                <button
-                  type="button"
-                  className="text-xs bg-blue-600 text-white font-semibold flex items-center gap-1 px-2 py-1 rounded-lg"
-                  onClick={() => setShowCreate(true)}
-                >
-                  <Plus className="h-3 w-3" />
-                  Create
-                </button>
-                <button
-                  type="button"
-                  className="text-xs text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-1"
-                  onClick={async () => {
-                    setFetchingPos(true);
-                    const pos = await getCurrentPosition();
-                    if (pos) setAgentPos({ lat: pos.lat, lng: pos.lng });
-                    setFetchingPos(false);
-                  }}
-                >
-                  {fetchingPos ? <Loader2 className="h-3 w-3 animate-spin" /> : <MapPin className="h-3 w-3" />}
-                  GPS
-                </button>
-              </div>
+              <button
+                type="button"
+                className="h-9 px-3 rounded-xl border border-slate-200 dark:border-slate-600 text-xs font-semibold text-slate-600 dark:text-slate-300 flex items-center gap-1.5 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+                onClick={() => setShowFilters(!showFilters)}
+              >
+                <List className="h-3.5 w-3.5" />
+                {showFilters ? "Hide" : "Filter"}
+              </button>
+              <button
+                type="button"
+                className="h-9 w-9 rounded-xl border border-slate-200 dark:border-slate-600 flex items-center justify-center bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+                title="Refresh GPS"
+                onClick={async () => {
+                  setFetchingPos(true);
+                  const pos = await getCurrentPosition();
+                  if (pos) setAgentPos({ lat: pos.lat, lng: pos.lng });
+                  setFetchingPos(false);
+                }}
+              >
+                {fetchingPos ? <Loader2 className="h-4 w-4 animate-spin text-blue-500" /> : <MapPin className="h-4 w-4 text-slate-500 dark:text-slate-400" />}
+              </button>
+              <button
+                type="button"
+                className="h-9 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
+                onClick={() => setShowCreate(true)}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                New Order
+              </button>
             </div>
 
             {/* Status filter chips */}
-            <div className="flex gap-1.5 overflow-x-auto pb-1 mb-2">
+            <div className="flex gap-2 overflow-x-auto pb-2 mb-2 scrollbar-hide" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
               {(["all", "pending", "confirmed", "delivered", "cancelled"] as const).map((s) => (
                 <button
                   key={s}
                   onClick={() => setFilterStatus(s)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
+                  className={`h-9 px-4 rounded-full text-xs font-semibold whitespace-nowrap transition-all flex-shrink-0 ${
                     filterStatus === s
-                      ? "bg-blue-600 text-white shadow-sm"
-                      : "bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50"
+                      ? "bg-blue-600 text-white shadow-md scale-105"
+                      : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700/50"
                   }`}
                 >
-                  {s === "all" ? "All" : s.charAt(0).toUpperCase() + s.slice(1)}
+                  {s === "all" ? "All Orders" : s.charAt(0).toUpperCase() + s.slice(1)}
                 </button>
               ))}
             </div>
@@ -1397,7 +1326,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
                         {order.status === "pending" && canFulfillOrders && (
                           <button
                             onClick={() => { setFulfillOrder(order); setFulfillCash(""); setFulfillUpi(""); }}
-                            className="flex-1 py-3.5 flex items-center justify-center gap-1.5 text-xs font-semibold text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors border-r border"
+                            className="flex-1 min-h-[48px] py-3 flex flex-col items-center justify-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors border-r border-slate-100 dark:border-slate-700"
                           >
                             <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                             Fulfill
@@ -1405,7 +1334,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
                         )}
                         <button
                           onClick={() => { setViewProformaId(order.id); }}
-                          className="flex-1 py-3.5 flex items-center justify-center gap-1.5 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors border-r border"
+                          className="flex-1 min-h-[48px] py-3 flex flex-col items-center justify-center gap-1 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors border-r border-slate-100 dark:border-slate-700"
                         >
                           <Package className="h-4 w-4 text-indigo-400" />
                           Proforma
@@ -1429,16 +1358,16 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
                               );
                               setShowCreate(true);
                             }}
-                            className="flex-1 py-3.5 flex items-center justify-center gap-1.5 text-xs font-semibold text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors border-r border"
+                            className="flex-1 min-h-[48px] py-3 flex flex-col items-center justify-center gap-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors border-r border-slate-100 dark:border-slate-700"
                           >
-                            <Edit className="h-4 w-4 text-amber-400" />
+                            <Edit className="h-4 w-4 text-amber-500" />
                             Edit
                           </button>
                         )}
                         {(order.status === "pending" || order.status === "confirmed") && canCancelOrders && (
                           <button
                             onClick={() => { setCancelOrderId(order.id); setCancelReason(""); }}
-                            className="flex-1 py-3.5 flex items-center justify-center gap-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                            className="flex-1 min-h-[48px] py-3 flex flex-col items-center justify-center gap-1 text-[11px] font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                           >
                             <X className="h-4 w-4 text-red-500" />
                             Cancel
@@ -1447,7 +1376,7 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
                         {order.status !== "pending" && order.status !== "confirmed" && (
                           <button
                             onClick={() => { setSelectedOrder(order); setShowDetailModal(true); }}
-                            className="flex-1 py-3.5 flex items-center justify-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400 hover:bg-muted/50 transition-colors"
+                            className="flex-1 min-h-[48px] py-3 flex flex-col items-center justify-center gap-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400 hover:bg-muted/50 transition-colors"
                           >
                             <Eye className="h-4 w-4 text-slate-400 dark:text-slate-500" />
                             Details
@@ -1771,23 +1700,23 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
                                     {inCart ? ` × ${inCart.quantity} = ${fmtINR(inCart.quantity * (inCart.unit_price || p.effective_price))}` : ""}
                                   </p>
                                 </div>
-                                <div className="flex items-center gap-1.5">
+                                <div className="flex items-center gap-2">
                                   {inCart ? (
                                     <>
-                                      <Button type="button" variant="outline" size="icon" className="h-8 w-8 rounded-lg"
+                                      <Button type="button" variant="outline" size="icon" className="h-10 w-10 rounded-xl border-slate-200 dark:border-slate-600"
                                         onClick={() => createUpdateQty(p.id, inCart.quantity - 1)}>
-                                        <Minus className="h-3.5 w-3.5" />
+                                        <Minus className="h-4 w-4" />
                                       </Button>
-                                      <span className="text-sm font-bold w-6 text-center">{inCart.quantity}</span>
-                                      <Button type="button" variant="outline" size="icon" className="h-8 w-8 rounded-lg"
+                                      <span className="text-base font-bold w-8 text-center tabular-nums">{inCart.quantity}</span>
+                                      <Button type="button" variant="outline" size="icon" className="h-10 w-10 rounded-xl border-slate-200 dark:border-slate-600"
                                         onClick={() => createUpdateQty(p.id, inCart.quantity + 1)}>
-                                        <Plus className="h-3.5 w-3.5" />
+                                        <Plus className="h-4 w-4" />
                                       </Button>
                                     </>
                                   ) : (
-                                    <Button type="button" variant="outline" size="icon" className="h-8 w-8 rounded-lg"
+                                    <Button type="button" className="h-10 w-10 rounded-xl bg-blue-600 hover:bg-blue-700 text-white" size="icon"
                                       onClick={() => createAddItem(p)}>
-                                      <Plus className="h-3.5 w-3.5" />
+                                      <Plus className="h-4 w-4" />
                                     </Button>
                                   )}
                                 </div>
@@ -1861,27 +1790,43 @@ export function AgentRoutes({ onOpenStore, onGoRecord }: AgentRoutesProps = {}) 
                   ))}
                 </div>
               )}
-              <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-3">
                 <div>
-                  <Label className="text-xs text-slate-500 dark:text-slate-400">Cash (₹)</Label>
+                  <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
+                    <span className="h-5 w-5 rounded-md bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center text-[10px] font-bold text-emerald-700 dark:text-emerald-400">₹</span>
+                    Cash Payment
+                  </Label>
                   <Input
                     type="number"
+                    inputMode="numeric"
                     value={fulfillCash}
                     onChange={(e) => setFulfillCash(e.target.value)}
-                    placeholder="0"
-                    className="text-sm h-10"
+                    placeholder="Enter cash amount"
+                    className="text-base h-12 rounded-xl"
                   />
                 </div>
                 <div>
-                  <Label className="text-xs text-slate-500 dark:text-slate-400">UPI (₹)</Label>
+                  <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
+                    <span className="h-5 w-5 rounded-md bg-violet-100 dark:bg-violet-900/40 flex items-center justify-center text-[10px] font-bold text-violet-700 dark:text-violet-400">↗</span>
+                    UPI Payment
+                  </Label>
                   <Input
                     type="number"
+                    inputMode="numeric"
                     value={fulfillUpi}
                     onChange={(e) => setFulfillUpi(e.target.value)}
-                    placeholder="0"
-                    className="text-sm h-10"
+                    placeholder="Enter UPI amount"
+                    className="text-base h-12 rounded-xl"
                   />
                 </div>
+                {(fulfillCash || fulfillUpi) && (
+                  <div className="flex justify-between items-center p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+                    <span className="text-sm text-slate-500 dark:text-slate-400 font-medium">Total Payment</span>
+                    <span className="text-base font-bold text-slate-800 dark:text-white tabular-nums">
+                      ₹{((Number(fulfillCash) || 0) + (Number(fulfillUpi) || 0)).toLocaleString("en-IN")}
+                    </span>
+                  </div>
+                )}
               </div>
               <div className="flex gap-2 pt-2">
                 <Button variant="outline" className="flex-1" onClick={() => { setFulfillOrder(null); setFulfillCash(""); setFulfillUpi(""); }}>

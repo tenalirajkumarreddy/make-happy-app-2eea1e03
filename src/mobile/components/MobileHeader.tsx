@@ -1,5 +1,5 @@
 import { memo, useState, useEffect } from "react";
-import { Bell, Wifi, WifiOff, LogOut, Moon, Sun, ChevronDown, User, Settings } from "lucide-react";
+import { Bell, Menu, Wifi, WifiOff, LogOut, Moon, Sun, ChevronDown, User, Settings } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
@@ -34,7 +34,7 @@ interface Props {
   onMenuClick?: () => void;
 }
 
-export const MobileHeader = memo(function MobileHeader({ title }: Props) {
+export const MobileHeader = memo(function MobileHeader({ title, onMenuClick }: Props) {
   const { profile, role, signOut } = useAuth();
   const { unreadCount } = useNotifications();
   const { isOnline, pendingCount } = useOnlineStatus();

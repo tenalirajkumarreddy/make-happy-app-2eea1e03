@@ -35,6 +35,8 @@ export function afterSaleSaved(qc: QueryClient, options?: { isMobile?: boolean; 
     invalidateAll(qc, ["balance-adjustments", options.storeId]);
     invalidateAll(qc, ["store-payment-returns", options.storeId]);
     invalidateAll(qc, ["store-qr-codes", options.storeId]);
+    invalidateAll(qc, ["mobile-store-ledger-sales", options.storeId]);
+    invalidateAll(qc, ["mobile-store-ledger-transactions", options.storeId]);
   }
   invalidateAll(qc, ["staff-stock"], true);
   invalidateAll(qc, ["product-stock"], true);
@@ -115,6 +117,8 @@ export function afterTransactionSaved(qc: QueryClient, options?: { isMobile?: bo
     invalidateAll(qc, ["balance-adjustments", options.storeId]);
     invalidateAll(qc, ["store-payment-returns", options.storeId]);
     invalidateAll(qc, ["store-qr-codes", options.storeId]);
+    invalidateAll(qc, ["mobile-store-ledger-sales", options.storeId]);
+    invalidateAll(qc, ["mobile-store-ledger-transactions", options.storeId]);
   }
   if (options?.isMobile) {
     invalidateAll(qc, ["mobile-agent-tx-today"]);
@@ -159,6 +163,8 @@ export function afterSaleReturned(qc: QueryClient, options?: { isMobile?: boolea
     invalidateAll(qc, ["balance-adjustments", options.storeId]);
     invalidateAll(qc, ["store-payment-returns", options.storeId]);
     invalidateAll(qc, ["store-qr-codes", options.storeId]);
+    invalidateAll(qc, ["mobile-store-ledger-sales", options.storeId]);
+    invalidateAll(qc, ["mobile-store-ledger-transactions", options.storeId]);
   }
   invalidateAll(qc, ["orders"]);
   invalidateAll(qc, ["pending-orders-for-store"]);
@@ -209,6 +215,8 @@ export function afterSaleEdited(qc: QueryClient, options?: { isMobile?: boolean;
     invalidateAll(qc, ["balance-adjustments", options.storeId]);
     invalidateAll(qc, ["store-payment-returns", options.storeId]);
     invalidateAll(qc, ["store-qr-codes", options.storeId]);
+    invalidateAll(qc, ["mobile-store-ledger-sales", options.storeId]);
+    invalidateAll(qc, ["mobile-store-ledger-transactions", options.storeId]);
   }
   invalidateAll(qc, ["orders"]);
   invalidateAll(qc, ["sale-items"]);
@@ -250,6 +258,8 @@ export function afterSaleCancelled(qc: QueryClient, options?: { isMobile?: boole
     invalidateAll(qc, ["balance-adjustments", options.storeId]);
     invalidateAll(qc, ["store-payment-returns", options.storeId]);
     invalidateAll(qc, ["store-qr-codes", options.storeId]);
+    invalidateAll(qc, ["mobile-store-ledger-sales", options.storeId]);
+    invalidateAll(qc, ["mobile-store-ledger-transactions", options.storeId]);
   }
   invalidateAll(qc, ["orders"]);
   invalidateAll(qc, ["staff-stock"], true);
@@ -284,5 +294,7 @@ export function afterPaymentReturned(qc: QueryClient, options?: { isMobile?: boo
     invalidateAll(qc, ["mobile-transactions"]);
     invalidateAll(qc, ["mobile-recent-activity"]);
     invalidateAll(qc, ["mobile-agent-tx-today"]);
+    invalidateAll(qc, ["mobile-store-ledger-sales"]);
+    invalidateAll(qc, ["mobile-store-ledger-transactions"]);
   }
 }

@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search, Phone, Navigation2, Plus, Loader2, MapPin, X, Store, Eye, Wallet, ClipboardList } from "lucide-react";
+import { Search, Phone, Navigation2, Plus, Loader2, MapPin, X, Wallet, ClipboardList } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -10,24 +9,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { StoreCard, type StoreCardAction } from "@/mobile/components/StoreCard";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { CreateStoreWizard } from "@/components/stores/CreateStoreWizard";
-import { cn, timeAgo } from "@/lib/utils";
 import type { StoreOption } from "@/mobile/components/StorePickerSheet";
 import { useRouteAccess } from "@/hooks/useRouteAccess";
-
-const TYPE_COLORS: Record<string, string> = {
-  RETAIL: "bg-blue-500",
-  RESTAURANT: "bg-orange-500",
-  WHOLESALE: "bg-green-500",
-  DEFAULT: "bg-muted-foreground",
-};
-
-function getTypeColor(typeName: string) {
-  const key = typeName?.toUpperCase();
-  return TYPE_COLORS[key] ?? TYPE_COLORS.DEFAULT;
-}
 
 interface RouteItem {
   id: string;
@@ -210,11 +197,7 @@ export function MarketerStores({ onOpenStore, onGoRecord, onGoOrders }: Props) {
         ) : (
           <div className="space-y-2">
             {filtered.map((store) => {
-              const typeName = store.store_types?.name ?? "";
-              const colorClass = getTypeColor(typeName);
               const phone = store.phone || store.customers?.phone;
-              const daysSinceActivity = store.last_activity_at ? Math.floor((Date.now() - new Date(store.last_activity_at).getTime()) / 86400000) : null;
-              const inactiveBadgeClass = daysSinceActivity === null ? "" : daysSinceActivity === 0 ? "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-700" : daysSinceActivity < 7 ? "bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-700" : "bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border-red-200 dark:border-red-700";
               const storeOption: StoreOption = {
                 id: store.id,
                 name: store.name,
@@ -235,102 +218,54 @@ export function MarketerStores({ onOpenStore, onGoRecord, onGoOrders }: Props) {
                 routes: store.routes,
               };
 
+              const actions: StoreCardAction[] = [
+                ...(onGoOrders
+                  ? [
+                      {
+                        id: "order",
+                        label: "Order",
+                        icon: ClipboardList,
+                        onClick: () => onGoOrders(storeOption),
+                        className:
+                          "bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-950/20 dark:border-amber-800",
+                      } as StoreCardAction,
+                    ]
+                  : []),
+                {
+                  id: "transaction",
+                  label: "Transaction",
+                  icon: Wallet,
+                  onClick: () => onGoRecord(storeOption),
+                  className:
+                    "bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-800",
+                },
+                {
+                  id: "navigate",
+                  label: "Navigate",
+                  icon: Navigation2,
+                  onClick: () => handleNavigate(store),
+                  disabled: !store.lat && !store.lng && !store.address,
+                  className:
+                    "bg-indigo-50 text-indigo-600 border-indigo-200 dark:bg-indigo-950/20 dark:border-indigo-800",
+                },
+                {
+                  id: "call",
+                  label: "Call",
+                  icon: Phone,
+                  onClick: () => phone && handleCall(phone),
+                  disabled: !phone,
+                  className:
+                    "bg-teal-50 text-teal-600 border-teal-200 dark:bg-teal-950/20 dark:border-teal-800",
+                },
+              ];
+
               return (
-                <div key={store.id} className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm overflow-hidden">
-                  <div className="flex">
-                    <div className={cn("w-1 shrink-0", colorClass)} />
-                    <div className="p-3 flex-1 min-w-0">
-                      <div className="flex items-start gap-2">
-                        <button
-                          className="h-14 w-14 rounded-xl bg-slate-100 dark:bg-slate-700 overflow-hidden shrink-0"
-                          onClick={() => onOpenStore(storeOption)}
-                        >
-                          {store.photo_url ? (
-                            <img src={store.photo_url} alt={store.name} loading="lazy" className="h-full w-full object-cover" />
-                          ) : (
-                            <div className="h-full w-full flex items-center justify-center">
-                              <Store className="h-5 w-5 text-slate-400" />
-                            </div>
-                          )}
-                        </button>
-
-                        <div className="min-w-0 flex-1">
-                          <button className="text-left w-full" onClick={() => onOpenStore(storeOption)}>
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-sm font-semibold truncate">{store.name}</span>
-                              <span className="text-xs text-slate-500 dark:text-slate-400">({store.display_id})</span>
-                            </div>
-                          </button>
-                          {store.customers?.name && (
-                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{store.customers.name}</p>
-                          )}
-                          {store.address && (
-                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1">{store.address}</p>
-                          )}
-                          <div className="flex items-center gap-2 mt-1 flex-wrap">
-                            {typeName && <Badge variant="outline" className="text-xs h-4 px-1.5">{typeName}</Badge>}
-                            {store.routes?.name && (
-                              <span className="text-xs text-slate-400 dark:text-slate-500">{store.routes.name}</span>
-                            )}
-                            {daysSinceActivity !== null && (
-                              <span className={`text-2xs font-medium px-1.5 py-0.5 rounded-full border ${inactiveBadgeClass}`}>{timeAgo(store.last_activity_at!)}</span>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="text-right shrink-0">
-                          <p className={cn("text-sm font-bold", store.outstanding > 0 ? "text-destructive" : "text-green-600")}>
-                            ₹{Number(store.outstanding).toLocaleString("en-IN")}
-                          </p>
-                          {store.outstanding > 0 && <p className="text-xs text-slate-500 dark:text-slate-400">Outstanding</p>}
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-2 mt-2">
-                        <button
-                          onClick={() => onGoOrders?.(storeOption)}
-                          className="flex-1 h-8 rounded-lg border border-slate-100 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-1 hover:bg-slate-50 dark:hover:bg-slate-700/50 active:scale-[0.98] transition-all"
-                        >
-                          <ClipboardList className="h-3.5 w-3.5 text-slate-400" />
-                          Order
-                        </button>
-                        <button
-                          onClick={() => onGoRecord(storeOption)}
-                          className="flex-1 h-8 rounded-lg border border-slate-100 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-1 hover:bg-slate-50 dark:hover:bg-slate-700/50 active:scale-[0.98] transition-all"
-                        >
-                          <Wallet className="h-3.5 w-3.5 text-slate-400" />
-                          Txn
-                        </button>
-                        <button
-                          onClick={() => onOpenStore(storeOption)}
-                          className="flex-1 h-8 rounded-lg border border-slate-100 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-1 hover:bg-slate-50 dark:hover:bg-slate-700/50 active:scale-[0.98] transition-all"
-                        >
-                          <Eye className="h-3.5 w-3.5 text-slate-400" />
-                          Open
-                        </button>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2 mt-2">
-                        <button
-                          onClick={() => handleNavigate(store)}
-                          disabled={!store.lat && !store.lng && !store.address}
-                          className="flex-1 h-8 rounded-lg border border-slate-100 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-1 hover:bg-slate-50 dark:hover:bg-slate-700/50 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <Navigation2 className="h-3.5 w-3.5 text-slate-400" />
-                          Navigate
-                        </button>
-                        <button
-                          onClick={() => phone && handleCall(phone)}
-                          disabled={!phone}
-                          className="flex-1 h-8 rounded-lg border border-slate-100 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-1 hover:bg-slate-50 dark:hover:bg-slate-700/50 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <Phone className="h-3.5 w-3.5 text-slate-400" />
-                          Call
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <StoreCard
+                  key={store.id}
+                  store={store}
+                  onOpenStore={() => onOpenStore(storeOption)}
+                  actions={actions}
+                />
               );
             })}
           </div>

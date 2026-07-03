@@ -188,11 +188,15 @@
 
 /* ───────────────── Dialogs & Sheets ───────────────── */
 /* Make dialogs full-width on mobile (exclude bottom sheets which handle their own positioning) */
-.mobile-page-wrapper ~ [role="dialog"],
+.mobile-page-wrapper ~ [role="dialog"]:not([class*="SheetContent"]),
 [data-state="open"][role="dialog"]:not([class*="SheetContent"]) {
   width: calc(100% - 2rem) !important;
   max-width: 100% !important;
   border-radius: 1rem !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  left: 0 !important;
+  right: 0 !important;
 }
 
 /* Sheet content improvements */

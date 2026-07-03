@@ -6,6 +6,7 @@ import {
   MapPin,
   Navigation2,
   Phone,
+  Receipt,
   Store,
   Wallet,
 
@@ -14,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { timeAgo } from "@/lib/utils";
+import { StoreLedger } from "@/mobile/components/StoreLedger";
 import type { StoreOption } from "@/mobile/components/StorePickerSheet";
 
 interface Props {
@@ -167,6 +169,14 @@ export function MarketerStoreProfile({ store, onBack, onGoRecord, onGoOrders }: 
               <span className="text-xs font-bold text-slate-700 dark:text-slate-200 text-center">Payment</span>
             </button>
           </div>
+        </div>
+        {/* Store Ledger */}
+        <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-4 shadow-sm">
+          <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+            <Receipt className="h-3.5 w-3.5" />
+            Store Ledger
+          </p>
+          <StoreLedger storeId={currentStore.id} />
         </div>
       </div>
     </div>

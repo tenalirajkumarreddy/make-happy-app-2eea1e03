@@ -11,6 +11,7 @@ import {
   Phone,
   Store,
   Wallet,
+  Receipt,
   ShoppingCart,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { timeAgo } from "@/lib/utils";
 import type { StoreOption } from "@/mobile/components/StorePickerSheet";
+import { StoreLedger } from "@/mobile/components/StoreLedger";
 import { useMarkVisit } from "@/mobile/hooks/useMarkVisit";
 
 interface Props {
@@ -284,6 +286,14 @@ export function AgentStoreProfile({ store, onBack, onGoRecord }: Props) {
             </div>
           </div>
         )}
+        {/* Store Ledger */}
+        <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-4 shadow-sm">
+          <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+            <Receipt className="h-3.5 w-3.5" />
+            Store Ledger
+          </p>
+          <StoreLedger storeId={currentStore.id} />
+        </div>
       </div>
     </div>
   );

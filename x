@@ -1,0 +1,6 @@
+-- Migration: Fix sale return stock restoration and per-item damage logic
+-- Date: 2026-07-02
+-- Issues fixed:
+-- 1. process_completed_sale_return referenced wrong column names (quantity -> return_qty, total -> total_price)
+-- 2. Per-item damage logic was broken - used sale-level is_damaged instead of item-level damaged_qty
+-- 3. record_sale_return did not persist the is_damaged flag flair_sale_receipts_paid

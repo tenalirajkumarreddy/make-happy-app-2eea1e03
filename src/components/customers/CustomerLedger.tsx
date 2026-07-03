@@ -100,6 +100,25 @@ export const CustomerLedger = memo(({ customerId, customerName }: CustomerLedger
     setTimeout(() => window.print(), 500);
   };
 
+  const { data: returnedSaleIds } = useQuery({
+    queryKey: ["returned-sales", customerId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("sales")
+        .select("display_id")
+        .eq("customer_id", customerId)
+        .eq("is_fully_returned", true);
+      if (error) throw error;
+      return new Set((data || []).map((s) => s.display_id));
+    },
+  });
+
+  // Helper to check if a ledger entry is a returned sale
+  const isReturnedSale = (entry: LedgerEntry) => {
+    if (entry.transaction_type !== "SALE") return false;
+    return returnedSaleIds?.has(entry.reference) || false;
+  };
+
   const columns = [
     {
       header: "Date",
@@ -120,9 +139,13 @@ export const CustomerLedger = memo(({ customerId, customerName }: CustomerLedger
             <Badge
               variant={row.transaction_type === "SALE" ? "destructive"
                 : row.transaction_type === "PAYMENT" ? "default" : "secondary"}
-              className={`text-2xs ${row.transaction_type === "PAYMENT" ? "bg-green-500" : ""}`}
+              className={cn(
+                "text-2xs",
+                isReturnedSale(row) ? "bg-amber-500 text-white" :
+                row.transaction_type === "PAYMENT" && "bg-green-500"
+              )}
             >
-              {row.transaction_type}
+              {isReturnedSale(row) ? "RETURNED" : row.transaction_type}
             </Badge>
           </div>
         );
@@ -350,7 +373,7 @@ export const CustomerLedger = memo(({ customerId, customerName }: CustomerLedger
                   </thead>
                   <tbody>
                     {ledger?.map((entry) => (
-                      <tr key={entry.record_id} className="border-b">
+                <tr key={entry.record_id} className={isReturnedSale(entry) ? 'border-b opacity-50' : 'border-b'}>
                         <td className="py-2">
                           {format(new Date(entry.transaction_date), "dd MMM yyyy")}
                         </td>

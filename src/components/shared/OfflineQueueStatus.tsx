@@ -120,7 +120,7 @@ export function OfflineQueueStatus() {
         </Button>
       </SheetTrigger>
 
-      <SheetContent side="right" className="w-full sm:max-w-md">
+      <SheetContent side="right" className="w-full sm:max-w-md p-6">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
             {isOnline ? (

@@ -35,13 +35,18 @@ function validatePhoneNumber(phone: string): string | null {
 }
 
 async function sendSMSViaHTTPsms(to: string, otp: string, apiKey: string, fromPhone: string): Promise<HTTPsmsResponse> {
-  const apiUrl = 'https://api.httpsms.com/v1/messages'
+  const apiUrl = 'https://api.httpsms.com/v1/messages/send'
 
   const payload = {
-    to: to,
     from: fromPhone,
-    content: `Your Aqua Prime verification code is: ${otp}. Valid for 10 minutes. Do not share it with anyone.`
+    to: to,
+    content: `Your OTP for Aqua Prime is: ${otp}. Valid for 10 minutes. Do not share it with anyone.`
   }
+
+  console.log('Sending SMS via HTTPsms:', JSON.stringify({
+    from: fromPhone,
+    to: maskPhoneNumber(to)
+  }))
 
   const response = await fetch(apiUrl, {
     method: 'POST',
@@ -50,7 +55,7 @@ async function sendSMSViaHTTPsms(to: string, otp: string, apiKey: string, fromPh
       'x-api-key': apiKey,
     },
     body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(35000), // 35 second timeout
+    signal: AbortSignal.timeout(35000),
   })
 
   const responseData = await response.json()
@@ -127,7 +132,16 @@ serve(async (req) => {
     // Check if HTTPSMS is configured
     if (!apiKey) {
       return new Response(
-        JSON.stringify({ error: 'HTTPsms API key not configured. Set HTTPSMS_API_KEY environment variable.' }),
+        JSON.stringify({ error: 'HTTPsms API key not configured. Set HTTPSMS_API_KEY environment variable.' }),          {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      )
+    }
+
+    if (!fromPhone) {
+      return new Response(
+        JSON.stringify({ error: 'HTTPsms from phone not configured. Set HTTPSMS_FROM_PHONE environment variable.' }),
         {
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -156,7 +170,7 @@ serve(async (req) => {
       if (recentSessions && recentSessions.length >= 3) {
         return new Response(
           JSON.stringify({
-            error: 'Too many OTP好久没发了...查看请求!He本人在第5分钟之前还会继续发送OTP。请稍后再试。'  
+            error: 'Too many OTP requests. Please wait 5 minutes before requesting another OTP.'
           }),
           {
             status: 429,
@@ -180,31 +194,20 @@ serve(async (req) => {
         throw new Error(`Database error: ${dbError.message}`)
       }
 
-      // Send SMS via HTTPsms
-      try {
-        // If fromPhone is not configured, we still return success but log a warning
-        // The actual send will happen when the user provides the from number
-        if (fromPhone) {
-          const smsResponse = await sendSMSViaHTTPsms(normalizedPhone, otp, apiKey, fromPhone)
-          console.log('HTTPsms sent successfully:', {
-            phone: maskPhoneNumber(normalizedPhone),
-            messageId: smsResponse.data.id,
-            sessionToken
-          })
-        } else {
-          console.warn('HTTPSMS_FROM_PHONE not configured. SMS not actually sent. Set HTTPSMS_FROM_PHONE env variable.')
-        }
-      } catch (smsError) {
-        console.error('HTTPsms send failed:', smsError)
-        // Don't fail the request - the OTP is still stored and can be delivered later
-        // This matches the OpenSMS behavior where the database entry is created
-      }
+      // Send SMS via HTTPsms - throws on error so frontend knows
+      const smsResponse = await sendSMSViaHTTPsms(normalizedPhone, otp, apiKey, fromPhone)
+      console.log('HTTPsms sent successfully:', {
+        phone: maskPhoneNumber(normalizedPhone),
+        messageId: smsResponse.data.id,
+        sessionToken
+      })
 
       return new Response(
         JSON.stringify({
           success: true,
           phone: maskPhoneNumber(normalizedPhone),
           session_token: sessionToken,
+          message_id: smsResponse.data.id,
         }),
         {
           status: 200,

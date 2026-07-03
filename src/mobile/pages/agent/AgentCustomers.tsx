@@ -1,10 +1,7 @@
-import React, { useState, memo, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search, Phone, Navigation2, Plus, Loader2, MapPin, X, Store, Eye, ShoppingCart, Wallet, CheckCircle2 } from "lucide-react";
+import { Search, Phone, Navigation2, Plus, Loader2, MapPin, X, ShoppingCart, Wallet, CheckCircle2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -12,24 +9,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { StoreCard, type StoreCardAction } from "@/mobile/components/StoreCard";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { CreateStoreWizard } from "@/components/stores/CreateStoreWizard";
-import { cn, timeAgo } from "@/lib/utils";
 import type { StoreOption } from "@/mobile/components/StorePickerSheet";
 import { useRouteAccess } from "@/hooks/useRouteAccess";
-
-const TYPE_COLORS: Record<string, string> = {
-  RETAIL: "bg-blue-500",
-  RESTAURANT: "bg-orange-500",
-  WHOLESALE: "bg-green-500",
-  DEFAULT: "bg-muted-foreground",
-};
-
-function getTypeColor(typeName: string) {
-  const key = typeName?.toUpperCase();
-  return TYPE_COLORS[key] ?? TYPE_COLORS.DEFAULT;
-}
 
 interface Props {
   onOpenStore: (store: StoreOption) => void;
@@ -204,17 +189,80 @@ export function AgentCustomers({ onOpenStore, onGoRecord, onGoVisit }: Props) {
           </div>
         ) : (
           <div className="space-y-2">
-            {filtered.map((s) => (
-              <StoreCard
-                key={s.id}
-                s={s}
-                onOpenStore={onOpenStore}
-                onGoRecord={onGoRecord}
-                onGoVisit={onGoVisit}
-                handleNavigate={handleNavigate}
-                handleCall={handleCall}
-              />
-            ))}
+            {filtered.map((s) => {
+              const phone = s.phone || s.customers?.phone;
+              const storeOption: StoreOption = {
+                id: s.id,
+                name: s.name,
+                display_id: s.display_id,
+                photo_url: s.photo_url || null,
+                outstanding: Number(s.outstanding || 0),
+                store_type_id: s.store_type_id,
+                customer_id: s.customer_id,
+                lat: s.lat,
+                lng: s.lng,
+                address: s.address,
+                phone: s.phone,
+                route_id: s.route_id,
+                is_active: s.is_active,
+                last_activity_at: s.last_activity_at,
+                customers: s.customers,
+                store_types: s.store_types,
+                routes: s.routes,
+              };
+              const actions: StoreCardAction[] = [
+                {
+                  id: "sale",
+                  label: "Sale",
+                  icon: ShoppingCart,
+                  onClick: () => onGoRecord(storeOption, "sale"),
+                  className:
+                    "bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800",
+                },
+                {
+                  id: "transaction",
+                  label: "Transaction",
+                  icon: Wallet,
+                  onClick: () => onGoRecord(storeOption, "payment"),
+                  className:
+                    "bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-800",
+                },
+                {
+                  id: "visit",
+                  label: "Visit",
+                  icon: CheckCircle2,
+                  onClick: onGoVisit,
+                  className:
+                    "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700",
+                },
+                {
+                  id: "navigate",
+                  label: "Navigate",
+                  icon: Navigation2,
+                  onClick: () => handleNavigate(s),
+                  disabled: !s.lat && !s.lng && !s.address,
+                  className:
+                    "bg-indigo-50 text-indigo-600 border-indigo-200 dark:bg-indigo-950/20 dark:border-indigo-800",
+                },
+                {
+                  id: "call",
+                  label: "Call",
+                  icon: Phone,
+                  onClick: () => phone && handleCall(phone),
+                  disabled: !phone,
+                  className:
+                    "bg-teal-50 text-teal-600 border-teal-200 dark:bg-teal-950/20 dark:border-teal-800",
+                },
+              ];
+              return (
+                <StoreCard
+                  key={s.id}
+                  store={s}
+                  onOpenStore={() => onOpenStore(storeOption)}
+                  actions={actions}
+                />
+              );
+            })}
           </div>
         )}
       </div>
@@ -238,160 +286,3 @@ export function AgentCustomers({ onOpenStore, onGoRecord, onGoVisit }: Props) {
     </div>
   );
 }
-
-interface StoreCardProps {
-  s: StoreListItem;
-  onOpenStore: (store: StoreOption) => void;
-  onGoRecord: (store: StoreOption, action: "sale" | "payment") => void;
-  onGoVisit: () => void;
-  handleNavigate: (s: StoreListItem) => void;
-  handleCall: (phone: string) => void;
-}
-
-const StoreCard = memo(({ s, onOpenStore, onGoRecord, onGoVisit, handleNavigate, handleCall }: StoreCardProps) => {
-  const typeName = s.store_types?.name ?? "";
-  const colorClass = getTypeColor(typeName);
-  const phone = s.phone || s.customers?.phone;
-  const storeOption: StoreOption = {
-    id: s.id,
-    name: s.name,
-    display_id: s.display_id,
-    photo_url: s.photo_url || null,
-    outstanding: Number(s.outstanding || 0),
-    store_type_id: s.store_type_id,
-    customer_id: s.customer_id,
-    lat: s.lat,
-    lng: s.lng,
-    address: s.address,
-    phone: s.phone,
-    route_id: s.route_id,
-    is_active: s.is_active,
-    last_activity_at: s.last_activity_at,
-    customers: s.customers,
-    store_types: s.store_types,
-    routes: s.routes,
-  };
-
-  return (
-    <Card className="overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-      <div className="flex">
-        <div className={cn("w-1.5 shrink-0 rounded-l-xl", colorClass)} />
-        <CardContent className="p-4 flex-1 min-w-0">
-          <div className="flex items-start gap-3">
-            <button
-              className="h-14 w-14 rounded-xl bg-slate-100 dark:bg-slate-700 overflow-hidden shrink-0 active:scale-95 transition-transform"
-              onClick={() => onOpenStore(storeOption)}
-            >
-              {s.photo_url ? (
-                <img src={s.photo_url} alt={s.name} loading="lazy" className="h-full w-full object-cover" />
-              ) : (
-                <div className="h-full w-full flex items-center justify-center">
-                  <Store className="h-6 w-6 text-slate-400" />
-                </div>
-              )}
-            </button>
-
-            <div className="min-w-0 flex-1">
-              <button className="text-left w-full" onClick={() => onOpenStore(storeOption)}>
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-sm font-bold text-slate-900 dark:text-white leading-tight truncate">{s.name}</span>
-                  <span className="text-xs text-muted-foreground font-mono">({s.display_id})</span>
-                </div>
-              </button>
-              {s.customers?.name && (
-                <p className="text-xs text-slate-500 mt-0.5 font-medium">{s.customers.name}</p>
-              )}
-              {s.address && (
-                <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{s.address}</p>
-              )}
-              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                {typeName && (
-                  <Badge variant="outline" className="text-xs h-4.5 px-1.5 font-semibold">{typeName}</Badge>
-                )}
-                {s.routes?.name && (
-                  <span className="text-xs text-muted-foreground/80 font-medium">{s.routes.name}</span>
-                )}
-                {s.last_activity_at && (
-                  <span className="text-2xs text-muted-foreground/60 font-medium">{timeAgo(s.last_activity_at)}</span>
-                )}
-              </div>
-            </div>
-
-            <div className="text-right shrink-0">
-              <p className={cn("text-sm font-extrabold tabular-nums", s.outstanding > 0 ? "text-destructive" : "text-emerald-600")}>
-                ₹{Number(s.outstanding).toLocaleString("en-IN")}
-              </p>
-              {s.outstanding > 0 && (
-                <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider mt-0.5">Outstanding</p>
-              )}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2 mt-3.5">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-11 rounded-xl text-xs font-bold bg-blue-50/50 hover:bg-blue-100/70 text-blue-600 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
-              onClick={() => onGoRecord(storeOption, "sale")}
-            >
-              <ShoppingCart className="h-4 w-4 mr-1 shrink-0" />
-              Sale
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-11 rounded-xl text-xs font-bold bg-emerald-50/50 hover:bg-emerald-100/70 text-emerald-600 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-800"
-              onClick={() => onGoRecord(storeOption, "payment")}
-            >
-              <Wallet className="h-4 w-4 mr-1 shrink-0" />
-              Txn
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-11 rounded-xl text-xs font-bold bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700"
-              onClick={() => onOpenStore(storeOption)}
-            >
-              <CheckCircle2 className="h-4 w-4 mr-1 shrink-0" />
-              Visit
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2 mt-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-11 text-xs font-semibold rounded-xl text-slate-600 hover:text-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700"
-              onClick={() => handleNavigate(s)}
-              disabled={!s.lat && !s.lng && !s.address}
-            >
-              <Navigation2 className="h-4 w-4 mr-1 shrink-0 text-slate-500" />
-              Navigate
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-11 text-xs font-semibold rounded-xl text-slate-600 hover:text-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700"
-              onClick={() => phone && handleCall(phone)}
-              disabled={!phone}
-            >
-              <Phone className="h-4 w-4 mr-1 shrink-0 text-slate-500" />
-              Call
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-11 text-xs font-semibold rounded-xl text-slate-600 hover:text-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700"
-              onClick={() => onOpenStore(storeOption)}
-            >
-              <Eye className="h-4 w-4 mr-1 shrink-0 text-slate-500" />
-              Open
-            </Button>
-          </div>
-        </CardContent>
-      </div>
-    </Card>
-  );
-});
-
-StoreCard.displayName = "StoreCard";
