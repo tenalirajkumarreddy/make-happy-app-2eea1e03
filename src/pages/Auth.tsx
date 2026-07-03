@@ -296,7 +296,7 @@ const Auth = () => {
       // Normalize phone number (add +91 for Indian numbers if missing +)
       const normalizedPhone = phone.startsWith("+") ? phone : `+91${phone.replace(/^0+/, "")}`;
       
-      const { data, error } = await supabase.functions.invoke('send-otp-opensms', {
+      const { data, error } = await supabase.functions.invoke('send-otp-httpsms', {
         body: { phone: normalizedPhone }
       });
       
