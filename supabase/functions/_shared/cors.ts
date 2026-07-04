@@ -24,8 +24,11 @@ function isAllowedOrigin(origin: string): boolean {
   // Explicitly allow Capacitor / Ionic native app schemes
   if (origin === "capacitor://localhost" || origin === "ionic://localhost") return true;
 
-  // Always allow localhost / 127.0.0.1 for local development
+  // Always allow localhost / 127.0.0.1 for local development (both http and https for APK)
   if (origin.startsWith("http://localhost") || origin.startsWith("http://127.0.0.1")) {
+    return true;
+  }
+  if (origin.startsWith("https://localhost") || origin.startsWith("https://127.0.0.1")) {
     return true;
   }
 

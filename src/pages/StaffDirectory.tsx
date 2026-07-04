@@ -515,12 +515,12 @@ export function StaffDirectory() {
             </div>
             <div>
               <Label htmlFor="invite-warehouse">Warehouse</Label>
-              <Select value={inviteWarehouseId} onValueChange={setInviteWarehouseId} disabled={inviteSaving}>
+              <Select value={inviteWarehouseId || "none"} onValueChange={(v) => setInviteWarehouseId(v === "none" ? "" : v)} disabled={inviteSaving}>
                 <SelectTrigger id="invite-warehouse">
                   <SelectValue placeholder="No warehouse" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">No warehouse</SelectItem>
+                  <SelectItem value="none">No warehouse</SelectItem>
                   {warehouses.map((w: any) => (
                     <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
                   ))}

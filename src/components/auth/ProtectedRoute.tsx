@@ -18,7 +18,7 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (needsOnboarding) {
-    return <Navigate to="/auth" replace />;
+    return <Navigate to="/auth/onboarding" replace />;
   }
 
   return <>{children}</>;

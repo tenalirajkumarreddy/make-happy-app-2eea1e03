@@ -10,6 +10,7 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { logDebug, logError } from "@/lib/logger";
 import { Loader2 } from "lucide-react";
 import Auth from "./pages/Auth";
+import AuthOnboarding from "./pages/AuthOnboarding";
 
 const Onboarding = lazy(() => import("./pages/Onboarding"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
@@ -63,6 +64,7 @@ const App = () => {
           <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <Routes>
               <Route path="/auth" element={<Auth />} />
+              <Route path="/auth/onboarding" element={<AuthOnboarding />} />
               <Route path="/onboarding" element={<Suspense fallback={<PageLoader />}><Onboarding /></Suspense>} />
               <Route path="/reset-password" element={<Suspense fallback={<PageLoader />}><ResetPassword /></Suspense>} />
               <Route path="/*" element={

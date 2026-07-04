@@ -1,18 +1,15 @@
-import { useEffect, useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Loader2, MapPin, Navigation } from "lucide-react";
-import { generateDisplayId } from "@/lib/displayId";
-import { useQuery } from "@tanstack/react-query";
-import { getCurrentPosition, getOAuthRedirectUrl } from "@/lib/capacitorUtils";
+import { Loader2, ArrowLeft, RefreshCw } from "lucide-react";
+import { OTPInput } from "@/components/auth/OTPInput";
 import { useAuth } from "@/contexts/AuthContext";
 
-type Step = "phone" | "register" | "add-store";
+const OTP_RESEND_INTERVAL = 60; // seconds
 
 const Logo = () => (
   <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground font-bold text-xl mb-4">
@@ -20,284 +17,85 @@ const Logo = () => (
   </div>
 );
 
-const STEP_ORDER: Step[] = ["phone", "register", "add-store"];
-
-const STEP_LABELS: Record<Step, string> = {
-  phone: "Verify phone",
-  register: "Profile",
-  "add-store": "Store details",
-};
-
-function OnboardingProgress({ step }: { step: Step }) {
-  const activeIndex = STEP_ORDER.indexOf(step);
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        {STEP_ORDER.map((item, index) => {
-          const isActive = index === activeIndex;
-          const isDone = index < activeIndex;
-
-          return (
-            <div key={item} className="flex flex-1 items-center gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold ${
-                  isDone
-                    ? "bg-primary text-primary-foreground"
-                    : isActive
-                    ? "border border-primary bg-primary/10 text-primary"
-                    : "border border-border bg-background text-muted-foreground"
-                }`}>
-                  {index + 1}
-                </div>
-                <span className={`text-xs font-medium ${isActive || isDone ? "text-foreground" : "text-muted-foreground"}`}>
-                  {STEP_LABELS[item]}
-                </span>
-              </div>
-              {index < STEP_ORDER.length - 1 && (
-                <div className={`h-px flex-1 ${index < activeIndex ? "bg-primary/60" : "bg-border"}`} />
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-
-async function hasStaffOrCustomerAccess(userId: string): Promise<boolean> {
-  try {
-    const resolverCall: any = (supabase as any).rpc("resolve_user_identity", { p_user_id: userId });
-    let resolverData: any = null;
-    let resolverError: any = null;
-
-    if (resolverCall?.single) {
-      const result = await resolverCall.single();
-      resolverData = result.data;
-      resolverError = result.error;
-    } else {
-      const result = await resolverCall;
-      resolverData = Array.isArray(result.data) ? result.data[0] : result.data;
-      resolverError = result.error;
-    }
-
-    if (resolverError) throw resolverError;
-    return !resolverData?.onboarding_required;
-  } catch {
-    const [{ data: roleData }, { data: customerData }] = await Promise.all([
-      supabase.from("user_roles").select("role").eq("user_id", userId).maybeSingle(),
-      supabase.from("customers").select("id").eq("user_id", userId).maybeSingle(),
-    ]);
-
-    if (roleData?.role && roleData.role !== "customer") {
-      return true;
-    }
-
-    return !!customerData;
-  }
-}
-
 const Auth = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
-  const [sessionChecked, setSessionChecked] = useState(false);
-  const [step, setStep] = useState<Step>("phone");
-
-  // Phone / OTP
-  const [verifiedPhone, setVerifiedPhone] = useState("");
+  const auth = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState("");
   const [otpCode, setOtpCode] = useState("");
-  const [otpSent, setOtpSent] = useState(false);
   const [sessionToken, setSessionToken] = useState("");
+  const [countdown, setCountdown] = useState(0);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [otpError, setOtpError] = useState(false);
 
-  // New-customer registration
-  const [regName, setRegName] = useState("");
-  const [newCustomerId, setNewCustomerId] = useState<string | null>(null);
-
-  // Store creation (step: add-store)
-  const [storeName, setStoreName] = useState("");
-  const [storeAddress, setStoreAddress] = useState("");
-  const [storeCity, setStoreCity] = useState("");
-  const [storeLat, setStoreLat] = useState<number | null>(null);
-  const [storeLng, setStoreLng] = useState<number | null>(null);
-  const [fetchingLocation, setFetchingLocation] = useState(false);
-
-  // App settings
-  const { data: appSettings } = useQuery({
-    queryKey: ["app-settings-auth"],
-    queryFn: async () => {
-      const { data } = await supabase.from("company_settings").select("key, value");
-      const map: Record<string, string> = {};
-      data?.forEach((s: any) => { map[s.key] = s.value || ""; });
-      return map;
-    },
-  });
-
-  // Central auth state
-
-
-
-  // Use central AuthContext to avoid racing the resolver/role sync performed
-  // during login (this prevents a transient redirect to onboarding).
-  // We prefer the AuthProvider's resolved `needsOnboarding` value.
-  const auth = useAuth();
-
+  // Countdown timer for resend OTP
   useEffect(() => {
-    let cancelled = false;
+    if (countdown <= 0) return;
+    const timer = setInterval(() => {
+      setCountdown((prev) => prev - 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [countdown]);
 
-    if (auth.loading) return;
+  // Clear error when user types
+  const clearErrors = useCallback(() => {
+    setErrorMessage("");
+    setOtpError(false);
+  }, []);
 
-    if (!auth.user) {
-      if (!cancelled) {
-        setLoading(false);
-        setSessionChecked(true);
-      }
-      return;
-    }
-
-    if (!auth.needsOnboarding) {
-      if (!cancelled) {
-        setLoading(false);
-        setSessionChecked(true);
-        navigate("/", { replace: true });
-      }
-      return;
-    }
-
-    // Needs onboarding: prefill phone and show register step
-    if (!cancelled) {
-      setVerifiedPhone(auth.user.phone || "");
-      setStep("register");
-      setLoading(false);
-      setSessionChecked(true);
-    }
-
-    return () => { cancelled = true; };
-  }, [auth.loading, auth.user, auth.needsOnboarding, navigate]);
-
-  // ── Handlers ──
-
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!regName.trim()) {
-      toast.error("Name is required");
-      return;
-    }
-    setLoading(true);
-    try {
-      const db: any = supabase;
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
-
-      const displayId = generateDisplayId("CUST");
-      const customersTable = db.from("customers") as {
-        insert: (values: unknown) => {
-          select: (columns: string) => {
-            single: () => Promise<{ data: { id: string } | null; error: any }>;
-          };
-        };
-      };
-
-      const customerPayload: Record<string, unknown> = {};
-      customerPayload["display_id"] = displayId;
-      customerPayload["name"] = regName.trim();
-      customerPayload["phone"] = verifiedPhone || null;
-
-      const insertCustomer: any = customersTable.insert;
-      const { data: cust, error } = await insertCustomer(customerPayload)
-        .select("id")
-        .single();
-
-      if (error) throw error;
-
-      // Mark onboarding complete so user doesn't see it again
-      const profilesTable: any = supabase.from("profiles");
-      await profilesTable.upsert({
-        user_id: user.id,
-        full_name: regName.trim(),
-        phone: verifiedPhone || null,
-        onboarding_complete: true,
-        phone_verified: true,
-      } as any, { onConflict: "user_id" });
-
-      // Ensure user_roles has customer role
-      await supabase.from("user_roles").upsert({
-        user_id: user.id,
-        role: "customer",
-      }, { onConflict: "user_id" });
-
-      setNewCustomerId(cust.id);
-      setStep("add-store");
-    } catch (error: any) {
-      // Handle stale session (FK constraint violation)
-      if (error.message?.includes("foreign key constraint") || error.code === "23503") {
-        toast.error("Session expired. Please login again.");
-        await supabase.auth.signOut();
-        navigate("/auth", { replace: true });
-        return;
-      }
-      toast.error(error instanceof Error ? error.message : "Registration failed");
-    } finally {
-      setLoading(false);
-    }
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    // Only allow digits, max 10 characters
+    const digitsOnly = value.replace(/\D/g, "").slice(0, 10);
+    setPhoneNumber(digitsOnly);
+    clearErrors();
   };
 
-  const fetchLocationFromCoords = async (lat: number, lng: number) => {
-    try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`
-      );
-      const data = await response.json();
-      if (data?.address) {
-        const addr = data.address;
-        const city = addr.city || addr.town || addr.village || addr.county || "";
-        const area = addr.suburb || addr.neighbourhood || addr.road || "";
-        const state = addr.state || "";
-        const postcode = addr.postcode || "";
-        
-        setStoreCity(city);
-        setStoreAddress(`${area}${area && city ? ", " : ""}${city}${state ? ", " + state : ""}${postcode ? " - " + postcode : ""}`);
-      }
-    } catch (err) {
-      console.error("Reverse geocoding failed:", err);
-    }
+  const handleOtpChange = (value: string) => {
+    setOtpCode(value);
+    clearErrors();
   };
 
-  const handleGetLocation = async () => {
-    setFetchingLocation(true);
-    try {
-      const position = await getCurrentPosition();
-      if (position) {
-        setStoreLat(position.lat);
-        setStoreLng(position.lng);
-        await fetchLocationFromCoords(position.lat, position.lng);
-        toast.success("Location captured!");
-      } else {
-        toast.error("Could not get location. Please enable GPS.");
-      }
-    } catch (err) {
-      toast.error("Location access denied");
-    } finally {
-      setFetchingLocation(false);
+  const getErrorMessage = (error: any): string => {
+    if (!error) return "Something went wrong. Please try again.";
+    
+    const message = error.message || error.error || String(error);
+    
+    // Map specific error messages
+    if (message.includes("Invalid OTP") || message.includes("verify") || message.includes("expired")) {
+      return "Wrong OTP. Please check the code and try again.";
     }
+    if (message.includes("rate limit") || message.includes("Too many")) {
+      return "Too many attempts. Please wait a moment before trying again.";
+    }
+    if (message.includes("not configured") || message.includes("env")) {
+      return "Service temporarily unavailable. Please try again later.";
+    }
+    if (message.includes("phone") || message.includes("required")) {
+      return "Please enter a valid phone number.";
+    }
+    if (message.includes("network") || message.includes("fetch")) {
+      return "Network issue. Please check your connection and try again.";
+    }
+    
+    return message;
   };
 
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    const phone = phoneNumber.trim();
-    if (!phone) {
-      toast.error("Phone number is required");
+    if (phoneNumber.length !== 10) {
+      setErrorMessage("Please enter a valid 10-digit mobile number");
       return;
     }
-    
+
     setLoading(true);
+    setErrorMessage("");
     try {
-      // Normalize phone number (add +91 for Indian numbers if missing +)
-      const normalizedPhone = phone.startsWith("+") ? phone : `+91${phone.replace(/^0+/, "")}`;
+      const fullPhone = `+91${phoneNumber}`;
       
       const { data, error } = await supabase.functions.invoke('send-otp-httpsms', {
-        body: { phone: normalizedPhone }
+        body: { phone: fullPhone }
       });
       
       if (error) throw error;
@@ -305,9 +103,13 @@ const Auth = () => {
       
       setSessionToken(data.session_token);
       setOtpSent(true);
+      setCountdown(OTP_RESEND_INTERVAL);
+      setOtpCode("");
       toast.success("OTP sent to your phone!");
     } catch (error: any) {
-      toast.error(error.message || "Failed to send OTP");
+      const message = getErrorMessage(error);
+      setErrorMessage(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -315,18 +117,20 @@ const Auth = () => {
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    const code = otpCode.trim();
-    if (!code) {
-      toast.error("OTP code is required");
+    if (otpCode.length !== 6) {
+      setOtpError(true);
+      setErrorMessage("Please enter all 6 digits of the OTP");
       return;
     }
-    
+
     setLoading(true);
+    setErrorMessage("");
+    setOtpError(false);
     try {
       const { data, error } = await supabase.functions.invoke('verify-otp-opensms', {
         body: { 
           session_token: sessionToken,
-          otp_code: code 
+          otp_code: otpCode 
         }
       });
       
@@ -341,238 +145,166 @@ const Auth = () => {
 
       if (sessionError) throw sessionError;
 
-      setVerifiedPhone(data.user.phone);
-      setSessionChecked(false);
-
-      // Let the shared AuthContext finish resolving the account before we
-      // decide whether to stay on onboarding or go straight to the dashboard.
-      toast.success("Phone verified! Checking your account...");
-    } catch (error: any) {
-      toast.error(error.message || "Invalid OTP code");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleAddStore = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!storeName.trim()) {
-      toast.error("Store name is required");
-      return;
-    }
-    if (!storeAddress.trim()) {
-      toast.error("Address is required. Please use 'Get Current Location' or enter manually.");
-      return;
-    }
-    setLoading(true);
-    try {
-      // Get default store type from settings
-      const defaultStoreTypeId = appSettings?.default_store_type_id || '76efecec-3e6b-4142-beaa-885c06f41ba2'; // Fallback to Retail
+      toast.success("Phone verified! Welcome.");
       
-      const displayId = generateDisplayId("STR");
-      const { data: defaultWarehouse } = await supabase.from("warehouses").select("id").limit(1).single();
-      const { error } = await supabase.from("stores").insert({
-        customer_id: newCustomerId as any,
-        store_type_id: defaultStoreTypeId,
-        display_id: displayId,
-        name: storeName.trim(),
-        address: storeAddress.trim(),
-        city: storeCity.trim() || null,
-        lat: storeLat,
-        lng: storeLng,
-        phone: verifiedPhone || null,
-        warehouse_id: (defaultWarehouse as any)?.id || null,
-      });
-      if (error) throw error;
-      toast.success("Account set up successfully! Welcome.");
-      window.location.assign("/");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not create store");
+      // AuthContext will handle the redirect based on needsOnboarding
+      // If needsOnboarding, it will redirect to the onboarding page
+      // If not, it will redirect to the dashboard
+      
+    } catch (error: any) {
+      const message = getErrorMessage(error);
+      setOtpError(true);
+      setErrorMessage(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
   };
 
-  if (loading || !sessionChecked) {
+  const handleResendOtp = async () => {
+    if (countdown > 0) return;
+    
+    setLoading(true);
+    setErrorMessage("");
+    setOtpError(false);
+    try {
+      const fullPhone = `+91${phoneNumber}`;
+      
+      const { data, error } = await supabase.functions.invoke('send-otp-httpsms', {
+        body: { phone: fullPhone }
+      });
+      
+      if (error) throw error;
+      if (data.error) throw new Error(data.error);
+      
+      setSessionToken(data.session_token);
+      setCountdown(OTP_RESEND_INTERVAL);
+      setOtpCode("");
+      toast.success("OTP resent!");
+    } catch (error: any) {
+      const message = getErrorMessage(error);
+      setErrorMessage(message);
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Loading guard: prevent login form flash for logged-in users
+  if (auth.loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="text-center space-y-4">
-            <Logo />
-          <div className="flex flex-col items-center gap-3">
-            <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
-            <p className="text-sm font-medium animate-pulse">Checking your account...</p>
-            <p className="text-xs text-muted-foreground">This usually takes a moment.</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ── REGISTER STEP ──
-  if (step === "register") {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background p-4">
-        <div className="w-full max-w-md space-y-6">
-          <div className="text-center">
-            <Logo />
-            <h1 className="text-2xl font-bold tracking-tight">Create Your Account</h1>
-            <p className="text-sm text-muted-foreground mt-1">Phone verified. Next, tell us who you are.</p>
-          </div>
-          <OnboardingProgress step="register" />
-          <div className="rounded-xl border bg-card p-6 shadow-sm">
-            <form onSubmit={handleRegister} className="space-y-4">
-              <div>
-                <Label htmlFor="reg-name">Full Name <span className="text-destructive">*</span></Label>
-                <Input id="reg-name" placeholder="Your full name" value={regName}
-                  onChange={(e) => setRegName(e.target.value)} className="mt-1" required />
-              </div>
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Continue
-              </Button>
-            </form>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-
-
-  // ── ADD STORE STEP ──
-  if (step === "add-store") {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background p-4">
-        <div className="w-full max-w-md space-y-6">
-          <div className="text-center">
-            <Logo />
-            <h1 className="text-2xl font-bold tracking-tight">Add Your Store</h1>
-            <p className="text-sm text-muted-foreground mt-1">One last step. Tell us about your business location.</p>
-          </div>
-          <OnboardingProgress step="add-store" />
-          <div className="rounded-xl border bg-card p-6 shadow-sm">
-            <form onSubmit={handleAddStore} className="space-y-4">
-              <div>
-                <Label htmlFor="store-name">Store Name <span className="text-destructive">*</span></Label>
-                <Input id="store-name" placeholder="e.g. My Shop" value={storeName}
-                  onChange={(e) => setStoreName(e.target.value)} className="mt-1" required />
-              </div>
-              
-              {/* Location Picker */}
-              <div className="space-y-2">
-                <Label>Store Location <span className="text-destructive">*</span></Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full gap-2"
-                  onClick={handleGetLocation}
-                  disabled={fetchingLocation}
-                >
-                  {fetchingLocation ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Navigation className="h-4 w-4" />
-                  )}
-                  {storeLat ? "Update Location" : "Get Current Location"}
-                </Button>
-                {storeLat && storeLng && (
-                  <div className="flex items-center gap-2 text-xs text-green-600 bg-green-50 p-2 rounded">
-                    <MapPin className="h-3 w-3" />
-                    Location captured ({storeLat.toFixed(4)}, {storeLng.toFixed(4)})
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <Label htmlFor="store-address">
-                  Address <span className="text-destructive">*</span>
-                </Label>
-                <Textarea 
-                  id="store-address" 
-                  placeholder="Full store address (auto-filled from location or enter manually)" 
-                  value={storeAddress}
-                  onChange={(e) => setStoreAddress(e.target.value)} 
-                  className="mt-1 min-h-[80px]" 
-                  required 
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Use "Get Current Location" button above or enter address manually
-                </p>
-              </div>
-
-              <Button type="submit" className="w-full" disabled={loading || !storeName.trim() || !storeAddress.trim()}>
-                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Create Store & Finish
-              </Button>
-            </form>
-          </div>
-        </div>
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
-      <div className="w-full max-w-md space-y-4">
+      <div className="w-full max-w-md space-y-6">
         <div className="text-center">
           <Logo />
           <h1 className="text-2xl font-bold tracking-tight">Aqua Prime</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Sign in with your phone number to access your account
+            {otpSent 
+              ? `Enter the OTP sent to +91 ${phoneNumber}`
+              : "Sign in with your mobile number"
+            }
           </p>
         </div>
-        <OnboardingProgress step="phone" />
 
-        <div className="rounded-xl border bg-card p-6 shadow-sm space-y-4">
-          {/* Phone OTP Login — Primary */}
+        <div className="rounded-xl border bg-card p-6 shadow-sm space-y-5">
           {!otpSent ? (
-            <form onSubmit={handleSendOtp} className="space-y-3">
+            /* Step 1: Phone Input */
+            <form onSubmit={handleSendOtp} className="space-y-4">
               <div>
-                <Label htmlFor="phone">Phone Number</Label>
-                <Input
-                  id="phone"
-                  type="tel"
-                  data-testid="phone-input"
-                  placeholder="+91XXXXXXXXXX or 10-digit number"
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
-                  className="mt-1"
-                  autoFocus
-                  required
-                />
+                <Label htmlFor="phone">Mobile Number</Label>
+                <div className="flex items-center mt-1 gap-2 rounded-md border border-input bg-background px-3 py-2 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+                  <span className="text-sm font-medium text-muted-foreground select-none">+91</span>
+                  <Input
+                    id="phone"
+                    type="tel"
+                    inputMode="numeric"
+                    placeholder="10-digit number"
+                    value={phoneNumber}
+                    onChange={handlePhoneChange}
+                    className="border-0 bg-transparent p-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                    autoFocus
+                    maxLength={10}
+                  />
+                </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Enter with country code (e.g., +91) or a 10-digit mobile number
+                  We'll send a 6-digit OTP to verify your number
                 </p>
               </div>
-              <Button type="submit" className="w-full" disabled={loading} data-testid="send-otp-btn">
-                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+
+              {errorMessage && (
+                <div className="rounded-md bg-red-50 p-3 text-sm text-red-600">
+                  {errorMessage}
+                </div>
+              )}
+
+              <Button 
+                type="submit" 
+                className="w-full" 
+                disabled={loading || phoneNumber.length !== 10}
+              >
+                {loading ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : null}
                 Send OTP
               </Button>
             </form>
           ) : (
-            <form onSubmit={handleVerifyOtp} className="space-y-3">
-              <div>
-                <Label htmlFor="otp">Enter OTP</Label>
-                <Input
-                  id="otp"
-                  type="text"
-                  data-testid="otp-input"
-                  placeholder="6-digit code"
+            /* Step 2: OTP Verification */
+            <form onSubmit={handleVerifyOtp} className="space-y-5">
+              <div className="space-y-3">
+                <Label>Enter OTP</Label>
+                <OTPInput
                   value={otpCode}
-                  onChange={(e) => setOtpCode(e.target.value)}
-                  className="mt-1"
-                  maxLength={6}
-                  autoFocus
-                  required
+                  onChange={handleOtpChange}
+                  disabled={loading}
+                  error={otpError}
                 />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Sent to {phoneNumber}
-                </p>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">
+                    Sent to +91 {phoneNumber}
+                  </span>
+                  {countdown > 0 ? (
+                    <span className="text-muted-foreground">
+                      Resend in {countdown}s
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleResendOtp}
+                      disabled={loading}
+                      className="flex items-center text-primary hover:text-primary/80 hover:underline disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                    >
+                      <RefreshCw className="mr-1 h-3 w-3" />
+                      Resend OTP
+                    </button>
+                  )}
+                </div>
               </div>
-              <Button type="submit" className="w-full" disabled={loading} data-testid="verify-otp-btn">
-                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+
+              {errorMessage && (
+                <div className="rounded-md bg-red-50 p-3 text-sm text-red-600">
+                  {errorMessage}
+                </div>
+              )}
+
+              <Button 
+                type="submit" 
+                className="w-full" 
+                disabled={loading || otpCode.length !== 6}
+              >
+                {loading ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : null}
                 Verify OTP
               </Button>
+
               <Button
                 type="button"
                 variant="ghost"
@@ -580,46 +312,16 @@ const Auth = () => {
                 onClick={() => {
                   setOtpSent(false);
                   setOtpCode("");
+                  setErrorMessage("");
+                  setOtpError(false);
                 }}
+                disabled={loading}
               >
+                <ArrowLeft className="mr-2 h-4 w-4" />
                 Change Phone Number
               </Button>
             </form>
           )}
-
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-card px-2 text-muted-foreground">or</span>
-            </div>
-          </div>
-
-          {/* Google OAuth — Secondary, for returning users */}
-          <Button
-            variant="outline"
-            className="w-full"
-            disabled={loading}
-            onClick={async () => {
-              setLoading(true);
-              const { error } = await supabase.auth.signInWithOAuth({
-                provider: "google",
-                options: { redirectTo: getOAuthRedirectUrl("/auth") },
-              });
-              if (error) {
-                toast.error(error.message || "Google sign-in failed");
-                setLoading(false);
-              }
-            }}
-          >
-            <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
-              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z" fill="#4285F4"/>
-              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-            </svg>
-            Continue with Google
-          </Button>
-
         </div>
       </div>
     </div>

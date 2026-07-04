@@ -164,6 +164,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (target && window.location.pathname !== target) {
           window.location.href = target;
         }
+      } else if (resolvedNeedsOnboarding) {
+        // New customer — redirect to onboarding page
+        if (window.location.pathname !== "/auth/onboarding") {
+          window.location.href = "/auth/onboarding";
+        }
       } else if (resolvedCustomer) {
         if (window.location.pathname !== "/") {
           window.location.href = "/";
