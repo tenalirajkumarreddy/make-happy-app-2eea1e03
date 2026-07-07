@@ -156,9 +156,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const ROLE_DASHBOARD_MAP: Record<string, string> = {
           super_admin: "/",
           manager: "/",
-          agent: "/agent",
-          marketer: "/marketer",
-          operator: "/pos",
+          agent: "/",
+          marketer: "/",
+          operator: "/",
         };
         const target = ROLE_DASHBOARD_MAP[resolvedRole];
         if (target && window.location.pathname !== target) {

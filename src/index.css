@@ -426,7 +426,31 @@
   pointer-events: none;
 }
 
-/* Urgent row: soft red background with smooth blink */
+/* Toast live region */
+#toast-live-region {
+  position: fixed;
+  bottom: 1rem;
+  right: 1rem;
+  pointer-events:.base;
+}
+
+/* Fade in and up animation for metric cards */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.4s ease-out forwards;
+}
+
+/* Urgent row: soft red background with smooth glow */
 @keyframes urgent-blink {
   0%, 100% {
     background-color: hsl(0 84% 60% / 0.08);
@@ -438,23 +462,19 @@
   }
 }
 
-.urgent-row {
-  animation: urgent-blink 2s ease-in-out infinite;
+.animate-highlight {
+  animation: highlight-pulse 3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
-/* VirtualDataTable row styling — urgent rows override default hover */
-.urgent-row:hover {
-  background-color: hsl(0 84% 60% / 0.12) !important;
-}
-
-/* Shake animation for OTP error state */
-@keyframes shake {
-  0%, 100% { transform: translateX(0); }
-  10%, 30%, 50%, 70%, 90% { transform: translateX(-2px); }
-  20%, 40%, 60%, 80% { transform: translateX(2px); }
-}
-
-.animate-shake {
-  animation: shake 0.4s ease-in-out;
+/* Skip link */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
 }
 

@@ -16,11 +16,23 @@ import { formatDate, formatCurrency } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useFollowUps } from "@/hooks/useFollowUps";
+import { useMarketerTarget } from "@/hooks/useMarketerTarget";
+import { TodaySummary } from "@/components/marketer/TodaySummary";
+import { FollowUpCard } from "@/components/marketer/FollowUpCard";
+import { FollowUpsTab } from "@/components/marketer/FollowUpsTab";
+import { TargetsTab } from "@/components/marketer/TargetsTab";
+import { StoresTab } from "@/components/marketer/StoresTab";
 
 const MarketerDashboard = () => {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
   const { isOnline, pendingCount, syncing, syncQueue } = useOnlineStatus();
+
+  const { data: followUpList, refetch: refetchFollowUps } = useFollowUps('today');
+  const { data: weekFollowUps } = useFollowUps('week');
+  const { data: target, isLoading: targetLoading } = useMarketerTarget();
 
   const { data: stats, isLoading } = useQuery({
     queryKey: ["marketer-crm-dashboard", user?.id],
@@ -155,153 +167,152 @@ const MarketerDashboard = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
-        <StatCard title="Active Customers" value={String(s.customerCount)} change={`+${s.customersThisMonth} this month`} changeType="positive" icon={Users} iconColor="primary" />
-        <StatCard title="Total Orders" value={String(s.totalOrders)} icon={ClipboardList} iconColor="info" />
-        <StatCard title="Pending" value={String(s.pendingOrders)} change={s.pendingOrders > 0 ? "Needs action" : "All clear"} changeType={s.pendingOrders > 0 ? "negative" : "positive"} icon={ShoppingCart} iconColor={s.pendingOrders > 0 ? "destructive" : "success"} />
-        <StatCard title="Cash Collected" value={`₹${s.todayCash.toLocaleString()}`} icon={Banknote} iconColor="warning" />
-        <StatCard title="UPI Collected" value={`₹${s.todayUpi.toLocaleString()}`} icon={Smartphone} iconColor="success" />
-        <StatCard title="Outstanding" value={`₹${s.totalOutstanding.toLocaleString()}`} icon={DollarSign} iconColor={s.totalOutstanding > 0 ? "destructive" : "info"} />
-      </div>
+      <Tabs defaultValue="overview" className="space-y-6">
+        <TabsList className="w-full grid grid-cols-4">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="followups">Follow-ups</TabsTrigger>
+          <TabsTrigger value="targets">Targets</TabsTrigger>
+          <TabsTrigger value="stores">Stores</TabsTrigger>
+        </TabsList>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle className="text-base">Order Pipeline</CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">Your orders this week</p>
-            </div>
-            <Button variant="ghost" size="sm" onClick={() => navigate("/orders")}>
-              View all <ArrowRight className="h-4 w-4 ml-1" />
-            </Button>
-          </CardHeader>
-          <CardContent>
+        {/* Overview Tab */}
+        <TabsContent value="overview" className="space-y-6">
+          {/* Summary */}
+          <TodaySummary
+            greeting={`Good morning, ${profile?.full_name || "Marketer"}!`}
+            followUpsToday={followUpList?.length || 0}
+            urgentCount={followUpList?.filter(f => f.priority === 'critical' || f.priority === 'high').length || 0}
+            upcomingCount={weekFollowUps?.length || 0}
+            target={target}
+          />
+
+          {/* Stats Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+            <StatCard title="Active Customers" value={String(s.customerCount)} change={`+${s.customersThisMonth} this month`} changeType="positive" icon={Users} iconColor="primary" />
+            <StatCard title="Total Orders" value={String(s.totalOrders)} icon={ClipboardList} iconColor="info" />
+            <StatCard title="Pending" value={String(s.pendingOrders)} change={s.pendingOrders > 0 ? "Needs action" : "All clear"} changeType={s.pendingOrders > 0 ? "negative" : "positive"} icon={ShoppingCart} iconColor={s.pendingOrders > 0 ? "destructive" : "success"} />
+            <StatCard title="Cash Collected" value={`₹${s.todayCash.toLocaleString()}`} icon={Banknote} iconColor="warning" />
+            <StatCard title="UPI Collected" value={`₹${s.todayUpi.toLocaleString()}`} icon={Smartphone} iconColor="success" />
+            <StatCard title="Outstanding" value={`₹${s.totalOutstanding.toLocaleString()}`} icon={DollarSign} iconColor={s.totalOutstanding > 0 ? "destructive" : "info"} />
+          </div>
+
+          {/* Follow-ups Preview */}
+          {followUpList && followUpList.length > 0 && (
             <div className="space-y-3">
-              {[
-                { label: "Pending", count: s.pipeline.pending, value: s.pipelineValue.pending, color: "bg-amber-500" },
-                { label: "Confirmed", count: s.pipeline.confirmed, value: s.pipelineValue.confirmed, color: "bg-blue-500" },
-                { label: "Fulfilled", count: s.pipeline.fulfilled, value: s.pipelineValue.fulfilled, color: "bg-emerald-500" },
-              ].map((stage) => (
-                <div key={stage.label} className="flex items-center gap-3">
-                  <div className={`w-2.5 h-2.5 rounded-full ${stage.color}`} />
-                  <div className="flex-1">
-                    <div className="flex justify-between text-sm">
-                      <span className="font-medium">{stage.label}</span>
-                      <span className="text-muted-foreground">{stage.count} orders · {formatCurrency(stage.value)}</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <Button variant="outline" className="w-full mt-4" onClick={() => navigate("/orders")}>
-              <Plus className="h-4 w-4 mr-1.5" />
-              Create New Order
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle className="text-base">Collection Performance</CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">Top outstanding customers</p>
-            </div>
-            <Button variant="ghost" size="sm" onClick={() => navigate("/transactions")}>
-              <History className="h-4 w-4 mr-1" />
-              History
-            </Button>
-          </CardHeader>
-          <CardContent>
-            {s.flaggedStores.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-6">No outstanding balances</p>
-            ) : (
-              <div className="space-y-2">
-                {s.flaggedStores.map((store: any) => (
-                  <div key={store.id} className="flex items-center justify-between rounded-lg bg-muted/30 px-4 py-2.5">
-                    <div>
-                      <p className="text-sm font-medium">{store.name}</p>
-                      <p className="text-xs text-muted-foreground">{store.customers?.name || "—"}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-destructive">
-                        ₹{Number(store.outstanding).toLocaleString()}
-                      </span>
-                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => navigate("/transactions")}>
-                        Collect
-                      </Button>
-                    </div>
-                  </div>
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold">Today's Follow-ups</h3>
+                <Button variant="link" className="h-auto p-0" onClick={() => {}}>
+                  View all <ArrowRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {followUpList.slice(0, 4).map((followUp) => (
+                  <FollowUpCard 
+                    key={followUp.id} 
+                    followUp={followUp} 
+                    onRefresh={refetchFollowUps}
+                  />
                 ))}
               </div>
-            )}
-            {s.monthlyCollection > 0 && (
-              <div className="mt-4 rounded-lg bg-primary/5 border border-primary/20 p-3">
-                <p className="text-xs text-muted-foreground">30-day collection total</p>
-                <p className="text-lg font-bold">{formatCurrency(s.monthlyCollection)}</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Follow-ups & Activity</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {s.recentActivity.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-6">No recent activity. Create an order or record a payment to get started.</p>
-            ) : (
-              <div className="space-y-3">
-                {s.recentActivity.map((activity) => (
-                  <div key={activity.id} className="flex items-start justify-between gap-4 rounded-lg border p-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{activity.title}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5 truncate">{activity.subtitle}</p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <Badge variant="secondary" className="text-xs capitalize">{activity.meta}</Badge>
-                      <p className="text-xs text-muted-foreground mt-1">{formatDate(activity.created_at)}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Handover Status</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="rounded-lg bg-muted/50 p-4">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Pending handover</p>
-                <p className="mt-2 text-2xl font-bold">₹{s.pendingHandover.toLocaleString()}</p>
-              </div>
-              {s.recentHandover ? (
-                <div className="rounded-lg border p-4">
-                  <p className="text-xs text-muted-foreground">Last handover</p>
-                  <p className="mt-1 font-medium">{formatDate(s.recentHandover.handover_date)}</p>
-                  <Badge variant="outline" className="mt-1 capitalize">
-                    {String(s.recentHandover.status).split("_").join(" ")}
-                  </Badge>
-                </div>
-              ) : (
-                <div className="rounded-lg border p-4">
-                  <p className="text-sm text-muted-foreground text-center">No handovers yet</p>
-                </div>
-              )}
-              <Button variant="outline" className="w-full" onClick={() => navigate("/handovers")}>
-                <HandCoins className="h-4 w-4 mr-1.5" />
-                Review Handover
-              </Button>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-base">Order Pipeline</CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">Your orders this week</p>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => navigate("/orders")}>
+                  View all <ArrowRight className="h-4 w-4 ml-1" />
+                </Button>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {[
+                    { label: "Pending", count: s.pipeline.pending, value: s.pipelineValue.pending, color: "bg-amber-500" },
+                    { label: "Confirmed", count: s.pipeline.confirmed, value: s.pipelineValue.confirmed, color: "bg-blue-500" },
+                    { label: "Fulfilled", count: s.pipeline.fulfilled, value: s.pipelineValue.fulfilled, color: "bg-emerald-500" },
+                  ].map((stage) => (
+                    <div key={stage.label} className="flex items-center gap-3">
+                      <div className={`w-2.5 h-2.5 rounded-full ${stage.color}`} />
+                      <div className="flex-1">
+                        <div className="flex justify-between text-sm">
+                          <span className="font-medium">{stage.label}</span>
+                          <span className="text-muted-foreground">{stage.count} orders · {formatCurrency(stage.value)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <Button variant="outline" className="w-full mt-4" onClick={() => navigate("/orders")}>
+                  <Plus className="h-4 w-4 mr-1.5" />
+                  Create New Order
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-base">Collection Performance</CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">Top outstanding customers</p>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => navigate("/transactions")}>
+                  <History className="h-4 w-4 mr-1" />
+                  History
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {s.flaggedStores.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-6">No outstanding balances</p>
+                ) : (
+                  <div className="space-y-2">
+                    {s.flaggedStores.map((store: any) => (
+                      <div key={store.id} className="flex items-center justify-between rounded-lg bg-muted/30 px-4 py-2.5">
+                        <div>
+                          <p className="text-sm font-medium">{store.name}</p>
+                          <p className="text-xs text-muted-foreground">{store.customers?.name || "—"}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-destructive">
+                            ₹{Number(store.outstanding).toLocaleString()}
+                          </span>
+                          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => navigate("/transactions")}>
+                            Collect
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {s.monthlyCollection > 0 && (
+                  <div className="mt-4 rounded-lg bg-primary/5 border border-primary/20 p-3">
+                    <p className="text-xs text-muted-foreground">30-day collection total</p>
+                    <p className="text-lg font-bold">{formatCurrency(s.monthlyCollection)}</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        {/* Follow-ups Tab */}
+        <TabsContent value="followups">
+          <FollowUpsTab />
+        </TabsContent>
+
+        {/* Targets Tab */}
+        <TabsContent value="targets">
+          <TargetsTab />
+        </TabsContent>
+
+        {/* Stores Tab */}
+        <TabsContent value="stores">
+          <StoresTab />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

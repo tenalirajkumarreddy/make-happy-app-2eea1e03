@@ -37,6 +37,7 @@ import {
   Undo2,
   UserCog,
   Coins,
+  Target,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -102,6 +103,7 @@ const NAV_BY_ROLE: Record<string, { main: NavSection[]; secondary: NavSection[] 
         label: "Overview",
         items: [
           { label: "Dashboard", path: "/", icon: LayoutDashboard },
+          { label: "CRM", path: "/crm", icon: Target },
           { label: "Orders", path: "/orders", icon: ClipboardList },
           { label: "Sales", path: "/sales", icon: ShoppingCart },
           { label: "Transactions", path: "/transactions", icon: Receipt },
@@ -163,6 +165,14 @@ const NAV_BY_ROLE: Record<string, { main: NavSection[]; secondary: NavSection[] 
         ],
       },
       {
+        label: "Fleet",
+        items: [
+          { label: "Dashboard", path: "/admin/vehicles", icon: Truck },
+          { label: "Sessions", path: "/admin/vehicles/sessions", icon: ClipboardList },
+          { label: "Alert Settings", path: "/admin/vehicles/settings", icon: Settings },
+        ],
+      },
+      {
         label: "Administration",
         items: [
           { label: "Expense Access", path: "/admin/expense-access", icon: Shield },
@@ -179,12 +189,13 @@ const NAV_BY_ROLE: Record<string, { main: NavSection[]; secondary: NavSection[] 
       },
     ],
   },
-manager: {
+  manager: {
     main: [
       {
         label: "Overview",
         items: [
           { label: "Dashboard", path: "/", icon: LayoutDashboard },
+          { label: "CRM", path: "/crm", icon: Target },
           { label: "Orders", path: "/orders", icon: ClipboardList },
           { label: "Sales", path: "/sales", icon: ShoppingCart },
           { label: "Transactions", path: "/transactions", icon: Receipt },
@@ -228,6 +239,13 @@ manager: {
 { label: "Income", path: "/income", icon: TrendingUp },
         { label: "Activity Log", path: "/activity", icon: History },
         { label: "Settings", path: "/settings", icon: Settings },
+      ],
+    },
+    {
+      label: "Fleet",
+      items: [
+        { label: "Dashboard", path: "/admin/vehicles", icon: Truck },
+        { label: "Sessions", path: "/admin/vehicles/sessions", icon: ClipboardList },
       ],
     },
   ],

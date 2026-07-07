@@ -127,7 +127,7 @@ const Auth = () => {
     setErrorMessage("");
     setOtpError(false);
     try {
-      const { data, error } = await supabase.functions.invoke('verify-otp-opensms', {
+      const { data, error } = await supabase.functions.invoke('verify-otp-httpsms', {
         body: { 
           session_token: sessionToken,
           otp_code: otpCode 

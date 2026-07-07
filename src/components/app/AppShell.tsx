@@ -40,6 +40,8 @@ const Activity = lazy(() => import("@/pages/Activity"));
 const AccessControl = lazy(() => import("@/pages/AccessControl"));
 const AdminStaffDirectory = lazy(() => import("@/pages/AdminStaffDirectory").then(m => ({ default: m.AdminStaffDirectory })));
 const AdminVehicles = lazy(() => import("@/pages/admin/AdminVehicles"));
+const VehicleSessions = lazy(() => import("@/pages/admin/VehicleSessions"));
+const VehicleAlertSettings = lazy(() => import("@/pages/admin/VehicleAlertSettings"));
 const DeliveryFeasibility = lazy(() => import("@/pages/admin/DeliveryFeasibility"));
 const AdminSetup = lazy(() => import("@/pages/admin/AdminSetup"));
 const AdminCostHistory = lazy(() => import("@/pages/admin/AdminCostHistory"));
@@ -76,6 +78,9 @@ const AgentDashboard = lazy(() => import("@/pages/AgentDashboard"));
 const MarketerDashboard = lazy(() => import("@/pages/MarketerDashboard"));
 const PosDashboard = lazy(() => import("@/pages/PosDashboard"));
 const CustomerPortal = lazy(() => import("@/pages/CustomerPortal"));
+const AdminTargetApprovals = lazy(() => import("@/pages/AdminTargetApprovals"));
+const AdminCrmSettings = lazy(() => import("@/pages/AdminCrmSettings"));
+const CrmOverview = lazy(() => import("@/pages/CrmOverview"));
 
 const PageLoader = () => (
   <div className="flex h-full items-center justify-center py-20">
@@ -171,22 +176,31 @@ const AppShell = () => {
                 <Route path="/income" element={<RoleGuard allowed={["super_admin", "manager"]}><Income /></RoleGuard>} />
                 <Route path="/settings" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer", "operator", "customer"]}><Settings /></RoleGuard>} />
                 <Route path="/map" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer"]}><MapPage /></RoleGuard>} />
+                <Route path="/crm" element={<RoleGuard allowed={["super_admin", "manager"]}><Outlet /></RoleGuard>}>
+                  <Route index element={<CrmOverview />} />
+                  <Route path="settings" element={<AdminCrmSettings />} />
+                  <Route path="target-approvals" element={<AdminTargetApprovals />} />
+                </Route>
                 <Route path="/profile" element={<RoleGuard allowed={["super_admin", "manager", "agent", "marketer", "operator", "customer"]}><UserProfile /></RoleGuard>} />
                 <Route path="/cost-insights" element={<RoleGuard allowed={["super_admin", "manager"]}><CostInsights /></RoleGuard>} />
                 <Route path="/portal/sales" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><CustomerSales /></Suspense></ErrorBoundary>} />
                 <Route path="/portal/orders" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><CustomerOrders /></Suspense></ErrorBoundary>} />
                 <Route path="/portal/transactions" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><CustomerTransactions /></Suspense></ErrorBoundary>} />
                 <Route path="/portal/profile" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><CustomerProfile /></Suspense></ErrorBoundary>} />
+                <Route path="/admin/vehicles" element={<RoleGuard allowed={["super_admin", "manager"]}><AdminVehicles /></RoleGuard>} />
+                <Route path="/admin/vehicles/sessions" element={<RoleGuard allowed={["super_admin", "manager"]}><VehicleSessions /></RoleGuard>} />
+                <Route path="/admin/vehicles/settings" element={<RoleGuard allowed={["super_admin"]}><VehicleAlertSettings /></RoleGuard>} />
                 <Route path="/admin" element={<RoleGuard allowed={["super_admin"]}><Outlet /></RoleGuard>}>
                   <Route path="staff" element={<AdminStaffDirectory />} />
                   <Route path="setup" element={<AdminSetup />} />
                   <Route path="expense-access" element={<AdminExpenseAccess />} />
                   <Route path="cost-history" element={<AdminCostHistory />} />
-                  <Route path="vehicles" element={<AdminVehicles />} />
                   <Route path="delivery-feasibility" element={<DeliveryFeasibility />} />
                   <Route path="production-log" element={<ProductionLogPage />} />
                   <Route path="settings" element={<Settings />} />
                   <Route path="map" element={<MapPage />} />
+                  <Route path="target-approvals" element={<AdminTargetApprovals />} />
+                  <Route path="crm-settings" element={<AdminCrmSettings />} />
                 </Route>
                 <Route path="/hr/staff" element={<RoleGuard allowed={["super_admin", "manager", "operator"]}><WorkersPage /></RoleGuard>} />
                 <Route path="/hr/roles" element={<RoleGuard allowed={["super_admin", "manager", "operator"]}><WorkerRolesPage /></RoleGuard>} />

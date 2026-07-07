@@ -1,278 +1,567 @@
-import { useState, useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  useVehiclesWithIntegrations,
+  useLatestTelemetry,
+  useFleetSummary,
+} from "@/hooks/useVehicleTracking";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Plus, Pencil, Trash2 } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import VehicleMap from "@/components/vehicles/VehicleMap";
+import MetricCards from "@/components/vehicles/MetricCards";
+import AddVehicleDialog from "@/components/vehicles/AddVehicleDialog";
+
+// ── UI ──
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Alert,
+  AlertDescription,
+} from "@/components/ui/alert";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
 
-const vehicleSchema = z.object({
-  plate_number: z.string().min(1, "License plate is required"),
-  capacity_kg: z.coerce.number().min(1, "Max weight must be greater than 0"),
-  capacity_volume: z.coerce.number().min(0.1, "Max volume must be greater than 0"),
-  mileage_kmpl: z.coerce.number().min(1, "Mileage must be greater than 0"),
-  status: z.enum(["active", "maintenance", "retired"]),
-});
+// ── Icons ──
+import {
+  Truck,
+  RefreshCw,
+  Plus,
+  AlertTriangle,
+  Search,
+  MapPin,
+  Navigation,
+  Fuel,
+  Battery,
+  Gauge,
+  Activity,
+  SlidersHorizontal,
+  Route,
+  Settings,
+  FilterX,
+  PowerOff,
+  Zap,
+  X,
+} from "lucide-react";
 
-type VehicleFormValues = z.infer<typeof vehicleSchema>;
+// ── local types ──
+interface FleetStatus {
+  label: string;
+  count: number;
+  color: string;
+  bg: string;
+  icon: React.ElementType;
+}
+
+/* ================================================================
+   AdminVehicles – Fleet Command Redesign
+   ================================================================ */
 
 export default function AdminVehicles() {
-  const [isOpen, setIsOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
 
+  // ── selection & UI state ──
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showAdd, setShowAdd] = useState(false);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [showFilters, setShowFilters] = useState(false);
+
+  // ── data ──
+  const { data: vehicles, isLoading: vehiclesLoading } = useVehiclesWithIntegrations();
+  const { data: fleetSummary } = useFleetSummary();
+  const { data: telemetry, isLoading: telemetryLoading } = useLatestTelemetry(selectedId);
+
+  const selectedVehicle = vehicles?.find((v) => v.id === selectedId);
+
+  // ── auto-select first vehicle ──
   useEffect(() => {
-    document.title = 'Vehicles';
+    if (vehicles && vehicles.length > 0 && !selectedId) {
+      setSelectedId(vehicles[0].id);
+    }
+  }, [vehicles, selectedId]);
+
+  // ── page title ──
+  useEffect(() => {
+    document.title = "Fleet Command";
   }, []);
 
-  const { data: vehicles, isLoading } = useQuery({
-    queryKey: ["vehicles"],
+  // ── token expired warning ──
+  const { data: tokenExpired } = useQuery({
+    queryKey: ["notifications", "intangles_token_expired"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("vehicles").select("*").order("created_at", { ascending: false });
+      const { data, error } = await supabase
+        .from("notifications")
+        .select("id, created_at")
+        .eq("type", "intangles_token_expired")
+        .order("created_at", { ascending: false })
+        .limit(1);
       if (error) throw error;
-      return data;
+      return data && data.length > 0 ? data[0] : null;
     },
+    refetchInterval: 30_000,
   });
 
-  const form = useForm<VehicleFormValues>({
-    resolver: zodResolver(vehicleSchema),
-    defaultValues: {
-      plate_number: "",
-      capacity_kg: 1000,
-      capacity_volume: 10,
-      mileage_kmpl: 10,
-      status: "active",
-    },
-  });
-
-  const saveMutation = useMutation({
-    mutationFn: async (values: VehicleFormValues) => {
-      if (editingId) {
-        const { error } = await supabase.from("vehicles").update(values as any).eq("id", editingId);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from("vehicles").insert([values as any]);
-        if (error) throw error;
-      }
+  // ── telemetry refresh mutation ──
+  const refreshMutation = useMutation({
+    mutationFn: async () => {
+      const res = await supabase.functions.invoke("poll-vehicle-telemetry");
+      if (res.error) throw new Error(res.error.message || "Refresh failed");
+      return res.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["vehicles"] });
-      toast.success(editingId ? "Vehicle updated" : "Vehicle added");
-      handleClose();
+      queryClient.invalidateQueries({ queryKey: ["vehicle_telemetry"] });
+      queryClient.invalidateQueries({ queryKey: ["vehicle_fleet_summary"] });
+      queryClient.invalidateQueries({ queryKey: ["vehicle_alert_thresholds"] });
+      queryClient.invalidateQueries({ queryKey: ["vehicle_sessions"] });
+      toast.success("Fleet data refreshed");
     },
-    onError: (error) => {
-      toast.error(`Error: ${error.message}`);
-    },
+    onError: () => toast.error("Failed to refresh fleet data"),
   });
 
-const deleteMutation = useMutation({
-  mutationFn: async (id: string) => {
-    const { error } = await supabase.from("vehicles").update({ deleted_at: new Date().toISOString() } as any).eq("id", id);
-    if (error) throw error;
-  },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["vehicles"] });
-      toast.success("Vehicle deleted");
-    },
-    onError: (error) => {
-      toast.error(`Error deleting vehicle: ${error.message}`);
-    },
-  });
-
-  const onSubmit = (values: VehicleFormValues) => {
-    saveMutation.mutate(values);
-  };
-
-  const handleEdit = (vehicle: any) => {
-    setEditingId(vehicle.id);
-    form.reset({
-      plate_number: vehicle.plate_number,
-      capacity_kg: vehicle.capacity_kg,
-      capacity_volume: vehicle.capacity_volume,
-      mileage_kmpl: vehicle.mileage_kmpl || 10,
-      status: vehicle.status,
+  // ─── Filtered vehicles ───
+  const filteredVehicles = useMemo(() => {
+    if (!vehicles) return [];
+    return vehicles.filter((v) => {
+      const matchesSearch = v.plate_number.toLowerCase().includes(search.toLowerCase());
+      const matchesStatus = statusFilter === "all" || v.status === statusFilter;
+      return matchesSearch && matchesStatus;
     });
-    setIsOpen(true);
-  };
+  }, [vehicles, search, statusFilter]);
 
-  const handleDelete = (id: string) => {
-    if (confirm("Are you sure you want to delete this vehicle?")) {
-      deleteMutation.mutate(id);
+  // ─── Fleet status pins ───
+  const fleetStatuses: FleetStatus[] = useMemo(() => {
+    if (!fleetSummary) return [];
+    return [
+      {
+        label: "Moving",
+        count: fleetSummary.moving,
+        color: "text-success",
+        bg: "bg-success/10",
+        icon: Navigation,
+      },
+      {
+        label: "Idle",
+        count: fleetSummary.idling,
+        color: "text-warning",
+        bg: "bg-warning/10",
+        icon: Zap,
+      },
+      {
+        label: "Parked",
+        count: fleetSummary.parked,
+        color: "text-muted-foreground",
+        bg: "bg-muted",
+        icon: MapPin,
+      },
+      {
+        label: "Off-Ntwk",
+        count: fleetSummary.out_of_network,
+        color: "text-destructive",
+        bg: "bg-destructive/10",
+        icon: PowerOff,
+      },
+    ];
+  }, [fleetSummary]);
+
+  // ─── Connection ring progress ───
+  const totalVehicles = vehicles?.length ?? 0;
+  const connectedPercent =
+    totalVehicles > 0 && fleetSummary
+      ? Math.round((fleetSummary.connected / totalVehicles) * 100)
+      : 0;
+
+  // ─── Vehicle status helpers ───
+  const getVehicleStatusProps = (status: string) => {
+    switch (status) {
+      case "active":
+        return {
+          badge: "success" as const,
+          iconColor: "text-success",
+          barColor: "bg-success",
+        };
+      case "maintenance":
+        return {
+          badge: "warning" as const,
+          iconColor: "text-warning",
+          barColor: "bg-warning",
+        };
+      case "retired":
+        return {
+          badge: "destructive" as const,
+          iconColor: "text-destructive",
+          barColor: "bg-destructive",
+        };
+      default:
+        return {
+          badge: "outline" as const,
+          iconColor: "text-muted-foreground",
+          barColor: "bg-muted-foreground",
+        };
     }
   };
 
-  const handleClose = () => {
-    setIsOpen(false);
-    setEditingId(null);
-    form.reset({
-      plate_number: "",
-      capacity_kg: 1000,
-      capacity_volume: 10,
-      status: "active",
-    });
-  };
-
   return (
-    <div className="container mx-auto py-8">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Vehicle Management</h1>
-        <Dialog open={isOpen} onOpenChange={(open) => !open ? handleClose() : setIsOpen(true)}>
-          <DialogTrigger asChild>
-            <Button><Plus className="mr-2 h-4 w-4" /> Add Vehicle</Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>{editingId ? "Edit Vehicle" : "Add Vehicle"}</DialogTitle>
-            </DialogHeader>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="plate_number"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>License Plate</FormLabel>
-                      <FormControl><Input {...field} placeholder="e.g. MH 12 AB 1234" /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="capacity_kg"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Capacity (kg)</FormLabel>
-                        <FormControl><Input type="number" {...field} /></FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="capacity_volume"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Capacity Volume (m³)</FormLabel>
-                        <FormControl><Input type="number" step="0.1" {...field} /></FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="mileage_kmpl"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Mileage (km/l)</FormLabel>
-                        <FormControl><Input type="number" step="0.1" {...field} /></FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                <FormField
-                  control={form.control}
-                  name="status"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Status</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl><SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger></FormControl>
-                        <SelectContent>
-                          <SelectItem value="active">Active</SelectItem>
-                          <SelectItem value="maintenance">Maintenance</SelectItem>
-                          <SelectItem value="retired">Retired</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <Button type="submit" className="w-full" disabled={saveMutation.isPending}>
-                  {saveMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {editingId ? "Update Vehicle" : "Add Vehicle"}
-                </Button>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
-      </div>
+    <TooltipProvider delayDuration={150}>
+      {/* ── Top-level industrial grid background ── */}
+      <div className="min-h-[calc(100vh-4rem)] bg-background relative">
+        {/* faint grid overlay */}
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.03]"
+          style={{
+            backgroundImage:
+              "radial-gradient(circle, hsl(var(--foreground)) 1px, transparent 1px)",
+            backgroundSize: "32px 32px",
+          }}
+        />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Fleet Overview</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
-          ) : vehicles && vehicles.length > 0 ? (
-            <div className="rounded-md border">
-              <table className="min-w-full divide-y border-collapse">
-                <thead className="bg-muted">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">License Plate</th>
-                    <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">Capacity (kg)</th>
-                    <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">Volume (m³)</th>
-                    <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">Mileage (km/l)</th>
-                    <th className="px-4 py-3 text-center text-sm font-medium text-muted-foreground">Status</th>
-                    <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y bg-card">
-                  {vehicles.map((v: any) => (
-                    <tr key={v.id}>
-                      <td className="px-4 py-3 text-sm font-medium">{v.plate_number}</td>
-                      <td className="px-4 py-3 text-sm text-right">{v.capacity_kg}</td>
-                      <td className="px-4 py-3 text-sm text-right">{v.capacity_volume}</td>
-                      <td className="px-4 py-3 text-sm text-right">{v.mileage_kmpl || '-'}</td>
-                      <td className="px-4 py-3 text-sm text-center">
-                        <Badge variant={v.status === 'active' ? 'default' : v.status === 'maintenance' ? 'secondary' : 'destructive'}>
-                          {v.status}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-right space-x-2">
-                        <Button variant="ghost" size="icon" onClick={() => handleEdit(v)}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDelete(v.id)} className="text-destructive hover:text-destructive">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        <div className="relative z-10 flex flex-col lg:flex-row h-[calc(100vh-4rem)]">
+          {/* ═════════════════════════════════════════
+               SIDEBAR – Fleet Navigation
+              ═════════════════════════════════════════ */}
+          <aside className="w-full lg:w-80 lg:shrink-0 flex flex-col border-r border-border/60 bg-card/80 backdrop-blur-sm">
+            {/* Header */}
+            <div className="p-4 border-b border-border/60">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center ring-1 ring-primary/20">
+                    <Truck className="w-4 h-4 text-primary" strokeWidth={1.5} />
+                  </div>
+                  <div>
+                    <h2 className="font-semibold text-sm tracking-tight">Fleet Command</h2>
+                    <p className="text-[11px] text-muted-foreground font-mono">
+                      {totalVehicles} UNIT{totalVehicles !== 1 ? "S" : ""}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => refreshMutation.mutate()}
+                        disabled={refreshMutation.isPending}
+                      >
+                        <RefreshCw
+                          className={`h-3.5 w-3.5 ${
+                            refreshMutation.isPending ? "animate-spin" : ""
+                          }`}
+                          strokeWidth={1.5}
+                        />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Refresh Fleet Data</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => setShowFilters(!showFilters)}
+                      >
+                        <SlidersHorizontal className="h-3.5 w-3.5" strokeWidth={1.5} />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Toggle Filters</TooltipContent>
+                  </Tooltip>
+                </div>
+              </div>
+
+              {/* Search */}
+              <div className="relative mb-3">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  placeholder="Search plate number..."
+                  className="pl-9 h-9 text-sm bg-muted/40 border-0 focus-visible:ring-1 focus-visible:ring-primary/30 font-mono"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+
+              {/* Add Vehicle */}
+              <Button
+                size="sm"
+                className="w-full text-xs h-9 gap-1.5 shadow-sm"
+                onClick={() => setShowAdd(true)}
+              >
+                <Plus className="h-3.5 w-3.5" strokeWidth={1.5} />
+                Add Vehicle
+              </Button>
+
+              {/* Expandable Filters */}
+              {showFilters && (
+                <div className="mt-3 pt-3 border-t border-border/50 space-y-2 animate-slide-down">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground font-medium">Status:</span>
+                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                      <SelectTrigger className="h-8 text-xs flex-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="maintenance">Maintenance</SelectItem>
+                        <SelectItem value="retired">Retired</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {(search || statusFilter !== "all") && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs w-full gap-1 text-muted-foreground hover:text-foreground"
+                      onClick={() => {
+                        setSearch("");
+                        setStatusFilter("all");
+                      }}
+                    >
+                      <FilterX className="h-3 w-3" strokeWidth={1.5}/>
+                      Clear Filters
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
-          ) : (
-            <p className="text-center text-muted-foreground py-8">No vehicles found. Add one to get started.</p>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+
+            {/* Fleet Overview */}
+            {fleetSummary && (
+              <div className="px-4 py-3 border-b border-border/60 bg-muted/20">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
+                    Fleet Status
+                  </span>
+                  <span className="text-[10px] text-muted-foreground font-mono">
+                    {fleetSummary.connected}/{totalVehicles} connected
+                  </span>
+                </div>
+                {/* Connection progress */}
+                <div className="mb-3">
+                  <Progress value={connectedPercent} className="h-1.5" />
+                </div>
+                {/* Status pins */}
+                <div className="grid grid-cols-2 gap-2">
+                  {fleetStatuses.map((s) => (
+                    <div
+                      key={s.label}
+                      className="flex items-center gap-2 rounded-lg bg-background/60 px-2.5 py-1.5 border border-border/40"
+                    >
+                      <div className={`w-6 h-6 rounded-md ${s.bg} flex items-center justify-center`}>
+                        <s.icon className={`w-3 h-3 ${s.color}`} strokeWidth={2} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[11px] text-muted-foreground leading-none">{s.label}</div>
+                        <div className="text-sm font-semibold font-mono leading-tight mt-0.5">{s.count}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Vehicle List */}
+            <div className="flex-1 overflow-y-auto min-h-0">
+              {vehiclesLoading ? (
+                <div className="flex items-center justify-center py-10">
+                  <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : filteredVehicles.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 text-center px-4">
+                  <Truck className="h-8 w-8 text-muted-foreground/30 mb-2" strokeWidth={1.5} />
+                  <p className="text-xs text-muted-foreground">
+                    {search || statusFilter !== "all"
+                      ? "No vehicles match your filters"
+                      : "No vehicles in fleet"}
+                  </p>
+                </div>
+              ) : (
+                <div className="p-2 space-y-[2px]">
+                  {filteredVehicles.map((v) => {
+                    const isSelected = selectedId === v.id;
+                    const statusProps = getVehicleStatusProps(v.status);
+                    return (
+                      <button
+                        key={v.id}
+                        onClick={() => setSelectedId(v.id)}
+                        className={`w-full text-left rounded-lg p-3 transition-all duration-200 border group ${
+                          isSelected
+                            ? "bg-primary/5 border-primary/30 shadow-sm ring-1 ring-primary/10"
+                            : "bg-transparent border-transparent hover:bg-muted/50 hover:border-border/40"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          {/* Vehicle indicator */}
+                          <div
+                            className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors ${
+                            isSelected
+                            ? "bg-primary/10 text-primary"
+                            : "bg-muted text-muted-foreground group-hover:bg-muted-foreground/10"
+                            }`}
+                          >
+                            <Truck className="w-4 h-4" strokeWidth={1.5} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-semibold font-mono truncate">
+                                {v.plate_number}
+                              </span>
+                              {!v.is_tracked && (
+                                <Badge variant="outline" className="text-[10px] h-4 px-1 shrink-0 font-normal">
+                                  Manual
+                                </Badge>
+                              )}
+                              <Badge
+                                variant={statusProps.badge}
+                                className="text-[10px] h-4 px-1.5 font-medium capitalize ml-auto"
+                              >
+                                {v.status}
+                              </Badge>
+                            </div>
+                            <div className="flex items-center gap-2 mt-1.5">
+                              {/* Connectivity dot */}
+                              <span
+                                className={`inline-block w-1.5 h-1.5 rounded-full ${
+                                  v.is_tracked ? "bg-success" : "bg-muted-foreground/30"
+                                }`}
+                              />
+                              <span className="text-[11px] text-muted-foreground">
+                                {v.is_tracked
+                                  ? v.intangles_v_id
+                                    ? "Tracked"
+                                    : "No API link"
+                                  : "Manual entry"}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        {/* Bottom status bar */}
+                        <div className="mt-2 flex items-center gap-2 pt-2 border-t border-border/30">
+                          <div className="flex-1 h-1 rounded-full bg-muted overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${statusProps.barColor} ${
+                                v.status === "active" ? "w-full" : v.status === "maintenance" ? "w-2/3" : "w-1/3"
+                              }`}
+                            />
+                          </div>
+                          <span className="text-[10px] text-muted-foreground font-mono">
+                            {v.status === "active" ? "Online" : v.status === "maintenance" ? "Service" : "Offline"}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Footer Nav */}
+            <div className="p-3 border-t border-border/60 space-y-1 bg-card/50">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start text-xs h-8 gap-2 text-muted-foreground hover:text-foreground"
+                onClick={() => navigate("/admin/vehicles/sessions")}
+              >
+                <Route className="h-3.5 w-3.5" strokeWidth={1.5} />
+                Vehicle Sessions
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start text-xs h-8 gap-2 text-muted-foreground hover:text-foreground"
+                onClick={() => navigate("/admin/vehicles/settings")}
+              >
+                <Settings className="h-3.5 w-3.5" strokeWidth={1.5} />
+                Alert Settings
+              </Button>
+            </div>
+          </aside>
+
+          {/* ═════════════════════════════════════════
+               MAIN – Command Console
+              ═════════════════════════════════════════ */}
+          <main className="flex-1 flex flex-col min-h-0 overflow-hidden">
+            {/* Alert Banner */}
+            {tokenExpired && (
+              <div className="mx-6 mt-4 mb-0">
+                <Alert variant="destructive" className="border-destructive/20">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription className="text-xs">
+                    Intangles API token has expired. Update it in Supabase Edge Function
+                    environment variables to resume vehicle tracking.
+                  </AlertDescription>
+                </Alert>
+              </div>
+            )}
+
+            {/* Telemetry Metrics */}
+            <div className="p-4 pb-2 shrink-0">
+              <MetricCards
+                telemetry={telemetry}
+                isLoading={telemetryLoading && !!selectedId}
+              />
+            </div>
+
+            {/* Map & Split Panel */}
+            <div className="flex-1 min-h-0 p-4 pt-0">
+              <Card className="h-full border border-border/60 shadow-sm overflow-hidden flex flex-col">
+                {/* Map toolbar */}
+                <div className="flex items-center justify-between px-4 py-2.5 border-b border-border/40 bg-muted/20">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.5} />
+                    <span className="text-xs font-medium text-muted-foreground">
+                      {selectedVehicle ? selectedVehicle.plate_number : "No vehicle selected"}
+                    </span>
+                    {telemetry?.speed !== null && telemetry?.speed !== undefined && (
+                      <Badge variant="outline" className="text-[10px] h-5 font-mono">
+                        <Gauge className="h-3 w-3 mr-1" strokeWidth={1.5} />
+                        {telemetry.speed} km/h
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {telemetry?.connection_status ? (
+                      <Badge variant="outline" className="text-[10px] h-5 border-success/30 text-success bg-success/5 gap-1">
+                        <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                        LIVE
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-[10px] h-5 border-destructive/30 text-destructive bg-destructive/5 gap-1">
+                        <div className="w-1.5 h-1.5 rounded-full bg-destructive" />
+                        OFFLINE
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+
+                {/* Map */}
+                <div className="flex-1 min-h-0 relative">
+                  <VehicleMap
+                    telemetry={telemetry}
+                    plateNumber={selectedVehicle?.plate_number ?? "Vehicle"}
+                  />
+                </div>
+              </Card>
+            </div>
+          </main>
+        </div>
+
+        {/* Add Vehicle Dialog */}
+        <AddVehicleDialog open={showAdd} onOpenChange={setShowAdd} />
+      </div>
+    </TooltipProvider>
   );
 }
